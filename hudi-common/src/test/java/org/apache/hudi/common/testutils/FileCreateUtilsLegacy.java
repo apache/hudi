@@ -61,7 +61,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 /**
  * Utils for creating dummy Hudi files in testing.
  * ****************************************************
- *      Use FileCreateUtilsV2 whenever possible!
+ *      Use FileCreateUtils whenever possible!
  * ****************************************************
  * [HUDI-8924]: Remove this class entirely.
  */

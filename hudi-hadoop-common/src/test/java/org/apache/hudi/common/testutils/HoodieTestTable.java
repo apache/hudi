@@ -109,31 +109,31 @@ import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.baseFileName;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createCleanFile;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createDeltaCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createInflightCleanFile;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createInflightClusterCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createInflightCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createInflightCompaction;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createInflightDeltaCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createInflightReplaceCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createInflightRollbackFile;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createInflightSavepoint;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createMarkerFile;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createReplaceCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createRequestedCleanFile;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createRequestedClusterCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createRequestedCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createRequestedDeltaCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createRequestedReplaceCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createRequestedRollbackFile;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createRestoreFile;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createRollbackFile;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.createSavepointCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.deleteSavepointCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtilsV2.logFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createCleanFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCleanFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightClusterCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCompaction;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightReplaceCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightRollbackFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightSavepoint;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createReplaceCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedClusterCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedReplaceCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedRollbackFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRestoreFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRollbackFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createSavepointCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.deleteSavepointCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.BASE_FILE_EXTENSION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
@@ -304,9 +304,9 @@ public class HoodieTestTable implements AutoCloseable {
 
   public void moveCompleteCommitToInflight(String instantTime) throws IOException {
     if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
-      FileCreateUtilsV2.deleteCommit(metaClient, instantTime);
+      FileCreateUtils.deleteCommit(metaClient, instantTime);
     } else {
-      FileCreateUtilsV2.deleteDeltaCommit(metaClient, instantTime);
+      FileCreateUtils.deleteDeltaCommit(metaClient, instantTime);
     }
   }
 
@@ -500,7 +500,7 @@ public class HoodieTestTable implements AutoCloseable {
         long rollbackLogFileSize = 50 + RANDOM.nextInt(500);
         String fileId = UUID.randomUUID().toString();
         String logFileName = logFileName(instantTimeToDelete, fileId, 0);
-        FileCreateUtilsV2.createLogFile(metaClient, entry.getKey(), instantTimeToDelete, fileId, 0, (int) rollbackLogFileSize);
+        FileCreateUtils.createLogFile(metaClient, entry.getKey(), instantTimeToDelete, fileId, 0, (int) rollbackLogFileSize);
         rollbackPartitionMetadata.setRollbackLogFiles(singletonMap(logFileName, rollbackLogFileSize));
       }
       partitionMetadataMap.put(entry.getKey(), rollbackPartitionMetadata);
@@ -673,14 +673,14 @@ public class HoodieTestTable implements AutoCloseable {
 
   public HoodieTestTable withPartitionMetaFiles(String... partitionPaths) throws IOException {
     for (String partitionPath : partitionPaths) {
-      FileCreateUtilsV2.createPartitionMetaFile(basePath, partitionPath);
+      FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
     }
     return this;
   }
 
   public HoodieTestTable withPartitionMetaFiles(List<String> partitionPaths) throws IOException {
     for (String partitionPath : partitionPaths) {
-      FileCreateUtilsV2.createPartitionMetaFile(basePath, partitionPath);
+      FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
     }
     return this;
   }
@@ -704,8 +704,8 @@ public class HoodieTestTable implements AutoCloseable {
 
   public HoodieTestTable withLogMarkerFile(String partitionPath, String fileId, IOType ioType) throws IOException {
     String logFileName = FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, currentInstantTime, HoodieLogFile.LOGFILE_BASE_VERSION, HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
-    String markerFileName = FileCreateUtilsV2.markerFileName(logFileName, ioType);
-    FileCreateUtilsV2.createMarkerFile(metaClient, partitionPath, currentInstantTime, markerFileName);
+    String markerFileName = FileCreateUtils.markerFileName(logFileName, ioType);
+    FileCreateUtils.createMarkerFile(metaClient, partitionPath, currentInstantTime, markerFileName);
     return this;
   }
 
@@ -718,7 +718,7 @@ public class HoodieTestTable implements AutoCloseable {
     Map<String, String> partitionFileIdMap = new HashMap<>();
     for (String p : partitions) {
       String fileId = UUID.randomUUID().toString();
-      FileCreateUtilsV2.createBaseFile(metaClient, p, currentInstantTime, fileId);
+      FileCreateUtils.createBaseFile(metaClient, p, currentInstantTime, fileId);
       partitionFileIdMap.put(p, fileId);
     }
     return partitionFileIdMap;
@@ -735,7 +735,7 @@ public class HoodieTestTable implements AutoCloseable {
   public Pair<HoodieTestTable, List<String>> withBaseFilesInPartition(String partition, String... fileIds) throws Exception {
     List<String> files = new ArrayList<>();
     for (String f : fileIds) {
-      files.add(FileCreateUtilsV2.createBaseFile(metaClient, partition, currentInstantTime, f));
+      files.add(FileCreateUtils.createBaseFile(metaClient, partition, currentInstantTime, f));
     }
     return Pair.of(this, files);
   }
@@ -743,14 +743,14 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable withBaseFilesInPartition(String partition, int... lengths) throws Exception {
     for (int l : lengths) {
       String fileId = UUID.randomUUID().toString();
-      FileCreateUtilsV2.createBaseFile(metaClient, partition, currentInstantTime, fileId, l);
+      FileCreateUtils.createBaseFile(metaClient, partition, currentInstantTime, fileId, l);
     }
     return this;
   }
 
   public HoodieTestTable withBaseFilesInPartition(String partition, List<Pair<String, Integer>> fileInfos) throws Exception {
     for (Pair<String, Integer> fileInfo : fileInfos) {
-      FileCreateUtilsV2.createBaseFile(metaClient, partition, currentInstantTime, fileInfo.getKey(), fileInfo.getValue());
+      FileCreateUtils.createBaseFile(metaClient, partition, currentInstantTime, fileInfo.getKey(), fileInfo.getValue());
     }
     return this;
   }
@@ -768,14 +768,14 @@ public class HoodieTestTable implements AutoCloseable {
   public Pair<HoodieTestTable, List<String>> withLogFile(String partitionPath, String fileId, int... versions) throws Exception {
     List<String> logFiles = new ArrayList<>();
     for (int version : versions) {
-      logFiles.add(FileCreateUtilsV2.createLogFile(metaClient, partitionPath, currentInstantTime, fileId, version));
+      logFiles.add(FileCreateUtils.createLogFile(metaClient, partitionPath, currentInstantTime, fileId, version));
     }
     return Pair.of(this, logFiles);
   }
 
   public HoodieTestTable withLogFilesInPartition(String partition, List<Pair<String, Integer[]>> fileInfos) throws Exception {
     for (Pair<String, Integer[]> fileInfo : fileInfos) {
-      FileCreateUtilsV2.createLogFile(metaClient, partition, currentInstantTime, fileInfo.getKey(), fileInfo.getValue()[0], fileInfo.getValue()[1]);
+      FileCreateUtils.createLogFile(metaClient, partition, currentInstantTime, fileInfo.getKey(), fileInfo.getValue()[0], fileInfo.getValue()[1]);
     }
     return this;
   }
@@ -846,7 +846,7 @@ public class HoodieTestTable implements AutoCloseable {
 
   public List<java.nio.file.Path> getAllPartitionPaths() throws IOException {
     java.nio.file.Path basePathPath = Paths.get(basePath);
-    return FileCreateUtilsV2.getPartitionPaths(basePathPath);
+    return FileCreateUtils.getPartitionPaths(basePathPath);
   }
 
   public Path getBaseFilePath(String partition, String fileId) {
@@ -942,7 +942,7 @@ public class HoodieTestTable implements AutoCloseable {
           String filePath = entry.getPath().toString();
           String fileName = entry.getPath().getName();
           if (fileName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)
-              || !FileCreateUtilsV2.isBaseOrLogFilename(fileName)
+              || !FileCreateUtils.isBaseOrLogFilename(fileName)
               || filePath.contains("metadata")) {
             toReturn = false;
           } else {
@@ -1368,7 +1368,7 @@ public class HoodieTestTable implements AutoCloseable {
       for (Pair<String, Integer> fileIdInfo : entry.getValue()) {
         HoodieWriteStat writeStat = new HoodieWriteStat();
         String fileName = bootstrap ? fileIdInfo.getKey() :
-            FileCreateUtilsV2.baseFileName(commitTime, fileIdInfo.getKey());
+            FileCreateUtils.baseFileName(commitTime, fileIdInfo.getKey());
         writeStat.setFileId(fileName);
         writeStat.setPartitionPath(partition);
         writeStat.setPath(StringUtils.isNullOrEmpty(partition) ? fileName : partition + "/" + fileName);
@@ -1394,7 +1394,7 @@ public class HoodieTestTable implements AutoCloseable {
       for (Pair<String, Integer[]> fileIdInfo : entry.getValue()) {
         HoodieWriteStat writeStat = new HoodieWriteStat();
         String fileName = bootstrap ? fileIdInfo.getKey() :
-            FileCreateUtilsV2.logFileName(commitTime, fileIdInfo.getKey(), fileIdInfo.getValue()[0]);
+            FileCreateUtils.logFileName(commitTime, fileIdInfo.getKey(), fileIdInfo.getValue()[0]);
         writeStat.setFileId(fileName);
         writeStat.setPartitionPath(partition);
         writeStat.setPath(StringUtils.isNullOrEmpty(partition) ? fileName : partition + "/" + fileName);
