@@ -22,9 +22,9 @@ package org.apache.hudi.common.table.checkpoint;
  * Utility class providing methods to check if a string starts with specific resume-related prefixes.
  */
 public class HoodieIncrSourceCheckpointValUtils {
-  private static final String RESET_CHECKPOINT_V2_SEPARATOR = ":";
-  private static final String REQUEST_TIME_PREFIX = "resumeFromInstantRequestTime";
-  private static final String COMPLETION_TIME_PREFIX = "resumeFromInstantCompletionTime";
+  public static final String RESET_CHECKPOINT_V2_SEPARATOR = ":";
+  public static final String REQUEST_TIME_PREFIX = "resumeFromInstantRequestTime";
+  public static final String COMPLETION_TIME_PREFIX = "resumeFromInstantCompletionTime";
 
   /**
    * For hoodie incremental source ingestion, if the target table is version 8 or higher, the checkpoint

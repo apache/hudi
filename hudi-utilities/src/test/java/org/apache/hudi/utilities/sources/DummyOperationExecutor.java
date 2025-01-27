@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointFromCfgCkp;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
@@ -28,6 +29,8 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+
+import static org.apache.hudi.common.table.checkpoint.HoodieIncrSourceCheckpointValUtils.resolveToV1V2Checkpoint;
 
 /**
  * Helper class to execute dummy operations for testing S3EventsHoodieIncrSource.
@@ -44,6 +47,7 @@ public class DummyOperationExecutor {
    */
   public static final String OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY = "OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY";
   public static final String OP_EMPTY_ROW_SET_NONE_NULL_CKP_V2_KEY = "OP_EMPTY_ROW_SET_NONE_NULL_CKP_V2_KEY";
+  public static final String OP_EMPTY_ROW_SET_CKP_RESOLVE_KEY = "OP_EMPTY_ROW_SET_CKP_RESOLVE_KEY";
   public static final String OP_EMPTY_ROW_SET_NULL_CKP_KEY = "OP_EMPTY_ROW_SET_NULL_CKP";
   
   /**
@@ -77,6 +81,15 @@ public class DummyOperationExecutor {
         return Pair.of(empty, new StreamerCheckpointV2(returnCheckpoint));
       };
 
+  private static final OperationFunction EMPTY_ROW_SET_CKP_RESOLVE =
+      (checkpoint, limit, props) -> {
+        Option<Dataset<Row>> empty = Option.empty();
+        String returnCheckpoint = props.getString(RETURN_CHECKPOINT_KEY, CUSTOM_CHECKPOINT1);
+        Checkpoint newCkp = resolveToV1V2Checkpoint((StreamerCheckpointFromCfgCkp) checkpoint.get());
+        newCkp.setCheckpointKey(returnCheckpoint);
+        return Pair.of(empty, newCkp);
+      };
+
   /**
    * Executes the dummy operation based on the operation type in props.
    *
@@ -96,6 +109,8 @@ public class DummyOperationExecutor {
         return EMPTY_ROW_SET_NONE_NULL_CKP_V2.apply(lastCheckpoint, sourceLimit, props);
       case OP_EMPTY_ROW_SET_NULL_CKP_KEY:
         return EMPTY_ROW_SET_NULL_CKP.apply(lastCheckpoint, sourceLimit, props);
+      case OP_EMPTY_ROW_SET_CKP_RESOLVE_KEY:
+        return EMPTY_ROW_SET_CKP_RESOLVE.apply(lastCheckpoint, sourceLimit, props);
       default:
         throw new IllegalArgumentException("Unsupported operation type: " + opType);
     }

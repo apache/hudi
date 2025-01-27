@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointFromCfgCkp;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -51,6 +52,8 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
+import static org.apache.hudi.common.table.checkpoint.HoodieIncrSourceCheckpointValUtils.REQUEST_TIME_PREFIX;
+import static org.apache.hudi.common.table.checkpoint.HoodieIncrSourceCheckpointValUtils.RESET_CHECKPOINT_V2_SEPARATOR;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
@@ -63,6 +66,7 @@ import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_EMPTY_CK
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_INPUT_CKP;
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_NON_EMPTY_CKP_ALL_MEMBERS;
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_NO_INGESTION_HAPPENS;
+import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_CKP_RESOLVE_KEY;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP_V2_KEY;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_FETCH_NEXT_BATCH;
@@ -220,6 +224,43 @@ public class TestHoodieIncrSourceE2EAutoUpgrade extends S3EventsHoodieIncrSource
     expectedMetadata.clear();
     expectedMetadata.put("schema", schemaStr);
     expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V2, "20");
+    verifyLastInstantCommitMetadata(expectedMetadata);
+    // Table is upgraded
+    metaClient.reloadActiveTimeline();
+    assertNotEquals(metaClient.getActiveTimeline().lastInstant().get(), instantAfterFirstRound);
+    assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig().getTableVersion());
+    assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_2, metaClient.getTableConfig().getTimelineLayoutVersion().get());
+
+    //  ========== Checkpoint override with new format <eventOrderingMode>:<checkpoint> ==========
+    props = setupBaseProperties("8");
+    props.put("hoodie.metadata.enable", "true");
+    // If user wants to do request time based checkpoint override.
+    cfg = createConfig(basePath(), REQUEST_TIME_PREFIX + RESET_CHECKPOINT_V2_SEPARATOR + "30", sourceClass);
+    // In this iteration, we override the checkpoint instead of resuming from ckp 20. Covers 2 modes: Event time based and
+    // commit time based.
+    props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
+    // Data source will know this checkpoint is configured by the override
+    props.put(VAL_CKP_INSTANCE_OF, StreamerCheckpointFromCfgCkp.class.getName());
+    // The content contains the ordering mode.
+    props.put(VAL_CKP_KEY_EQ_VAL, REQUEST_TIME_PREFIX + RESET_CHECKPOINT_V2_SEPARATOR + "30");
+    props.put(VAL_CKP_RESET_KEY_IS_NULL, "IGNORED");
+    props.put(VAL_CKP_IGNORE_KEY_IS_NULL, "IGNORED");
+    // Dummy behavior is consuming the given v1 checkpoint and always return a v2 checkpoint. We only support resetting checkpoint
+    // based on request time, but after that it would be translated to completion time and everything after that is completion
+    // time based. We are not following request time ordering anymore in version 8.
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V2_KEY);
+    props.put(RETURN_CHECKPOINT_KEY, "40");
+    props.put("hoodie.write.auto.upgrade", "true");
+
+    ds = new HoodieDeltaStreamer(cfg, jsc, Option.of(props));
+    ds.sync();
+    // After the sync the table is upgraded to version 8.
+    metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), "8");
+    // Confirm the resulting commit metadata contains the reset ckp and 30
+    expectedMetadata.clear();
+    expectedMetadata.put("schema", schemaStr);
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V2, "40"); // V2 means completion time based.
+    expectedMetadata.put(STREAMER_CHECKPOINT_RESET_KEY_V2, REQUEST_TIME_PREFIX + RESET_CHECKPOINT_V2_SEPARATOR + "30");
     verifyLastInstantCommitMetadata(expectedMetadata);
     // Table is upgraded
     metaClient.reloadActiveTimeline();
