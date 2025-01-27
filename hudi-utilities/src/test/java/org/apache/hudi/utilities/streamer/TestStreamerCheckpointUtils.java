@@ -21,17 +21,20 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.exception.HoodieStreamerException;
 
@@ -44,6 +47,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -362,5 +366,118 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveWhatCheckpointToResumeFrom(
         Option.of(metaClient.getActiveTimeline()), streamerConfig, props, metaClient);
     assertEquals("config-cp", checkpoint.get().getCheckpointKey());
+  }
+
+  @Test
+  public void testAssertNoCheckpointOverrideDuringUpgradeSuccess() throws IOException {
+    // Create metaclient with older version
+    metaClient =
+        HoodieTableMetaClient.newTableBuilder()
+            .setDatabaseName("dataset")
+            .setTableName("testTable")
+            .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
+            .setTableVersion(HoodieTableVersion.SIX)
+            .setTableType(HoodieTableType.MERGE_ON_READ)
+            .initTable(getDefaultStorageConf(), basePath());
+    // No checkpoint override configs set
+    streamerConfig.checkpoint = null;
+    streamerConfig.ignoreCheckpoint = null;
+    
+    // Even with auto-upgrade enabled and version mismatch, should pass when no checkpoint override
+    props.setProperty(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "true");
+    props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+
+    // Should not throw exception
+    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+  }
+
+  @Test
+  public void testAssertNoCheckpointOverrideDuringUpgradeFailure() throws IOException {
+    metaClient =
+        HoodieTableMetaClient.newTableBuilder()
+            .setDatabaseName("dataset")
+            .setTableName("testTable")
+            .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
+            .setTableVersion(HoodieTableVersion.SIX)
+            .setTableType(HoodieTableType.MERGE_ON_READ)
+            .initTable(getDefaultStorageConf(), basePath());
+    
+    // Set checkpoint override
+    streamerConfig.checkpoint = "test-cp";
+    streamerConfig.targetBasePath = "dummyVal";
+    // Enable auto-upgrade and set newer write version
+    props.setProperty(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "true");
+    props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+    // Should throw exception due to checkpoint override during upgrade
+    assertThrows(HoodieUpgradeDowngradeException.class, () -> {
+      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+    });
+  }
+
+  @Test
+  public void testAssertNoCheckpointOverrideDuringUpgradeWithIgnoreCheckpoint() throws IOException {
+    // Create metaclient with older version
+    metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setDatabaseName("dataset")
+        .setTableName("testTable")
+        .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
+        .setTableVersion(HoodieTableVersion.SIX)
+        .setTableType(HoodieTableType.MERGE_ON_READ)
+        .initTable(getDefaultStorageConf(), basePath());
+    // Set ignore checkpoint override
+    streamerConfig.ignoreCheckpoint = "ignore-cp";
+    streamerConfig.targetBasePath = "dummyVal";
+
+    // Enable auto-upgrade and set newer write version
+    props.setProperty(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "true");
+    props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+
+    // Should throw exception due to ignore checkpoint override during upgrade
+    assertThrows(HoodieUpgradeDowngradeException.class, () -> {
+      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+    });
+  }
+
+  @Test
+  public void testAssertNoCheckpointOverrideDuringUpgradeWithAutoUpgradeDisabledVersion6() throws IOException {
+    // Test case 1: Version 6 table with version 6 write config
+    metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setDatabaseName("dataset")
+        .setTableName("testTable")
+        .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
+        .setTableVersion(HoodieTableVersion.SIX)
+        .setTableType(HoodieTableType.MERGE_ON_READ)
+        .initTable(getDefaultStorageConf(), basePath());
+      
+      streamerConfig.checkpoint = "test-cp";
+      streamerConfig.targetBasePath = "dummyVal";
+
+      // Disable auto-upgrade and set matching version
+      props.setProperty(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false");
+      props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "6");
+
+      // Should pass since versions match
+      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+  }
+
+  @Test
+  public void testAssertNoCheckpointOverrideDuringUpgradeWithAutoUpgradeDisabledVersion8() throws IOException {
+    metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setDatabaseName("dataset")
+        .setTableName("testTable")
+        .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
+        .setTableVersion(HoodieTableVersion.EIGHT)
+        .setTableType(HoodieTableType.MERGE_ON_READ)
+        .initTable(getDefaultStorageConf(), basePath());
+
+    streamerConfig.checkpoint = "test-cp";
+    streamerConfig.targetBasePath = "dummyVal";
+
+    // Disable auto-upgrade and set matching version 8
+    props.setProperty(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false");
+    props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+
+    // Should pass since versions match
+    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
   }
 }

@@ -87,7 +87,8 @@ public class StreamerCheckpointUtils {
     return checkpoint;
   }
 
-  private static void assertNoCheckpointOverrideDuringUpgrade(HoodieTableMetaClient metaClient, HoodieStreamer.Config streamerConfig, TypedProperties props) {
+  @VisibleForTesting
+  static void assertNoCheckpointOverrideDuringUpgrade(HoodieTableMetaClient metaClient, HoodieStreamer.Config streamerConfig, TypedProperties props) {
     if (!StringUtils.isNullOrEmpty(streamerConfig.checkpoint)
         || !StringUtils.isNullOrEmpty(streamerConfig.ignoreCheckpoint)) {
       HoodieTableVersion writeTableVersion = HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION));
