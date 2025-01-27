@@ -402,12 +402,10 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     assertEquals(actualColumnRange.getMinValue(), new Float(-1));
     assertEquals(actualColumnRange.getMaxValue(), new Float(10000));
 
-
     // Merging Float and String
     actualColumnRange = mergeAndAssert(aFloatVal, bStringVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize, Schema.Type.FLOAT);
     assertEquals(actualColumnRange.getMinValue(), new Float(-1));
     assertEquals(actualColumnRange.getMaxValue(), new Float(10000));
-
 
     // Double and Double
     actualColumnRange = mergeAndAssert(aDoubleVal, bDoubleVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize, Schema.Type.DOUBLE);

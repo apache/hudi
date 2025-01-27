@@ -40,6 +40,7 @@ import org.apache.avro.generic.GenericRecord;
 import javax.annotation.Nonnull;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -62,17 +63,36 @@ public abstract class FileFormatUtils {
   public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(String relativePartitionPath,
                                                                                                  @Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges,
                                                                                                  Map<String, Schema> colsToIndexSchemaMap) {
+
     ValidationUtils.checkArgument(!fileColumnRanges.isEmpty(), "fileColumnRanges should not be empty.");
+    // Let's do one pass and deduce all columns that needs to go through schema evolution.
+    Map<String, Set<Class<?>>> schemaSeenForColsToIndex = new HashMap<>();
+    Set<String> colsWithSchemaEvolved = new HashSet<>();
+    fileColumnRanges.stream().forEach(entry -> {
+      String colToIndex = entry.getColumnName();
+      Class<?> minValueClass = entry.getMinValue() != null ? entry.getMinValue().getClass() : null;
+      Class<?> maxValueClass = entry.getMaxValue() != null ? entry.getMaxValue().getClass() : null;
+      schemaSeenForColsToIndex.computeIfAbsent(colToIndex, s -> new HashSet());
+      if (minValueClass != null) {
+        schemaSeenForColsToIndex.get(colToIndex).add(minValueClass);
+      }
+      if (maxValueClass != null) {
+        schemaSeenForColsToIndex.get(colToIndex).add(maxValueClass);
+      }
+      if (!colsToIndexSchemaMap.isEmpty() && schemaSeenForColsToIndex.get(colToIndex).size() > 1) {
+        colsWithSchemaEvolved.add(colToIndex);
+      }
+    });
+
     // There are multiple files. Compute min(file_mins) and max(file_maxs)
     return fileColumnRanges.stream()
         .map(e -> HoodieColumnRangeMetadata.create(
             relativePartitionPath, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
             e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize()))
         .reduce((a,b) -> {
-          if (colsToIndexSchemaMap.isEmpty()
+          if (colsWithSchemaEvolved.isEmpty() || colsToIndexSchemaMap.isEmpty()
               || a.getMinValue() == null || a.getMaxValue() == null || b.getMinValue() == null || b.getMaxValue() == null
-              || (a.getMinValue().getClass().getSimpleName().equals(b.getMinValue().getClass().getSimpleName())
-              && a.getMaxValue().getClass().getSimpleName().equals(b.getMaxValue().getClass().getSimpleName()))) {
+              || !colsWithSchemaEvolved.contains(a.getColumnName())) {
             return HoodieColumnRangeMetadata.merge(a, b);
           } else {
             // schema is evolving for the column of interest.

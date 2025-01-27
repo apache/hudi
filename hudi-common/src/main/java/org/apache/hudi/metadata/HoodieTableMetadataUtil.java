@@ -135,6 +135,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -771,8 +772,8 @@ public class HoodieTableMetadataUtil {
       deletedFiles.forEach(entry -> deleteFileList.add(Pair.of(partition, entry)));
     });
 
-    List<String> columnsToIndex = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig,
-        Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)), false, recordTypeOpt).keySet().stream().collect(toList());
+    List<String> columnsToIndex = new ArrayList<>(getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig,
+        Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)), false, recordTypeOpt).keySet());
 
     if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
@@ -1480,7 +1481,7 @@ public class HoodieTableMetadataUtil {
         // In case there are no columns to index, bail
         return engineContext.emptyHoodieData();
       }
-      List<String> columnsToIndex = columnsToIndexSchemaMap.keySet().stream().collect(toList());
+      List<String> columnsToIndex = new ArrayList<>(columnsToIndexSchemaMap.keySet());
       int parallelism = Math.max(Math.min(allWriteStats.size(), metadataConfig.getColumnStatsIndexParallelism()), 1);
       return engineContext.parallelize(allWriteStats, parallelism)
           .flatMap(writeStat ->
@@ -1514,7 +1515,7 @@ public class HoodieTableMetadataUtil {
   @VisibleForTesting
   public static final Set<String> META_COL_SET_TO_INDEX = new HashSet<>(Arrays.asList(META_COLS_TO_ALWAYS_INDEX));
   @VisibleForTesting
-  static final Map<String, Schema> META_COLS_TO_ALWAYS_INDEX_SCHEMA_MAP = new HashMap<String, Schema>() {{
+  static final Map<String, Schema> META_COLS_TO_ALWAYS_INDEX_SCHEMA_MAP = new TreeMap() {{
       put(COMMIT_TIME_METADATA_FIELD, Schema.create(Schema.Type.STRING));
       put(RECORD_KEY_METADATA_FIELD, Schema.create(Schema.Type.STRING));
       put(PARTITION_PATH_METADATA_FIELD, Schema.create(Schema.Type.STRING));
@@ -2557,7 +2558,7 @@ public class HoodieTableMetadataUtil {
       final String partitionPath = partitionInfo.getKey();
       // Step 1: Collect Column Metadata for Each File
       List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getValue().stream()
-          .map(fileName -> getFileStatsRangeMetadata(partitionPath, fileName, dataTableMetaClient, columnsToIndexSchemaMap.keySet().stream().collect(toList()), false,
+          .map(fileName -> getFileStatsRangeMetadata(partitionPath, fileName, dataTableMetaClient, new ArrayList<>(columnsToIndexSchemaMap.keySet()), false,
               metadataConfig.getMaxReaderBufferSize()))
           .collect(Collectors.toList());
 
@@ -2631,7 +2632,7 @@ public class HoodieTableMetadataUtil {
       if (columnsToIndexSchemaMap.isEmpty()) {
         return engineContext.emptyHoodieData();
       }
-      List<String> colsToIndex = columnsToIndexSchemaMap.keySet().stream().collect(toList());
+      List<String> colsToIndex = new ArrayList<>(columnsToIndexSchemaMap.keySet());
       LOG.debug("Indexing following columns for partition stats index: {}", columnsToIndexSchemaMap.keySet());
       // Group by partitionPath and then gather write stats lists,
       // where each inner list contains HoodieWriteStat objects that have the same partitionPath.
