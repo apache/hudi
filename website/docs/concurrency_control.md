@@ -67,6 +67,21 @@ Following are the basic configs required to setup this lock provider:
 
 `The HiveMetastore URI's are picked up from the hadoop configuration file loaded during runtime.`
 
+:::note
+Zookeeper is required for HMS lock provider. Users can set the zookeeper configs for Hive using Hudi
+
+```properties
+hoodie.write.lock.zookeeper.url
+hoodie.write.lock.zookeeper.port
+```
+or via Hive config for Hive Metastore (HMS)
+
+```properties
+hive.zookeeper.quorum
+hive.zookeeper.client.port
+```
+:::
+
 #### Amazon DynamoDB based
 ```
 hoodie.write.lock.provider=org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProvider
