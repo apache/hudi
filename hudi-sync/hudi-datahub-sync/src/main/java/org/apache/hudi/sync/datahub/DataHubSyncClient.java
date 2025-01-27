@@ -113,7 +113,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
         .getInstantsOrderedByStateTransitionTime()
         .skip(countInstants - 1)
         .findFirst()
-        .map(HoodieInstant::getTimestamp)
+        .map(HoodieInstant::getStateTransitionTime)
         .map(Option::of).orElseGet(Option::empty);
   }
 
@@ -156,12 +156,12 @@ public class DataHubSyncClient extends HoodieSyncClient {
       future.get();
       return true;
     } catch (Exception e) {
-      if (!config.suppressExceptions()) {
-        throw new HoodieDataHubSyncException(
-            "Failed to sync properties for Dataset " + datasetUrn + ": " + tableProperties, e);
-      } else {
+      if (config.suppressExceptions()) {
         LOG.error("Failed to sync properties for Dataset {}: {}", datasetUrn, tableProperties, e);
         return false;
+      } else {
+        throw new HoodieDataHubSyncException(
+            "Failed to sync properties for Dataset " + datasetUrn + ": " + tableProperties, e);
       }
     }
   }
