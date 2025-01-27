@@ -34,6 +34,7 @@ import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSourceHarness;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -67,11 +68,16 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     return "8".equals(version) ? "6" : "8";
   }
 
+
   private HoodieDeltaStreamer.Config createConfig(String basePath, String sourceCheckpoint) {
+    return createConfig(basePath, sourceCheckpoint, S3EventsHoodieIncrSource.class.getName());
+  }
+
+  private HoodieDeltaStreamer.Config createConfig(String basePath, String sourceCheckpoint, String sourceClass) {
     HoodieDeltaStreamer.Config cfg = HoodieDeltaStreamerTestBase.TestHelpers.makeConfig(
         basePath,
         WriteOperationType.INSERT,
-        "org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
+        sourceClass,
         Collections.emptyList(),
         sourceCheckpoint != null ? DFSPropertiesConfiguration.DEFAULT_PATH.toString() : null,
         false,
@@ -100,6 +106,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     assertEquals(metadata.get().getExtraMetadata(), expectedMetadata);
   }
 
+
   /**
    * Tests the end-to-end sync behavior with multiple sync iterations.
    *
@@ -120,9 +127,15 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
    *    - Verifies commit metadata still uses checkpoint V1 format
    *    - Verifies final checkpoint="30"
    */
+
   @ParameterizedTest
-  @ValueSource(strings = {"6", "8"})
-  public void testSyncE2ENoPrevCkpThenSyncMultipleTimes(String tableVersion) throws Exception {
+  @CsvSource({
+      "6, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
+      "8, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
+      "6, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource",
+      "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource"
+  })
+  public void testSyncE2ENoPrevCkpThenSyncMultipleTimes(String tableVersion, String sourceClass) throws Exception {
     // First start with no previous checkpoint and ingest till ckp 1 with table version.
     // Disable auto upgrade and MDT as we want to keep things as it is.
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
@@ -135,7 +148,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     props.put("hoodie.metadata.enable", "false");
     props.put("hoodie.write.auto.upgrade", "false");
 
-    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(createConfig(basePath(), null), jsc, Option.of(props));
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(createConfig(basePath(), null, sourceClass), jsc, Option.of(props));
     ds.sync();
 
     Map<String, String> expectedMetadata = new HashMap<>();
@@ -158,7 +171,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     props.put(VAL_CKP_RESET_KEY_IS_NULL, "IGNORED");
     props.put(VAL_CKP_IGNORE_KEY_IS_NULL, "IGNORED");
 
-    ds = new HoodieDeltaStreamer(createConfig(basePath(), null), jsc, Option.of(props));
+    ds = new HoodieDeltaStreamer(createConfig(basePath(), null, sourceClass), jsc, Option.of(props));
     ds.sync();
 
     // We do not allow table version 8 and ingest with version 6 delta streamer. But not table with version 6
@@ -181,7 +194,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     props.put(VAL_CKP_RESET_KEY_IS_NULL, "IGNORED");
     props.put(VAL_CKP_IGNORE_KEY_IS_NULL, "IGNORED");
 
-    ds = new HoodieDeltaStreamer(createConfig(basePath(), null), jsc, Option.of(props));
+    ds = new HoodieDeltaStreamer(createConfig(basePath(), null, sourceClass), jsc, Option.of(props));
     ds.sync();
 
     // After upgrading, we still use checkpoint V1 since this is s3/Gcs incremental source.
