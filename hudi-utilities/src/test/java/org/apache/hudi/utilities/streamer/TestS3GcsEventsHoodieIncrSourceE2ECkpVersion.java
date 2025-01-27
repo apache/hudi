@@ -68,7 +68,6 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     return "8".equals(version) ? "6" : "8";
   }
 
-
   private HoodieDeltaStreamer.Config createConfig(String basePath, String sourceCheckpoint) {
     return createConfig(basePath, sourceCheckpoint, S3EventsHoodieIncrSource.class.getName());
   }
