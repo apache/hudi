@@ -63,7 +63,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 @ExtendWith(MockitoExtension.class)
-public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodieIncrSourceHarness {
+public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
+
+  public static final String S3_EVENTS_HOODIE_INCR_SOURCE = "org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource";
 
   private String toggleVersion(String version) {
     return "8".equals(version) ? "6" : "8";
@@ -106,7 +108,6 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     assertEquals(metadata.get().getExtraMetadata(), expectedMetadata);
   }
 
-
   /**
    * Tests the end-to-end sync behavior with multiple sync iterations.
    *
@@ -127,13 +128,14 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
    *    - Verifies commit metadata still uses checkpoint V1 format
    *    - Verifies final checkpoint="30"
    */
-
   @ParameterizedTest
   @CsvSource({
       "6, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
       "8, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
       "6, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource",
-      "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource"
+      "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource",
+      "6, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource",
+      "8, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource"
   })
   public void testSyncE2ENoPrevCkpThenSyncMultipleTimes(String tableVersion, String sourceClass) throws Exception {
     // First start with no previous checkpoint and ingest till ckp 1 with table version.

@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.checkpoint;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -39,6 +40,7 @@ import static org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHa
 import static org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.FAIL;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -52,6 +54,9 @@ public class TestCheckpointUtils {
 
   private HoodieTableMetaClient metaClient;
   private HoodieActiveTimeline activeTimeline;
+
+  private static final String CHECKPOINT_TO_RESUME = "20240101000000";
+  private static final String GENERAL_SOURCE = "org.apache.hudi.utilities.sources.GeneralSource";
 
   @BeforeEach
   public void setUp() {
@@ -209,5 +214,47 @@ public class TestCheckpointUtils {
   })
   public void testTargetCheckpointV2(int version, String sourceClassName, boolean isV2Checkpoint) {
     assertEquals(isV2Checkpoint, CheckpointUtils.buildCheckpointFromGeneralSource(version, sourceClassName) instanceof StreamerCheckpointV2);
+  }
+
+  @Test
+  public void testBuildCheckpointFromGeneralSource() {
+    // Test V2 checkpoint creation (newer table version + general source)
+    Checkpoint checkpoint1 = CheckpointUtils.buildCheckpointFromGeneralSource(
+        GENERAL_SOURCE,
+        HoodieTableVersion.EIGHT.versionCode(),
+        CHECKPOINT_TO_RESUME
+    );
+    assertInstanceOf(StreamerCheckpointV2.class, checkpoint1);
+    assertEquals(CHECKPOINT_TO_RESUME, checkpoint1.getCheckpointKey());
+
+    // Test V1 checkpoint creation (older table version)
+    Checkpoint checkpoint2 = CheckpointUtils.buildCheckpointFromGeneralSource(
+        GENERAL_SOURCE,
+        HoodieTableVersion.SEVEN.versionCode(),
+        CHECKPOINT_TO_RESUME
+    );
+    assertInstanceOf(StreamerCheckpointV1.class, checkpoint2);
+    assertEquals(CHECKPOINT_TO_RESUME, checkpoint2.getCheckpointKey());
+  }
+
+  @Test
+  public void testBuildCheckpointFromConfigOverride() {
+    // Test checkpoint from config creation (newer table version + general source)
+    Checkpoint checkpoint1 = CheckpointUtils.buildCheckpointFromConfigOverride(
+        GENERAL_SOURCE,
+        HoodieTableVersion.EIGHT.versionCode(),
+        CHECKPOINT_TO_RESUME
+    );
+    assertInstanceOf(StreamerCheckpointFromCfgCkp.class, checkpoint1);
+    assertEquals(CHECKPOINT_TO_RESUME, checkpoint1.getCheckpointKey());
+
+    // Test V1 checkpoint creation (older table version)
+    Checkpoint checkpoint2 = CheckpointUtils.buildCheckpointFromConfigOverride(
+        GENERAL_SOURCE,
+        HoodieTableVersion.SEVEN.versionCode(),
+        CHECKPOINT_TO_RESUME
+    );
+    assertInstanceOf(StreamerCheckpointV1.class, checkpoint2);
+    assertEquals(CHECKPOINT_TO_RESUME, checkpoint2.getCheckpointKey());
   }
 }
