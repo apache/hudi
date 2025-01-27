@@ -226,8 +226,8 @@ object HoodieCreateRecordUtils {
     else {
       None
     }
-    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields) {
-      Option(avroRec.get(ParquetFileFormat.ROW_INDEX_TEMPORARY_COLUMN_NAME)).map(_.asInstanceOf[Long])
+    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields && avroRec.hasField(SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName())) {
+      Option(avroRec.get(SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName())).map(_.asInstanceOf[Long])
     } else {
       None
     }

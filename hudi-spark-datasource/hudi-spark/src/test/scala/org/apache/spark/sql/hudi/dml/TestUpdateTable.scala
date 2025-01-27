@@ -33,8 +33,8 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test Update Table") {
     withRecordType()(withTempDir { tmp =>
-      Seq(true).foreach { sparkSqlOptimizedWrites =>
-        Seq("mor").foreach { tableType =>
+      Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+        Seq("mor", "cow").foreach { tableType =>
           val tableName = generateTableName
           // create table
           spark.sql(

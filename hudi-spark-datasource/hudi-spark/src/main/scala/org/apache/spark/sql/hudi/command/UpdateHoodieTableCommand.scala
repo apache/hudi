@@ -17,20 +17,19 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
 import org.apache.hudi.HoodieBaseRelation.convertToAvroSchema
+import org.apache.hudi.HoodieCatalystUtils.toUnresolved
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.avro.AvroSchemaUtils
-import org.apache.hudi.HoodieCatalystUtils.toUnresolved
-import org.apache.avro.{Schema, SchemaBuilder}
-import org.apache.spark.sql._
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, UpdateTable}
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression, NamedExpression}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, Project, UpdateTable}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -89,9 +88,6 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
       case Assignment(attr: AttributeReference, value) => attr -> value
     }
 
-    val rowIndexAttr = AttributeReference(
-      ParquetFileFormat.ROW_INDEX_TEMPORARY_COLUMN_NAME, LongType, nullable = true)()
-
     val attributeSeq = ut.table.output
 
     // We don't support update queries changing partition column value.
@@ -119,23 +115,25 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
       removeMetaFields(attributeSeq)
     }
 
-    val targetExprs = filteredOutput.map { targetAttr =>
+    val condition = ut.condition.getOrElse(TrueLiteral)
+    val targetAttributes = filteredOutput.map { targetAttr =>
       // NOTE: [[UpdateTable]] permits partial updates and therefore here we correlate assigned
       //       assigned attributes to the ones of the target table. Ones not being assigned
       //       will simply be carried over (from the old record)
       assignedAttributes.find(p => attributeEquals(p._1, targetAttr))
         .map { case (_, expr) => Alias(castIfNeeded(expr, targetAttr.dataType), targetAttr.name)() }
         .getOrElse(targetAttr)
-    }
+    }.map(attr => toUnresolved(attr).asInstanceOf[NamedExpression])
 
-    val condition = ut.condition.getOrElse(TrueLiteral)
+    // Include temporary row index column name in the attribute refs of logical plan
+    var attributeRefs = attributeSeq.map(expr => AttributeReference(expr.name, expr.dataType, nullable = expr.nullable)())
+    attributeRefs = attributeRefs :+ AttributeReference(SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName(), LongType, nullable = true)()
 
-    val x = convertToAvroSchema(catalogTable.tableSchema, catalogTable.tableName)
     val schema = AvroSchemaUtils.projectSchema(
       convertToAvroSchema(catalogTable.tableSchema, catalogTable.tableName),
       attributeSeq.map(e => e.name).asJava,
       new Schema.Field(
-        ParquetFileFormat.ROW_INDEX_TEMPORARY_COLUMN_NAME,
+        SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName(),
         Schema.createUnion(
           Schema.create(Schema.Type.NULL), SchemaBuilder.builder().longType())
       ))
@@ -144,7 +142,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
       "path" -> catalogTable.metaClient.getBasePath.toString)
     val relation = sparkAdapter.createRelation(
       sparkSession.sqlContext, catalogTable.metaClient, schema, Array.empty, options.asJava)
-    val filteredPlan = Filter(toUnresolved(condition), LogicalRelation(relation))
+    val filteredPlan = Filter(toUnresolved(condition), Project(targetAttributes, new LogicalRelation(relation, attributeRefs, None, false)))
 
     val config = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {

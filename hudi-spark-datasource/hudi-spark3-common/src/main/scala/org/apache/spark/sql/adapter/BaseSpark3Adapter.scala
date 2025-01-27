@@ -104,4 +104,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
                                                  name: Option[String])(body: => T): T = {
       SQLExecution.withNewExecutionId(queryExecution, name)(body)
   }
+
+  override def getTemporaryRowIndexColumnName(): String = {
+    "_tmp_metadata_row_index"
+  }
 }
