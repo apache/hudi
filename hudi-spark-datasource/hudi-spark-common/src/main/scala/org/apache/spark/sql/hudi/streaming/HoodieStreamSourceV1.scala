@@ -67,7 +67,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
    * Users can set [[DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT]] to
    * [[HollowCommitHandling.USE_TRANSITION_TIME]] to avoid the blocking behavior.
    */
-  private val hollowCommitHandling: HollowCommitHandling =
+  private val hollowCommitHandlingMode: HollowCommitHandling =
     parameters.get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
       .map(HollowCommitHandling.valueOf)
       .getOrElse(HollowCommitHandling.BLOCK)
@@ -103,10 +103,10 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
   private def getLatestOffset: Option[HoodieSourceOffset] = {
     metaClient.reloadActiveTimeline()
     val filteredTimeline = handleHollowCommitIfNeeded(
-      metaClient.getActiveTimeline.filterCompletedInstants(), metaClient, hollowCommitHandling)
+      metaClient.getActiveTimeline.filterCompletedInstants(), metaClient, hollowCommitHandlingMode)
     filteredTimeline match {
       case activeInstants if !activeInstants.empty() =>
-        val timestamp = if (hollowCommitHandling == USE_TRANSITION_TIME) {
+        val timestamp = if (hollowCommitHandlingMode == USE_TRANSITION_TIME) {
           activeInstants.getLatestCompletionTime.get()
         } else {
           activeInstants.lastInstant().get().requestedTime()
@@ -155,7 +155,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
           DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
           DataSourceReadOptions.START_COMMIT.key -> startCommitTime(startOffset),
           DataSourceReadOptions.END_COMMIT.key -> endOffset.offsetCommitTime,
-          INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key -> hollowCommitHandling.name
+          INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key -> hollowCommitHandlingMode.name
         )
 
         val rdd = tableType match {
@@ -188,7 +188,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
   private def translateCheckpoint(commitTime: String): String = {
     if (writeTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       CheckpointUtils.convertToCheckpointV2ForCommitTime(
-        new StreamerCheckpointV1(commitTime), metaClient, hollowCommitHandling).getCheckpointKey
+        new StreamerCheckpointV1(commitTime), metaClient, hollowCommitHandlingMode).getCheckpointKey
     } else {
       commitTime
     }

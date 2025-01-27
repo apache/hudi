@@ -64,7 +64,7 @@ public class StreamerCheckpointUtils {
     LOG.debug("Checkpoint from config: " + streamerConfig.checkpoint);
     if (!checkpoint.isPresent() && streamerConfig.checkpoint != null) {
       int writeTableVersion = ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION);
-      checkpoint = Option.of(CheckpointUtils.targetCheckpointV2(writeTableVersion, streamerConfig.sourceClassName)
+      checkpoint = Option.of(CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, streamerConfig.sourceClassName)
           ? new StreamerCheckpointV2(streamerConfig.checkpoint) : new StreamerCheckpointV1(streamerConfig.checkpoint));
     }
     return checkpoint;
@@ -108,7 +108,7 @@ public class StreamerCheckpointUtils {
           resumeCheckpoint = Option.empty();
         } else if (streamerConfig.checkpoint != null && (StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointResetKey())
             || !streamerConfig.checkpoint.equals(checkpointFromCommit.getCheckpointResetKey()))) {
-          resumeCheckpoint = Option.of(CheckpointUtils.targetCheckpointV2(writeTableVersion, streamerConfig.sourceClassName)
+          resumeCheckpoint = Option.of(CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, streamerConfig.sourceClassName)
               ? new StreamerCheckpointV2(streamerConfig.checkpoint) : new StreamerCheckpointV1(streamerConfig.checkpoint));
         } else if (!StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointKey())) {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
@@ -126,7 +126,7 @@ public class StreamerCheckpointUtils {
         }
       } else if (streamerConfig.checkpoint != null) {
         // getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get()) will never return a commit metadata w/o any checkpoint key set.
-        resumeCheckpoint = Option.of(CheckpointUtils.targetCheckpointV2(writeTableVersion, streamerConfig.sourceClassName)
+        resumeCheckpoint = Option.of(CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, streamerConfig.sourceClassName)
             ? new StreamerCheckpointV2(streamerConfig.checkpoint) : new StreamerCheckpointV1(streamerConfig.checkpoint));
       }
     }

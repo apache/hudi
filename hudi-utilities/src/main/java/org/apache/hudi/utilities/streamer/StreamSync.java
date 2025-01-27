@@ -140,7 +140,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.targetCheckpointV2;
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.shouldTargetCheckpointV2;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
@@ -887,7 +887,7 @@ public class StreamSync implements Serializable, Closeable {
     }
 
     // Otherwise create new checkpoint based on version
-    Checkpoint checkpoint = targetCheckpointV2(versionCode, cfg.sourceClassName)
+    Checkpoint checkpoint = shouldTargetCheckpointV2(versionCode, cfg.sourceClassName)
         ? new StreamerCheckpointV2((String) null)
         : new StreamerCheckpointV1((String) null);
     

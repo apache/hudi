@@ -163,7 +163,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
   }
 
   private def translateCheckpoint(commitTime: String): String = {
-    if (CheckpointUtils.targetCheckpointV2(writeTableVersion.versionCode(), getClass.getName)) {
+    if (CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion.versionCode(), getClass.getName)) {
       commitTime
     } else {
       CheckpointUtils.convertToCheckpointV1ForCommitTime(

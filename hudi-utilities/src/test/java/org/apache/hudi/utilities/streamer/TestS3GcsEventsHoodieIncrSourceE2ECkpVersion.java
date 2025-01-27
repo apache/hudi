@@ -402,16 +402,16 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
    * Expected behavior:
    * - Both S3EventsHoodieIncrSource and GcsEventsHoodieIncrSource must use checkpoint V1
    * - This remains true for both table version 6 and 8
-   * - targetCheckpointV2() returns false in all these cases
+   * - shouldTargetCheckpointV2() returns false in all these cases
    *
    * This ensures these sources maintain backward compatibility with checkpoint V1 format
    */
   @Test
   public void testTargetCheckpointV2ForS3Gcs() {
     // To ensure we properly track sources that must use checkpoint V1.
-    assertFalse(CheckpointUtils.targetCheckpointV2(8, S3EventsHoodieIncrSource.class.getName()));
-    assertFalse(CheckpointUtils.targetCheckpointV2(6, S3EventsHoodieIncrSource.class.getName()));
-    assertFalse(CheckpointUtils.targetCheckpointV2(8, GcsEventsHoodieIncrSource.class.getName()));
-    assertFalse(CheckpointUtils.targetCheckpointV2(6, GcsEventsHoodieIncrSource.class.getName()));
+    assertFalse(CheckpointUtils.shouldTargetCheckpointV2(8, S3EventsHoodieIncrSource.class.getName()));
+    assertFalse(CheckpointUtils.shouldTargetCheckpointV2(6, S3EventsHoodieIncrSource.class.getName()));
+    assertFalse(CheckpointUtils.shouldTargetCheckpointV2(8, GcsEventsHoodieIncrSource.class.getName()));
+    assertFalse(CheckpointUtils.shouldTargetCheckpointV2(6, GcsEventsHoodieIncrSource.class.getName()));
   }
 }

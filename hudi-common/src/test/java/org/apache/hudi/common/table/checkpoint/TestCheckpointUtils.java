@@ -203,9 +203,11 @@ public class TestCheckpointUtils {
       "6, org.apache.hudi.utilities.sources.AnotherSource, false",
       // Disallowed sources should return false even with version >= 8
       "8, org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource, false",
-      "8, org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource, false"
+      "8, org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource, false",
+      "8, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource, false",
+      "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource, false"
   })
   public void testTargetCheckpointV2(int version, String sourceClassName, boolean expected) {
-    assertEquals(expected, CheckpointUtils.targetCheckpointV2(version, sourceClassName));
+    assertEquals(expected, CheckpointUtils.shouldTargetCheckpointV2(version, sourceClassName));
   }
 }

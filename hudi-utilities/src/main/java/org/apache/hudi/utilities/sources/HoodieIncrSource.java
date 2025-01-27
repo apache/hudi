@@ -190,7 +190,7 @@ public class HoodieIncrSource extends RowSource {
 
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    if (CheckpointUtils.targetCheckpointV2(writeTableVersion, getClass().getName())) {
+    if (CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, getClass().getName())) {
       return fetchNextBatchBasedOnCompletionTime(lastCheckpoint, sourceLimit);
     } else {
       return fetchNextBatchBasedOnRequestedTime(lastCheckpoint, sourceLimit);
