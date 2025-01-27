@@ -32,13 +32,12 @@ import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.catalyst.expressions.{And, Expression}
+import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
-import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.JavaConverters._
 
 class PartitionStatsIndexSupport(spark: SparkSession,
@@ -86,46 +85,76 @@ class PartitionStatsIndexSupport(spark: SparkSession,
                       queryFilters: Seq[Expression],
                       queryReferencedColumns: Seq[String]): Option[Set[String]] = {
     if (isIndexAvailable && queryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
-      val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
-      loadTransposed(queryReferencedColumns, readInMemory, Option.empty, Option.empty) {
-        transposedPartitionStatsDF => {
-          try {
-            transposedPartitionStatsDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
-            val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-              .collect()
-              .map(_.getString(0))
-              .toSet
-            if (allPartitions.nonEmpty) {
-              // PARTITION_STATS index exist for all or some columns in the filters
-              // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
-              //       column in a filter does not have the stats available, by making sure such a
-              //       filter does not prune any partition.
-              val indexSchema = transposedPartitionStatsDF.schema
-              val indexedCols: Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
-              // to be fixed. HUDI-8836.
-              val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
-              if (indexFilter.equals(TrueLiteral)) {
-                // if there are any non indexed cols or we can't translate source expr, we can prune partitions based on col stats lookup.
-                Some(allPartitions)
+      if (containsAnySqlFunction(queryFilters)) {
+        // If the query contains any SQL function, skip the pruning.
+        // Expression Index will be used in such cases, if available.
+        Option.empty
+      } else {
+        val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
+        loadTransposed(queryReferencedColumns, readInMemory, Option.empty, Option.empty) {
+          transposedPartitionStatsDF => {
+            try {
+              transposedPartitionStatsDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
+              val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                .collect()
+                .map(_.getString(0))
+                .toSet
+              if (allPartitions.nonEmpty) {
+                // PARTITION_STATS index exist for all or some columns in the filters
+                // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
+                //       column in a filter does not have the stats available, by making sure such a
+                //       filter does not prune any partition.
+                val indexSchema = transposedPartitionStatsDF.schema
+                val indexedCols: Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
+                // to be fixed. HUDI-8836.
+                val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
+                if (indexFilter.equals(TrueLiteral)) {
+                  // if there are any non indexed cols or we can't translate source expr, we can prune partitions based on col stats lookup.
+                  Some(allPartitions)
+                } else {
+                  Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+                    .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                    .collect()
+                    .map(_.getString(0))
+                    .toSet)
+                }
               } else {
-                Some(transposedPartitionStatsDF.where(new Column(indexFilter))
-                  .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-                  .collect()
-                  .map(_.getString(0))
-                  .toSet)
+                // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
+                Option.empty
               }
-            } else {
-              // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
-              Option.empty
+            } finally {
+              transposedPartitionStatsDF.unpersist()
             }
-          } finally {
-            transposedPartitionStatsDF.unpersist()
           }
         }
       }
     } else {
       Option.empty
     }
+  }
+
+  private def containsAnySqlFunction(queryFilters: Seq[Expression]): Boolean = {
+    val isMatchingExpression = (expr: Expression) => {
+      expr.find {
+        case _: UnaryExpression => true
+        case _: DateFormatClass => true
+        case _: FromUnixTime => true
+        case _: UnixTimestamp => true
+        case _: ParseToDate => true
+        case _: ParseToTimestamp => true
+        case _: DateAdd => true
+        case _: DateSub => true
+        case _: Substring => true
+        case _: StringTrim => true
+        case _: StringTrimLeft => true
+        case _: StringTrimRight => true
+        case _: RegExpReplace => true
+        case _: RegExpExtract => true
+        case _: StringSplit => true
+        case _ => false
+      }.isDefined
+    }
+    queryFilters.exists(isMatchingExpression)
   }
 }
 

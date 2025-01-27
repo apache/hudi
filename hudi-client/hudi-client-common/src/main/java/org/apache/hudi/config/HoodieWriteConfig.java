@@ -2090,6 +2090,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    *
    * <p>The partition stats index is enabled if:
    * <ul>
+   *   <li>The column stats is enabled. Partition stats cannot be created without column stats.</li>
    *   <li>The metadata table is enabled and partition stats index is enabled in the metadata configuration, or</li>
    *   <li>The partition stats index is not explicitly marked for dropping in the metadata configuration.</li>
    * </ul>
@@ -2097,7 +2098,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return {@code true} if the partition stats index is enabled, {@code false} otherwise.
    */
   public boolean isPartitionStatsIndexEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+    if (isMetadataColumnStatsIndexEnabled()) {
+      return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+    }
+    return false;
   }
 
   /**

@@ -890,6 +890,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
+      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, metadataConfig.isColumnStatsIndexEnabled());
       // fix me: disable when schema on read is enabled.
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
