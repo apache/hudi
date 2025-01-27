@@ -63,8 +63,9 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * ****************************************************
  *      Use FileCreateUtilsV2 whenever possible!
  * ****************************************************
+ * [HUDI-8924]: Remove this class entirely.
  */
-public class FileCreateUtils extends FileCreateUtilsBase {
+public class FileCreateUtilsLegacy extends FileCreateUtilsBase {
 
   public static StoragePath getTimelinePath(StoragePath basePath) throws IOException {
     return new StoragePath(
