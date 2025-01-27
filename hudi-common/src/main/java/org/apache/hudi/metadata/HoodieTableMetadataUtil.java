@@ -1549,7 +1549,7 @@ public class HoodieTableMetadataUtil {
 
     Map<String, Schema> colsToIndexSchemaMap = new LinkedHashMap<>();
     colsToIndexSchemaMap.putAll(META_COLS_TO_ALWAYS_INDEX_SCHEMA_MAP);
-    colsToIndexSchemaMap.putAll(colsToIndexSchemaMap);
+    colsToIndexSchemaMap.putAll(columnsToIndexWithoutRequiredMetas);
     return colsToIndexSchemaMap;
   }
 
@@ -1878,7 +1878,7 @@ public class HoodieTableMetadataUtil {
     } else if (val instanceof Double) {
       return ((Double)val).floatValue();
     } else if (val instanceof Boolean) {
-      return ((Float) val);
+      return (Boolean) val ? 1.0f : 0.0f;
     }  else {
       // best effort casting
       return Float.parseFloat(val.toString());
@@ -1898,7 +1898,7 @@ public class HoodieTableMetadataUtil {
     } else if (val instanceof Double) {
       return ((Double)val).doubleValue();
     } else if (val instanceof Boolean) {
-      return ((Double) val);
+      return (Boolean) val ? 1.0d : 0.0d;
     }  else {
       // best effort casting
       return Double.parseDouble(val.toString());

@@ -69,27 +69,23 @@ public abstract class FileFormatUtils {
             relativePartitionPath, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
             e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize()))
         .reduce((a,b) -> {
-          try {
-            if (colsToIndexSchemaMap.isEmpty() || (a.getMinValue() == null || b.getMinValue() == null)
-                || (a.getMinValue().getClass().getSimpleName().equals(b.getMinValue().getClass().getSimpleName())
-                && a.getMaxValue().getClass().getSimpleName().equals(b.getMaxValue().getClass().getSimpleName()))) {
-              return HoodieColumnRangeMetadata.merge(a, b);
-            } else {
-              // schema is evolving for the column of interest.
-              Schema schema = colsToIndexSchemaMap.get(a.getColumnName());
-              HoodieColumnRangeMetadata<T> left = HoodieColumnRangeMetadata.create(a.getFilePath(), a.getColumnName(),
-                  (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMinValue()),
-                  (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMaxValue()), a.getNullCount(),
-                  a.getValueCount(), a.getTotalSize(), a.getTotalUncompressedSize());
-              HoodieColumnRangeMetadata<T> right = HoodieColumnRangeMetadata.create(b.getFilePath(), b.getColumnName(),
-                  (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMinValue()),
-                  (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMaxValue()), b.getNullCount(),
-                  b.getValueCount(), b.getTotalSize(), b.getTotalUncompressedSize());
-              return HoodieColumnRangeMetadata.merge(left, right);
-            }
-          } catch (ClassCastException cce) {
-            System.out.println("asdfadsf");
-            throw cce;
+          if (colsToIndexSchemaMap.isEmpty()
+              || a.getMinValue() == null || a.getMaxValue() == null || b.getMinValue() == null || b.getMaxValue() == null
+              || (a.getMinValue().getClass().getSimpleName().equals(b.getMinValue().getClass().getSimpleName())
+              && a.getMaxValue().getClass().getSimpleName().equals(b.getMaxValue().getClass().getSimpleName()))) {
+            return HoodieColumnRangeMetadata.merge(a, b);
+          } else {
+            // schema is evolving for the column of interest.
+            Schema schema = colsToIndexSchemaMap.get(a.getColumnName());
+            HoodieColumnRangeMetadata<T> left = HoodieColumnRangeMetadata.create(a.getFilePath(), a.getColumnName(),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMinValue()),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMaxValue()), a.getNullCount(),
+                a.getValueCount(), a.getTotalSize(), a.getTotalUncompressedSize());
+            HoodieColumnRangeMetadata<T> right = HoodieColumnRangeMetadata.create(b.getFilePath(), b.getColumnName(),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMinValue()),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMaxValue()), b.getNullCount(),
+                b.getValueCount(), b.getTotalSize(), b.getTotalUncompressedSize());
+            return HoodieColumnRangeMetadata.merge(left, right);
           }
         }).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
   }
