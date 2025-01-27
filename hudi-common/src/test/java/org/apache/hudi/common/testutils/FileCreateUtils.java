@@ -252,9 +252,9 @@ public class FileCreateUtils extends FileCreateUtilsBase {
     return markerFilePath.toAbsolutePath().toString();
   }
 
-  private static void createMetaFile(String basePath, String instantTime, Supplier<String> completionTimeSupplier, String suffix, byte[] content) throws IOException {
+  private static void createMetaFile(String timelinePath, String instantTime, Supplier<String> completionTimeSupplier, String suffix, byte[] content) throws IOException {
     try {
-      Path parentPath = Paths.get(getTimelinePath(new StoragePath(basePath)).makeQualified(new URI("file:///")).toUri());
+      Path parentPath = Paths.get(new StoragePath(timelinePath).makeQualified(new URI("file:///")).toUri());
 
       Files.createDirectories(parentPath);
       if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {

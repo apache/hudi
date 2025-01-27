@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -75,12 +76,14 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Utils for creating dummy Hudi files in testing.
+ * TODO[Davis Zhang]: For all function calls with preTableVersion8, they should be derive directly by consulting metaClient. Remove the
+ * parameter and revise all call sites properly.
  */
 public class FileCreateUtilsV2 extends FileCreateUtilsBase {
 
   private static void createMetaFile(HoodieTableMetaClient metaClient, String instantTime, String suffix,
                                      HoodieStorage storage) throws IOException {
-    createMetaFile(metaClient, instantTime, suffix, storage, false);
+    createMetaFile(metaClient, instantTime, suffix, storage, metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT));
   }
 
   private static void createMetaFile(HoodieTableMetaClient metaClient, String instantTime, String suffix,
