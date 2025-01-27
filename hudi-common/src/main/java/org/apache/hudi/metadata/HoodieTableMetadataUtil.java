@@ -380,14 +380,14 @@ public class HoodieTableMetadataUtil {
    * @param dataMetaClient        - HoodieTableMetaClient for data
    * @param tableMetadata
    * @param metadataConfig        - HoodieMetadataConfig
-   * @param enabledPartitionTypes - List of enabled MDT partitions
+   * @param enabledPartitionTypes - Set of enabled MDT partitions to update
    * @param bloomFilterType       - Type of generated bloom filter records
    * @param bloomIndexParallelism - Parallelism for bloom filter record generation
    * @return Map of partition to metadata records for the commit action
    */
   public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext context, HoodieConfig hoodieConfig, HoodieCommitMetadata commitMetadata,
                                                                                String instantTime, HoodieTableMetaClient dataMetaClient, HoodieTableMetadata tableMetadata,
-                                                                               HoodieMetadataConfig metadataConfig, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType,
+                                                                               HoodieMetadataConfig metadataConfig, Set<String> enabledPartitionTypes, String bloomFilterType,
                                                                                int bloomIndexParallelism, int writesFileIdEncoding, EngineType engineType,
                                                                                Option<HoodieRecordType> recordTypeOpt) {
     final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
@@ -395,18 +395,18 @@ public class HoodieTableMetadataUtil {
         convertMetadataToFilesPartitionRecords(commitMetadata, instantTime), 1);
     partitionToRecordsMap.put(MetadataPartitionType.FILES.getPartitionPath(), filesPartitionRecordsRDD);
 
-    if (enabledPartitionTypes.contains(MetadataPartitionType.BLOOM_FILTERS)) {
+    if (enabledPartitionTypes.contains(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath())) {
       final HoodieData<HoodieRecord> metadataBloomFilterRecords = convertMetadataToBloomFilterRecords(
           context, hoodieConfig, commitMetadata, instantTime, dataMetaClient, bloomFilterType, bloomIndexParallelism);
       partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath(), metadataBloomFilterRecords);
     }
 
-    if (enabledPartitionTypes.contains(MetadataPartitionType.COLUMN_STATS)) {
+    if (enabledPartitionTypes.contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
       final HoodieData<HoodieRecord> metadataColumnStatsRDD = convertMetadataToColumnStatsRecords(commitMetadata, context,
           dataMetaClient, metadataConfig, recordTypeOpt);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
     }
-    if (enabledPartitionTypes.contains(MetadataPartitionType.PARTITION_STATS)) {
+    if (enabledPartitionTypes.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath())) {
       checkState(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient),
           "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
       // Generate Hoodie Pair data of partition name and list of column range metadata for all the files in that partition
@@ -414,7 +414,7 @@ public class HoodieTableMetadataUtil {
           dataMetaClient, tableMetadata, metadataConfig, recordTypeOpt);
       partitionToRecordsMap.put(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), partitionStatsRDD);
     }
-    if (enabledPartitionTypes.contains(MetadataPartitionType.RECORD_INDEX)) {
+    if (enabledPartitionTypes.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
       partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), convertMetadataToRecordIndexRecords(context, commitMetadata, metadataConfig,
           dataMetaClient, writesFileIdEncoding, instantTime, engineType));
     }
