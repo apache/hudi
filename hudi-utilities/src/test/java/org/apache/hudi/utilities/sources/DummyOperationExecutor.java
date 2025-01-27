@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -38,8 +39,11 @@ public class DummyOperationExecutor {
 
   /**
    * Operation keys for different test scenarios returning empty row sets with different checkpoint configurations.
+   * For corresponding dummy operations please extract the lambda function name from the key OP_[DummyOperationFunctionName]_KEY
+   * and check the corresponding [DummyOperationFunctionName] member definition.
    */
-  public static final String OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY = "OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY";
+  public static final String OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY = "OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY";
+  public static final String OP_EMPTY_ROW_SET_NONE_NULL_CKP_V2_KEY = "OP_EMPTY_ROW_SET_NONE_NULL_CKP_V2_KEY";
   public static final String OP_EMPTY_ROW_SET_NULL_CKP_KEY = "OP_EMPTY_ROW_SET_NULL_CKP";
   
   /**
@@ -53,22 +57,24 @@ public class DummyOperationExecutor {
     Pair<Option<Dataset<Row>>, Checkpoint> apply(Option<Checkpoint> checkpoint, Long limit, TypedProperties props);
   }
 
-  private static final OperationFunction EMPTY_ROW_SET_NONE_NULL_CKP =
+  private static final OperationFunction EMPTY_ROW_SET_NONE_NULL_CKP_V1 =
       (checkpoint, limit, props) -> {
         Option<Dataset<Row>> empty = Option.empty();
         String returnCheckpoint = props.getString(RETURN_CHECKPOINT_KEY, CUSTOM_CHECKPOINT1);
-        return Pair.of(
-          empty,
-          new StreamerCheckpointV1(returnCheckpoint));
+        return Pair.of(empty, new StreamerCheckpointV1(returnCheckpoint));
       };
 
   private static final OperationFunction EMPTY_ROW_SET_NULL_CKP =
       (checkpoint, limit, props) -> {
         Option<Dataset<Row>> empty = Option.empty();
-        return Pair.of(
-            empty,
-            null
-        );
+        return Pair.of(empty, null);
+      };
+
+  private static final OperationFunction EMPTY_ROW_SET_NONE_NULL_CKP_V2 =
+      (checkpoint, limit, props) -> {
+        Option<Dataset<Row>> empty = Option.empty();
+        String returnCheckpoint = props.getString(RETURN_CHECKPOINT_KEY, CUSTOM_CHECKPOINT1);
+        return Pair.of(empty, new StreamerCheckpointV2(returnCheckpoint));
       };
 
   /**
@@ -82,10 +88,12 @@ public class DummyOperationExecutor {
    */
   public static Pair<Option<Dataset<Row>>, Checkpoint> executeDummyOperation(
       Option<Checkpoint> lastCheckpoint, long sourceLimit, TypedProperties props) {
-    String opType = props.getString(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    String opType = props.getString(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     switch (opType) {
-      case OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY:
-        return EMPTY_ROW_SET_NONE_NULL_CKP.apply(lastCheckpoint, sourceLimit, props);
+      case OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY:
+        return EMPTY_ROW_SET_NONE_NULL_CKP_V1.apply(lastCheckpoint, sourceLimit, props);
+      case OP_EMPTY_ROW_SET_NONE_NULL_CKP_V2_KEY:
+        return EMPTY_ROW_SET_NONE_NULL_CKP_V2.apply(lastCheckpoint, sourceLimit, props);
       case OP_EMPTY_ROW_SET_NULL_CKP_KEY:
         return EMPTY_ROW_SET_NULL_CKP.apply(lastCheckpoint, sourceLimit, props);
       default:

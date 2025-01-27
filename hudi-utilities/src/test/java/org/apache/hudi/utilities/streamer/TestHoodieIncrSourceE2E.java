@@ -53,7 +53,7 @@ import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_CKP_RESE
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_EMPTY_CKP_KEY;
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_INPUT_CKP;
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_NON_EMPTY_CKP_ALL_MEMBERS;
-import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY;
+import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NULL_CKP_KEY;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_FETCH_NEXT_BATCH;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.RETURN_CHECKPOINT_KEY;
@@ -64,8 +64,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 @ExtendWith(MockitoExtension.class)
 public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
-
-  public static final String S3_EVENTS_HOODIE_INCR_SOURCE = "org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource";
 
   private String toggleVersion(String version) {
     return "8".equals(version) ? "6" : "8";
@@ -143,7 +141,7 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
     TypedProperties props = setupBaseProperties(tableVersion);
     // Round 1: ingest start from beginning to checkpoint 10. No checkpoint override.
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(RETURN_CHECKPOINT_KEY, "10");
     // Validating the source input ckp is empty when doing the sync.
     props.put(VAL_INPUT_CKP, VAL_EMPTY_CKP_KEY);
@@ -164,7 +162,7 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     props = setupBaseProperties(toggleVersion(tableVersion));
     props.put("hoodie.metadata.enable", "false");
     // Dummy behavior injection to return ckp 2.
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(RETURN_CHECKPOINT_KEY, "20");
     props.put("hoodie.write.auto.upgrade", "false");
     // Validate the given checkpoint is ckp 1 when doing the sync.
@@ -187,7 +185,7 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     props = setupBaseProperties("8");
     props.put("hoodie.metadata.enable", "false");
     // Dummy behavior injection to return ckp 1.
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(RETURN_CHECKPOINT_KEY, "30");
     props.put("hoodie.write.auto.upgrade", "false");
     // Validate the given checkpoint is ckp 2 when doing the sync.
@@ -239,7 +237,7 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     // set it to start at ckp "10" and in that iteration the streamer stops at ckp "30
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
     TypedProperties props = setupBaseProperties(tableVersion);
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
     props.put(RETURN_CHECKPOINT_KEY, "30"); // The data source said it stops at "30".
     props.put(VAL_CKP_KEY_EQ_VAL, "10"); // Ensure the data source is notified we should start at "10"
@@ -297,7 +295,7 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
 
     // In the next iteration, using the same config with ignore key setting does not lead to checkpoint reset.
     props = setupBaseProperties(tableVersion);
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(RETURN_CHECKPOINT_KEY, "70"); // Stop at 70 after ingestion.
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
     props.put(VAL_CKP_KEY_EQ_VAL, "60"); // Ensure the data source is notified we should start at "60".
@@ -314,7 +312,7 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     // contain that info.
     cfg.ignoreCheckpoint = null;
     props = setupBaseProperties(tableVersion);
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(RETURN_CHECKPOINT_KEY, "80"); // Stop at 70 after ingestion.
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
     props.put(VAL_CKP_KEY_EQ_VAL, "70"); // Ensure the data source is notified we should start at "60".
@@ -400,7 +398,7 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
     TypedProperties props = setupBaseProperties(tableVersion);
     props.put(CHECKPOINT_FORCE_SKIP.key(), "true");
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(VAL_INPUT_CKP, VAL_EMPTY_CKP_KEY);
 
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(createConfig(basePath(), null), jsc, Option.of(props));

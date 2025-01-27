@@ -449,15 +449,15 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .initTable(getDefaultStorageConf(), basePath());
       
-      streamerConfig.checkpoint = "test-cp";
-      streamerConfig.targetBasePath = "dummyVal";
+    streamerConfig.checkpoint = "test-cp";
+    streamerConfig.targetBasePath = "dummyVal";
 
-      // Disable auto-upgrade and set matching version
-      props.setProperty(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false");
-      props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "6");
+    // Disable auto-upgrade and set matching version
+    props.setProperty(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false");
+    props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "6");
 
-      // Should pass since versions match
-      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+    // Should pass since versions match
+    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
   }
 
   @Test
