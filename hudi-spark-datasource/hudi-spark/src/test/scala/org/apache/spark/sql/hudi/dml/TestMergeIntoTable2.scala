@@ -58,7 +58,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 1 as id, 'a1' as name, 10 as price, 1000L as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when not matched and s0.id % 2 = 1 then insert *
@@ -73,7 +73,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 2 as id, 'a2' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 2 as id, 'a2' as name, 10 as price, 1000L as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when not matched and s0.id % 2 = 1 then insert *
@@ -88,7 +88,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 11 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 1 as id, 'a1' as name, 11 as price, 1000L as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when matched and s0.id % 2 = 0 then update set *
@@ -105,7 +105,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 11 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 1 as id, 'a1' as name, 11 as price, 1000L as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when matched and s0.id % 2 = 1 then update set id = s0.id, name = s0.name,
@@ -122,7 +122,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 11 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 1 as id, 'a1' as name, 11 as price, 1000L as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when matched and s0.id % 2 = 0 then update set id = s0.id, name = s0.name,
@@ -139,7 +139,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 1 as id, 'a1' as name, 10 as price, 1000L as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when matched and s0.id % 2 = 1 then update set id = s0.id, name = s0.name,

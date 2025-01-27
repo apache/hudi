@@ -435,7 +435,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test MergeInto for MOR table ") {
+  test("Test MergeInto for MOR table") {
     spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
     withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
@@ -470,7 +470,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 1 as id, 'a1' as name, 10 as price, 1000L as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when not matched and s0.id % 2 = 1 then insert *
@@ -485,7 +485,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as _id, 'a1' as name, 12 as _price, 1001 as _ts, '2021-03-21' as dt
+           |  select 1 as _id, 'a1' as name, 12 as _price, 1001L as _ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0._id
            | when matched and s0._id % 2 = 0 then update set
@@ -501,7 +501,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as _id, 'a1' as name, 12 as _price, 1001 as _ts, '2021-03-21' as dt
+           |  select 1 as _id, 'a1' as name, 12 as _price, 1001L as _ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0._id
            | when matched and s0._id % 2 = 1 then update set
@@ -517,7 +517,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 2 as id, 'a2' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 2 as id, 'a2' as name, 10 as price, 1000L as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when not matched and s0.id % 2 = 0 then insert *
@@ -532,7 +532,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName t0
            | using (
-           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as s_ts, '2021-03-21' as dt
+           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001L as s_ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id
            | when matched and s_ts = 1001
@@ -552,7 +552,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName t0
            | using (
-           |  select 1 as s_id, 'a2' as s_name, 15 as s_price, 1001 as s_ts, '2021-03-21' as dt
+           |  select 1 as s_id, 'a2' as s_name, 15 as s_price, 1001L as s_ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id + 1
            | when matched and s_ts = 1001 then delete
@@ -563,7 +563,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName t0
            | using (
-           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as ts, '2021-03-21' as dt
+           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001L as ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id
            | when matched and s0.ts = 1001 then delete
