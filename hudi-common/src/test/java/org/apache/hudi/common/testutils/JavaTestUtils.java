@@ -27,7 +27,7 @@ public class JavaTestUtils {
   public static boolean checkNestedExceptionContains(Throwable t, String errorMsg) {
     Throwable throwable = t;
     boolean res = false;
-    while(throwable != null) {
+    while (throwable != null) {
       if (throwable.getMessage().contains(errorMsg)) {
         res = true;
         break;
