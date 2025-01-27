@@ -251,8 +251,8 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
             s"""
                | merge into $tableName t
                | using (
-               |   select 7 as id, 'G' as name, 70.0 as price, 99 as ts union all
-               |   select 8, 'H', 80.0, 99 as ts
+               |   select 7 as id, 'G' as name, 70.0 as price, 99L as ts union all
+               |   select 8, 'H', 80.0, 99L as ts
                | ) s
                | on t.id = s.id
                | when not matched then insert *
@@ -270,5 +270,5 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
         })
       }
     }
-  }
+//  }
 }
