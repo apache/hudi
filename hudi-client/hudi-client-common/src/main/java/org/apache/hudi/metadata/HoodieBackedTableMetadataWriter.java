@@ -544,7 +544,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     Lazy<Option<Schema>> tableSchema = Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient));
     final List<String> columnsToIndex = HoodieTableMetadataUtil.getColumnsToIndex(dataMetaClient.getTableConfig(),
         dataWriteConfig.getMetadataConfig(), tableSchema, true,
-        Option.of(dataWriteConfig.getRecordMerger().getRecordType()));
+        Option.of(dataWriteConfig.getRecordMerger().getRecordType())).keySet().stream().collect(Collectors.toList());
 
     final int fileGroupCount = dataWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
     if (columnsToIndex.isEmpty()) {

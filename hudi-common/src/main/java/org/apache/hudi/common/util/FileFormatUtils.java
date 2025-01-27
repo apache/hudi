@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -59,14 +60,38 @@ public abstract class FileFormatUtils {
    * @param fileColumnRanges List of column range statistics for each file in a partition
    */
   public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(String relativePartitionPath,
-                                                                                                 @Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges) {
+                                                                                                 @Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges,
+                                                                                                 Map<String, Schema> colsToIndexSchemaMap) {
     ValidationUtils.checkArgument(!fileColumnRanges.isEmpty(), "fileColumnRanges should not be empty.");
     // There are multiple files. Compute min(file_mins) and max(file_maxs)
     return fileColumnRanges.stream()
         .map(e -> HoodieColumnRangeMetadata.create(
             relativePartitionPath, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
             e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize()))
-        .reduce(HoodieColumnRangeMetadata::merge).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
+        .reduce((a,b) -> {
+          try {
+            if (colsToIndexSchemaMap.isEmpty() || (a.getMinValue() == null || b.getMinValue() == null)
+                || (a.getMinValue().getClass().getSimpleName().equals(b.getMinValue().getClass().getSimpleName())
+                && a.getMaxValue().getClass().getSimpleName().equals(b.getMaxValue().getClass().getSimpleName()))) {
+              return HoodieColumnRangeMetadata.merge(a, b);
+            } else {
+              // schema is evolving for the column of interest.
+              Schema schema = colsToIndexSchemaMap.get(a.getColumnName());
+              HoodieColumnRangeMetadata<T> left = HoodieColumnRangeMetadata.create(a.getFilePath(), a.getColumnName(),
+                  (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMinValue()),
+                  (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMaxValue()), a.getNullCount(),
+                  a.getValueCount(), a.getTotalSize(), a.getTotalUncompressedSize());
+              HoodieColumnRangeMetadata<T> right = HoodieColumnRangeMetadata.create(b.getFilePath(), b.getColumnName(),
+                  (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMinValue()),
+                  (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMaxValue()), b.getNullCount(),
+                  b.getValueCount(), b.getTotalSize(), b.getTotalUncompressedSize());
+              return HoodieColumnRangeMetadata.merge(left, right);
+            }
+          } catch (ClassCastException cce) {
+            System.out.println("asdfadsf");
+            throw cce;
+          }
+        }).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
   }
 
   /**

@@ -69,7 +69,6 @@ import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_ST
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD_STR;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.computeRevivedAndDeletedKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForPartitionStats;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryOrExpressionIndex;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -611,19 +610,19 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         .endRecord();
 
     // Test for primitive fields
-    assertTrue(validateDataTypeForPartitionStats("stringField", schema));
-    assertTrue(validateDataTypeForPartitionStats("intField", schema));
-    assertTrue(validateDataTypeForPartitionStats("booleanField", schema));
-    assertTrue(validateDataTypeForPartitionStats("floatField", schema));
-    assertTrue(validateDataTypeForPartitionStats("doubleField", schema));
-    assertTrue(validateDataTypeForPartitionStats("longField", schema));
-    assertTrue(validateDataTypeForPartitionStats("unionIntField", schema));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("stringField").schema(), Option.empty()));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("intField").schema(), Option.empty()));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("booleanField").schema(), Option.empty()));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("floatField").schema(), Option.empty()));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("doubleField").schema(), Option.empty()));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("longField").schema(), Option.empty()));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("unionIntField").schema(), Option.empty()));
 
     // Test for unsupported fields
-    assertFalse(validateDataTypeForPartitionStats("arrayField", schema));
-    assertFalse(validateDataTypeForPartitionStats("mapField", schema));
-    assertFalse(validateDataTypeForPartitionStats("structField", schema));
-    assertFalse(validateDataTypeForPartitionStats("bytesField", schema));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("arrayField").schema(), Option.empty()));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("mapField").schema(), Option.empty()));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("structField").schema(), Option.empty()));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("bytesField").schema(), Option.of(HoodieRecord.HoodieRecordType.SPARK)));
 
     // Test for logical types
     Schema dateFieldSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
@@ -631,7 +630,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         .fields()
         .name("dateField").type(dateFieldSchema).noDefault()
         .endRecord();
-    assertTrue(validateDataTypeForPartitionStats("dateField", schema));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("dateField").schema(), Option.empty()));
   }
 
   @Test

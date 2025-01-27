@@ -303,7 +303,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, localSourceTableSchema, metadataConfig, metaClient)
     val lazyOptTableSchema : Lazy[org.apache.hudi.common.util.Option[Schema]] = Lazy.eagerly(org.apache.hudi.common.util.Option.of(tableSchema))
     val indexedColumnswithMeta: Set[String] = HoodieTableMetadataUtil
-      .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, lazyOptTableSchema, false).asScala.toSet
+      .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, lazyOptTableSchema, false).keySet().asScala.toSet
     val indexedColumns = indexedColumnswithMeta.filter(colName => !HoodieTableMetadataUtil.META_COL_SET_TO_INDEX.contains(colName))
     val sortedIndexedColumns : Set[String] = TreeSet(indexedColumns.toSeq:_*)
     val (expectedColStatsSchema, _) = composeIndexSchema(sortedIndexedColumns.toSeq, indexedColumns.toSeq, localSourceTableSchema)
@@ -348,7 +348,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
     val lazyOptTableSchema : Lazy[org.apache.hudi.common.util.Option[Schema]] = Lazy.eagerly(org.apache.hudi.common.util.Option.of(tableSchema))
     val indexedColumnswithMeta: Set[String] = HoodieTableMetadataUtil
-      .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, lazyOptTableSchema, false).asScala.toSet
+      .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, lazyOptTableSchema, false).keySet().asScala.toSet
     val pIndexedColumns = indexedColumnswithMeta.filter(colName => !HoodieTableMetadataUtil.META_COL_SET_TO_INDEX.contains(colName))
       .toSeq.sorted
 
