@@ -270,7 +270,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieConfig config = new HoodieConfig();
     config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
     config.setValue(HoodieTableConfig.INITIAL_VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
-    config.setValue(RECORD_MERGE_MODE, RECORD_MERGE_MODE.defaultValue().name());
+    config.setValue(RECORD_MERGE_MODE, COMMIT_TIME_ORDERING.name());
 
     HoodieTableConfig.dropInvalidConfigs(config);
     assertTrue(config.contains(HoodieTableConfig.VERSION));
@@ -337,8 +337,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
         arguments(null, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
             false, EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
 
-        //test legal overwrite combos
-
+        //test legal commit time ordering combos
         arguments(COMMIT_TIME_ORDERING, null, null, null,
             false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
         arguments(COMMIT_TIME_ORDERING, null, null, "",
@@ -364,7 +363,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
         arguments(null, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
             false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
 
-        //test legal custom payload combos
+        //test legal custom merge mode combos
         arguments(CUSTOM, customPayload, null, null,
             false, CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
         arguments(CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
@@ -373,12 +372,22 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
             false, CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
         arguments(null, customPayload, null, null,
             false, CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
-
-        //test legal custom merger combos
         arguments(CUSTOM, null, customStrategy, null,
-            false, CUSTOM, null, customStrategy),
+            false, CUSTOM, defaultPayload, customStrategy),
         arguments(CUSTOM, customPayload, customStrategy, null,
             false, CUSTOM, customPayload, customStrategy),
+
+        //test legal configs that work but should not be used usually
+        arguments(CUSTOM, defaultPayload, customStrategy, null,
+            false, CUSTOM, defaultPayload, customStrategy),
+        arguments(CUSTOM, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            false, CUSTOM, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(CUSTOM, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            false, CUSTOM, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            false, CUSTOM, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            false, CUSTOM, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
 
         //test illegal combos due to missing info
         arguments(CUSTOM, null, null, null,
@@ -411,23 +420,13 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
             true, null, null, null),
         arguments(CUSTOM, overwritePayload, null, null,
             true, null, null, null),
-        arguments(CUSTOM, defaultPayload, customStrategy, null,
-            true, null, null, null),
         arguments(CUSTOM, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
         arguments(CUSTOM, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
-        arguments(CUSTOM, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
-            true, null, null, null),
-        arguments(CUSTOM, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
-            true, null, null, null),
         arguments(CUSTOM, defaultPayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
         arguments(CUSTOM, overwritePayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
-            true, null, null, null),
-        arguments(null, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
-            true, null, null, null),
-        arguments(null, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
         arguments(null, defaultPayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),

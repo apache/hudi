@@ -779,13 +779,15 @@ public class HoodieTableConfig extends HoodieConfig {
       checkArgument(modeBasedOnPayload != null || modeBasedOnStrategyId != null,
           String.format("Cannot infer record merge mode from payload class (%s) or record merge "
               + "strategy ID (%s).", payloadClassName, recordMergeStrategyId));
-      if (modeBasedOnPayload != null && modeBasedOnStrategyId != null) {
+      // TODO(HUDI-8925): once payload class name is not required, remove the check on
+      //  modeBasedOnStrategyId
+      if (modeBasedOnStrategyId != CUSTOM && modeBasedOnPayload != null && modeBasedOnStrategyId != null) {
         checkArgument(modeBasedOnPayload.equals(modeBasedOnStrategyId),
             String.format("Configured payload class (%s) and record merge strategy ID (%s) conflict "
                     + "with each other. Please only set one of them in the write config.",
                 payloadClassName, recordMergeStrategyId));
       }
-      inferredRecordMergeMode = modeBasedOnPayload != null ? modeBasedOnPayload : modeBasedOnStrategyId;
+      inferredRecordMergeMode = modeBasedOnStrategyId != null ? modeBasedOnStrategyId : modeBasedOnPayload;
     }
     if (recordMergeMode != null) {
       checkArgument(inferredRecordMergeMode == recordMergeMode,
@@ -824,6 +826,10 @@ public class HoodieTableConfig extends HoodieConfig {
         checkArgument(nonEmpty(inferredPayloadClassName),
             "For payload class based merge strategy as a fallback, payload class name is "
                 + "required to be set.");
+      }
+      // TODO(HUDI-8925): remove this once the payload class name is no longer required
+      if (isNullOrEmpty(inferredPayloadClassName)) {
+        inferredPayloadClassName = DEFAULT_PAYLOAD_CLASS_NAME;
       }
     }
 
