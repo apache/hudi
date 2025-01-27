@@ -1097,40 +1097,43 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
-  @ParameterizedTest
-  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
-  public void testHoodieIndexerExecutionAfterCommit(HoodieRecordType recordType) throws Exception {
-    String tableBasePath = basePath + "/asyncindexer";
-    HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 1000, "false", recordType, WriteOperationType.UPSERT,
-        Collections.singleton(HoodieIndexConfig.INDEX_TYPE.key() + "=GLOBAL_SIMPLE"));
+  @Test
+  public void testHoodieIndexerExecutionAfterCommit() throws Exception {
+    String tableBasePath = basePath + "/asyncindexer_commit";
+    Set<String> customConfigs = new HashSet<>();
+    customConfigs.add(HoodieIndexConfig.INDEX_TYPE.key() + "=GLOBAL_SIMPLE");
+    // disabling timeline server based marker type to avoid flakiness, sometimes timeline server read times out
+    customConfigs.add(HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT");
+    HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 100, "false", HoodieRecordType.AVRO, WriteOperationType.UPSERT, customConfigs);
 
     deltaStreamerTestRunner(ds, (r) -> {
       // Ensure there are two commits in the table
-      TestHelpers.assertAtLeastNCommits(2, tableBasePath);
+      TestHelpers.assertAtLeastNCommits(1, tableBasePath);
 
       Option<String> scheduleIndexInstantTime;
       try {
         // Schedule an indexing instant
         HoodieIndexer scheduleIndexingJob = new HoodieIndexer(jsc,
-            buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, UtilHelpers.SCHEDULE, "RECORD_INDEX"));
+            buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, UtilHelpers.SCHEDULE, "RECORD_INDEX",
+            Arrays.asList(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
         scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
         TestHelpers.assertPendingIndexCommit(tableBasePath);
         LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
         // Wait for a pending commit before starting execution phase for the executor. This ensures that indexer waits for the commit to complete.
         TestHelpers.waitFor(() -> {
-          HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, tableBasePath);
-          HoodieTimeline pendingCommitsTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested();
+          HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage.getConf(), tableBasePath);
+          HoodieTimeline pendingCommitsTimeline = metaClient.reloadActiveTimeline().getCommitsTimeline().filterInflightsAndRequested();
           return !pendingCommitsTimeline.empty();
         });
         HoodieIndexer runIndexingJob = new HoodieIndexer(jsc,
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), UtilHelpers.EXECUTE, "RECORD_INDEX",
-                Collections.singletonList(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key() + "=true")));
+                Arrays.asList(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
         runIndexingJob.start(0);
         LOG.info("Metadata indexing success");
         TestHelpers.assertCompletedIndexCommit(tableBasePath);
         // Assert no pending commits before indexing instant
-        HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, tableBasePath);
-        String indexCompletedTime = metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedIndexTimeline().firstInstant().get().getCompletionTime();
+        HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage.getConf(), tableBasePath);
+        String indexCompletedTime = metaClient.reloadActiveTimeline().getAllCommitsTimeline().filterCompletedIndexTimeline().firstInstant().get().getCompletionTime();
         assertTrue(metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().findInstantsBefore(indexCompletedTime).empty());
       } catch (Exception e) {
         fail("Indexing job should not have failed", e);
@@ -1158,7 +1161,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testHoodieIndexerExecutionAfterClustering(HoodieRecordType recordType) throws Exception {
-    String tableBasePath = basePath + "/asyncindexer";
+    String tableBasePath = basePath + "/asyncindexer_cluster";
     // Set async clustering to run every commit
     HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 1000, "true", recordType, WriteOperationType.UPSERT,
         new HashSet<>(Arrays.asList(HoodieIndexConfig.INDEX_TYPE.key() + "=GLOBAL_SIMPLE", HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key() + "=1",

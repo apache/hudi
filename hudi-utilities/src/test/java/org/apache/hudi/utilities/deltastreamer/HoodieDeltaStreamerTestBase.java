@@ -753,7 +753,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
     static void assertPendingIndexCommit(String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
-      HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterPendingIndexTimeline();
+      HoodieTimeline timeline = meta.reloadActiveTimeline().getAllCommitsTimeline().filterPendingIndexTimeline();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
       int numIndexCommits = timeline.countInstants();
       assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
@@ -761,7 +761,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
     static void assertCompletedIndexCommit(String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
-      HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterCompletedIndexTimeline();
+      HoodieTimeline timeline = meta.reloadActiveTimeline().getAllCommitsTimeline().filterCompletedIndexTimeline();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
       int numIndexCommits = timeline.countInstants();
       assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
