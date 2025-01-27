@@ -280,7 +280,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
 
   protected def validateColumnsToIndex(metaClient: HoodieTableMetaClient, expectedColsToIndex: Seq[String]): Unit = {
     val indexDefn = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
-    assertEquals(expectedColsToIndex, indexDefn.getSourceFields.asScala.toSeq)
+    assertEquals(expectedColsToIndex.sorted, indexDefn.getSourceFields.asScala.toSeq.sorted)
   }
 
   protected def validateNonExistantColumnsToIndexDefn(metaClient: HoodieTableMetaClient): Unit = {

@@ -894,7 +894,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
     // enable column stats
     val hudiOpts = writeOpts ++ Map(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "city_to_state,rider")
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "fare,city_to_state,rider")
 
     initMetaClient(HoodieTableType.MERGE_ON_READ)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
@@ -942,11 +942,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       metaClient = HoodieTableMetaClient.reload(metaClient)
       val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build()
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, inputDF1.schema, metadataConfig, metaClient)
-      columnStatsIndex.loadTransposed(Seq("city_to_state", "rider"), shouldReadInMemory = true) { emptyTransposedColStatsDF =>
-        // city_to_state is a map column, so it should not have any min/max value as it is not comparable, but still have nullCount
-        assertEquals(0, emptyTransposedColStatsDF.filter("city_to_state_minValue IS NOT NULL").count())
-        assertEquals(0, emptyTransposedColStatsDF.filter("city_to_state_maxValue IS NOT NULL").count())
-        assertTrue(emptyTransposedColStatsDF.filter("city_to_state_nullCount IS NOT NULL").count() > 0)
+      columnStatsIndex.loadTransposed(Seq("fare","city_to_state", "rider"), shouldReadInMemory = true) { emptyTransposedColStatsDF =>
+        assertTrue(!emptyTransposedColStatsDF.columns.contains("fare"))
+        assertTrue(!emptyTransposedColStatsDF.columns.contains("city_to_state"))
         // rider is a simple string field, so it should have a min/max value as well as nullCount
         assertTrue(emptyTransposedColStatsDF.filter("rider_minValue IS NOT NULL").count() > 0)
         assertTrue(emptyTransposedColStatsDF.filter("rider_maxValue IS NOT NULL").count() > 0)
