@@ -168,6 +168,15 @@ public abstract class HoodieLogBlock {
     }
   }
 
+  protected boolean containsBaseFileInstantTimeOfPositions() {
+    return logBlockHeader.containsKey(
+        HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
+  }
+
+  protected void removeBaseFileInstantTimeOfPositions() {
+    logBlockHeader.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
+  }
+
   /**
    * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at the end.
    */

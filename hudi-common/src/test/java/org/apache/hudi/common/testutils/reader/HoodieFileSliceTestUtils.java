@@ -237,15 +237,17 @@ public class HoodieFileSliceTestUtils {
           return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partitionPath), r, new HoodieRecordLocation("", "",  keyToPositionMap.get(r.get(RECORD_KEY_INDEX))));
         })
         .collect(Collectors.toList());
+    if (writePositions) {
+      header.put(
+          HoodieLogBlock.HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS,
+          baseFileInstantTime);
+    }
     return new HoodieDeleteBlock(
         hoodieRecords.stream().map(
             r -> Pair.of(DeleteRecord.create(
                 r.getKey(), r.getOrderingValue(schema, props)), r.getCurrentLocation().getPosition()))
             .collect(Collectors.toList()),
-        baseFileInstantTime,
-        writePositions,
-        header
-    );
+        header);
   }
 
   public static HoodieBaseFile createBaseFile(

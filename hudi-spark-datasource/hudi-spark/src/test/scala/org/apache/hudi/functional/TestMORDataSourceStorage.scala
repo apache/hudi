@@ -191,7 +191,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(/*true, */ false))
+  @ValueSource(booleans = Array(true, false))
   def testAutoDisablingRecordPositionsUnderPendingCompaction(enableNBCC: Boolean): Unit = {
     val options = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",

@@ -76,10 +76,9 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   private DeleteRecord[] recordsToDelete;
 
   public HoodieDeleteBlock(List<Pair<DeleteRecord, Long>> recordsToDelete,
-                           boolean shouldWriteRecordPositions,
                            Map<HeaderMetadataType, String> header) {
     this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
-    if (shouldWriteRecordPositions) {
+    if (containsBaseFileInstantTimeOfPositions()) {
       recordsToDelete.sort((o1, o2) -> {
         long v1 = o1.getRight();
         long v2 = o2.getRight();
@@ -92,6 +91,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
       } else {
         LOG.warn("There are delete records without valid positions. "
             + "Skip writing record positions to the delete block header.");
+
       }
     }
     this.recordsToDelete = recordsToDelete.stream().map(Pair::getLeft).toArray(DeleteRecord[]::new);

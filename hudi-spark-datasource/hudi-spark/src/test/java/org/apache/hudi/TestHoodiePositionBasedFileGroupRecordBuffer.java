@@ -62,6 +62,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -145,10 +146,13 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         readStats);
   }
 
-  public Map<HoodieLogBlock.HeaderMetadataType, String> getHeader() {
+  public Map<HoodieLogBlock.HeaderMetadataType, String> getHeader(boolean shouldWriteRecordPositions) {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, avroSchema.toString());
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    if (shouldWriteRecordPositions) {
+      header.put(BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS, "099");
+    }
     return header;
   }
 
@@ -172,7 +176,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
       deleteRecordList.add(Pair.of(dr, position++));
     }
     // TODO(yihua)
-    return new HoodieDeleteBlock(deleteRecordList, "001", true, getHeader());
+    return new HoodieDeleteBlock(deleteRecordList, getHeader(true));
   }
 
   public HoodieDeleteBlock getDeleteBlockWithoutPositions() throws IOException, URISyntaxException {
@@ -183,7 +187,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
       deleteRecordList.add(Pair.of(dr, -1L));
     }
     // TODO(yihua)
-    return new HoodieDeleteBlock(deleteRecordList, "001", true, getHeader());
+    return new HoodieDeleteBlock(deleteRecordList, getHeader(false));
   }
 
   @Test

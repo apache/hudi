@@ -22,7 +22,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
@@ -85,26 +84,20 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                          Map<FooterMetadataType, String> footer,
                          String keyFieldName) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
-    if (shouldWriteRecordPositions && !records.isEmpty()) {
-      String baseFileInstantTime = records.get(0).getCurrentBaseFileInstantTime();
-      if (StringUtils.isNullOrEmpty(baseFileInstantTime)) {
-        LOG.warn("Base file instant time of record positions cannot be determined, possibly "
-            + "due to insert records.");
+    if (containsBaseFileInstantTimeOfPositions()) {
+      records.sort((o1, o2) -> {
+        long v1 = o1.getCurrentPosition();
+        long v2 = o2.getCurrentPosition();
+        return Long.compare(v1, v2);
+      });
+      if (isPositionValid(records.get(0).getCurrentPosition())) {
+        addRecordPositionsToHeader(
+            records.stream().map(HoodieRecord::getCurrentPosition).collect(Collectors.toSet()),
+            records.size());
       } else {
-        records.sort((o1, o2) -> {
-          long v1 = o1.getCurrentPosition();
-          long v2 = o2.getCurrentPosition();
-          return Long.compare(v1, v2);
-        });
-        if (isPositionValid(records.get(0).getCurrentPosition())) {
-          addRecordPositionsToHeader(
-              baseFileInstantTime,
-              records.stream().map(HoodieRecord::getCurrentPosition).collect(Collectors.toSet()),
-              records.size());
-        } else {
-          LOG.warn("There are records without valid positions. "
-              + "Skip writing record positions to the data block header.");
-        }
+        LOG.warn("There are records without valid positions. "
+            + "Skip writing record positions to the data block header.");
+        removeBaseFileInstantTimeOfPositions();
       }
     }
     this.records = Option.of(records);

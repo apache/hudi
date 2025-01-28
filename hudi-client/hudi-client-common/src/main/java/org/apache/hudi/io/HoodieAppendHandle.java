@@ -99,7 +99,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   // Buffer for holding records (to be deleted), along with their position in log block, in memory before they are flushed to disk
   private final List<Pair<DeleteRecord, Long>> recordsToDeleteWithPositions = new ArrayList<>();
   // Base file instant time for the record positions
-  private final Option<String> baseFileInstantTimeForPositions;
+  private final Option<String> baseFileInstantTimeOfPositions;
   // Incoming records to be written to logs.
   protected Iterator<HoodieRecord<T>> recordItr;
   // Writer to log into the file group's latest slice.
@@ -164,8 +164,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.shouldWriteRecordPositions = config.shouldWriteRecordPositions()
         // record positions supported only from table version 8
         && config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT);
-    this.baseFileInstantTimeForPositions = shouldWriteRecordPositions
-        ? getBaseFileInstantTimeForPositions()
+    this.baseFileInstantTimeOfPositions = shouldWriteRecordPositions
+        ? getBaseFileInstantTimeOfPositions()
         : Option.empty();
   }
 
@@ -174,7 +174,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this(config, instantTime, hoodieTable, partitionPath, fileId, null, sparkTaskContextSupplier);
   }
 
-  private Option<String> getBaseFileInstantTimeForPositions() {
+  private Option<String> getBaseFileInstantTimeOfPositions() {
     TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
     Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
     if (fileSlice.isPresent()) {
@@ -499,16 +499,15 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
         blocks.add(getDataBlock(config, pickLogDataBlockFormat(), recordList, shouldWriteRecordPositions,
-            getUpdatedHeader(header, config, shouldWriteRecordPositions, baseFileInstantTimeForPositions),
+            getUpdatedHeader(header, config, shouldWriteRecordPositions, baseFileInstantTimeOfPositions),
             keyField));
       }
 
       if (appendDeleteBlocks && !recordsToDeleteWithPositions.isEmpty()) {
         blocks.add(new HoodieDeleteBlock(
             recordsToDeleteWithPositions,
-            shouldWriteRecordPositions,
             getUpdatedHeader(
-                header, config, shouldWriteRecordPositions, baseFileInstantTimeForPositions)));
+                header, config, shouldWriteRecordPositions, baseFileInstantTimeOfPositions)));
       }
 
       if (!blocks.isEmpty()) {
