@@ -168,54 +168,34 @@ public class FormatUtils {
         .build();
   }
 
-  /**
-   * Utility to read and buffer the records in the unMerged log record scanner.
-   */
-  public static class BoundedMemoryRecords {
-    // Iterator for the buffer consumer
-    private final Iterator<HoodieRecord<?>> iterator;
+  public static HoodieUnMergedLogRecordScanner getUnMergedLogRecordScanner(MergeOnReadInputSplit split,
+                                                                           Schema logSchema,
+                                                                           InternalSchema internalSchema,
+                                                                           Configuration hadoopConf,
+                                                                           org.apache.flink.configuration.Configuration flinkConf) {
+    List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
+        .map(String::trim)
+        .distinct()
+        .collect(Collectors.toList());
 
-    public BoundedMemoryRecords(
-        MergeOnReadInputSplit split,
-        Schema logSchema,
-        InternalSchema internalSchema,
-        Configuration hadoopConf,
-        org.apache.flink.configuration.Configuration flinkConf) {
-      List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
-          .map(String::trim)
-          .distinct()
-          .collect(Collectors.toList());
-      HoodieRecordMerger merger = HoodieRecordUtils.createRecordMerger(
-          split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY_ID));
-      HoodieUnMergedLogRecordScanner scanner =
-          HoodieUnMergedLogRecordScanner.newBuilder()
-              .withStorage(HoodieStorageUtils.getStorage(
-                  split.getTablePath(), HadoopFSUtils.getStorageConf(hadoopConf)))
-              .withBasePath(split.getTablePath())
-              .withLogFilePaths(split.getLogPaths().get())
-              .withReaderSchema(logSchema)
-              .withInternalSchema(internalSchema)
-              .withLatestInstantTime(split.getLatestCommit())
-              .withReverseReader(false)
-              .withBufferSize(
-                  flinkConf.getInteger(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(),
-                      HoodieMemoryConfig.DEFAULT_MR_MAX_DFS_STREAM_BUFFER_SIZE))
-              .withInstantRange(split.getInstantRange())
-              .withRecordMerger(merger)
-              .build();
+    HoodieRecordMerger merger = HoodieRecordUtils.createRecordMerger(
+        split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY_ID));
 
-      this.iterator = scanner.iterator();
-    }
-
-    public Iterator<HoodieRecord<?>> getRecordsIterator() {
-      return this.iterator;
-    }
-
-    public void close() {
-      if (this.iterator instanceof ClosableIterator) {
-        ((ClosableIterator<HoodieRecord<?>>) this.iterator).close();
-      }
-    }
+    return HoodieUnMergedLogRecordScanner.newBuilder()
+        .withStorage(HoodieStorageUtils.getStorage(
+            split.getTablePath(), HadoopFSUtils.getStorageConf(hadoopConf)))
+        .withBasePath(split.getTablePath())
+        .withLogFilePaths(split.getLogPaths().get())
+        .withReaderSchema(logSchema)
+        .withInternalSchema(internalSchema)
+        .withLatestInstantTime(split.getLatestCommit())
+        .withReverseReader(false)
+        .withBufferSize(
+            flinkConf.getInteger(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(),
+                HoodieMemoryConfig.DEFAULT_MR_MAX_DFS_STREAM_BUFFER_SIZE))
+        .withInstantRange(split.getInstantRange())
+        .withRecordMerger(merger)
+        .build();
   }
 
   public static HoodieMergedLogRecordScanner logScanner(

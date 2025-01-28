@@ -432,42 +432,41 @@ public class MergeOnReadInputFormat
     final GenericRecordBuilder recordBuilder = new GenericRecordBuilder(requiredSchema);
     final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
         AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType(), conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
-    final FormatUtils.BoundedMemoryRecords records = new FormatUtils.BoundedMemoryRecords(split, tableSchema, internalSchemaManager.getQuerySchema(), hadoopConf, conf);
-    final Iterator<HoodieRecord<?>> recordsIterator = records.getRecordsIterator();
+    try (ClosableIterator<HoodieRecord<?>> recordsIterator = FormatUtils.getUnMergedLogRecordScanner(split, tableSchema, internalSchemaManager.getQuerySchema(), hadoopConf, conf).iterator()) {
+      return new ClosableIterator<RowData>() {
+        private RowData currentRecord;
 
-    return new ClosableIterator<RowData>() {
-      private RowData currentRecord;
-
-      @Override
-      public boolean hasNext() {
-        while (recordsIterator.hasNext()) {
-          final HoodieAvroRecord<?> hoodieRecord = (HoodieAvroRecord) recordsIterator.next();
-          Option<IndexedRecord> curAvroRecord = getInsertVal(hoodieRecord, tableSchema);
-          if (curAvroRecord.isPresent()) {
-            final IndexedRecord avroRecord = curAvroRecord.get();
-            GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
-                avroRecord,
-                requiredSchema,
-                requiredPos,
-                recordBuilder);
-            currentRecord = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);
-            FormatUtils.setRowKind(currentRecord, avroRecord, tableState.getOperationPos());
-            return true;
+        @Override
+        public boolean hasNext() {
+          while (recordsIterator.hasNext()) {
+            final HoodieAvroRecord<?> hoodieRecord = (HoodieAvroRecord) recordsIterator.next();
+            Option<IndexedRecord> curAvroRecord = getInsertVal(hoodieRecord, tableSchema);
+            if (curAvroRecord.isPresent()) {
+              final IndexedRecord avroRecord = curAvroRecord.get();
+              GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
+                  avroRecord,
+                  requiredSchema,
+                  requiredPos,
+                  recordBuilder);
+              currentRecord = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);
+              FormatUtils.setRowKind(currentRecord, avroRecord, tableState.getOperationPos());
+              return true;
+            }
           }
+          return false;
         }
-        return false;
-      }
 
-      @Override
-      public RowData next() {
-        return currentRecord;
-      }
+        @Override
+        public RowData next() {
+          return currentRecord;
+        }
 
-      @Override
-      public void close() {
-        records.close();
-      }
-    };
+        @Override
+        public void close() {
+          recordsIterator.close();
+        }
+      };
+    }
   }
 
   protected static Option<IndexedRecord> getInsertVal(HoodieAvroRecord<?> hoodieRecord, Schema tableSchema) {
