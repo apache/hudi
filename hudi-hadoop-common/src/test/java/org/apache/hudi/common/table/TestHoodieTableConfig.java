@@ -280,7 +280,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     // test valid ones are not dropped
     config = new HoodieConfig();
     config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
-    config.setValue(RECORD_MERGE_MODE, RECORD_MERGE_MODE.defaultValue().name());
+    config.setValue(RECORD_MERGE_MODE, COMMIT_TIME_ORDERING.name());
     HoodieTableConfig.dropInvalidConfigs(config);
     assertTrue(config.contains(RECORD_MERGE_MODE));
   }
