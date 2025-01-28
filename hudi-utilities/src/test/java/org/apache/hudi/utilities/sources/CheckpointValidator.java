@@ -26,8 +26,6 @@ import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
-
 import java.util.function.BiFunction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -100,7 +98,7 @@ public class CheckpointValidator {
           assertInstanceOf(StreamerCheckpointFromCfgCkp.class, ckp);
           break;
         default:
-          throw new ValidateException("Unknown checkpoint class to validate " + props.get(VAL_CKP_INSTANCE_OF));
+          throw new RuntimeException("Unknown checkpoint class to validate " + props.get(VAL_CKP_INSTANCE_OF));
       }
     }
   }

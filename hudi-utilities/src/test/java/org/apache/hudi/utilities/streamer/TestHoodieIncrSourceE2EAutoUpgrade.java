@@ -270,7 +270,7 @@ public class TestHoodieIncrSourceE2EAutoUpgrade extends S3EventsHoodieIncrSource
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig().getTableVersion());
     assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_2, metaClient.getTableConfig().getTimelineLayoutVersion().get());
 
-    //  ============ Reuse the same writ config with <eventOrderingMode>:<checkpoint> ==========
+    // ============ Reuse the same writ config with <eventOrderingMode>:<checkpoint> ==========
     // table version 8, write version 8 without request time based checkpoint override.
     // start from checkpoint v2 40 stop at checkpoint v2 50.
 

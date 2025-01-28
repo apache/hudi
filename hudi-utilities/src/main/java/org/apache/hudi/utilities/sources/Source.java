@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.shouldTargetCheckpointV2;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 
 /**
@@ -138,6 +139,17 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     throw new UnsupportedOperationException("Unsupported checkpoint type: " + lastCheckpoint.get());
   }
 
+  public void assertCheckpointVersion(Checkpoint checkpoint) {
+    if (checkpoint != null) {
+      if (shouldTargetCheckpointV2(writeTableVersion, getClass().getName()) && !(checkpoint instanceof StreamerCheckpointV2)) {
+        throw new IllegalStateException("Data source target checkpoint v2 (completion time based) should always return checkpoint v2. Setup " + props);
+      }
+      if (shouldTargetCheckpointV2(writeTableVersion, getClass().getName()) && !(checkpoint instanceof StreamerCheckpointV2)) {
+        throw new IllegalStateException("Data source target checkpoint v1 (completion time based) should always return checkpoint v1. Setup " + props);
+      }
+    }
+  }
+
   /**
    * Main API called by Hoodie Streamer to fetch records.
    *
@@ -147,6 +159,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
    */
   public final InputBatch<T> fetchNext(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     InputBatch<T> batch = readFromCheckpoint(translateCheckpoint(lastCheckpoint), sourceLimit);
+    assertCheckpointVersion(batch.getCheckpointForNextBatch());
     // If overriddenSchemaProvider is passed in CLI, use it
     return overriddenSchemaProvider == null ? batch
         : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);
