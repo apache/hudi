@@ -104,7 +104,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     if (lastCheckpoint.isEmpty()) {
       return Option.empty();
     }
-    if (CheckpointUtils.targetCheckpointV2(writeTableVersion)) {
+    if (CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, getClass().getName())) {
       // V2 -> V2
       if (lastCheckpoint.get() instanceof StreamerCheckpointV2) {
         return lastCheckpoint;

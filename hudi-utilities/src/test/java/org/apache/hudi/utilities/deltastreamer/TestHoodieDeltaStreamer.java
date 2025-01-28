@@ -83,6 +83,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieIndexer;
@@ -167,6 +168,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
@@ -422,6 +425,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         expectedKeyGeneratorClassName, metaClient.getTableConfig().getKeyGeneratorClassName());
     Dataset<Row> res = sqlContext.read().format("hudi").load(tableBasePath);
     assertEquals(1000, res.count());
+    assertUseV2Checkpoint(metaClient);
+  }
+
+  private static void assertUseV2Checkpoint(HoodieTableMetaClient metaClient) {
+    metaClient.reloadActiveTimeline();
+    Option<HoodieCommitMetadata> metadata = HoodieClientTestUtils.getCommitMetadataForInstant(
+        metaClient, metaClient.getActiveTimeline().lastInstant().get());
+    assertFalse(metadata.isEmpty());
+    Map<String, String> extraMetadata = metadata.get().getExtraMetadata();
+    assertTrue(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V2));
+    assertFalse(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V1));
   }
 
   @Test
@@ -568,6 +582,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
 
     new HoodieDeltaStreamer(cfg, jsc).sync();
+    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
 
@@ -579,6 +595,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source_evolved.avsc");
     cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
     new HoodieDeltaStreamer(cfg, jsc).sync();
+    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
     assertRecordCount(1450, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
@@ -644,6 +661,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.continuousMode = false;
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     ds.sync();
+    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
     assertFalse(Metrics.isInitialized(tableBasePath), "Metrics should be shutdown");
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
@@ -673,6 +691,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.continuousMode = false;
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     ds.sync();
+    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
     assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
     assertFalse(Metrics.isInitialized(tableBasePath), "Metrics should be shutdown");
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
@@ -1384,6 +1403,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                   entry, metaClient, WriteOperationType.BULK_INSERT));
         }
       }
+      assertUseV2Checkpoint(createMetaClient(jsc, tableBasePath));
     } finally {
       deltaStreamer.shutdownGracefully();
     }

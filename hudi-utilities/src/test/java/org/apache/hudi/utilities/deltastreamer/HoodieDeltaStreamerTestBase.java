@@ -563,7 +563,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         .count());
   }
 
-  static class TestHelpers {
+  public static class TestHelpers {
 
     static HoodieDeltaStreamer.Config makeDropAllConfig(String basePath, WriteOperationType op) {
       return makeConfig(basePath, op, Collections.singletonList(TestHoodieDeltaStreamer.DropAllTransformer.class.getName()));
@@ -590,7 +590,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           useSchemaProviderClass, 1000, updatePayloadClass, payloadClassName, tableType, "timestamp", null);
     }
 
-    static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
+    public static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
                                                  List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
                                                  int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField,
                                                  String checkpoint) {
