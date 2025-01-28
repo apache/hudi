@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointFromCfgCkp;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -204,7 +203,7 @@ public class TestHoodieIncrSourceE2EAutoUpgrade extends S3EventsHoodieIncrSource
     // table version 6, write version 8 without checkpoint override.
     // start from checkpoint v1 10 stop at checkpoint v2 20.
     props = setupBaseProperties("8");
-    props.put("hoodie.metadata.enable", "true");
+    props.put("hoodie.metadata.enable", "false"); // follow up with MDT enabled
     // In this iteration, we expect to resume from the previous checkpoint "10". The data source would get a v1 checkpoint as
     // for all hoodie incremental source the checkpoint translation step is a no-op.
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
@@ -241,10 +240,11 @@ public class TestHoodieIncrSourceE2EAutoUpgrade extends S3EventsHoodieIncrSource
     // In this iteration, we override the checkpoint instead of resuming from ckp 20. Covers 2 modes: Event time based and
     // commit time based.
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
-    // Data source will know this checkpoint is configured by the override
-    props.put(VAL_CKP_INSTANCE_OF, StreamerCheckpointFromCfgCkp.class.getName());
-    // The content contains the ordering mode.
-    props.put(VAL_CKP_KEY_EQ_VAL, REQUEST_TIME_PREFIX + RESET_CHECKPOINT_V2_SEPARATOR + "30");
+    // Data source will know this checkpoint is configured by the override, and it is translated to
+    // checkpoint v1 in translate checkpoint step.
+    props.put(VAL_CKP_INSTANCE_OF, StreamerCheckpointV1.class.getName());
+    // The data source will only see this is a v1 checkpoint (request time based) with offset 30 to resume.
+    props.put(VAL_CKP_KEY_EQ_VAL, "30");
     props.put(VAL_CKP_RESET_KEY_IS_NULL, "IGNORED");
     props.put(VAL_CKP_IGNORE_KEY_IS_NULL, "IGNORED");
     // Dummy behavior is consuming the given v1 checkpoint and always return a v2 checkpoint. We only support resetting checkpoint

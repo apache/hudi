@@ -74,17 +74,4 @@ public class TestHoodieIncrSourceCheckpointValUtils {
     );
     assertTrue(exception.getMessage().contains("Illegal checkpoint key override"));
   }
-
-  @Test
-  public void testCheckpointWithModeToString() {
-    HoodieIncrSourceCheckpointValUtils.CheckpointWithMode checkpointWithMode =
-        new HoodieIncrSourceCheckpointValUtils.CheckpointWithMode("REQUEST_TIME", "20240304");
-
-    String result = checkpointWithMode.toString();
-
-    assertTrue(result.contains("REQUEST_TIME"));
-    assertTrue(result.contains("20240304"));
-    assertEquals("REQUEST_TIME", checkpointWithMode.getEventOrderingMode());
-    assertEquals("20240304", checkpointWithMode.getCheckpointKey());
-  }
 } 

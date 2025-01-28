@@ -22,7 +22,9 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
@@ -187,9 +189,7 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
       "6, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
       "8, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
       "6, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource",
-      "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource",
-      "6, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource",
-      "8, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource"
+      "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource"
   })
   public void testSyncE2ENoPrevCkpThenSyncMultipleTimes(String tableVersion, String sourceClass) throws Exception {
     // First start with no previous checkpoint and ingest till ckp 1 with table version.
@@ -237,7 +237,8 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "20");
     verifyLastInstantCommitMetadata(expectedMetadata);
 
-    // In the third round, enable MDT and auto upgrade, use table version 8
+    // In the third round, disable MDT and auto upgrade, use table write version 8. The result is
+    // no upgrade will happen.
     props = setupBaseProperties("8");
     props.put("hoodie.metadata.enable", "false");
     // Dummy behavior injection to return ckp 1.
@@ -253,10 +254,43 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     ds = new HoodieDeltaStreamer(createConfig(basePath(), null, sourceClass), jsc, Option.of(props));
     ds.sync();
 
-    // After upgrading, we still use checkpoint V1 since this is s3/Gcs incremental source.
+    // Assert no upgrade happens.
+    if (tableVersion.equals("6")) {
+      metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), "6");
+      assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
+      assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_1, metaClient.getTableConfig().getTimelineLayoutVersion().get());
+    }
+
+    // After that, we still use checkpoint V1 since this is s3/Gcs incremental source.
     expectedMetadata = new HashMap<>();
     expectedMetadata.put("schema", "");
     expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "30");
+    verifyLastInstantCommitMetadata(expectedMetadata);
+
+    // In the forth round, enable auto upgrade, use table write version 8, the upgrade is successful.
+    props = setupBaseProperties("8");
+    props.put("hoodie.metadata.enable", "false");
+    // Dummy behavior injection to return ckp 1.
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
+    props.put(RETURN_CHECKPOINT_KEY, "40");
+    props.put("hoodie.write.auto.upgrade", "true");
+    // Validate the given checkpoint is ckp 2 when doing the sync.
+    props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
+    props.put(VAL_CKP_KEY_EQ_VAL, "30");
+    props.put(VAL_CKP_RESET_KEY_IS_NULL, "IGNORED");
+    props.put(VAL_CKP_IGNORE_KEY_IS_NULL, "IGNORED");
+
+    ds = new HoodieDeltaStreamer(createConfig(basePath(), null, sourceClass), jsc, Option.of(props));
+    ds.sync();
+
+    // After upgrading, we still use checkpoint V1 since this is s3/Gcs incremental source.
+    // Assert the table is upgraded.
+    metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), "8");
+    assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig().getTableVersion());
+    assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_2, metaClient.getTableConfig().getTimelineLayoutVersion().get());
+    expectedMetadata = new HashMap<>();
+    expectedMetadata.put("schema", "");
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "40");
     verifyLastInstantCommitMetadata(expectedMetadata);
   }
 

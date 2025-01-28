@@ -68,32 +68,4 @@ public class HoodieIncrSourceCheckpointValUtils {
     parts[1] = parts[1].trim();
     return parts;
   }
-
-  /**
-   * Immutable class to hold the parts of a resume string.
-   */
-  public static class CheckpointWithMode {
-    private final String eventOrderingMode;
-    private final String checkpointKey;
-
-    public CheckpointWithMode(String eventOrderingMode, String checkpointKey) {
-      this.eventOrderingMode = eventOrderingMode;
-      this.checkpointKey = checkpointKey;
-    }
-
-    public String getEventOrderingMode() {
-      return eventOrderingMode;
-    }
-
-    public String getCheckpointKey() {
-      return checkpointKey;
-    }
-
-    @Override
-    public String toString() {
-      return "ResetCheckpointKeyParsed {"
-          + "eventOrderingMode='" + eventOrderingMode + "', "
-          + "checkpointKey='" + checkpointKey + "'}";
-    }
-  }
 }
