@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
-//import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
@@ -79,7 +78,6 @@ public class DataHubSyncClient extends HoodieSyncClient {
   private static final Status SOFT_DELETE_FALSE = new Status().setRemoved(false);
 
   public DataHubSyncClient(DataHubSyncConfig config, HoodieTableMetaClient metaClient) {
-    //super(config, metaClient);
     super(config);
     this.config = config;
     HoodieDataHubDatasetIdentifier datasetIdentifier =
@@ -97,18 +95,11 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
   protected Option<String> getLastCommitTime() {
     return getActiveTimeline().lastInstant()
-        //.map(HoodieInstant::requestedTime);
         .map(HoodieInstant::getTimestamp);
   }
 
   protected Option<String> getLastCommitCompletionTime() {
     int countInstants = getActiveTimeline().countInstants();
-    // return getActiveTimeline()
-    //     .getInstantsOrderedByCompletionTime()
-    //     .skip(countInstants - 1)
-    //     .findFirst()
-    //     .map(HoodieInstant::getCompletionTime)
-    //     .map(Option::of).orElseGet(Option::empty);
     return getActiveTimeline()
         .getInstantsOrderedByStateTransitionTime()
         .skip(countInstants - 1)
