@@ -853,7 +853,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
         header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
         writer.appendBlock(new HoodieAvroDataBlock(
-            Collections.emptyList(), false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+            Collections.emptyList(), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
       } else {
         header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
         header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, baseInstantTime);
