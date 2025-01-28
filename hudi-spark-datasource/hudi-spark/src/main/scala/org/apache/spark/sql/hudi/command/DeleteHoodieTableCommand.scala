@@ -32,7 +32,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.removeMetaFields
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.types.LongType
 
-import scala.jdk.CollectionConverters.{mapAsJavaMapConverter, seqAsJavaListConverter}
+import scala.collection.JavaConverters
 
 case class DeleteHoodieTableCommand(dft: DeleteFromTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport
@@ -69,7 +69,7 @@ case class DeleteHoodieTableCommand(dft: DeleteFromTable) extends HoodieLeafRunn
     val schema = if (HoodieSparkUtils.gteqSpark3_5) {
       AvroSchemaUtils.projectSchema(
         convertToAvroSchema(catalogTable.tableSchema, catalogTable.tableName),
-        attributeSeq.map(e => e.name).asJava,
+        JavaConverters.seqAsJavaList(attributeSeq.map(e => e.name)),
         new Schema.Field(
           SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName(),
           Schema.createUnion(
@@ -82,7 +82,7 @@ case class DeleteHoodieTableCommand(dft: DeleteFromTable) extends HoodieLeafRunn
       "hoodie.datasource.query.type" -> "snapshot",
       "path" -> catalogTable.metaClient.getBasePath.toString)
     val relation = sparkAdapter.createRelation(
-      sparkSession.sqlContext, catalogTable.metaClient, schema, Array.empty, options.asJava)
+      sparkSession.sqlContext, catalogTable.metaClient, schema, Array.empty, JavaConverters.mapAsJavaMap(options))
     val filteredPlan = Filter(toUnresolved(condition), Project(targetAttributes, new LogicalRelation(relation, attributeRefs, None, false)))
 
     val config = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
