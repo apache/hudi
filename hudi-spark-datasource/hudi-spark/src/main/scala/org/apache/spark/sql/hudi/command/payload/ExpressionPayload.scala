@@ -70,7 +70,9 @@ class ExpressionPayload(@transient record: GenericRecord,
   }
 
   override def preCombine(oldValue: ExpressionPayload): ExpressionPayload = {
-    throw new IllegalStateException(s"Should not call this method for ${getClass.getCanonicalName}")
+    // used in HoodiePreCombineAvroRecordMerger when running insert for source table having dup key with preCombineField
+    // or when running merge into with insert * for non-matched records containing duplicates
+    this
   }
 
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,
