@@ -34,6 +34,8 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
+
 /**
  * Record merger for spark that implements the default merger strategy
  */
@@ -45,7 +47,11 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older,
+                                                  Schema oldSchema,
+                                                  HoodieRecord newer,
+                                                  Schema newSchema,
+                                                  TypedProperties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
 
@@ -62,13 +68,23 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
     Comparable oldOrderingVal = oldRecord.getOrderingValue(oldSchema, props);
 
     // The same logic as fg reader.
-    if (newOrderingVal.equals(0) && newRecord.isDelete(newSchema, props)) {
+    // CASE 1: New record is a delete record with natural order.
+    if (newOrderingVal.equals(DEFAULT_ORDERING_VALUE)
+        && newRecord.isDelete(newSchema, props)) {
       return Option.empty();
     }
-    if (!oldOrderingVal.equals(0) && oldOrderingVal.compareTo(newOrderingVal) > 0) {
+    // When old record has valid ordering value, and its value
+    // is higher than that of new record,
+    // Case 2: old record is a delete record, return empty.
+    // Case 3: old record is not a delete record, return old record.
+    if (!oldOrderingVal.equals(DEFAULT_ORDERING_VALUE)
+        && oldOrderingVal.compareTo(newOrderingVal) > 0) {
       return oldRecord.isDelete(oldSchema, props)
           ? Option.empty() : Option.of(Pair.of(older, oldSchema));
     }
+    // Otherwise, the return value is determined by new record.
+    // Case 4: new record is a delete record, return empty.
+    // Case 5: new record is not a delete record, return new.
     return newRecord.isDelete(newSchema, props)
         ? Option.empty() : Option.of(Pair.of(newer, newSchema));
   }

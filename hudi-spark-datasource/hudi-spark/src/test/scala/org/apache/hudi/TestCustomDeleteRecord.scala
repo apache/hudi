@@ -69,10 +69,10 @@ class TestCustomDeleteRecord extends SparkClientFunctionalTestHarness {
       HoodieWriteConfig.RECORD_MERGE_MODE.key -> mergeMode
     )
     val deleteOpts: Map[String, String] = Map(
-      DELETE_KEY -> "delete",
+      DELETE_KEY -> "op",
       DELETE_MARKER -> "d")
     val opts = mergeOpts ++ fgReaderOpts ++ deleteOpts
-    val columns = Seq("ts", "key", "rider", "driver", "fare", "delete")
+    val columns = Seq("ts", "key", "rider", "driver", "fare", "op")
 
     val data = Seq(
       (10, "1", "rider-A", "driver-A", 19.10, "i"),
@@ -107,7 +107,7 @@ class TestCustomDeleteRecord extends SparkClientFunctionalTestHarness {
     val deletesData = Seq((-5, "4", "rider-D", "driver-D", 34.15, 6))
     val deletes = spark.createDataFrame(deletesData).toDF(columns: _*)
     deletes.write.format("hudi").
-      option(OPERATION.key(), "delete").
+      option(OPERATION.key(), "DELETE").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       options(opts).
       mode(SaveMode.Append).
@@ -115,7 +115,7 @@ class TestCustomDeleteRecord extends SparkClientFunctionalTestHarness {
 
     // Validate in the end.
     val df = spark.read.format("hudi").options(opts).load(basePath)
-    val finalDf = df.select("ts", "key", "rider", "driver", "fare", "delete").sort("key")
+    val finalDf = df.select("ts", "key", "rider", "driver", "fare", "op").sort("key")
     finalDf.show(false)
     val expected = if (mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING.name()) {
       expectedCommitTimeBased

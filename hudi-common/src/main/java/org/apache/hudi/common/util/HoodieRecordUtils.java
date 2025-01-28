@@ -29,6 +29,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +38,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
+import java.util.function.Function;
+
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 
 /**
  * A utility class for HoodieRecord.
@@ -135,5 +141,26 @@ public class HoodieRecordUtils {
       return record.getCurrentLocation().getInstantTime();
     }
     return null;
+  }
+
+  public static <T> boolean isCustomDeleteRecord(T record,
+                                                 Schema schema,
+                                                 Properties props,
+                                                 Function<T, Object> valueFetcher) {
+    String deleteKeyField = props.getProperty(DELETE_KEY);
+    if (StringUtils.isNullOrEmpty(deleteKeyField)) {
+      return false;
+    }
+
+    ValidationUtils.checkArgument(
+        !StringUtils.isNullOrEmpty(props.getProperty(DELETE_MARKER)),
+        () -> DELETE_MARKER + " should be configured with " + DELETE_KEY);
+    if (schema.getField(deleteKeyField) == null) {
+      return false;
+    }
+
+    Object deleteMarker = valueFetcher.apply(record);
+    return deleteMarker != null
+        && props.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
   }
 }

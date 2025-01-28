@@ -270,5 +270,5 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
         })
       }
     }
-//  }
+  }
 }
