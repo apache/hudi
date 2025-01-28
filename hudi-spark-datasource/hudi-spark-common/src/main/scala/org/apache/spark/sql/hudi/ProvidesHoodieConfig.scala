@@ -257,17 +257,7 @@ trait ProvidesHoodieConfig extends Logging {
         Map()
     }
 
-    val inferredMergeConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
-      tableConfig.getRecordMergeMode, tableConfig.getPayloadClass,
-      tableConfig.getRecordMergeStrategyId, preCombineField)
-    val recordMergeMode = inferredMergeConfigs.getLeft.name()
-    val deducedPayloadClassName = inferredMergeConfigs.getMiddle
-    val recordMergeStrategy = inferredMergeConfigs.getRight
-
     val defaultOpts = Map(
-      DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key -> deducedPayloadClassName,
-      DataSourceWriteOptions.RECORD_MERGE_MODE.key -> recordMergeMode,
-      DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key() -> recordMergeStrategy,
       // NOTE: By default insert would try to do deduplication in case that pre-combine column is specified
       //       for the table
       HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(combineBeforeInsert),

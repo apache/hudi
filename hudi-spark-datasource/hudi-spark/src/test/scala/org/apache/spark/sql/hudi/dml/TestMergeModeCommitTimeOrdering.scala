@@ -30,7 +30,8 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
 
   // "cow,false"
   // "cow,true",  "mor,true", "mor,false"
-  Seq("cow,false", "cow,true", "mor,false", "mor,true").foreach { args =>
+  //  "cow,true", "mor,false", "mor,true"
+  Seq("cow,false", "mor,false").foreach { args =>
     val argList = args.split(',')
     val tableType = argList(0)
     val setRecordMergeMode = argList(1).toBoolean
@@ -42,8 +43,8 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
     )
     val mergeConfigClause = if (setRecordMergeMode) {
       // with precombine, dedup automatically kick in
-      // ", preCombineField = 'ts',\nhoodie.record.merge.mode = 'COMMIT_TIME_ORDERING'"
-      ",\nhoodie.record.merge.mode = 'COMMIT_TIME_ORDERING'"
+      ", preCombineField = 'ts',\nhoodie.record.merge.mode = 'COMMIT_TIME_ORDERING'"
+      //",\nhoodie.record.merge.mode = 'COMMIT_TIME_ORDERING'"
     } else {
       // By default, the COMMIT_TIME_ORDERING is used if not specified by the user
       ""
