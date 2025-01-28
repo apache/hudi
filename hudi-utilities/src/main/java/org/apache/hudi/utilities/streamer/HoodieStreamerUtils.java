@@ -83,7 +83,9 @@ public class HoodieStreamerUtils {
     boolean useConsistentLogicalTimestamp = ConfigUtils.getBooleanWithAltKeys(
         props, KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
     Set<String> partitionColumns = getPartitionColumns(props);
-    String payloadClassName = StringUtils.isNullOrEmpty(cfg.payloadClassName) ? HoodieRecordPayload.getAvroPayloadForMergeMode(cfg.recordMergeMode) : cfg.payloadClassName;
+    String payloadClassName = StringUtils.isNullOrEmpty(cfg.payloadClassName)
+        ? HoodieRecordPayload.getAvroPayloadForMergeMode(cfg.recordMergeMode, cfg.payloadClassName)
+        : cfg.payloadClassName;
     return avroRDDOptional.map(avroRDD -> {
       SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
       SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns(props) ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());

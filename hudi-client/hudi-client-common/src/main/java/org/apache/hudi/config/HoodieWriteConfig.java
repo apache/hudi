@@ -166,7 +166,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
-      .defaultValue("ts")
+      .noDefaultValue()
       .withDocumentation("Field used in preCombining before actual write. When two records have the same key value, "
           + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)");
 
@@ -181,7 +181,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   // This ConfigProperty is also used in SQL options which expect String type
   public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.write.record.merge.mode")
-      .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
+      .noDefaultValue("COMMIT_TIME_ORDERING if ordering field is not set; EVENT_TIME_ORDERING if ordering field is set")
       .sinceVersion("1.0.0")
       .withDocumentation(RecordMergeMode.class);
 
