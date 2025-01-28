@@ -153,15 +153,11 @@ public abstract class HoodieLogBlock {
     return logBlockHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
   }
 
-  protected void addRecordPositionsToHeader(String baseInstantTimeForPositions,
-                                            Set<Long> positionSet,
+  protected void addRecordPositionsToHeader(Set<Long> positionSet,
                                             int numRecords) {
     if (positionSet.size() == numRecords) {
       try {
         logBlockHeader.put(HeaderMetadataType.RECORD_POSITIONS, LogReaderUtils.encodePositions(positionSet));
-        logBlockHeader.put(
-            HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS,
-            baseInstantTimeForPositions);
       } catch (IOException e) {
         LOG.error("Cannot write record positions to the log block header.", e);
       }

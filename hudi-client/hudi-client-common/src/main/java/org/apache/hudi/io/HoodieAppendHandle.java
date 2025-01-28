@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -53,7 +54,6 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SizeEstimator;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
@@ -81,7 +81,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRangeMetadata;
 
 /**
@@ -99,9 +98,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private final List<HoodieRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted), along with their position in log block, in memory before they are flushed to disk
   private final List<Pair<DeleteRecord, Long>> recordsToDeleteWithPositions = new ArrayList<>();
-  // Base file instant time of the delete positions;
-  // "null" means uninitialized, "" (empty String) means not valid
-  private String baseFileInstantTimeForDeletePositions;
+  // Base file instant time for the record positions
+  private final Option<String> baseFileInstantTimeForPositions;
   // Incoming records to be written to logs.
   protected Iterator<HoodieRecord<T>> recordItr;
   // Writer to log into the file group's latest slice.
@@ -166,11 +164,23 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.shouldWriteRecordPositions = config.shouldWriteRecordPositions()
         // record positions supported only from table version 8
         && config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT);
+    this.baseFileInstantTimeForPositions = shouldWriteRecordPositions
+        ? getBaseFileInstantTimeForPositions()
+        : Option.empty();
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier sparkTaskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, null, sparkTaskContextSupplier);
+  }
+
+  private Option<String> getBaseFileInstantTimeForPositions() {
+    TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
+    Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
+    if (fileSlice.isPresent()) {
+      return fileSlice.get().getBaseFile().map(HoodieBaseFile::getCommitTime);
+    }
+    return Option.empty();
   }
 
   private void populateWriteStat(HoodieRecord record, HoodieDeltaWriteStat deltaWriteStat) {
@@ -488,21 +498,17 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, shouldWriteRecordPositions,
-            getUpdatedHeader(header, config), keyField));
-      }
-
-      if (shouldWriteRecordPositions
-          && !recordsToDeleteWithPositions.isEmpty()
-          && StringUtils.isNullOrEmpty(baseFileInstantTimeForDeletePositions)) {
-        LOG.warn("Base file instant time of delete positions cannot be determined, possibly "
-            + "due to inserts or different base file instant times for the input records.");
+        blocks.add(getDataBlock(config, pickLogDataBlockFormat(), recordList, shouldWriteRecordPositions,
+            getUpdatedHeader(header, config, shouldWriteRecordPositions, baseFileInstantTimeForPositions),
+            keyField));
       }
 
       if (appendDeleteBlocks && !recordsToDeleteWithPositions.isEmpty()) {
         blocks.add(new HoodieDeleteBlock(
-            recordsToDeleteWithPositions, baseFileInstantTimeForDeletePositions,
-            shouldWriteRecordPositions, getUpdatedHeader(header, config)));
+            recordsToDeleteWithPositions,
+            shouldWriteRecordPositions,
+            getUpdatedHeader(
+                header, config, shouldWriteRecordPositions, baseFileInstantTimeForPositions)));
       }
 
       if (!blocks.isEmpty()) {
@@ -511,7 +517,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         recordList.clear();
         if (appendDeleteBlocks) {
           recordsToDeleteWithPositions.clear();
-          baseFileInstantTimeForDeletePositions = null;
         }
       }
     } catch (Exception e) {
@@ -633,13 +638,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
     } else {
       long position = shouldWriteRecordPositions ? record.getCurrentPosition() : -1L;
-      if (baseFileInstantTimeForDeletePositions != null) {
-        if (!baseFileInstantTimeForDeletePositions.equals(record.getCurrentBaseFileInstantTime())) {
-          baseFileInstantTimeForDeletePositions = EMPTY_STRING;
-        }
-      } else {
-        baseFileInstantTimeForDeletePositions = record.getCurrentBaseFileInstantTime();
-      }
       recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(record.getKey(), orderingVal), position));
     }
     numberOfRecords++;
@@ -686,7 +684,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header,
-                                                                  HoodieWriteConfig config) {
+                                                                  HoodieWriteConfig config,
+                                                                  boolean shouldWriteRecordPositions,
+                                                                  Option<String> baseInstantTimeForPositions) {
     Map<HeaderMetadataType, String> updatedHeader = new HashMap<>(header);
     if (config.shouldWritePartialUpdates()) {
       // When enabling writing partial updates to the data blocks, the "IS_PARTIAL" flag is also
@@ -695,15 +695,20 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       updatedHeader.put(
           HeaderMetadataType.IS_PARTIAL, Boolean.toString(true));
     }
+    if (shouldWriteRecordPositions && baseInstantTimeForPositions.isPresent()) {
+      updatedHeader.put(
+          HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS,
+          baseInstantTimeForPositions.get());
+    }
     return updatedHeader;
   }
 
-  private static HoodieLogBlock getBlock(HoodieWriteConfig writeConfig,
-                                         HoodieLogBlock.HoodieLogBlockType logDataBlockFormat,
-                                         List<HoodieRecord> records,
-                                         boolean shouldWriteRecordPositions,
-                                         Map<HeaderMetadataType, String> header,
-                                         String keyField) {
+  private static HoodieLogBlock getDataBlock(HoodieWriteConfig writeConfig,
+                                             HoodieLogBlock.HoodieLogBlockType logDataBlockFormat,
+                                             List<HoodieRecord> records,
+                                             boolean shouldWriteRecordPositions,
+                                             Map<HeaderMetadataType, String> header,
+                                             String keyField) {
     switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(records, shouldWriteRecordPositions, header, keyField);
