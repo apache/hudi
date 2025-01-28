@@ -20,6 +20,7 @@
 package org.apache.hudi.client.utils;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -368,7 +369,8 @@ public class SparkMetadataWriterUtils {
    */
   public static HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> getExpressionIndexPartitionStatUpdates(HoodieCommitMetadata commitMetadata, String indexPartition,
                                                                                                                            HoodieEngineContext engineContext, HoodieTableMetadata tableMetadata,
-                                                                                                                           HoodieTableMetaClient dataMetaClient, HoodieMetadataConfig metadataConfig) {
+                                                                                                                           HoodieTableMetaClient dataMetaClient, HoodieMetadataConfig metadataConfig,
+                                                                                                                           Option<HoodieRecord.HoodieRecordType> recordTypeOpt) {
     // In this function we iterate over all the partitions modified by the commit and fetch the latest files in those partitions
     // We fetch stored Expression index records for these latest files and return HoodiePairData of partition name and list of column range metadata of these files
 
@@ -385,9 +387,14 @@ public class SparkMetadataWriterUtils {
       HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
       Schema tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema)
           .orElseThrow(() -> new IllegalStateException(String.format("Expected writer schema in commit metadata %s", commitMetadata)));
-      // filter columns with only supported types
-      final List<String> validColumnsToIndex = columnsToIndex.stream()
-          .filter(col -> HoodieTableMetadataUtil.SUPPORTED_META_FIELDS_PARTITION_STATS.contains(col) || HoodieTableMetadataUtil.validateDataTypeForPartitionStats(col, tableSchema))
+      List<Pair<String,Schema>> columnsToIndexSchemaMap = columnsToIndex.stream()
+          .map(columnToIndex -> Pair.of(columnToIndex, HoodieAvroUtils.getSchemaForField(tableSchema, columnToIndex).getValue().schema())).collect(
+          Collectors.toList());
+      // filter for supported types
+      final List<String> validColumnsToIndex = columnsToIndexSchemaMap.stream()
+          .filter(colSchemaPair -> HoodieTableMetadataUtil.SUPPORTED_META_FIELDS_PARTITION_STATS.contains(colSchemaPair.getKey())
+              || HoodieTableMetadataUtil.isColumnTypeSupported(colSchemaPair.getValue(), recordTypeOpt))
+          .map(entry -> entry.getKey())
           .collect(Collectors.toList());
       if (validColumnsToIndex.isEmpty()) {
         return engineContext.emptyHoodieData().mapToPair(o -> Pair.of("", new ArrayList<>()));
