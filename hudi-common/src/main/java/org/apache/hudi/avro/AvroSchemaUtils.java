@@ -174,7 +174,18 @@ public class AvroSchemaUtils {
    * </ol>
    */
   public static boolean isStrictProjectionOf(Schema sourceSchema, Schema targetSchema) {
-    return isProjectionOfInternal(sourceSchema, targetSchema, Objects::equals);
+    return isProjectionOfInternal(sourceSchema, targetSchema, AvroSchemaUtils::isAtomicTypeEquals);
+  }
+
+  private static boolean isAtomicTypeEquals(Schema source, Schema target) {
+    // ignore name/namespace for FIXED type
+    if (source.getType() == Schema.Type.FIXED && target.getType() == Schema.Type.FIXED) {
+      return source.getLogicalType().equals(target.getLogicalType())
+          && source.getFixedSize() == target.getFixedSize()
+          && source.getObjectProps().equals(target.getObjectProps());
+    } else {
+      return Objects.equals(source, target);
+    }
   }
 
   private static boolean isProjectionOfInternal(Schema sourceSchema,
