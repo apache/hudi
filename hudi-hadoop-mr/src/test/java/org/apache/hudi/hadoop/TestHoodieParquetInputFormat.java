@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -203,7 +203,7 @@ public class TestHoodieParquetInputFormat {
         true, schema);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    FileCreateUtils.createCommit(COMMIT_METADATA_SER_DE, basePath.toString(), "100", Option.of(commitMetadata));
+    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, basePath.toString(), "100", Option.of(commitMetadata));
 
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -673,7 +673,7 @@ public class TestHoodieParquetInputFormat {
 
     // add more files
     InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId2-", 5, "200");
-    FileCreateUtils.createInflightCommit(basePath.toString(), "200");
+    FileCreateUtilsLegacy.createInflightCommit(basePath.toString(), "200");
 
     // Verify that validate mode reads uncommitted files
     InputFormatTestUtil.setupSnapshotIncludePendingCommits(jobConf, "200");
@@ -714,7 +714,7 @@ public class TestHoodieParquetInputFormat {
 
     // create inflight commit add more files with same file_id.
     InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId1", 5, "100");
-    FileCreateUtils.createInflightCommit(basePath.toString(), "100");
+    FileCreateUtilsLegacy.createInflightCommit(basePath.toString(), "100");
 
     // Create another commit without datafiles.
     createCommitFile(basePath, "200", "2016/05/01");

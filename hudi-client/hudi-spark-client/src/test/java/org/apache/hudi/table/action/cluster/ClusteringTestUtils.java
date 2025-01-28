@@ -51,8 +51,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createBaseFile;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.utils.HoodieWriterClientTestHarness.getPropertiesForKeyGen;
 

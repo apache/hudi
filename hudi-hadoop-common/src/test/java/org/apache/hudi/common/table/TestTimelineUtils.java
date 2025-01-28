@@ -34,23 +34,18 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.BaseTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -63,7 +58,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
@@ -78,13 +72,10 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -593,40 +584,6 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         .setPartitionMetadata(partitionToFilesCleaned).build();
 
     return TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata);
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = HollowCommitHandling.class)
-  public void testHandleHollowCommitIfNeeded(HollowCommitHandling handlingMode) throws Exception {
-    HoodieTestTable.of(metaClient)
-        .addCommit("001")
-        .addInflightCommit("003")
-        .addCommit("005");
-    Stream<String> completed = Stream.of("001", "005");
-    HoodieTimeline completedTimeline = new MockHoodieTimeline(completed, Stream.empty());
-    switch (handlingMode) {
-      case FAIL:
-        HoodieException e = assertThrows(HoodieException.class, () ->
-            handleHollowCommitIfNeeded(completedTimeline, metaClient, handlingMode));
-        assertTrue(e.getMessage().startsWith("Found hollow commit:"));
-        break;
-      case BLOCK: {
-        HoodieTimeline filteredTimeline = handleHollowCommitIfNeeded(completedTimeline, metaClient, handlingMode);
-        assertTrue(filteredTimeline.containsInstant("001"));
-        assertFalse(filteredTimeline.containsInstant("003"));
-        assertFalse(filteredTimeline.containsInstant("005"));
-        break;
-      }
-      case USE_TRANSITION_TIME: {
-        HoodieTimeline filteredTimeline = handleHollowCommitIfNeeded(completedTimeline, metaClient, handlingMode);
-        assertTrue(filteredTimeline.containsInstant("001"));
-        assertFalse(filteredTimeline.containsInstant("003"));
-        assertTrue(filteredTimeline.containsInstant("005"));
-        break;
-      }
-      default:
-        fail("should cover all handling mode.");
-    }
   }
 
   @Test

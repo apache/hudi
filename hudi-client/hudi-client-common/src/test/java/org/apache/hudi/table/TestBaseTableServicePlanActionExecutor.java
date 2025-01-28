@@ -35,7 +35,7 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -144,7 +144,7 @@ public class TestBaseTableServicePlanActionExecutor {
     prepareTimeline(metaClient, instants, Collections.emptyList());
     instants.keySet().forEach(instant -> {
       try {
-        FileCreateUtils.createPartitionMetaFile(tablePath, instant);
+        FileCreateUtilsLegacy.createPartitionMetaFile(tablePath, instant);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -193,7 +193,7 @@ public class TestBaseTableServicePlanActionExecutor {
     testTable.addCluster(clusteringRequestTime, replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue(), clusteringCompletionTIme);
 
     HoodieInstant clusteringInstant = metaClient.getActiveTimeline().filterCompletedInstants().getLastClusteringInstant().get();
-    FileCreateUtils.createPartitionMetaFile(tablePath, clusteringInstant.requestedTime());
+    FileCreateUtilsLegacy.createPartitionMetaFile(tablePath, clusteringInstant.requestedTime());
 
     // create empty commit 0003_004
     String emptyCommitRequestTime = "0003";
@@ -235,7 +235,7 @@ public class TestBaseTableServicePlanActionExecutor {
     requestInstants.forEach(instant -> {
       try {
         testTable.addRequestedCommit(instant);
-        FileCreateUtils.createPartitionMetaFile(metaClient.getBasePath().toString(), instant);
+        FileCreateUtilsLegacy.createPartitionMetaFile(metaClient.getBasePath().toString(), instant);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
