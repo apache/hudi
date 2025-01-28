@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sink.bootstrap.IndexRecord;
 import org.apache.hudi.sink.utils.PayloadCreation;
@@ -67,7 +68,7 @@ import java.util.Objects;
  *
  * @see BucketAssigner
  */
-public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
+public class BucketAssignFunction<K, I, O>
     extends KeyedProcessFunction<K, I, O>
     implements CheckpointedFunction, CheckpointListener {
 
@@ -87,11 +88,11 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   /**
    * Bucket assigner to assign new bucket IDs or reuse existing ones.
    */
-  private BucketAssigner bucketAssigner;
+  protected BucketAssigner bucketAssigner;
 
-  private final Configuration conf;
+  protected final Configuration conf;
 
-  private final boolean isChangingRecords;
+  protected final boolean isChangingRecords;
 
   /**
    * Used to create DELETE payload.
@@ -102,7 +103,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
    * If the index is global, update the index for the old partition path
    * if same key record with different partition path came in.
    */
-  private final boolean globalIndex;
+  protected final boolean globalIndex;
 
   public BucketAssignFunction(Configuration conf) {
     this.conf = conf;
@@ -123,16 +124,11 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         getRuntimeContext().getIndexOfThisSubtask(),
         getRuntimeContext().getMaxNumberOfParallelSubtasks(),
         getRuntimeContext().getNumberOfParallelSubtasks(),
-        ignoreSmallFiles(),
+        OptionsResolver.isInsertOverwrite(conf),
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
         context,
         writeConfig);
     this.payloadCreation = PayloadCreation.instance(this.conf);
-  }
-
-  private boolean ignoreSmallFiles() {
-    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
-    return WriteOperationType.isOverwrite(operationType);
   }
 
   @Override
@@ -213,7 +209,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     out.collect((O) record);
   }
 
-  private HoodieRecordLocation getNewRecordLocation(String partitionPath) {
+  protected HoodieRecordLocation getNewRecordLocation(String partitionPath) {
     final BucketInfo bucketInfo = this.bucketAssigner.addInsert(partitionPath);
     final HoodieRecordLocation location;
     switch (bucketInfo.getBucketType()) {
