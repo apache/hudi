@@ -46,6 +46,8 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+
 /**
  * {@link HoodieRecord} implementation for Hive records of {@link ArrayWritable}.
  */
@@ -101,7 +103,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   @Override
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     String orderingField = ConfigUtils.getOrderingField(props);
-    if (orderingField == null) {
+    if (isNullOrEmpty(orderingField)) {
       return DEFAULT_ORDERING_VALUE;
     }
     return (Comparable<?>) getValue(orderingField);
