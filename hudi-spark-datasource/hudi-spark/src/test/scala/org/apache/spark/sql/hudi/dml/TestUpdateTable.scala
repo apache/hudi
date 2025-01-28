@@ -18,13 +18,12 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
-import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils, LogFileTestUtils}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
-
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -36,6 +35,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       Seq(true, false).foreach { sparkSqlOptimizedWrites =>
         Seq("mor", "cow").foreach { tableType =>
           val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
           // create table
           spark.sql(
             s"""
@@ -45,7 +45,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
                |  price double,
                |  ts long
                |) using hudi
-               | location '${tmp.getCanonicalPath}/$tableName'
+               | location '$basePath'
                | tblproperties (
                |  type = '$tableType',
                |  primaryKey = 'id',
@@ -67,6 +67,10 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           checkAnswer(s"select id, name, price, ts from $tableName")(
             Seq(1, "a1", 20.0, 1000)
           )
+
+          if (tableType.equals("mor") && HoodieSparkUtils.gteqSpark3_5) {
+            LogFileTestUtils.validateRecordPositionsInLogFiles(createMetaClient(spark, basePath), true)
+          }
 
           // update data
           spark.sql(s"update $tableName set price = price * 2 where id = 1")
