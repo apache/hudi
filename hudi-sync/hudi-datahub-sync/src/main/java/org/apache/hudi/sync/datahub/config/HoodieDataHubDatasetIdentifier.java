@@ -22,6 +22,8 @@ package org.apache.hudi.sync.datahub.config;
 import com.linkedin.common.FabricType;
 import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.urn.DatasetUrn;
+import com.linkedin.common.urn.Urn;
+import io.datahubproject.models.util.DatabaseKey;
 
 import java.util.Properties;
 
@@ -41,19 +43,50 @@ public class HoodieDataHubDatasetIdentifier {
   public static final FabricType DEFAULT_DATAHUB_ENV = FabricType.DEV;
 
   protected final Properties props;
+  private final DatasetUrn datasetUrn;
+  private final Urn databaseUrn;
+  private final String tableName;
+  private final String databaseName;
 
   public HoodieDataHubDatasetIdentifier(Properties props) {
     this.props = props;
+    if (props == null || props.isEmpty()) {
+      throw new IllegalArgumentException("Properties cannot be null or empty");
+    }
+    DataHubSyncConfig config = new DataHubSyncConfig(props);
+
+    this.datasetUrn = new DatasetUrn(
+        createDataPlatformUrn(config.getStringOrDefault(META_SYNC_DATAHUB_DATAPLATFORM_NAME)),
+        createDatasetName(config.getString(META_SYNC_DATABASE_NAME), config.getString(META_SYNC_TABLE_NAME)),
+        FabricType.valueOf(config.getStringOrDefault(META_SYNC_DATAHUB_DATASET_ENV))
+    );
+
+    this.tableName = config.getString(META_SYNC_TABLE_NAME);
+    this.databaseName = config.getString(META_SYNC_DATABASE_NAME);
+
+    DatabaseKey databaseKey = DatabaseKey.builder()
+        .platform(config.getStringOrDefault(META_SYNC_DATAHUB_DATAPLATFORM_NAME))
+        .instance(config.getStringOrDefault(META_SYNC_DATAHUB_DATASET_ENV))
+        .database(this.databaseName)
+        .build();
+
+    this.databaseUrn = databaseKey.asUrn();
   }
 
   public DatasetUrn getDatasetUrn() {
-    DataHubSyncConfig config = new DataHubSyncConfig(props);
+    return this.datasetUrn;
+  }
 
-    return new DatasetUrn(
-            createDataPlatformUrn(config.getStringOrDefault(META_SYNC_DATAHUB_DATAPLATFORM_NAME)),
-            createDatasetName(config.getString(META_SYNC_DATABASE_NAME), config.getString(META_SYNC_TABLE_NAME)),
-            FabricType.valueOf(config.getStringOrDefault(META_SYNC_DATAHUB_DATASET_ENV))
-    );
+  public Urn getDatabaseUrn() {
+    return this.databaseUrn;
+  }
+
+  public String getTableName() {
+    return this.tableName;
+  }
+
+  public String getDatabaseName() {
+    return this.databaseName;
   }
 
   private static DataPlatformUrn createDataPlatformUrn(String platformUrn) {
