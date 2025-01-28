@@ -86,6 +86,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -108,8 +109,10 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieRecordLocation.INVALID_POSITION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.useExternalHdfs;
@@ -2789,19 +2792,38 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  public void testGetRecordPositions(boolean addRecordPositionsHeader) throws IOException {
+  @CsvSource(value = {"false,false,false", "false,false,true",
+      "true,false,false", "true,false,true", "true,true,false", "true,true,true"})
+  public void testGetRecordPositions(boolean recordWithPositions,
+                                     boolean allValidPositions,
+                                     boolean addBaseFileInstantTimeOfPositions) throws IOException {
     Map<HeaderMetadataType, String> header = new HashMap<>();
-    Set<Long> positions = new HashSet<>();
-    if (addRecordPositionsHeader) {
-      positions = TestLogReaderUtils.generatePositions();
+    List<Long> positions = new ArrayList<>();
+    if (recordWithPositions) {
+      positions.addAll(TestLogReaderUtils.generatePositions());
+      if (!allValidPositions) {
+        positions.add(INVALID_POSITION);
+        positions.set(positions.size() / 2, INVALID_POSITION);
+      }
+    }
+
+    List<Pair<DeleteRecord, Long>> deleteRecordList = positions.isEmpty()
+        ? IntStream.range(0, 10).boxed()
+        .map(i -> Pair.of(DeleteRecord.create("key" + i, "partition"), INVALID_POSITION))
+        .collect(Collectors.toList())
+        : IntStream.range(0, positions.size()).boxed()
+        .map(i -> Pair.of(DeleteRecord.create("key" + i, "partition"), positions.get(i)))
+        .collect(Collectors.toList());
+
+    if (addBaseFileInstantTimeOfPositions) {
       header.put(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS, "001");
     }
-    // TODO(yihua): fix tests
-    HoodieLogBlock logBlock = new HoodieDeleteBlock(Collections.emptyList(), header);
-    if (addRecordPositionsHeader) {
-      TestLogReaderUtils.assertPositionEquals(positions, logBlock.getRecordPositions());
-    }
+    HoodieLogBlock logBlock = new HoodieDeleteBlock(deleteRecordList, header);
+    boolean hasPositions = (recordWithPositions && allValidPositions && addBaseFileInstantTimeOfPositions);
+    assertEquals(hasPositions ? "001" : null, logBlock.getBaseFileInstantTimeOfPositions());
+    TestLogReaderUtils.assertPositionEquals(
+        hasPositions ? new HashSet<>(positions) : Collections.emptySet(),
+        logBlock.getRecordPositions());
   }
 
   private static Stream<Arguments> testArguments() {
