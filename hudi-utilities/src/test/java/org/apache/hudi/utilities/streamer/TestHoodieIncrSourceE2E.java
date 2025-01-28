@@ -54,6 +54,7 @@ import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_EMPTY_CK
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_INPUT_CKP;
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_NON_EMPTY_CKP_ALL_MEMBERS;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY;
+import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP_V2_KEY;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NULL_CKP_KEY;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_FETCH_NEXT_BATCH;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.RETURN_CHECKPOINT_KEY;
@@ -61,6 +62,8 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.Missing
 import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(MockitoExtension.class)
 public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
@@ -104,6 +107,59 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
         metaClient, metaClient.getActiveTimeline().lastInstant().get());
     assertFalse(metadata.isEmpty());
     assertEquals(metadata.get().getExtraMetadata(), expectedMetadata);
+  }
+
+
+  /**
+   * Tests the end-to-end sync behavior with multiple sync iterations.
+   *
+   * Test flow:
+   * 1. First sync:
+   *    - Starts with no checkpoint
+   *    - Ingests data until checkpoint "10"
+   *    - Verifies commit metadata contains only checkpoint="10"
+   *
+   * 2. Second sync:
+   *    - Uses different table version
+   *    - Continues from checkpoint "10" to "20"
+   *    - Verifies commit metadata contains checkpoint="20"
+   *
+   * 3. Third sync:
+   *    - Upgrades to table version 8
+   *    - Continues from checkpoint "20" to "30"
+   *    - Verifies commit metadata still uses checkpoint V1 format
+   *    - Verifies final checkpoint="30"
+   */
+  @ParameterizedTest
+  @CsvSource({
+      "6, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource",
+      "8, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource"
+  })
+  public void testSyncE2EWrongCheckpointVersionErrorOut(String tableVersion, String sourceClass) throws Exception {
+    // First start with no previous checkpoint and ingest till ckp 1 with table version.
+    // Disable auto upgrade and MDT as we want to keep things as it is.
+    metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
+    TypedProperties props = setupBaseProperties(tableVersion);
+    // Round 1: ingest start from beginning to checkpoint 10. Return wrong version of checkpoint.
+    props.put(OP_FETCH_NEXT_BATCH,
+        tableVersion.equals("6") ? OP_EMPTY_ROW_SET_NONE_NULL_CKP_V2_KEY : OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
+    props.put(RETURN_CHECKPOINT_KEY, "10");
+    // Validating the source input ckp is empty when doing the sync.
+    props.put(VAL_INPUT_CKP, VAL_EMPTY_CKP_KEY);
+    props.put("hoodie.metadata.enable", "false");
+    props.put("hoodie.write.auto.upgrade", "false");
+    props.put("hoodie.write.table.version", tableVersion);
+
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(createConfig(basePath(), null, sourceClass), jsc, Option.of(props));
+    Exception ex = assertThrows(java.lang.IllegalStateException.class, ds::sync);
+    // Contain error messages.
+    if (tableVersion.equals("8")) {
+      assertTrue(ex.getMessage().contains("Data source target checkpoint v2 (completion time based) should always return checkpoint v2."));
+    } else {
+      assertTrue(ex.getMessage().contains("Data source target checkpoint v1 (completion time based) should always return checkpoint v1."));
+    }
+    // Contain basic information like table base path for debugging.
+    assertTrue(ex.getMessage().contains(basePath()));
   }
 
   /**

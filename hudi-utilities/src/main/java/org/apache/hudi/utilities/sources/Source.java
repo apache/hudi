@@ -144,7 +144,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
       if (shouldTargetCheckpointV2(writeTableVersion, getClass().getName()) && !(checkpoint instanceof StreamerCheckpointV2)) {
         throw new IllegalStateException("Data source target checkpoint v2 (completion time based) should always return checkpoint v2. Setup " + props);
       }
-      if (shouldTargetCheckpointV2(writeTableVersion, getClass().getName()) && !(checkpoint instanceof StreamerCheckpointV2)) {
+      if (!shouldTargetCheckpointV2(writeTableVersion, getClass().getName()) && !(checkpoint instanceof StreamerCheckpointV1)) {
         throw new IllegalStateException("Data source target checkpoint v1 (completion time based) should always return checkpoint v1. Setup " + props);
       }
     }
