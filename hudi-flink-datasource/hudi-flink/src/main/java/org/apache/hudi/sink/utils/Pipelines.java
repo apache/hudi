@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,6 +35,7 @@ import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
+import org.apache.hudi.sink.bucket.BucketStreamWriteRowDataOperator;
 import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
@@ -51,6 +53,7 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
+import org.apache.hudi.sink.transform.RowDataEnrichFunctions;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.table.format.FilePathUtils;
 
@@ -254,6 +257,19 @@ public class Pipelines {
     }
   }
 
+  public static DataStream<HoodieFlinkRecord> bootstrapRowData(
+      Configuration conf,
+      RowType rowType,
+      TypeInformation<RowData> rowDataInfo,
+      DataStream<RowData> dataStream,
+      boolean overwrite) {
+    if (overwrite || OptionsResolver.isBucketIndexType(conf)) {
+      return rowDataEnrich(conf, rowType, rowDataInfo, dataStream);
+    } else {
+      throw new HoodieNotSupportedException("Currently, only simple bucket index is supported with enabled '" + FlinkOptions.WRITE_FAST_MODE.key() + "'");
+    }
+  }
+
   private static DataStream<HoodieRecord> streamBootstrap(
       Configuration conf,
       RowType rowType,
@@ -303,6 +319,13 @@ public class Pipelines {
   public static DataStream<HoodieRecord> rowDataToHoodieRecord(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
     return dataStream.map(RowDataToHoodieFunctions.create(rowType, conf), TypeInformation.of(HoodieRecord.class))
         .setParallelism(dataStream.getParallelism()).name("row_data_to_hoodie_record");
+  }
+
+  public static DataStream<HoodieFlinkRecord> rowDataEnrich(Configuration conf, RowType rowType, TypeInformation<RowData> rowDataInfo, DataStream<RowData> dataStream) {
+    return dataStream
+        .map(RowDataEnrichFunctions.create(conf, rowType), HoodieFlinkRecord.getTypeInfo(rowDataInfo))
+        .setParallelism(dataStream.getParallelism())
+        .name("row_data_enrich");
   }
 
   /**
@@ -380,6 +403,27 @@ public class Pipelines {
           .transform(opName("stream_write", conf), TypeInformation.of(Object.class), operatorFactory)
           .uid(opUID("stream_write", conf))
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+    }
+  }
+
+  public static DataStream<Object> hoodieStreamWriteRowData(Configuration conf, RowType rowType, DataStream<HoodieFlinkRecord> dataStream) {
+    if (OptionsResolver.isBucketIndexType(conf)
+        && OptionsResolver.getBucketEngineType(conf).equals(HoodieIndex.BucketIndexEngineType.SIMPLE)) {
+      int bucketNum = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
+      String indexKeyFields = OptionsResolver.getIndexKeyField(conf);
+      BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(bucketNum, indexKeyFields);
+      return dataStream
+          .partitionCustom(
+              partitioner,
+              record -> new HoodieKey(record.getRecordKey(), record.getPartitionPath()))
+          .transform(
+              opName("bucket_write_row_data", conf),
+              TypeInformation.of(Object.class),
+              BucketStreamWriteRowDataOperator.getFactory(conf, rowType))
+          .uid(opUID("bucket_write_row_data", conf))
+          .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+    } else {
+      throw new HoodieNotSupportedException("Currently, only simple bucket index is supported with enabled '" + FlinkOptions.WRITE_FAST_MODE.key() + "'");
     }
   }
 

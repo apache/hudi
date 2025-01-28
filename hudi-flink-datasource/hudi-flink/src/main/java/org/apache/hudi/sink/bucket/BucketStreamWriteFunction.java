@@ -125,17 +125,23 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     HoodieRecord<?> record = (HoodieRecord<?>) i;
     final HoodieKey hoodieKey = record.getKey();
     final String partition = hoodieKey.getPartitionPath();
-    final HoodieRecordLocation location;
 
-    // for insert overwrite operation skip the index loading
+    record.unseal();
+    record.setCurrentLocation(defineRecordLocation(hoodieKey, partition));
+    record.seal();
+    bufferRecord(record);
+  }
+
+  protected HoodieRecordLocation defineRecordLocation(HoodieKey hoodieKey, String partition) {
+    // for insert overwrite operation skip `bucketIndex` loading
     if (!isInsertOverwrite) {
       bootstrapIndexIfNeed(partition);
     }
-
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
     final int bucketNum = BucketIdentifier.getBucketId(hoodieKey.getRecordKey(), indexKeyFields, this.bucketNum);
     final String bucketId = partition + "/" + bucketNum;
 
+    final HoodieRecordLocation location;
     if (incBucketIndex.contains(bucketId)) {
       location = new HoodieRecordLocation("I", bucketToFileId.get(bucketNum));
     } else if (bucketToFileId.containsKey(bucketNum)) {
@@ -146,10 +152,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
       bucketToFileId.put(bucketNum, newFileId);
       incBucketIndex.add(bucketId);
     }
-    record.unseal();
-    record.setCurrentLocation(location);
-    record.seal();
-    bufferRecord(record);
+    return location;
   }
 
   /**

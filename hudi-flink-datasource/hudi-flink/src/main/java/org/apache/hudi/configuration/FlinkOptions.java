@@ -675,6 +675,14 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(ClientIds.INIT_CLIENT_ID)
       .withDescription("Unique identifier used to distinguish different writer pipelines for concurrent mode");
 
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_FAST_MODE = ConfigOptions
+      .key("write.fast.mode")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Optimized Flink write into Hudi table, which uses customized serialization/deserialization. "
+          + "Note, that only SIMPLE BUCKET index is supported for now.");
+
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------
