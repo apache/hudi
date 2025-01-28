@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.storage.StoragePath
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
-import scala.jdk.CollectionConverters.mapAsScalaMapConverter
+import scala.collection.JavaConverters
 
 object LogFileTestUtils {
   def validateRecordPositionsInLogFiles(metaClient: HoodieTableMetaClient,
@@ -35,8 +35,9 @@ object LogFileTestUtils {
     val commitMetadata = metaClient.getCommitMetadataSerDe.deserialize(
       instant, metaClient.getActiveTimeline.getInstantDetails(instant).get,
       classOf[HoodieCommitMetadata])
-    val logFileList: List[HoodieLogFile] = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath)
-      .asScala.values
+    val logFileList: List[HoodieLogFile] = JavaConverters.mapAsScalaMapConverter(commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath))
+      .asScala
+      .values
       .filter(e => FSUtils.isLogFile(new StoragePath(e)))
       .map(e => new HoodieLogFile(new StoragePath(e)))
       .toList
