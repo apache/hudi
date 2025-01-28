@@ -98,7 +98,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private final List<HoodieRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted), along with their position in log block, in memory before they are flushed to disk
   private final List<Pair<DeleteRecord, Long>> recordsToDeleteWithPositions = new ArrayList<>();
-  // Base file instant time for the record positions
+  // Base file instant time of the record positions
   private final Option<String> baseFileInstantTimeOfPositions;
   // Incoming records to be written to logs.
   protected Iterator<HoodieRecord<T>> recordItr;
@@ -710,15 +710,15 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
                                              String keyField) {
     switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(records, shouldWriteRecordPositions, header, keyField);
+        return new HoodieAvroDataBlock(records, header, keyField);
       case HFILE_DATA_BLOCK:
+        header.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
         return new HoodieHFileDataBlock(
             records, header, writeConfig.getHFileCompressionAlgorithm(), new StoragePath(writeConfig.getBasePath()),
             writeConfig.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER));
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,
-            shouldWriteRecordPositions,
             header,
             keyField,
             writeConfig.getParquetCompressionCodec(),

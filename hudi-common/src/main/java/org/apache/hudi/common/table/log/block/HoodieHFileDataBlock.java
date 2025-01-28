@@ -89,7 +89,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               String compressionCodec,
                               StoragePath pathForReader,
                               boolean useNativeHFileReader) {
-    super(records, false, header, new HashMap<>(), HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME);
+    super(records, header, new HashMap<>(), HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME);
     this.compressionCodec = Option.of(compressionCodec);
     this.pathForReader = pathForReader;
     this.hFileReaderConfig = getHFileReaderConfig(useNativeHFileReader);

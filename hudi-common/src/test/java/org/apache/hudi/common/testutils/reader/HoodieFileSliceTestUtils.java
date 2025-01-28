@@ -70,6 +70,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.DELETE_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
 import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileName;
@@ -168,7 +169,6 @@ public class HoodieFileSliceTestUtils {
       List<IndexedRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
       StoragePath logFilePath,
-      boolean writePositions,
       Map<String, Long> keyToPositionMap
   ) {
     return createDataBlock(
@@ -176,19 +176,17 @@ public class HoodieFileSliceTestUtils {
         records.stream().map(r -> new HoodieAvroIndexedRecord(r, new HoodieRecordLocation("", "", keyToPositionMap.get(r.get(RECORD_KEY_INDEX)))))
             .collect(Collectors.toList()),
         header,
-        logFilePath,
-        writePositions);
+        logFilePath);
   }
 
   private static HoodieDataBlock createDataBlock(
       HoodieLogBlock.HoodieLogBlockType dataBlockType,
       List<HoodieRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      StoragePath pathForReader,
-      boolean writePositions
-  ) {
+      StoragePath pathForReader) {
     switch (dataBlockType) {
       case CDC_DATA_BLOCK:
+        header.remove(BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
         return new HoodieCDCDataBlock(
             records,
             header,
@@ -196,10 +194,10 @@ public class HoodieFileSliceTestUtils {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(
             records,
-            writePositions,
             header,
             HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case HFILE_DATA_BLOCK:
+        header.remove(BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
         return new HoodieHFileDataBlock(
             records,
             header,
@@ -209,7 +207,6 @@ public class HoodieFileSliceTestUtils {
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,
-            writePositions,
             header,
             HoodieRecord.RECORD_KEY_METADATA_FIELD,
             PARQUET_COMPRESSION_CODEC_NAME.defaultValue(),
@@ -226,8 +223,6 @@ public class HoodieFileSliceTestUtils {
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
       Schema schema,
       Properties props,
-      boolean writePositions,
-      String baseFileInstantTime,
       Map<String, Long> keyToPositionMap
   ) {
     List<HoodieRecord> hoodieRecords = records.stream()
@@ -237,11 +232,6 @@ public class HoodieFileSliceTestUtils {
           return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partitionPath), r, new HoodieRecordLocation("", "",  keyToPositionMap.get(r.get(RECORD_KEY_INDEX))));
         })
         .collect(Collectors.toList());
-    if (writePositions) {
-      header.put(
-          HoodieLogBlock.HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS,
-          baseFileInstantTime);
-    }
     return new HoodieDeleteBlock(
         hoodieRecords.stream().map(
             r -> Pair.of(DeleteRecord.create(
@@ -313,14 +303,19 @@ public class HoodieFileSliceTestUtils {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, logInstantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+      if (writePositions) {
+        header.put(
+            BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS,
+            baseFileInstantTime);
+      }
 
       if (blockType != DELETE_BLOCK) {
         HoodieDataBlock dataBlock = getDataBlock(
-            blockType, records, header, new StoragePath(logFilePath), writePositions, keyToPositionMap);
+            blockType, records, header, new StoragePath(logFilePath), keyToPositionMap);
         writer.appendBlock(dataBlock);
       } else {
-        HoodieDeleteBlock deleteBlock = getDeleteBlock(
-            records, header, schema, PROPERTIES, writePositions, baseFileInstantTime, keyToPositionMap);
+        HoodieDeleteBlock deleteBlock =
+            getDeleteBlock(records, header, schema, PROPERTIES, keyToPositionMap);
         writer.appendBlock(deleteBlock);
       }
     }

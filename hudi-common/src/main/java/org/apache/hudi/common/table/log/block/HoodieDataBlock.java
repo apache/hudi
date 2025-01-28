@@ -70,7 +70,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   private final boolean enablePointLookups;
 
   protected Schema readerSchema;
-  protected final boolean shouldWriteRecordPositions;
 
   //  Map of string schema to parsed schema.
   private static ConcurrentHashMap<String, Schema> schemaMap = new ConcurrentHashMap<>();
@@ -79,7 +78,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
   public HoodieDataBlock(List<HoodieRecord> records,
-                         boolean shouldWriteRecordPositions,
                          Map<HeaderMetadataType, String> header,
                          Map<FooterMetadataType, String> footer,
                          String keyFieldName) {
@@ -104,7 +102,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = getWriterSchema(super.getLogBlockHeader());
-    this.shouldWriteRecordPositions = shouldWriteRecordPositions;
     this.enablePointLookups = false;
   }
 
@@ -121,8 +118,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                             String keyFieldName,
                             boolean enablePointLookups) {
     super(headers, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
-    // Setting `shouldWriteRecordPositions` to false as this constructor is only used by the reader
-    this.shouldWriteRecordPositions = false;
     this.records = Option.empty();
     this.keyFieldName = keyFieldName;
     this.readerSchema = containsPartialUpdates()
