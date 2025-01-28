@@ -42,7 +42,7 @@ Pessimistic Concurrency Control assumes that conflicts between transactions can 
 - Transactions acquire a shared lock before reading data and an exclusive lock before writing.
 - Locks are held until the transaction commits or aborts but releases immediately after the commit command executes, ensuring serializability.
 
-<img src="/assets/images/blog/concurrency_control/2PL.png" alt="2PL" width="800" align="middle"/>
+<img src="/assets/images/blog/concurrency_control/2PL.png" alt="2PL" width="1000" align="middle"/>
 
 If we take our online concert ticketing system example, where we have 5 tickets left and Customer A and Customer B both attempt to buy 3 tickets simultaneously. With Strict Two-Phase Locking (2PL), Transaction T1 (Customer A’s purchase) acquires an exclusive lock on the inventory, preventing Transaction T2 (Customer B’s purchase) from accessing it until T1 completes. T1 checks the inventory, deducts 3 tickets for Customer A, reducing the count to 2, and then releases the lock. Only then can T2 proceed, locking the inventory, seeing the updated 2 tickets, and completing the purchase for Customer B. This ensures serializability by isolating transactions through locking, yielding the same result as if the transactions had run one after the other.
 
@@ -89,7 +89,7 @@ Let’s take a look at what type of concurrency control methods are available wi
 
 Most of the concurrency control implementations today in lakehouse table formats focus on optimistically handling conflicts. OCC relies on the assumption that conflicts are rare, making it suitable for simple, append-only jobs but inadequate for scenarios that require frequent updates or deletes. In OCC, each job typically takes a table-level lock to check for conflicts by determining if there are overlapping files that multiple jobs have impacted. If a conflict is detected, the job will abort its operation _entirely_. This could be a problem with certain types of workloads. For example, an ingest job writing data every 30 minutes and a deletion job running every two hours may often conflict, causing the deletion job to fail. In such cases especially with long-running transactions, OCC is problematic because the chance of conflicts increases over time.
 
-<img src="/assets/images/blog/concurrency_control/concur_blog.png" alt="Hudi concurrency control methods" align="middle"/>
+<img src="/assets/images/blog/concurrency_control/concur_blog.png" alt="Hudi concurrency control methods" width="900" align="middle"/>
 
 Apache Hudi’s uniqueness lies in the fact that it clearly distinguishes the different actors interacting with the format, i.e. writer processes (that issue user’s upserts/deletes), table services (such as clustering, compaction) and readers (that execute queries and read data). Hudi provides [Snapshot Isolation](https://en.wikipedia.org/wiki/Snapshot_isolation) between all three types of processes, meaning they all operate on a consistent snapshot of the table. For writers, Hudi implements a variant of Serializable [Snapshot Isolation (SSI)](https://distributed-computing-musings.com/2022/02/transactions-serializable-snapshot-isolation/). Here’s how Hudi supports different types of concurrency control methods, offering fine-grained control over concurrent data access and updates.
 
