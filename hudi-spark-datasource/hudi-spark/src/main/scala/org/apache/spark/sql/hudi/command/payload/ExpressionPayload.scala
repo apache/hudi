@@ -17,13 +17,13 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema}
+import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
+import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{BaseAvroPayload, DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, StringUtils, ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -43,7 +43,7 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructType}
 
 import java.nio.ByteBuffer
-import java.util.{Base64, Objects, Properties}
+import java.util.{Base64, Properties}
 import java.util.function.{Function, Supplier}
 
 import scala.collection.JavaConverters._
@@ -63,10 +63,14 @@ import scala.collection.JavaConverters._
  */
 class ExpressionPayload(@transient record: GenericRecord,
                         @transient orderingVal: Comparable[_])
-  extends DefaultHoodieRecordPayload(record, orderingVal) with Logging {
+  extends BaseAvroPayload(record, orderingVal) with HoodieRecordPayload[ExpressionPayload] with Logging {
 
   def this(recordOpt: HOption[GenericRecord]) {
     this(recordOpt.orElse(null), HoodieRecord.DEFAULT_ORDERING_VALUE)
+  }
+
+  override def preCombine(oldValue: ExpressionPayload): ExpressionPayload = {
+    throw new IllegalStateException(s"Should not call this method for ${getClass.getCanonicalName}")
   }
 
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,
@@ -82,10 +86,8 @@ class ExpressionPayload(@transient record: GenericRecord,
                                         schema: Schema,
                                         properties: Properties): HOption[IndexedRecord] = {
     val recordSchema = getRecordSchema(properties)
-
     val sourceRecord = bytesToAvro(recordBytes, recordSchema)
-    val joinedRecord = joinRecord(sourceRecord, targetRecord, properties)
-
+    val joinedRecord = joinRecord(sourceRecord, targetRecord)
     processMatchedRecord(ConvertibleRecord(joinedRecord), Some(targetRecord), properties)
   }
 
@@ -171,7 +173,7 @@ class ExpressionPayload(@transient record: GenericRecord,
     if (tablePayloadClass.equals(classOf[OverwriteWithLatestAvroPayload].getName)) {
       HOption.of(incomingRecord)
     } else if (tablePayloadClass.equals(classOf[DefaultHoodieRecordPayload].getName)) {
-      if (needUpdatingPersistedRecord(existingRecord, incomingRecord, properties)) {
+      if (needUpdatingPersistedRecord(existingRecord.asInstanceOf[GenericRecord], incomingRecord, properties)) {
         HOption.of(incomingRecord)
       } else {
         HOption.of(existingRecord)
@@ -188,6 +190,19 @@ class ExpressionPayload(@transient record: GenericRecord,
             .asInstanceOf[Comparable[_]]).asInstanceOf[HoodieRecordPayload[_ <: HoodieRecordPayload[_]]]
         incomingRecordPayload.combineAndGetUpdateValue(existingRecord, schema, properties)
       }
+    }
+  }
+
+  private def needUpdatingPersistedRecord(existingRecord: GenericRecord, incomingRecord: GenericRecord, properties: Properties): Boolean = {
+    val orderingField = ConfigUtils.getOrderingField(properties)
+    if (StringUtils.isNullOrEmpty(orderingField)) {
+      true
+    } else {
+      val consistentLogicalTimestampEnabled = properties.getProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean
+      val persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal(existingRecord, orderingField, true, consistentLogicalTimestampEnabled)
+      val incomingOrderingVal = HoodieAvroUtils.getNestedFieldVal(incomingRecord, orderingField, true, consistentLogicalTimestampEnabled)
+      persistedOrderingVal == null || persistedOrderingVal.asInstanceOf[Comparable[AnyRef]].compareTo(incomingOrderingVal) <= 0
     }
   }
 
@@ -286,36 +301,6 @@ class ExpressionPayload(@transient record: GenericRecord,
 
   private def isMORTable(properties: Properties): Boolean = {
     properties.getProperty(TABLE_TYPE.key, null) == MOR_TABLE_TYPE_OPT_VAL
-  }
-
-  private def convertToRecord(values: Array[AnyRef], schema: Schema): GenericRecord = {
-    assert(values.length == schema.getFields.size())
-    val writeRecord = new GenericData.Record(schema)
-    for (i <- values.indices) {
-      writeRecord.put(i, values(i))
-    }
-    writeRecord
-  }
-
-  /**
-   * Join the source record with the target record.
-   */
-  private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord, props: Properties): GenericRecord = {
-    val leftSchema = sourceRecord.getSchema
-    val joinSchema = getMergedSchema(leftSchema, targetRecord.getSchema)
-
-    // TODO rebase onto JoinRecord
-    val values = new Array[AnyRef](joinSchema.getFields.size())
-    for (i <- 0 until joinSchema.getFields.size()) {
-      val value = if (i < leftSchema.getFields.size()) {
-        sourceRecord.get(i)
-      } else { // skip meta field
-        targetRecord.get(i - leftSchema.getFields.size() + HoodieRecord.HOODIE_META_COLUMNS.size())
-      }
-      values(i) = value
-    }
-
-    convertToRecord(values, joinSchema)
   }
 }
 
@@ -518,37 +503,6 @@ object ExpressionPayload {
     })
   }
 
-  private def validateCompatibleSchemas(joinedSchema: Schema, expectedStructType: StructType, props: Properties): Unit = {
-    ValidationUtils.checkState(expectedStructType.fields.length == joinedSchema.getFields.size,
-      s"Expected schema diverges from the merged one: " +
-        s"expected has ${expectedStructType.fields.length} fields, while merged one has ${joinedSchema.getFields.size}")
-
-    val shouldValidate = props.getProperty(PAYLOAD_SHOULD_VALIDATE_COMBINED_SCHEMA, "false").toBoolean
-    if (shouldValidate) {
-      val expectedSchema = convertStructTypeToAvroSchema(expectedStructType, joinedSchema.getName, joinedSchema.getNamespace)
-      // NOTE: Since compared schemas are produced by essentially combining (joining)
-      //       2 schemas together, field names might not be appropriate and therefore
-      //       just structural compatibility will be checked (ie based on ordering of
-      //       the fields as well as corresponding data-types)
-      expectedSchema.getFields.asScala
-        .zip(joinedSchema.getFields.asScala)
-        .zipWithIndex
-        .foreach {
-          case ((expectedField, targetField), idx) =>
-            val expectedFieldSchema = resolveNullableSchema(expectedField.schema())
-            val targetFieldSchema = resolveNullableSchema(targetField.schema())
-
-            val equal = Objects.equals(expectedFieldSchema, targetFieldSchema)
-            ValidationUtils.checkState(equal,
-              s"""
-                 |Expected schema diverges from the target one in #$idx field:
-                 |Expected data-type: $expectedFieldSchema
-                 |Received data-type: $targetFieldSchema
-                 |""".stripMargin)
-        }
-    }
-  }
-
   private def mergeSchema(a: Schema, b: Schema): Schema = {
     val mergedFields =
       a.getFields.asScala.map(field =>
@@ -603,6 +557,36 @@ object ExpressionPayload {
     def toObject(bytes: Array[Byte]): Any = {
       SERIALIZER_THREAD_LOCAL.get.deserialize(ByteBuffer.wrap(bytes))
     }
+  }
+
+  private def convertToRecord(values: Array[AnyRef], schema: Schema): GenericRecord = {
+    assert(values.length == schema.getFields.size())
+    val writeRecord = new GenericData.Record(schema)
+    for (i <- values.indices) {
+      writeRecord.put(i, values(i))
+    }
+    writeRecord
+  }
+
+  /**
+   * Join the source record with the target record.
+   */
+  private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord): GenericRecord = {
+    val leftSchema = sourceRecord.getSchema
+    val joinSchema = getMergedSchema(leftSchema, targetRecord.getSchema)
+
+    // TODO rebase onto JoinRecord
+    val values = new Array[AnyRef](joinSchema.getFields.size())
+    for (i <- 0 until joinSchema.getFields.size()) {
+      val value = if (i < leftSchema.getFields.size()) {
+        sourceRecord.get(i)
+      } else { // skip meta field
+        targetRecord.get(i - leftSchema.getFields.size() + HoodieRecord.HOODIE_META_COLUMNS.size())
+      }
+      values(i) = value
+    }
+
+    convertToRecord(values, joinSchema)
   }
 }
 
