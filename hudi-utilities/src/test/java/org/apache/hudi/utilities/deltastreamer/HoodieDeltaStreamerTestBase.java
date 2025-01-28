@@ -728,7 +728,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static void waitFor(BooleanSupplier booleanSupplier) {
       while (!booleanSupplier.getAsBoolean()) {
         try {
-          Thread.sleep(10);
+          Thread.sleep(5);
         } catch (Throwable error) {
           LOG.debug("Got error waiting for condition", error);
         }

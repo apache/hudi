@@ -1122,7 +1122,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         // Wait for a pending commit before starting execution phase for the executor. This ensures that indexer waits for the commit to complete.
         TestHelpers.waitFor(() -> {
           HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage.getConf(), tableBasePath);
-          HoodieTimeline pendingCommitsTimeline = metaClient.reloadActiveTimeline().getCommitsTimeline().filterInflightsAndRequested();
+          HoodieTimeline pendingCommitsTimeline = metaClient.getCommitsTimeline().filterInflightsAndRequested();
           return !pendingCommitsTimeline.empty();
         });
         HoodieIndexer runIndexingJob = new HoodieIndexer(jsc,
