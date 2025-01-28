@@ -54,7 +54,7 @@ class TestCustomDeleteRecord extends SparkClientFunctionalTestHarness {
       classOf[OverwriteWithLatestMerger].getName).mkString(",")
 
     val mergeStrategy = if (mergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING.name)) {
-      HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID
+      HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
     } else {
       HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID
     }
