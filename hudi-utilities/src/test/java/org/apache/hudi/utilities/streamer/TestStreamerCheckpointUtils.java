@@ -329,7 +329,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.sourceClassName = "org.apache.hudi.utilities.sources.KafkaSource";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveWhatCheckpointToResumeFrom(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointToResumeFrom(
         Option.empty(), streamerConfig, props, metaClient);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV1);
     assertEquals("test-cp", checkpoint.get().getCheckpointKey());
@@ -340,7 +340,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.checkpoint = "test-cp";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "1");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveWhatCheckpointToResumeFrom(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointToResumeFrom(
         Option.empty(), streamerConfig, props, metaClient);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV1);
     assertEquals("test-cp", checkpoint.get().getCheckpointKey());
@@ -349,7 +349,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
   @Test
   public void testEmptyTimelineAndNullCheckpoint() throws IOException {
     streamerConfig.checkpoint = null;
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveWhatCheckpointToResumeFrom(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointToResumeFrom(
         Option.empty(), streamerConfig, props, metaClient);
     assertTrue(checkpoint.isEmpty());
   }
@@ -363,7 +363,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
 
     streamerConfig.checkpoint = "config-cp";
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveWhatCheckpointToResumeFrom(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointToResumeFrom(
         Option.of(metaClient.getActiveTimeline()), streamerConfig, props, metaClient);
     assertEquals("config-cp", checkpoint.get().getCheckpointKey());
   }

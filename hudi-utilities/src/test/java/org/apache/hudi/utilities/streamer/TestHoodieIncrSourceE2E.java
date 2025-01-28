@@ -156,12 +156,10 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     Exception ex = assertThrows(java.lang.IllegalStateException.class, ds::sync);
     // Contain error messages.
     if (tableVersion.equals("8")) {
-      assertTrue(ex.getMessage().contains("Data source target checkpoint v2 (completion time based) should always return checkpoint v2."));
+      assertTrue(ex.getMessage().contains("Data source should return checkpoint version V2."));
     } else {
-      assertTrue(ex.getMessage().contains("Data source target checkpoint v1 (completion time based) should always return checkpoint v1."));
+      assertTrue(ex.getMessage().contains("Data source should return checkpoint version V1."));
     }
-    // Contain basic information like table base path for debugging.
-    assertTrue(ex.getMessage().contains(basePath()));
   }
 
   /**

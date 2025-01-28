@@ -543,7 +543,7 @@ public class StreamSync implements Serializable, Closeable {
    */
   public Pair<InputBatch, Boolean> readFromSource(String instantTime, HoodieTableMetaClient metaClient) throws IOException {
     // Retrieve the previous round checkpoints, if any
-    Option<Checkpoint> checkpointToResume = StreamerCheckpointUtils.resolveWhatCheckpointToResumeFrom(commitsTimelineOpt, cfg, props, metaClient);
+    Option<Checkpoint> checkpointToResume = StreamerCheckpointUtils.resolveCheckpointToResumeFrom(commitsTimelineOpt, cfg, props, metaClient);
     LOG.info("Checkpoint to resume from : " + checkpointToResume);
 
     int maxRetryCount = cfg.retryOnSourceFailures ? cfg.maxRetryCount : 1;

@@ -47,16 +47,16 @@ public class CheckpointUtils {
       "org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource",
       "org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource",
       "org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
-      "org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource",
-      "org.apache.hudi.utilities.sources.HoodieIncrSource"
+      "org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource"
   )));
 
   public static final Set<String> HOODIE_INCREMENTAL_SOURCES;
 
   static {
-    HashSet<String> tmp = new HashSet<>(DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2);
-    tmp.add("org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource");
-    HOODIE_INCREMENTAL_SOURCES = Collections.unmodifiableSet(tmp);
+    HashSet<String> hoodieIncSource = new HashSet<>(DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2);
+    hoodieIncSource.add("org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource");
+    hoodieIncSource.add("org.apache.hudi.utilities.sources.HoodieIncrSource");
+    HOODIE_INCREMENTAL_SOURCES = Collections.unmodifiableSet(hoodieIncSource);
   }
 
   public static Checkpoint getCheckpoint(HoodieCommitMetadata commitMetadata) {

@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.checkpoint;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -31,24 +32,26 @@ public class TestHoodieIncrSourceCheckpointValUtils {
 
   @Test
   public void testResolveToV1V2CheckpointWithRequestTime() {
+    String checkpoint = "20240301";
     UnresolvedStreamerCheckpointBasedOnCfg mockCheckpoint = mock(UnresolvedStreamerCheckpointBasedOnCfg.class);
-    when(mockCheckpoint.getCheckpointKey()).thenReturn("resumeFromInstantRequestTime:20240301");
+    when(mockCheckpoint.getCheckpointKey()).thenReturn("resumeFromInstantRequestTime:" + checkpoint);
 
     Checkpoint result = HoodieIncrSourceCheckpointValUtils.resolveToActualCheckpointVersion(mockCheckpoint);
 
-    assertTrue(result instanceof StreamerCheckpointV1);
-    assertEquals("20240301", result.getCheckpointKey());
+    assertInstanceOf(StreamerCheckpointV1.class, result);
+    assertEquals(checkpoint, result.getCheckpointKey());
   }
 
   @Test
   public void testResolveToV1V2CheckpointWithCompletionTime() {
+    String checkpoint = "20240302";
     UnresolvedStreamerCheckpointBasedOnCfg mockCheckpoint = mock(UnresolvedStreamerCheckpointBasedOnCfg.class);
-    when(mockCheckpoint.getCheckpointKey()).thenReturn("resumeFromInstantCompletionTime:20240302");
+    when(mockCheckpoint.getCheckpointKey()).thenReturn("resumeFromInstantCompletionTime:" + checkpoint);
 
     Checkpoint result = HoodieIncrSourceCheckpointValUtils.resolveToActualCheckpointVersion(mockCheckpoint);
 
-    assertTrue(result instanceof StreamerCheckpointV2);
-    assertEquals("20240302", result.getCheckpointKey());
+    assertInstanceOf(StreamerCheckpointV2.class, result);
+    assertEquals(checkpoint, result.getCheckpointKey());
   }
 
   @Test

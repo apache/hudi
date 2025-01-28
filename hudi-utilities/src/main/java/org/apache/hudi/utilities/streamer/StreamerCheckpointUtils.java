@@ -72,10 +72,10 @@ public class StreamerCheckpointUtils {
    * {@link org.apache.hudi.utilities.sources.Source#translateCheckpoint} and child class overrides of this
    * method.
    */
-  public static Option<Checkpoint> resolveWhatCheckpointToResumeFrom(Option<HoodieTimeline> commitsTimelineOpt,
-                                                                     HoodieStreamer.Config streamerConfig,
-                                                                     TypedProperties props,
-                                                                     HoodieTableMetaClient metaClient) throws IOException {
+  public static Option<Checkpoint> resolveCheckpointToResumeFrom(Option<HoodieTimeline> commitsTimelineOpt,
+                                                                 HoodieStreamer.Config streamerConfig,
+                                                                 TypedProperties props,
+                                                                 HoodieTableMetaClient metaClient) throws IOException {
     Option<Checkpoint> checkpoint = Option.empty();
     assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
     // If we have both streamer config and commits specifying what checkpoint to use, go with the

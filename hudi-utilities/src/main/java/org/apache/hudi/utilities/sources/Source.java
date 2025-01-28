@@ -139,13 +139,21 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     throw new UnsupportedOperationException("Unsupported checkpoint type: " + lastCheckpoint.get());
   }
 
-  public void assertCheckpointVersion(Checkpoint checkpoint) {
+  public void assertCheckpointVersion(Option<Checkpoint> lastCheckpoint, Option<Checkpoint> lastCheckpointTranslated, Checkpoint checkpoint) {
     if (checkpoint != null) {
-      if (shouldTargetCheckpointV2(writeTableVersion, getClass().getName()) && !(checkpoint instanceof StreamerCheckpointV2)) {
-        throw new IllegalStateException("Data source target checkpoint v2 (completion time based) should always return checkpoint v2. Setup " + props);
+      boolean shouldBeV2Checkpoint = shouldTargetCheckpointV2(writeTableVersion, getClass().getName());
+      String errorMessage = String.format(
+          "Data source should return checkpoint version V%s. The checkpoint resumed in the iteration is %s, whose translated version is %s. "
+              + "The checkpoint returned after the iteration %s.",
+          shouldBeV2Checkpoint ? "2" : "1",
+          lastCheckpoint.isEmpty() ? "null" : lastCheckpointTranslated.get(),
+          lastCheckpointTranslated.isEmpty() ? "null" : lastCheckpointTranslated.get(),
+          checkpoint);
+      if (shouldBeV2Checkpoint && !(checkpoint instanceof StreamerCheckpointV2)) {
+        throw new IllegalStateException(errorMessage);
       }
-      if (!shouldTargetCheckpointV2(writeTableVersion, getClass().getName()) && !(checkpoint instanceof StreamerCheckpointV1)) {
-        throw new IllegalStateException("Data source target checkpoint v1 (completion time based) should always return checkpoint v1. Setup " + props);
+      if (!shouldBeV2Checkpoint && !(checkpoint instanceof StreamerCheckpointV1)) {
+        throw new IllegalStateException(errorMessage);
       }
     }
   }
@@ -158,8 +166,9 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
    * @return
    */
   public final InputBatch<T> fetchNext(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    InputBatch<T> batch = readFromCheckpoint(translateCheckpoint(lastCheckpoint), sourceLimit);
-    assertCheckpointVersion(batch.getCheckpointForNextBatch());
+    Option<Checkpoint> lastCheckpointTranslated = translateCheckpoint(lastCheckpoint);
+    InputBatch<T> batch = readFromCheckpoint(lastCheckpointTranslated, sourceLimit);
+    assertCheckpointVersion(lastCheckpoint, lastCheckpointTranslated, batch.getCheckpointForNextBatch());
     // If overriddenSchemaProvider is passed in CLI, use it
     return overriddenSchemaProvider == null ? batch
         : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);
