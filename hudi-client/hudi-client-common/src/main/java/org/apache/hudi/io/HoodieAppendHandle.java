@@ -175,12 +175,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private Option<String> getBaseFileInstantTimeOfPositions() {
-    TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-    Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
-    if (fileSlice.isPresent()) {
-      return fileSlice.get().getBaseFile().map(HoodieBaseFile::getCommitTime);
-    }
-    return Option.empty();
+    return hoodieTable.getHoodieView().getLatestBaseFile(partitionPath, fileId)
+        .map(HoodieBaseFile::getCommitTime);
   }
 
   private void populateWriteStat(HoodieRecord record, HoodieDeltaWriteStat deltaWriteStat) {
