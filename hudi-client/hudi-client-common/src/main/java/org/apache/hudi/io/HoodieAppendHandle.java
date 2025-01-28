@@ -498,7 +498,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getDataBlock(config, pickLogDataBlockFormat(), recordList, shouldWriteRecordPositions,
+        blocks.add(getDataBlock(config, pickLogDataBlockFormat(), recordList,
             getUpdatedHeader(header, config, shouldWriteRecordPositions, baseFileInstantTimeOfPositions),
             keyField));
       }
@@ -705,13 +705,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private static HoodieLogBlock getDataBlock(HoodieWriteConfig writeConfig,
                                              HoodieLogBlock.HoodieLogBlockType logDataBlockFormat,
                                              List<HoodieRecord> records,
-                                             boolean shouldWriteRecordPositions,
                                              Map<HeaderMetadataType, String> header,
                                              String keyField) {
     switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(records, header, keyField);
       case HFILE_DATA_BLOCK:
+        // Not supporting positions in HFile data blocks
         header.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
         return new HoodieHFileDataBlock(
             records, header, writeConfig.getHFileCompressionAlgorithm(), new StoragePath(writeConfig.getBasePath()),

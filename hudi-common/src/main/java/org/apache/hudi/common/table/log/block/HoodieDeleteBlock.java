@@ -91,7 +91,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
       } else {
         LOG.warn("There are delete records without valid positions. "
             + "Skip writing record positions to the delete block header.");
-
+        removeBaseFileInstantTimeOfPositions();
       }
     }
     this.recordsToDelete = recordsToDelete.stream().map(Pair::getLeft).toArray(DeleteRecord[]::new);
