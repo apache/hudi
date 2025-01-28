@@ -19,6 +19,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.LogFileTestUtils.validateRecordPositionsInLogFiles
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
@@ -36,7 +37,6 @@ import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
@@ -314,32 +314,5 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       validateRecordPositionsInLogFiles(
         metaClient, shouldContainRecordPosition = !enableNBCC && i != 4)
     }
-  }
-
-  def validateRecordPositionsInLogFiles(metaClient: HoodieTableMetaClient,
-                                        shouldContainRecordPosition: Boolean): Unit = {
-    val instant = metaClient.getActiveTimeline.getDeltaCommitTimeline.lastInstant().get()
-    val commitMetadata = metaClient.getCommitMetadataSerDe.deserialize(
-      instant, metaClient.getActiveTimeline.getInstantDetails(instant).get,
-      classOf[HoodieCommitMetadata])
-    val logFileList: List[HoodieLogFile] = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath)
-      .asScala.values
-      .filter(e => FSUtils.isLogFile(new StoragePath(e)))
-      .map(e => new HoodieLogFile(new StoragePath(e)))
-      .toList
-    assertFalse(logFileList.isEmpty)
-    val schema = new TableSchemaResolver(metaClient).getTableAvroSchema
-    logFileList.foreach(filename => {
-      val logFormatReader = new HoodieLogFileReader(metaClient.getStorage, filename, schema, 81920)
-      var numBlocks = 0
-      while (logFormatReader.hasNext) {
-        val logBlock = logFormatReader.next()
-        val recordPositions = logBlock.getRecordPositions
-        assertEquals(shouldContainRecordPosition, !recordPositions.isEmpty)
-        numBlocks += 1
-      }
-      logFormatReader.close()
-      assertTrue(numBlocks > 0)
-    })
   }
 }

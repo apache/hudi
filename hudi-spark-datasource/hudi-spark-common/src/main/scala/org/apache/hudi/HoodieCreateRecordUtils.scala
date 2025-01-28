@@ -266,9 +266,9 @@ object HoodieCreateRecordUtils {
       None
     }
 
-    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields) {
-      // TODO(yihua): fix
-      Option(sourceRow.getLong(6))
+    val temporaryRowIndexFieldOrd = schema.fieldNames.indexOf(SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName())
+    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields && temporaryRowIndexFieldOrd != -1) {
+      Option(sourceRow.getLong(temporaryRowIndexFieldOrd))
     } else {
       None
     }
@@ -282,9 +282,13 @@ object HoodieCreateRecordUtils {
   private def createHoodieRecordLocation(instantTime: Option[String],
                                          fileName: Option[String],
                                          recordPosition: Option[Long]) = {
-    if (instantTime.isDefined && fileName.isDefined && recordPosition.isDefined) {
+    if (instantTime.isDefined && fileName.isDefined) {
       val fileId = FSUtils.getFileId(fileName.get)
-      Some(new HoodieRecordLocation(instantTime.get, fileId, recordPosition.get))
+      if (recordPosition.isDefined) {
+        Some(new HoodieRecordLocation(instantTime.get, fileId, recordPosition.get))
+      } else {
+        Some(new HoodieRecordLocation(instantTime.get, fileId))
+      }
     } else {
       None
     }

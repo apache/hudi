@@ -21,7 +21,7 @@ import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
 import org.apache.hudi.HoodieBaseRelation.convertToAvroSchema
 import org.apache.hudi.HoodieCatalystUtils.toUnresolved
-import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql._
@@ -116,7 +116,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     }
 
     val condition = ut.condition.getOrElse(TrueLiteral)
-    val targetAttributes = filteredOutput.map { targetAttr =>
+    var targetAttributes = filteredOutput.map { targetAttr =>
       // NOTE: [[UpdateTable]] permits partial updates and therefore here we correlate assigned
       //       assigned attributes to the ones of the target table. Ones not being assigned
       //       will simply be carried over (from the old record)
@@ -127,16 +127,24 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
 
     // Include temporary row index column name in the attribute refs of logical plan
     var attributeRefs = attributeSeq.map(expr => AttributeReference(expr.name, expr.dataType, nullable = expr.nullable)())
-    attributeRefs = attributeRefs :+ AttributeReference(SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName(), LongType, nullable = true)()
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      val rowIndexAttributeRef = AttributeReference(SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName(), LongType, nullable = true)()
+      attributeRefs = attributeRefs :+ rowIndexAttributeRef
+      targetAttributes = targetAttributes :+ rowIndexAttributeRef.toAttribute
+    }
 
-    val schema = AvroSchemaUtils.projectSchema(
-      convertToAvroSchema(catalogTable.tableSchema, catalogTable.tableName),
-      attributeSeq.map(e => e.name).asJava,
-      new Schema.Field(
-        SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName(),
-        Schema.createUnion(
-          Schema.create(Schema.Type.NULL), SchemaBuilder.builder().longType())
-      ))
+    val schema = if (HoodieSparkUtils.gteqSpark3_5) {
+      AvroSchemaUtils.projectSchema(
+        convertToAvroSchema(catalogTable.tableSchema, catalogTable.tableName),
+        attributeSeq.map(e => e.name).asJava,
+        new Schema.Field(
+          SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName(),
+          Schema.createUnion(
+            Schema.create(Schema.Type.NULL), SchemaBuilder.builder().longType())
+        ))
+    } else {
+      convertToAvroSchema(catalogTable.tableSchema, catalogTable.tableName)
+    }
     val options = Map(
       "hoodie.datasource.query.type" -> "snapshot",
       "path" -> catalogTable.metaClient.getBasePath.toString)
