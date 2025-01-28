@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
@@ -27,6 +28,7 @@ import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.clustering.update.strategy.FlinkConsistentBucketUpdateStrategy;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.types.logical.RowType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,10 +41,8 @@ import java.util.stream.Collectors;
 
 /**
  * A stream write function with consistent bucket hash index.
- *
- * @param <I> the input type
  */
-public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
+public class ConsistentBucketStreamWriteFunction extends StreamWriteFunction {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketStreamWriteFunction.class);
 
@@ -53,8 +53,8 @@ public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<
    *
    * @param config The config options
    */
-  public ConsistentBucketStreamWriteFunction(Configuration config) {
-    super(config);
+  public ConsistentBucketStreamWriteFunction(Configuration config, RowType rowType) {
+    super(config, rowType);
   }
 
   @Override
@@ -71,10 +71,10 @@ public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<
   }
 
   @Override
-  protected List<WriteStatus> writeRecords(String instant, List<HoodieRecord> records) {
+  protected List<WriteStatus> writeRecords(String instant, List<HoodieFlinkInternalRow> records) {
     updateStrategy.initialize(this.writeClient);
     Pair<List<Pair<List<HoodieRecord>, String>>, Set<HoodieFileGroupId>> recordListFgPair =
-        updateStrategy.handleUpdate(Collections.singletonList(Pair.of(deduplicateRecordsIfNeeded(records), instant)));
+        updateStrategy.handleUpdate(Collections.singletonList(Pair.of(deduplicateRecordsIfNeeded(convertToHoodieRecords(records)), instant)));
     return recordListFgPair.getKey().stream().flatMap(
         recordsInstantPair -> writeFunction.apply(recordsInstantPair.getLeft(), recordsInstantPair.getRight()).stream()
     ).collect(Collectors.toList());
