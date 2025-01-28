@@ -47,8 +47,18 @@ public class CheckpointUtils {
       "org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource",
       "org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource",
       "org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
-      "org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource"
+      "org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource",
+      "org.apache.hudi.utilities.sources.HoodieIncrSource"
   )));
+
+  public static final Set<String> HOODIE_INCREMENTAL_SOURCES;
+
+  static {
+    HashSet<String> tmp = new HashSet<>(DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2);
+    tmp.add("org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource");
+    HOODIE_INCREMENTAL_SOURCES = Collections.unmodifiableSet(tmp);
+  }
+
   public static Checkpoint getCheckpoint(HoodieCommitMetadata commitMetadata) {
     if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2))
         || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_RESET_KEY_V2))) {
@@ -72,7 +82,7 @@ public class CheckpointUtils {
   public static Checkpoint buildCheckpointFromConfigOverride(
       String sourceClassName, int writeTableVersion, String checkpointToResume) {
     return CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
-        ? new StreamerCheckpointFromCfgCkp(checkpointToResume) : new StreamerCheckpointV1(checkpointToResume);
+        ? new UnresolvedStreamerCheckpointBasedOnCfg(checkpointToResume) : new StreamerCheckpointV1(checkpointToResume);
   }
 
   public static boolean shouldTargetCheckpointV2(int writeTableVersion, String sourceClassName) {

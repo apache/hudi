@@ -34,16 +34,16 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
  * To keep the checkpoint class design ignorant of which data source it serves, the class only indicates where
  * the checkpoint key comes from.
  * */
-public class StreamerCheckpointFromCfgCkp extends StreamerCheckpointV2 {
-  public StreamerCheckpointFromCfgCkp(String key) {
+public class UnresolvedStreamerCheckpointBasedOnCfg extends StreamerCheckpointV2 {
+  public UnresolvedStreamerCheckpointBasedOnCfg(String key) {
     super(key);
   }
 
-  public StreamerCheckpointFromCfgCkp(Checkpoint checkpoint) {
+  public UnresolvedStreamerCheckpointBasedOnCfg(Checkpoint checkpoint) {
     super(checkpoint);
   }
 
-  public StreamerCheckpointFromCfgCkp(HoodieCommitMetadata commitMetadata) {
+  public UnresolvedStreamerCheckpointBasedOnCfg(HoodieCommitMetadata commitMetadata) {
     super(commitMetadata);
   }
 }

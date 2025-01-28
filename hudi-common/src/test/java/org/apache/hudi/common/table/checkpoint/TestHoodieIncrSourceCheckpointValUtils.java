@@ -31,10 +31,10 @@ public class TestHoodieIncrSourceCheckpointValUtils {
 
   @Test
   public void testResolveToV1V2CheckpointWithRequestTime() {
-    StreamerCheckpointFromCfgCkp mockCheckpoint = mock(StreamerCheckpointFromCfgCkp.class);
+    UnresolvedStreamerCheckpointBasedOnCfg mockCheckpoint = mock(UnresolvedStreamerCheckpointBasedOnCfg.class);
     when(mockCheckpoint.getCheckpointKey()).thenReturn("resumeFromInstantRequestTime:20240301");
 
-    Checkpoint result = HoodieIncrSourceCheckpointValUtils.resolveToV1V2Checkpoint(mockCheckpoint);
+    Checkpoint result = HoodieIncrSourceCheckpointValUtils.resolveToActualCheckpointVersion(mockCheckpoint);
 
     assertTrue(result instanceof StreamerCheckpointV1);
     assertEquals("20240301", result.getCheckpointKey());
@@ -42,10 +42,10 @@ public class TestHoodieIncrSourceCheckpointValUtils {
 
   @Test
   public void testResolveToV1V2CheckpointWithCompletionTime() {
-    StreamerCheckpointFromCfgCkp mockCheckpoint = mock(StreamerCheckpointFromCfgCkp.class);
+    UnresolvedStreamerCheckpointBasedOnCfg mockCheckpoint = mock(UnresolvedStreamerCheckpointBasedOnCfg.class);
     when(mockCheckpoint.getCheckpointKey()).thenReturn("resumeFromInstantCompletionTime:20240302");
 
-    Checkpoint result = HoodieIncrSourceCheckpointValUtils.resolveToV1V2Checkpoint(mockCheckpoint);
+    Checkpoint result = HoodieIncrSourceCheckpointValUtils.resolveToActualCheckpointVersion(mockCheckpoint);
 
     assertTrue(result instanceof StreamerCheckpointV2);
     assertEquals("20240302", result.getCheckpointKey());
@@ -53,24 +53,24 @@ public class TestHoodieIncrSourceCheckpointValUtils {
 
   @Test
   public void testResolveToV1V2CheckpointWithInvalidPrefix() {
-    StreamerCheckpointFromCfgCkp mockCheckpoint = mock(StreamerCheckpointFromCfgCkp.class);
+    UnresolvedStreamerCheckpointBasedOnCfg mockCheckpoint = mock(UnresolvedStreamerCheckpointBasedOnCfg.class);
     when(mockCheckpoint.getCheckpointKey()).thenReturn("invalidPrefix:20240303");
 
     IllegalArgumentException exception = assertThrows(
         IllegalArgumentException.class,
-        () -> HoodieIncrSourceCheckpointValUtils.resolveToV1V2Checkpoint(mockCheckpoint)
+        () -> HoodieIncrSourceCheckpointValUtils.resolveToActualCheckpointVersion(mockCheckpoint)
     );
     assertTrue(exception.getMessage().contains("Illegal checkpoint key override"));
   }
 
   @Test
   public void testResolveToV1V2CheckpointWithMalformedInput() {
-    StreamerCheckpointFromCfgCkp mockCheckpoint = mock(StreamerCheckpointFromCfgCkp.class);
+    UnresolvedStreamerCheckpointBasedOnCfg mockCheckpoint = mock(UnresolvedStreamerCheckpointBasedOnCfg.class);
     when(mockCheckpoint.getCheckpointKey()).thenReturn("malformedInput");
 
     IllegalArgumentException exception = assertThrows(
         IllegalArgumentException.class,
-        () -> HoodieIncrSourceCheckpointValUtils.resolveToV1V2Checkpoint(mockCheckpoint)
+        () -> HoodieIncrSourceCheckpointValUtils.resolveToActualCheckpointVersion(mockCheckpoint)
     );
     assertTrue(exception.getMessage().contains("Illegal checkpoint key override"));
   }

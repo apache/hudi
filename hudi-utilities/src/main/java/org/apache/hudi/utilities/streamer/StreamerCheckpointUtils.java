@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.HOODIE_INCREMENTAL_SOURCES;
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.buildCheckpointFromConfigOverride;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
@@ -76,7 +77,7 @@ public class StreamerCheckpointUtils {
                                                                      TypedProperties props,
                                                                      HoodieTableMetaClient metaClient) throws IOException {
     Option<Checkpoint> checkpoint = Option.empty();
-    assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+    assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
     // If we have both streamer config and commits specifying what checkpoint to use, go with the
     // checkpoint resolution logic to resolve conflicting configurations.
     if (commitsTimelineOpt.isPresent()) {
@@ -87,10 +88,22 @@ public class StreamerCheckpointUtils {
     return checkpoint;
   }
 
+  /**
+   * Asserts that checkpoint override options are not used during table upgrade/downgrade operations.
+   * This validation is necessary because using checkpoint overrides during upgrade/downgrade operations
+   * is ambigious on if it should be interpreted as requested time or completion time.
+   *
+   * @param metaClient The metadata client for the Hudi table
+   * @param streamerConfig The configuration for the Hudi streamer
+   * @param props The typed properties containing configuration settings
+   * @throws HoodieUpgradeDowngradeException if checkpoint override options are used during upgrade/downgrade
+   */
   @VisibleForTesting
-  static void assertNoCheckpointOverrideDuringUpgrade(HoodieTableMetaClient metaClient, HoodieStreamer.Config streamerConfig, TypedProperties props) {
-    if (!StringUtils.isNullOrEmpty(streamerConfig.checkpoint)
-        || !StringUtils.isNullOrEmpty(streamerConfig.ignoreCheckpoint)) {
+  static void assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(HoodieTableMetaClient metaClient, HoodieStreamer.Config streamerConfig, TypedProperties props) {
+    boolean hasCheckpointOverride = !StringUtils.isNullOrEmpty(streamerConfig.checkpoint)
+        || !StringUtils.isNullOrEmpty(streamerConfig.ignoreCheckpoint);
+    boolean isHoodieIncSource = HOODIE_INCREMENTAL_SOURCES.contains(streamerConfig.sourceClassName);
+    if (hasCheckpointOverride && isHoodieIncSource) {
       HoodieTableVersion writeTableVersion = HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION));
       HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(streamerConfig.targetBasePath).withProps(props).build();
       if (config.autoUpgrade() && needsUpgradeOrDowngrade(metaClient, config, writeTableVersion)) {

@@ -245,7 +245,7 @@ public class TestCheckpointUtils {
         HoodieTableVersion.EIGHT.versionCode(),
         CHECKPOINT_TO_RESUME
     );
-    assertInstanceOf(StreamerCheckpointFromCfgCkp.class, checkpoint1);
+    assertInstanceOf(UnresolvedStreamerCheckpointBasedOnCfg.class, checkpoint1);
     assertEquals(CHECKPOINT_TO_RESUME, checkpoint1.getCheckpointKey());
 
     // Test V1 checkpoint creation (older table version)

@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointFromCfgCkp;
+import org.apache.hudi.common.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
@@ -95,7 +95,7 @@ public class CheckpointValidator {
           assertInstanceOf(StreamerCheckpointV2.class, ckp);
           break;
         case "org.apache.hudi.common.table.checkpoint.StreamerCheckpointFromCfgCkp":
-          assertInstanceOf(StreamerCheckpointFromCfgCkp.class, ckp);
+          assertInstanceOf(UnresolvedStreamerCheckpointBasedOnCfg.class, ckp);
           break;
         default:
           throw new RuntimeException("Unknown checkpoint class to validate " + props.get(VAL_CKP_INSTANCE_OF));

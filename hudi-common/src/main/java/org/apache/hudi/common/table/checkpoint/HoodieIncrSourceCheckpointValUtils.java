@@ -38,7 +38,7 @@ public class HoodieIncrSourceCheckpointValUtils {
    * When the checkpoint is consumed by individual data sources, we need to convert them to either vanilla
    * checkpoint v1 (request time based) or checkpoint v2 (completion time based).
    */
-  public static Checkpoint resolveToV1V2Checkpoint(StreamerCheckpointFromCfgCkp checkpoint) {
+  public static Checkpoint resolveToActualCheckpointVersion(UnresolvedStreamerCheckpointBasedOnCfg checkpoint) {
     String[] parts = extractKeyValues(checkpoint);
     switch (parts[0]) {
       case REQUEST_TIME_PREFIX: {
@@ -52,7 +52,7 @@ public class HoodieIncrSourceCheckpointValUtils {
     }
   }
 
-  private static String [] extractKeyValues(StreamerCheckpointFromCfgCkp checkpoint) {
+  private static String [] extractKeyValues(UnresolvedStreamerCheckpointBasedOnCfg checkpoint) {
     String checkpointKey = checkpoint.getCheckpointKey();
     String[] parts = checkpointKey.split(RESET_CHECKPOINT_V2_SEPARATOR);
     if (parts.length != 2

@@ -388,7 +388,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
 
     // Should not throw exception
-    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
   }
 
   @Test
@@ -405,13 +405,19 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     // Set checkpoint override
     streamerConfig.checkpoint = "test-cp";
     streamerConfig.targetBasePath = "dummyVal";
+    streamerConfig.sourceClassName = "org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource";
     // Enable auto-upgrade and set newer write version
     props.setProperty(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "true");
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
     // Should throw exception due to checkpoint override during upgrade
     assertThrows(HoodieUpgradeDowngradeException.class, () -> {
-      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
     });
+
+    // If not a hoodie incremental source, checkpoint override is allowed during upgrade.
+    streamerConfig.sourceClassName = "org.apache.hudi.utilities.sources.NotAHoodieIncrSource";
+    streamerConfig.checkpoint = "test-cp";
+    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
   }
 
   @Test
@@ -427,6 +433,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     // Set ignore checkpoint override
     streamerConfig.ignoreCheckpoint = "ignore-cp";
     streamerConfig.targetBasePath = "dummyVal";
+    streamerConfig.sourceClassName = "org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource";
 
     // Enable auto-upgrade and set newer write version
     props.setProperty(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "true");
@@ -434,7 +441,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
 
     // Should throw exception due to ignore checkpoint override during upgrade
     assertThrows(HoodieUpgradeDowngradeException.class, () -> {
-      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
     });
   }
 
@@ -457,7 +464,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "6");
 
     // Should pass since versions match
-    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
   }
 
   @Test
@@ -478,6 +485,6 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
 
     // Should pass since versions match
-    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
   }
 }
