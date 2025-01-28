@@ -80,10 +80,10 @@ We can refer this blog for in-depth details of the functionality  - https://hudi
 
 We use following configs to configure this -
 
-    * __Hoodie.parquet.max.file.size (Default 128 MB)__
+    * __hoodie.parquet.max.file.size (Default 128 MB)__
 This setting specifies the target size, in bytes, for Parquet files generated during Hudi write phases. The writer will attempt to create files that approach this target size. For example, if an existing file is 80 MB, the writer will allocate only 40 MB to that particular file group.
 
-    * __Hoodie.parquet.small.file.limit (Default 100 MB)__
+    * __hoodie.parquet.small.file.limit (Default 100 MB)__
 This setting defines the maximum file size for a data file to be classified as a small file. Files below this threshold are considered small files, prompting the system to allocate additional records to their respective file groups in subsequent write phases.
 
     * __hoodie.copyonwrite.record.size.estimate (Default 1024)__

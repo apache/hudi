@@ -1,0 +1,151 @@
+---
+title: "Out of the box Key Generators in Apache Hudi"
+excerpt: "Explain need for key gerators and out of box key generators in Apache Hudi"
+author: Aditya Goenka
+category: blog
+image: /assets/images/blog/2024-06-07-apache-hudi-a-deep-dive-with-python-code-examples.png
+tags:
+- Data Lake
+- Data Lakehouse
+- Apache Hudi
+- Key Generators
+- partition
+---
+
+## Introduction
+The goal of Apache Hudi is to bring database-like features to data lakes. This addresses the main shortcoming of traditional data lakes: the inability to easily perform row-level updates or deletions.By integrating database-like management capabilities into data lakes, Hudi revolutionizes how it handles and processes large volumes of data, enabling out-of-the-box upserts and deletes that facilitate efficient record level updating and deletion.
+One of Hudi's key innovations is the ability for users to explicitly define a Record Key, similar to a unique key in traditional databases, along with a Partition Key that aligns with the data lake paradigm. These two keys make the [HoodieKey](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieKey.java) that aligns with the data lake paradigm. These two keys make the HoodieKey which is similar to the primary key which uniquely defines each row. This enables hudi to do the upsert based on Hoodiekey. The upsert operation works by utilizing the HoodieKey to locate the exact file group where the data associated with that key resides.  When a new record is ingested into the Hudi table, the system first derives  the HoodieKey of the incoming record based on the unique key and partitioning schema configured. This key is used to determine which file group (a logical grouping of files) the record should be associated with which is usually achieved via an [indexing](https://hudi.apache.org/docs/indexes) mechanism.
+In this blog, we will explore the concept of Key Generators in Apache Hudi, how they enhance data management, and their role in enabling efficient data operations in modern data lakes.
+
+## Challenge
+The biggest challenge in defining the record key and partition key on a table is  the columns in input data does not naturally lend itself to being used as a primary key or partition key directly. In the realm of databases, we often have below cases -
+- Need to have multiple fields that serve as primary key commonly known as composite keys in the database.
+- It is necessary to preprocess the data to derive a specific field that can serve as a primary key before loading it into the database.
+- Sometimes we have to generate unique ids also. Common use case is surrogate key.
+
+Similarly, for partition columns also in datalakes, most of the time the raw field can’t be used as a partition key.
+- Partition columns often have time grain like month level or year level partition but input data mostly contain timestamp and date.
+- Nested primary keys are very common, and necessitates multiple partition columns.
+
+## Approaches to Handling this in Data Pipelines
+Data Lake and Lakehouse technologies typically address such scenarios by preprocessing the data. For example, if date-based partitioning is required and a timestamp column is available, the data must be processed using Spark SQL date functions to extract relevant components (e.g., year, month, day). These derived columns are then used for partitioning. However, this process can become cumbersome at scale, especially when multiple data streams are writing to the same Hudi table. The same extraction logic needs to be applied to all streams, and any table maintenance activities (such as bootstrapping or backfilling) also require this logic to be reapplied. This repetition is error-prone and can lead to data consistency issues if the logic is incorrectly applied.
+Hudi addresses these challenges with a built-in solution: key generators. These can be configured at the table level, eliminating the need to repeatedly apply the same logic. With key generators, Hudi automatically handles the conversion process every time, ensuring consistency and reducing the risk of errors.
+
+## What are Key Generators in Apache Hudi
+[Key generators](https://hudi.apache.org/docs/key_generation) in Apache Hudi are essential components responsible for creating record keys and partition keys for records within a dataset. Hudi uses key generators to extract the Hudi record key, which is a combination of the record key and the partition key, from the incoming record fields. This process allows Hudi to efficiently prepare the hoodie key on which updates can occur. During upserts, Hudi identifies the file group that contains the specified hoodie key using an index and updates the corresponding file group accordingly.
+Hudi offers several built-in key generator implementations that cover common use cases, such as generating record keys based on fields from the input data. However, to provide flexibility and support for more complex use cases, Hudi also offers a pluggable interface. This allows users to implement custom key generators tailored to their specific requirements.
+To create a custom key generator, you can extend the [BaseKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/keygen/BaseKeyGenerator.java) class which itself extends the [KeyGenerator](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/keygen/KeyGenerator.java)  class and implement methods such as getRecordKey and getPartitionKey. This enables you to define the specific logic required for calculating record and partition keys tailored to your dataset's requirements. Additionally, Hudi includes a variety of built-in key generators that address many common scenarios discussed in the previous section, streamlining the process of key generation for users.
+The key generator is configured at the table level and stored in the hoodie.properties file, which resides within the .hoodie directory. This file contains all the table-level configurations, including the key generation settings. Once a table is created with a particular key generator we can’t change it. It can be set using the configuration hoodie.datasource.write.keygenerator.class
+
+## Out of the Box Key Generators
+
+### SimpleKeyGenerator
+The SimpleKeyGenerator is a basic key generator used in Apache Hudi when direct fields from the input dataset can serve as both the record key and partition key. It maps a specific column in the DataFrame to the record key and another column to the partition path. This widely-used generator interprets values as-is from the DataFrame and converts them to strings, making it ideal for straightforward data structures.
+Please note that this is the default key generator for the partitioned datasets.
+```shell
+{
+  "hoodie.datasource.write.recordkey.field": "id",
+  "hoodie.datasource.write.partitionpath.field": "date",
+  "hoodie.datasource.write.keygenerator.class": "org.apache.hudi.keygen.SimpleKeyGenerator"
+}
+```
+
+### NonpartitionedKeyGenerator
+The NonpartitionedKeyGenerator is a key generator in Apache Hudi designed specifically for non-partitioned datasets. Unlike the SimpleKeyGenerator, which uses a field to determine the partition path for the data, the NonpartitionedKeyGenerator does not assign a partition key to the records. Instead, it returns an empty string as the partition key for all records. This is because the dataset is non-partitioned, meaning all records are stored in a single partition.
+```shell
+{
+  "hoodie.datasource.write.recordkey.field": "id",
+  "hoodie.datasource.write.keygenerator.class": "org.apache.hudi.keygen.NonpartitionedKeyGenerator"
+}
+```
+
+### ComplexKeyGenerator
+This key generator is used when multiple fields are used to create the record key or partition key. We can provide the comma separated list of the columns. In the output, the hoodie record key is generated using the format key1:value1,key2:value2. If any one of the partition key or record key contains multiple fields, then we have to use ComplexKeyGenerator.
+```shell
+{
+  "hoodie.datasource.write.keygenerator.class" : "org.apache.hudi.keygen.ComplexKeyGenerator",
+  "hoodie.datasource.write.recordkey.field" = "key1,key2",
+  "hoodie.datasource.write.partitionpath.field" = "country,state,city"
+}
+```
+
+### TimestampBasedKeygenerator
+The TimestampBasedKeyGenerator allows you to generate partition keys based on timestamp fields in your data. This is especially useful when you want to partition your data by date, month, or year, depending on your use case. The key generator can transform timestamps into different formats, enabling you to create partitions that suit your analytical needs.
+
+Relevant Configurations
+* __hoodie.datasource.write.keygenerator.class__
+To use this key generator, The key gen class should be `org.apache.hudi.keygen.TimestampBasedKeyGenerator`
+
+* __hoodie.deltastreamer.keygen.timebased.timestamp.type__
+This config determines the nature of the value of input. Below can be the possible values for this -
+**DATE_STRING**: Use this when the input value is in string format.
+
+    - MIXED: This option allows for a combination of formats.
+
+    - UNIX_TIMESTAMP: Select this when the input value is in epoch timestamp format (long type) measured in seconds.
+
+    - EPOCHMILLISECONDS: Use this when the input value is in epoch timestamp format (long type) measured in milliseconds.
+
+    - SCALAR: This option is for epoch timestamp values (long type) where you can specify any time unit.
+
+
+* __hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit__
+When using the SCALAR timestamp type, you can define the unit of the epoch time. Valid options include NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS
+
+* __hoodie.keygen.timebased.input.dateformat__
+When the timestamp type is DATE_STRING or MIXED, this config can be defined to specify the date format in which the field is coming in input.
+
+* __hoodie.keygen.timebased.output.dateformat__
+When the timestamp type is set to DATE_STRING or MIXED, this configuration defines the desired date format for the output field. It allows you to specify how the date should be formatted when it is generated or output.
+
+* __hoodie.deltastreamer.keygen.timebased.input.timezone__
+This setting specifies the timezone for the input date field derived from the raw data. The default value is UTC.
+
+* __hoodie.deltastreamer.keygen.timebased.output.timezone__
+This setting defines the timezone for the output date field that will be used to populate the partition column. The default value is UTC.
+
+#### Common Use Cases
+- Data Contains Timestamp Field and We Want Date Level Partitions
+In this scenario, you have a dataset with a timestamp field, and you want to partition the data by the date (i.e., year-month-day).
+```shell
+{
+  "hoodie.datasource.write.keygenerator.class":     "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
+  "hoodie.deltastreamer.keygen.timebased.timestamp.type": "DATE_STRING",
+  "hoodie.keygen.timebased.input.dateformat":"yyyy-MM-dd'T'HH:mm:ss.SSSSSSZ",
+  "hoodie.keygen.timebased.output.dateformat":"yyyy-MM-dd",
+  "hoodie.datasource.write.partitionpath.field": "event_time"
+}
+```
+
+- Data Contains Date Field but We Want to Have Month or Year Level Partitions
+Here, you have a dataset with a date field, but you want to create partitions at a higher granularity, such as by month or year.
+```shell
+{
+  "hoodie.datasource.write.keygenerator.class":     "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
+  "hoodie.deltastreamer.keygen.timebased.timestamp.type": "DATE_STRING",
+  "hoodie.keygen.timebased.input.dateformat":"yyyy-MM-dd",
+  "hoodie.keygen.timebased.output.dateformat":"yyyyMM",
+  "hoodie.datasource.write.partitionpath.field": "event_date"
+}
+```
+
+In the example above, if we have an input with a date column named event_date in the format 'yyyy-MM-dd', the configurations will convert this format to a monthly level in the format 'yyyyMM' and use it as the partition column.
+
+We can refer [TimestampBasedKeyGenerator](https://hudi.apache.org/docs/0.10.0/key_generation/#timestampbasedkeygenerator) for more examples
+
+### CustomKeyGenerator
+In typical use cases, using the same key generator for both the record key and the partition key often does not meet the requirements. For such scenarios, a Custom Key Generator is particularly useful, as it allows for the use of different key generators for different fields.
+A common use case arises when the partition key consists of multiple fields, and you also need to extract date or month-level partitions from a timestamp field. In these situations, it is essential to utilize both the TimestampBasedKeyGenerator and the ComplexKeyGenerator. However, since you cannot specify two different key generator classes simultaneously, the CustomKeyGenerator serves as an effective solution. We can configure it as list of comma separated fields with the key generator separated by colon. Example - key1:Timestamp,key2:SIMPLE,key3:SIMPLE
+When we pass the partition column, we can also provide which key generator to use. The configurations below enable you to use SimpleKeyGenerator to extract the country field and TimestampBasedKeygenerator to transform the event_date field to use only month level partitions.
+```shell
+{
+  "hoodie.datasource.write.keygenerator.class":     "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
+  "hoodie.deltastreamer.keygen.timebased.timestamp.type": "DATE_STRING",
+  "hoodie.keygen.timebased.input.dateformat":"yyyy-MM-dd",
+  "hoodie.keygen.timebased.output.dateformat":"yyyyMM",
+  "hoodie.datasource.write.partitionpath.field": "country:SIMPLE,event_date:TIMESTAMP"
+}
+```
+
+## Conclusion
+Key generators in Hudi are vital components that enable efficient record identification, partitioning, and data operations in large datasets. Whether you're performing upserts, deletes, or managing time-series data, choosing the right key generator ensures that Hudi can handle the data efficiently, while aligning with your business logic. By addressing challenges like composite keys, timestamp-based partitioning, and complex use cases, Apache Hudi revolutionizes how data lakes handle evolving data, providing database-like management capabilities that are scalable and flexible.
