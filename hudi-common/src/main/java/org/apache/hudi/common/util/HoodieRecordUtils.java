@@ -96,7 +96,7 @@ public class HoodieRecordUtils {
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
                                                                    String mergerImpls, String recordMergerStrategy) {
-    return createValidRecordMerger(engineType,ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
+    return createValidRecordMerger(engineType, ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
   }
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
@@ -147,20 +147,20 @@ public class HoodieRecordUtils {
                                                  Schema schema,
                                                  Properties props,
                                                  Function<T, Object> valueFetcher) {
-    String deleteKeyField = props.getProperty(DELETE_KEY);
-    if (StringUtils.isNullOrEmpty(deleteKeyField)) {
+    if (!hasCustomDeleteConfigs(props)) {
       return false;
     }
-
-    ValidationUtils.checkArgument(
-        !StringUtils.isNullOrEmpty(props.getProperty(DELETE_MARKER)),
-        () -> DELETE_MARKER + " should be configured with " + DELETE_KEY);
+    String deleteKeyField = props.getProperty(DELETE_KEY);
     if (schema.getField(deleteKeyField) == null) {
       return false;
     }
-
     Object deleteMarker = valueFetcher.apply(record);
     return deleteMarker != null
         && props.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
+  }
+
+  public static boolean hasCustomDeleteConfigs(Properties props) {
+    return !StringUtils.isNullOrEmpty(props.getProperty(DELETE_KEY))
+        && !StringUtils.isNullOrEmpty(props.getProperty(DELETE_MARKER));
   }
 }

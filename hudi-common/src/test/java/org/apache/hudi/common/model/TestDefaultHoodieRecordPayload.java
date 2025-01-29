@@ -40,7 +40,6 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MAR
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Unit tests {@link DefaultHoodieRecordPayload}.
@@ -149,43 +148,15 @@ public class TestDefaultHoodieRecordPayload {
 
     assertFalse(payload.isDeleted(schema, props));
     assertTrue(deletePayload.isDeleted(schema, props));
-    assertFalse(defaultDeletePayload.isDeleted(schema, props)); // if custom marker is present, should honor that irrespective of hoodie_is_deleted
+    assertTrue(defaultDeletePayload.isDeleted(schema, props)); // if custom marker is present, should honor that irrespective of hoodie_is_deleted
 
     assertEquals(record, payload.getInsertValue(schema, props).get());
     assertFalse(deletePayload.getInsertValue(schema, props).isPresent());
-    assertTrue(defaultDeletePayload.getInsertValue(schema, props).isPresent()); // if custom marker is present, should honor that irrespective of hoodie_is_deleted
+    assertFalse(defaultDeletePayload.getInsertValue(schema, props).isPresent()); // if custom marker is present, should honor that irrespective of hoodie_is_deleted
 
     assertEquals(delRecord, payload.combineAndGetUpdateValue(delRecord, schema, props).get());
     assertEquals(defaultDeleteRecord, payload.combineAndGetUpdateValue(defaultDeleteRecord, schema, props).get());
     assertFalse(deletePayload.combineAndGetUpdateValue(record, schema, props).isPresent());
-  }
-
-  @Test
-  public void testDeleteKeyConfiguration() throws IOException {
-    props.setProperty(DELETE_KEY, "ts");
-    GenericRecord record = new GenericData.Record(schema);
-    record.put("id", "1");
-    record.put("partition", "partition0");
-    record.put("ts", 0L);
-    record.put("_hoodie_is_deleted", false);
-
-    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1);
-
-    // Verify failure when DELETE_MARKER is not configured along with DELETE_KEY
-    try {
-      payload.getInsertValue(schema, props).get();
-      fail("Should fail");
-    } catch (IllegalArgumentException e) {
-      // Ignore
-    }
-
-    try {
-      payload = new DefaultHoodieRecordPayload(record, 1);
-      payload.combineAndGetUpdateValue(record, schema, props).get();
-      fail("Should fail");
-    } catch (IllegalArgumentException e) {
-      // Ignore
-    }
   }
 
   @Test
