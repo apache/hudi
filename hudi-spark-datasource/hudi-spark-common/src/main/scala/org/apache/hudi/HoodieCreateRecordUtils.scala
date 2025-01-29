@@ -226,7 +226,7 @@ object HoodieCreateRecordUtils {
     else {
       None
     }
-    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields && avroRec.hasField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)) {
+    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields && avroRec.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) != null) {
       val commitSeqNo = avroRec.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).toString
       Option(java.lang.Long.parseLong(commitSeqNo.substring(commitSeqNo.lastIndexOf("_") + 1, commitSeqNo.length)))
     } else {
@@ -267,7 +267,7 @@ object HoodieCreateRecordUtils {
       None
     }
 
-    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields) {
+    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields && !sourceRow.isNullAt(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)) {
       val commitSeqNo = sourceRow.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
       Option(java.lang.Long.parseLong(commitSeqNo.substring(commitSeqNo.lastIndexOf("_") + 1, commitSeqNo.length)))
     } else {
