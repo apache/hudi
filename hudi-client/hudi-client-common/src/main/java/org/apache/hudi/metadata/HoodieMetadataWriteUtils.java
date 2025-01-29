@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -36,6 +38,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -93,7 +96,7 @@ public class HoodieMetadataWriteUtils {
         .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
         .withAutoClean(false)
         .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
-        .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
+        .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
         .withCleanerPolicy(dataTableCleaningPolicy);
 
     if (HoodieCleaningPolicy.KEEP_LATEST_COMMITS.equals(dataTableCleaningPolicy)) {
@@ -165,12 +168,15 @@ public class HoodieMetadataWriteUtils {
         .withRecordMergeStrategyId(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(HoodieMetadataPayload.class.getCanonicalName()).build())
-        .withRecordMergeImplClasses(HoodieAvroRecordMerger.class.getCanonicalName());
+        .withRecordMergeImplClasses(HoodieAvroRecordMerger.class.getCanonicalName())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build());
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), RECORD_KEY_FIELD_NAME);
     properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD_NAME);
+    properties.put(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     if (nonEmpty(writeConfig.getMetricReporterMetricsNamePrefix())) {
       properties.put(HoodieMetricsConfig.METRICS_REPORTER_PREFIX.key(),
           writeConfig.getMetricReporterMetricsNamePrefix() + METADATA_TABLE_NAME_SUFFIX);
