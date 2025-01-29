@@ -232,7 +232,7 @@ public class TableSchemaResolver {
       String schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
       Schema schema = new Schema.Parser().parse(schemaStr);
       if (includeMetadataFields) {
-        schema = HoodieAvroUtils.addMetadataFields(schema, schema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null);
+        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField.get());
       } else {
         schema = HoodieAvroUtils.removeMetadataFields(schema);
       }
