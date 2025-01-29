@@ -411,6 +411,60 @@ object DataSkippingUtils extends Logging {
         throw new AnalysisException(s"convert reference to name failed,  Found unsupported expression ${other}")
     }
   }
+
+  /**
+   * Deduces if filter contains Null count or value count based filters. Partitions filters for MOR table cannot be looked up in
+   * Partition Stats Index if they contain these filters.
+   * @param sourceFilterExpr source expr filter of interest.
+   * @param indexedCols list of indexed cols
+   * @return {@code true} if source filters contains null or value count based filters. {@code false} otherwise.
+   */
+  def containsNullOrValueCountBasedFilters(sourceFilterExpr: Expression, indexedCols : Seq[String]): Boolean = {
+    //
+    // returns true if the filters contains null or value count based filter attributes.
+    //
+    sourceFilterExpr match {
+      // If Expression is not resolved, we can't perform the analysis accurately, bailing
+      case expr if !expr.resolved => false
+
+      // Filter "colA = null"
+      // Translates to "colA_nullCount = null" for index lookup
+      case EqualNullSafe(attrRef: AttributeReference, litNull @ Literal(null, _)) =>
+        getTargetIndexedColumnName(attrRef, indexedCols).isDefined
+
+      // Filter "colA is null"
+      // Translates to "colA_nullCount > 0" for index lookup
+      case IsNull(attribute: AttributeReference) =>
+        getTargetIndexedColumnName(attribute, indexedCols).isDefined
+
+      // Filter "colA is not null"
+      // Translates to "colA_nullCount = null or colA_valueCount = null or colA_nullCount < colA_valueCount" for index lookup
+      // "colA_nullCount = null or colA_valueCount = null" means we are not certain whether the column is null or not,
+      // hence we return True to ensure this does not affect the query.
+      case IsNotNull(attribute: AttributeReference) =>
+        getTargetIndexedColumnName(attribute, indexedCols).isDefined
+
+      case or: Or =>
+        val resLeft = containsNullOrValueCountBasedFilters(or.left, indexedCols = indexedCols)
+        val resRight = containsNullOrValueCountBasedFilters(or.right, indexedCols = indexedCols)
+        resLeft || resRight
+
+      case and: And =>
+        val resLeft = containsNullOrValueCountBasedFilters(and.left, indexedCols = indexedCols)
+        val resRight = containsNullOrValueCountBasedFilters(and.right, indexedCols = indexedCols)
+        resLeft || resRight
+
+      case Not(And(left: Expression, right: Expression)) =>
+        containsNullOrValueCountBasedFilters(Or(Not(left), Not(right)), indexedCols = indexedCols)
+
+      case Not(Or(left: Expression, right: Expression)) =>
+        containsNullOrValueCountBasedFilters(And(Not(left), Not(right)), indexedCols = indexedCols)
+
+      case _: Expression => false
+    }
+  }
+
+
 }
 
 object ColumnStatsExpressionUtils {

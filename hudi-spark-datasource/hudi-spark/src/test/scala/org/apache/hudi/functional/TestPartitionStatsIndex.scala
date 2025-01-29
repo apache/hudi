@@ -36,7 +36,10 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieMetadataFileSy
 import org.apache.hudi.util.{JFunction, JavaConversions}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, PartitionStatsIndexSupport}
 import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualNullSafe, EqualTo, Expression, GreaterThanOrEqual, IsNotNull, IsNull, LessThanOrEqual, Literal, Or}
+import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
@@ -474,6 +477,74 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     }
   }
 
+  @Test
+  def testTranslateIntoColumnStatsIndexFilterExpr(): Unit = {
+    var dataFilter: Expression = EqualTo(attribute("c1"), literal("619sdc"))
+    validateContainsNullAndValueFilters(dataFilter, Seq("c1"), false)
+
+    // c1 = 619sdc and c2 = 100, where both c1 and c2 are indexed.
+    val dataFilter1 = And(dataFilter, EqualTo(attribute("c2"), literal("100")))
+    validateContainsNullAndValueFilters(dataFilter1, Seq("c1","c2"), false)
+
+    // add contains null
+    val dataFilter2 = And(dataFilter, IsNull(attribute("c3")))
+    validateContainsNullAndValueFilters(dataFilter2, Seq("c1","c2","c3"), true)
+
+    // checks for not null
+    val dataFilter3 = And(dataFilter, IsNotNull(attribute("c4")))
+    validateContainsNullAndValueFilters(dataFilter3, Seq("c1","c2","c3","c4"), true)
+
+    // nested And and Or case
+    val dataFilter4 = And(
+      Or(
+        EqualTo(attribute("c1"), literal("619sdc")),
+        And(EqualTo(attribute("c2"), literal("100")), EqualTo(attribute("c3"), literal("200")))
+      ),
+      EqualTo(attribute("c4"), literal("300"))
+    )
+    validateContainsNullAndValueFilters(dataFilter4, Seq("c1","c2","c3","c4"), false)
+
+    // embed a null filter and validate
+    val dataFilter5 = Or(dataFilter4, And(
+      Or(
+        EqualTo(attribute("c1"), literal("619sdc")),
+        And(EqualTo(attribute("c2"), literal("100")), EqualTo(attribute("c3"), literal("200")))
+      ),
+      IsNotNull(attribute("c4"))
+    ))
+    validateContainsNullAndValueFilters(dataFilter5, Seq("c1","c2","c3","c4"), true)
+
+    // unsupported filter type
+    val dataFilter6 = BitwiseOr(
+      EqualTo(attribute("c1"), literal("619sdc")),
+      EqualTo(attribute("c2"), literal("100"))
+    )
+    validateContainsNullAndValueFilters(dataFilter6, Seq("c1","c2","c3","c4"), false)
+
+    // too many filters, out of which only half are indexed.
+    val largeFilter = (1 to 100).map(i => EqualTo(attribute(s"c$i"), literal("value"))).reduce(And)
+    val indexedColumns = (1 to 50).map(i => s"c$i")
+    validateContainsNullAndValueFilters(largeFilter, indexedColumns, false)
+
+    // add just 1 null check
+    val largeFilter1 = And(largeFilter, IsNull(attribute("c10")))
+    validateContainsNullAndValueFilters(dataFilter3, indexedColumns, true)
+  }
+
+  def validateContainsNullAndValueFilters(dataFilter: Expression, indexedCols: Seq[String],
+                                          expectedValue: Boolean): Unit = {
+    assertEquals(expectedValue, DataSkippingUtils.containsNullOrValueCountBasedFilters(dataFilter, indexedCols))
+  }
+
+  private def literal(value: String): Literal = {
+    Literal.create(value)
+  }
+
+  def generateColStatsExprForGreaterthanOrEquals(colName: String, colValue: String): Expression = {
+    val expectedExpr: Expression = GreaterThanOrEqual(UnresolvedAttribute(colName + "_maxValue"), literal(colValue))
+    And(LessThanOrEqual(UnresolvedAttribute(colName + "_minValue"), literal(colValue)), expectedExpr)
+  }
+
   def verifyQueryPredicate(hudiOpts: Map[String, String]): Unit = {
     val candidateRow = mergedDfList.last.groupBy("_row_key").count().limit(1).collect().head
     val rowKey = candidateRow.getAs[String]("_row_key")
@@ -481,6 +552,10 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     val dataFilter = EqualTo(attribute("_row_key"), Literal(rowKey))
     assertEquals(count, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
     verifyFilePruning(hudiOpts, dataFilter)
+
+    // validate that if filter contains null filters, there is no data skipping
+    val dataFilter1 = IsNotNull(attribute("_row_key"))
+    verifyFilePruning(hudiOpts, dataFilter1, false)
   }
 
   private def attribute(partition: String): AttributeReference = {
