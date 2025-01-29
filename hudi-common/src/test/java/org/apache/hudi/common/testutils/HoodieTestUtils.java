@@ -183,6 +183,10 @@ public class HoodieTestUtils {
             .setTableType(tableType)
             .setPayloadClass(HoodieAvroPayload.class);
 
+    if (properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()) != null) {
+      builder.setKeyGeneratorClassProp(properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()));
+    }
+
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
     if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
