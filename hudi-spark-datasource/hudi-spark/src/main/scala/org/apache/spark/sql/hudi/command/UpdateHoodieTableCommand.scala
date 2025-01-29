@@ -150,7 +150,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
       "path" -> catalogTable.metaClient.getBasePath.toString)
     val relation = sparkAdapter.createRelation(
       sparkSession.sqlContext, catalogTable.metaClient, schema, Array.empty, JavaConverters.mapAsJavaMap(options))
-    val filteredPlan = Filter(toUnresolved(condition), Project(targetAttributes, new LogicalRelation(relation, attributeRefs, None, false)))
+    val filteredPlan = Project(targetAttributes, Filter(toUnresolved(condition), new LogicalRelation(relation, attributeRefs, None, false)))
 
     val config = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
