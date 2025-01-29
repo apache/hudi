@@ -20,6 +20,7 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -164,8 +166,11 @@ public class UpgradeDowngradeUtils {
       // set required configs for rollback
       HoodieInstantTimeGenerator.setCommitTimeZone(table.getMetaClient().getTableConfig().getTimelineTimezone());
       // NOTE: at this stage rollback should use the current writer version and disable auto upgrade/downgrade
+      TypedProperties properties = config.getProps();
+      properties.remove(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key());
+      properties.remove(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key());
       HoodieWriteConfig rollbackWriteConfig = HoodieWriteConfig.newBuilder()
-          .withProps(config.getProps())
+          .withProps(properties)
           .withWriteTableVersion(tableVersion.versionCode())
           .withAutoUpgradeVersion(false)
           .build();
