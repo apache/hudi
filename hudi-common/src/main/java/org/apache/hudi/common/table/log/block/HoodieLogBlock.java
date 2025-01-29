@@ -345,6 +345,14 @@ public abstract class HoodieLogBlock {
     return Option.of(content);
   }
 
+  /**
+   * Adds the record positions if the base file instant time of the positions exists
+   * in the log header and the record positions are all valid.
+   *
+   * @param records         records with valid or invalid positions
+   * @param getPositionFunc function to get the position from the record
+   * @param <T>             type of record
+   */
   protected <T> void addRecordPositionsIfRequired(List<T> records,
                                                   Function<T, Long> getPositionFunc) {
     if (containsBaseFileInstantTimeOfPositions()) {

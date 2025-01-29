@@ -51,6 +51,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -134,7 +136,6 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
     readStats = new HoodieReadStats();
-    // TODO(yihua): Add more tests
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
@@ -190,15 +191,24 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     return new HoodieDeleteBlock(deleteRecordList, getHeader(false, ""));
   }
 
-  @Test
-  public void testProcessDeleteBlockWithPositions() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testProcessDeleteBlockWithPositions(boolean sameBaseInstantTime) throws Exception {
     String baseFileInstantTime = "090";
     prepareBuffer(RecordMergeMode.COMMIT_TIME_ORDERING, baseFileInstantTime);
-    HoodieDeleteBlock deleteBlock = getDeleteBlockWithPositions(baseFileInstantTime);
+    HoodieDeleteBlock deleteBlock = getDeleteBlockWithPositions(
+        sameBaseInstantTime ? baseFileInstantTime : baseFileInstantTime + "1");
     buffer.processDeleteBlock(deleteBlock);
     assertEquals(50, buffer.getLogRecords().size());
-    // With record positions, we do not need the record keys.
-    assertNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_RECORD_KEY));
+    if (sameBaseInstantTime) {
+      // If the log block's base instant time of record positions match the base file
+      // to merge, the log records are stored based on the position
+      assertNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_RECORD_KEY));
+    } else {
+      // If the log block's base instant time of record positions does not match the
+      // base file to merge, the log records are stored based on the record key
+      assertNull(buffer.getLogRecords().get(0L));
+    }
   }
 
   @Test

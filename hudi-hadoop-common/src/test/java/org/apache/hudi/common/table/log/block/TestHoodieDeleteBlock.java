@@ -118,7 +118,6 @@ public class TestHoodieDeleteBlock {
 
   public void testDeleteBlockWithValidation(DeleteRecord[] deleteRecords) throws IOException {
     List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
-    String baseFileInstantTime = "001";
     for (DeleteRecord dr : deleteRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
