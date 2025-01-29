@@ -42,7 +42,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -82,22 +81,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                          Map<FooterMetadataType, String> footer,
                          String keyFieldName) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
-    if (containsBaseFileInstantTimeOfPositions()) {
-      records.sort((o1, o2) -> {
-        long v1 = o1.getCurrentPosition();
-        long v2 = o2.getCurrentPosition();
-        return Long.compare(v1, v2);
-      });
-      if (isPositionValid(records.get(0).getCurrentPosition())) {
-        addRecordPositionsToHeader(
-            records.stream().map(HoodieRecord::getCurrentPosition).collect(Collectors.toSet()),
-            records.size());
-      } else {
-        LOG.warn("There are records without valid positions. "
-            + "Skip writing record positions to the data block header.");
-        removeBaseFileInstantTimeOfPositions();
-      }
-    }
+    addRecordPositionsIfRequired(records, HoodieRecord::getCurrentPosition);
     this.records = Option.of(records);
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one

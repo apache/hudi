@@ -93,7 +93,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private static final AtomicLong RECORD_COUNTER = new AtomicLong(1);
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_RECORD_SIZE = 100;
 
-  private final boolean shouldWriteRecordPositions;
   // Buffer for holding records in memory before they are flushed to disk
   private final List<HoodieRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted), along with their position in log block, in memory before they are flushed to disk
@@ -161,7 +160,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
-    this.shouldWriteRecordPositions = config.shouldWriteRecordPositions()
+    boolean shouldWriteRecordPositions = config.shouldWriteRecordPositions()
         // record positions supported only from table version 8
         && config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT);
     this.baseFileInstantTimeOfPositions = shouldWriteRecordPositions
@@ -495,7 +494,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
         blocks.add(getDataBlock(config, pickLogDataBlockFormat(), recordList,
-            getUpdatedHeader(header, config, shouldWriteRecordPositions, baseFileInstantTimeOfPositions),
+            getUpdatedHeader(header, config, baseFileInstantTimeOfPositions),
             keyField));
       }
 
@@ -503,7 +502,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         blocks.add(new HoodieDeleteBlock(
             recordsToDeleteWithPositions,
             getUpdatedHeader(
-                header, config, shouldWriteRecordPositions, baseFileInstantTimeOfPositions)));
+                header, config, baseFileInstantTimeOfPositions)));
       }
 
       if (!blocks.isEmpty()) {
@@ -632,7 +631,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         LOG.error("Error writing record  " + indexedRecord.get(), e);
       }
     } else {
-      long position = shouldWriteRecordPositions ? record.getCurrentPosition() : -1L;
+      long position = baseFileInstantTimeOfPositions.isPresent() ? record.getCurrentPosition() : -1L;
       recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(record.getKey(), orderingVal), position));
     }
     numberOfRecords++;
@@ -680,7 +679,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header,
                                                                   HoodieWriteConfig config,
-                                                                  boolean shouldWriteRecordPositions,
                                                                   Option<String> baseInstantTimeForPositions) {
     Map<HeaderMetadataType, String> updatedHeader = new HashMap<>(header);
     if (config.shouldWritePartialUpdates()) {
@@ -690,7 +688,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       updatedHeader.put(
           HeaderMetadataType.IS_PARTIAL, Boolean.toString(true));
     }
-    if (shouldWriteRecordPositions && baseInstantTimeForPositions.isPresent()) {
+    if (baseInstantTimeForPositions.isPresent()) {
       updatedHeader.put(
           HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS,
           baseInstantTimeForPositions.get());

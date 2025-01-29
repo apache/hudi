@@ -42,11 +42,14 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -174,6 +177,8 @@ public abstract class HoodieLogBlock {
   }
 
   protected void removeBaseFileInstantTimeOfPositions() {
+    LOG.warn("There are records without valid positions. "
+        + "Skip writing record positions to the block header.");
     logBlockHeader.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
   }
 
@@ -338,6 +343,30 @@ public abstract class HoodieLogBlock {
     byte[] content = new byte[contentLength];
     inputStream.readFully(content, 0, contentLength);
     return Option.of(content);
+  }
+
+  protected <T> void addRecordPositionsIfRequired(List<T> records,
+                                                  Function<T, Long> getPositionFunc) {
+    if (containsBaseFileInstantTimeOfPositions()) {
+      if (isPositionValid(getPositionFunc.apply(records.get(0)))) {
+        // Short circuit in case all records do not have valid positions,
+        // e.g., BUCKET index cannot identify the record position with low overhead
+        removeBaseFileInstantTimeOfPositions();
+        return;
+      }
+      records.sort((o1, o2) -> {
+        long v1 = getPositionFunc.apply(o1);
+        long v2 = getPositionFunc.apply(o2);
+        return Long.compare(v1, v2);
+      });
+      if (isPositionValid(getPositionFunc.apply(records.get(0)))) {
+        addRecordPositionsToHeader(
+            records.stream().map(getPositionFunc).collect(Collectors.toSet()),
+            records.size());
+      } else {
+        removeBaseFileInstantTimeOfPositions();
+      }
+    }
   }
 
   /**
