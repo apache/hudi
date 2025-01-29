@@ -430,19 +430,12 @@ public class FileCreateUtils extends FileCreateUtilsBase {
     return markerFilePath.toAbsolutePath().toString();
   }
 
-  public static String createLogFileMarker(String basePath, String partitionPath, String instantTime, String logFileName)
+  public static String createLogFileMarker(String basePath, String partitionPath, String instantTime,
+                                           String logFileName, HoodieTableVersion tableVersion)
       throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
-    Files.createDirectories(parentPath);
-    Path markerFilePath = parentPath.resolve(markerFileName(logFileName, IOType.APPEND));
-    return createLogFileMarker(markerFilePath);
-  }
-
-  private static String createLogFileMarker(Path markerFilePath) throws IOException {
-    if (Files.notExists(markerFilePath)) {
-      Files.createFile(markerFilePath);
-    }
-    return markerFilePath.toAbsolutePath().toString();
+    return createMarkerFile(basePath, partitionPath, instantTime,
+        markerFileName(logFileName,
+            tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? IOType.CREATE : IOType.APPEND));
   }
 
   private static void removeMetaFile(HoodieTableMetaClient metaClient, String instantTime, String suffix) throws IOException {

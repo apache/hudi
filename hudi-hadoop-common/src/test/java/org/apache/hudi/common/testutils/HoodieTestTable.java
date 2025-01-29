@@ -712,7 +712,9 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable withLogMarkerFile(String partitionPath, String fileName) throws IOException {
-    createLogFileMarker(basePath, partitionPath, currentInstantTime, fileName);
+
+    createLogFileMarker(basePath, partitionPath, currentInstantTime,
+        fileName, metaClient.getTableConfig().getTableVersion());
     return this;
   }
 

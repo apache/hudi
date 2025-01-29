@@ -28,7 +28,6 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -37,7 +36,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -68,8 +66,10 @@ import org.mockito.MockitoAnnotations;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -319,25 +319,25 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     String instantTime2 = "002";
     testTable.forDeltaCommit(instantTime2)
         .withLogFile(partition, fileId,
-            tableVersion.getTimelineLayoutVersion()
-                .compareTo(TimelineLayoutVersion.LAYOUT_VERSION_2) >= 0
+            tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
                 ? instantTime2 : instantTime1, 1);
     testTable.addDeltaCommit(instantTime2);
 
     String instantTime3 = "003";
     int numLogFiles = 199;
-    int[] logVersions = tableVersion.getTimelineLayoutVersion()
-        .compareTo(TimelineLayoutVersion.LAYOUT_VERSION_2) >= 0
+    Set<String> logFilePathSet = new HashSet<>();
+    int[] logVersions = tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
         ? IntStream.rangeClosed(1, numLogFiles).toArray()
         : IntStream.rangeClosed(2, numLogFiles + 1).toArray();
-    String logFileInstantTime = tableVersion.getTimelineLayoutVersion()
-        .compareTo(TimelineLayoutVersion.LAYOUT_VERSION_2) >= 0
+    String logFileInstantTime = tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
         ? instantTime3 : instantTime1;
     testTable.forDeltaCommit(instantTime3)
         .withLogFile(partition, fileId, logFileInstantTime, logVersions);
     for (int version : logVersions) {
       String logFileName = FileCreateUtils.logFileName(logFileInstantTime, fileId, version);
-      assertTrue(storage.exists(new StoragePath(new StoragePath(basePath, partition), logFileName)));
+      StoragePath logFilePath = new StoragePath(new StoragePath(basePath, partition), logFileName);
+      assertTrue(storage.exists(logFilePath));
+      logFilePathSet.add(logFilePath.toString());
       testTable.withLogMarkerFile(partition, logFileName);
     }
     testTable.addInflightDeltaCommit(instantTime3);
@@ -355,7 +355,9 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     HoodieInstant instantToRollback = INSTANT_GENERATOR.createNewInstant(
         HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime3);
     List<HoodieRollbackRequest> rollbackRequests = rollbackStrategy.getRollbackRequests(instantToRollback);
-    assertEquals(1, rollbackRequests.size());
+    assertEquals(
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? numLogFiles : 1,
+        rollbackRequests.size());
     HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan(
         new HoodieInstantInfo(instantTime3, HoodieTimeline.DELTA_COMMIT_ACTION),
         rollbackRequests, LATEST_ROLLBACK_PLAN_VERSION);
@@ -366,22 +368,28 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     MergeOnReadRollbackActionExecutor rollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context, writeConfig, hoodieTable, "004", instantToRollback, true, false);
     List<HoodieRollbackStat> rollbackStats = rollbackActionExecutor.doRollbackAndGetStats(rollbackPlan);
-    StoragePath rollbackLogPath = new StoragePath(new StoragePath(basePath, partition),
-        tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
-            ? FSUtils.makeLogFileName(fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(),
-            instantToRollback.requestedTime(), 1, "0-1-100")
-            : FileCreateUtils.logFileName(instantTime1, fileId, numLogFiles + 2));
-    assertTrue(storage.exists(rollbackLogPath));
     timelineServer.stopForBasePath(basePath);
     assertEquals(1, rollbackStats.size());
     HoodieRollbackStat rollbackStat = rollbackStats.get(0);
+    if (!tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      StoragePath rollbackLogPath = new StoragePath(new StoragePath(basePath, partition),
+          FileCreateUtils.logFileName(instantTime1, fileId, numLogFiles + 2));
+      assertTrue(storage.exists(rollbackLogPath));
+      assertEquals(rollbackLogPath.getPathWithoutSchemeAndAuthority(),
+          rollbackStat.getCommandBlocksCount().entrySet().stream().findFirst().get()
+              .getKey().getPath().getPathWithoutSchemeAndAuthority());
+    }
     assertEquals(partition, rollbackStat.getPartitionPath());
-    assertEquals(0, rollbackStat.getSuccessDeleteFiles().size());
+    assertEquals(
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? numLogFiles : 0,
+        rollbackStat.getSuccessDeleteFiles().size());
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      rollbackStat.getSuccessDeleteFiles().forEach(logFilePathSet::contains);
+    }
     assertEquals(0, rollbackStat.getFailedDeleteFiles().size());
-    assertEquals(1, rollbackStat.getCommandBlocksCount().size());
-    assertEquals(rollbackLogPath.getPathWithoutSchemeAndAuthority(),
-        rollbackStat.getCommandBlocksCount().entrySet().stream().findFirst().get()
-            .getKey().getPath().getPathWithoutSchemeAndAuthority());
+    assertEquals(
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? 0 : 1,
+        rollbackStat.getCommandBlocksCount().size());
     assertEquals(0, rollbackStat.getLogFilesFromFailedCommit().size());
   }
 }
