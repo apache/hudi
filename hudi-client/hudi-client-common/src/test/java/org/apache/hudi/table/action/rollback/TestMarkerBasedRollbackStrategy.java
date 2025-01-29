@@ -46,7 +46,6 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFileMark
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.table.action.rollback.TestRollbackUtils.assertRollbackRequestListEquals;
-import static org.mockito.Mockito.when;
 
 class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
   private static final int ROLLBACK_LOG_VERSION = 10;
@@ -60,8 +59,7 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
   @ParameterizedTest
   @ValueSource(strings = {"SIX", "EIGHT"})
   void testGetRollbackRequestsWithMultipleLogFilesInOneFileGroup(HoodieTableVersion tableVersion) throws IOException {
-    when(tableConfig.getTableVersion()).thenReturn(tableVersion);
-    when(table.version()).thenReturn(tableVersion);
+    prepareMetaClient(tableVersion);
     HoodieEngineContext context = new HoodieLocalEngineContext(storage.getConf());
     String rollbackInstantTime = "003";
     String instantToRollbackTs = "002";
@@ -79,11 +77,11 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
     StoragePath baseFilePath3 = createBaseFileAndMarkerToRollback(partition2, baseFileId3, instantToRollbackTs);
     // Log files to roll back
     Map<String, Long> logFilesToRollback1 = createLogFilesAndMarkersToRollback(
-        tableVersion, partition2, logFileId1, baseInstantTimeOfLogFiles, instantToRollbackTs, IntStream.of(1));
+        partition2, logFileId1, baseInstantTimeOfLogFiles, instantToRollbackTs, IntStream.of(1));
     // Multiple rollback requests of log files belonging to the same file group
     Map<String, Long> logFilesToRollback2 = IntStream.range(1, ROLLBACK_LOG_VERSION).boxed()
         .flatMap(version -> createLogFilesAndMarkersToRollback(
-            tableVersion, partition2, logFileId2, baseInstantTimeOfLogFiles, instantToRollbackTs, IntStream.of(version))
+            partition2, logFileId2, baseInstantTimeOfLogFiles, instantToRollbackTs, IntStream.of(version))
             .entrySet().stream())
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     HoodieInstant instantToRollback = INSTANT_GENERATOR.createNewInstant(
@@ -121,12 +119,11 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
                                                  String fileId,
                                                  String instantTime) throws IOException {
     StoragePath baseFilePath = createBaseFileToRollback(partition, fileId, instantTime);
-    createMarkerFile(basePath.toString(), partition, instantTime, fileId, IOType.CREATE);
+    createMarkerFile(metaClient, partition, instantTime, fileId, IOType.CREATE);
     return baseFilePath;
   }
 
-  private Map<String, Long> createLogFilesAndMarkersToRollback(HoodieTableVersion tableVersion,
-                                                               String partition,
+  private Map<String, Long> createLogFilesAndMarkersToRollback(String partition,
                                                                String fileId,
                                                                String baseInstantTime,
                                                                String currentInstantTime,
@@ -135,8 +132,9 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
         partition, fileId, baseInstantTime, logVersions, 0L);
     return logFilesToRollback.keySet().stream().map(logFileName -> {
       try {
-        createLogFileMarker(basePath.toString(), partition, currentInstantTime, logFileName, tableVersion);
-        if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+        createLogFileMarker(metaClient, partition, currentInstantTime, logFileName);
+        if (metaClient.getTableConfig().getTableVersion()
+            .greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
           return new StoragePath(new StoragePath(basePath, partition), logFileName).toString();
         }
         return logFileName;

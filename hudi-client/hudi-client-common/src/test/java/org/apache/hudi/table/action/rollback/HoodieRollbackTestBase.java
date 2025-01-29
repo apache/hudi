@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
@@ -74,6 +75,8 @@ public class HoodieRollbackTestBase {
     storage = HoodieTestUtils.getStorage(basePath);
     when(table.getStorage()).thenReturn(storage);
     when(metaClient.getBasePath()).thenReturn(basePath);
+    when(metaClient.getTempFolderPath())
+        .thenReturn(new StoragePath(basePath, TEMPFOLDER_NAME).toString());
     when(metaClient.getMarkerFolderPath(any()))
         .thenReturn(basePath + Path.SEPARATOR + TEMPFOLDER_NAME);
     when(metaClient.getStorage()).thenReturn(storage);
@@ -86,6 +89,18 @@ public class HoodieRollbackTestBase {
     HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
         .initTable(storage.getConf(), metaClient.getBasePath());
+  }
+
+  protected void prepareMetaClient(HoodieTableVersion tableVersion) {
+    when(tableConfig.getTableVersion()).thenReturn(tableVersion);
+    when(table.version()).thenReturn(tableVersion);
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      when(metaClient.getTimelinePath()).thenReturn(
+          new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
+    } else {
+      when(metaClient.getTimelinePath()).thenReturn(new StoragePath(
+          new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME), "timeline"));
+    }
   }
 
   protected StoragePath createBaseFileToRollback(String partition,

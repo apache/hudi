@@ -51,7 +51,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.TestLogReaderUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -712,9 +711,7 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable withLogMarkerFile(String partitionPath, String fileName) throws IOException {
-
-    createLogFileMarker(basePath, partitionPath, currentInstantTime,
-        fileName, metaClient.getTableConfig().getTableVersion());
+    createLogFileMarker(metaClient, partitionPath, currentInstantTime, fileName);
     return this;
   }
 
@@ -782,7 +779,7 @@ public class HoodieTestTable implements AutoCloseable {
                                                          String instantTime, int... versions) throws Exception {
     List<String> logFiles = new ArrayList<>();
     for (int version : versions) {
-      logFiles.add(FileCreateUtils.createLogFile(metaClient, partitionPath, currentInstantTime, fileId, version));
+      logFiles.add(FileCreateUtils.createLogFile(metaClient, partitionPath, instantTime, fileId, version));
     }
     return Pair.of(this, logFiles);
   }
