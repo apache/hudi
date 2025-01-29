@@ -22,7 +22,9 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
@@ -53,7 +55,8 @@ import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_CKP_RESE
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_EMPTY_CKP_KEY;
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_INPUT_CKP;
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_NON_EMPTY_CKP_ALL_MEMBERS;
-import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY;
+import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY;
+import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP_V2_KEY;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NULL_CKP_KEY;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_FETCH_NEXT_BATCH;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.RETURN_CHECKPOINT_KEY;
@@ -61,9 +64,11 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.Missing
 import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(MockitoExtension.class)
-public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodieIncrSourceHarness {
+public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
 
   private String toggleVersion(String version) {
     return "8".equals(version) ? "6" : "8";
@@ -127,7 +132,56 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
    *    - Verifies commit metadata still uses checkpoint V1 format
    *    - Verifies final checkpoint="30"
    */
+  @ParameterizedTest
+  @CsvSource({
+      "6, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource",
+      "8, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource"
+  })
+  public void testSyncE2EWrongCheckpointVersionErrorOut(String tableVersion, String sourceClass) throws Exception {
+    // First start with no previous checkpoint and ingest till ckp 1 with table version.
+    // Disable auto upgrade and MDT as we want to keep things as it is.
+    metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
+    TypedProperties props = setupBaseProperties(tableVersion);
+    // Round 1: ingest start from beginning to checkpoint 10. Return wrong version of checkpoint.
+    props.put(OP_FETCH_NEXT_BATCH,
+        tableVersion.equals("6") ? OP_EMPTY_ROW_SET_NONE_NULL_CKP_V2_KEY : OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
+    props.put(RETURN_CHECKPOINT_KEY, "10");
+    // Validating the source input ckp is empty when doing the sync.
+    props.put(VAL_INPUT_CKP, VAL_EMPTY_CKP_KEY);
+    props.put("hoodie.metadata.enable", "false");
+    props.put("hoodie.write.auto.upgrade", "false");
+    props.put("hoodie.write.table.version", tableVersion);
 
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(createConfig(basePath(), null, sourceClass), jsc, Option.of(props));
+    Exception ex = assertThrows(java.lang.IllegalStateException.class, ds::sync);
+    // Contain error messages.
+    if (tableVersion.equals("8")) {
+      assertTrue(ex.getMessage().contains("Data source should return checkpoint version V2."));
+    } else {
+      assertTrue(ex.getMessage().contains("Data source should return checkpoint version V1."));
+    }
+  }
+
+  /**
+   * Tests the end-to-end sync behavior with multiple sync iterations.
+   *
+   * Test flow:
+   * 1. First sync:
+   *    - Starts with no checkpoint
+   *    - Ingests data until checkpoint "10"
+   *    - Verifies commit metadata contains only checkpoint="10"
+   *
+   * 2. Second sync:
+   *    - Uses different table version
+   *    - Continues from checkpoint "10" to "20"
+   *    - Verifies commit metadata contains checkpoint="20"
+   *
+   * 3. Third sync:
+   *    - Upgrades to table version 8
+   *    - Continues from checkpoint "20" to "30"
+   *    - Verifies commit metadata still uses checkpoint V1 format
+   *    - Verifies final checkpoint="30"
+   */
   @ParameterizedTest
   @CsvSource({
       "6, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
@@ -141,7 +195,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
     TypedProperties props = setupBaseProperties(tableVersion);
     // Round 1: ingest start from beginning to checkpoint 10. No checkpoint override.
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(RETURN_CHECKPOINT_KEY, "10");
     // Validating the source input ckp is empty when doing the sync.
     props.put(VAL_INPUT_CKP, VAL_EMPTY_CKP_KEY);
@@ -162,7 +216,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     props = setupBaseProperties(toggleVersion(tableVersion));
     props.put("hoodie.metadata.enable", "false");
     // Dummy behavior injection to return ckp 2.
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(RETURN_CHECKPOINT_KEY, "20");
     props.put("hoodie.write.auto.upgrade", "false");
     // Validate the given checkpoint is ckp 1 when doing the sync.
@@ -181,11 +235,12 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "20");
     verifyLastInstantCommitMetadata(expectedMetadata);
 
-    // In the third round, enable MDT and auto upgrade, use table version 8
+    // In the third round, disable MDT and auto upgrade, use table write version 8. The result is
+    // no upgrade will happen.
     props = setupBaseProperties("8");
     props.put("hoodie.metadata.enable", "false");
     // Dummy behavior injection to return ckp 1.
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(RETURN_CHECKPOINT_KEY, "30");
     props.put("hoodie.write.auto.upgrade", "false");
     // Validate the given checkpoint is ckp 2 when doing the sync.
@@ -197,10 +252,43 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     ds = new HoodieDeltaStreamer(createConfig(basePath(), null, sourceClass), jsc, Option.of(props));
     ds.sync();
 
-    // After upgrading, we still use checkpoint V1 since this is s3/Gcs incremental source.
+    // Assert no upgrade happens.
+    if (tableVersion.equals("6")) {
+      metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), "6");
+      assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
+      assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_1, metaClient.getTableConfig().getTimelineLayoutVersion().get());
+    }
+
+    // After that, we still use checkpoint V1 since this is s3/Gcs incremental source.
     expectedMetadata = new HashMap<>();
     expectedMetadata.put("schema", "");
     expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "30");
+    verifyLastInstantCommitMetadata(expectedMetadata);
+
+    // In the forth round, enable auto upgrade, use table write version 8, the upgrade is successful.
+    props = setupBaseProperties("8");
+    props.put("hoodie.metadata.enable", "false");
+    // Dummy behavior injection to return ckp 1.
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
+    props.put(RETURN_CHECKPOINT_KEY, "40");
+    props.put("hoodie.write.auto.upgrade", "true");
+    // Validate the given checkpoint is ckp 2 when doing the sync.
+    props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
+    props.put(VAL_CKP_KEY_EQ_VAL, "30");
+    props.put(VAL_CKP_RESET_KEY_IS_NULL, "IGNORED");
+    props.put(VAL_CKP_IGNORE_KEY_IS_NULL, "IGNORED");
+
+    ds = new HoodieDeltaStreamer(createConfig(basePath(), null, sourceClass), jsc, Option.of(props));
+    ds.sync();
+
+    // After upgrading, we still use checkpoint V1 since this is s3/Gcs incremental source.
+    // Assert the table is upgraded.
+    metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), "8");
+    assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig().getTableVersion());
+    assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_2, metaClient.getTableConfig().getTimelineLayoutVersion().get());
+    expectedMetadata = new HashMap<>();
+    expectedMetadata.put("schema", "");
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "40");
     verifyLastInstantCommitMetadata(expectedMetadata);
   }
 
@@ -237,7 +325,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     // set it to start at ckp "10" and in that iteration the streamer stops at ckp "30
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
     TypedProperties props = setupBaseProperties(tableVersion);
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
     props.put(RETURN_CHECKPOINT_KEY, "30"); // The data source said it stops at "30".
     props.put(VAL_CKP_KEY_EQ_VAL, "10"); // Ensure the data source is notified we should start at "10"
@@ -295,7 +383,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
 
     // In the next iteration, using the same config with ignore key setting does not lead to checkpoint reset.
     props = setupBaseProperties(tableVersion);
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(RETURN_CHECKPOINT_KEY, "70"); // Stop at 70 after ingestion.
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
     props.put(VAL_CKP_KEY_EQ_VAL, "60"); // Ensure the data source is notified we should start at "60".
@@ -312,7 +400,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     // contain that info.
     cfg.ignoreCheckpoint = null;
     props = setupBaseProperties(tableVersion);
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(RETURN_CHECKPOINT_KEY, "80"); // Stop at 70 after ingestion.
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
     props.put(VAL_CKP_KEY_EQ_VAL, "70"); // Ensure the data source is notified we should start at "60".
@@ -398,7 +486,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
     TypedProperties props = setupBaseProperties(tableVersion);
     props.put(CHECKPOINT_FORCE_SKIP.key(), "true");
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_V1_KEY);
     props.put(VAL_INPUT_CKP, VAL_EMPTY_CKP_KEY);
 
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(createConfig(basePath(), null), jsc, Option.of(props));

@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
+import org.apache.hudi.common.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -69,6 +70,7 @@ import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSI
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
 import static org.apache.hudi.DataSourceReadOptions.START_COMMIT;
+import static org.apache.hudi.common.table.checkpoint.HoodieIncrSourceCheckpointValUtils.resolveToActualCheckpointVersion;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
@@ -183,8 +185,14 @@ public class HoodieIncrSource extends RowSource {
 
   @Override
   protected Option<Checkpoint> translateCheckpoint(Option<Checkpoint> lastCheckpoint) {
-    // For Hudi incremental source, we'll let #fetchNextBatch to handle it since
-    // it involves heavy lifting by loading the timeline for analysis
+    // User might override checkpoint based on
+    // - instant request time: Then we will treat it as a V1 checkpoint.
+    // - completion time: We will treat it as a normal V2 checkpoint.
+    if (!lastCheckpoint.isEmpty() && lastCheckpoint.get() instanceof UnresolvedStreamerCheckpointBasedOnCfg) {
+      lastCheckpoint = Option.of(resolveToActualCheckpointVersion((UnresolvedStreamerCheckpointBasedOnCfg) lastCheckpoint.get()));
+    }
+    // For Hudi incremental source, we'll let #fetchNextBatch to handle request time to completion time
+    // based conversion as it is heavy operation.
     return lastCheckpoint;
   }
 

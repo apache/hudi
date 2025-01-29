@@ -392,7 +392,12 @@ public class HoodieStreamer implements Serializable {
     /**
      * Resume Hudi Streamer from this checkpoint.
      */
-    @Parameter(names = {"--checkpoint"}, description = "Resume Hudi Streamer from this checkpoint.")
+    @Parameter(names = {"--checkpoint"}, description = "Resume Hudi Streamer from this checkpoint. \nIf --source-class specifies a class "
+        + "that is a child class of org.apache.hudi.utilities.sources.HoodieIncrSource and the hoodie.table.version is 8 or higher, the "
+        + "format is expected to be either `resumeFromInstantRequestTime: <checkpoint>` or `resumeFromInstantCompletionTime: <checkpoint>`. "
+        + "In table version 8 and above internally we only support completion time based commit ordering. If we use resumeFromInstantCompletionTime "
+        + "mode, the checkpoint will be reset to the instant with the corresponding completion time and resume. If we use resumeFromInstantRequestTime "
+        + "hudi first finds the instant, fetch the completion time of it and resume from the completion time.")
     public String checkpoint = null;
 
     @Parameter(names = {"--initial-checkpoint-provider"}, description = "subclass of "

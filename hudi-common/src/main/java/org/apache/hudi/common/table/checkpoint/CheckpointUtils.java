@@ -49,6 +49,16 @@ public class CheckpointUtils {
       "org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
       "org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource"
   )));
+
+  public static final Set<String> HOODIE_INCREMENTAL_SOURCES;
+
+  static {
+    HashSet<String> hoodieIncSource = new HashSet<>(DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2);
+    hoodieIncSource.add("org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource");
+    hoodieIncSource.add("org.apache.hudi.utilities.sources.HoodieIncrSource");
+    HOODIE_INCREMENTAL_SOURCES = Collections.unmodifiableSet(hoodieIncSource);
+  }
+
   public static Checkpoint getCheckpoint(HoodieCommitMetadata commitMetadata) {
     if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2))
         || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_RESET_KEY_V2))) {
@@ -59,6 +69,20 @@ public class CheckpointUtils {
       return new StreamerCheckpointV1(commitMetadata);
     }
     throw new HoodieException("Checkpoint is not found in the commit metadata: " + commitMetadata.getExtraMetadata());
+  }
+
+  public static Checkpoint buildCheckpointFromGeneralSource(
+      String sourceClassName, int writeTableVersion, String checkpointToResume) {
+    return CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
+        ? new StreamerCheckpointV2(checkpointToResume) : new StreamerCheckpointV1(checkpointToResume);
+  }
+
+  // Whenever we create checkpoint from streamer config checkpoint override, we should use this function
+  // to build checkpoints.
+  public static Checkpoint buildCheckpointFromConfigOverride(
+      String sourceClassName, int writeTableVersion, String checkpointToResume) {
+    return CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
+        ? new UnresolvedStreamerCheckpointBasedOnCfg(checkpointToResume) : new StreamerCheckpointV1(checkpointToResume);
   }
 
   public static boolean shouldTargetCheckpointV2(int writeTableVersion, String sourceClassName) {
