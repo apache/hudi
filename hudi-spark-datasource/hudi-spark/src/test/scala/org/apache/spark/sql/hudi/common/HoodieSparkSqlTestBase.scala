@@ -39,7 +39,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageConta
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 import org.slf4j.LoggerFactory
@@ -380,11 +380,15 @@ object HoodieSparkSqlTestBase {
 
   def validateTableConfig(storage: HoodieStorage,
                           basePath: String,
-                          expectedConfigs: Map[String, String]): Unit = {
+                          expectedConfigs: Map[String, String],
+                          nonExistentConfigs: Seq[String]): Unit = {
     val tableConfig = HoodieTableConfig.loadFromHoodieProps(storage, basePath)
     expectedConfigs.foreach(e => {
-      assertEquals(e._2, tableConfig.getString(e._1))
+      assertEquals(e._2, tableConfig.getString(e._1),
+        s"Table config ${e._1} should be ${e._2} but is ${tableConfig.getString(e._1)}")
     })
+    nonExistentConfigs.foreach(e => assertFalse(
+      tableConfig.contains(e), s"$e should not be present in the table config"))
   }
 
   private def checkMessageContains(e: Throwable, text: String): Boolean =
