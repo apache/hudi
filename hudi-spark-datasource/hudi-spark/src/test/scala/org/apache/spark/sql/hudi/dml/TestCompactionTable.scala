@@ -43,6 +43,9 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
       // disable automatic inline compaction
       spark.sql("set hoodie.compact.inline=false")
       spark.sql("set hoodie.compact.schedule.inline=false")
+      spark.sql("set hoodie.metrics.on=true")
+      spark.sql("set hoodie.metrics.reporter.type=CONSOLE")
+      spark.sql("set hoodie.metrics.partition.level.metrics.enable=true")
 
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
