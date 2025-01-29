@@ -33,8 +33,7 @@ import org.apache.hudi.util.JFunction
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
-import org.apache.spark.sql.hudi.DataSkippingUtils
-import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
+import org.apache.spark.sql.hudi.DataSkippingUtils.{containsNullOrValueCountBasedFilters, translateIntoColumnStatsIndexFilterExpr}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.storage.StorageLevel
@@ -137,8 +136,9 @@ class PartitionStatsIndexSupport(spark: SparkSession,
     }
   }
 
-  def canLookupInPSI(queryFilters: Seq[Expression], indexedCols: Seq[String]): Boolean = {
-    queryFilters.exists(DataSkippingUtils.containsNullOrValueCountBasedFilters(_, indexedCols = indexedCols))
+  private def canLookupInPSI(queryFilters: Seq[Expression], indexedCols: Seq[String]): Boolean = {
+    // If no queryFilter contains null/value-count filters, then we can do a lookup
+    !queryFilters.exists(containsNullOrValueCountBasedFilters(_, indexedCols))
   }
 
   private def containsAnySqlFunction(queryFilters: Seq[Expression]): Boolean = {
