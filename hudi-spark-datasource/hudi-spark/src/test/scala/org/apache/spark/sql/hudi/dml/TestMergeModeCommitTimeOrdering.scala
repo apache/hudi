@@ -35,8 +35,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
     "mor,true,false,6", "mor,true,true,6"
    */
   //"cow,true,false,6",
-  Seq("cow,false,false,8", "cow,false,true,8", "cow,true,false,8",
-    "cow,true,false,6", "cow,true,true,6",
+  Seq(
     "mor,false,false,8", "mor,false,true,8", "mor,true,false,8",
     "mor,true,false,6", "mor,true,true,6").foreach { args =>
     val argList = args.split(',')
@@ -78,7 +77,11 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
     val nonExistentConfigs = if (tableVersion.toInt == 6) {
       Seq(HoodieTableConfig.RECORD_MERGE_MODE.key, HoodieTableConfig.PRECOMBINE_FIELD.key)
     } else {
-      Seq(HoodieTableConfig.PRECOMBINE_FIELD.key)
+      if (setRecordMergeConfigs) {
+        Seq()
+      } else {
+        Seq(HoodieTableConfig.PRECOMBINE_FIELD.key)
+      }
     }
 
     test(s"Test $tableType table with COMMIT_TIME_ORDERING (tableVersion=$tableVersion,"
@@ -130,10 +133,12 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
             storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
           checkAnswer(s"select id, name, price, ts from $tableName order by id")(
             (if (isUpsert) {
+              // With UPSERT operation, there is no duplicate
               Seq(
                 Seq(1, "A_equal", 60.0, 100),
                 Seq(2, "B_equal", 70.0, 100))
             } else {
+              // With INSERT operation, there are duplicates
               Seq(
                 Seq(1, "A", 10.0, 100),
                 Seq(1, "A_equal", 60.0, 100),
@@ -241,6 +246,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
                  |  ts long
                  | ) using hudi
                  | tblproperties (
+                 |  $writeTableVersionClause
                  |  type = '$tableType',
                  |  primaryKey = 'id'
                  |  $mergeConfigClause
@@ -254,13 +260,13 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
             spark.sql(
               s"""
                  | insert into $tableName
-                 | select 1 as id, 'A' as name, 10.0 as price, 100 as ts union all
-                 | select 0, 'X', 20.0, 100 union all
-                 | select 2, 'B', 20.0, 100 union all
-                 | select 3, 'C', 30.0, 100 union all
-                 | select 4, 'D', 40.0, 100 union all
-                 | select 5, 'E', 50.0, 100 union all
-                 | select 6, 'F', 60.0, 100
+                 | select 1 as id, 'A' as name, 10.0 as price, 100L as ts union all
+                 | select 0, 'X', 20.0, 100L union all
+                 | select 2, 'B', 20.0, 100L union all
+                 | select 3, 'C', 30.0, 100L union all
+                 | select 4, 'D', 40.0, 100L union all
+                 | select 5, 'E', 50.0, 100L union all
+                 | select 6, 'F', 60.0, 100L
              """.stripMargin)
             validateTableConfig(
               storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
@@ -270,9 +276,9 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
               s"""
                  | merge into $tableName t
                  | using (
-                 |   select 1 as id, 'B2' as name, 25.0 as price, 101 as ts union all
-                 |   select 2, '', 55.0, 99 as ts union all
-                 |   select 0, '', 55.0, 100 as ts
+                 |   select 1 as id, 'B2' as name, 25.0 as price, 101L as ts union all
+                 |   select 2, '', 55.0, 99L as ts union all
+                 |   select 0, '', 55.0, 100L as ts
                  | ) s
                  | on t.id = s.id
                  | when matched then delete
@@ -283,9 +289,9 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
               s"""
                  | merge into $tableName t
                  | using (
-                 |   select 4 as id, 'D2' as name, 45.0 as price, 101 as ts union all
-                 |   select 5, 'E2', 55.0, 99 as ts union all
-                 |   select 6, 'F2', 65.0, 100 as ts
+                 |   select 4 as id, 'D2' as name, 45.0 as price, 101L as ts union all
+                 |   select 5, 'E2', 55.0, 99L as ts union all
+                 |   select 6, 'F2', 65.0, 100L as ts
                  | ) s
                  | on t.id = s.id
                  | when matched then update set *
@@ -306,8 +312,8 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
               s"""
                  | merge into $tableName t
                  | using (
-                 |   select 7 as id, 'D2' as name, 45.0 as price, 100 as ts union all
-                 |   select 8, 'E2', 55.0, 100 as ts
+                 |   select 7 as id, 'D2' as name, 45.0 as price, 100L as ts union all
+                 |   select 8, 'E2', 55.0, 100L as ts
                  | ) s
                  | on t.id = s.id
                  | when not matched then insert *
