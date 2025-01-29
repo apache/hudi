@@ -2785,14 +2785,14 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Returns whether the explicit guard of lock is required.
    */
   public boolean isLockRequired() {
-    return !isDefaultLockProvider() || getWriteConcurrencyMode().supportsMultiWriter();
+    return isLockProviderSet() || getWriteConcurrencyMode().supportsMultiWriter();
   }
 
   /**
    * Returns whether the lock provider is default.
    */
-  private boolean isDefaultLockProvider() {
-    return HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue().equals(getLockProviderClass());
+  private boolean isLockProviderSet() {
+    return getLockProviderClass() != null;
   }
 
   /**
