@@ -348,7 +348,7 @@ public abstract class HoodieLogBlock {
   protected <T> void addRecordPositionsIfRequired(List<T> records,
                                                   Function<T, Long> getPositionFunc) {
     if (containsBaseFileInstantTimeOfPositions()) {
-      if (isPositionValid(getPositionFunc.apply(records.get(0)))) {
+      if (!isPositionValid(getPositionFunc.apply(records.get(0)))) {
         // Short circuit in case all records do not have valid positions,
         // e.g., BUCKET index cannot identify the record position with low overhead
         removeBaseFileInstantTimeOfPositions();
