@@ -173,7 +173,8 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
   }
 
   Seq("mor").foreach { tableType =>
-    // [HUDI-8915]: COW MIT delete does not honor event time ordering.
+    // [HUDI-8915]: COW MIT delete does not honor event time ordering. For update we have the coverage in
+    // "Test MergeInto with commit time/event time ordering coverage".
     //  Seq("cow", "mor").foreach { tableType =>
     test(s"Test merge operations with EVENT_TIME_ORDERING for $tableType table") {
       withSparkSqlSessionConfig("hoodie.merge.small.file.group.candidates.limit" -> "0") {
