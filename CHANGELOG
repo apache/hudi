@@ -578,3 +578,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-21049][MINOR] Fix bloom index shuffle setup (#1163)
 [ENG-20414][HUDI-8898] Support INSERT SQL statement with a subset of columns in Spark 3.5 (#1158)
 [AUDIT-1071]: Changelog for release-v1.80.0 (#1160)
+
+--- [2025-01-29 16:03:51] [release-v1.82.0] ---
+[ENG-19873][INTERNAL] Conditional write lock scaffolding (#1166)
+[AUDIT-1146]: Changelog for release-v1.81.0 (#1165)
