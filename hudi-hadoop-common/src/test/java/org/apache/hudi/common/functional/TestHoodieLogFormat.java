@@ -26,8 +26,10 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -42,7 +44,6 @@ import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.table.log.TestLogReaderUtils;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -87,6 +88,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -109,8 +111,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieRecordLocation.INVALID_POSITION;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.useExternalHdfs;
@@ -1358,7 +1363,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deletedRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock);
 
     List<String> allLogFiles =
@@ -1499,7 +1504,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       deleteRecordList.add(Pair.of(
           DeleteRecord.create(deletedKey.getRecordKey(), deletedKey.getPartitionPath()), -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock);
 
     List<String> allLogFiles =
@@ -1522,7 +1527,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       deleteRecordList.add(Pair.of(
           DeleteRecord.create(deletedKey.getRecordKey(), deletedKey.getPartitionPath()), -1L));
     }
-    deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, deleteBlockHeader);
+    deleteBlock = new HoodieDeleteBlock(deleteRecordList, deleteBlockHeader);
     writer.appendBlock(deleteBlock);
 
     FileCreateUtilsLegacy.createDeltaCommit(basePath, "102", storage);
@@ -1614,7 +1619,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deleteRecords1) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock1 = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock1 = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock1);
 
     // Delete another 10 keys with -1 as orderingVal.
@@ -1626,7 +1631,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(), -1), -1L))
         .collect(Collectors.toList());
 
-    HoodieDeleteBlock deleteBlock2 = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock2 = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock2);
 
     // Delete another 10 keys with +1 as orderingVal.
@@ -1641,7 +1646,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deletedRecords3) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock3 = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock3 = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock3);
 
     List<String> allLogFiles =
@@ -1740,7 +1745,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deleteRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock);
 
     FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
@@ -1802,7 +1807,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deleteRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock);
 
     FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
@@ -1895,7 +1900,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deleteRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock);
 
     FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
@@ -1980,7 +1985,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deletedRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    writer.appendBlock(new HoodieDeleteBlock(deleteRecordList, false, header));
+    writer.appendBlock(new HoodieDeleteBlock(deleteRecordList, header));
 
     copyOfRecords2.addAll(copyOfRecords1);
     List<String> originalKeys =
@@ -2790,19 +2795,51 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  public void testGetRecordPositions(boolean addRecordPositionsHeader) throws IOException {
+  @CsvSource(value = {"false,false,false", "false,false,true",
+      "true,false,false", "true,false,true", "true,true,false", "true,true,true"})
+  public void testGetRecordPositions(boolean recordWithPositions,
+                                     boolean allValidPositions,
+                                     boolean addBaseFileInstantTimeOfPositions) throws IOException {
     Map<HeaderMetadataType, String> header = new HashMap<>();
-    Set<Long> positions = new HashSet<>();
-    if (addRecordPositionsHeader) {
-      positions = TestLogReaderUtils.generatePositions();
-      String content = LogReaderUtils.encodePositions(positions);
-      header.put(HeaderMetadataType.RECORD_POSITIONS, content);
+    List<Long> positions = new ArrayList<>();
+    if (recordWithPositions) {
+      positions.addAll(TestLogReaderUtils.generatePositions());
+      if (!allValidPositions) {
+        positions.add(INVALID_POSITION);
+        positions.set(positions.size() / 2, INVALID_POSITION);
+      }
     }
-    HoodieLogBlock logBlock = new HoodieDeleteBlock(Collections.emptyList(), addRecordPositionsHeader, header);
-    if (addRecordPositionsHeader) {
-      TestLogReaderUtils.assertPositionEquals(positions, logBlock.getRecordPositions());
+
+    List<Pair<DeleteRecord, Long>> deleteRecordList = positions.isEmpty()
+        ? IntStream.range(0, 10).boxed()
+        .map(i -> Pair.of(DeleteRecord.create("key" + i, "partition"), INVALID_POSITION))
+        .collect(Collectors.toList())
+        : IntStream.range(0, positions.size()).boxed()
+        .map(i -> Pair.of(DeleteRecord.create("key" + i, "partition"), positions.get(i)))
+        .collect(Collectors.toList());
+    List<HoodieRecord> recordList = positions.isEmpty()
+        ? IntStream.range(0, 10).boxed()
+        .map(i -> new HoodieAvroRecord(new HoodieKey("key" + i, "partition"), null, HoodieOperation.INSERT,
+            new HoodieRecordLocation("001", "file1", INVALID_POSITION), null))
+        .collect(Collectors.toList())
+        : IntStream.range(0, positions.size()).boxed()
+        .map(i -> new HoodieAvroRecord(new HoodieKey("key" + i, "partition"), null, HoodieOperation.INSERT,
+            new HoodieRecordLocation("001", "file1", positions.get(i)), null))
+        .collect(Collectors.toList());
+
+    header.put(HeaderMetadataType.SCHEMA, NULL_SCHEMA);
+    if (addBaseFileInstantTimeOfPositions) {
+      header.put(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS, "001");
     }
+    HoodieLogBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
+    HoodieLogBlock dataBlock = new HoodieAvroDataBlock(recordList, header, "key");
+    boolean hasPositions = (recordWithPositions && allValidPositions && addBaseFileInstantTimeOfPositions);
+    String expectedInstantTime = hasPositions ? "001" : null;
+    Set<Long> expectedPositions = hasPositions ? new HashSet<>(positions) : Collections.emptySet();
+    assertEquals(expectedInstantTime, deleteBlock.getBaseFileInstantTimeOfPositions());
+    TestLogReaderUtils.assertPositionEquals(expectedPositions, deleteBlock.getRecordPositions());
+    assertEquals(expectedInstantTime, dataBlock.getBaseFileInstantTimeOfPositions());
+    TestLogReaderUtils.assertPositionEquals(expectedPositions, dataBlock.getRecordPositions());
   }
 
   private static Stream<Arguments> testArguments() {

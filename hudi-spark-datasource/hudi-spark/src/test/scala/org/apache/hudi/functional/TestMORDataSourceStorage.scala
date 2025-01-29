@@ -26,6 +26,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieLogFile, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
+import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.StringUtils
@@ -43,7 +44,7 @@ import org.apache.spark.sql.functions.{col, lit}
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+import org.junit.jupiter.params.provider.CsvSource
 
 import scala.collection.JavaConverters._
 
@@ -191,15 +192,16 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testAutoDisablingRecordPositionsUnderPendingCompaction(enableNBCC: Boolean): Unit = {
+  @CsvSource(value = Array("false,false", "true,true", "true,false"))
+  def testAutoDisablingRecordPositionsUnderPendingCompaction(writeRecordPosition: Boolean,
+                                                             enableNBCC: Boolean): Unit = {
     val options = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
       "hoodie.bulkinsert.shuffle.parallelism" -> "2",
       "hoodie.delete.shuffle.parallelism" -> "1",
       "hoodie.merge.small.file.group.candidates.limit" -> "0",
-      HoodieWriteConfig.WRITE_RECORD_POSITIONS.key -> "true",
+      HoodieWriteConfig.WRITE_RECORD_POSITIONS.key -> writeRecordPosition.toString,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName,
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
@@ -241,6 +243,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       .option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key, "true").load(basePath).count())
 
     val metaClient = HoodieTestUtils.createMetaClient(storage.getConf, basePath)
+    var logFileList = List[HoodieLogFile]()
     // Upsert
     for (i <- 1 to 3) {
       // Generate some deletes so that if the record positions are still enabled during pending
@@ -272,12 +275,11 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       assertEquals(1,
         metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants())
       assertEquals(i + 1, metaClient.getActiveTimeline.getDeltaCommitTimeline.countInstants())
-      // The deltacommit from the first round should write record positions in the log files
-      // since it happens before the pending compaction.
-      // The deltacommit from the second and third round should not write record positions in the
-      // log files since it happens after the pending compaction
-      validateRecordPositionsInLogFiles(
-        metaClient, shouldContainRecordPosition = !enableNBCC && i == 1)
+      // The deltacommit from all three rounds should write record positions in the log files
+      // and the base file instant time of the record positions should match the latest
+      // base file before compaction happens
+      logFileList = validateRecordPositionsInLogFiles(
+        metaClient, writeRecordPosition && !enableNBCC)
     }
 
     for (i <- 4 to 6) {
@@ -308,17 +310,28 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       assertTrue(metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().empty())
       assertEquals(1, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.countInstants())
       assertEquals(i + 1, metaClient.getActiveTimeline.getDeltaCommitTimeline.countInstants())
-      // The deltacommit from the forth round should not write record positions in the log files
-      // since it happens before the compaction is executed.
+      // The deltacommit from the forth round should write record positions in the log files
+      // but the base file instant time of the record positions should not match the latest
+      // base file, since the compaction happens afterwards.
+      if (i == 4) {
+        // Also revalidate the log files generate from the third round as the base instant
+        // time should not match the the latest base file after compaction
+        validateRecordPositionsInLogFiles(
+          metaClient, shouldContainRecordPosition = writeRecordPosition && !enableNBCC,
+          logFileList, shouldBaseFileInstantTimeMatch = false)
+      }
       // The deltacommit from the fifth and sixth round should write record positions in the log
-      // files since it happens after the completed compaction
+      // files and the base file instant time of the record positions should match the latest
+      // base file generated by the compaction.
       validateRecordPositionsInLogFiles(
-        metaClient, shouldContainRecordPosition = !enableNBCC && i != 4)
+        metaClient, shouldContainRecordPosition = writeRecordPosition && !enableNBCC,
+        shouldBaseFileInstantTimeMatch = i != 4)
     }
   }
 
   def validateRecordPositionsInLogFiles(metaClient: HoodieTableMetaClient,
-                                        shouldContainRecordPosition: Boolean): Unit = {
+                                        shouldContainRecordPosition: Boolean,
+                                        shouldBaseFileInstantTimeMatch: Boolean = true): List[HoodieLogFile] = {
     val instant = metaClient.getActiveTimeline.getDeltaCommitTimeline.lastInstant().get()
     val commitMetadata = metaClient.getCommitMetadataSerDe.deserialize(
       instant, metaClient.getActiveTimeline.getInstantDetails(instant).get,
@@ -329,7 +342,18 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       .map(e => new HoodieLogFile(new StoragePath(e)))
       .toList
     assertFalse(logFileList.isEmpty)
+    validateRecordPositionsInLogFiles(
+      metaClient, shouldContainRecordPosition, logFileList, shouldBaseFileInstantTimeMatch)
+    logFileList
+  }
+
+  def validateRecordPositionsInLogFiles(metaClient: HoodieTableMetaClient,
+                                        shouldContainRecordPosition: Boolean,
+                                        logFileList: List[HoodieLogFile],
+                                        shouldBaseFileInstantTimeMatch: Boolean): Unit = {
     val schema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    val fsv = FileSystemViewManager.createInMemoryFileSystemView(
+      context(), metaClient, HoodieMetadataConfig.newBuilder().build())
     logFileList.foreach(filename => {
       val logFormatReader = new HoodieLogFileReader(metaClient.getStorage, filename, schema, 81920)
       var numBlocks = 0
@@ -337,6 +361,13 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
         val logBlock = logFormatReader.next()
         val recordPositions = logBlock.getRecordPositions
         assertEquals(shouldContainRecordPosition, !recordPositions.isEmpty)
+        if (shouldContainRecordPosition) {
+          val baseFile = fsv.getLatestBaseFile("", filename.getFileId)
+          assertTrue(baseFile.isPresent)
+          assertEquals(
+            shouldBaseFileInstantTimeMatch,
+            baseFile.get().getCommitTime.equals(logBlock.getBaseFileInstantTimeOfPositions))
+        }
         numBlocks += 1
       }
       logFormatReader.close()

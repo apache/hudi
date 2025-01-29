@@ -74,7 +74,7 @@ public class TestSerializationUtils {
     DeleteRecord deleteRecord = DeleteRecord.create(new HoodieKey("key", "partition"));
     List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
     deleteRecordList.add(Pair.of(deleteRecord, -1L));
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, Collections.emptyMap());
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, Collections.emptyMap());
 
     byte[] firstBytes = SerializationUtils.serialize(deleteBlock);
     byte[] secondBytes = SerializationUtils.serialize(deleteBlock);

@@ -191,7 +191,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           return null;
         }
       }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()),
-          false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+          header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
       return Pair.of(partitionPath, logWriter.getLogFile());
     }
   }
