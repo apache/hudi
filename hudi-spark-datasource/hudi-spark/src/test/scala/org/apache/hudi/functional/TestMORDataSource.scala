@@ -99,23 +99,29 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   @ParameterizedTest
   @CsvSource(Array(
     // Inferred as COMMIT_TIME_ORDERING
-    "AVRO, AVRO, avro, false, ", "AVRO, SPARK, parquet, false, ",
-    "SPARK, AVRO, parquet, false, ", "SPARK, SPARK, parquet, false, ",
+    "AVRO, AVRO, avro, false,,", "AVRO, SPARK, parquet, false,,",
+    "SPARK, AVRO, parquet, false,,", "SPARK, SPARK, parquet, false,,",
     // EVENT_TIME_ORDERING without precombine field
-    "AVRO, AVRO, avro, false, EVENT_TIME_ORDERING", "AVRO, SPARK, parquet, false, EVENT_TIME_ORDERING",
-    "SPARK, AVRO, parquet, false, EVENT_TIME_ORDERING", "SPARK, SPARK, parquet, false, EVENT_TIME_ORDERING",
+    "AVRO, AVRO, avro, false,,EVENT_TIME_ORDERING", "AVRO, SPARK, parquet, false,,EVENT_TIME_ORDERING",
+    "SPARK, AVRO, parquet, false,,EVENT_TIME_ORDERING", "SPARK, SPARK, parquet, false,,EVENT_TIME_ORDERING",
+    // EVENT_TIME_ORDERING with empty precombine field
+    "AVRO, AVRO, avro, true,,EVENT_TIME_ORDERING", "AVRO, SPARK, parquet, true,,EVENT_TIME_ORDERING",
+    "SPARK, AVRO, parquet, true,,EVENT_TIME_ORDERING", "SPARK, SPARK, parquet, true,,EVENT_TIME_ORDERING",
     // Inferred as EVENT_TIME_ORDERING
-    "AVRO, AVRO, avro, true, ", "AVRO, SPARK, parquet, true, ",
-    "SPARK, AVRO, parquet, true, ", "SPARK, SPARK, parquet, true, "))
+    "AVRO, AVRO, avro, true, timestamp,", "AVRO, SPARK, parquet, true, timestamp,",
+    "SPARK, AVRO, parquet, true, timestamp,", "SPARK, SPARK, parquet, true, timestamp,"))
   def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String,
-                hasPreCombineField: Boolean, recordMergeMode: String) {
+                hasPreCombineField: Boolean, precombineField: String, recordMergeMode: String) {
     var (_, readOpts) = getWriterReaderOpts(readType)
     var (writeOpts, _) = getWriterReaderOpts(writeType)
     readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
     writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
+    readOpts = readOpts - DataSourceWriteOptions.PRECOMBINE_FIELD.key
     if (!hasPreCombineField) {
-      readOpts = readOpts - DataSourceWriteOptions.PRECOMBINE_FIELD.key
       writeOpts = writeOpts - DataSourceWriteOptions.PRECOMBINE_FIELD.key
+    } else {
+      writeOpts = writeOpts ++ Map(DataSourceWriteOptions.PRECOMBINE_FIELD.key ->
+        (if (isNullOrEmpty(precombineField)) "" else precombineField))
     }
     val firstWriteOpts = if (isNullOrEmpty(recordMergeMode)) {
       writeOpts
@@ -150,8 +156,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       recordMergeMode
     }
     val expectedConfigs = (Map(HoodieTableConfig.RECORD_MERGE_MODE.key -> expectedMergeMode) ++
-      (if (hasPreCombineField) {
-        Map(HoodieTableConfig.PRECOMBINE_FIELD.key -> "timestamp")
+      (if (hasPreCombineField && !isNullOrEmpty(precombineField)) {
+        Map(HoodieTableConfig.PRECOMBINE_FIELD.key -> precombineField)
       } else {
         Map()
       })).asJava

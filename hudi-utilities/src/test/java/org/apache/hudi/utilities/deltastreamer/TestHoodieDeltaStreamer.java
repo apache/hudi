@@ -172,6 +172,7 @@ import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREA
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1673,6 +1674,43 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(DummyAvroPayload.class.getName(), props.get(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
   }
 
+  private static Stream<Arguments> getArgumentsForFilterDupesWithPrecombineTest() {
+    return Stream.of(
+        Arguments.of(HoodieRecordType.AVRO, "MERGE_ON_READ", EMPTY_STRING),
+        Arguments.of(HoodieRecordType.AVRO, "MERGE_ON_READ", "timestamp"),
+        Arguments.of(HoodieRecordType.AVRO, "COPY_ON_WRITE", EMPTY_STRING),
+        Arguments.of(HoodieRecordType.AVRO, "COPY_ON_WRITE", "timestamp"),
+        Arguments.of(HoodieRecordType.SPARK, "MERGE_ON_READ", EMPTY_STRING),
+        Arguments.of(HoodieRecordType.SPARK, "MERGE_ON_READ", "timestamp"),
+        Arguments.of(HoodieRecordType.SPARK, "COPY_ON_WRITE", EMPTY_STRING),
+        Arguments.of(HoodieRecordType.SPARK, "COPY_ON_WRITE", "timestamp"));
+  }
+
+  @ParameterizedTest
+  @MethodSource("getArgumentsForFilterDupesWithPrecombineTest")
+  public void testFilterDupesWithPrecombine(
+      HoodieRecordType recordType, String tableType, String sourceOrderingField) throws Exception {
+    String tableBasePath = basePath + "/test_dupes_tables_with_precombine";
+    HoodieDeltaStreamer.Config cfg =
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    cfg.tableType = tableType;
+    cfg.filterDupes = true;
+    cfg.sourceOrderingField = sourceOrderingField;
+    addRecordMerger(recordType, cfg.configs);
+    new HoodieStreamer(cfg, jsc).sync();
+
+    assertRecordCount(1000, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
+
+    // Generate the same 1000 records + 1000 new ones
+    // We use TestDataSource to assist w/ generating input data. for every subquent batches, it produces 50% inserts and 50% updates.
+    runStreamSync(cfg, true, 2000, WriteOperationType.INSERT);
+    assertRecordCount(2000, tableBasePath, sqlContext); // if filter dupes is not enabled, we should be expecting 3000 records here.
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
+
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
   @Test
   public void testFilterDupes() throws Exception {
     String tableBasePath = basePath + "/test_dupes_table";
@@ -1684,10 +1722,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
 
     // Generate the same 1000 records + 1000 new ones for upsert
-    cfg.filterDupes = true;
-    cfg.sourceLimit = 2000;
-    cfg.operation = WriteOperationType.INSERT;
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    runStreamSync(cfg, true, 2000, WriteOperationType.INSERT);
     assertRecordCount(2000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
     // 1000 records for commit 00000 & 1000 for commit 00001
@@ -1699,13 +1734,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient mClient = createMetaClient(jsc, tableBasePath);
     HoodieInstant lastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
     HoodieDeltaStreamer.Config cfg2 = TestHelpers.makeDropAllConfig(tableBasePath, WriteOperationType.UPSERT);
-    addRecordMerger(HoodieRecordType.AVRO, cfg2.configs);
-    cfg2.filterDupes = false;
-    cfg2.sourceLimit = 2000;
-    cfg2.operation = WriteOperationType.UPSERT;
     cfg2.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
-    HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg2, jsc);
-    ds2.sync();
+    addRecordMerger(HoodieRecordType.AVRO, cfg2.configs);
+    runStreamSync(cfg2, false, 2000, WriteOperationType.UPSERT);
     mClient = createMetaClient(jsc, tableBasePath);
     HoodieInstant newLastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
     assertTrue(InstantComparison.compareTimestamps(newLastFinished.requestedTime(), GREATER_THAN, lastFinished.requestedTime()
@@ -1726,6 +1757,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       assertTrue(e.getMessage().contains("'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed."));
     }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  private void runStreamSync(
+      HoodieDeltaStreamer.Config cfg, boolean filterDupes, int numberOfRecords, WriteOperationType operationType) throws Exception {
+    cfg.filterDupes = filterDupes;
+    cfg.sourceLimit = numberOfRecords;
+    cfg.operation = operationType;
+    new HoodieDeltaStreamer(cfg, jsc).sync();
   }
 
   @Test
