@@ -19,6 +19,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
@@ -28,7 +29,7 @@ import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex.IndexType.{BUCKET, SIMPLE}
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
@@ -36,7 +37,6 @@ import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
@@ -205,6 +205,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       HoodieIndexConfig.INDEX_TYPE.key -> (if (enableNBCC) BUCKET.name else SIMPLE.name),
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> classOf[InProcessLockProvider].getName,
       HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> (
         if (enableNBCC) {
           WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name
