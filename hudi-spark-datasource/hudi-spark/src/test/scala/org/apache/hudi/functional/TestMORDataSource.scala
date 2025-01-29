@@ -25,30 +25,32 @@ import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieMetadataConfig, 
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.util.{Option, StringUtils}
+import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.index.HoodieIndex.IndexType
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.{PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataPartitionExists}
-import org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists, PARTITION_NAME_SECONDARY_INDEX_PREFIX}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
+
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.BooleanType
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
 import java.util.function.Consumer
+
 import scala.collection.JavaConverters._
 
 /**
@@ -95,11 +97,18 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     )
 
   @ParameterizedTest
-  @CsvSource(Array("AVRO, AVRO, avro, false", "AVRO, SPARK, parquet, false",
-    "SPARK, AVRO, parquet, false", "SPARK, SPARK, parquet, false",
-    "AVRO, AVRO, avro, true", "AVRO, SPARK, parquet, true",
-    "SPARK, AVRO, parquet, true", "SPARK, SPARK, parquet, true"))
-  def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String, hasPreCombineField: Boolean) {
+  @CsvSource(Array(
+    // Inferred as COMMIT_TIME_ORDERING
+    "AVRO, AVRO, avro, false, ", "AVRO, SPARK, parquet, false, ",
+    "SPARK, AVRO, parquet, false, ", "SPARK, SPARK, parquet, false, ",
+    // EVENT_TIME_ORDERING without precombine field
+    "AVRO, AVRO, avro, false, EVENT_TIME_ORDERING", "AVRO, SPARK, parquet, false, EVENT_TIME_ORDERING",
+    "SPARK, AVRO, parquet, false, EVENT_TIME_ORDERING", "SPARK, SPARK, parquet, false, EVENT_TIME_ORDERING",
+    // Inferred as EVENT_TIME_ORDERING
+    "AVRO, AVRO, avro, true, ", "AVRO, SPARK, parquet, true, ",
+    "SPARK, AVRO, parquet, true, ", "SPARK, SPARK, parquet, true, "))
+  def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String,
+                hasPreCombineField: Boolean, recordMergeMode: String) {
     var (_, readOpts) = getWriterReaderOpts(readType)
     var (writeOpts, _) = getWriterReaderOpts(writeType)
     readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
@@ -108,6 +117,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       readOpts = readOpts - DataSourceWriteOptions.PRECOMBINE_FIELD.key
       writeOpts = writeOpts - DataSourceWriteOptions.PRECOMBINE_FIELD.key
     }
+    val firstWriteOpts = if (isNullOrEmpty(recordMergeMode)) {
+      writeOpts
+    } else {
+      writeOpts ++ Map(HoodieWriteConfig.RECORD_MERGE_MODE.key -> recordMergeMode)
+    }
+    if (isNullOrEmpty(recordMergeMode)) {
+      assertFalse(writeOpts.contains(HoodieWriteConfig.RECORD_MERGE_MODE.key))
+    }
 
     // First Operation:
     // Producing parquet files to three default partitions.
@@ -115,16 +132,35 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toSeq
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
-      .options(writeOpts)
+      .options(firstWriteOpts)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
-    val metaClient = HoodieTableMetaClient.builder
-      .setConf(storage.getConf.newInstance).setBasePath(basePath).build
-    assertEquals(hasPreCombineField, !StringUtils.isNullOrEmpty(metaClient.getTableConfig.getPreCombineField))
+    val expectedMergeMode = if (isNullOrEmpty(recordMergeMode)) {
+      if (hasPreCombineField) {
+        RecordMergeMode.EVENT_TIME_ORDERING.name
+      }
+      else {
+        RecordMergeMode.COMMIT_TIME_ORDERING.name
+      }
+    } else {
+      recordMergeMode
+    }
+    val expectedConfigs = (Map(HoodieTableConfig.RECORD_MERGE_MODE.key -> expectedMergeMode) ++
+      (if (hasPreCombineField) {
+        Map(HoodieTableConfig.PRECOMBINE_FIELD.key -> "timestamp")
+      } else {
+        Map()
+      })).asJava
+    val nonExistentConfigs: java.util.List[String] = (if (hasPreCombineField) {
+      Seq[String]()
+    } else {
+      Seq(HoodieTableConfig.PRECOMBINE_FIELD.key)
+    }).asJava
+    HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
     val commit1CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
@@ -142,6 +178,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(writeOpts)
       .mode(SaveMode.Append)
       .save(basePath)
+    HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
     val commit2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
@@ -225,6 +262,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(writeOpts)
       .mode(SaveMode.Append)
       .save(basePath)
+    HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
     val commit3CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hudiSnapshotDF3 = spark.read.format("org.apache.hudi")
       .options(readOpts)
@@ -269,6 +307,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(writeOpts)
       .mode(SaveMode.Append)
       .save(basePath)
+    HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
     val hudiSnapshotDF4 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -296,6 +335,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(writeOpts)
       .mode(SaveMode.Append)
       .save(basePath)
+    HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
     val hudiSnapshotDF5 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -311,6 +351,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option("hoodie.compact.inline", "true")
       .mode(SaveMode.Append)
       .save(basePath)
+    HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
     val commit6CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hudiSnapshotDF6 = spark.read.format("org.apache.hudi")
       .options(readOpts)
