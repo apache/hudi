@@ -191,7 +191,7 @@ public class UpgradeDowngradeUtils {
       try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(rollbackWriteConfig, context)) {
         writeClient.rollbackFailedWrites();
         if (shouldCompact) {
-          Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
+          Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty(), writeClient.getConfig().isLockRequired());
           if (compactionInstantOpt.isPresent()) {
             writeClient.compact(compactionInstantOpt.get());
           }

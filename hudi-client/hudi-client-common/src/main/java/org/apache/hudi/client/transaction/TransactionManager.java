@@ -37,7 +37,7 @@ public class TransactionManager implements Serializable {
 
   protected static final Logger LOG = LoggerFactory.getLogger(TransactionManager.class);
   protected final LockManager lockManager;
-  protected final boolean isLockRequired;
+  protected boolean isLockRequired;
   protected Option<HoodieInstant> currentTxnOwnerInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedTxnOwnerInstant = Option.empty();
 
@@ -104,5 +104,13 @@ public class TransactionManager implements Serializable {
 
   public boolean isLockRequired() {
     return isLockRequired;
+  }
+
+  /**
+   * Lock requirement for transaction manager can change from within a transaction.
+   * For example, when a compaction is scheduled during upgrade, the lock requirement is set to false.
+   */
+  public void setIsLockRequired(boolean isLockRequired) {
+    this.isLockRequired = isLockRequired;
   }
 }

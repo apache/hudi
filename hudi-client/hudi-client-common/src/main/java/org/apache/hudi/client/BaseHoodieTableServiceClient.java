@@ -336,6 +336,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     handleWriteErrors(writeStats, TableServiceType.COMPACT);
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
     final HoodieInstant compactionInstant = instantGenerator.getCompactionInflightInstant(compactionCommitTime);
+    boolean oldLockRequired = txnManager.isLockRequired();
+    boolean isTxnManagerLockRequirementUpdated = updateTxnManagerLockRequirementIfNecessary(oldLockRequired);
     try {
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
@@ -346,6 +348,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
+      // Restore the old lock requirement if it was updated.
+      if (isTxnManagerLockRequirementUpdated) {
+        txnManager.setIsLockRequired(oldLockRequired);
+      }
       releaseResources(compactionCommitTime);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
@@ -398,6 +404,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     handleWriteErrors(writeStats, TableServiceType.LOG_COMPACT);
     final HoodieInstant logCompactionInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION,
         logCompactionCommitTime);
+    boolean oldLockRequired = txnManager.isLockRequired();
+    boolean isTxnManagerLockRequirementUpdated = updateTxnManagerLockRequirementIfNecessary(oldLockRequired);
     try {
       this.txnManager.beginTransaction(Option.of(logCompactionInstant), Option.empty());
       preCommit(metadata);
@@ -409,6 +417,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(logCompactionInstant));
+      // Restore the old lock requirement if it was updated.
+      if (isTxnManagerLockRequirementUpdated) {
+        txnManager.setIsLockRequired(oldLockRequired);
+      }
       releaseResources(logCompactionCommitTime);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionCommitTime)
@@ -528,6 +540,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     handleWriteErrors(writeStats, TableServiceType.CLUSTER);
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,
         table.getActiveTimeline(), table.getMetaClient().getInstantGenerator()).get();
+    boolean oldLockRequired = txnManager.isLockRequired();
+    boolean isTxnManagerLockRequirementUpdated = updateTxnManagerLockRequirementIfNecessary(oldLockRequired);
     try {
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
 
@@ -549,6 +563,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     } finally {
       this.txnManager.endTransaction(Option.of(clusteringInstant));
+      // Restore the old lock requirement if it was updated.
+      if (isTxnManagerLockRequirementUpdated) {
+        txnManager.setIsLockRequired(oldLockRequired);
+      }
       releaseResources(clusteringCommitTime);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
@@ -633,12 +651,18 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     InstantGenerator instantGenerator = TimelineLayout.fromVersion(tableConfig.getTableVersion().getTimelineLayoutVersion()).getInstantGenerator();
     final Option<HoodieInstant> inflightInstant = Option.of(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
         tableServiceType.getAction(), instantTime));
+    boolean oldLockRequired = txnManager.isLockRequired();
+    boolean isTxnManagerLockRequirementUpdated = updateTxnManagerLockRequirementIfNecessary(oldLockRequired);
     try {
       this.txnManager.beginTransaction(inflightInstant, Option.empty());
       LOG.info("Scheduling table service {} for table {}", tableServiceType, config.getBasePath());
       return scheduleTableServiceInternal(instantTime, extraMetadata, tableServiceType);
     } finally {
       this.txnManager.endTransaction(inflightInstant);
+      // Restore the old lock requirement if it was updated.
+      if (isTxnManagerLockRequirementUpdated) {
+        txnManager.setIsLockRequired(oldLockRequired);
+      }
     }
   }
 
@@ -967,7 +991,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback) {
-    rollbackFailedWrites(instantsToRollback, false, false);
+    rollbackFailedWrites(instantsToRollback, !config.isLockRequired(), false);
   }
 
   protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback, boolean skipLocking, boolean skipVersionCheck) {

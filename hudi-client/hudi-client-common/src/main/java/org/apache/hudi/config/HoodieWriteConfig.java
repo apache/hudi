@@ -1242,7 +1242,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
     this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
     this.timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().fromProperties(props)
-        .withDefaultLockProvider(!isLockRequired()).build();
+        // Instant time generation needs a lock. If lock provider is not set, use default lock provider
+        .withDefaultLockProvider(!isLockProviderSet()).build();
     this.indexingConfig = HoodieIndexingConfig.newBuilder().fromProperties(props).build();
   }
 

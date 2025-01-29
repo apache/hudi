@@ -237,6 +237,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HoodieInstant inflightInstant = table.getMetaClient().createNewInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
+    boolean oldLockRequired = txnManager.isLockRequired();
+    boolean isTxnManagerLockRequirementUpdated = updateTxnManagerLockRequirementIfNecessary(oldLockRequired);
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
@@ -251,6 +253,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
       this.txnManager.endTransaction(Option.of(inflightInstant));
+      // Restore the old lock requirement if it was updated
+      if (isTxnManagerLockRequirementUpdated) {
+        txnManager.setIsLockRequired(oldLockRequired);
+      }
       releaseResources(instantTime);
     }
 
@@ -996,6 +1002,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Schedules a new compaction instant.
+   *
+   * @param extraMetadata Extra Metadata to be stored
+   * @param shouldLock    whether to lock for time generation
+   */
+  public Option<String> scheduleCompaction(Option<Map<String, String>> extraMetadata, boolean shouldLock) throws HoodieIOException {
+    String instantTime = createNewInstantTime(shouldLock);
+    return scheduleCompactionAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
+  }
+
+  /**
+   * Schedules a new compaction instant.
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleCompaction(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
@@ -1308,11 +1325,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   private void executeUsingTxnManager(Option<HoodieInstant> ownerInstant, Runnable r) {
+    boolean oldLockRequired = txnManager.isLockRequired();
+    boolean isTxnManagerLockRequirementUpdated = updateTxnManagerLockRequirementIfNecessary(oldLockRequired);
     this.txnManager.beginTransaction(ownerInstant, Option.empty());
     try {
       r.run();
     } finally {
       this.txnManager.endTransaction(ownerInstant);
+      // Restore the old lock requirement if it was updated
+      if (isTxnManagerLockRequirementUpdated) {
+        txnManager.setIsLockRequired(oldLockRequired);
+      }
     }
   }
 

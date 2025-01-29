@@ -286,6 +286,20 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   /**
+   * Update the transaction manager lock requirement if necessary.
+   *
+   * @param oldLockRequired whether lock was required before.
+   * @return whether lock was disabled.
+   */
+  protected boolean updateTxnManagerLockRequirementIfNecessary(boolean oldLockRequired) {
+    boolean shouldDisableLock = oldLockRequired && !config.isLockRequired();
+    if (shouldDisableLock) {
+      txnManager.setIsLockRequired(false);
+    }
+    return shouldDisableLock;
+  }
+
+  /**
    * Updates the cols being indexed with column stats. This is for tracking purpose so that queries can leverage col stats
    * from MDT only for indexed columns.
    * @param metaClient instance of {@link HoodieTableMetaClient} of interest.
