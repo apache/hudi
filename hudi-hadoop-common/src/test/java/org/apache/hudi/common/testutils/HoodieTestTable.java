@@ -121,6 +121,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDel
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightRollbackFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightSavepoint;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFileMarker;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
@@ -709,6 +710,11 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
+  public HoodieTestTable withLogMarkerFile(String partitionPath, String fileName) throws IOException {
+    createLogFileMarker(metaClient, partitionPath, currentInstantTime, fileName);
+    return this;
+  }
+
   /**
    * Insert one base file to each of the given distinct partitions.
    *
@@ -766,9 +772,14 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public Pair<HoodieTestTable, List<String>> withLogFile(String partitionPath, String fileId, int... versions) throws Exception {
+    return withLogFile(partitionPath, fileId, currentInstantTime, versions);
+  }
+
+  public Pair<HoodieTestTable, List<String>> withLogFile(String partitionPath, String fileId,
+                                                         String instantTime, int... versions) throws Exception {
     List<String> logFiles = new ArrayList<>();
     for (int version : versions) {
-      logFiles.add(FileCreateUtils.createLogFile(metaClient, partitionPath, currentInstantTime, fileId, version));
+      logFiles.add(FileCreateUtils.createLogFile(metaClient, partitionPath, instantTime, fileId, version));
     }
     return Pair.of(this, logFiles);
   }

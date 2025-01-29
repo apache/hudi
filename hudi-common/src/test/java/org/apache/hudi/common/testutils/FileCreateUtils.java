@@ -430,6 +430,15 @@ public class FileCreateUtils extends FileCreateUtilsBase {
     return markerFilePath.toAbsolutePath().toString();
   }
 
+  public static String createLogFileMarker(HoodieTableMetaClient metaClient, String partitionPath,
+                                           String instantTime, String logFileName)
+      throws IOException {
+    return createMarkerFile(metaClient, partitionPath, instantTime,
+        markerFileName(logFileName,
+            metaClient.getTableConfig().getTableVersion()
+                .greaterThanOrEquals(HoodieTableVersion.EIGHT) ? IOType.CREATE : IOType.APPEND));
+  }
+
   private static void removeMetaFile(HoodieTableMetaClient metaClient, String instantTime, String suffix) throws IOException {
     removeMetaFileInTimelinePath(metaClient.getTimelinePath().toUri().getPath(), instantTime, suffix);
   }
