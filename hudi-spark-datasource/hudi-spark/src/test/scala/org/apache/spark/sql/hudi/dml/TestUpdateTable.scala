@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
-import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils, LogFileTestUtils}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
@@ -33,8 +33,9 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
   test("Test Update Table") {
     withRecordType()(withTempDir { tmp =>
       Seq(true, false).foreach { sparkSqlOptimizedWrites =>
-        Seq("cow", "mor").foreach { tableType =>
+        Seq("mor", "cow").foreach { tableType =>
           val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
           // create table
           spark.sql(
             s"""
@@ -44,7 +45,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
                |  price double,
                |  ts long
                |) using hudi
-               | location '${tmp.getCanonicalPath}/$tableName'
+               | location '$basePath'
                | tblproperties (
                |  type = '$tableType',
                |  primaryKey = 'id',
@@ -66,6 +67,10 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           checkAnswer(s"select id, name, price, ts from $tableName")(
             Seq(1, "a1", 20.0, 1000)
           )
+
+          if (tableType.equals("mor") && HoodieSparkUtils.gteqSpark3_5) {
+            LogFileTestUtils.validateRecordPositionsInLogFiles(createMetaClient(spark, basePath), true)
+          }
 
           // update data
           spark.sql(s"update $tableName set price = price * 2 where id = 1")
@@ -176,6 +181,10 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           Seq(2, "a2", 20.0, 1000)
         )
 
+        if (tableType.equals("mor") && HoodieSparkUtils.gteqSpark3_5) {
+          LogFileTestUtils.validateRecordPositionsInLogFiles(createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName"), true)
+        }
+
         /** partitioned table */
         val ptTableName = generateTableName + "_pt"
         // create table
@@ -218,12 +227,20 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           Seq(3, "a2", 33.0, 1001, "2022")
         )
 
+        if (tableType.equals("mor") && HoodieSparkUtils.gteqSpark3_5) {
+          LogFileTestUtils.validateRecordPositionsInLogFiles(createMetaClient(spark, s"${tmp.getCanonicalPath}/$ptTableName"), true)
+        }
+
         spark.sql(s"update $ptTableName set price = price + 5, ts = ts + 1 where pt = '2021'")
         checkAnswer(s"select id, name, price, ts, pt from $ptTableName")(
           Seq(1, "a1", 15.0, 1001, "2021"),
           Seq(2, "a2", 27.0, 1002, "2021"),
           Seq(3, "a2", 33.0, 1001, "2022")
         )
+
+        if (tableType.equals("mor") && HoodieSparkUtils.gteqSpark3_5) {
+          LogFileTestUtils.validateRecordPositionsInLogFiles(createMetaClient(spark, s"${tmp.getCanonicalPath}/$ptTableName"), true)
+        }
       }
     })
   }

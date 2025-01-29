@@ -352,6 +352,12 @@ object DataSourceWriteOptions {
    * operations are already prepped.
    */
   val SPARK_SQL_WRITES_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
+  val ROW_POSITION_META_COLUMN = "_hoodie_row_position"
+  val SPARK_READ_ATTACH_ROW_POSITION: ConfigProperty[Boolean] = ConfigProperty
+    .key("_hoodie.spark.read.attach.row.position")
+    .defaultValue(false)
+    .withDocumentation("When enabled, the datasource read and SQL query return the results with "
+      + s"row position column, $ROW_POSITION_META_COLUMN, attached.")
 
   /**
    * May be derive partition path from incoming df if not explicitly set.
