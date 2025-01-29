@@ -239,9 +239,4 @@ trait SparkAdapter extends Serializable {
   def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
                                         queryExecution: QueryExecution,
                                         name: Option[String] = None)(body: => T): T
-
-  /**
-   * Returns temporary row index column name used in Spark
-   */
-  def getTemporaryRowIndexColumnName(): String
 }

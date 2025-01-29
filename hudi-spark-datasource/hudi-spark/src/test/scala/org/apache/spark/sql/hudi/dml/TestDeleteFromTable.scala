@@ -18,8 +18,8 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+import org.apache.hudi.{HoodieSparkUtils, LogFileTestUtils}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestDeleteFromTable extends HoodieSparkSqlTestBase {
@@ -76,6 +76,10 @@ class TestDeleteFromTable extends HoodieSparkSqlTestBase {
           // Delete single row
           spark.sql(s"DELETE FROM $tableName WHERE id = 1")
 
+          if (tableType.equals("mor") && HoodieSparkUtils.gteqSpark3_5) {
+            LogFileTestUtils.validateRecordPositionsInLogFiles(createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName"), true)
+          }
+
           checkAnswer(s"SELECT id, name, price, ts, dt FROM $tableName")(
             Seq(2, "a2", 20.0, 2000, "2021-01-06"),
             Seq(3, "a3", 30.0, 3000, "2021-01-07")
@@ -91,6 +95,10 @@ class TestDeleteFromTable extends HoodieSparkSqlTestBase {
 
           // Delete record identified by some field other than the primary-key
           spark.sql(s"DELETE FROM $tableName WHERE name = 'a2'")
+
+          if (tableType.equals("mor") && HoodieSparkUtils.gteqSpark3_5) {
+            LogFileTestUtils.validateRecordPositionsInLogFiles(createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName"), true)
+          }
 
           checkAnswer(s"SELECT id, name, price, ts, dt FROM $tableName")(
             Seq(3, "a3", 30.0, 3000, "2021-01-07")

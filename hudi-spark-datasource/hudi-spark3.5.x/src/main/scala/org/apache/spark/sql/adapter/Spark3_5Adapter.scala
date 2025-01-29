@@ -148,8 +148,4 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
                                        hadoopConf: Configuration): SparkParquetReader = {
     Spark35ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
   }
-
-  override def getTemporaryRowIndexColumnName(): String = {
-    ParquetFileFormat.ROW_INDEX_TEMPORARY_COLUMN_NAME
-  }
 }

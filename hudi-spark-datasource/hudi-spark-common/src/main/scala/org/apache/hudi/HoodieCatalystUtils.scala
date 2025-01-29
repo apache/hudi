@@ -21,8 +21,6 @@ package org.apache.hudi
 import org.apache.hudi.common.data.HoodieData
 
 import org.apache.spark.sql.Dataset
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
@@ -63,13 +61,6 @@ object HoodieCatalystUtils extends SparkAdapterSupport {
       f
     } finally {
       data.unpersist()
-    }
-  }
-
-  def toUnresolved(e: Expression): Expression = {
-    e transform {
-      case AttributeReference(name, _, _, _) =>
-        UnresolvedAttribute(name)
     }
   }
 }

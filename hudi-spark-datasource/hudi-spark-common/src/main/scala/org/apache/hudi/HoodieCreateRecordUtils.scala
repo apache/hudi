@@ -226,8 +226,9 @@ object HoodieCreateRecordUtils {
     else {
       None
     }
-    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields && avroRec.hasField(SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName())) {
-      Option(avroRec.get(SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName())).map(_.asInstanceOf[Long])
+    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields && avroRec.hasField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)) {
+      val commitSeqNo = avroRec.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).toString
+      Option(java.lang.Long.parseLong(commitSeqNo.substring(commitSeqNo.lastIndexOf("_") + 1, commitSeqNo.length)))
     } else {
       None
     }
@@ -266,9 +267,9 @@ object HoodieCreateRecordUtils {
       None
     }
 
-    val temporaryRowIndexFieldOrd = schema.fieldNames.indexOf(SparkAdapterSupport.sparkAdapter.getTemporaryRowIndexColumnName())
-    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields && temporaryRowIndexFieldOrd != -1) {
-      Option(sourceRow.getLong(temporaryRowIndexFieldOrd))
+    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields) {
+      val commitSeqNo = sourceRow.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
+      Option(java.lang.Long.parseLong(commitSeqNo.substring(commitSeqNo.lastIndexOf("_") + 1, commitSeqNo.length)))
     } else {
       None
     }
