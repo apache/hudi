@@ -131,8 +131,8 @@ class ExpressionPayload(@transient record: GenericRecord,
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
 
-        if (targetRecord.isEmpty) {
-          resultRecordOpt = HOption.of(resultingAvroRecord)
+        resultRecordOpt = if (targetRecord.isEmpty) {
+          HOption.of(resultingAvroRecord)
         } else {
           doRecordMerge(resultingAvroRecord, targetRecord.get, writerSchema, properties)
         }
@@ -166,15 +166,18 @@ class ExpressionPayload(@transient record: GenericRecord,
                             schema: Schema,
                             properties: Properties): HOption[IndexedRecord] = {
     val originalPayload = properties.getProperty(PAYLOAD_ORIGINAL_AVRO_PAYLOAD)
-//    if (originalPayload.equals(classOf[OverwriteWithLatestAvroPayload].getName)) {
-//      HOption.of(incomingRecord)
-//    } else if (originalPayload.equals(classOf[DefaultHoodieRecordPayload].getName)) {
-//      if (needUpdatingPersistedRecord(existingRecord, incomingRecord, properties)) {
-//        HOption.of(incomingRecord)
-//      } else {
-//        HOption.of(existingRecord)
-//      }
-//    } else {
+    if (originalPayload.equals(classOf[OverwriteWithLatestAvroPayload].getName)) {
+      // If is overwrite payload, then always pick the incoming record.
+      HOption.of(incomingRecord)
+    } else if (originalPayload.equals(classOf[DefaultHoodieRecordPayload].getName)) {
+      // If is default payload, then pick based on comparison result.
+      if (needUpdatingPersistedRecord(existingRecord, incomingRecord, properties)) {
+        HOption.of(incomingRecord)
+      } else {
+        HOption.of(existingRecord)
+      }
+    } else {
+      // For customized payload, create the payload class and merge.
       val orderingField = ConfigUtils.getOrderingField(properties)
       if (StringUtils.isNullOrEmpty(orderingField)) {
         HOption.of(incomingRecord)
@@ -187,7 +190,7 @@ class ExpressionPayload(@transient record: GenericRecord,
             .asInstanceOf[Comparable[_]]).asInstanceOf[HoodieRecordPayload[_ <: HoodieRecordPayload[_]]]
         incomingRecordPayload.combineAndGetUpdateValue(existingRecord, schema, properties)
       }
-//    }
+    }
   }
 
   /**

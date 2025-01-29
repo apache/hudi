@@ -1217,10 +1217,11 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test MergeInto with various payloads") {
-    Seq("cow").foreach { tableType =>
+  test("Test MergeInto with commit time/event time ordering coverage") {
+    Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
-        Seq(RecordMergeMode.EVENT_TIME_ORDERING.name(), RecordMergeMode.COMMIT_TIME_ORDERING.name()).foreach { recordMergeMode =>
+        Seq(RecordMergeMode.COMMIT_TIME_ORDERING.name(),
+          RecordMergeMode.EVENT_TIME_ORDERING.name()).foreach { recordMergeMode =>
           val sourceTable = generateTableName
           spark.sql(
             s"""
