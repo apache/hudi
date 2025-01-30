@@ -326,14 +326,22 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  protected def withSparkSqlSessionConfig(configNameValues: (String, String)*)(f: => Unit): Unit = {
+  protected def withSparkSqlSessionConfig(configNameValues: (String, String)*
+                                         )(f: => Unit): Unit = {
+    withSparkSqlSessionConfigWithCondition(configNameValues.map(e => (e, true)): _*)(f)
+  }
+
+  protected def withSparkSqlSessionConfigWithCondition(configNameValues: ((String, String), Boolean)*
+                                                      )(f: => Unit): Unit = {
     try {
-      configNameValues.foreach { case (configName, configValue) =>
-        spark.sql(s"set $configName=$configValue")
+      configNameValues.foreach { case ((configName, configValue), condition) =>
+        if (condition) {
+          spark.sql(s"set $configName=$configValue")
+        }
       }
       f
     } finally {
-      configNameValues.foreach { case (configName, _) =>
+      configNameValues.foreach { case ((configName, configValue), condition) =>
         spark.sql(s"reset $configName")
       }
     }
