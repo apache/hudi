@@ -30,15 +30,15 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
 
   // TODO(HUDI-8938): add "mor,true,true,6" after the fix
   Seq(
-    "cow,false,false,8", "cow,false,true,8", "cow,true,false,8",
-    "cow,true,false,6", "cow,true,true,6",
-    "mor,false,false,8", "mor,false,true,8", "mor,true,false,8",
-    "mor,true,false,6").foreach { args =>
+    "cow,8,false,false", "cow,8,false,true", "cow,8,true,false",
+    "cow,6,true,false", "cow,6,true,true",
+    "mor,8,false,false", "mor,8,false,true", "mor,8,true,false",
+    "mor,6,true,false").foreach { args =>
     val argList = args.split(',')
     val tableType = argList(0)
-    val setRecordMergeConfigs = argList(1).toBoolean
-    val setUpsertOperation = argList(2).toBoolean
-    val tableVersion = argList(3)
+    val tableVersion = argList(1)
+    val setRecordMergeConfigs = argList(2).toBoolean
+    val setUpsertOperation = argList(3).toBoolean
     val isUpsert = setUpsertOperation || (tableVersion.toInt != 6 && setRecordMergeConfigs)
     val storage = HoodieTestUtils.getDefaultStorage
     val mergeConfigClause = if (setRecordMergeConfigs) {
@@ -86,7 +86,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
         ("hoodie.merge.small.file.group.candidates.limit" -> "0", true),
         ("hoodie.spark.sql.insert.into.operation" -> "upsert", setUpsertOperation),
         // TODO(HUDI-8820): enable MDT after supporting MDT with table version 6
-        ("hoodie.metadata.enable" -> "false", tableVersion.toInt == 6),
+        ("hoodie.metadata.enable" -> "false", tableVersion.toInt == 6)
       ) {
         withRecordType()(withTempDir { tmp =>
           val tableName = generateTableName
@@ -232,7 +232,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
         ("hoodie.merge.small.file.group.candidates.limit" -> "0", true),
         ("hoodie.spark.sql.insert.into.operation" -> "upsert", setUpsertOperation),
         // TODO(HUDI-8820): enable MDT after supporting MDT with table version 6
-        ("hoodie.metadata.enable" -> "false", tableVersion.toInt == 6),
+        ("hoodie.metadata.enable" -> "false", tableVersion.toInt == 6)
       ) {
         withRecordType()(withTempDir { tmp =>
           val tableName = generateTableName
