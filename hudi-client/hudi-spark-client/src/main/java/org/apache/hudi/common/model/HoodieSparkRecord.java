@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -53,6 +54,7 @@ import java.util.Properties;
 
 import scala.Function1;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
@@ -231,22 +233,28 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     if (null == data) {
       return true;
     }
-
     // Use metadata filed to decide.
     Schema.Field operationField = recordSchema.getField(OPERATION_METADATA_FIELD);
     if (null != operationField
         && HoodieOperation.isDeleteRecord((String) data.get(operationField.pos(), StringType))) {
       return true;
     }
-
-    // Use data field to decide.
-    if (recordSchema.getField(HOODIE_IS_DELETED_FIELD) == null) {
-      return false;
+    // Use custom marker to decide.
+    boolean isDeleted = HoodieRecordUtils.isCustomDeleteRecord(
+        data, recordSchema, props, recordData -> {
+          int pos = recordSchema.getField(props.getProperty(DELETE_KEY)).pos();
+          return recordData.get(pos, StringType);
+        });
+    if (isDeleted) {
+      return true;
     }
-
-    Object deleteMarker = data.get(
-        recordSchema.getField(HOODIE_IS_DELETED_FIELD).pos(), BooleanType);
-    return deleteMarker instanceof Boolean && (boolean) deleteMarker;
+    // Use data field to decide.
+    if (recordSchema.getField(HOODIE_IS_DELETED_FIELD) != null) {
+      Object deleteMarker = data.get(
+          recordSchema.getField(HOODIE_IS_DELETED_FIELD).pos(), BooleanType);
+      return deleteMarker instanceof Boolean && (boolean) deleteMarker;
+    }
+    return false;
   }
 
   @Override
@@ -321,7 +329,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     }
     scala.Option<NestedFieldPath> cachedNestedFieldPath =
         HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
-    if (cachedNestedFieldPath.isDefined()) {
+    if (data != null && cachedNestedFieldPath.isDefined()) {
       NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
       return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
     } else {

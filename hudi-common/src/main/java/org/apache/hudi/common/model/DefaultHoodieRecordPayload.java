@@ -20,9 +20,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -138,21 +137,16 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
   protected boolean isDeleteRecord(GenericRecord genericRecord, Properties properties) {
-    final String deleteKey = properties.getProperty(DELETE_KEY);
-    if (StringUtils.isNullOrEmpty(deleteKey)) {
-      return isDeleteRecord(genericRecord);
+    boolean isDeleted = HoodieRecordUtils.isCustomDeleteRecord(
+        genericRecord,
+        genericRecord.getSchema(),
+        properties,
+        recordData -> recordData.get(properties.getProperty(DELETE_KEY))
+    );
+    if (isDeleted) {
+      return true;
     }
-
-    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(properties.getProperty(DELETE_MARKER)),
-        () -> DELETE_MARKER + " should be configured with " + DELETE_KEY);
-    // Modify to be compatible with new version Avro.
-    // The new version Avro throws for GenericRecord.get if the field name
-    // does not exist in the schema.
-    if (genericRecord.getSchema().getField(deleteKey) == null) {
-      return false;
-    }
-    Object deleteMarker = genericRecord.get(deleteKey);
-    return deleteMarker != null && properties.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
+    return isDeleteRecord(genericRecord);
   }
 
   private static Option<Object> updateEventTime(GenericRecord record, Properties properties) {

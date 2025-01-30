@@ -19,13 +19,18 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieSerializationException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Properties;
+
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 
 /**
  * Base class for all AVRO record based payloads, that can be ordered based on a field.
@@ -68,7 +73,21 @@ public abstract class BaseAvroPayload implements Serializable {
    * We will not do deserialization in this method.
    */
   public boolean isDeleted(Schema schema, Properties props) {
-    return isDeletedRecord;
+    return isDeletedRecord
+        || HoodieRecordUtils.isCustomDeleteRecord(
+            recordBytes,
+            schema,
+            props,
+            recordData -> {
+              try {
+                GenericRecord data = HoodieAvroUtils.bytesToAvro(recordData, schema);
+                return data.get(props.getProperty(DELETE_KEY));
+              } catch (IOException e) {
+                throw new HoodieSerializationException(
+                    "Failed to deserialize bytes to avro record", e);
+              }
+            }
+        );
   }
 
   /**

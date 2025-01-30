@@ -71,6 +71,7 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_ME
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
@@ -576,15 +577,25 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   }
 
   private boolean isDeleteRecord(Option<T> record, Schema schema) {
+    // Case 1: no data.
     if (record.isEmpty()) {
       return true;
     }
-
+    // Case 2: is a delete operation.
     Object operation = readerContext.getValue(record.get(), schema, OPERATION_METADATA_FIELD);
     if (operation != null && HoodieOperation.isDeleteRecord(operation.toString())) {
       return true;
     }
-
+    // Case 3: is a custom delete.
+    boolean isDeleted = HoodieRecordUtils.isCustomDeleteRecord(
+        record.get(),
+        schema,
+        props,
+        r -> readerContext.getValue(r, schema, props.getProperty(DELETE_KEY)));
+    if (isDeleted) {
+      return true;
+    }
+    // Case 4: is a delete record by a static field.
     Object deleteMarker = readerContext.getValue(record.get(), schema, HOODIE_IS_DELETED_FIELD);
     return deleteMarker instanceof Boolean && (boolean) deleteMarker;
   }

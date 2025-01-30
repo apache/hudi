@@ -29,6 +29,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +38,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
+import java.util.function.Function;
+
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 
 /**
  * A utility class for HoodieRecord.
@@ -77,6 +83,9 @@ public class HoodieRecordUtils {
    */
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
                                                       List<String> mergerClassList, String recordMergerStrategy) {
+    // Currently we fall back to `HoodieAvroRecordMerger` (event time based) even the specified merger strategy
+    // is commit time based. This behavior has been treated as the norm in Hudi.
+    // TODO: evaluate the impact of this behavior and unify/simplify merge behavior in Hudi repo.
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
     } else {
@@ -87,7 +96,7 @@ public class HoodieRecordUtils {
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
                                                                    String mergerImpls, String recordMergerStrategy) {
-    return createValidRecordMerger(engineType,ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
+    return createValidRecordMerger(engineType, ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
   }
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
@@ -132,5 +141,26 @@ public class HoodieRecordUtils {
       return record.getCurrentLocation().getInstantTime();
     }
     return null;
+  }
+
+  public static <T> boolean isCustomDeleteRecord(T record,
+                                                 Schema schema,
+                                                 Properties props,
+                                                 Function<T, Object> valueFetcher) {
+    if (!hasCustomDeleteConfigs(props)) {
+      return false;
+    }
+    String deleteKeyField = props.getProperty(DELETE_KEY);
+    if (schema.getField(deleteKeyField) == null) {
+      return false;
+    }
+    Object deleteMarker = valueFetcher.apply(record);
+    return deleteMarker != null
+        && props.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
+  }
+
+  public static boolean hasCustomDeleteConfigs(Properties props) {
+    return !StringUtils.isNullOrEmpty(props.getProperty(DELETE_KEY))
+        && !StringUtils.isNullOrEmpty(props.getProperty(DELETE_MARKER));
   }
 }
