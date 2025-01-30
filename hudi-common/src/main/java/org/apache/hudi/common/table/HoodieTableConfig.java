@@ -760,7 +760,8 @@ public class HoodieTableConfig extends HoodieConfig {
   public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
                                                                                     String payloadClassName,
                                                                                     String recordMergeStrategyId,
-                                                                                    String orderingFieldName) {
+                                                                                    String orderingFieldName,
+                                                                                    HoodieConfig config) {
     RecordMergeMode inferredRecordMergeMode;
     String inferredPayloadClassName;
     String inferredRecordMergeStrategyId;
@@ -781,7 +782,7 @@ public class HoodieTableConfig extends HoodieConfig {
               + "strategy ID (%s).", payloadClassName, recordMergeStrategyId));
       // TODO(HUDI-8925): once payload class name is not required, remove the check on
       //  modeBasedOnStrategyId
-      if (modeBasedOnStrategyId != CUSTOM && modeBasedOnPayload != null && modeBasedOnStrategyId != null) {
+      if (getTableVersion(config).greaterThanOrEquals(HoodieTableVersion.EIGHT) && modeBasedOnStrategyId != CUSTOM && modeBasedOnPayload != null && modeBasedOnStrategyId != null) {
         checkArgument(modeBasedOnPayload.equals(modeBasedOnStrategyId),
             String.format("Configured payload class (%s) and record merge strategy ID (%s) conflict "
                     + "with each other. Please only set one of them in the write config.",

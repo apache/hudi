@@ -623,7 +623,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       cfg.allowCommitOnNoCheckpointChange = allowCommitOnNoCheckpointChange;
       Triple<RecordMergeMode, String, String> mergeCfgs =
           HoodieTableConfig.inferCorrectMergingBehavior(
-              cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField);
+              cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField, createMetaClient(storage.getConf(), basePath).getTableConfig());
       cfg.recordMergeMode = mergeCfgs.getLeft();
       cfg.payloadClassName = mergeCfgs.getMiddle();
       cfg.recordMergeStrategyId = mergeCfgs.getRight();

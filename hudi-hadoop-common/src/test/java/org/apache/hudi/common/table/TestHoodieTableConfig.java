@@ -444,11 +444,11 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     if (shouldThrow) {
       assertThrows(IllegalArgumentException.class,
           () -> HoodieTableConfig.inferCorrectMergingBehavior(
-              inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName));
+              inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName, metaClient.getTableConfig()));
     } else {
       Triple<RecordMergeMode, String, String> inferredConfigs =
           HoodieTableConfig.inferCorrectMergingBehavior(
-              inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName);
+              inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName, metaClient.getTableConfig());
       assertEquals(outputMergeMode, inferredConfigs.getLeft());
       assertEquals(outputPayloadClass, inferredConfigs.getMiddle());
       assertEquals(outputMergeStrategy, inferredConfigs.getRight());
