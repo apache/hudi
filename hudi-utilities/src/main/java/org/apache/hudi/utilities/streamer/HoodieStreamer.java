@@ -157,7 +157,8 @@ public class HoodieStreamer implements Serializable {
         .setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
     Triple<RecordMergeMode, String, String> mergingConfigs =
         HoodieTableConfig.inferCorrectMergingBehavior(
-            cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField, metaClient.getTableConfig());
+            cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField,
+            metaClient.getTableConfig().getTableVersion());
     cfg.recordMergeMode = mergingConfigs.getLeft();
     cfg.payloadClassName = mergingConfigs.getMiddle();
     cfg.recordMergeStrategyId = mergingConfigs.getRight();

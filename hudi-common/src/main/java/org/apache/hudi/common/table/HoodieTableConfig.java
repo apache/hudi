@@ -761,7 +761,7 @@ public class HoodieTableConfig extends HoodieConfig {
                                                                                     String payloadClassName,
                                                                                     String recordMergeStrategyId,
                                                                                     String orderingFieldName,
-                                                                                    HoodieConfig config) {
+                                                                                    HoodieTableVersion tableVersion) {
     RecordMergeMode inferredRecordMergeMode;
     String inferredPayloadClassName;
     String inferredRecordMergeStrategyId;
@@ -782,13 +782,18 @@ public class HoodieTableConfig extends HoodieConfig {
               + "strategy ID (%s).", payloadClassName, recordMergeStrategyId));
       // TODO(HUDI-8925): once payload class name is not required, remove the check on
       //  modeBasedOnStrategyId
-      if (getTableVersion(config).greaterThanOrEquals(HoodieTableVersion.EIGHT) && modeBasedOnStrategyId != CUSTOM && modeBasedOnPayload != null && modeBasedOnStrategyId != null) {
+      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+          && modeBasedOnStrategyId != CUSTOM && modeBasedOnPayload != null && modeBasedOnStrategyId != null) {
         checkArgument(modeBasedOnPayload.equals(modeBasedOnStrategyId),
             String.format("Configured payload class (%s) and record merge strategy ID (%s) conflict "
                     + "with each other. Please only set one of them in the write config.",
                 payloadClassName, recordMergeStrategyId));
       }
-      inferredRecordMergeMode = modeBasedOnStrategyId != null ? modeBasedOnStrategyId : modeBasedOnPayload;
+      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+        inferredRecordMergeMode = modeBasedOnStrategyId != null ? modeBasedOnStrategyId : modeBasedOnPayload;
+      } else {
+        inferredRecordMergeMode = modeBasedOnPayload != null ? modeBasedOnPayload : modeBasedOnStrategyId;
+      }
     }
     if (recordMergeMode != null) {
       checkArgument(inferredRecordMergeMode == recordMergeMode,
