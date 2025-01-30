@@ -20,6 +20,7 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.client.transaction.lock.NoopLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -527,6 +528,42 @@ public class TestHoodieWriteConfig {
         }), true, true, true,
         WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
         HoodieFailedWritesCleaningPolicy.LAZY, FileSystemBasedLockProviderTestClass.class.getName());
+  }
+
+  @Test
+  public void testTimeGeneratorConfig() {
+
+    HoodieWriteConfig writeConfig = createWriteConfig(new HashMap<String, String>() {
+      {
+        put(HoodieTableConfig.TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
+      }
+    });
+
+    // validate the InProcessLockProvider kicks in if no explicit lock provider is set.
+    assertEquals(InProcessLockProvider.class.getName(), writeConfig.getTimeGeneratorConfig().getLockConfiguration().getConfig().getProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
+
+    writeConfig = createWriteConfig(new HashMap<String, String>() {
+      {
+        put(HoodieTableConfig.TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
+        put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
+      }
+    });
+
+    // validate the the configured lock provider is honored by the TimeGeneratorConfig as well.
+    assertEquals(NoopLockProvider.class.getName(), writeConfig.getTimeGeneratorConfig().getLockConfiguration().getConfig().getProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
+
+    // if auto adjust lock config is enabled, for a single writer w/ all inline table services, InProcessLockProvider is overriden
+    writeConfig = createWriteConfig(new HashMap<String, String>() {
+      {
+        put(HoodieTableConfig.TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
+        put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
+        put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
+      }
+    });
+
+    // validate the InProcessLockProvider kicks in due to auto adjust lock configs
+    assertEquals(InProcessLockProvider.class.getName(), writeConfig.getTimeGeneratorConfig().getLockConfiguration().getConfig().getProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
+
   }
 
   @Test
