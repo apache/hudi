@@ -152,9 +152,12 @@ public class HoodieStreamer implements Serializable {
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
+        .setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
     Triple<RecordMergeMode, String, String> mergingConfigs =
         HoodieTableConfig.inferCorrectMergingBehavior(
-            cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField);
+            cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField, metaClient.getTableConfig());
     cfg.recordMergeMode = mergingConfigs.getLeft();
     cfg.payloadClassName = mergingConfigs.getMiddle();
     cfg.recordMergeStrategyId = mergingConfigs.getRight();

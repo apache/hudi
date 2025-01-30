@@ -1133,7 +1133,7 @@ class HoodieSparkSqlWriterInternal {
         RecordMergeMode.getValue(mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
         mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
         mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
-        optParams.getOrElse(PRECOMBINE_FIELD.key(), null))
+        optParams.getOrElse(PRECOMBINE_FIELD.key(), null), tableConfig)
       mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
       mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
       mergedParams.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), inferredMergeConfigs.getMiddle)

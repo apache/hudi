@@ -1394,7 +1394,7 @@ public class HoodieTableMetaClient implements Serializable {
 
       Triple<RecordMergeMode, String, String> mergeConfigs =
           HoodieTableConfig.inferCorrectMergingBehavior(
-              recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineField);
+              recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineField, tableConfig);
       tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
       tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
       tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
