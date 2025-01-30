@@ -20,6 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.HoodieFileIndex.collectReferencedColumns
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
@@ -81,67 +82,65 @@ class PartitionStatsIndexSupport(spark: SparkSession,
     columnStatsRecords
   }
 
-  def prunePartitions(fileIndex: HoodieFileIndex,
-                      queryFilters: Seq[Expression],
-                      queryReferencedColumns: Seq[String]): Option[Set[String]] = {
-    if (isIndexAvailable && queryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
-      if (containsAnySqlFunction(queryFilters)) {
-        // If the query contains any SQL function, skip the pruning.
-        // Expression Index will be used in such cases, if available.
-        Option.empty
-      } else {
+  def prunePartitions(fileIndex: HoodieFileIndex, queryFilters: Seq[Expression]): Option[Set[String]] = {
+    if (isIndexAvailable) {
+      // Filter out sql queries. Partition stats only supports simple queries on field attribute without any operation on the field
+      val nonSqlFilters = filterNonSqlExpressions(queryFilters)
+      val indexedCols: Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
+      // Filter out queries involving null and value count checks
+      val filteredQueryFilters: Seq[Expression] = filterExpressionsExcludingNullAndValue(nonSqlFilters, indexedCols)
+      lazy val queryReferencedColumns = collectReferencedColumns(spark, filteredQueryFilters, tableSchema)
+
+      if (filteredQueryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
         val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
         loadTransposed(queryReferencedColumns, readInMemory, Option.empty, Option.empty) {
           transposedPartitionStatsDF => {
-            val indexedCols: Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
-            if (canLookupInPSI(queryFilters, indexedCols)) {
-              try {
-                transposedPartitionStatsDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
-                val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-                  .collect()
-                  .map(_.getString(0))
-                  .toSet
-                if (allPartitions.nonEmpty) {
-                  // PARTITION_STATS index exist for all or some columns in the filters
-                  // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
-                  //       column in a filter does not have the stats available, by making sure such a
-                  //       filter does not prune any partition.
-                  // to be fixed. HUDI-8836.
-                  val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
-                  if (indexFilter.equals(TrueLiteral)) {
-                    // if there are any non indexed cols or we can't translate source expr, we can prune partitions based on col stats lookup.
-                    Some(allPartitions)
-                  } else {
-                    Some(transposedPartitionStatsDF.where(new Column(indexFilter))
-                      .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-                      .collect()
-                      .map(_.getString(0))
-                      .toSet)
-                  }
+            try {
+              transposedPartitionStatsDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
+              val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                .collect()
+                .map(_.getString(0))
+                .toSet
+              if (allPartitions.nonEmpty) {
+                // PARTITION_STATS index exist for all or some columns in the filters
+                // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
+                //       column in a filter does not have the stats available, by making sure such a
+                //       filter does not prune any partition.
+                // to be fixed. HUDI-8836.
+                val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
+                if (indexFilter.equals(TrueLiteral)) {
+                  // if there are any non indexed cols or we can't translate source expr, we can prune partitions based on col stats lookup.
+                  Some(allPartitions)
                 } else {
-                  // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
-                  Option.empty
+                  Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+                    .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                    .collect()
+                    .map(_.getString(0))
+                    .toSet)
                 }
-              } finally {
-                transposedPartitionStatsDF.unpersist()
+              } else {
+                // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
+                Option.empty
               }
-            } else { // for null filters, we can't look up in PSI.
-              Option.empty
+            } finally {
+              transposedPartitionStatsDF.unpersist()
             }
           }
         }
+      } else {
+        Option.empty
       }
     } else {
       Option.empty
     }
   }
 
-  private def canLookupInPSI(queryFilters: Seq[Expression], indexedCols: Seq[String]): Boolean = {
-    // If no queryFilter contains null/value-count filters, then we can do a lookup
-    !queryFilters.exists(containsNullOrValueCountBasedFilters(_, indexedCols))
+  private def filterExpressionsExcludingNullAndValue(queryFilters: Seq[Expression], indexedCols: Seq[String]): Seq[Expression] = {
+    // Filter queries which do not contain null/value-count filters
+    queryFilters.filter(query => !containsNullOrValueCountBasedFilters(query, indexedCols))
   }
 
-  private def containsAnySqlFunction(queryFilters: Seq[Expression]): Boolean = {
+  private def filterNonSqlExpressions(queryFilters: Seq[Expression]): Seq[Expression] = {
     val isMatchingExpression = (expr: Expression) => {
       expr.find {
         case _: UnaryExpression => true
@@ -162,7 +161,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
         case _ => false
       }.isDefined
     }
-    queryFilters.exists(isMatchingExpression)
+    queryFilters.filter(query => !isMatchingExpression(query))
   }
 }
 

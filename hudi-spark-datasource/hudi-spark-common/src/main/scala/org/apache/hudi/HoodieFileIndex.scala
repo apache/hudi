@@ -320,9 +320,8 @@ case class HoodieFileIndex(spark: SparkSession,
       } else if (isPartitionedTable && isDataSkippingEnabled) {
         // For partitioned table and no partition filters, if data skipping is enabled,
         // try using the PARTITION_STATS index to prune the partitions
-        lazy val filterReferencedColumns = collectReferencedColumns(spark, dataFilters, schema)
         val prunedPartitionPaths = new PartitionStatsIndexSupport(spark, schema, metadataConfig, metaClient)
-          .prunePartitions(this, dataFilters, filterReferencedColumns)
+          .prunePartitions(this, dataFilters)
         if (prunedPartitionPaths.nonEmpty) {
           try {
             (true, prunedPartitionPaths.get.map(e => convertToPartitionPath(e)).toSeq)
@@ -333,6 +332,7 @@ case class HoodieFileIndex(spark: SparkSession,
           }
         } else if (isExpressionIndexEnabled) {
           val expressionIndexSupport = getExpressionIndexSupport
+          lazy val filterReferencedColumns = collectReferencedColumns(spark, dataFilters, schema)
           val exprIndexPrunedPartitionsOpt = expressionIndexSupport.prunePartitions(this, dataFilters, filterReferencedColumns)
           if (exprIndexPrunedPartitionsOpt.nonEmpty) {
             (true, exprIndexPrunedPartitionsOpt.get.map(e => convertToPartitionPath(e)).toSeq)
