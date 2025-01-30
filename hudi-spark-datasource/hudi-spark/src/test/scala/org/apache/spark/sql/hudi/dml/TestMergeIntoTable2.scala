@@ -24,7 +24,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-
 import org.slf4j.LoggerFactory
 
 class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
@@ -1254,7 +1253,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |  ts BIGINT
                |) using hudi
                |TBLPROPERTIES (
-               |  type = 'cow',
+               |  type = '$tableType',
                |  primaryKey = 'id',
                |  preCombineField = 'ts',
                |  recordMergeMode = '$recordMergeMode'
