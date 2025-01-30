@@ -1384,14 +1384,12 @@ public class HoodieTableMetaClient implements Serializable {
       tableConfig.setValue(HoodieTableConfig.NAME, tableName);
       tableConfig.setValue(HoodieTableConfig.TYPE, tableType.name());
 
-      if (null != tableVersion) {
-        tableConfig.setTableVersion(tableVersion);
-        tableConfig.setInitialVersion(tableVersion);
-      } else {
+      if (null == tableVersion) {
         tableVersion = HoodieTableVersion.current();
-        tableConfig.setTableVersion(HoodieTableVersion.current());
-        tableConfig.setInitialVersion(HoodieTableVersion.current());
       }
+
+      tableConfig.setTableVersion(tableVersion);
+      tableConfig.setInitialVersion(tableVersion);
 
       Triple<RecordMergeMode, String, String> mergeConfigs =
           HoodieTableConfig.inferCorrectMergingBehavior(
