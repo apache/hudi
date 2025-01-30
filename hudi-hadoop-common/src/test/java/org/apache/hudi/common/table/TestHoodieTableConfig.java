@@ -440,7 +440,8 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   public void testInferMergeMode(RecordMergeMode inputMergeMode, String inputPayloadClass,
                                  String inputMergeStrategy, String orderingFieldName,
                                  boolean shouldThrow, RecordMergeMode outputMergeMode,
-                                 String outputPayloadClass, String outputMergeStrategy) {
+                                 String outputPayloadClass, String outputMergeStrategy) throws IOException {
+    metaClient = HoodieTestUtils.init(basePath);
     if (shouldThrow) {
       assertThrows(IllegalArgumentException.class,
           () -> HoodieTableConfig.inferCorrectMergingBehavior(
