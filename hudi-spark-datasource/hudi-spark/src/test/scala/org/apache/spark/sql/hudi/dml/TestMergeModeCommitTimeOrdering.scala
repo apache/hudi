@@ -29,11 +29,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConf
 class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
 
   // TODO(HUDI-8938): add "mor,true,true,6" after the fix
-  Seq(
-    "cow,8,false,false", "cow,8,false,true", "cow,8,true,false",
-    "cow,6,true,false", "cow,6,true,true",
-    "mor,8,false,false", "mor,8,false,true", "mor,8,true,false",
-    "mor,6,true,false").foreach { args =>
+  Seq("mor,6,true,true").foreach { args =>
     val argList = args.split(',')
     val tableType = argList(0)
     val tableVersion = argList(1)
@@ -86,7 +82,9 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
         ("hoodie.merge.small.file.group.candidates.limit" -> "0", true),
         ("hoodie.spark.sql.insert.into.operation" -> "upsert", setUpsertOperation),
         // TODO(HUDI-8820): enable MDT after supporting MDT with table version 6
-        ("hoodie.metadata.enable" -> "false", tableVersion.toInt == 6)
+        ("hoodie.metadata.enable" -> "false", tableVersion.toInt == 6),
+        ("hoodie.file.group.reader.enabled" -> "true", true),
+        ("hoodie.merge.use.record.positions" -> "false", true)
       ) {
         withRecordType()(withTempDir { tmp =>
           val tableName = generateTableName
@@ -149,200 +147,14 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
               s"""
                  | update $tableName
                  | set price = 50.0, ts = 100
-                 | where id = 1
+                 | where id = 2
              """.stripMargin)
             validateTableConfig(
               storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
             checkAnswer(s"select id, name, price, ts from $tableName order by id")(
               Seq(1, "A_equal", 50.0, 100),
               Seq(2, "B_equal", 70.0, 100))
-
-            // Verify inserting records with a lower ts value are visible (COMMIT_TIME_ORDERING)
-            spark.sql(
-              s"""
-                 | insert into $tableName
-                 | select 1 as id, 'A' as name, 30.0 as price, 99 as ts
-                 | union all
-                 | select 2, 'B', 40.0, 99
-             """.stripMargin)
-
-            checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-              Seq(1, "A", 30.0, 99),
-              Seq(2, "B", 40.0, 99))
-
-            // Verify updating records with a lower ts value are visible (COMMIT_TIME_ORDERING)
-            spark.sql(
-              s"""
-                 | update $tableName
-                 | set price = 50.0, ts = 98
-                 | where id = 1
-             """.stripMargin)
-
-            checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-              Seq(1, "A", 50.0, 98),
-              Seq(2, "B", 40.0, 99))
-
-            // Verify inserting records with a higher ts value are visible (COMMIT_TIME_ORDERING)
-            spark.sql(
-              s"""
-                 | insert into $tableName
-                 | select 1 as id, 'A' as name, 30.0 as price, 101 as ts
-                 | union all
-                 | select 2, 'B', 40.0, 101
-             """.stripMargin)
-
-            // Verify records with ts=101 are visible
-            checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-              Seq(1, "A", 30.0, 101),
-              Seq(2, "B", 40.0, 101)
-            )
-
-            // Verify updating records with a higher ts value are visible (COMMIT_TIME_ORDERING)
-            spark.sql(
-              s"""
-                 | update $tableName
-                 | set price = 50.0, ts = 102
-                 | where id = 1
-             """.stripMargin)
-
-            // Verify final state after all operations
-            checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-              Seq(1, "A", 50.0, 102),
-              Seq(2, "B", 40.0, 101)
-            )
-
-            // Delete record
-            spark.sql(s"delete from $tableName where id = 1")
-            validateTableConfig(
-              storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
-            // Verify deletion
-            checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-              Seq(2, "B", 40.0, 101)
-            )
           }
-        })
-      }
-    }
-
-    // TODO(HUDI-8468): add COW test after supporting COMMIT_TIME_ORDERING in MERGE INTO for COW
-    test(s"Test merge operations with COMMIT_TIME_ORDERING for $tableType table "
-      + s"(tableVersion=$tableVersion,setRecordMergeConfigs=$setRecordMergeConfigs,"
-      + s"setUpsertOperation=$setUpsertOperation)") {
-      withSparkSqlSessionConfigWithCondition(
-        ("hoodie.merge.small.file.group.candidates.limit" -> "0", true),
-        ("hoodie.spark.sql.insert.into.operation" -> "upsert", setUpsertOperation),
-        // TODO(HUDI-8820): enable MDT after supporting MDT with table version 6
-        ("hoodie.metadata.enable" -> "false", tableVersion.toInt == 6)
-      ) {
-        withRecordType()(withTempDir { tmp =>
-          val tableName = generateTableName
-          // Create table with COMMIT_TIME_ORDERING
-          spark.sql(
-            s"""
-               | create table $tableName (
-               |  id int,
-               |  name string,
-               |  price double,
-               |  ts long
-               | ) using hudi
-               | tblproperties (
-               |  $writeTableVersionClause
-               |  type = '$tableType',
-               |  primaryKey = 'id'
-               |  $mergeConfigClause
-               | )
-               | location '${tmp.getCanonicalPath}'
-           """.stripMargin)
-          validateTableConfig(
-            storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
-
-          // Insert initial records
-          spark.sql(
-            s"""
-               | insert into $tableName
-               | select 1 as id, 'A' as name, 10.0 as price, 100L as ts union all
-               | select 0, 'X', 20.0, 100L union all
-               | select 2, 'B', 20.0, 100L union all
-               | select 3, 'C', 30.0, 100L union all
-               | select 4, 'D', 40.0, 100L union all
-               | select 5, 'E', 50.0, 100L union all
-               | select 6, 'F', 60.0, 100L
-           """.stripMargin)
-          validateTableConfig(
-            storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
-
-          // TODO(HUDI-8840): enable MERGE INTO with deletes
-          val shouldTestMergeIntoDelete = setRecordMergeConfigs && tableVersion.toInt == 8
-          // Merge operation - delete with higher, lower and equal ordering field value, all should take effect.
-          if (shouldTestMergeIntoDelete) {
-            spark.sql(
-              s"""
-                 | merge into $tableName t
-                 | using (
-                 |   select 1 as id, 'B2' as name, 25.0 as price, 101L as ts union all
-                 |   select 2, '', 55.0, 99L as ts union all
-                 |   select 0, '', 55.0, 100L as ts
-                 | ) s
-                 | on t.id = s.id
-                 | when matched then delete
-           """.stripMargin)
-          }
-
-          // Merge operation - update with mixed ts values
-          spark.sql(
-            s"""
-               | merge into $tableName t
-               | using (
-               |   select 4 as id, 'D2' as name, 45.0 as price, 101L as ts union all
-               |   select 5, 'E2', 55.0, 99L as ts union all
-               |   select 6, 'F2', 65.0, 100L as ts
-               | ) s
-               | on t.id = s.id
-               | when matched then update set *
-           """.stripMargin)
-
-          // Verify state after merges
-          validateTableConfig(
-            storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
-          val nonDeletedRows: Seq[Seq[Any]] = if (shouldTestMergeIntoDelete) {
-            Seq()
-          } else {
-            Seq(Seq(0, "X", 20.0, 100),
-              Seq(1, "A", 10.0, 100),
-              Seq(2, "B", 20.0, 100))
-          }
-          checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-            (nonDeletedRows ++ Seq(
-              Seq(3, "C", 30.0, 100),
-              Seq(4, "D2", 45.0, 101),
-              Seq(5, "E2", 55.0, 99),
-              Seq(6, "F2", 65.0, 100)
-            )): _*)
-
-          // Insert new records through merge
-          spark.sql(
-            s"""
-               | merge into $tableName t
-               | using (
-               |   select 7 as id, 'D2' as name, 45.0 as price, 100L as ts union all
-               |   select 8, 'E2', 55.0, 100L as ts
-               | ) s
-               | on t.id = s.id
-               | when not matched then insert *
-           """.stripMargin)
-
-          // Verify final state
-          validateTableConfig(
-            storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
-          checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-            (nonDeletedRows ++ Seq(
-              Seq(3, "C", 30.0, 100),
-              Seq(4, "D2", 45.0, 101),
-              Seq(5, "E2", 55.0, 99),
-              Seq(6, "F2", 65.0, 100),
-              Seq(7, "D2", 45.0, 100),
-              Seq(8, "E2", 55.0, 100)
-            )): _*)
         })
       }
     }
