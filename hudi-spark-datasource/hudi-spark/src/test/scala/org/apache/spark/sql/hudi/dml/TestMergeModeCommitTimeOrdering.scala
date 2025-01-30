@@ -317,8 +317,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
               Seq(4, "D2", 45.0, 101),
               Seq(5, "E2", 55.0, 99),
               Seq(6, "F2", 65.0, 100)
-            )): _*,
-          )
+            )): _*)
 
           // Insert new records through merge
           spark.sql(
@@ -343,8 +342,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
               Seq(6, "F2", 65.0, 100),
               Seq(7, "D2", 45.0, 100),
               Seq(8, "E2", 55.0, 100)
-            )): _*
-          )
+            )): _*)
         })
       }
     }
