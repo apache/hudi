@@ -32,7 +32,7 @@ object SparkConfigUtils {
    * @return String value if the config exists; default String value if the config does not exist
    *         and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
    */
-  def getStringWithAltKeys[T](props: Map[String, String], configProperty: ConfigProperty[T]): String = {
+  def getStringWithAltKeys[T](props: scala.collection.Map[String, String], configProperty: ConfigProperty[T]): String = {
     ConfigUtils.getStringWithAltKeys(JFunction.toJavaFunction[String, Object](key => props.getOrElse(key, null)), configProperty)
   }
 
