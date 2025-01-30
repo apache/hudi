@@ -640,10 +640,15 @@ public class HoodieStreamer implements Serializable {
       LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
 
+    int exitCode = 0;
     try {
       new HoodieStreamer(cfg, jssc).sync();
+    } catch (Exception e) {
+      LOG.error("Failed to execute HoodieStreamer : {}", e.getMessage());
+      exitCode = 1;
+      throw e;
     } finally {
-      jssc.stop();
+      jssc.sc().stop(exitCode);
     }
   }
 
