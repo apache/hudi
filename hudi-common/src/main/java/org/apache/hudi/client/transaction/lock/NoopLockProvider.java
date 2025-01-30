@@ -31,9 +31,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * NoopLockProvider as the name suggests, is a no op lock provider. Any caller asking for a lock will be able to get hold of the lock.
- * This is not meant to be used a producation grade lock providers. This is meant to be used for Hudi's internal operations.
- * For eg: During upgrade, we have nested lock situations and we leverage this {@code NoopLockProvider} for any operations we
- * might want to do within the upgradeHandler blocks to avoid re-entrant situations. Not all lock providers might support re-entrancy and during upgrade,
+ * This is not meant to be used a production grade lock providers. This is meant to be used for Hudi's internal operations.
+ * For eg: During upgrade, we have nested lock situations, and we leverage this {@code NoopLockProvider} for any operations we
+ * might want to do within the upgradeHandler blocks to avoid re-entrant situations. Not all lock providers support re-entrance and during upgrade,
  * it is expected to have a single writer to the Hudi table of interest.
  */
 public class NoopLockProvider implements LockProvider<ReentrantReadWriteLock>, Serializable {
