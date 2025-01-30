@@ -23,10 +23,12 @@ import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
+import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
 
 import org.apache.hadoop.fs.Path
@@ -37,6 +39,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageConta
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 import org.slf4j.LoggerFactory
@@ -323,14 +326,22 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  protected def withSparkSqlSessionConfig(configNameValues: (String, String)*)(f: => Unit): Unit = {
+  protected def withSparkSqlSessionConfig(configNameValues: (String, String)*
+                                         )(f: => Unit): Unit = {
+    withSparkSqlSessionConfigWithCondition(configNameValues.map(e => (e, true)): _*)(f)
+  }
+
+  protected def withSparkSqlSessionConfigWithCondition(configNameValues: ((String, String), Boolean)*
+                                                      )(f: => Unit): Unit = {
     try {
-      configNameValues.foreach { case (configName, configValue) =>
-        spark.sql(s"set $configName=$configValue")
+      configNameValues.foreach { case ((configName, configValue), condition) =>
+        if (condition) {
+          spark.sql(s"set $configName=$configValue")
+        }
       }
       f
     } finally {
-      configNameValues.foreach { case (configName, _) =>
+      configNameValues.foreach { case ((configName, configValue), condition) =>
         spark.sql(s"reset $configName")
       }
     }
@@ -375,7 +386,19 @@ object HoodieSparkSqlTestBase {
       .getActiveTimeline.getInstantDetails(cleanInstant).get)
   }
 
+  def validateTableConfig(storage: HoodieStorage,
+                          basePath: String,
+                          expectedConfigs: Map[String, String],
+                          nonExistentConfigs: Seq[String]): Unit = {
+    val tableConfig = HoodieTableConfig.loadFromHoodieProps(storage, basePath)
+    expectedConfigs.foreach(e => {
+      assertEquals(e._2, tableConfig.getString(e._1),
+        s"Table config ${e._1} should be ${e._2} but is ${tableConfig.getString(e._1)}")
+    })
+    nonExistentConfigs.foreach(e => assertFalse(
+      tableConfig.contains(e), s"$e should not be present in the table config"))
+  }
+
   private def checkMessageContains(e: Throwable, text: String): Boolean =
     e.getMessage.trim.contains(text.trim)
-
 }

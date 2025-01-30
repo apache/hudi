@@ -28,14 +28,15 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, RECORD_MERGE_MODE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
+import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
 import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
+
 import org.apache.avro.Schema
 import org.apache.spark.sql._
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, MatchCast}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
@@ -46,13 +47,14 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
-import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{CoercedAttributeReference, encodeAsBase64String, stripCasting, toStructType, userGuideString, validateTargetTableAttrExistsInAssignments}
+import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{encodeAsBase64String, stripCasting, toStructType, userGuideString, validateTargetTableAttrExistsInAssignments, CoercedAttributeReference}
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.Base64
+
 import scala.collection.JavaConverters._
 
 /**
@@ -817,8 +819,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // Precombine field and record key field must be present in the assignment clause of all insert actions for event time ordering mode.
     // Check has no effect if we don't have such fields in target table or we don't have insert actions
     // Please note we are relying on merge mode in the table config as writer merge mode is always "CUSTOM" for MIT.
-    if (getStringWithAltKeys(props.asJava.asInstanceOf[java.util.Map[String, Object]], HoodieTableConfig.RECORD_MERGE_MODE)
-          .equals(RecordMergeMode.EVENT_TIME_ORDERING.name())) {
+    if (RecordMergeMode.EVENT_TIME_ORDERING.name()
+      .equals(getStringWithAltKeys(props.asJava.asInstanceOf[java.util.Map[String, Object]],
+        HoodieTableConfig.RECORD_MERGE_MODE))) {
       insertActions.foreach(action =>
         hoodieCatalogTable.preCombineKey.foreach(
           field => {
