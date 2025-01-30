@@ -109,6 +109,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()), HoodieTableVersion.SIX);
     try {
       HoodieTableMetaClient.createTableLayoutOnStorage(context.getStorageConf(), new StoragePath(config.getBasePath()), config.getProps(), TimelineLayoutVersion.VERSION_2, false);
+      LOG.info(">>> Created table layout on storage for timeline layout version {}", TimelineLayoutVersion.VERSION_2);
     } catch (IOException e) {
       LOG.error("Failed to create table layout on storage for timeline layout version {}", TimelineLayoutVersion.VERSION_2, e);
       throw new HoodieIOException("Failed to create table layout on storage", e);
@@ -121,6 +122,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     setInitialVersion(tableConfig, tablePropsToAdd);
     upgradeKeyGeneratorType(tableConfig, tablePropsToAdd);
     upgradeBootstrapIndexType(tableConfig, tablePropsToAdd);
+    LOG.info(">>> Upgraded table properties: {}", tablePropsToAdd);
 
     // Handle timeline upgrade:
     //  - Rewrite instants in active timeline to new format
@@ -140,13 +142,17 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       CommitMetadataSerDeV2 commitMetadataSerDeV2 = new CommitMetadataSerDeV2();
       CommitMetadataSerDeV1 commitMetadataSerDeV1 = new CommitMetadataSerDeV1();
       ActiveTimelineV2 activeTimelineV2 = new ActiveTimelineV2(metaClient);
+      LOG.info(">>> Upgrading {} instants in active timeline", instants.size());
       context.map(instants, instant -> {
         String originalFileName = instantFileNameGenerator.getFileName(instant);
         return upgradeActiveTimelineInstant(instant, originalFileName, metaClient, commitMetadataSerDeV1, commitMetadataSerDeV2, activeTimelineV2);
       }, instants.size());
+      LOG.info(">>> Upgraded {} instants in active timeline", instants.size());
     }
 
+    LOG.info(">>> Upgrading to LSM timeline");
     upgradeToLSMTimeline(table, context, config);
+    LOG.info(">>> Upgraded to LSM timeline");
 
     return tablePropsToAdd;
   }

@@ -59,6 +59,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       hudiOptsWithoutLockConfigs
     }
 
+    println(">>> write data")
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
@@ -72,6 +73,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
 
     // downgrade table props to version seven
     // assert table version is seven and the partition fields in table config does not have partition type
+    println(">>> downgrade the table")
     new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
       .run(HoodieTableVersion.SEVEN, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -82,10 +84,12 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
 
     // auto upgrade the table
     // assert table version is eight and the partition fields in table config has partition type
+    println(">>> auto upgrade the table and write more data")
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
       validate = false)
+    println(">>> auto upgrade and commit done")
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)

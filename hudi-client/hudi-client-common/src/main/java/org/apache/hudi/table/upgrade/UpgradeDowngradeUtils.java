@@ -197,6 +197,7 @@ public class UpgradeDowngradeUtils {
           }
         }
       }
+      LOG.info(">>> Rollback and compaction completed successfully");
     } catch (Exception e) {
       throw new HoodieException(e);
     }
