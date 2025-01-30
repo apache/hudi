@@ -624,7 +624,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       Triple<RecordMergeMode, String, String> mergeCfgs =
           HoodieTableConfig.inferCorrectMergingBehavior(
               cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField,
-              HoodieTableVersion.EIGHT);
+              HoodieTableVersion.current());
       cfg.recordMergeMode = mergeCfgs.getLeft();
       cfg.payloadClassName = mergeCfgs.getMiddle();
       cfg.recordMergeStrategyId = mergeCfgs.getRight();
