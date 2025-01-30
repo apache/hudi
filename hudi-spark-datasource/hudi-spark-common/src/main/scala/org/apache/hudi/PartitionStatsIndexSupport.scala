@@ -83,7 +83,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
   }
 
   def prunePartitions(fileIndex: HoodieFileIndex, queryFilters: Seq[Expression]): Option[Set[String]] = {
-    if (isIndexAvailable) {
+    if (isIndexAvailable && queryFilters.nonEmpty) {
       // Filter out sql queries. Partition stats only supports simple queries on field attribute without any operation on the field
       val nonSqlFilters = filterNonSqlExpressions(queryFilters)
       val indexedCols: Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
@@ -109,7 +109,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
                 // to be fixed. HUDI-8836.
                 val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
                 if (indexFilter.equals(TrueLiteral)) {
-                  // if there are any non indexed cols or we can't translate source expr, we can prune partitions based on col stats lookup.
+                  // if there are any non indexed cols or we can't translate source expr, we cannot prune partitions based on col stats lookup.
                   Some(allPartitions)
                 } else {
                   Some(transposedPartitionStatsDF.where(new Column(indexFilter))
