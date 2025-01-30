@@ -106,6 +106,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.HoodieRowMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
@@ -149,6 +150,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -187,11 +189,19 @@ import static org.mockito.Mockito.when;
 public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   private static final String CLUSTERING_FAILURE = "CLUSTERING FAILURE";
+  private static final String CLEANING_FAILURE = "CLEANING FAILURE";
   private static final Map<String, String> STRATEGY_PARAMS = new HashMap<String, String>() {
     {
       put("sortColumn", "record_key");
     }
   };
+  private Function<HoodieWriteConfig, BaseHoodieWriteClient> createBrokenClusteringClient(Throwable throwable) {
+    return config -> new WriteClientBrokenClustering<>(context, config, throwable);
+  }
+
+  private Function<HoodieWriteConfig, BaseHoodieWriteClient> createBrokenCleaningClient(Throwable throwable) {
+    return config -> new WriteClientBrokenClean<>(context, config, throwable);
+  }
 
   private static Stream<Arguments> smallInsertHandlingParams() {
     return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
@@ -1507,7 +1517,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @Test
   public void testAndValidateClusteringOutputFiles() throws IOException {
     String partitionPath = "2015/03/16";
-    testInsertTwoBatches(true, partitionPath);
+    testInsertTwoBatches(true, partitionPath, createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)));
 
     // Trigger clustering
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withEmbeddedTimelineServerEnabled(false).withAutoCommit(false)
@@ -1579,7 +1589,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testInlineScheduleClustering(boolean scheduleInlineClustering) throws IOException {
-    testInsertTwoBatches(true);
+    testInsertTwoBatches(true, createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)));
 
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
@@ -1803,35 +1813,62 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
                                                      boolean completeClustering, boolean assertSameFileIds, String validatorClasses,
                                                      String sqlQueryForEqualityValidation, String sqlQueryForSingleResultValidation,
                                                      Properties properties) throws Exception {
-    Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> allRecords = testInsertTwoBatches(populateMetaFields);
+    Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> allRecords = testInsertTwoBatches(populateMetaFields, createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)));
     testClustering(clusteringConfig, populateMetaFields, completeClustering, assertSameFileIds, validatorClasses, sqlQueryForEqualityValidation, sqlQueryForSingleResultValidation, allRecords,
         properties);
     return allRecords.getLeft().getLeft();
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testFailWritesOnInlineTableServiceExceptions(boolean shouldFail) throws IOException {
+  protected void testFailWritesOnInlineTableServiceThrowable(
+      boolean shouldFailOnException, boolean actuallyFailed, Function createBrokenClusteringClientFn, String error) throws IOException {
     try {
       Properties properties = new Properties();
-      properties.setProperty("hoodie.fail.writes.on.inline.table.service.exception", String.valueOf(shouldFail));
+      properties.setProperty("hoodie.fail.writes.on.inline.table.service.exception", String.valueOf(shouldFailOnException));
       properties.setProperty("hoodie.auto.commit", "false");
       properties.setProperty("hoodie.clustering.inline.max.commits", "1");
       properties.setProperty("hoodie.clustering.inline", "true");
-      testInsertTwoBatches(true, "2015/03/16", properties, true);
-      assertFalse(shouldFail);
-    } catch (HoodieException e) {
-      assertEquals(CLUSTERING_FAILURE, e.getMessage());
-      assertTrue(shouldFail);
+      properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+      testInsertTwoBatches(true, "2015/03/16", properties, true, createBrokenClusteringClientFn);
+      assertFalse(actuallyFailed);
+    } catch (HoodieException | Error e) {
+      assertEquals(error, e.getMessage());
+      assertTrue(actuallyFailed);
     }
   }
 
-  private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields) throws IOException {
-    return testInsertTwoBatches(populateMetaFields, "2015/03/16");
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testFailWritesOnInlineTableServiceExceptions(boolean shouldFail) throws IOException {
+    testFailWritesOnInlineTableServiceThrowable(shouldFail, shouldFail, createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)), CLUSTERING_FAILURE);
   }
 
-  private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields, String partitionPath) throws IOException {
-    return testInsertTwoBatches(populateMetaFields, partitionPath, new Properties(), false);
+  @Test
+  void testFailWritesOnInlineTableServiceErrors() throws IOException {
+    testFailWritesOnInlineTableServiceThrowable(false, true, createBrokenClusteringClient(new OutOfMemoryError(CLUSTERING_FAILURE)), CLUSTERING_FAILURE);
+  }
+
+  @Test
+  void testFailWritesOnInlineCleanExceptions() throws IOException {
+    testFailWritesOnInlineTableServiceThrowable(true, true, createBrokenCleaningClient(new HoodieException(CLEANING_FAILURE)), CLEANING_FAILURE);
+    testFailWritesOnInlineTableServiceThrowable(false, true, createBrokenCleaningClient(new HoodieException(CLEANING_FAILURE)), CLEANING_FAILURE);
+    testFailWritesOnInlineTableServiceThrowable(true, true, createBrokenCleaningClient(new OutOfMemoryError(CLEANING_FAILURE)), CLEANING_FAILURE);
+  }
+
+  private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields, Function createBrokenClusteringClientFn) throws IOException {
+    return testInsertTwoBatches(populateMetaFields, "2015/03/16", createBrokenClusteringClientFn);
+  }
+
+  private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(
+      boolean populateMetaFields, String partitionPath, Function createBrokenClusteringClientFn) throws IOException {
+    return testInsertTwoBatches(populateMetaFields, partitionPath, new Properties(), false, createBrokenClusteringClientFn);
+  }
+
+  protected Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields, String partitionPath, Properties props, boolean failInlineClustering,
+                                                                                                      Function createBrokenClusteringClientFn) throws IOException {
+    // create config to not update small files.
+    HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false, populateMetaFields,
+        populateMetaFields ? props : getPropertiesForKeyGen());
+    return insertTwoBatches(getHoodieWriteClient(config), (SparkRDDWriteClient) createBrokenClusteringClientFn.apply(config), populateMetaFields, partitionPath, failInlineClustering);
   }
 
   /**
@@ -1840,20 +1877,18 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
    * 2. Commit instants of the two batches.
    * 3. List of new file group ids that were written in the two batches.
    */
-  private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields, String partitionPath, Properties props,
-                                                                                                    boolean failInlineClustering) throws IOException {
-    // create config to not update small files.
-    HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false, populateMetaFields,
-        populateMetaFields ? props : getPropertiesForKeyGen());
+  protected Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> insertTwoBatches(
+      SparkRDDWriteClient writeClient, SparkRDDWriteClient brokenClusteringClient, boolean populateMetaFields,
+      String partitionPath, boolean failInlineClustering) throws IOException {
+
     SparkRDDWriteClient client;
     if (failInlineClustering) {
-      if (null != writeClient) {
+      if (writeClient != null) {
         writeClient.close();
-        writeClient = null;
       }
-      client = new WriteClientBrokenClustering(context, config);
+      client = brokenClusteringClient;
     } else {
-      client = getHoodieWriteClient(config);
+      client = writeClient;
     }
 
     dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
@@ -3014,19 +3049,43 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
-  public static class WriteClientBrokenClustering<T extends HoodieRecordPayload> extends org.apache.hudi.client.SparkRDDWriteClient<T> {
+  public static class WriteClientBrokenBase<T extends HoodieRecordPayload> extends org.apache.hudi.client.SparkRDDWriteClient<T> {
+    protected final Throwable throwable;
 
-    public WriteClientBrokenClustering(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    public WriteClientBrokenBase(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
       super(context, clientConfig);
+      this.throwable = throwable;
+    }
+  }
+
+  public static class WriteClientBrokenClustering<T extends HoodieRecordPayload> extends WriteClientBrokenBase<T> {
+    public WriteClientBrokenClustering(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
+      super(context, clientConfig, throwable);
     }
 
     @Override
-    protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
+    protected void runTableServicesInlineInternal(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
       if (config.inlineClusteringEnabled()) {
-        throw new HoodieException(CLUSTERING_FAILURE);
+        if (throwable instanceof Error) {
+          throw (Error) throwable;
+        }
+        throw (HoodieException) throwable;
       }
     }
+  }
 
+  public static class WriteClientBrokenClean<T extends HoodieRecordPayload> extends WriteClientBrokenBase<T> {
+    public WriteClientBrokenClean(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
+      super(context, clientConfig, throwable);
+    }
+
+    @Override
+    protected void autoCleanOnCommit() {
+      if (throwable instanceof Error) {
+        throw (Error) throwable;
+      }
+      throw (HoodieException) throwable;
+    }
   }
 
   /**
