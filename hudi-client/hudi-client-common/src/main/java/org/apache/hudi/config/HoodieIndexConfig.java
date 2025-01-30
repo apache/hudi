@@ -147,6 +147,14 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "When true, bucketized bloom filtering is enabled. "
           + "This reduces skew seen in sort based bloom index lookup");
 
+  public static final ConfigProperty<String> BLOOM_INDEX_FILE_GROUP_ID_KEY_SORT_PARTITIONER = ConfigProperty
+      .key("hoodie.bloom.index.fileId.key.sort.partitioner")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("Only applies if index type is BLOOM. "
+          + "When true, fileId and key sort based partitioning is enabled "
+          + "This reduces skew seen in bucket based bloom index lookup");
+
   public static final ConfigProperty<String> SIMPLE_INDEX_USE_CACHING = ConfigProperty
       .key("hoodie.simple.index.use.caching")
       .defaultValue("true")
@@ -617,6 +625,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder bloomIndexBucketizedChecking(boolean bucketizedChecking) {
       hoodieIndexConfig.setValue(BLOOM_INDEX_BUCKETIZED_CHECKING, String.valueOf(bucketizedChecking));
+      return this;
+    }
+
+    public Builder bloomIndexFileGroupIdKeySortPartitioner(boolean fileGroupIdKeySortPartitioner) {
+      hoodieIndexConfig.setValue(BLOOM_INDEX_FILE_GROUP_ID_KEY_SORT_PARTITIONER, String.valueOf(fileGroupIdKeySortPartitioner));
       return this;
     }
 
