@@ -65,6 +65,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -76,6 +77,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -87,6 +89,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.HoodieSparkClientTestHarness.buildProfile;
@@ -226,7 +229,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   }
 
   @Test
-  public void testUpsertPartitionerWithTableVersion6() throws Exception {
+  public void testUpsertPartitionerWithTableVersionSix() throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     cfgBuilder.withWriteTableVersion(6);
@@ -281,6 +284,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> newRecords = dataGen.generateUpdates(newCommitTime, records);
     List<WriteStatus> statuses = client.upsert(jsc().parallelize(newRecords), newCommitTime).collect();
+    // validate the data itself
+    validateNewData(newRecords);
     assertNoWriteErrors(statuses);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -313,6 +318,25 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
           }
         }
     );
+  }
+
+  private void validateNewData(List<HoodieRecord> newRecords) {
+    Dataset<Row> inputDf = spark().read().json(jsc().parallelize(recordsToStrings(newRecords), 2)).drop("partition");
+    // get keys from the dataframe
+    List<String> updatedKeys = inputDf.select("_row_key").as(Encoders.STRING()).collectAsList();
+    Dataset<Row> outputDf = spark().read().format("hudi").load(basePath());
+    // drop metadata columns
+    outputDf = outputDf.drop(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+        HoodieRecord.FILENAME_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
+    // filter the dataframe for updatedKeys only
+    outputDf = outputDf.filter(outputDf.col("_row_key").isin(updatedKeys.toArray()));
+    // assert that the dataframe is equal to the expected dataframe
+    // NOTE: we have excluded some columns from comparison such as map, date and array type fields as they were incompatible
+    // For example below is what data generated looks like vs what is read from the table (check `city_to_state` map: [CA] vs Map(LA -> CA))
+    //  [false,029c1e56-3c03-42e3-a2eb-a45addd5b671,0.5550830309956531,0.013823731501093062,[CA],15,1322460250,1053705246,driver-002,0.8563083971473885,0.7050871729430999,[39.649862113946796,USD],WrappedArray(0, 0, 8, 19, -72),Canada,2015/03/17,rider-002,-5190452608208752867,0,WrappedArray([88.29247239885966,USD]),BLACK,0.7458226]
+    //  [false,029c1e56-3c03-42e3-a2eb-a45addd5b671,0.5550830309956531,0.013823731501093062,Map(LA -> CA),1970-01-16,1322460250,1053705246,driver-002,0.8563083971473885,0.7050871729430999,[39.649862113946796,USD],0.529336,[B@372d7420,2015/03/17,rider-002,-5190452608208752867,0,WrappedArray([88.29247239885966,USD]),BLACK,0.7458226]
+    assertTrue(areDataframesEqual(inputDf, outputDf, new HashSet<>(Arrays.asList("_hoodie_is_deleted", "_row_key", "begin_lat", "begin_lon",
+        "current_ts", "distance_in_meters", "driver", "end_lat", "end_lon", "fare"))), "Dataframe mismatch");
   }
 
   // TODO: Enable metadata virtual keys in this test once the feature HUDI-2593 is completed
