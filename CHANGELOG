@@ -582,3 +582,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-01-29 16:03:51] [release-v1.82.0] ---
 [ENG-19873][INTERNAL] Conditional write lock scaffolding (#1166)
 [AUDIT-1146]: Changelog for release-v1.81.0 (#1165)
+
+--- [2025-01-31 16:03:37] [release-v1.83.0] ---
+[ENG-20641][INTERNAL] Remove validations for clustering metadata (#1153)
+[ENG-19658][HUDI-8804] clean and archival should also be in try-catch block (#1113)
+[AUDIT-1071]: Changelog for release-v1.82.0 (#1170)
