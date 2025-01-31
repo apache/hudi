@@ -172,9 +172,20 @@ public class DataSourceTestUtils {
         .getLatestCompletionTime().orElse(null);
   }
 
+  public static String latestCommitRequestTime(HoodieStorage storage, String basePath) {
+    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath)
+        .lastInstant().map(instant -> instant.requestedTime()).orElse(null);
+  }
+
   public static String latestDeltaCommitCompletionTime(HoodieStorage storage, String basePath) {
     return HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath)
         .filter(instant -> HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
         .getLatestCompletionTime().orElse(null);
+  }
+
+  public static String latestDeltaCommitRequest(HoodieStorage storage, String basePath) {
+    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath)
+        .filter(instant -> HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
+        .lastInstant().map(instant -> instant.requestedTime()).orElse(null);
   }
 }

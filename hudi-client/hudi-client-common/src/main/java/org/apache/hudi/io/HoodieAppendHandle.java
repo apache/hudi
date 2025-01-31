@@ -178,11 +178,12 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         .map(HoodieBaseFile::getCommitTime);
   }
 
-  private void populateWriteStat(HoodieRecord record, HoodieDeltaWriteStat deltaWriteStat) {
+  private Option<FileSlice> populateWriteStatAndFetchFileSlice(HoodieRecord record, HoodieDeltaWriteStat deltaWriteStat) {
     HoodieTableVersion tableVersion = hoodieTable.version();
     String prevCommit;
     String baseFile = "";
     List<String> logFiles = new ArrayList<>();
+    Option<FileSlice> fileSlice = Option.empty();
 
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       // table versions 8 and greater.
@@ -190,7 +191,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
         // the cdc reader needs the base file metadata to have deterministic update sequence.
         TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-        Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
+        fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
         if (fileSlice.isPresent()) {
           prevCommit = fileSlice.get().getBaseInstantTime();
           baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
@@ -200,7 +201,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     } else {
       // older table versions.
       TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-      Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
+      fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
       if (fileSlice.isPresent()) {
         prevCommit = fileSlice.get().getBaseInstantTime();
         baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
@@ -218,6 +219,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     deltaWriteStat.setPrevCommit(prevCommit);
     deltaWriteStat.setBaseFile(baseFile);
     deltaWriteStat.setLogFiles(logFiles);
+    return fileSlice;
   }
 
   private void init(HoodieRecord record) {
@@ -231,7 +233,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     writeStatus.setPartitionPath(partitionPath);
     deltaWriteStat.setPartitionPath(partitionPath);
     deltaWriteStat.setFileId(fileId);
-    populateWriteStat(record, deltaWriteStat);
+    Option<FileSlice> fileSliceOpt = populateWriteStatAndFetchFileSlice(record, deltaWriteStat);
     averageRecordSize = sizeEstimator.sizeEstimate(record);
     try {
       // Save hoodie partition meta in the partition path
@@ -243,7 +245,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       String instantTime = config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
           ? getInstantTimeForLogFile(record) : deltaWriteStat.getPrevCommit();
-      this.writer = createLogWriter(instantTime);
+      this.writer = createLogWriter(instantTime, fileSliceOpt);
     } catch (Exception e) {
       LOG.error("Error in update task at commit " + instantTime, e);
       writeStatus.setGlobalError(e);
