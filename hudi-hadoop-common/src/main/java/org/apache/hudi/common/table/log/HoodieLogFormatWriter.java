@@ -106,7 +106,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
             rollOver();
           }
           // Block size does not matter as we will always manually auto-flush
-          createNewFile(); // if file already exists, we end up creating a marker, but no data file.
+          createNewFile();
           LOG.info("Created a new log file: {}", logFile);
           created = true;
         } catch (FileAlreadyExistsException ignored) {

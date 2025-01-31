@@ -109,9 +109,12 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     "SPARK, AVRO, parquet, true,,EVENT_TIME_ORDERING", "SPARK, SPARK, parquet, true,,EVENT_TIME_ORDERING",
     // Inferred as EVENT_TIME_ORDERING
     "AVRO, AVRO, avro, true, timestamp,", "AVRO, SPARK, parquet, true, timestamp,",
-    "SPARK, AVRO, parquet, true, timestamp,", "SPARK, SPARK, parquet, true, timestamp,"))
+    "SPARK, AVRO, parquet, true, timestamp,", "SPARK, SPARK, parquet, true, timestamp,",
+    // test table version 6
+    "AVRO, AVRO, avro, true,timestamp,EVENT_TIME_ORDERING,6",
+    "AVRO, AVRO, avro, true,timestamp,COMMIT_TIME_ORDERING,6"))
   def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String,
-                hasPreCombineField: Boolean, precombineField: String, recordMergeMode: String) {
+                hasPreCombineField: Boolean, precombineField: String, recordMergeMode: String, tableVersion: String = "8") {
     var (_, readOpts) = getWriterReaderOpts(readType)
     var (writeOpts, _) = getWriterReaderOpts(writeType)
     readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
@@ -123,13 +126,24 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       writeOpts = writeOpts ++ Map(DataSourceWriteOptions.PRECOMBINE_FIELD.key ->
         (if (isNullOrEmpty(precombineField)) "" else precombineField))
     }
-    val firstWriteOpts = if (isNullOrEmpty(recordMergeMode)) {
-      writeOpts
-    } else {
-      writeOpts ++ Map(HoodieWriteConfig.RECORD_MERGE_MODE.key -> recordMergeMode)
+    //val firstWriteOpts =
+    if (!isNullOrEmpty(recordMergeMode)) {
+      writeOpts = writeOpts ++ Map(HoodieWriteConfig.RECORD_MERGE_MODE.key -> recordMergeMode)
     }
     if (isNullOrEmpty(recordMergeMode)) {
       assertFalse(writeOpts.contains(HoodieWriteConfig.RECORD_MERGE_MODE.key))
+    }
+    val firstWriteOpts = if (tableVersion.equals("6")) {
+      writeOpts = writeOpts ++ Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "6")
+      writeOpts = writeOpts - HoodieWriteConfig.RECORD_MERGE_MODE.key
+      if (recordMergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name)) {
+        writeOpts = writeOpts ++ Map(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName)
+      } else if (recordMergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING.name)) {
+        writeOpts = writeOpts ++ Map(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName)
+      }
+      writeOpts
+    } else {
+      writeOpts
     }
 
     // First Operation:
@@ -155,19 +169,29 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     } else {
       recordMergeMode
     }
-    val expectedConfigs = (Map(HoodieTableConfig.RECORD_MERGE_MODE.key -> expectedMergeMode) ++
+    val expectedConfigs = (
+      if (tableVersion.equals("8")) {
+        Map(HoodieTableConfig.RECORD_MERGE_MODE.key -> expectedMergeMode)
+      } else {
+        Map()
+      } ++
       (if (hasPreCombineField && !isNullOrEmpty(precombineField)) {
         Map(HoodieTableConfig.PRECOMBINE_FIELD.key -> precombineField)
       } else {
         Map()
-      })).asJava
+      }) ++ Map(HoodieTableConfig.VERSION.key -> tableVersion)).asJava
     val nonExistentConfigs: java.util.List[String] = (if (hasPreCombineField) {
       Seq[String]()
     } else {
       Seq(HoodieTableConfig.PRECOMBINE_FIELD.key)
     }).asJava
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
-    val commit1CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    val commit1CompletionTime = if (tableVersion.equals("8"))
+    {
+      DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    } else {
+      DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
+    }
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -185,7 +209,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
-    val commit2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    val commit2CompletionTime = if (tableVersion.equals("8")) {
+      DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    } else {
+      DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
+    }
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -269,7 +297,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
-    val commit3CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    val commit3CompletionTime = if (tableVersion.equals("8")) {
+      DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    } else {
+      DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
+    }
     val hudiSnapshotDF3 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -358,7 +390,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
-    val commit6CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    val commit6CompletionTime = if (tableVersion.equals("8")) {
+      DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    } else {
+      DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
+    }
     val hudiSnapshotDF6 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
