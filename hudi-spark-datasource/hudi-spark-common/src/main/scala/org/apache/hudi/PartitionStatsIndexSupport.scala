@@ -107,7 +107,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
                 //       column in a filter does not have the stats available, by making sure such a
                 //       filter does not prune any partition.
                 // to be fixed. HUDI-8836.
-                val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
+                val indexFilter = filteredQueryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
                 if (indexFilter.equals(TrueLiteral)) {
                   // if there are any non indexed cols or we can't translate source expr, we cannot prune partitions based on col stats lookup.
                   Some(allPartitions)
