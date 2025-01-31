@@ -20,6 +20,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -54,20 +55,20 @@ public class DataQualityTestDataGenerator  extends UtilitiesTestBase {
     int totalRounds = 10;
     int numMillsLess = 120000;
 
-    String basePath = "/tmp/test_data/";
+    String basePath = "/Users/linliu/emr/merge_mode_test/test_data/";
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/path").build();
     TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(writeConfig.getTimeGeneratorConfig(), HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
 
-    String commit1 = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
+    String commit1 = HoodieInstantTimeGenerator.createNewInstantTime(true, timeGenerator, 1);
 
     List<HoodieRecord> initialInsertRecords = dataGen.generateInserts(commit1, initialInserts);
 
     UtilitiesTestBase.Helpers.saveParquetToDFS(UtilitiesTestBase.Helpers.toGenericRecords(initialInsertRecords), new Path(basePath+"/0/inputdata.parquet"));
 
     for (int i = 1; i < totalRounds; i++) {
-      String commit = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
+      String commit = HoodieInstantTimeGenerator.createNewInstantTime(true, timeGenerator, 1);
       List<HoodieRecord> allRecords = new ArrayList<>();
       List<GenericRecord> allGenRecs = new ArrayList<>();
       allGenRecs.addAll(dataGen.generateUniqueDeleteGenRecStream(commit, recurrentDeletes).collect(Collectors.toList()));

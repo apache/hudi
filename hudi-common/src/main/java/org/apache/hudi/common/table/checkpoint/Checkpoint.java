@@ -75,6 +75,6 @@ public abstract class Checkpoint implements Serializable {
 
   @Override
   public String toString() {
-    return getClass().getSimpleName() + "{checkpointKey='" + checkpointKey + "'}";
+    return checkpointKey;
   }
 }

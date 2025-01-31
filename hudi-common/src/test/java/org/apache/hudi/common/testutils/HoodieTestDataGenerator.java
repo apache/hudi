@@ -324,8 +324,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private RawTripTestPayload generateRandomValue(
-      HoodieKey key, String instantTime, boolean isFlattened) {
-    return generateRandomValue(key, instantTime, isFlattened);
+      HoodieKey key, String instantTime, boolean isFlattened) throws IOException {
+    return generateRandomValue(key, instantTime, isFlattened, 1);
   }
 
   /**
@@ -355,8 +355,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     GenericRecord rec = generateGenericRecord(
         key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp,
         false, isFlattened, curTime);
-    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, false,
-        curTime );
+    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, false, curTime);
   }
 
   private RawTripTestPayload generateNestedExampleRandomValue(
@@ -1027,7 +1026,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
     AtomicInteger numRecordsGeneratedWithLowerTs = new AtomicInteger(numRecordsWithLowerTs.orElse(0));
     if (numRecordsGeneratedWithLowerTs.get() > 0) {
-      logger.info("Generating " + numRecordsGeneratedWithLowerTs +" records with lower current ts out of " + n);
+      logger.info("Generating " + numRecordsGeneratedWithLowerTs + " records with lower current ts out of " + n);
     }
 
     return IntStream.range(0, n).boxed().map(i -> {
