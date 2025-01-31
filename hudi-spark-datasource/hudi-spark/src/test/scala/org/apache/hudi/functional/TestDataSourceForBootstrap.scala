@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, EventTimeBasedSparkRecordMerger, HoodieDataSourceHelpers}
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
 import org.apache.hudi.client.bootstrap.selector.{FullRecordBootstrapModeSelector, MetadataOnlyBootstrapModeSelector}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
@@ -29,6 +29,7 @@ import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
+
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SparkSession}
@@ -41,6 +42,7 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.time.Instant
 import java.util.Collections
+
 import scala.collection.JavaConverters._
 
 class TestDataSourceForBootstrap {
@@ -61,7 +63,7 @@ class TestDataSourceForBootstrap {
   )
 
   val sparkRecordTypeOpts = Map(
-    HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
+    HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[EventTimeBasedSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkRecordMerger}
+import org.apache.hudi.{EventTimeBasedSparkRecordMerger, HoodieSparkRecordMerger}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordMerger, OperationModeAwareness}
 import org.apache.hudi.common.util.{collection, HoodieRecordUtils, Option => HOption}
@@ -39,7 +39,7 @@ class HoodieSparkValidateDuplicateKeyRecordMerger extends HoodieSparkRecordMerge
   }
 
   override def asPreCombiningMode(): HoodieRecordMerger = {
-    HoodieRecordUtils.loadRecordMerger(classOf[DefaultSparkRecordMerger].getName)
+    HoodieRecordUtils.loadRecordMerger(classOf[EventTimeBasedSparkRecordMerger].getName)
   }
 
   /**

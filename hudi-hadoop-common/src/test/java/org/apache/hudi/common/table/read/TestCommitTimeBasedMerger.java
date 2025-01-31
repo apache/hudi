@@ -20,9 +20,9 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.CommitTimeBasedMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
-import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
@@ -54,7 +54,7 @@ import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.Operati
 import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarness {
+public class TestCommitTimeBasedMerger extends HoodieFileGroupReaderTestHarness {
 
   @Override
   protected Properties getMetaProps() {
@@ -65,7 +65,7 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
 
   @BeforeAll
   public static void setUp() throws IOException {
-    HoodieRecordMerger merger = new OverwriteWithLatestMerger();
+    HoodieRecordMerger merger = new CommitTimeBasedMerger();
     readerContext = new HoodieTestReaderContext(
         Option.of(merger),
         Option.of(OverwriteWithLatestAvroPayload.class.getName()));
@@ -113,7 +113,7 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
 
   @BeforeEach
   public void initialize() throws Exception {
-    setTableName(TestOverwriteWithLatestMerger.class.getName());
+    setTableName(TestCommitTimeBasedMerger.class.getName());
     initPath(tableName);
     initMetaClient();
     initTestDataGenerator(new String[]{PARTITION_PATH});

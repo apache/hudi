@@ -31,9 +31,9 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 
 /**
- * Record merger for hive that implements the default merger strategy
+ * Record merger for hive that implements the event-time based merging strategy
  */
-public class DefaultHiveRecordMerger extends HoodieHiveRecordMerger {
+public class EventTimeBasedHiveRecordMerger extends HoodieHiveRecordMerger {
   @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecord.HoodieRecordType.HIVE);

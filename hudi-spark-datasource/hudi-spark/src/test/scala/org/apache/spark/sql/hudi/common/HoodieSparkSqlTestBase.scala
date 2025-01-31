@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.{EventTimeBasedSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecord}
@@ -352,7 +352,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     // TODO HUDI-5264 Test parquet log with avro record in spark sql test
     recordTypes.foreach { recordType =>
       val (merger, format) = recordType match {
-        case HoodieRecordType.SPARK => (classOf[DefaultSparkRecordMerger].getName, "parquet")
+        case HoodieRecordType.SPARK => (classOf[EventTimeBasedSparkRecordMerger].getName, "parquet")
         case _ => (classOf[HoodieAvroRecordMerger].getName, "avro")
       }
       val config = Map(

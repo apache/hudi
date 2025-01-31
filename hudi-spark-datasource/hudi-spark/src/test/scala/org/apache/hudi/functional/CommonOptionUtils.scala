@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSparkRecordMerger}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, EventTimeBasedSparkRecordMerger}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -39,7 +39,7 @@ object CommonOptionUtils {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
   )
-  val sparkOpts = Map(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName)
+  val sparkOpts = Map(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[EventTimeBasedSparkRecordMerger].getName)
 
   def getWriterReaderOpts(recordType: HoodieRecordType,
                           opt: Map[String, String] = commonOpts,

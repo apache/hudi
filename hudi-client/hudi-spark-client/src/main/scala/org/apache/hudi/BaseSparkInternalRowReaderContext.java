@@ -60,9 +60,9 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     // get rid of event time and commit time ordering. Just return Option.empty
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
-        return Option.of(new DefaultSparkRecordMerger());
+        return Option.of(new EventTimeBasedSparkRecordMerger());
       case COMMIT_TIME_ORDERING:
-        return Option.of(new OverwriteWithLatestSparkRecordMerger());
+        return Option.of(new CommitTimeBasedSparkRecordMerger());
       case CUSTOM:
       default:
         if (mergeStrategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
