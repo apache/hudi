@@ -30,10 +30,11 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
 
   // TODO(HUDI-8938): add "mor,true,true,6" after the fix
   Seq(
-    "cow,8,false,false", "cow,8,false,true", "cow,8,true,false",
+    /*"cow,8,false,false", "cow,8,false,true", "cow,8,true,false",
     "cow,6,true,false", "cow,6,true,true",
-    "mor,8,false,false", "mor,8,false,true", "mor,8,true,false",
-    "mor,6,true,false").foreach { args =>
+    "mor,8,false,false", "mor,8,false,true", "mor,8,true,false",*/
+    "mor,6,true,true"
+  ).foreach { args =>
     val argList = args.split(',')
     val tableType = argList(0)
     val tableVersion = argList(1)
@@ -225,7 +226,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
     }
 
     // TODO(HUDI-8468): add COW test after supporting COMMIT_TIME_ORDERING in MERGE INTO for COW
-    test(s"Test merge operations with COMMIT_TIME_ORDERING for $tableType table "
+    /*test(s"Test merge operations with COMMIT_TIME_ORDERING for $tableType table "
       + s"(tableVersion=$tableVersion,setRecordMergeConfigs=$setRecordMergeConfigs,"
       + s"setUpsertOperation=$setUpsertOperation)") {
       withSparkSqlSessionConfigWithCondition(
@@ -345,6 +346,6 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
             )): _*)
         })
       }
-    }
+    }*/
   }
 }

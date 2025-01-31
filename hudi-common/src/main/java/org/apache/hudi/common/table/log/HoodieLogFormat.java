@@ -256,6 +256,7 @@ public interface HoodieLogFormat {
           if (versionAndWriteToken.isPresent()) {
             logVersion = versionAndWriteToken.get().getKey();
             logWriteToken = versionAndWriteToken.get().getValue();
+            //logVersion++; // bump up the version so the new file has the next log version.
           } else {
             // this is the case where there is no existing log-file.
             logVersion = HoodieLogFile.LOGFILE_BASE_VERSION;
