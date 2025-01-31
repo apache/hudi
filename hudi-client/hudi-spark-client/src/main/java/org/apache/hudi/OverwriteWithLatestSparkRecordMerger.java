@@ -21,8 +21,10 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.merge.SparkRecordMergingUtils;
 
 import org.apache.avro.Schema;
 
@@ -41,5 +43,39 @@ public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerge
   @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     return Option.of(Pair.of(newer, newSchema));
+  }
+
+  @Override
+  public Option<Pair<HoodieRecord, Schema>> partialMerge(HoodieRecord older, Schema oldSchema,
+                                                         HoodieRecord newer, Schema newSchema,
+                                                         Schema readerSchema, TypedProperties props) throws IOException {
+    if (newer instanceof HoodieSparkRecord) {
+      HoodieSparkRecord newSparkRecord = (HoodieSparkRecord) newer;
+      if (newSparkRecord.isDelete(newSchema, props)) {
+        // Delete record
+        return Option.empty();
+      }
+    } else {
+      if (newer.getData() == null) {
+        // Delete record
+        return Option.empty();
+      }
+    }
+
+    if (older instanceof HoodieSparkRecord) {
+      HoodieSparkRecord oldSparkRecord = (HoodieSparkRecord) older;
+      if (oldSparkRecord.isDelete(oldSchema, props)) {
+        // use natural order for delete record
+        return Option.of(Pair.of(newer, newSchema));
+      }
+    } else {
+      if (older.getData() == null) {
+        // use natural order for delete record
+        return Option.of(Pair.of(newer, newSchema));
+      }
+    }
+
+    return Option.of(SparkRecordMergingUtils.mergePartialRecords(
+        (HoodieSparkRecord) older, oldSchema, (HoodieSparkRecord) newer, newSchema, readerSchema, props));
   }
 }
