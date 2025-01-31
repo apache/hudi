@@ -114,7 +114,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     "AVRO, AVRO, avro, true,timestamp,EVENT_TIME_ORDERING,6",
     "AVRO, AVRO, avro, true,timestamp,COMMIT_TIME_ORDERING,6"))
   def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String,
-                hasPreCombineField: Boolean, precombineField: String, recordMergeMode: String, tableVersion: String = "8") {
+                hasPreCombineField: Boolean, precombineField: String, recordMergeMode: String, tableVersion: String = "8"): Unit = {
     var (_, readOpts) = getWriterReaderOpts(readType)
     var (writeOpts, _) = getWriterReaderOpts(writeType)
     readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
