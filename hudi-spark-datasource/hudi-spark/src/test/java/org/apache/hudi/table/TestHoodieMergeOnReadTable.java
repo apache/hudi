@@ -24,9 +24,11 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -85,6 +87,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.HoodieSparkClientTestHarness.buildProfile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -220,6 +223,96 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       // Wrote 20 records in 2 batches
       assertEquals(40, recordsRead.size(), "Must contain 40 records");
     }
+  }
+
+  @Test
+  public void testUpsertPartitionerWithTableVersion6() throws Exception {
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
+    cfgBuilder.withWriteTableVersion(6);
+    HoodieWriteConfig cfg = cfgBuilder.build();
+
+    // create meta client w/ the table version 6
+    Properties props = getPropertiesForKeyGen(true);
+    props.put(WRITE_TABLE_VERSION.key(), "6");
+    metaClient = getHoodieMetaClient(storageConf(), basePath(), props, HoodieTableType.MERGE_ON_READ);
+    dataGen = new HoodieTestDataGenerator();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
+      // batch 1 insert
+      String newCommitTime = "001";
+      client.startCommitWithTime(newCommitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
+      JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
+      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+      assertNoWriteErrors(statuses);
+
+      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+
+      Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
+      assertTrue(deltaCommit.isPresent());
+      assertEquals("001", deltaCommit.get().requestedTime(), "Delta commit should be 001");
+
+      Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
+      assertFalse(commit.isPresent());
+
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+      BaseFileOnlyView roView = getHoodieTableFileSystemView(metaClient,
+          metaClient.getCommitsTimeline().filterCompletedInstants(), allFiles);
+
+      Map<String, String> baseFileMapping = new HashMap<>();
+      Map<String, List<String>> baseFileToLogFileMapping = new HashMap<>();
+      BaseFileOnlyView finalRoView = roView;
+      Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS).forEach(partitionPath -> {
+        String baseFileName = finalRoView.getLatestBaseFiles(partitionPath).collect(Collectors.toList()).get(0).getFileName();
+        baseFileMapping.put(partitionPath, baseFileName);
+        baseFileToLogFileMapping.put(baseFileName, new ArrayList<>());
+      });
+
+      writeAndValidateLogFileBaseInstantTimeMatches(client, "002", records, cfg, baseFileMapping, baseFileToLogFileMapping);
+      writeAndValidateLogFileBaseInstantTimeMatches(client, "003", records, cfg, baseFileMapping, baseFileToLogFileMapping);
+      writeAndValidateLogFileBaseInstantTimeMatches(client, "004", records, cfg, baseFileMapping, baseFileToLogFileMapping);
+    }
+  }
+
+  private void writeAndValidateLogFileBaseInstantTimeMatches(SparkRDDWriteClient client, String newCommitTime, List<HoodieRecord> records,
+                                                             HoodieWriteConfig cfg, Map<String, String> baseFileMapping,
+                                                             Map<String, List<String>> baseFileToLogFileMapping) throws IOException {
+    client.startCommitWithTime(newCommitTime);
+    List<HoodieRecord> newRecords = dataGen.generateUpdates(newCommitTime, records);
+    List<WriteStatus> statuses = client.upsert(jsc().parallelize(newRecords), newCommitTime).collect();
+    assertNoWriteErrors(statuses);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
+    assertTrue(deltaCommit.isPresent());
+    assertEquals(newCommitTime, deltaCommit.get().requestedTime(), "Latest Delta commit should be 002");
+
+    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+    HoodieTable finalHoodieTable = hoodieTable;
+    baseFileMapping.entrySet().forEach(entry -> {
+          FileSlice fileSlice = finalHoodieTable.getSliceView().getLatestFileSlices(entry.getKey()).collect(Collectors.toList()).get(0);
+          String baseFileName = entry.getValue();
+          String baseInstantTime = FSUtils.getCommitTime(baseFileName);
+          // validate the base instant time matches
+          List<HoodieLogFile> logFiles = fileSlice.getLogFiles().collect(Collectors.toList());
+          // except latest log file, all other files should be present in the tracking map.
+          int counter = 0;
+          while (counter < logFiles.size()) {
+            HoodieLogFile logFile = logFiles.get(counter);
+            if (counter == logFiles.size() - 1) {
+              // latest log file may not be present in the tracking map. lets add it to assist w/ for next round of validation.
+              baseFileToLogFileMapping.get(baseFileName).add(logFile.getFileName());
+            } else {
+              // all previous log files are expected to be matching
+              baseFileToLogFileMapping.get(baseFileName).contains(logFile.getFileName());
+            }
+            // validate that base instant time matches
+            assertEquals(baseInstantTime, FSUtils.getDeltaCommitTimeFromLogPath(logFile.getPath()));
+            counter++;
+          }
+        }
+    );
   }
 
   // TODO: Enable metadata virtual keys in this test once the feature HUDI-2593 is completed

@@ -192,9 +192,15 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
   @Override
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
+    return getHoodieMetaClient(storageConf, basePath, props, COPY_ON_WRITE);
+  }
+
+  @Override
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props,
+                                                   HoodieTableType tableType) throws IOException {
     return HoodieTableMetaClient.newTableBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
-        .setTableType(COPY_ON_WRITE)
+        .setTableType(tableType)
         .setPayloadClass(HoodieAvroPayload.class)
         .setTableVersion(ConfigUtils.getIntWithAltKeys(new TypedProperties(props), WRITE_TABLE_VERSION))
         .fromProperties(props)
