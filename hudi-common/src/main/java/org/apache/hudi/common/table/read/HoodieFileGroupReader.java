@@ -109,7 +109,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
           recordMergeMode, tableConfig.getPayloadClass(),
-          mergeStrategyId, null);
+          mergeStrategyId, null, tableConfig.getTableVersion());
       recordMergeMode = triple.getLeft();
       mergeStrategyId = triple.getRight();
     }

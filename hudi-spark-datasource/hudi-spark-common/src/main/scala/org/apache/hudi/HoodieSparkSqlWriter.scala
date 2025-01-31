@@ -37,7 +37,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
@@ -45,7 +45,6 @@ import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, WRITE_TABLE_VERSION}
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, HoodieRecordCreationException, HoodieWriteConflictException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
@@ -61,8 +60,8 @@ import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
+import org.apache.hudi.util.{SparkConfigUtils, SparkKeyGenUtils}
 import org.apache.hudi.util.SparkConfigUtils.getStringWithAltKeys
-import org.apache.hudi.util.SparkKeyGenUtils
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
@@ -1126,6 +1125,12 @@ class HoodieSparkSqlWriterInternal {
       mergedParams.put(HoodieTableConfig.DROP_PARTITION_COLUMNS.key, "false")
     }
 
+    val tableVersion = if (tableConfig != null) {
+      tableConfig.getTableVersion
+    } else {
+      HoodieTableVersion.fromVersionCode(
+        SparkConfigUtils.getStringWithAltKeys(mergedParams, WRITE_TABLE_VERSION).toInt)
+    }
     if (!mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_MODE.key())
       || !mergedParams.contains(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key())
       || !mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key())) {
@@ -1133,7 +1138,8 @@ class HoodieSparkSqlWriterInternal {
         RecordMergeMode.getValue(mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
         mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
         mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
-        optParams.getOrElse(PRECOMBINE_FIELD.key(), null))
+        optParams.getOrElse(PRECOMBINE_FIELD.key(), null),
+        tableVersion)
       mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
       mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
       mergedParams.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), inferredMergeConfigs.getMiddle)
