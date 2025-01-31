@@ -79,6 +79,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
@@ -710,6 +711,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           try {
             Thread.sleep(2000);
             ret = condition.apply(true);
+            LOG.info("Condition completed successfully");
           } catch (Throwable error) {
             LOG.debug("Got error waiting for condition", error);
             ret = false;
@@ -718,6 +720,20 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         return ret;
       });
       res.get(timeoutInSecs, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Waits for booleanSupplier to return true
+     * @param booleanSupplier Boolean supplier
+     */
+    static void waitFor(BooleanSupplier booleanSupplier) {
+      while (!booleanSupplier.getAsBoolean()) {
+        try {
+          Thread.sleep(5);
+        } catch (Throwable error) {
+          LOG.debug("Got error waiting for condition", error);
+        }
+      }
     }
 
     static void assertAtLeastNCommits(int minExpected, String tablePath) {
@@ -738,7 +754,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
     static void assertPendingIndexCommit(String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
-      HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterPendingIndexTimeline();
+      HoodieTimeline timeline = meta.reloadActiveTimeline().getAllCommitsTimeline().filterPendingIndexTimeline();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
       int numIndexCommits = timeline.countInstants();
       assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
@@ -746,7 +762,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
     static void assertCompletedIndexCommit(String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
-      HoodieTimeline timeline = meta.getActiveTimeline().getAllCommitsTimeline().filterCompletedIndexTimeline();
+      HoodieTimeline timeline = meta.reloadActiveTimeline().getAllCommitsTimeline().filterCompletedIndexTimeline();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
       int numIndexCommits = timeline.countInstants();
       assertEquals(1, numIndexCommits, "Got=" + numIndexCommits + ", exp=1");
