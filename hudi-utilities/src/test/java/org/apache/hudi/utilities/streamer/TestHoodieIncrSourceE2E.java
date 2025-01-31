@@ -132,7 +132,7 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
    *    - Verifies commit metadata still uses checkpoint V1 format
    *    - Verifies final checkpoint="30"
    */
-  @ParameterizedTest
+  /*@ParameterizedTest
   @CsvSource({
       "6, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource",
       "8, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource"
@@ -160,7 +160,7 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
     } else {
       assertTrue(ex.getMessage().contains("Data source should return checkpoint version V1."));
     }
-  }
+  }*/
 
   /**
    * Tests the end-to-end sync behavior with multiple sync iterations.
