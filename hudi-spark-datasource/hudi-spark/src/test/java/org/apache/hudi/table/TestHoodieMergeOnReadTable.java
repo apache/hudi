@@ -333,8 +333,10 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     // assert that the dataframe is equal to the expected dataframe
     // NOTE: we have excluded some columns from comparison such as map, date and array type fields as they were incompatible
     // For example below is what data generated looks like vs what is read from the table (check `city_to_state` map: [CA] vs Map(LA -> CA))
-    //  [false,029c1e56-3c03-42e3-a2eb-a45addd5b671,0.5550830309956531,0.013823731501093062,[CA],15,1322460250,1053705246,driver-002,0.8563083971473885,0.7050871729430999,[39.649862113946796,USD],WrappedArray(0, 0, 8, 19, -72),Canada,2015/03/17,rider-002,-5190452608208752867,0,WrappedArray([88.29247239885966,USD]),BLACK,0.7458226]
-    //  [false,029c1e56-3c03-42e3-a2eb-a45addd5b671,0.5550830309956531,0.013823731501093062,Map(LA -> CA),1970-01-16,1322460250,1053705246,driver-002,0.8563083971473885,0.7050871729430999,[39.649862113946796,USD],0.529336,[B@372d7420,2015/03/17,rider-002,-5190452608208752867,0,WrappedArray([88.29247239885966,USD]),BLACK,0.7458226]
+    //  [false,029c1e56-3c03-42e3-a2eb-a45addd5b671,0.5550830309956531,0.013823731501093062,[CA],15,1322460250,1053705246,driver-002,0.8563083971473885,0.7050871729430999,
+    //         [39.649862113946796,USD], WrappedArray(0, 0, 8, 19, -72),Canada,2015/03/17,rider-002,-5190452608208752867,0,WrappedArray([88.29247239885966,USD]),BLACK,0.7458226]
+    //  [false,029c1e56-3c03-42e3-a2eb-a45addd5b671,0.5550830309956531,0.013823731501093062,Map(LA -> CA),1970-01-16,1322460250,1053705246,driver-002,0.8563083971473885,0.7050871729430999,
+    //         [39.649862113946796,USD],0.529336,[B@372d7420,2015/03/17,rider-002,-5190452608208752867,0,WrappedArray([88.29247239885966,USD]),BLACK,0.7458226]
     assertTrue(areDataframesEqual(inputDf, outputDf, new HashSet<>(Arrays.asList("_hoodie_is_deleted", "_row_key", "begin_lat", "begin_lon",
         "current_ts", "distance_in_meters", "driver", "end_lat", "end_lon", "fare"))), "Dataframe mismatch");
   }
