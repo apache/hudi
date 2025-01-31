@@ -168,7 +168,6 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   public final InputBatch<T> fetchNext(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     Option<Checkpoint> lastCheckpointTranslated = translateCheckpoint(lastCheckpoint);
     InputBatch<T> batch = readFromCheckpoint(lastCheckpointTranslated, sourceLimit);
-    assertCheckpointVersion(lastCheckpoint, lastCheckpointTranslated, batch.getCheckpointForNextBatch());
     // If overriddenSchemaProvider is passed in CLI, use it
     return overriddenSchemaProvider == null ? batch
         : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);
