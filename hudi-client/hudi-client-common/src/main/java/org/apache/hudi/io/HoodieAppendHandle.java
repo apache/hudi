@@ -187,15 +187,15 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       // table versions 8 and greater.
       prevCommit = instantTime;
-      if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
-        // the cdc reader needs the base file metadata to have deterministic update sequence.
-        TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-        Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
-        if (fileSlice.isPresent()) {
+      TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
+      Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
+      if (fileSlice.isPresent()) {
+        if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
+          // the cdc reader needs the base file metadata to have deterministic update sequence.
           prevCommit = fileSlice.get().getBaseInstantTime();
-          baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
-          logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
         }
+        baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
+        logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
       }
     } else {
       // older table versions.
