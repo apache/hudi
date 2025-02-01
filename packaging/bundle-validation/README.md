@@ -19,7 +19,7 @@
 
 # Bundle Validation for Hudi
 
-This directory contains scripts for running bundle validation in Github Actions (`validate-bundles`
+This directory contains scripts for running bundle validation in GitHub Actions (`validate-bundles`
 specified in `.github/workflows/bot.yml`) and build profile for Docker images used.
 
 ## Docker Image for Bundle Validation
@@ -60,7 +60,7 @@ to `base/` and the image should only be used for development only and not be pus
 
 ## Running Bundle Validation on a Release Candidate
 
-The bundle validation on a release candidate is specified in the Github Action job `validate-release-candidate-bundles`
+The bundle validation on a release candidate is specified in the GitHub Action job `validate-release-candidate-bundles`
 in `.github/workflows/bot.yml`. By default, this is disabled.
 
 To enable the bundle validation on a particular release candidate, makes the following changes to the job by flipping the
@@ -73,3 +73,22 @@ env:
   STAGING_REPO_NUM: 1123
 ```
 
+## [Running Bundle Validation on Release Artifacts in Maven Central](#running-bundle-validation-on-release-artifacts-in-maven-central)
+
+After the release candidate artifacts are finalized and released from the staging repository, the artifacts usually take
+24 hours to be available in [Maven Central](https://repo1.maven.org/maven2/org/apache/hudi). The bundle validation can
+be run on the release artifacts in Maven Central by specifying the version in the GitHub Action job
+`validate-release-maven-artifacts` in `.github/workflows/maven_artifact_validation.yml`. By default, this is
+disabled.
+
+To enable the bundle validation on a particular release version, make the following changes to the job by flipping the
+flag and adding the release version:
+
+```yaml
+  validate-release-maven-artifacts:
+    runs-on: ubuntu-latest
+    if: false             ## Change to true, or simply remove/comment this line
+    env:
+      HUDI_VERSION: 1.0.0 ## Change to the release version
+      MAVEN_BASE_URL: 'https://repo1.maven.org/maven2'  ## Maven Central URL, no need to change unless necessary
+```
