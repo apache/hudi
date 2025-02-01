@@ -590,7 +590,7 @@ After the release candidate artifacts are finalized and released from the stagin
 24 hours to be available in [Maven Central](https://repo1.maven.org/maven2/org/apache/hudi). Once the artifacts are
 available in Maven Central, please run the bundle validation GitHub Action to ensure the artifacts are valid. Steps to
 run the bundle validation GitHub Action are available in
-the [bundle validation documentation](packaging/bundle-validation/README.md#running-bundle-validation-on-release-artifacts-in-maven-central).
+the [bundle validation documentation](../packaging/bundle-validation/README.md#running-bundle-validation-on-release-artifacts-in-maven-central).
 
 In the meantime, you can proceed with documentation changes and website updates.
 

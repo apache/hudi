@@ -78,7 +78,7 @@ env:
 After the release candidate artifacts are finalized and released from the staging repository, the artifacts usually take
 24 hours to be available in [Maven Central](https://repo1.maven.org/maven2/org/apache/hudi). The bundle validation can
 be run on the release artifacts in Maven Central by specifying the version in the GitHub Action job
-`validate-release-maven-artifacts` in `.github/workflows/release_candidate_validation.yml`. By default, this is
+`validate-release-maven-artifacts` in `.github/workflows/maven_artifact_validation.yml`. By default, this is
 disabled.
 
 To enable the bundle validation on a particular release version, make the following changes to the job by flipping the

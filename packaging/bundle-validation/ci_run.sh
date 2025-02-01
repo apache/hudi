@@ -50,9 +50,6 @@ if [[ -n "$STAGING_REPO_NUM" ]]; then
 elif [[ -n "$MAVEN_BASE_URL" ]]; then
   REPO_BASE_URL=$MAVEN_BASE_URL/org/apache/hudi
   echo "Downloading bundle jars from maven central - $REPO_BASE_URL ..."
-else
-  echo "Error: Either STAGING_REPO_NUM or MAVEN_BASE_URL must be provided."
-  exit 1
 fi
 
 # choose versions based on build profiles
@@ -146,7 +143,7 @@ if [ -z "$STAGING_REPO_NUM" ] && [ -z "$MAVEN_BASE_URL" ]; then
   cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-slim-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
   echo 'Validating jars below:'
 else
-  echo 'Adding environment variables for bundles in the release candidate'
+  echo 'Adding environment variables for bundles in the release candidate or artifact'
 
   HUDI_HADOOP_MR_BUNDLE_NAME=hudi-hadoop-mr-bundle
   HUDI_KAFKA_CONNECT_BUNDLE_NAME=hudi-kafka-connect-bundle
