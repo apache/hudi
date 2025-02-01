@@ -1,4 +1,4 @@
-name: Release Candidate Validation
+name: Maven Release Artifact Validation
 
 on:
   push:
