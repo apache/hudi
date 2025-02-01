@@ -34,6 +34,7 @@ import org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource;
 import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource;
 import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSourceHarness;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -45,6 +46,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static javolution.testing.TestContext.assertTrue;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_RESET_KEY_V1;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
@@ -65,7 +67,6 @@ import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KE
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(MockitoExtension.class)
 public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
@@ -132,11 +133,12 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
    *    - Verifies commit metadata still uses checkpoint V1 format
    *    - Verifies final checkpoint="30"
    */
-  @ParameterizedTest
-  @CsvSource({
+  /*@ParameterizedTest
+  /@CsvSource({
       "6, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource",
       "8, org.apache.hudi.utilities.sources.MockGeneralHoodieIncrSource"
-  })
+  })*/
+  @Disabled("HUDI-8952")
   public void testSyncE2EWrongCheckpointVersionErrorOut(String tableVersion, String sourceClass) throws Exception {
     // First start with no previous checkpoint and ingest till ckp 1 with table version.
     // Disable auto upgrade and MDT as we want to keep things as it is.

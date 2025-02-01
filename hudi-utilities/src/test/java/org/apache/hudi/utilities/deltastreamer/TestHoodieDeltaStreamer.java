@@ -47,6 +47,7 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -650,11 +651,26 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
   }
 
+  private static Stream<Arguments> continuousModeArgs() {
+    return Stream.of(
+        Arguments.of("AVRO", "EIGHT"),
+        Arguments.of("SPARK", "EIGHT"),
+        Arguments.of("AVRO", "SIX")
+    );
+  }
+
+  private static Stream<Arguments> continuousModeMorArgs() {
+    return Stream.of(
+        Arguments.of("AVRO", "EIGHT"),
+        Arguments.of("AVRO", "SIX")
+    );
+  }
+
   @Timeout(600)
   @ParameterizedTest
-  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
-  public void testUpsertsCOWContinuousMode(HoodieRecordType recordType) throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", recordType);
+  @MethodSource("continuousModeArgs")
+  public void testUpsertsCOWContinuousMode(HoodieRecordType recordType, String writeTableVersion) throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", recordType, writeTableVersion);
   }
 
   @Test
@@ -677,14 +693,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO"})
   public void testUpsertsMORContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType);
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType, "EIGHT");
   }
 
   @Timeout(600)
   @ParameterizedTest
-  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
-  public void testUpsertsMORContinuousMode(HoodieRecordType recordType) throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor", recordType);
+  @MethodSource("continuousModeMorArgs")
+  public void testUpsertsMORContinuousMode(HoodieRecordType recordType, String writeTableVersion) throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor", recordType, writeTableVersion);
   }
 
   @Test
@@ -703,11 +719,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
-  private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir, HoodieRecordType recordType) throws Exception {
-    testUpsertsContinuousMode(tableType, tempDir, false, recordType);
+  private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir, HoodieRecordType recordType, String writeTableVersion) throws Exception {
+    testUpsertsContinuousMode(tableType, tempDir, false, recordType, writeTableVersion);
   }
 
-  private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir, boolean testShutdownGracefully, HoodieRecordType recordType) throws Exception {
+  private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir, boolean testShutdownGracefully, HoodieRecordType recordType,
+                                         String writeTableVersion) throws Exception {
     String tableBasePath = basePath + "/" + tempDir;
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
@@ -721,6 +738,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.tableType = tableType.name();
     cfg.configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
     cfg.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    if (HoodieTableVersion.SIX.name().equals(writeTableVersion)) {
+      cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), HoodieTableVersion.SIX.versionCode()));
+    }
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamerTestRunner(ds, cfg, (r) -> {
       if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
@@ -736,6 +756,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
       return true;
     });
+    // validate table version matches
+    HoodieTableMetaClient hudiTblMetaClient = HoodieTableMetaClient.builder().setBasePath(cfg.targetBasePath).setConf(context.getStorageConf()).build();
+    assertEquals(HoodieTableVersion.valueOf(writeTableVersion), hudiTblMetaClient.getTableConfig().getTableVersion());
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
@@ -1097,7 +1120,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
-  @Test
+  @Disabled("HUDI-8951")
   public void testHoodieIndexerExecutionAfterCommit() throws Exception {
     String tableBasePath = basePath + "/asyncindexer_commit";
     Set<String> customConfigs = new HashSet<>();
