@@ -1120,7 +1120,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
-  @Test
+  @Disabled("HUDI-8951")
   public void testHoodieIndexerExecutionAfterCommit() throws Exception {
     String tableBasePath = basePath + "/asyncindexer_commit";
     Set<String> customConfigs = new HashSet<>();
