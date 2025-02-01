@@ -31,9 +31,26 @@ CONTAINER_NAME=$1
 HUDI_VERSION=$2
 JAVA_RUNTIME_VERSION=$3
 STAGING_REPO_NUM=$4
+MAVEN_BASE_URL=$5
 echo "HUDI_VERSION: $HUDI_VERSION JAVA_RUNTIME_VERSION: $JAVA_RUNTIME_VERSION"
 echo "SPARK_RUNTIME: $SPARK_RUNTIME SPARK_PROFILE (optional): $SPARK_PROFILE"
 echo "SCALA_PROFILE: $SCALA_PROFILE"
+echo "MAVEN_BASE_URL: $MAVEN_BASE_URL"
+echo "STAGING_REPO_NUM: $STAGING_REPO_NUM"
+
+# Ensure only one of STAGING_REPO_NUM or MAVEN_BASE_URL is provided
+if [[ -n "$STAGING_REPO_NUM" && -n "$MAVEN_BASE_URL" ]]; then
+  echo "Error: Both STAGING_REPO_NUM and MAVEN_BASE_URL cannot be provided simultaneously."
+  exit 1
+fi
+
+if [[ -n "$STAGING_REPO_NUM" ]]; then
+  REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-$STAGING_REPO_NUM/org/apache/hudi
+  echo "Downloading bundle jars from staging repo orgapachehudi-$REPO_BASE_URL ..."
+elif [[ -n "$MAVEN_BASE_URL" ]]; then
+  REPO_BASE_URL=$MAVEN_BASE_URL/org/apache/hudi
+  echo "Downloading bundle jars from maven central - $REPO_BASE_URL ..."
+fi
 
 # choose versions based on build profiles
 if [[ ${SPARK_RUNTIME} == 'spark3.3.1' ]]; then
@@ -112,7 +129,7 @@ fi
 TMP_JARS_DIR=/tmp/jars/$(date +%s)
 mkdir -p $TMP_JARS_DIR
 
-if [[ -z "$STAGING_REPO_NUM" ]]; then
+if [ -z "$STAGING_REPO_NUM" ] && [ -z "$MAVEN_BASE_URL" ]; then
   echo 'Adding built bundle jars for validation'
   if [[ "$SCALA_PROFILE" != 'scala-2.13' ]]; then
     # For Scala 2.13, Flink is not support, so skipping the Flink bundle validation
@@ -126,7 +143,7 @@ if [[ -z "$STAGING_REPO_NUM" ]]; then
   cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-slim-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
   echo 'Validating jars below:'
 else
-  echo 'Adding environment variables for bundles in the release candidate'
+  echo 'Adding environment variables for bundles in the release candidate or artifact'
 
   HUDI_HADOOP_MR_BUNDLE_NAME=hudi-hadoop-mr-bundle
   HUDI_KAFKA_CONNECT_BUNDLE_NAME=hudi-kafka-connect-bundle
@@ -170,8 +187,7 @@ else
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.20-bundle    
   fi
 
-  echo "Downloading bundle jars from staging repo orgapachehudi-$STAGING_REPO_NUM ..."
-  REPO_BASE_URL=https://repository.apache.org/content/repositories/orgapachehudi-$STAGING_REPO_NUM/org/apache/hudi
+  echo "Downloading bundle jars from base URL - $REPO_BASE_URL ..."
   wget -q $REPO_BASE_URL/$HUDI_FLINK_BUNDLE_NAME/$HUDI_VERSION/$HUDI_FLINK_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
   wget -q $REPO_BASE_URL/$HUDI_HADOOP_MR_BUNDLE_NAME/$HUDI_VERSION/$HUDI_HADOOP_MR_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
   wget -q $REPO_BASE_URL/$HUDI_KAFKA_CONNECT_BUNDLE_NAME/$HUDI_VERSION/$HUDI_KAFKA_CONNECT_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
