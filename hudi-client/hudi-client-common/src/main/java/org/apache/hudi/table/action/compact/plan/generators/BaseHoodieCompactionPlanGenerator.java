@@ -156,6 +156,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     if (compactionPlan.getOperations().isEmpty()) {
       LOG.warn("After filtering, Nothing to compact for {}", metaClient.getBasePathV2());
     }
+    compactionPlan.setExtraMetadata(getExtraMetadata(operations, compactionPlan));
     return compactionPlan;
   }
 
@@ -176,4 +177,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     return Collections.emptyMap();
   }
 
+  protected Map<String, String> getExtraMetadata(List<HoodieCompactionOperation> operationsBeforeApplyingStrategy, HoodieCompactionPlan compactionPlan) {
+    return Collections.emptyMap();
+  }
 }

@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
+import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -211,6 +212,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "
           + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
+
+  public static final ConfigProperty<String> COMPACTION_PLAN_GENERATOR = ConfigProperty
+      .key("hoodie.compaction.plan.generator")
+      .defaultValue(HoodieCompactionPlanGenerator.class.getName())
+      .markAdvanced()
+      .withDocumentation("Compaction plan generator for data files. Override with a custom plan generator "
+          + "if there's a need to use extraMetadata in the compaction plan for optimizations, ignore otherwise");
 
   /** @deprecated Use {@link #INLINE_COMPACT} and its methods instead */
   @Deprecated

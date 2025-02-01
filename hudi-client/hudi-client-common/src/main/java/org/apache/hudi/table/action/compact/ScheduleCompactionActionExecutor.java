@@ -28,15 +28,17 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
-import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator;
 
 import org.slf4j.Logger;
@@ -76,7 +78,8 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
 
   private void initPlanGenerator(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     if (WriteOperationType.COMPACT.equals(operationType)) {
-      planGenerator = new HoodieCompactionPlanGenerator(table, context, config);
+      String planGeneratorClass = ConfigUtils.getStringWithAltKeys(config.getProps(), HoodieCompactionConfig.COMPACTION_PLAN_GENERATOR, true);
+      planGenerator = createCompactionPlanGenerator(planGeneratorClass, table, context, config);
     } else {
       planGenerator = new HoodieLogCompactionPlanGenerator(table, context, config);
     }
@@ -239,5 +242,9 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
       throw new HoodieCompactionException(e.getMessage(), e);
     }
     return timestamp;
+  }
+
+  private  BaseHoodieCompactionPlanGenerator createCompactionPlanGenerator(String planGeneratorClass, HoodieTable table, HoodieEngineContext context, HoodieWriteConfig config) {
+    return ReflectionUtils.loadClass(planGeneratorClass, new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config);
   }
 }
