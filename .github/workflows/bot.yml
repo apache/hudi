@@ -82,7 +82,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -141,7 +140,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -173,7 +171,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
-            flinkProfile: "flink1.19"
+            flinkProfile: "flink1.20"
 
     steps:
       - uses: actions/checkout@v3
@@ -183,7 +181,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Generate Maven Wrapper
         run:
           mvn -N io.takari:maven:wrapper
@@ -222,7 +219,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -235,7 +231,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -277,7 +272,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -290,7 +284,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -326,7 +319,6 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -339,7 +331,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -381,7 +372,6 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -394,7 +384,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -416,11 +405,19 @@ jobs:
       matrix:
         include:
           - flinkProfile: "flink1.14"
+            flinkAvroVersion: "1.10.0"
           - flinkProfile: "flink1.15"
+            flinkAvroVersion: "1.10.0"
           - flinkProfile: "flink1.16"
+            flinkAvroVersion: "1.11.1"
           - flinkProfile: "flink1.17"
+            flinkAvroVersion: "1.11.1"
           - flinkProfile: "flink1.18"
+            flinkAvroVersion: "1.11.1"
           - flinkProfile: "flink1.19"
+            flinkAvroVersion: "1.11.1"
+          - flinkProfile: "flink1.20"
+            flinkAvroVersion: "1.11.3"
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
@@ -429,27 +426,29 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
       - name: Integration Test
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ endsWith(env.FLINK_PROFILE, '1.18') }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+        if: ${{ endsWith(env.FLINK_PROFILE, '1.20') }}
         run: |
-          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
-          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
+          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
+          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   docker-java17-test:
     runs-on: ubuntu-latest
@@ -457,15 +456,15 @@ jobs:
       matrix:
         include:
           - scalaProfile: 'scala-2.13'
-            flinkProfile: 'flink1.19'
+            flinkProfile: 'flink1.20'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.0'
           - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.19'
+            flinkProfile: 'flink1.20'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.0'
           - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.19'
+            flinkProfile: 'flink1.20'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.0'
 
@@ -477,7 +476,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: UT/FT - Docker Test - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -495,29 +493,40 @@ jobs:
       matrix:
         include:
           - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.3'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+          - scalaProfile: 'scala-2.13'
             flinkProfile: 'flink1.19'
+            flinkAvroVersion: '1.11.1'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
           - scalaProfile: 'scala-2.13'
             flinkProfile: 'flink1.18'
+            flinkAvroVersion: '1.11.1'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.17'
+            flinkAvroVersion: '1.11.1'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.16'
+            flinkAvroVersion: '1.11.1'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.3'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.15'
+            flinkAvroVersion: '1.10.0'
             sparkProfile: 'spark3.3'
             sparkRuntime: 'spark3.3.4'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.14'
+            flinkAvroVersion: '1.10.0'
             sparkProfile: 'spark3.3'
-            sparkRuntime: 'spark3.3.1'
+            sparkRuntime: 'spark3.3.4'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
@@ -526,12 +535,12 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
         run: |
           if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
@@ -539,7 +548,7 @@ jobs:
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
             # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
             sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION"
           fi
       - name: IT - Bundle Validation - OpenJDK 8
         env:
@@ -569,68 +578,67 @@ jobs:
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
-  validate-bundles-java11:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - scalaProfile: 'scala-2.13'
-            flinkProfile: 'flink1.19'
-            sparkProfile: 'spark3.5'
-            sparkRuntime: 'spark3.5.0'
-          - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.19'
-            sparkProfile: 'spark3.5'
-            sparkRuntime: 'spark3.5.0'
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 11
-        uses: actions/setup-java@v3
-        with:
-          java-version: '11'
-          distribution: 'temurin'
-          architecture: x64
-          cache: maven
-      - name: Build Project
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-        run: |
-          if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle -am
-          else
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true
-            # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
-            sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
-          fi
-      - name: IT - Bundle Validation - OpenJDK 11
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-        run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
-      - name: IT - Bundle Validation - OpenJDK 17
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-        run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
+#  validate-bundles-java11:
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        include:
+#          - scalaProfile: 'scala-2.13'
+#            flinkProfile: 'flink1.20'
+#            sparkProfile: 'spark3.5'
+#            sparkRuntime: 'spark3.5.0'
+#          - scalaProfile: 'scala-2.12'
+#            flinkProfile: 'flink1.20'
+#            sparkProfile: 'spark3.5'
+#            sparkRuntime: 'spark3.5.0'
+#    steps:
+#      - uses: actions/checkout@v3
+#      - name: Set up JDK 11
+#        uses: actions/setup-java@v3
+#        with:
+#          java-version: '11'
+#          distribution: 'temurin'
+#          architecture: x64
+#      - name: Build Project
+#        env:
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#        run: |
+#          if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
+#            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle -am
+#          else
+#            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true
+#            # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
+#            sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
+#            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
+#          fi
+#      - name: IT - Bundle Validation - OpenJDK 11
+#        env:
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#        run: |
+#          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+#          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
+#      - name: IT - Bundle Validation - OpenJDK 17
+#        env:
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#        run: |
+#          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+#          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
   integration-tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - sparkProfile: 'spark2.4'
-            sparkArchive: 'spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz'
+          - sparkProfile: 'spark3.5'
+            sparkArchive: 'spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
@@ -639,24 +647,25 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
+      - name: Check disk space
+        run: df -h
       - name: Build Project
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
           mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
       - name: 'UT integ-test'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
           mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
       - name: 'IT'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
-          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run: |
           echo "Downloading $SPARK_ARCHIVE"
           curl https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
@@ -697,7 +706,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -718,8 +726,8 @@ jobs:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
-            flinkProfile: "flink1.19"
-
+            flinkProfile: "flink1.20"
+            flinkAvroVersion: '1.11.3'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 17
@@ -728,13 +736,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
         run:
-          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}

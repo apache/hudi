@@ -87,6 +87,16 @@ public class CloudSourceConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Only selects objects in the bucket whose relative path starts with this prefix");
 
+  public static final ConfigProperty<String> SELECT_RELATIVE_PATH_REGEX = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.select.relative.path.regex")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Only selects objects in the bucket whose relative path matches this regex. "
+          + "For example: When hoodie.streamer.source.cloud.data.select.relpath.prefix is set to /path/prefix, and the hoodie.streamer.source.cloud.data.select.relative.path.regex"
+          + " is regex/files[0-9]+, only files located in the /path/prefix/regex directory that match the pattern (e.g., file1, file2, etc.) will be ingested.\n"
+          + "If hoodie.streamer.source.cloud.data.select.relpath.prefix is not set, the ingestion process will look for files matching /regex/files[0-9]+ in the source bucket.");
+
   public static final ConfigProperty<String> IGNORE_RELATIVE_PATH_PREFIX = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.ignore.relpath.prefix")
       .noDefaultValue()
@@ -107,7 +117,7 @@ public class CloudSourceConfig extends HoodieConfig {
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.datasource.options")
       .markAdvanced()
       .withDocumentation("A JSON string passed to the Spark DataFrameReader while loading the dataset. "
-          + "Example: hoodie.streamer.gcp.spark.datasource.options={\"header\":\"true\",\"encoding\":\"UTF-8\"}\n");
+          + "Example: `hoodie.streamer.gcp.spark.datasource.options={\"header\":\"true\",\"encoding\":\"UTF-8\"}`\n");
 
   public static final ConfigProperty<String> CLOUD_DATAFILE_EXTENSION = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.select.file.extension")
@@ -136,9 +146,11 @@ public class CloudSourceConfig extends HoodieConfig {
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("0.14.1")
-      .withDocumentation("Boolean value for specifying path format in load args of spark.read.format(\"..\").load(\"a.xml,b.xml,c.xml\"),\n"
-          + "   * set true if path format needs to be comma separated string value, if false it's passed as array of strings like\n"
-          + "   * spark.read.format(\"..\").load(new String[]{a.xml,b.xml,c.xml})");
+      .withDocumentation("Boolean value for specifying path format in load args of "
+          + "`spark.read.format(\"..\").load(\"a.xml,b.xml,c.xml\")`. "
+          + "Set true if path format needs to be comma separated string value; "
+          + "false if it's passed as array of strings like"
+          + "`spark.read.format(\"..\").load(new String[]{a.xml,b.xml,c.xml})`");
 
   public static final ConfigProperty<String> SOURCE_MAX_BYTES_PER_PARTITION = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.partition.max.size")
@@ -155,4 +167,11 @@ public class CloudSourceConfig extends HoodieConfig {
       .withDocumentation("Max time in secs to consume " + MAX_NUM_MESSAGES_PER_SYNC.key() + " messages from cloud queue. Cloud event queues like SQS, "
           + "PubSub can return empty responses even when messages are available the queue, this config ensures we don't wait forever "
           + "to consume MAX_MESSAGES_CONF messages, but time out and move on further.");
+
+  public static final ConfigProperty<Boolean> SPARK_DATASOURCE_READER_COALESCE_ALIAS_COLUMNS = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.reader.coalesce.aliases")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Boolean value to allow coalesce alias columns with actual columns while reading from source");
 }

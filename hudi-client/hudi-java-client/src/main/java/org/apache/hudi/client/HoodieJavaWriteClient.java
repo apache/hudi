@@ -57,6 +57,11 @@ public class HoodieJavaWriteClient<T> extends
     this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
   }
 
+  @Override
+  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    // no op
+  }
+
   public HoodieJavaWriteClient(HoodieEngineContext context,
                                HoodieWriteConfig writeConfig,
                                boolean rollbackPending,
@@ -88,18 +93,18 @@ public class HoodieJavaWriteClient<T> extends
                         Map<String, List<String>> partitionToReplacedFileIds,
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    return commitStats(instantTime, HoodieListData.eager(writeStatuses), writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
+    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
         extraPreCommitFunc);
   }
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config) {
-    return HoodieJavaTable.create(config, context);
+    return createTableAndValidate(config, HoodieJavaTable::create);
   }
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    return HoodieJavaTable.create(config, context, metaClient);
+    return createTableAndValidate(config, metaClient, HoodieJavaTable::create);
   }
 
   @Override
@@ -172,7 +177,7 @@ public class HoodieJavaWriteClient<T> extends
   public void transitionInflight(String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     metaClient.getActiveTimeline().transitionRequestedToInflight(
-        new HoodieInstant(HoodieInstant.State.REQUESTED, metaClient.getCommitActionType(), instantTime),
+        metaClient.createNewInstant(HoodieInstant.State.REQUESTED, metaClient.getCommitActionType(), instantTime),
         Option.empty(), config.shouldAllowMultiWriteOnSameInstant());
   }
 

@@ -19,31 +19,43 @@
 
 package org.apache.hudi.gcp.bigquery;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.util.ManifestFileWriter;
+import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 
+import com.google.cloud.bigquery.BigQuery;
+import com.google.cloud.bigquery.BigQueryOptions;
 import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-public class TestBigQuerySyncTool {
+public class TestBigQuerySyncTool extends HoodieCommonTestHarness {
   private static final String TEST_TABLE = "test_table";
   private static final String TEST_TABLE_BASE_PATH = "gs://test-bucket/test-lake/test-db/test_table";
   private final ManifestFileWriter mockManifestFileWriter = mock(ManifestFileWriter.class);
@@ -138,5 +150,58 @@ public class TestBigQuerySyncTool {
     tool.syncHoodieTable();
     verify(mockBqSyncClient).updateTableSchema(TEST_TABLE, schema, Collections.emptyList());
     verify(mockManifestFileWriter).writeManifestFile(true);
+  }
+
+  @Test
+  void validateInitThroughSyncTool() throws Exception {
+    TypedProperties typedProperties = new TypedProperties();
+    String location = "us-central1";
+    typedProperties.setProperty("hoodie.gcp.bigquery.sync.dataset_location", location);
+    try (MockedStatic<BigQueryOptions> mockedStatic = mockStatic(BigQueryOptions.class)) {
+      BigQueryOptions.Builder builder = mock(BigQueryOptions.Builder.class);
+      BigQueryOptions.Builder builderWithLocation = mock(BigQueryOptions.Builder.class);
+      mockedStatic.when(BigQueryOptions::newBuilder).thenReturn(builder);
+      when(builder.setLocation(location)).thenReturn(builderWithLocation);
+      BigQueryOptions finalOption = mock(BigQueryOptions.class);
+      when(builderWithLocation.build()).thenReturn(finalOption);
+      BigQuery service = mock(BigQuery.class);
+      when(finalOption.getService()).thenReturn(service);
+      String path = "file:///tmp/path";
+      Configuration configuration = new Configuration();
+      HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
+      HoodieSyncTool syncTool = SyncUtilHelpers.instantiateMetaSyncTool(
+          BigQuerySyncTool.class.getName(),
+          typedProperties,
+          configuration,
+          new Path(path).getFileSystem(configuration),
+          path,
+          "PARQUET",
+          Option.of(mockMetaClient));
+      assertTrue(syncTool instanceof BigQuerySyncTool);
+      syncTool.close();
+    }
+  }
+
+  @Test
+  void validatePropsConstructor() throws Exception {
+    initMetaClient();
+    TypedProperties typedProperties = new TypedProperties();
+    String location = "us-central1";
+    typedProperties.setProperty("hoodie.gcp.bigquery.sync.dataset_location", location);
+    typedProperties.setProperty("hoodie.datasource.meta.sync.base.path", metaClient.getBasePath().toString());
+    try (MockedStatic<BigQueryOptions> mockedStatic = mockStatic(BigQueryOptions.class)) {
+      BigQueryOptions.Builder builder = mock(BigQueryOptions.Builder.class);
+      BigQueryOptions.Builder builderWithLocation = mock(BigQueryOptions.Builder.class);
+      mockedStatic.when(BigQueryOptions::newBuilder).thenReturn(builder);
+      when(builder.setLocation(location)).thenReturn(builderWithLocation);
+      BigQueryOptions finalOption = mock(BigQueryOptions.class);
+      when(builderWithLocation.build()).thenReturn(finalOption);
+      BigQuery service = mock(BigQuery.class);
+      when(finalOption.getService()).thenReturn(service);
+      assertDoesNotThrow(() -> {
+        BigQuerySyncTool syncTool = new BigQuerySyncTool(typedProperties);
+        syncTool.close();
+      });
+    }
   }
 }

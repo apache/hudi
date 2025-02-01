@@ -18,10 +18,13 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -157,5 +160,32 @@ public class DataSourceTestUtils {
       }
     }
     return true;
+  }
+
+  public static String latestCommitCompletionTime(FileSystem fs, String basePath) {
+    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
+        .getLatestCompletionTime().orElse(null);
+  }
+
+  public static String latestCommitCompletionTime(HoodieStorage storage, String basePath) {
+    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath)
+        .getLatestCompletionTime().orElse(null);
+  }
+
+  public static String latestCommitRequestTime(HoodieStorage storage, String basePath) {
+    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath)
+        .lastInstant().map(instant -> instant.requestedTime()).orElse(null);
+  }
+
+  public static String latestDeltaCommitCompletionTime(HoodieStorage storage, String basePath) {
+    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath)
+        .filter(instant -> HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
+        .getLatestCompletionTime().orElse(null);
+  }
+
+  public static String latestDeltaCommitRequest(HoodieStorage storage, String basePath) {
+    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath)
+        .filter(instant -> HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
+        .lastInstant().map(instant -> instant.requestedTime()).orElse(null);
   }
 }

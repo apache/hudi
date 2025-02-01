@@ -21,7 +21,6 @@ package org.apache.hudi.sink.clustering;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.TableServiceType;
@@ -112,9 +111,24 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
   @Override
   public void invoke(ClusteringCommitEvent event, Context context) throws Exception {
     final String instant = event.getInstant();
+    if (event.isFailed()
+        || (event.getWriteStatuses() != null
+        && event.getWriteStatuses().stream().anyMatch(writeStatus -> writeStatus.getTotalErrorRecords() > 0))) {
+      LOG.warn("Receive abnormal ClusteringCommitEvent of instant {}, task ID is {},"
+              + " is failed: {}, error record count: {}",
+          instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
+    }
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
         .put(event.getFileIds(), event);
     commitIfNecessary(instant, commitBuffer.get(instant).values());
+  }
+
+  private long getNumErrorRecords(ClusteringCommitEvent event) {
+    if (event.getWriteStatuses() == null) {
+      return -1L;
+    }
+    return event.getWriteStatuses().stream()
+        .map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
   }
 
   /**
@@ -128,7 +142,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     HoodieClusteringPlan clusteringPlan = clusteringPlanCache.computeIfAbsent(instant, k -> {
       try {
         HoodieTableMetaClient metaClient = this.writeClient.getHoodieTable().getMetaClient();
-        return ClusteringUtils.getInflightClusteringInstant(instant, metaClient.getActiveTimeline())
+        return ClusteringUtils.getInflightClusteringInstant(instant, metaClient.getActiveTimeline(), table.getInstantGenerator())
             .flatMap(pendingInstant -> ClusteringUtils.getClusteringPlan(
             metaClient, pendingInstant))
             .map(Pair::getRight)
@@ -203,8 +217,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     }
     // commit the clustering
     this.table.getMetaClient().reloadActiveTimeline();
-    this.writeClient.completeTableService(
-        TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant, Option.of(HoodieListData.lazy(writeMetadata.getWriteStatuses())));
+    this.writeClient.completeTableService(TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant);
 
     clusteringMetrics.updateCommitMetrics(instant, writeMetadata.getCommitMetadata().get());
     // whether to clean up the input base parquet files used for clustering

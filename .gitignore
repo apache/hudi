@@ -2,7 +2,9 @@
 /build/
 target/
 metastore_db/
+.metals/
 .mvn/
+.vscode/
 
 # OS Files #
 .DS_Store

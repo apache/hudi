@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -29,8 +30,8 @@ import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -51,6 +52,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class TestHiveIncrementalPuller {
 
@@ -168,15 +170,15 @@ public class TestHiveIncrementalPuller {
   }
 
   @Test
-  @EnabledIf(value = "org.apache.hudi.HoodieSparkUtils#isSpark2", disabledReason = "Disable due to hive not support avro 1.10.2.")
+  @Disabled("Disable due to hive not support avro 1.10.2.")
   public void testPuller() throws IOException, URISyntaxException {
     createTables();
     HiveIncrementalPuller.Config cfg = getHivePullerConfig("select name from testdb.test1 where `_hoodie_commit_time` > '%s'");
-    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(new HiveSyncConfig(hiveSyncProps, HiveTestUtil.getHiveConf()));
+    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(new HiveSyncConfig(hiveSyncProps, HiveTestUtil.getHiveConf()), mock(HoodieTableMetaClient.class));
     hiveClient.createDatabase(cfg.tmpDb);
     HiveIncrementalPuller puller = new HiveIncrementalPuller(cfg);
     puller.saveDelta();
-    HoodieHiveSyncClient assertingClient = new HoodieHiveSyncClient(new HiveSyncConfig(getAssertionSyncConfig(cfg.tmpDb), HiveTestUtil.getHiveConf()));
+    HoodieHiveSyncClient assertingClient = new HoodieHiveSyncClient(new HiveSyncConfig(getAssertionSyncConfig(cfg.tmpDb), HiveTestUtil.getHiveConf()), mock(HoodieTableMetaClient.class));
     String tmpTable = cfg.targetTable + "__" + cfg.sourceTable;
     assertTrue(assertingClient.tableExists(tmpTable));
   }

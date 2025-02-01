@@ -284,6 +284,24 @@
                                             "name": "value"
                                         }
                                     ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "LocalDateWrapper",
+                                    "doc": "A record wrapping Local Date type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": {
+                                                "type": "int"
+                                                // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
+                                                //       rely on logical types to do proper encoding of the native Java types,
+                                                //       and hereby have to encode statistic manually
+                                                //"logicalType": "date"
+                                            },
+                                            "name": "value"
+                                        }
+                                    ]
                                 }
                             ],
                             "default": null
@@ -309,7 +327,8 @@
                                 "org.apache.hudi.avro.model.DateWrapper",
                                 "org.apache.hudi.avro.model.DecimalWrapper",
                                 "org.apache.hudi.avro.model.TimeMicrosWrapper",
-                                "org.apache.hudi.avro.model.TimestampMicrosWrapper"
+                                "org.apache.hudi.avro.model.TimestampMicrosWrapper",
+                                "org.apache.hudi.avro.model.LocalDateWrapper"
                             ],
                             "default": null
                         },
@@ -353,6 +372,17 @@
                             "doc": "Column range entry valid/deleted flag",
                             "name": "isDeleted",
                             "type": "boolean"
+                        },
+                        // NOTE: This is a new field added in 1.0.0.
+                        //       Typically, the min/max range for each column can become wider i.e. the minValue <= all
+                        //       valid values and the maxValue >= all valid values in the file with updates and deletes.
+                        //       For effective pruning, the min/max range can be updated to a tighter bound during
+                        //       compaction or clustering.
+                        {
+                            "doc": "Whether the min/max range of a column is tight bound or not",
+                            "name": "isTightBound",
+                            "type": "boolean",
+                            "default": false
                         }
                     ]
                 }
@@ -451,15 +481,6 @@
                     "type": "record",
                     "name": "HoodieSecondaryIndexInfo",
                     "fields": [
-                        {
-                            "name": "recordKey",
-                            "type": [
-                                "null",
-                                "string"
-                            ],
-                            "default": null,
-                            "doc": "Refers to the record key that this secondary key maps to"
-                        },
                         {
                             "name": "isDeleted",
                             "type": "boolean",

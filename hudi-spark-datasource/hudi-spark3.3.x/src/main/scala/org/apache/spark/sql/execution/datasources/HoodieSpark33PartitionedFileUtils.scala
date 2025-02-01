@@ -24,12 +24,15 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hadoop.fs.FileStatus
 import org.apache.spark.sql.catalyst.InternalRow
 
+import java.net.URI
+
 /**
  * Utils on Spark [[PartitionedFile]] and [[PartitionDirectory]] for Spark 3.3.
  */
 object HoodieSpark33PartitionedFileUtils extends HoodieSparkPartitionedFileUtils {
   override def getPathFromPartitionedFile(partitionedFile: PartitionedFile): StoragePath = {
-    new StoragePath(partitionedFile.filePath)
+    //see SPARK-41970
+    new StoragePath(new URI(partitionedFile.filePath))
   }
 
   override def getStringPathFromPartitionedFile(partitionedFile: PartitionedFile): String = {

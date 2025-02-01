@@ -23,17 +23,18 @@ import org.apache.hudi.cli.ArchiveExecutorUtils;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -62,6 +63,7 @@ import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -80,6 +82,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
@@ -97,7 +100,7 @@ public class SparkMain {
    * Commands.
    */
   enum SparkCommand {
-    BOOTSTRAP(18), ROLLBACK(6), DEDUPLICATE(8), ROLLBACK_TO_SAVEPOINT(6), SAVEPOINT(7),
+    BOOTSTRAP(21), ROLLBACK(6), DEDUPLICATE(8), ROLLBACK_TO_SAVEPOINT(6), SAVEPOINT(7),
     IMPORT(13), UPSERT(13), COMPACT_SCHEDULE(7), COMPACT_RUN(10), COMPACT_SCHEDULE_AND_EXECUTE(9),
     COMPACT_UNSCHEDULE_PLAN(9), COMPACT_UNSCHEDULE_FILE(10), COMPACT_VALIDATE(7), COMPACT_REPAIR(8),
     CLUSTERING_SCHEDULE(7), CLUSTERING_RUN(9), CLUSTERING_SCHEDULE_AND_EXECUTE(8), CLEAN(5),
@@ -127,9 +130,16 @@ public class SparkMain {
     }
 
     String getPropsFilePath(String[] args) {
-      return (args.length >= minArgsCount && !StringUtils.isNullOrEmpty(args[minArgsCount - 1]))
+      return (args.length >= minArgsCount && !isNullOrEmpty(args[minArgsCount - 1]))
           ? args[minArgsCount - 1] : null;
     }
+  }
+
+  public static void addAppArgs(SparkLauncher sparkLauncher, SparkMain.SparkCommand cmd, String... args) {
+    //cmd is going to be the first arg so that is why it is minArgsCount - 1
+    ValidationUtils.checkArgument(args.length == cmd.minArgsCount - 1, "For developers only: App args does not match minArgsCount");
+    sparkLauncher.addAppArgs(cmd.toString());
+    sparkLauncher.addAppArgs(args);
   }
 
   public static void main(String[] args) {
@@ -225,7 +235,7 @@ public class SparkMain {
           break;
         case BOOTSTRAP:
           returnCode = doBootstrap(jsc, args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10],
-              args[11], args[12], args[13], args[14], args[15], args[16], propsFilePath, configs);
+              args[11], args[12], args[13], args[14], args[15], args[16], args[17], args[18], args[19], propsFilePath, configs);
           break;
         case UPGRADE:
         case DOWNGRADE:
@@ -267,10 +277,10 @@ public class SparkMain {
 
   protected static int deleteMarker(JavaSparkContext jsc, String instantTime, String basePath) {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
-
       HoodieWriteConfig config = client.getConfig();
       HoodieEngineContext context = client.getEngineContext();
       HoodieSparkTable table = HoodieSparkTable.create(config, context);
+      client.validateAgainstTableProperties(table.getMetaClient().getTableConfig(), config);
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       return 0;
@@ -471,7 +481,7 @@ public class SparkMain {
     metaClient.getTableConfig().getProps().forEach((k, v) -> propsMap.put(k.toString(), v.toString()));
     propsMap.put(HoodieWriteConfig.SKIP_DEFAULT_PARTITION_VALIDATION.key(), "true");
     propsMap.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), metaClient.getTableConfig().getRecordKeyFieldProp());
-    propsMap.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), metaClient.getTableConfig().getPartitionFieldProp());
+    propsMap.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig()).orElse(""));
     propsMap.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), metaClient.getTableConfig().getKeyGeneratorClassName());
     return propsMap;
   }
@@ -479,14 +489,15 @@ public class SparkMain {
   private static int doBootstrap(JavaSparkContext jsc, String tableName, String tableType, String basePath,
                                  String sourcePath, String recordKeyCols, String partitionFields, String parallelism, String schemaProviderClass,
                                  String bootstrapIndexClass, String selectorClass, String keyGenerator, String fullBootstrapInputProvider,
-                                 String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
+                                 String recordMergeMode, String payloadClassName, String recordMergeStrategyId, String recordMergeImplClasses,
+                                 String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
 
     TypedProperties properties = propsFilePath == null ? buildProperties(configs)
         : readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
 
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key(), sourcePath);
 
-    if (!StringUtils.isNullOrEmpty(keyGenerator) && KeyGeneratorType.getNames().contains(keyGenerator.toUpperCase(Locale.ROOT))) {
+    if (!isNullOrEmpty(keyGenerator) && KeyGeneratorType.getNames().contains(keyGenerator.toUpperCase(Locale.ROOT))) {
       properties.setProperty(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), keyGenerator.toUpperCase(Locale.ROOT));
     } else {
       properties.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), keyGenerator);
@@ -505,6 +516,9 @@ public class SparkMain {
     cfg.schemaProviderClassName = schemaProviderClass;
     cfg.bootstrapIndexClass = bootstrapIndexClass;
     cfg.payloadClassName = payloadClassName;
+    cfg.recordMergeMode = RecordMergeMode.getValue(recordMergeMode);
+    cfg.recordMergeStrategyId = recordMergeStrategyId;
+    cfg.recordMergeImplClasses = recordMergeImplClasses;
     cfg.enableHiveSync = Boolean.valueOf(enableHiveSync);
 
     new BootstrapExecutor(cfg, jsc, HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration()),

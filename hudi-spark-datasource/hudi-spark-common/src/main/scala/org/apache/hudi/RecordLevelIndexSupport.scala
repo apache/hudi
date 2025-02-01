@@ -17,17 +17,22 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, TIME_TRAVEL_AS_OF_INSTANT}
 import org.apache.hudi.RecordLevelIndexSupport.getPrunedStoragePaths
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
+import org.apache.hudi.common.model.HoodieTableQueryType.SNAPSHOT
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.InstantComparison
+import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
+import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, In, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Cast, EqualTo, Expression, In, Literal}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
@@ -91,10 +96,44 @@ class RecordLevelIndexSupport(spark: SparkSession,
   def isIndexAvailable: Boolean = {
     metadataConfig.isEnabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
   }
+
+  /**
+   * Returns true if the query type is supported by the index.
+   */
+  override def supportsQueryType(options: Map[String, String]): Boolean = {
+    if (!options.getOrElse(QUERY_TYPE.key, QUERY_TYPE.defaultValue).equalsIgnoreCase(SNAPSHOT.name)) {
+      // Disallow RLI for non-snapshot query types
+      false
+    } else {
+      // Now handle the time-travel case for snapshot queries
+      options.get(TIME_TRAVEL_AS_OF_INSTANT.key)
+        .fold {
+          // No time travel instant specified, so allow if it's a snapshot query
+          true
+        } { instant =>
+          // Check if the as.of.instant is greater than or equal to the last completed instant.
+          // We can still use RLI for data skipping for the latest snapshot.
+          compareTimestamps(HoodieSqlCommonUtils.formatQueryInstant(instant),
+            InstantComparison.GREATER_THAN_OR_EQUALS, metaClient.getCommitsTimeline.filterCompletedInstants.lastInstant.get.requestedTime)
+        }
+    }
+  }
 }
 
 object RecordLevelIndexSupport {
   val INDEX_NAME = "RECORD_LEVEL"
+
+  private def getDefaultAttributeFetcher(): Function1[Expression, Expression] = {
+    expr => expr
+  }
+
+  def getSimpleLiteralGenerator(): Function2[AttributeReference, Literal, String] = {
+    (_, lit) => lit.value.toString
+  }
+
+  def getComplexKeyLiteralGenerator(): Function2[AttributeReference, Literal, String] = {
+    (attr: AttributeReference, lit: Literal) => attr.name + KeyGenUtils.DEFAULT_COLUMN_VALUE_SEPARATOR + lit.value.toString
+  }
 
   /**
    * If the input query is an EqualTo or IN query on simple record key columns, the function returns a tuple of
@@ -104,41 +143,89 @@ object RecordLevelIndexSupport {
    * @return Tuple of filtered query and list of record key literals that need to be matched
    */
   def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String]): Option[(Expression, List[String])] = {
+    filterQueryWithRecordKey(queryFilter, recordKeyOpt, getDefaultAttributeFetcher())
+  }
+
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String],
+                               literalGenerator: Function2[AttributeReference, Literal, String]): Option[(Expression, List[String])] = {
+    filterQueryWithRecordKey(queryFilter, recordKeyOpt, literalGenerator, getDefaultAttributeFetcher())._1
+  }
+
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String], attributeFetcher: Function1[Expression, Expression]): Option[(Expression, List[String])] = {
+    filterQueryWithRecordKey(queryFilter, recordKeyOpt, getSimpleLiteralGenerator(), attributeFetcher)._1
+  }
+
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String], literalGenerator: Function2[AttributeReference, Literal, String],
+                               attributeFetcher: Function1[Expression, Expression]): (Option[(Expression, List[String])], Boolean) = {
     queryFilter match {
       case equalToQuery: EqualTo =>
-        val attributeLiteralTuple = getAttributeLiteralTuple(equalToQuery.left, equalToQuery.right).orNull
+        val attributeLiteralTuple = getAttributeLiteralTuple(attributeFetcher.apply(equalToQuery.left), attributeFetcher.apply(equalToQuery.right)).orNull
         if (attributeLiteralTuple != null) {
           val attribute = attributeLiteralTuple._1
           val literal = attributeLiteralTuple._2
           if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
-            Option.apply(equalToQuery, List.apply(literal.value.toString))
+            val recordKeyLiteral = literalGenerator.apply(attribute, literal)
+            (Option.apply(EqualTo(attribute, literal), List.apply(recordKeyLiteral)), true)
           } else {
-            Option.empty
+            (Option.empty, true)
           }
         } else {
-          Option.empty
+          (Option.empty, true)
         }
 
       case inQuery: In =>
         var validINQuery = true
-        inQuery.value match {
-          case attribute: AttributeReference =>
-            if (!attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
+        val attributeOpt = Option.apply(
+          attributeFetcher.apply(inQuery.value) match {
+            case attribute: AttributeReference =>
+              if (!attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
+                validINQuery = false
+                null
+              } else {
+                attribute
+              }
+            case _ =>
               validINQuery = false
-            }
-          case _ => validINQuery = false
-        }
+              null
+          })
         var literals: List[String] = List.empty
         inQuery.list.foreach {
-          case literal: Literal => literals = literals :+ literal.value.toString
+          case literal: Literal if attributeOpt.isDefined =>
+            val recordKeyLiteral = literalGenerator.apply(attributeOpt.get, literal)
+            literals = literals :+ recordKeyLiteral
           case _ => validINQuery = false
         }
         if (validINQuery) {
-          Option.apply(inQuery, literals)
+          (Option.apply(In(attributeOpt.get, inQuery.list), literals), true)
         } else {
-          Option.empty
+          (Option.empty, true)
         }
-      case _ => Option.empty
+
+      // Handle And expression (composite filter)
+      case andQuery: And =>
+        val leftResult = filterQueryWithRecordKey(andQuery.left, recordKeyOpt, literalGenerator, attributeFetcher)
+        val rightResult = filterQueryWithRecordKey(andQuery.right, recordKeyOpt, literalGenerator, attributeFetcher)
+
+        val isSupported = leftResult._2 && rightResult._2
+        if (!isSupported) {
+          (Option.empty, false)
+        } else {
+          // If both left and right filters are valid, concatenate their results
+          (leftResult._1, rightResult._1) match {
+            case (Some((leftExp, leftKeys)), Some((rightExp, rightKeys))) =>
+              // Return concatenated expressions and record keys
+              (Option.apply(And(leftExp, rightExp), leftKeys ++ rightKeys), true)
+            case (Some((leftExp, leftKeys)), None) =>
+              // Return concatenated expressions and record keys
+              (Option.apply(leftExp, leftKeys), true)
+            case (None, Some((rightExp, rightKeys))) =>
+              // Return concatenated expressions and record keys
+              (Option.apply(rightExp, rightKeys), true)
+            case _ => (Option.empty, true)
+          }
+        }
+
+      case _ => (Option.empty, false)
     }
   }
 
@@ -190,6 +277,14 @@ object RecordLevelIndexSupport {
       case literal: Literal => expression2 match {
         case attr: AttributeReference =>
           Option.apply(attr, literal)
+        case cast: Cast if cast.child.isInstanceOf[AttributeReference] =>
+          Option.apply(cast.child.asInstanceOf[AttributeReference], literal)
+        case _ =>
+          Option.empty
+      }
+      case cast: Cast if cast.child.isInstanceOf[AttributeReference] => expression2 match {
+        case literal: Literal =>
+          Option.apply(cast.child.asInstanceOf[AttributeReference], literal)
         case _ =>
           Option.empty
       }

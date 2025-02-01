@@ -22,10 +22,10 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -34,7 +34,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.BaseActionExecutor;
+import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator;
@@ -50,7 +50,7 @@ import java.util.Map;
 import static org.apache.hudi.common.util.CollectionUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
-public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
+public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServicePlanActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ScheduleCompactionActionExecutor.class);
   private WriteOperationType operationType;
@@ -73,9 +73,9 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
 
   private void initPlanGenerator(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     if (WriteOperationType.COMPACT.equals(operationType)) {
-      planGenerator = new HoodieCompactionPlanGenerator(table, context, config);
+      planGenerator = new HoodieCompactionPlanGenerator(table, context, config, this);
     } else {
-      planGenerator = new HoodieLogCompactionPlanGenerator(table, context, config);
+      planGenerator = new HoodieLogCompactionPlanGenerator(table, context, config, this);
     }
   }
 
@@ -91,12 +91,12 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
       extraMetadata.ifPresent(plan::setExtraMetadata);
       try {
         if (operationType.equals(WriteOperationType.COMPACT)) {
-          HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED,
+          HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
               HoodieTimeline.COMPACTION_ACTION, instantTime);
           table.getActiveTimeline().saveToCompactionRequested(compactionInstant,
               TimelineMetadataUtils.serializeCompactionPlan(plan));
         } else {
-          HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED,
+          HoodieInstant logCompactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
               HoodieTimeline.LOG_COMPACTION_ACTION, instantTime);
           table.getActiveTimeline().saveToLogCompactionRequested(logCompactionInstant,
               TimelineMetadataUtils.serializeCompactionPlan(plan));
@@ -133,7 +133,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
     if (deltaCommitsInfo.isPresent()) {
       return Option.of(Pair.of(
           deltaCommitsInfo.get().getLeft().countInstants(),
-          deltaCommitsInfo.get().getRight().getTimestamp()));
+          deltaCommitsInfo.get().getRight().requestedTime()));
     }
     return Option.empty();
   }
@@ -144,7 +144,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
     if (deltaCommitsInfo.isPresent()) {
       return Option.of(Pair.of(
             deltaCommitsInfo.get().getLeft().countInstants(),
-            deltaCommitsInfo.get().getRight().getTimestamp()));
+            deltaCommitsInfo.get().getRight().requestedTime()));
     }
     return Option.empty();
   }
@@ -210,7 +210,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
   }
 
   private Long parsedToSeconds(String time) {
-    return HoodieActiveTimeline.parseDateFromInstantTimeSafely(time).orElseThrow(() -> new HoodieCompactionException("Failed to parse timestamp " + time))
+    return TimelineUtils.parseDateFromInstantTimeSafely(time).orElseThrow(() -> new HoodieCompactionException("Failed to parse timestamp " + time))
             .getTime() / 1000;
   }
 }

@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -117,6 +118,9 @@ public class FlinkStreamerConfig extends Configuration {
       + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record.")
   public String sourceOrderingField = "ts";
 
+  @Parameter(names = {"--write-table-version"}, description = "Version of table written")
+  public Integer writeTableVersion = HoodieTableVersion.current().versionCode();
+
   @Parameter(names = {"--payload-class"}, description = "Subclass of HoodieRecordPayload, that works off "
       + "a GenericRecord. Implement your own, if you want to do something other than overwriting existing value.")
   public String payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
@@ -128,7 +132,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--record-merger-strategy"}, description = "Id of record merger strategy. Hudi will pick HoodieRecordMerger implementations in record-merger-impls "
       + "which has the same record merger strategy id")
-  public String recordMergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+  public String recordMergerStrategy = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 
   @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
       + "is purely new data/inserts to gain speed).", converter = OperationConverter.class)
@@ -422,9 +426,10 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setBoolean(FlinkOptions.INSERT_CLUSTER, config.insertCluster);
     conf.setString(FlinkOptions.OPERATION, config.operation.value());
     conf.setString(FlinkOptions.PRECOMBINE_FIELD, config.sourceOrderingField);
+    conf.setInteger(FlinkOptions.WRITE_TABLE_VERSION, config.writeTableVersion);
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, config.payloadClassName);
     conf.setString(FlinkOptions.RECORD_MERGER_IMPLS, config.recordMergerImpls);
-    conf.setString(FlinkOptions.RECORD_MERGER_STRATEGY, config.recordMergerStrategy);
+    conf.setString(FlinkOptions.RECORD_MERGER_STRATEGY_ID, config.recordMergerStrategy);
     conf.setBoolean(FlinkOptions.PRE_COMBINE, config.preCombine);
     conf.setInteger(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
     conf.setLong(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));

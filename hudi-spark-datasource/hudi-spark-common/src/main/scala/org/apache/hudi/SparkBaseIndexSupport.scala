@@ -21,17 +21,21 @@ package org.apache.hudi
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.keygen.KeyGenUtils
+import org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
-import org.apache.hudi.util.JFunction
-
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.catalyst.expressions.{And, Expression}
-import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, In, Literal}
+import org.apache.spark.sql.hudi.DataSkippingUtils.{LITERAL_TRUE_EXPR, translateIntoColumnStatsIndexFilterExpr}
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.JavaConverters._
+import scala.util.control.Breaks.{break, breakable}
 import scala.util.control.NonFatal
 
 abstract class SparkBaseIndexSupport(spark: SparkSession,
@@ -44,6 +48,14 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
   def getIndexName: String
 
   def isIndexAvailable: Boolean
+
+  /**
+   * Returns true if the query type is supported by the index.
+   *
+   * TODO: The default implementation should be changed to throw
+   * an exception once time travel support for metadata table is added.
+   */
+  def supportsQueryType(options: Map[String, String]): Boolean = true
 
   def computeCandidateIsStrict(spark: SparkSession,
                                fileIndex: HoodieFileIndex,
@@ -70,47 +82,62 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
 
   def invalidateCaches(): Unit
 
-  protected def getPrunedFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
-                                   includeLogFiles: Boolean = false): Set[String] = {
-    prunedPartitionsAndFileSlices
-      .flatMap {
-        case (_, fileSlices) => fileSlices
-      }
-      .flatMap { fileSlice =>
-        val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
-        val logFiles = if (includeLogFiles) {
-          fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toList
-        } else Nil
-        baseFileOption.map(_.getFileName).toList ++ logFiles
-      }
-      .toSet
+  def getPrunedPartitionsAndFileNames(fileIndex: HoodieFileIndex, prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath],
+                                      Seq[FileSlice])]): (Set[String], Set[String]) = {
+    val (prunedPartitions, prunedFiles) = prunedPartitionsAndFileSlices.foldLeft((Set.empty[String], Set.empty[String])) {
+      case ((partitionSet, fileSet), (partitionPathOpt, fileSlices)) =>
+        val updatedPartitionSet = partitionPathOpt.map(_.path).map(partitionSet + _).getOrElse(partitionSet)
+        val updatedFileSet = fileSlices.foldLeft(fileSet) { (fileAcc, fileSlice) =>
+          val baseFile = Option(fileSlice.getBaseFile.orElse(null)).map(_.getFileName)
+          val logFiles = if (fileIndex.includeLogFiles) {
+            fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toSet
+          } else Set.empty[String]
+
+          fileAcc ++ baseFile ++ logFiles
+        }
+
+        (updatedPartitionSet, updatedFileSet)
+    }
+
+    (prunedPartitions, prunedFiles)
   }
 
-  protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], prunedFileNames: Set[String]): Set[String] = {
-    val indexSchema = indexDf.schema
-    val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema)).reduce(And)
-    val prunedCandidateFileNames =
-      indexDf.where(new Column(indexFilter))
-        .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+  protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], fileNamesFromPrunedPartitions: Set[String],
+                                  isExpressionIndex: Boolean = false, indexDefinitionOpt: Option[HoodieIndexDefinition] = Option.empty): Set[String] = {
+    val indexedCols : Seq[String] = if (indexDefinitionOpt.isDefined) {
+      indexDefinitionOpt.get.getSourceFields.asScala.toSeq
+    } else {
+      metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
+    }
+    val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex, indexedCols)).reduce(And)
+    if (indexFilter.equals(TrueLiteral)) {
+      // if there are any non indexed cols or we can't translate source expr, we have to read all files and may not benefit from col stats lookup.
+       fileNamesFromPrunedPartitions
+    } else {
+      // only lookup in col stats if all filters are eligible to be looked up in col stats index in MDT
+      val prunedCandidateFileNames =
+        indexDf.where(new Column(indexFilter))
+          .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+          .collect()
+          .map(_.getString(0))
+          .toSet
+
+      // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
+      //       base-file or log file: since it's bound to clustering, which could occur asynchronously
+      //       at arbitrary point in time, and is not likely to be touching all of the base files.
+      //
+      //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
+      //       files and all outstanding base-files or log files, and make sure that all base files and
+      //       log file not represented w/in the index are included in the output of this method
+      val allIndexedFileNames =
+      indexDf.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
         .collect()
         .map(_.getString(0))
         .toSet
+      val notIndexedFileNames = fileNamesFromPrunedPartitions -- allIndexedFileNames
 
-    // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
-    //       base-file or log file: since it's bound to clustering, which could occur asynchronously
-    //       at arbitrary point in time, and is not likely to be touching all of the base files.
-    //
-    //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
-    //       files and all outstanding base-files or log files, and make sure that all base files and
-    //       log file not represented w/in the index are included in the output of this method
-    val allIndexedFileNames =
-    indexDf.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-      .collect()
-      .map(_.getString(0))
-      .toSet
-    val notIndexedFileNames = prunedFileNames -- allIndexedFileNames
-
-    prunedCandidateFileNames ++ notIndexedFileNames
+      prunedCandidateFileNames ++ notIndexedFileNames
+    }
   }
 
   /**
@@ -133,9 +160,10 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
   }
 
   /**
-   * Given query filters, it filters the EqualTo and IN queries on simple record key columns and returns a tuple of
+   * Given query filters, it filters the EqualTo and IN queries on record key columns and returns a tuple of
    * list of such queries and list of record key literals present in the query.
    * If record index is not available, it returns empty list for record filters and record keys
+   *
    * @param queryFilters The queries that need to be filtered.
    * @return Tuple of List of filtered queries and list of record key literals that need to be matched
    */
@@ -144,32 +172,63 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       (List.empty, List.empty)
     } else {
       var recordKeyQueries: List[Expression] = List.empty
-      var recordKeys: List[String] = List.empty
-      for (query <- queryFilters) {
-        val recordKeyOpt = getRecordKeyConfig
-        RecordLevelIndexSupport.filterQueryWithRecordKey(query, recordKeyOpt).foreach({
-          case (exp: Expression, recKeys: List[String]) =>
-            recordKeys = recordKeys ++ recKeys
-            recordKeyQueries = recordKeyQueries :+ exp
-        })
-      }
+      var compositeRecordKeys: List[String] = List.empty
+      val recordKeyOpt = getRecordKeyConfig
+      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1
+      recordKeyOpt.foreach { recordKeysArray =>
+        // Handle composite record keys
+        breakable {
+          // Iterate configured record keys and fetch literals for every record key
+          for (recordKey <- recordKeysArray) {
+            var recordKeys: List[String] = List.empty
+            for (query <- queryFilters) {
+              {
+                RecordLevelIndexSupport.filterQueryWithRecordKey(query, Option.apply(recordKey),
+                  if (isComplexRecordKey) {
+                    RecordLevelIndexSupport.getComplexKeyLiteralGenerator()
+                  } else {
+                    RecordLevelIndexSupport.getSimpleLiteralGenerator()
+                  }
+                ).foreach {
+                  case (exp: Expression, recKeys: List[String]) =>
+                    recordKeys = recordKeys ++ recKeys
+                    recordKeyQueries = recordKeyQueries :+ exp
+                }
+              }
+            }
 
-      Tuple2.apply(recordKeyQueries, recordKeys)
+            if (recordKeys.isEmpty) {
+              // No literals found for the record key, therefore filtering can not be performed
+              recordKeyQueries = List.empty
+              compositeRecordKeys = List.empty
+              break()
+            } else if (!isComplexRecordKey || compositeRecordKeys.isEmpty) {
+              compositeRecordKeys = recordKeys
+            } else {
+              // Combine literals for this configured record key with literals for the other configured record keys
+              // If there are two literals for rk1, rk2, rk3 each. A total of 8 combinations will be generated
+              var tempCompositeRecordKeys: List[String] = List.empty
+              for (compRecKey <- compositeRecordKeys) {
+                for (recKey <- recordKeys) {
+                  tempCompositeRecordKeys = tempCompositeRecordKeys :+ (compRecKey + DEFAULT_RECORD_KEY_PARTS_SEPARATOR + recKey)
+                }
+              }
+              compositeRecordKeys = tempCompositeRecordKeys
+            }
+          }
+        }
+      }
+      (recordKeyQueries, compositeRecordKeys)
     }
   }
 
   /**
-   * Returns the configured record key for the table if it is a simple record key else returns empty option.
+   * Returns the configured record key for the table.
    */
-  private def getRecordKeyConfig: Option[String] = {
+  private def getRecordKeyConfig: Option[Array[String]] = {
     val recordKeysOpt: org.apache.hudi.common.util.Option[Array[String]] = metaClient.getTableConfig.getRecordKeyFields
-    val recordKeyOpt = recordKeysOpt.map[String](JFunction.toJavaFunction[Array[String], String](arr =>
-      if (arr.length == 1) {
-        arr(0)
-      } else {
-        null
-      }))
-    Option.apply(recordKeyOpt.orElse(null))
+    // Convert the Hudi Option to Scala Option and return if present
+    Option(recordKeysOpt.orElse(null)).filter(_.nonEmpty)
   }
 
 }

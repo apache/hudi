@@ -33,6 +33,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
@@ -464,6 +465,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       throw new HoodieCatalogException("CREATE VIEW is not supported.");
     }
 
+    // validate parameter consistency
+    validateParameterConsistency(table);
+
     try {
       boolean isMorTable = OptionsResolver.isMorTable(table.getOptions());
       Table hiveTable = instantiateHiveTable(tablePath, table, inferTablePath(tablePath, table), isMorTable);
@@ -718,7 +722,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
           HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(location)
               .setConf(HadoopFSUtils.getStorageConfWithCopy(hiveConf)).build();
           //Init table with new name
-          HoodieTableMetaClient.withPropertyBuilder().fromProperties(metaClient.getTableConfig().getProps())
+          HoodieTableMetaClient.newTableBuilder().fromProperties(metaClient.getTableConfig().getProps())
               .setTableName(newTableName)
               .initTable(HadoopFSUtils.getStorageConfWithCopy(hiveConf), location);
 
@@ -975,6 +979,44 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       newOptions.computeIfAbsent(FlinkOptions.HIVE_SYNC_DB.key(), k -> tablePath.getDatabaseName());
       newOptions.computeIfAbsent(FlinkOptions.HIVE_SYNC_TABLE.key(), k -> tablePath.getObjectName());
       return newOptions;
+    }
+  }
+
+  public void validateParameterConsistency(CatalogBaseTable table) {
+    Map<String, String> properties = new HashMap<>(table.getOptions());
+
+    //Check consistency between pk statement and option 'hoodie.datasource.write.recordkey.field'.
+    String pkError = String.format("Primary key fields definition has inconsistency between pk statement and option '%s'",
+        FlinkOptions.RECORD_KEY_FIELD.key());
+    if (table.getUnresolvedSchema().getPrimaryKey().isPresent()
+        && properties.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())) {
+      List<String> pks = table.getUnresolvedSchema().getPrimaryKey().get().getColumnNames();
+      String[] pkFromOptions = properties.get(FlinkOptions.RECORD_KEY_FIELD.key()).split(",");
+      if (pkFromOptions.length != pks.size()) {
+        throw new HoodieValidationException(pkError);
+      }
+      for (String field : pkFromOptions) {
+        if (!pks.contains(field)) {
+          throw new HoodieValidationException(pkError);
+        }
+      }
+    }
+
+    //Check consistency between partition key statement and option 'hoodie.datasource.write.partitionpath.field'.
+    String partitionKeyError = String.format("Partition key fields definition has inconsistency between partition key statement and option '%s'",
+        FlinkOptions.PARTITION_PATH_FIELD.key());
+    CatalogTable catalogTable = (CatalogTable) table;
+    if (catalogTable.isPartitioned() && properties.containsKey(FlinkOptions.PARTITION_PATH_FIELD.key())) {
+      final List<String> partitions = catalogTable.getPartitionKeys();
+      final String[] partitionsFromOptions = properties.get(FlinkOptions.PARTITION_PATH_FIELD.key()).split(",");
+      if (partitionsFromOptions.length != partitions.size()) {
+        throw new HoodieValidationException(pkError);
+      }
+      for (String field : partitionsFromOptions) {
+        if (!partitions.contains(field)) {
+          throw new HoodieValidationException(partitionKeyError);
+        }
+      }
     }
   }
 

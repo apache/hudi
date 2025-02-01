@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -118,6 +119,8 @@ public class SparkBucketIndexPartitioner<T> extends
     String bucketId = BucketIdentifier.bucketIdStr(bucketNumber % numBuckets);
     // Insert overwrite always generates new bucket file id
     if (isOverwrite) {
+      ValidationUtils.checkArgument(!isNonBlockingConcurrencyControl,
+          "Insert overwrite is not supported with non-blocking concurrency control");
       return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketId), partitionPath);
     }
     Option<String> fileIdOption = Option.fromJavaOptional(updatePartitionPathFileIds
@@ -128,9 +131,12 @@ public class SparkBucketIndexPartitioner<T> extends
       return new BucketInfo(BucketType.UPDATE, fileIdOption.get(), partitionPath);
     } else {
       // Always write into log file instead of base file if using NB-CC
-      BucketType bucketType = isNonBlockingConcurrencyControl ? BucketType.UPDATE : BucketType.INSERT;
-      String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucketId, isNonBlockingConcurrencyControl);
-      return new BucketInfo(bucketType, fileIdPrefix, partitionPath);
+      if (isNonBlockingConcurrencyControl) {
+        String fileId = BucketIdentifier.newBucketFileIdForNBCC(bucketNumber);
+        return new BucketInfo(BucketType.UPDATE, fileId, partitionPath);
+      }
+      String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucketId);
+      return new BucketInfo(BucketType.INSERT, fileIdPrefix, partitionPath);
     }
   }
 

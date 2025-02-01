@@ -73,7 +73,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
         "HoodieRealtimeRecordReader can only work on RealtimeSplit and not with " + split);
     RealtimeSplit realtimeSplit = (RealtimeSplit) split;
 
-    if (shouldUseFilegroupReader(jobConf)) {
+    if (shouldUseFilegroupReader(jobConf, split)) {
       return super.getRecordReader(realtimeSplit, jobConf, reporter);
     }
 

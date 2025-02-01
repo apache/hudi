@@ -20,6 +20,7 @@
 Starting from versions 0.11, Hudi provides hudi-utilities-slim-bundle which excludes hudi-spark-datasource modules. This new bundle is intended to be used with Hudi Spark bundle together, if using
 hudi-utilities-bundle solely introduces problems for a specific Spark version.
 
+<!--TODO: [HUDI-8294] update with supported spark version -->
 ## Example with Spark 2.4.7
 
 * Build Hudi: `mvn clean install -DskipTests`

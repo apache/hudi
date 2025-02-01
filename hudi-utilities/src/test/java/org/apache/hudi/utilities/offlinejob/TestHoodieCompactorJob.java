@@ -73,14 +73,12 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
         .build();
     props.putAll(config.getProps());
-    Properties metaClientProps = HoodieTableMetaClient.withPropertyBuilder()
+    metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
-        .build();
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath);
 
-    metaClient =  HoodieTableMetaClient.initTableAndGetMetaClient(
-        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath, metaClientProps);
     client = new SparkRDDWriteClient(context, config);
 
     writeData(true, client.createNewInstantTime(), 100, true);

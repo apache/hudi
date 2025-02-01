@@ -327,7 +327,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       // recomputed. This includes the state transitions. We need to delete the inflight instance so that subsequent
       // upsert will not run into conflicts.
       metaClient.getStorage().deleteDirectory(
-          new StoragePath(metaClient.getMetaPath(), "001.inflight"));
+          new StoragePath(metaClient.getTimelinePath(), "001.inflight"));
 
       writeClient.upsert(writeRecords, newCommitTime);
       assertNoWriteErrors(writeStatues.collect());
@@ -560,7 +560,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       // make first commit with 20 records
       JavaRDD<HoodieRecord> writeRecords1 = generateAndCommitRecords(writeClient, 20);
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      String commit1 = metaClient.getActiveTimeline().firstInstant().get().getTimestamp();
+      String commit1 = metaClient.getActiveTimeline().firstInstant().get().requestedTime();
 
       // Make 6 additional commits, so that first commit is archived
       for (int nCommit = 0; nCommit < 6; nCommit++) {

@@ -64,7 +64,7 @@ public class HoodieSparkConsistentBucketIndex extends HoodieConsistentBucketInde
                                                 String instantTime)
       throws HoodieIndexException {
     HoodieInstant instant = hoodieTable.getMetaClient().getActiveTimeline().findInstantsAfterOrEquals(instantTime, 1).firstInstant().get();
-    ValidationUtils.checkState(instant.getTimestamp().equals(instantTime), "Cannot get the same instant, instantTime: " + instantTime);
+    ValidationUtils.checkState(instant.requestedTime().equals(instantTime), "Cannot get the same instant, instantTime: " + instantTime);
     if (!ClusteringUtils.isClusteringOrReplaceCommitAction(instant.getAction())) {
       return writeStatuses;
     }
@@ -103,7 +103,9 @@ public class HoodieSparkConsistentBucketIndex extends HoodieConsistentBucketInde
           .collect(Collectors.toList());
       HoodieConsistentHashingMetadata newMeta = new HoodieConsistentHashingMetadata(meta.getVersion(), meta.getPartitionPath(),
           instantTime, meta.getNumBuckets(), seqNo + 1, newNodes);
-      ConsistentBucketIndexUtils.saveMetadata(hoodieTable, newMeta, true);
+      if (!ConsistentBucketIndexUtils.saveMetadata(hoodieTable, newMeta)) {
+        throw new HoodieIndexException("Failed to save metadata for partition: " + partition);
+      }
     });
 
     return writeStatuses;

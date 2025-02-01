@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex.IndexType;
@@ -51,6 +51,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -100,16 +101,16 @@ public class ITTestBucketStreamWrite {
 
     // rollback path structure: tablePath/.hoodie/.temp/${commitInstant}/${partition}/${fileGroup}_${fileInstant}.parquet.marker.APPEND
     HoodieInstant instant = activeCompletedTimeline.getInstants().get(0);
-    String commitInstant = instant.getTimestamp();
-    String filename = activeCompletedTimeline.getInstants().get(0).getFileName();
+    String commitInstant = instant.requestedTime();
+    String filename = INSTANT_FILE_NAME_GENERATOR.getFileName(activeCompletedTimeline.getInstants().get(0));
 
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-        .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(),
+    HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe()
+        .deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(),
             HoodieCommitMetadata.class);
 
     // delete successful commit to simulate an unsuccessful write
     HoodieStorage storage = metaClient.getStorage();
-    StoragePath path = new StoragePath(metaClient.getMetaPath(), filename);
+    StoragePath path = new StoragePath(metaClient.getTimelinePath(), filename);
     storage.deleteDirectory(path);
 
     commitMetadata.getFileIdAndRelativePaths().forEach((fileId, relativePath) -> {
@@ -118,8 +119,8 @@ public class ITTestBucketStreamWrite {
       String partition = partitionFileNameSplit[0];
       String fileName = partitionFileNameSplit[1];
       try {
-        String markerFileName = FileCreateUtils.markerFileName(fileName, IOType.CREATE);
-        FileCreateUtils.createMarkerFile(tablePath, partition, commitInstant, markerFileName);
+        String markerFileName = FileCreateUtilsLegacy.markerFileName(fileName, IOType.CREATE);
+        FileCreateUtilsLegacy.createMarkerFile(tablePath, partition, commitInstant, markerFileName);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

@@ -19,13 +19,14 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -129,10 +130,6 @@ public class FSUtils {
         .defaultValue().getFileExtension());
   }
 
-  public static String getCommitFromCommitFile(String commitFileName) {
-    return HoodieInstant.extractTimestamp(commitFileName);
-  }
-
   public static String getCommitTime(String fullFileName) {
     try {
       if (isLogFile(fullFileName)) {
@@ -144,12 +141,30 @@ public class FSUtils {
     }
   }
 
+  public static String getCommitTimeWithFullPath(String path) {
+    String fullFileName;
+    if (path.contains("/")) {
+      fullFileName = path.substring(path.lastIndexOf("/") + 1);
+    } else {
+      fullFileName = path;
+    }
+    return getCommitTime(fullFileName);
+  }
+
   public static long getFileSize(HoodieStorage storage, StoragePath path) throws IOException {
     return storage.getPathInfo(path).getLength();
   }
 
   public static String getFileId(String fullFileName) {
     return fullFileName.split("_", 2)[0];
+  }
+
+  /**
+   * @param filePath
+   * @returns the filename from the given path. Path could be the absolute path or just partition path and file name.
+   */
+  public static String getFileNameFromPath(String filePath) {
+    return filePath.substring(filePath.lastIndexOf("/") + 1);
   }
 
   /**
@@ -603,6 +618,31 @@ public class FSUtils {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
     return false;
+  }
+
+  public static HoodiePath fromStoragePath(StoragePath path) {
+    if (null == path) {
+      return null;
+    }
+    return HoodiePath.newBuilder().setUri(path.toString()).build();
+  }
+
+  public static HoodieFileStatus fromPathInfo(StoragePathInfo pathInfo) {
+    if (null == pathInfo) {
+      return null;
+    }
+
+    HoodieFileStatus fStatus = new HoodieFileStatus();
+
+    fStatus.setPath(fromStoragePath(pathInfo.getPath()));
+    fStatus.setLength(pathInfo.getLength());
+    fStatus.setIsDir(pathInfo.isDirectory());
+    fStatus.setBlockReplication((int) pathInfo.getBlockReplication());
+    fStatus.setBlockSize(pathInfo.getBlockSize());
+    fStatus.setModificationTime(pathInfo.getModificationTime());
+    fStatus.setAccessTime(pathInfo.getModificationTime());
+
+    return fStatus;
   }
 
   /**

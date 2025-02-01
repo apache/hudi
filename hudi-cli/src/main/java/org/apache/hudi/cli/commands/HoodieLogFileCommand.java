@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.block.HoodieCorruptBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.FooterMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -91,7 +92,7 @@ public class HoodieLogFileCommand {
         storage, new StoragePath(logFilePathPattern)).stream()
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
     Map<String, List<Tuple3<Tuple2<String, HoodieLogBlockType>, Tuple2<Map<HeaderMetadataType, String>,
-        Map<HeaderMetadataType, String>>, Integer>>> commitCountAndMetadata =
+        Map<FooterMetadataType, String>>, Integer>>> commitCountAndMetadata =
         new HashMap<>();
     int numCorruptBlocks = 0;
     int dummyInstantTimeCount = 0;
@@ -145,7 +146,7 @@ public class HoodieLogFileCommand {
                     new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount.get()));
           } else {
             List<Tuple3<Tuple2<String, HoodieLogBlockType>, Tuple2<Map<HeaderMetadataType, String>,
-                Map<HeaderMetadataType, String>>, Integer>> list =
+                Map<FooterMetadataType, String>>, Integer>> list =
                 new ArrayList<>();
             list.add(
                 new Tuple3<>(new Tuple2<>(fileName, n.getBlockType()),
@@ -158,11 +159,11 @@ public class HoodieLogFileCommand {
     List<Comparable[]> rows = new ArrayList<>();
     ObjectMapper objectMapper = new ObjectMapper();
     for (Map.Entry<String, List<Tuple3<Tuple2<String, HoodieLogBlockType>, Tuple2<Map<HeaderMetadataType, String>,
-        Map<HeaderMetadataType, String>>, Integer>>> entry : commitCountAndMetadata
+        Map<FooterMetadataType, String>>, Integer>>> entry : commitCountAndMetadata
         .entrySet()) {
       String instantTime = entry.getKey();
       for (Tuple3<Tuple2<String, HoodieLogBlockType>, Tuple2<Map<HeaderMetadataType, String>,
-          Map<HeaderMetadataType, String>>, Integer> tuple3 : entry
+          Map<FooterMetadataType, String>>, Integer> tuple3 : entry
           .getValue()) {
         Comparable[] output = new Comparable[6];
         output[0] = tuple3._1()._1();
@@ -232,7 +233,7 @@ public class HoodieLogFileCommand {
               .withReaderSchema(readerSchema)
               .withLatestInstantTime(
                   client.getActiveTimeline()
-                      .getCommitAndReplaceTimeline().lastInstant().get().getTimestamp())
+                      .getCommitAndReplaceTimeline().lastInstant().get().requestedTime())
               .withReverseReader(
                   Boolean.parseBoolean(
                       HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue()))

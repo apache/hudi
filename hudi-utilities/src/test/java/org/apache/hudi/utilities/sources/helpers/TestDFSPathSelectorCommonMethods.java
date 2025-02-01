@@ -20,6 +20,8 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -38,7 +40,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createBaseFile;
 import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.PARTITIONS_LIST_PARALLELISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -115,7 +117,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
     createBaseFile(basePath, "p1", "000", "foo3", 10, 3000);
     createBaseFile(basePath, "p1", "000", "foo4", 10, 4000);
     createBaseFile(basePath, "p1", "000", "foo5", 10, 5000);
-    Pair<Option<String>, String> nextFilePathsAndCheckpoint = selector
+    Pair<Option<String>, Checkpoint> nextFilePathsAndCheckpoint = selector
         .getNextFilePathsAndMaxModificationTime(jsc, Option.empty(), 30);
     List<String> fileNames = Arrays
         .stream(nextFilePathsAndCheckpoint.getLeft().get().split(","))
@@ -124,7 +126,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
     assertEquals(2, fileNames.size());
     assertTrue(fileNames.get(0).startsWith("foo1"));
     assertTrue(fileNames.get(1).startsWith("foo2"));
-    String checkpointStr1stRead = nextFilePathsAndCheckpoint.getRight();
+    String checkpointStr1stRead = nextFilePathsAndCheckpoint.getRight().getCheckpointKey();
     assertEquals(2000L, Long.parseLong(checkpointStr1stRead), "should read up to foo2 (inclusive)");
   }
 
@@ -137,7 +139,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
     createBaseFile(basePath, "p1", "000", "foo3", 10, 1000);
     createBaseFile(basePath, "p1", "000", "foo4", 10, 2000);
     createBaseFile(basePath, "p1", "000", "foo5", 10, 2000);
-    Pair<Option<String>, String> nextFilePathsAndCheckpoint = selector
+    Pair<Option<String>, Checkpoint> nextFilePathsAndCheckpoint = selector
         .getNextFilePathsAndMaxModificationTime(jsc, Option.empty(), 20);
     List<String> fileNames1stRead = Arrays
         .stream(nextFilePathsAndCheckpoint.getLeft().get().split(","))
@@ -147,11 +149,11 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
     assertTrue(fileNames1stRead.get(0).startsWith("foo1"));
     assertTrue(fileNames1stRead.get(1).startsWith("foo2"));
     assertTrue(fileNames1stRead.get(2).startsWith("foo3"));
-    String checkpointStr1stRead = nextFilePathsAndCheckpoint.getRight();
+    String checkpointStr1stRead = nextFilePathsAndCheckpoint.getRight().getCheckpointKey();
     assertEquals(1000L, Long.parseLong(checkpointStr1stRead), "should read up to foo3 (inclusive)");
 
     nextFilePathsAndCheckpoint = selector
-        .getNextFilePathsAndMaxModificationTime(jsc, Option.of(checkpointStr1stRead), 20);
+        .getNextFilePathsAndMaxModificationTime(jsc, Option.of(new StreamerCheckpointV2(checkpointStr1stRead)), 20);
     List<String> fileNames2ndRead = Arrays
         .stream(nextFilePathsAndCheckpoint.getLeft().get().split(","))
         .map(p -> Paths.get(p).toFile().getName())
@@ -159,7 +161,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
     assertEquals(2, fileNames2ndRead.size());
     assertTrue(fileNames2ndRead.get(0).startsWith("foo4"));
     assertTrue(fileNames2ndRead.get(1).startsWith("foo5"));
-    String checkpointStr2ndRead = nextFilePathsAndCheckpoint.getRight();
+    String checkpointStr2ndRead = nextFilePathsAndCheckpoint.getRight().getCheckpointKey();
     assertEquals(2000L, Long.parseLong(checkpointStr2ndRead), "should read up to foo5 (inclusive)");
   }
 }

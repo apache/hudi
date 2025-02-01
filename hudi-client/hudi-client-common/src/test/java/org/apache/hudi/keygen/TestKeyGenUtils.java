@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,6 +37,7 @@ public class TestKeyGenUtils {
     assertEquals(
         KeyGeneratorType.SIMPLE,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1"));
+
     assertEquals(
         KeyGeneratorType.COMPLEX,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1,partition2"));
@@ -45,20 +47,77 @@ public class TestKeyGenUtils {
     assertEquals(
         KeyGeneratorType.COMPLEX,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1,partition2"));
+
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1:simple,partition2:timestamp"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1:simple"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1:simple,partition2:timestamp"));
+
     assertEquals(
         KeyGeneratorType.NON_PARTITION,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), ""));
     assertEquals(
         KeyGeneratorType.NON_PARTITION,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), null));
+
+    // Test key generator type with auto generation of record keys
+    assertEquals(
+        KeyGeneratorType.SIMPLE,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), "partition1"));
+    assertEquals(
+        KeyGeneratorType.COMPLEX,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), "partition1,partition2"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), "partition1:simple"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), "partition1:simple,partition2:timestamp"));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), ""));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), null));
+  }
+
+  @Test
+  public void testInferKeyGeneratorTypeFromPartitionFields() {
+    assertEquals(
+        KeyGeneratorType.SIMPLE,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1"));
+    assertEquals(
+        KeyGeneratorType.COMPLEX,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1,partition2"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1:simple"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1:timestamp"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1:simple,partition2:timestamp"));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields(""));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields(null));
   }
 
   @Test
   public void testExtractRecordKeys() {
-    // test complex key form: field1:val1,field2:val2,...
-    String[] s1 = KeyGenUtils.extractRecordKeys("id:1");
-    Assertions.assertArrayEquals(new String[] {"1"}, s1);
+    // if for recordKey one column only is used, then there is no added column name before value
+    String[] s1 = KeyGenUtils.extractRecordKeys("2024-10-22 14:11:53.023");
+    Assertions.assertArrayEquals(new String[] {"2024-10-22 14:11:53.023"}, s1);
 
+    // test complex key form: field1:val1,field2:val2,...
     String[] s2 = KeyGenUtils.extractRecordKeys("id:1,id:2");
     Assertions.assertArrayEquals(new String[] {"1", "2"}, s2);
 
@@ -73,7 +132,7 @@ public class TestKeyGenUtils {
     Assertions.assertArrayEquals(new String[] {"1"}, s5);
 
     String[] s6 = KeyGenUtils.extractRecordKeys("id:1,id2:2,2");
-    Assertions.assertArrayEquals(new String[]{"1", "2", "2"}, s6);
+    Assertions.assertArrayEquals(new String[]{"1", "2,2"}, s6);
   }
 
   @Test
@@ -85,6 +144,14 @@ public class TestKeyGenUtils {
     Assertions.assertArrayEquals(new String[] {"2"}, s1);
 
     String[] s2 = KeyGenUtils.extractRecordKeysByFields("id1:1,id2:2,2,id3:3", fields);
-    Assertions.assertArrayEquals(new String[] {"2", "2"}, s2);
+    Assertions.assertArrayEquals(new String[] {"2,2"}, s2);
+
+    String[] s3 = KeyGenUtils.extractRecordKeysByFields("id1:1,1,1,id2:,2,2,,id3:3", fields);
+    Assertions.assertArrayEquals(new String[] {",2,2,"}, s3);
+
+    fields.addAll(Arrays.asList("id1", "id3", "id4"));
+    // tough case with a lot of ',' and ':'
+    String[] s4 = KeyGenUtils.extractRecordKeysByFields("id1:1,,,id2:2024-10-22 14:11:53.023,id3:,,3,id4:::1:2::4::", fields);
+    Assertions.assertArrayEquals(new String[] {"1,,", "2024-10-22 14:11:53.023", ",,3", "::1:2::4::"}, s4);
   }
 }

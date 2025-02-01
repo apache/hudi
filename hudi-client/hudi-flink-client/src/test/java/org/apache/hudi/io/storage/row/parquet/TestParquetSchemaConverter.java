@@ -50,7 +50,7 @@ public class TestParquetSchemaConverter {
     assertThat(messageType.getColumns().size(), is(7));
     final String expected = "message converted {\n"
         + "  optional group f_array (LIST) {\n"
-        + "    repeated group list {\n"
+        + "    repeated group array {\n"
         + "      optional binary element (STRING);\n"
         + "    }\n"
         + "  }\n"

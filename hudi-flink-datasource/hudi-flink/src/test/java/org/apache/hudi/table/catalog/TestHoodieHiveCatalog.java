@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -38,6 +39,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.StreamerUtil;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
@@ -96,6 +99,7 @@ public class TestHoodieHiveCatalog {
           .field("uuid", DataTypes.INT().notNull())
           .field("name", DataTypes.STRING())
           .field("age", DataTypes.INT())
+          .field("infos", DataTypes.ARRAY(DataTypes.STRING()))
           .field("par1", DataTypes.STRING())
           .field("ts_3", DataTypes.TIMESTAMP(3))
           .field("ts_6", DataTypes.TIMESTAMP(6))
@@ -168,6 +172,7 @@ public class TestHoodieHiveCatalog {
         + "uuid:int,"
         + "name:string,"
         + "age:int,"
+        + "infos:array<string>,"
         + "ts_3:timestamp,"
         + "ts_6:timestamp";
     assertEquals(expectedFieldSchema, fieldSchema);
@@ -187,10 +192,17 @@ public class TestHoodieHiveCatalog {
         + "{\"name\":\"uuid\",\"type\":\"integer\",\"nullable\":false,\"metadata\":{}},"
         + "{\"name\":\"name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"age\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"infos\",\"type\":{\"type\":\"array\", \"elementType\":\"string\",\"containsNull\":true},\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"ts_3\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"ts_6\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"par1\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]}";
     assertEquals(expectedAvroSchemaStr, avroSchemaStr);
+
+    // validate array field nullable
+    ObjectMapper mapper = new ObjectMapper();
+    JsonNode arrayFieldTypeNode = mapper.readTree(avroSchemaStr).get("fields").get(8).get("type");
+    assertThat(arrayFieldTypeNode.get("type").asText(), is("array"));
+    assertThat(arrayFieldTypeNode.get("containsNull").asBoolean(), is(true));
 
     // validate catalog table
     CatalogBaseTable table1 = hoodieCatalog.getTable(tablePath);
@@ -201,7 +213,7 @@ public class TestHoodieHiveCatalog {
     String tableSchema = table1.getUnresolvedSchema().getColumns().stream()
         .map(Schema.UnresolvedColumn::toString)
         .collect(Collectors.joining(","));
-    String expectedTableSchema = "`uuid` INT NOT NULL,`name` STRING,`age` INT,`par1` STRING,`ts_3` TIMESTAMP(3),`ts_6` TIMESTAMP(6)";
+    String expectedTableSchema = "`uuid` INT NOT NULL,`name` STRING,`age` INT,`infos` ARRAY<STRING>,`par1` STRING,`ts_3` TIMESTAMP(3),`ts_6` TIMESTAMP(6)";
     assertEquals(expectedTableSchema, tableSchema);
     assertEquals(Collections.singletonList("uuid"), table1.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
     assertEquals(Collections.singletonList("par1"), ((CatalogTable) table1).getPartitionKeys());
@@ -219,6 +231,7 @@ public class TestHoodieHiveCatalog {
 
     CatalogBaseTable table2 = hoodieCatalog.getTable(tablePath);
     assertEquals("id", table2.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
+    options.remove(RECORDKEY_FIELD_NAME.key());
 
     // validate key generator for partitioned table
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
@@ -473,6 +486,42 @@ public class TestHoodieHiveCatalog {
 
     Table hiveTable = hoodieCatalog.getHiveTable(tablePath);
     assertEquals("false", hiveTable.getParameters().get("hadoop.hive.metastore.schema.verification"));
+  }
+
+  @Test
+  public void checkParameterSemantic() throws TableAlreadyExistException, DatabaseNotExistException {
+    HoodieHiveCatalog catalog = HoodieCatalogTestUtils.createHiveCatalog("myCatalog", true);
+    catalog.open();
+    Map<String, String> originOptions = new HashMap<>();
+    originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
+
+    // validate pk: same quantity but different values
+    String pkError = String.format("Primary key fields definition has inconsistency between pk statement and option '%s'",
+        FlinkOptions.RECORD_KEY_FIELD.key());
+    originOptions.put(FlinkOptions.RECORD_KEY_FIELD.key(), "name");
+    CatalogTable pkTable = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, pkTable, false), pkError);
+    originOptions.remove(FlinkOptions.RECORD_KEY_FIELD.key());
+
+    // validate pk: the pk field exist in options but not in pk statement.
+    originOptions.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid,name");
+    CatalogTable pkTable1 = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, pkTable1, false), pkError);
+    originOptions.remove(FlinkOptions.RECORD_KEY_FIELD.key());
+
+    // validate partition key: same quantity but different values
+    String partitionKeyError = String.format("Partition key fields definition has inconsistency between partition key statement and option '%s'",
+        FlinkOptions.PARTITION_PATH_FIELD.key());
+    originOptions.put(FlinkOptions.PARTITION_PATH_FIELD.key(), "name");
+    CatalogTable partitionKeytable = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, partitionKeytable, false), partitionKeyError);
+    originOptions.remove(FlinkOptions.PARTITION_PATH_FIELD.key());
+
+    // validate partition key: the partition key field exist in options but not in partition key statement.
+    originOptions.put(FlinkOptions.PARTITION_PATH_FIELD.key(), "par1,name");
+    CatalogTable partitionKeytable1 = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, partitionKeytable1, false), partitionKeyError);
+    originOptions.remove(FlinkOptions.PARTITION_PATH_FIELD.key());
   }
 
   private Partition getHivePartition(CatalogPartitionSpec partitionSpec) throws Exception {

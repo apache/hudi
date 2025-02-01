@@ -23,7 +23,6 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,6 +33,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.table.HoodieJavaTable;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 
@@ -58,6 +59,11 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
                                                 HoodieEngineContext engineContext,
                                                 Option<String> inflightInstantTimestamp) {
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+  }
+
+  @Override
+  HoodieTable getTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
+    return HoodieJavaTable.create(writeConfig, engineContext, metaClient);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
@@ -87,7 +93,12 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
+  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
+    // no op. HUDI-8801 to fix.
+  }
+
+  @Override
+  protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
   }
 
@@ -97,8 +108,8 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected void bulkCommit(String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records, int fileGroupCount) {
-    commitInternal(instantTime, Collections.singletonMap(partitionType, records), true, Option.of(new JavaHoodieMetadataBulkInsertPartitioner()));
+  protected void bulkCommit(String instantTime, String partitionName, HoodieData<HoodieRecord> records, int fileGroupCount) {
+    commitInternal(instantTime, Collections.singletonMap(partitionName, records), true, Option.of(new JavaHoodieMetadataBulkInsertPartitioner()));
   }
 
   @Override
@@ -117,18 +128,14 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, FileSlice>> partitionFileSlicePairs, HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient,
-                                                               int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf) {
-    throw new HoodieNotSupportedException("Functional index not supported for Java metadata table writer yet.");
+  protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
+                                                               HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf,
+                                                               String instantTime) {
+    throw new HoodieNotSupportedException("Expression index not supported for Java metadata table writer yet.");
   }
 
   @Override
   protected EngineType getEngineType() {
     return EngineType.JAVA;
-  }
-
-  @Override
-  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieIndexDefinition indexDefinition) {
-    throw new HoodieNotSupportedException("Java metadata table writer does not support secondary index yet.");
   }
 }

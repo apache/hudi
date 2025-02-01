@@ -67,8 +67,7 @@ public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
     HoodieRecordGlobalLocation otherLoc = (HoodieRecordGlobalLocation) o;
     return Objects.equals(partitionPath, otherLoc.partitionPath)
         && Objects.equals(instantTime, otherLoc.instantTime)
-        && Objects.equals(fileId, otherLoc.fileId)
-        && Objects.equals(position, otherLoc.position);
+        && Objects.equals(fileId, otherLoc.fileId);
   }
 
   @Override

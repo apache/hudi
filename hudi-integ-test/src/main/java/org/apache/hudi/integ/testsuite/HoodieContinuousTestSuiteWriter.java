@@ -20,6 +20,7 @@ package org.apache.hudi.integ.testsuite;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
@@ -39,6 +40,7 @@ import java.util.Properties;
 /**
  * Test suite Writer that assists in testing async table operations with Deltastreamer continuous mode.
  *
+ * TODO: [HUDI-8294]
  * Sample command
  * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 \
  *  --conf spark.task.cpus=1 --conf spark.executor.cores=1 \
@@ -101,7 +103,7 @@ public class HoodieContinuousTestSuiteWriter extends HoodieTestSuiteWriter {
   }
 
   @Override
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
+  public Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
     return null;
   }
 
@@ -110,6 +112,7 @@ public class HoodieContinuousTestSuiteWriter extends HoodieTestSuiteWriter {
     return null;
   }
 
+  @Override
   public JavaRDD<WriteStatus> upsert(Option<String> instantTime) throws Exception {
     return null;
   }

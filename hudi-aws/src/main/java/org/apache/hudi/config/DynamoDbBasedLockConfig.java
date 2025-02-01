@@ -47,8 +47,6 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
     return new DynamoDbBasedLockConfig.Builder();
   }
 
-  public static final int MAX_PARTITION_KEY_SIZE_BYTE = 2048;
-
   // configs for DynamoDb based locks
   public static final String DYNAMODB_BASED_LOCK_PROPERTY_PREFIX = LockConfiguration.LOCK_PREFIX + "dynamodb.";
 

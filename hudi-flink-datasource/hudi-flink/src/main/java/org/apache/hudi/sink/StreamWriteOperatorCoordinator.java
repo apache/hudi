@@ -72,6 +72,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
 
 /**
@@ -263,10 +265,10 @@ public class StreamWriteOperatorCoordinator
           scheduleTableServices(committed);
 
           if (committed) {
-            // start new instant.
-            startInstant();
             // sync Hive if is enabled
             syncHiveAsync();
+            // start new instant.
+            startInstant();
           }
         }, "commits the instant %s", this.instant
     );
@@ -487,7 +489,7 @@ public class StreamWriteOperatorCoordinator
     // if it checkpoints succeed then flushes the data buffer again before this coordinator receives a checkpoint
     // success event, the data buffer would flush with an older instant time.
     ValidationUtils.checkState(
-        HoodieTimeline.compareTimestamps(this.instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, event.getInstantTime()),
+        compareTimestamps(this.instant, GREATER_THAN_OR_EQUALS, event.getInstantTime()),
         String.format("Receive an unexpected event for instant %s from task %d",
             event.getInstantTime(), event.getTaskID()));
 

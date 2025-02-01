@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -69,6 +70,10 @@ public class HoodieConfig implements Serializable {
 
   public <T> void setValue(String key, String val) {
     props.setProperty(key, val);
+  }
+
+  public <T> void clearValue(ConfigProperty<T> cfg) {
+    ConfigUtils.removeConfigFromProps(props, cfg);
   }
 
   public void setAll(Properties properties) {

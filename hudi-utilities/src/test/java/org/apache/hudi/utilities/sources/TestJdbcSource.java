@@ -20,6 +20,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -67,6 +69,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   private static final TypedProperties PROPS = new TypedProperties();
   private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator();
+  private static final String SECRETS_PATH = String.format("%s/%s", sharedTempDir.toAbsolutePath(), "hudi/config/secret");
   private static Connection connection;
 
   @BeforeAll
@@ -74,6 +77,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     UtilitiesTestBase.initTestServices(false, false, false);
   }
 
+  @Override
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
@@ -85,6 +89,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     connection = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASS);
   }
 
+  @Override
   @AfterEach
   public void teardown() throws Exception {
     super.teardown();
@@ -268,13 +273,13 @@ public class TestJdbcSource extends UtilitiesTestBase {
       InputBatch<Dataset<Row>> batch = runSource(Option.empty(), 100);
       Dataset<Row> rowDataset = batch.getBatch().get();
       assertEquals(100, rowDataset.count());
-      assertEquals("100", batch.getCheckpointForNextBatch());
+      assertEquals(new StreamerCheckpointV2("100"), batch.getCheckpointForNextBatch());
 
       // Add 100 records with commit time "001"
       insert("001", 100, connection, DATA_GENERATOR, PROPS);
 
       // Start incremental scan. With checkpoint greater than the number of records, there should not be any dataset to fetch.
-      batch = runSource(Option.of("200"), 50);
+      batch = runSource(Option.of(new StreamerCheckpointV2("200")), 50);
       rowDataset = batch.getBatch().get();
       assertEquals(0, rowDataset.count());
     } catch (Exception e) {
@@ -356,7 +361,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
       InputBatch<Dataset<Row>> batch = runSource(Option.empty(), 10);
       Dataset<Row> rowDataset = batch.getBatch().get();
       assertEquals(10, rowDataset.count());
-      assertEquals("", batch.getCheckpointForNextBatch());
+      assertEquals(new StreamerCheckpointV2(""), batch.getCheckpointForNextBatch());
 
       // Get max of incremental column
       Column incrementalColumn = rowDataset
@@ -368,7 +373,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
       insert("001", 10, connection, DATA_GENERATOR, PROPS);
 
       // Start incremental scan
-      rowDataset = runSource(Option.of(max), 10).getBatch().get();
+      rowDataset = runSource(Option.of(new StreamerCheckpointV2(max)), 10).getBatch().get();
       assertEquals(10, rowDataset.count());
       assertEquals(10, rowDataset.where("commit_time=001").count());
     } catch (Exception e) {
@@ -384,7 +389,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
       // Remove secret string from props
       PROPS.remove("hoodie.streamer.jdbc.password");
       // Set property to read secret from fs file
-      PROPS.setProperty("hoodie.streamer.jdbc.password.file", "file:///tmp/hudi/config/secret");
+      PROPS.setProperty("hoodie.streamer.jdbc.password.file", SECRETS_PATH);
       PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
       // Add 10 records with commit time 000
       clearAndInsert("000", 10, connection, DATA_GENERATOR, PROPS);
@@ -441,13 +446,13 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   private void writeSecretToFs() throws IOException {
     FileSystem fs = FileSystem.get(new Configuration());
-    FSDataOutputStream outputStream = fs.create(new Path("file:///tmp/hudi/config/secret"));
+    FSDataOutputStream outputStream = fs.create(new Path(SECRETS_PATH));
     outputStream.writeBytes(JDBC_PASS);
     outputStream.close();
   }
 
-  private InputBatch<Dataset<Row>> runSource(Option<String> lastCkptStr, long sourceLimit) {
+  private InputBatch<Dataset<Row>> runSource(Option<Checkpoint> lastCkptStr, long sourceLimit) {
     Source<Dataset<Row>> jdbcSource = new JdbcSource(PROPS, jsc, sparkSession, null);
-    return jdbcSource.fetchNewData(lastCkptStr, sourceLimit);
+    return jdbcSource.readFromCheckpoint(lastCkptStr, sourceLimit);
   }
 }

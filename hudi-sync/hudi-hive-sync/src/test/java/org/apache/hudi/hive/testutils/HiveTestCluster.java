@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -76,6 +75,8 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -161,7 +162,7 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, Bef
     String tablePathStr = tablePath(dbName, tableName);
     Path path = new Path(tablePathStr);
     FileIOUtils.deleteDirectory(new File(path.toString()));
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(tableName)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -173,9 +174,9 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, Bef
   }
 
   private void createCommitFile(HoodieCommitMetadata commitMetadata, String commitTime, String basePath) throws IOException {
-    byte[] bytes = serializeCommitMetadata(commitMetadata).get();
-    Path fullPath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
+    byte[] bytes = serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get();
+    Path fullPath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/"
+        + INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
     OutputStream fsout = dfsCluster.getFileSystem().create(fullPath, true);
     fsout.write(bytes);
     fsout.close();

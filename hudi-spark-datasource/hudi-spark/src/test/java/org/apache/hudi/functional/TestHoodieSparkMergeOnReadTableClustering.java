@@ -241,9 +241,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
                                        HoodieWriteConfig cfg,
                                        HoodieTestDataGenerator dataGen,
                                        boolean clusteringAsRow) {
-    if (clusteringAsRow) {
-      client.getConfig().setValue(DataSourceWriteOptions.ENABLE_ROW_WRITER(), "true");
-    }
+    client.getConfig().setValue(DataSourceWriteOptions.ENABLE_ROW_WRITER(), Boolean.toString(clusteringAsRow));
 
     client.cluster(clusteringCommitTime, true);
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -255,7 +253,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
     HoodieTimeline timeline = metaClient.getCommitTimeline().filterCompletedInstants();
     assertEquals(1, timeline.findInstantsAfter("003", Integer.MAX_VALUE).countInstants(),
         "Expecting a single commit.");
-    assertEquals(clusteringCommitTime, timeline.lastInstant().get().getTimestamp());
+    assertEquals(clusteringCommitTime, timeline.lastInstant().get().requestedTime());
     assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, timeline.lastInstant().get().getAction());
     if (cfg.populateMetaFields()) {
       assertEquals(400, HoodieClientTestUtils.countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline, Option.of("000")),

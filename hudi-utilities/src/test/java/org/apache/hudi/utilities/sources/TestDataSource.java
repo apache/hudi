@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.testutils.sources.AbstractBaseTestSource;
@@ -50,16 +51,16 @@ public class TestDataSource extends AbstractBaseTestSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
 
-    int nextCommitNum = lastCheckpointStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
+    int nextCommitNum = lastCheckpoint.map(s -> Integer.parseInt(s.getCheckpointKey()) + 1).orElse(0);
     String instantTime = String.format("%05d", nextCommitNum);
     LOG.info("Source Limit is set to " + sourceLimit);
 
     // No new data.
     if (sourceLimit <= 0 || returnEmptyBatch) {
       LOG.warn("Return no new data from Test Data source " + counter + ", source limit " + sourceLimit);
-      return new InputBatch<>(Option.empty(), lastCheckpointStr.orElse(null));
+      return new InputBatch<>(Option.empty(), lastCheckpoint.orElse(null));
     } else {
       LOG.warn("Returning valid data from Test Data source " + counter + ", source limit " + sourceLimit);
     }

@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -66,6 +66,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.table.action.restore.RestoreUtils.getRestorePlan;
 import static org.apache.hudi.table.action.restore.RestoreUtils.getSavepointToRestoreTimestampV1Schema;
@@ -176,7 +178,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
       // rollback to savepoint 002
       HoodieInstant savepoint = table.getCompletedSavepointTimeline().getInstantsAsStream().findFirst().get();
-      client.restoreToSavepoint(savepoint.getTimestamp());
+      client.restoreToSavepoint(savepoint.requestedTime());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieSparkTable.create(getConfig(), context, metaClient);
@@ -193,19 +195,18 @@ public class TestClientRollback extends HoodieClientTestBase {
       if (testFailedRestore) {
         //test to make sure that restore commit is reused when the restore fails and is re-ran
         HoodieInstant inst =  table.getActiveTimeline().getRestoreTimeline().getInstants().get(0);
-        String restoreFileName = table.getMetaClient().getBasePath() + "/.hoodie/" + inst.getFileName();
-
+        String restoreFileName = table.getMetaClient().getBasePath() + "/.hoodie/timeline/"  + INSTANT_FILE_NAME_GENERATOR.getFileName(inst);
         //delete restore commit file
         assertTrue((new File(restoreFileName)).delete());
 
         if (!failedRestoreInflight) {
           //delete restore inflight file
-          HoodieInstant inflightInst = new HoodieInstant(true, inst.getAction(), inst.getTimestamp());
-          assertTrue((new File(table.getMetaClient().getBasePath() + "/.hoodie/" + inflightInst.getFileName())).delete());
+          HoodieInstant inflightInst = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, inst.getAction(), inst.requestedTime());
+          assertTrue((new File(table.getMetaClient().getBasePath() + "/.hoodie/timeline/" + INSTANT_FILE_NAME_GENERATOR.getFileName(inflightInst))).delete());
         }
         try (SparkRDDWriteClient newClient = getHoodieWriteClient(cfg)) {
           //restore again
-          newClient.restoreToSavepoint(savepoint.getTimestamp());
+          newClient.restoreToSavepoint(savepoint.requestedTime());
 
           //verify that we reuse the existing restore commit
           metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -213,7 +214,7 @@ public class TestClientRollback extends HoodieClientTestBase {
           List<HoodieInstant> restoreInstants = table.getActiveTimeline().getRestoreTimeline().getInstants();
           assertEquals(1, restoreInstants.size());
           assertEquals(HoodieInstant.State.COMPLETED, restoreInstants.get(0).getState());
-          assertEquals(inst.getTimestamp(), restoreInstants.get(0).getTimestamp());
+          assertEquals(inst.requestedTime(), restoreInstants.get(0).requestedTime());
         }
       }
     }
@@ -260,7 +261,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
       HoodieInstant savepoint = table.getCompletedSavepointTimeline().lastInstant().get();
-      client.restoreToSavepoint(savepoint.getTimestamp());
+      client.restoreToSavepoint(savepoint.requestedTime());
 
       //verify that getSavepointToRestoreTimestampV1Schema is correct
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -353,7 +354,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
       // rollback to savepoint 002
       HoodieInstant savepoint = table.getCompletedSavepointTimeline().getInstantsAsStream().findFirst().get();
-      client.restoreToSavepoint(savepoint.getTimestamp());
+      client.restoreToSavepoint(savepoint.requestedTime());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieSparkTable.create(getConfig(), context, metaClient);
@@ -407,7 +408,8 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withRollbackUsingMarkers(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build()).build(); // HUDI-8815
 
     try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context)) {
       HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
@@ -552,7 +554,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       HoodieInstant rollbackInstant = rollbackInstants.get(0);
 
       // delete rollback completed meta file and retry rollback.
-      FileCreateUtils.deleteRollbackCommit(basePath, rollbackInstant.getTimestamp());
+      FileCreateUtilsLegacy.deleteRollbackCommit(basePath, rollbackInstant.requestedTime());
 
       if (instantToRollbackExists) {
         // recreate actual commit files if needed
@@ -632,7 +634,8 @@ public class TestClientRollback extends HoodieClientTestBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build()).build();
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build()).build();
 
     try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context)) {
       HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
@@ -667,7 +670,8 @@ public class TestClientRollback extends HoodieClientTestBase {
       // Set Failed Writes rollback to EAGER
       config = HoodieWriteConfig.newBuilder().withPath(basePath)
           .withRollbackUsingMarkers(false)
-          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+          .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build()).build();
       final String commitTime5 = "20160506030631";
       try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
         client.startCommitWithTime(commitTime5);
@@ -747,19 +751,19 @@ public class TestClientRollback extends HoodieClientTestBase {
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       if (isRollbackPlanCorrupted) {
         // Add a corrupted requested rollback plan
-        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, new byte[] {0, 1, 2});
+        FileCreateUtilsLegacy.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, new byte[] {0, 1, 2});
       } else {
         // Add a valid requested rollback plan to roll back commitTime3
         HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
         List<HoodieRollbackRequest> rollbackRequestList = partitionAndFileId3.keySet().stream()
             .map(partition -> new HoodieRollbackRequest(partition, EMPTY_STRING, EMPTY_STRING,
                 Collections.singletonList(metaClient.getBasePath() + "/" + partition + "/"
-                    + FileCreateUtils.baseFileName(commitTime3, partitionAndFileId3.get(p1))),
+                    + FileCreateUtilsLegacy.baseFileName(commitTime3, partitionAndFileId3.get(p1))),
                 Collections.emptyMap()))
             .collect(Collectors.toList());
         rollbackPlan.setRollbackRequests(rollbackRequestList);
         rollbackPlan.setInstantToRollback(new HoodieInstantInfo(commitTime3, HoodieTimeline.COMMIT_ACTION));
-        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, rollbackPlan);
+        FileCreateUtilsLegacy.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, rollbackPlan);
       }
 
       // Rollback commit3
@@ -777,10 +781,10 @@ public class TestClientRollback extends HoodieClientTestBase {
 
       if (isRollbackPlanCorrupted) {
         // Should create a new rollback instant
-        assertNotEquals(rollbackInstantTime, rollbackInstant.getTimestamp());
+        assertNotEquals(rollbackInstantTime, rollbackInstant.requestedTime());
       } else {
         // Should reuse the rollback instant
-        assertEquals(rollbackInstantTime, rollbackInstant.getTimestamp());
+        assertEquals(rollbackInstantTime, rollbackInstant.requestedTime());
       }
     }
     if (metadataWriter != null) {
@@ -823,7 +827,8 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withRollbackUsingMarkers(true) // rollback using markers to test fallback to listing based rollback for completed instant
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build()).build();
 
     // create test table with all commits completed
     try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(metaClient.getStorageConf(), config, context)) {

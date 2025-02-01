@@ -15,7 +15,7 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM openjdk:8u212-jdk-slim-stretch
+FROM openjdk:8u342-jdk-slim-bullseye
 MAINTAINER Hoodie
 USER root
 
@@ -35,6 +35,7 @@ RUN set -x \
     && mkdir -p /opt/hadoop-$HADOOP_VERSION/logs \
     && tar -xvf /tmp/hadoop.tar.gz -C /opt/ \
     && rm /tmp/hadoop.tar.gz* \
+    && rm -r /opt/hadoop-$HADOOP_VERSION/share/doc \
     && ln -s /opt/hadoop-$HADOOP_VERSION/etc/hadoop /etc/hadoop \
     && cp /etc/hadoop/mapred-site.xml.template /etc/hadoop/mapred-site.xml \
     && mkdir /hadoop-data

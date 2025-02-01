@@ -42,7 +42,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
@@ -52,7 +51,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,7 +113,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected long updatedRecordsWritten = 0;
   protected long insertRecordsWritten = 0;
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
-  private HoodieBaseFile baseFileToMerge;
+  protected HoodieBaseFile baseFileToMerge;
 
   protected Option<String[]> partitionFields = Option.empty();
   protected Object[] partitionValues = new Object[0];
@@ -149,6 +147,21 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
 
+  /**
+   * Used by `HoodieSparkFileGroupReaderBasedMergeHandle`.
+   *
+   * @param config              Hudi write config
+   * @param instantTime         Instant time to use
+   * @param partitionPath       Partition path
+   * @param fileId              File group ID for the merge handle to operate on
+   * @param hoodieTable         {@link HoodieTable} instance
+   * @param taskContextSupplier Task context supplier
+   */
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
+                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
+  }
+
   private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
     ValidationUtils.checkArgument(populateMetaFields == !keyGeneratorOpt.isPresent());
     this.keyGeneratorOpt = keyGeneratorOpt;
@@ -173,6 +186,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     try {
       String latestValidFilePath = baseFileToMerge.getFileName();
       writeStatus.getStat().setPrevCommit(baseFileToMerge.getCommitTime());
+      // At the moment, we only support SI for overwrite with latest payload. So, we don't need to embed entire file slice here.
+      // HUDI-8518 will be taken up to fix it for any payload during which we might require entire file slice to be set here.
+      // Already AppendHandle adds all logs file from current file slice to HoodieDeltaWriteStat.
+      writeStatus.getStat().setPrevBaseFile(latestValidFilePath);
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
           new StoragePath(config.getBasePath()),
@@ -408,13 +425,18 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   protected void writeIncomingRecords() throws IOException {
     // write out any pending records (this can happen when inserts are turned into updates)
-    Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
-        ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.values().iterator();
+    Iterator<HoodieRecord<T>> newRecordsItr;
+    if (keyToNewRecords instanceof ExternalSpillableMap) {
+      newRecordsItr = ((ExternalSpillableMap) keyToNewRecords).iterator(key -> !writtenRecordKeys.contains(key));
+    } else {
+      newRecordsItr = keyToNewRecords.entrySet().stream()
+          .filter(e -> !writtenRecordKeys.contains(e.getKey()))
+          .map(Map.Entry::getValue)
+          .iterator();
+    }
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> hoodieRecord = newRecordsItr.next();
-      if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
-        writeInsertRecord(hoodieRecord);
-      }
+      writeInsertRecord(hoodieRecord);
     }
   }
 
@@ -439,7 +461,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       fileWriter.close();
       fileWriter = null;
 
-      long fileSizeInBytes = HadoopFSUtils.getFileSize(fs, new Path(newFilePath.toUri()));
+      long fileSizeInBytes = storage.getPathInfo(newFilePath).getLength();
       HoodieWriteStat stat = writeStatus.getStat();
 
       stat.setTotalWriteBytes(fileSizeInBytes);
@@ -465,7 +487,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   public void performMergeDataValidationCheck(WriteStatus writeStatus) {
-    if (!config.isMergeDataValidationCheckEnabled()) {
+    if (!config.isMergeDataValidationCheckEnabled() || baseFileToMerge == null) {
       return;
     }
 

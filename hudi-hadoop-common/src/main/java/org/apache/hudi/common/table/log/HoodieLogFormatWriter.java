@@ -102,6 +102,9 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       boolean created = false;
       while (!created) {
         try {
+          if (storage.exists(logFile.getPath())) {
+            rollOver();
+          }
           // Block size does not matter as we will always manually auto-flush
           createNewFile();
           LOG.info("Created a new log file: {}", logFile);
@@ -146,11 +149,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       outputStream.write(HoodieLogFormat.MAGIC);
 
       // bytes for header
-      byte[] headerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockHeader());
+      byte[] headerBytes = HoodieLogBlock.getHeaderMetadataBytes(block.getLogBlockHeader());
       // content bytes
       byte[] content = block.getContentBytes(storage);
       // bytes for footer
-      byte[] footerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockFooter());
+      byte[] footerBytes = HoodieLogBlock.getFooterMetadataBytes(block.getLogBlockFooter());
 
       // 2. Write the total size of the block (excluding Magic)
       outputStream.writeLong(getLogBlockLength(content.length, headerBytes.length, footerBytes.length));
@@ -217,7 +220,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void rollOver() throws IOException {
     closeStream();
-    this.logFile = logFile.rollOver(storage, rolloverLogWriteToken);
+    this.logFile = logFile.rollOver(rolloverLogWriteToken);
     this.closed = false;
   }
 
@@ -231,10 +234,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   @Override
   public void close() throws IOException {
+    closeStream();
+    // remove the shutdown hook after closing the stream to avoid memory leaks
     if (null != shutdownThread) {
       Runtime.getRuntime().removeShutdownHook(shutdownThread);
     }
-    closeStream();
   }
 
   private void closeStream() throws IOException {
@@ -275,12 +279,10 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     shutdownThread = new Thread() {
       public void run() {
         try {
-          LOG.warn("running logformatwriter hook");
-          if (output != null) {
-            closeStream();
-          }
+          LOG.warn("running HoodieLogFormatWriter shutdown hook to close output stream for log file: {}", logFile);
+          closeStream();
         } catch (Exception e) {
-          LOG.warn(String.format("unable to close output stream for log file %s", logFile), e);
+          LOG.warn("unable to close output stream for log file: {}", logFile, e);
           // fail silently for any sort of exception
         }
       }

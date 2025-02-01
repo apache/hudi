@@ -29,7 +29,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -101,7 +101,8 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     // Create cow table and connect
     new TableCommand().createTable(
         cowTablePath, "cow_table", HoodieTableType.COPY_ON_WRITE.name(),
-        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "", HoodieTableVersion.current().versionCode(),
+        "org.apache.hudi.common.model.HoodieAvroPayload");
 
     HoodieSparkWriteableTestTable cowTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema);
 
@@ -124,7 +125,8 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     // Create mor table and connect
     new TableCommand().createTable(
         morTablePath, "mor_table", HoodieTableType.MERGE_ON_READ.name(),
-        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "", HoodieTableVersion.current().versionCode(),
+        "org.apache.hudi.common.model.HoodieAvroPayload");
     HoodieSparkWriteableTestTable morTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema);
 
     morTable.addDeltaCommit("20160401010101");
@@ -146,7 +148,8 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
     // Create cow table and connect
     new TableCommand().createTable(
         cowNonPartitionedTablePath, "cow_table_non_partitioned", HoodieTableType.COPY_ON_WRITE.name(),
-        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "", HoodieTableVersion.current().versionCode(),
+        "org.apache.hudi.common.model.HoodieAvroPayload");
 
     HoodieSparkWriteableTestTable cowNonPartitionedTable = HoodieSparkWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema);
 
@@ -331,7 +334,7 @@ public class ITTestRepairsCommand extends HoodieCLIIntegrationTestBase {
   }
 
   private void connectTableAndReloadMetaClient(String tablePath) throws IOException {
-    new TableCommand().connect(tablePath, TimelineLayoutVersion.VERSION_1, false, 0, 0, 0,
+    new TableCommand().connect(tablePath, false, 0, 0, 0,
         "WAIT_TO_ADJUST_SKEW", 200L, false);
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
   }

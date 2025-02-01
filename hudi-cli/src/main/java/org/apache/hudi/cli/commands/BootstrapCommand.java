@@ -72,8 +72,15 @@ public class BootstrapCommand {
           help = "Class for Full bootstrap input provider") final String fullBootstrapInputProvider,
       @ShellOption(value = {"--schemaProviderClass"}, defaultValue = "",
           help = "SchemaProvider to attach schemas to bootstrap source data") final String schemaProviderClass,
-      @ShellOption(value = {"--payloadClass"}, defaultValue = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
-          help = "Payload Class") final String payloadClass,
+      @ShellOption(value = {"--payloadClass"}, defaultValue = "",
+          help = "Payload Class (deprecated). Use `--merge-mode` to specify the equivalent payload update behavior.") final String payloadClass,
+      @ShellOption(value = {"--merge-mode", "--record-merge-mode"}, defaultValue = "",
+          help = "Merge mode to use. 'EVENT_TIME_ORDERING', 'COMMIT_TIME_ORDERING', "
+              + "or 'CUSTOM' if you want to set a custom merge strategy ID and implementation.") final String recordMergeMode,
+      @ShellOption(value = {"--merge-strategy-id", "--record-merge-strategy-id"}, defaultValue = "",
+          help = "ID of the merge strategy to use. Only set when using 'CUSTOM' merge mode") final String recordMergeStrategyId,
+      @ShellOption(value = {"--merge-impl-classes", "--record-merge-custom-implementation-classes"}, defaultValue = "",
+          help = "Comma separated list of classes that implement the record merge strategy") final String recordMergeImplClasses,
       @ShellOption(value = {"--parallelism"}, defaultValue = "1500", help = "Bootstrap writer parallelism") final int parallelism,
       @ShellOption(value = {"--sparkMaster"}, defaultValue = "", help = "Spark Master") String master,
       @ShellOption(value = {"--sparkMemory"}, defaultValue = "4G", help = "Spark executor memory") final String sparkMemory,
@@ -93,11 +100,10 @@ public class BootstrapCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    String cmd = SparkCommand.BOOTSTRAP.toString();
-
-    sparkLauncher.addAppArgs(cmd, master, sparkMemory, tableName, tableType, targetPath, srcPath, rowKeyField,
+    SparkMain.addAppArgs(sparkLauncher, SparkCommand.BOOTSTRAP, master, sparkMemory, tableName, tableType, targetPath, srcPath, rowKeyField,
         partitionPathField, String.valueOf(parallelism), schemaProviderClass, bootstrapIndexClass, selectorClass,
-        keyGeneratorClass, fullBootstrapInputProvider, payloadClass, String.valueOf(enableHiveSync), propsFilePath);
+        keyGeneratorClass, fullBootstrapInputProvider, recordMergeMode, payloadClass, recordMergeStrategyId, recordMergeImplClasses,
+        String.valueOf(enableHiveSync), propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
