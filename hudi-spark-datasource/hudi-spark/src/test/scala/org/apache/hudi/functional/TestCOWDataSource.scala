@@ -1922,7 +1922,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
   @Test
   def testClusteringWithRowWriterEnabledAndDisable(): Unit = {
-
     val optsWithCluster = Map(
       INLINE_CLUSTERING_ENABLE.key() -> "true",
       "hoodie.clustering.inline.max.commits" -> "2",
@@ -1939,6 +1938,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         StructField("name", StringType, nullable = true) ::
         StructField("timestamp", LongType, nullable = true) ::
         StructField("partition", LongType, nullable = true) :: Nil)
+
     val record1 = List(Row("1", null, 1L, 1L))
     var inputDF = spark.createDataFrame(spark.sparkContext.parallelize(record1, 2), schema)
     inputDF.write.format("org.apache.hudi")

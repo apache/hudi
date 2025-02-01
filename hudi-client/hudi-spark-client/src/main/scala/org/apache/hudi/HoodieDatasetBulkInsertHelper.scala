@@ -24,7 +24,7 @@ import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
@@ -150,8 +150,14 @@ object HoodieDatasetBulkInsertHelper
                  table: HoodieTable[_, _, _, _],
                  writeConfig: HoodieWriteConfig,
                  arePartitionRecordsSorted: Boolean,
-                 shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
-    val schema = alignNotNullFields(dataset.schema, new Schema.Parser().parse(writeConfig.getSchema))
+                 shouldPreserveHoodieMetadata: Boolean,
+                 operation: WriteOperationType): HoodieData[WriteStatus] = {
+    val schema = operation match {
+      case WriteOperationType.CLUSTER =>
+        alignNotNullFields(dataset.schema, new Schema.Parser().parse(writeConfig.getSchema))
+      case _ =>
+        dataset.schema
+    }
     HoodieJavaRDD.of(
       injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
         val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier
@@ -210,7 +216,7 @@ object HoodieDatasetBulkInsertHelper
     }
 
     val copiedFields = sourceSchema.fields.map(field => {
-      if (notNullFieldNames.contains(field.name) && field.nullable) {
+      if (notNullFieldNames.contains(field.name)) {
         field.copy(nullable = false)
       } else {
         field.copy()
