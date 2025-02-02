@@ -112,24 +112,30 @@ Data Summit Connect, May, 2021
 
 49. ["Trino fest: Skip rocks and files: Turbocharge Trino queries with Hudi’s multi-modal indexing subsystem"](https://trino.io/blog/2023/07/07/trino-fest-2023-onehouse-recap.html) - By Nadine Farah and Sagar Sumit. Trino Fest, July 2023
 
-50. ["A Glide, Skip or a Jump: Efficiently Stream Data into Your Medallion Architecture with Apache Hudi"](https://www.confluent.io/events/current/2023/a-glide-skip-or-a-jump-efficiently-stream-data-into-your-medallion/) - By Nadine Farah and Ethan Guo. Current, September 2023
+50. ["Empowering Interactive Queries on Lakehouse: Integrating Apache Hudi with Presto&Trino"](https://youtu.be/o6N9gxw0T88?feature=shared) - By Sagar Sumit. Bengaluru Streams Meetup, August 2023
 
-51. ["Incremental Data Processing with Apache Hudi](https://qconsf.com/presentation/oct2023/incremental-data-processing-apache-hudi) - By Bhavani Sudha Saktheeswaran and Saketh Chintapalli. Qcon, October 2023
+51. ["A Glide, Skip or a Jump: Efficiently Stream Data into Your Medallion Architecture with Apache Hudi"](https://www.confluent.io/events/current/2023/a-glide-skip-or-a-jump-efficiently-stream-data-into-your-medallion/) - By Nadine Farah and Ethan Guo. Current, September 2023 
 
-52. ["Keynote: The Future is Unified: The Convergence of Data Lakes and Data Warehouses into an Interoperable Data Lakehouse"](https://dewcon.ai/) - By Vinoth Chandar. DEWCON, October 2023
+52. ["Incremental Data Processing with Apache Hudi](https://qconsf.com/presentation/oct2023/incremental-data-processing-apache-hudi) - By Bhavani Sudha Saktheeswaran and Saketh Chintapalli. Qcon, October 2023
 
-53. ["Panel: Is the Modern Data Stack Dead?"](https://dewcon.ai/) - By Vinoth Chandar, Joe Reis, Divyansh Saini, Shuveb Hussain. DEWCON, October 2023
+53. ["Keynote: The Future is Unified: The Convergence of Data Lakes and Data Warehouses into an Interoperable Data Lakehouse"](https://dewcon.ai/) - By Vinoth Chandar. DEWCON, October 2023
 
-54. ["Apache Hudi 1.0 preview: A database experience on the data lake"](https://opensourcedatasummit.com/apache-hudi-1-preview/) - By Bhavani Sudha Saktheeswaran and Sagar Sumit. OSDS, November 2023
+54. ["Panel: Is the Modern Data Stack Dead?"](https://dewcon.ai/) - By Vinoth Chandar, Joe Reis, Divyansh Saini, Shuveb Hussain. DEWCON, October 2023
 
-55. ["Consistently Hashing it Out: Embracing Fresher, Faster Data with the Hudi-Flink Support for the Bucket Index"](https://www.ververica.academy/app/courses/f352775b-6c43-475b-84e0-d6070c57b1a7) - By Nadine Farah. Flink Forward, November 2023
+55. ["Apache Hudi 1.0 preview: A database experience on the data lake"](https://opensourcedatasummit.com/apache-hudi-1-preview/) - By Bhavani Sudha Saktheeswaran and Sagar Sumit. OSDS, November 2023
 
-56. ["Session: Maximizing efficiency by templating Glue jobs and serverless architecture in Hudi data lakes"](https://opensourcedatasummit.com/maximizing-efficiency-at-job-target/) - By Soumil Shah. OSDS, November 2023
+56. ["Consistently Hashing it Out: Embracing Fresher, Faster Data with the Hudi-Flink Support for the Bucket Index"](https://www.ververica.academy/app/courses/f352775b-6c43-475b-84e0-d6070c57b1a7) - By Nadine Farah. Flink Forward, November 2023
 
-57. ["Data Alchemy: Transforming Raw Data to Gold with Apache Hudi and DBT"](https://osacon.io/sessions/2023/data-alchemy-transforming-raw-data-to-gold-with-apache-hudi-and-dbt/) - By Nadine Farah. OSA CON, December 2023
+57. ["Session: Maximizing efficiency by templating Glue jobs and serverless architecture in Hudi data lakes"](https://opensourcedatasummit.com/maximizing-efficiency-at-job-target/) - By Soumil Shah. OSDS, November 2023
 
-58. ["Panel Discussion on Growing a Healthy Open Source Community"](https://osacon.io/sessions/2023/panel-discussion-on-growing-a-healthy-open-source-community/) - By Nadine Farah, Ali LeClerc, Evan Rusackas. OSA CON, December 2023
+58. ["Data Alchemy: Transforming Raw Data to Gold with Apache Hudi and DBT"](https://osacon.io/sessions/2023/data-alchemy-transforming-raw-data-to-gold-with-apache-hudi-and-dbt/) - By Nadine Farah. OSA CON, December 2023
 
-59. ["Unveil the Magic Without Hoodini: Transform Your Machine Learning Pipelines with Apache Hudi"](https://www.youtube.com/watch?v=pUZHotLdkjU) - By Nadine Farah. AI.dev, December 2023
+59. ["Panel Discussion on Growing a Healthy Open Source Community"](https://osacon.io/sessions/2023/panel-discussion-on-growing-a-healthy-open-source-community/) - By Nadine Farah, Ali LeClerc, Evan Rusackas. OSA CON, December 2023
 
-60. ["Enhancing Trino's Query Performance and Data Management with Hudi: Innovations and Future"](https://trino.io/blog/2024/04/15/trino-fest-2024-approaches.html#hudi) - By Ethan Guo.  Trino Fest, June 2024. [Video](https://youtu.be/JMzS2BbeK0E?si=t25pqd55bmdmVlXL). [Slides](https://trino.io/assets/blog/trino-fest-2024/onehouse.pdf)
+60. ["Unveil the Magic Without Hoodini: Transform Your Machine Learning Pipelines with Apache Hudi"](https://www.youtube.com/watch?v=pUZHotLdkjU) - By Nadine Farah. AI.dev, December 2023
+
+61. ["Unlocking Seamless Streaming Ingestion with Apache Hudi and Kafka"](https://youtu.be/PZyi1NWKBgs?feature=shared) - By Sagar Sumit and Vinish Reddy . Bengaluru Streams Meetup, May 2024
+
+62. ["Enhancing Trino's Query Performance and Data Management with Hudi: Innovations and Future"](https://trino.io/blog/2024/04/15/trino-fest-2024-approaches.html#hudi) - By Ethan Guo.  Trino Fest, June 2024. [Video](https://youtu.be/JMzS2BbeK0E?si=t25pqd55bmdmVlXL). [Slides](https://trino.io/assets/blog/trino-fest-2024/onehouse.pdf)
+
+63. ["Advancing query efficiency & data management in Presto w Apache Hudi"](https://prestodb.io/prestocon/prestocon-2024-agenda/) - By Bhavani Sudha Saktheeswaran  Presto Con, December 2024. [Video](https://youtu.be/Ul36gv5pdZo?feature=shared).
