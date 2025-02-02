@@ -4,10 +4,41 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/cn/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Sun, 17 Nov 2024 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Sun, 26 Jan 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>cn</language>
+        <item>
+            <title><![CDATA[Create your first Apache HUDI table in 5 simple steps]]></title>
+            <link>https://hudi.apache.org/cn/videos/2025/01/26/create-your-first-apache-hudi-table-in-5-simple-steps</link>
+            <guid>https://hudi.apache.org/cn/videos/2025/01/26/create-your-first-apache-hudi-table-in-5-simple-steps</guid>
+            <pubDate>Sun, 26 Jan 2025 00:00:00 GMT</pubDate>
+            <category>guide</category>
+            <category>apache hudi</category>
+            <category>beginner</category>
+        </item>
+        <item>
+            <title><![CDATA[Learn about Apache Hudi 1.0.0 Expression Index | hands on Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2025/01/04/learn-about-apache-hudi-1-0-0-expression-index-hands-on-labs</link>
+            <guid>https://hudi.apache.org/cn/videos/2025/01/04/learn-about-apache-hudi-1-0-0-expression-index-hands-on-labs</guid>
+            <pubDate>Sat, 04 Jan 2025 00:00:00 GMT</pubDate>
+            <category>guide</category>
+            <category>apache hudi</category>
+            <category>expression index</category>
+            <category>indexing</category>
+            <category>hudi 1.0.0</category>
+        </item>
+        <item>
+            <title><![CDATA[Learn About Secondary Indexes in Apache Hudi 1.0.0 | Hands-On Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/12/25/learn-about-secondary-indexes-in-apache-hudi-1-0-0</link>
+            <guid>https://hudi.apache.org/cn/videos/2024/12/25/learn-about-secondary-indexes-in-apache-hudi-1-0-0</guid>
+            <pubDate>Wed, 25 Dec 2024 00:00:00 GMT</pubDate>
+            <category>guide</category>
+            <category>apache hudi</category>
+            <category>secondary index</category>
+            <category>indexing</category>
+            <category>hudi 1.0.0</category>
+        </item>
         <item>
             <title><![CDATA[Create Data Lake using aws Glue as beginner]]></title>
             <link>https://hudi.apache.org/cn/videos/2024/11/17/Create-Data-Lake-using-aws-Glue-as-beginner</link>
@@ -209,45 +240,6 @@
             <category>aws glue</category>
             <category>metrics</category>
             <category>amazon cloudwatch</category>
-        </item>
-        <item>
-            <title><![CDATA[Unleashing the Power of Serverless: Serving Gold Hudi Tables with AWS Lambda]]></title>
-            <link>https://hudi.apache.org/cn/videos/2024/05/12/Unleashing-the-Power-of-Serverless-Serving-Gold-Hudi-Tables-with-AWS-Lambda</link>
-            <guid>https://hudi.apache.org/cn/videos/2024/05/12/Unleashing-the-Power-of-Serverless-Serving-Gold-Hudi-Tables-with-AWS-Lambda</guid>
-            <pubDate>Sun, 12 May 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>aws lambda</category>
-            <category>serverless</category>
-            <category>daft</category>
-            <category>python</category>
-        </item>
-        <item>
-            <title><![CDATA[How to read Hudi Dataset Using AWS Glue Ray and Glue Notebooks (withouth Spark)]]></title>
-            <link>https://hudi.apache.org/cn/videos/2024/05/08/How-to-read-Hudi-Dataset-Using-AWS-Glue-Ray-and-Glue-Notebooks-(withouth-Spark)</link>
-            <guid>https://hudi.apache.org/cn/videos/2024/05/08/How-to-read-Hudi-Dataset-Using-AWS-Glue-Ray-and-Glue-Notebooks-(withouth-Spark)</guid>
-            <pubDate>Wed, 08 May 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>aws glue</category>
-            <category>ray</category>
-            <category>daft</category>
-            <category>python</category>
-        </item>
-        <item>
-            <title><![CDATA[Learn How to Display Data From Hudi Tables to your Frontend with Flask and Daft (NO SPARK NEEDED)]]></title>
-            <link>https://hudi.apache.org/cn/videos/2024/05/04/Learn-How-to-Display-Data-From-Hudi-Tables-to-your-Frontend-with-Flask-and-Daft-NO-SPARK-NEEDED</link>
-            <guid>https://hudi.apache.org/cn/videos/2024/05/04/Learn-How-to-Display-Data-From-Hudi-Tables-to-your-Frontend-with-Flask-and-Daft-NO-SPARK-NEEDED</guid>
-            <pubDate>Sat, 04 May 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>daft</category>
-            <category>python</category>
-            <category>frontend</category>
-            <category>flask</category>
         </item>
     </channel>
 </rss>

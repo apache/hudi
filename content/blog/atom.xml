@@ -2,11 +2,26 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2025-01-28T00:00:00.000Z</updated>
+    <updated>2025-01-30T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[An intro to Hudi with MinIO]]></title>
+        <id>https://hudi.apache.org/blog/2025/01/30/an-intro-to-hudi-with-minio</id>
+        <link href="https://hudi.apache.org/blog/2025/01/30/an-intro-to-hudi-with-minio"/>
+        <updated>2025-01-30T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://dataxplorer.medium.com/an-intro-to-hudi-with-minio-i-75536fe75b4c">here</a></span>]]></content>
+        <author>
+            <name>Simbu</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="minio" term="minio"/>
+        <category label="medium" term="medium"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Concurrency Control in Open Data Lakehouse]]></title>
         <id>https://hudi.apache.org/blog/2025/01/28/concurrency-control</id>
@@ -108,12 +123,29 @@
             <name>Dipankar Mazumdar</name>
         </author>
         <category label="multi-writer" term="multi-writer"/>
+        <category label="concurrency" term="concurrency"/>
         <category label="concurrency-control" term="concurrency-control"/>
+        <category label="non-blocking concurrency-control" term="non-blocking concurrency-control"/>
         <category label="Apache Hudi" term="Apache Hudi"/>
         <category label="Apache Iceberg" term="Apache Iceberg"/>
         <category label="Delta Lake" term="Delta Lake"/>
         <category label="blog" term="blog"/>
         <category label="design" term="design"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi 1.0 Now Generally Available]]></title>
+        <id>https://hudi.apache.org/blog/2025/01/18/apache-hudi-1-0-now-generally-available</id>
+        <link href="https://hudi.apache.org/blog/2025/01/18/apache-hudi-1-0-now-generally-available"/>
+        <updated>2025-01-18T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.infoq.com/news/2025/01/apache-hudi/">here</a></span>]]></content>
+        <author>
+            <name>Renato Losio</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="hudi 1.0.0" term="hudi 1.0.0"/>
+        <category label="infoq" term="infoq"/>
     </entry>
     <entry>
         <title type="html"><![CDATA[Out of the box Key Generators in Apache Hudi]]></title>
@@ -232,6 +264,91 @@ When we pass the partition column, we can also provide which key generator to us
         <category label="Apache Hudi" term="Apache Hudi"/>
         <category label="Key Generators" term="Key Generators"/>
         <category label="partition" term="partition"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Iceberg vs Delta Lake vs Apache Hudi]]></title>
+        <id>https://hudi.apache.org/blog/2025/01/09/apache-iceberg-vs-delta-lake-vs-apache-hudi</id>
+        <link href="https://hudi.apache.org/blog/2025/01/09/apache-iceberg-vs-delta-lake-vs-apache-hudi"/>
+        <updated>2025-01-09T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@algodaysindia/apache-iceberg-vs-delta-lake-vs-apache-hudi-f987fee8dbe1">here</a></span>]]></content>
+        <author>
+            <name>AlgoDays</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="apache iceberg" term="apache iceberg"/>
+        <category label="delta lake" term="delta lake"/>
+        <category label="comparison" term="comparison"/>
+        <category label="medium" term="medium"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[The Future of Data Lakehouses: A Fireside Chat with Vinoth Chandar - Founder CEO Onehouse & PMC Chair of Apache Hudi]]></title>
+        <id>https://hudi.apache.org/blog/2025/01/08/the-future-of-data-lakehouses-a-fireside</id>
+        <link href="https://hudi.apache.org/blog/2025/01/08/the-future-of-data-lakehouses-a-fireside"/>
+        <updated>2025-01-08T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.dataengineeringweekly.com/p/the-future-of-data-lakehouses-a-fireside">here</a></span>]]></content>
+        <author>
+            <name>Ananth Packkildurai</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="lakehouse" term="lakehouse"/>
+        <category label="dataengineeringweekly" term="dataengineeringweekly"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to Use the New Hudi Streamer with Hudi 1.0.0 on EMR Serverless 7.5.0 | Hands-on Labs]]></title>
+        <id>https://hudi.apache.org/blog/2025/01/05/how-use-new-hudi-streamer-100-emr-serverless-750-hands-on</id>
+        <link href="https://hudi.apache.org/blog/2025/01/05/how-use-new-hudi-streamer-100-emr-serverless-750-hands-on"/>
+        <updated>2025-01-05T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.linkedin.com/pulse/how-use-new-hudi-streamer-100-emr-serverless-750-hands-on-soumil-shah-fxrae/">here</a></span>]]></content>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="how-to" term="how-to"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="hudi 1.0.0" term="hudi 1.0.0"/>
+        <category label="hudi streamer" term="hudi streamer"/>
+        <category label="amazon emr" term="amazon emr"/>
+        <category label="linkedin" term="linkedin"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Indexing in Apache Hudi]]></title>
+        <id>https://hudi.apache.org/blog/2024/12/31/indexing-in-apache-hudi</id>
+        <link href="https://hudi.apache.org/blog/2024/12/31/indexing-in-apache-hudi"/>
+        <updated>2024-12-31T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@sanjeets1900/indexing-in-apache-hudi-674f9481796e">here</a></span>]]></content>
+        <author>
+            <name>Sanjeet Shukla</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="indexing" term="indexing"/>
+        <category label="medium" term="medium"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[The Architect’s Guide to Open Table Formats and Object Storage]]></title>
+        <id>https://hudi.apache.org/blog/2024/12/31/the-architects-guide-to-open-table-formats-and-object-storage</id>
+        <link href="https://hudi.apache.org/blog/2024/12/31/the-architects-guide-to-open-table-formats-and-object-storage"/>
+        <updated>2024-12-31T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://thenewstack.io/the-architects-guide-to-open-table-formats-and-object-storage/">here</a></span>]]></content>
+        <author>
+            <name>Brenna Buuck</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="apache iceberg" term="apache iceberg"/>
+        <category label="delta lake" term="delta lake"/>
+        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="lakehouse" term="lakehouse"/>
+        <category label="table formats" term="table formats"/>
+        <category label="thenewstack" term="thenewstack"/>
     </entry>
     <entry>
         <title type="html"><![CDATA[Apache Hudi 2024: A Year In Review]]></title>
@@ -362,6 +479,24 @@ When we pass the partition column, we can also provide which key generator to us
         </author>
         <category label="apache hudi" term="apache hudi"/>
         <category label="community" term="community"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How lakehouse handles concurrent Read and Writes]]></title>
+        <id>https://hudi.apache.org/blog/2024/12/28/how-lakehouse-handles-concurrent-read-and-writes</id>
+        <link href="https://hudi.apache.org/blog/2024/12/28/how-lakehouse-handles-concurrent-read-and-writes"/>
+        <updated>2024-12-28T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@sanjeets1900/how-lakehouse-handles-concurrent-read-and-writes-b4423fecfe81">here</a></span>]]></content>
+        <author>
+            <name>Sanjeet Shukla</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="concurrency" term="concurrency"/>
+        <category label="concurrency-control" term="concurrency-control"/>
+        <category label="non-blocking concurrency-control" term="non-blocking concurrency-control"/>
+        <category label="nbcc" term="nbcc"/>
+        <category label="medium" term="medium"/>
     </entry>
     <entry>
         <title type="html"><![CDATA[Announcing Apache Hudi 1.0 and the Next Generation of Data Lakehouses]]></title>
@@ -543,6 +678,40 @@ here are some plans that improve the Hudi core features:</p>
         <category label="blog" term="blog"/>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Use open table format libraries on AWS Glue 5.0 for Apache Spark]]></title>
+        <id>https://hudi.apache.org/blog/2024/12/04/use-open-table-format-libraries-on-aws-glue-5-0-for-apache-spark</id>
+        <link href="https://hudi.apache.org/blog/2024/12/04/use-open-table-format-libraries-on-aws-glue-5-0-for-apache-spark"/>
+        <updated>2024-12-04T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://aws.amazon.com/blogs/big-data/use-open-table-format-libraries-on-aws-glue-5-0-for-apache-spark/">here</a></span>]]></content>
+        <author>
+            <name>Sotaro Hikita and  Noritaka Sekiyama</name>
+        </author>
+        <category label="announcement" term="announcement"/>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="aws glue" term="aws glue"/>
+        <category label="apache spark" term="apache spark"/>
+        <category label="table format" term="table format"/>
+        <category label="amazon" term="amazon"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Iceberg vs Hudi: Key Features, Performance & Use Cases]]></title>
+        <id>https://hudi.apache.org/blog/2024/12/03/apache-iceberg-vs-apache-hudi</id>
+        <link href="https://hudi.apache.org/blog/2024/12/03/apache-iceberg-vs-apache-hudi"/>
+        <updated>2024-12-03T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://estuary.dev/apache-iceberg-vs-apache-hudi/">here</a></span>]]></content>
+        <author>
+            <name>Dani Pálma</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="apache iceberg" term="apache iceberg"/>
+        <category label="comparison" term="comparison"/>
+        <category label="estuary" term="estuary"/>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Hudi’s Automatic File Sizing Delivers Unmatched Performance]]></title>
         <id>https://hudi.apache.org/blog/2024/11/19/automated-small-file-handling</id>
         <link href="https://hudi.apache.org/blog/2024/11/19/automated-small-file-handling"/>
@@ -710,173 +879,5 @@ This setting specifies the maximum number of file groups whose base files meet t
         <category label="apache hudi" term="apache hudi"/>
         <category label="beginner" term="beginner"/>
         <category label="det" term="det"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Moving Large Tables from Snowflake to S3 Using the COPY INTO Command and Hudi Bootstrapping to Build Data Lakes | Hands-On Labs]]></title>
-        <id>https://hudi.apache.org/blog/2024/10/26/moving-large-tables-from-snowflake-to-s3-using-the-copy-into-command-and-hudi</id>
-        <link href="https://hudi.apache.org/blog/2024/10/26/moving-large-tables-from-snowflake-to-s3-using-the-copy-into-command-and-hudi"/>
-        <updated>2024-10-26T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.linkedin.com/pulse/moving-large-tables-from-snowflake-s3-using-copy-command-soumil-shah-csdse/?trackingId=8qFtCUc3R7CAo%2BP883rgUA%3D%3D">here</a></span>]]></content>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="aws s3" term="aws s3"/>
-        <category label="bootstrap" term="bootstrap"/>
-        <category label="linkedin" term="linkedin"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Using Apache Hudi with Apache Flink]]></title>
-        <id>https://hudi.apache.org/blog/2024/10/23/Using-Apache-Hudi-with-Apache-Flink</id>
-        <link href="https://hudi.apache.org/blog/2024/10/23/Using-Apache-Hudi-with-Apache-Flink"/>
-        <updated>2024-10-23T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/tutorial-hudi-for-flink.html">here</a></span>]]></content>
-        <author>
-            <name>amazon</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="apache flink" term="apache flink"/>
-        <category label="beginner" term="beginner"/>
-        <category label="aws" term="aws"/>
-        <category label="amazon" term="amazon"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Mastering Open Table Formats: A Guide to Apache Iceberg, Hudi, and Delta Lake]]></title>
-        <id>https://hudi.apache.org/blog/2024/10/23/mastering-open-table-formats-a-guide-to-apache-iceberg-hudi-and-delta-lake</id>
-        <link href="https://hudi.apache.org/blog/2024/10/23/mastering-open-table-formats-a-guide-to-apache-iceberg-hudi-and-delta-lake"/>
-        <updated>2024-10-23T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/itversity/understanding-open-table-formats-a-comprehensive-guide-ba6f072167fb">here</a></span>]]></content>
-        <author>
-            <name>Naresh Dulam</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Apache Iceberg" term="Apache Iceberg"/>
-        <category label="Delta Lake" term="Delta Lake"/>
-        <category label="comparison" term="comparison"/>
-        <category label="medium" term="medium"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Exploring Time Travel Queries in Apache Hudi]]></title>
-        <id>https://hudi.apache.org/blog/2024/10/22/exploring-time-travel-queries-in-apache-hudi</id>
-        <link href="https://hudi.apache.org/blog/2024/10/22/exploring-time-travel-queries-in-apache-hudi"/>
-        <updated>2024-10-22T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://opstree.com/blog/2024/10/22/time-travel-queries-in-apache-hudi/">here</a></span>]]></content>
-        <author>
-            <name>Ramneek Kaur</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="time travel query" term="time travel query"/>
-        <category label="opstree" term="opstree"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Streaming DynamoDB Data into a Hudi Table: AWS Glue in Action]]></title>
-        <id>https://hudi.apache.org/blog/2024/10/14/streaming-dynamodb-data-into-a-hudi-table-aws-glue-in-action</id>
-        <link href="https://hudi.apache.org/blog/2024/10/14/streaming-dynamodb-data-into-a-hudi-table-aws-glue-in-action"/>
-        <updated>2024-10-14T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.antstack.com/blog/Streaming-DynamoDB-Data-into-a-Hudi-Table/">here</a></span>]]></content>
-        <author>
-            <name>Rahul Kumar</name>
-        </author>
-        <category label="how-to" term="how-to"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="amazon s3" term="amazon s3"/>
-        <category label="aws glue" term="aws glue"/>
-        <category label="amazon kinesis" term="amazon kinesis"/>
-        <category label="amazon dynamodb" term="amazon dynamodb"/>
-        <category label="antstack" term="antstack"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Iceberg vs. Delta Lake vs. Hudi: A Comparative Look at Lakehouse Architectures]]></title>
-        <id>https://hudi.apache.org/blog/2024/10/07/iceberg-vs-delta-lake-vs-hudi-a-comparative-look-at-lakehouse-architectures</id>
-        <link href="https://hudi.apache.org/blog/2024/10/07/iceberg-vs-delta-lake-vs-hudi-a-comparative-look-at-lakehouse-architectures"/>
-        <updated>2024-10-07T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.forefathers.io/iceberg-vs-delta-lake-vs-hudi-a-comparative-look-at-lakehouse-architectures-52eec62b29e8">here</a></span>]]></content>
-        <author>
-            <name>Abdelkbir Armel</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Apache Iceberg" term="Apache Iceberg"/>
-        <category label="Delta Lake" term="Delta Lake"/>
-        <category label="comparison" term="comparison"/>
-        <category label="forefathers" term="forefathers"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Mastering Slowly Changing Dimensions with Apache Hudi & Spark SQL]]></title>
-        <id>https://hudi.apache.org/blog/2024/10/07/mastering-slowly-changing-dimensions-with-apache-hudi-and-spark-sql</id>
-        <link href="https://hudi.apache.org/blog/2024/10/07/mastering-slowly-changing-dimensions-with-apache-hudi-and-spark-sql"/>
-        <updated>2024-10-07T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.linkedin.com/pulse/mastering-slowly-changing-dimensions-apache-hudi-spark-sameer-shaik-7zkjf/?trackingId=1qCeO8FIRJy32LcpHIvy3Q%3D%3D">here</a></span>]]></content>
-        <author>
-            <name>Sameer Shaik</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="scd1" term="scd1"/>
-        <category label="scd2" term="scd2"/>
-        <category label="scd3" term="scd3"/>
-        <category label="spark-sql" term="spark-sql"/>
-        <category label="linkedin" term="linkedin"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Apache Hudi, Spark and Minio: Hands-on Lab in Docker]]></title>
-        <id>https://hudi.apache.org/blog/2024/10/02/apache-hudi-spark-and-minio-hands-on-lab-in-docker</id>
-        <link href="https://hudi.apache.org/blog/2024/10/02/apache-hudi-spark-and-minio-hands-on-lab-in-docker"/>
-        <updated>2024-10-02T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.devgenius.io/apache-hudi-spark-and-minio-hands-on-lab-in-docker-f1daa099ccd0">here</a></span>]]></content>
-        <author>
-            <name>Sanjeet Shukla</name>
-        </author>
-        <category label="how-to" term="how-to"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Apache Spark" term="Apache Spark"/>
-        <category label="Minio" term="Minio"/>
-        <category label="docker" term="docker"/>
-        <category label="devgenius" term="devgenius"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Change query support in Apache Hudi (0.15)]]></title>
-        <id>https://hudi.apache.org/blog/2024/09/30/change-query-support-in-apache-hudi-0-15</id>
-        <link href="https://hudi.apache.org/blog/2024/09/30/change-query-support-in-apache-hudi-0-15"/>
-        <updated>2024-09-30T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://jack-vanlightly.com/analyses/2024/9/27/change-query-support-in-apache-hudi">here</a></span>]]></content>
-        <author>
-            <name>Jack Vanlightly</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="CDC" term="CDC"/>
-        <category label="Change Data Capture" term="Change Data Capture"/>
-        <category label="jack-vanlightly" term="jack-vanlightly"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Hudi, Iceberg and Delta Lake: Data Lake Table Formats Compared]]></title>
-        <id>https://hudi.apache.org/blog/2024/09/24/hudi-iceberg-and-delta-lake-data-lake-table-formats-compared</id>
-        <link href="https://hudi.apache.org/blog/2024/09/24/hudi-iceberg-and-delta-lake-data-lake-table-formats-compared"/>
-        <updated>2024-09-24T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://lakefs.io/blog/hudi-iceberg-and-delta-lake-data-lake-table-formats-compared/">here</a></span>]]></content>
-        <author>
-            <name>Oz Katz</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="apache iceberg" term="apache iceberg"/>
-        <category label="delta lake" term="delta lake"/>
-        <category label="comparison" term="comparison"/>
-        <category label="lakefs" term="lakefs"/>
     </entry>
 </feed>
