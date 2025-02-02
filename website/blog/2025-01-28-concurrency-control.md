@@ -6,7 +6,9 @@ category: blog
 image: /assets/images/blog/concurrency_control/concurrency_blog_thumb.jpg
 tags:
 - multi-writer
+- concurrency
 - concurrency-control
+- non-blocking concurrency-control
 - Apache Hudi
 - Apache Iceberg
 - Delta Lake
