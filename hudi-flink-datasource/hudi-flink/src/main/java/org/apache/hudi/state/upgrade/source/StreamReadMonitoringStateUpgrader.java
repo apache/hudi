@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.state.upgrade.StateUpgrader;
 import org.apache.hudi.state.upgrade.StateVersion;
 
@@ -49,15 +50,15 @@ public class StreamReadMonitoringStateUpgrader implements StateUpgrader<String> 
   public List<String> upgrade(List<String> oldState, StateVersion fromVersion, StateVersion toVersion) {
     switch (fromVersion) {
       case V0:
-        if (toVersion == StateVersion.V0) {
+        if (toVersion == StateVersion.V1) {
           return upgradeV0ToV1(oldState);
         }
-        throw new IllegalStateException("Unsupported version upgrade path");
+        throw new HoodieUpgradeDowngradeException("Unsupported version upgrade path :" + fromVersion + " -> " + toVersion);
       case V1:
         // Do nothing
         return oldState;
       default:
-        throw new IllegalStateException("Unsupported version upgrade path");
+        throw new HoodieUpgradeDowngradeException("Unsupported version upgrade path :" + fromVersion + " -> " + toVersion);
     }
   }
 
@@ -100,7 +101,7 @@ public class StreamReadMonitoringStateUpgrader implements StateUpgrader<String> 
     }
 
     if (filteredTimeline.firstInstant().isEmpty()) {
-      LOG.error("Unable to find instant {} in [isArchived: {}] timeline: {}", issuedInstant, isReadArchivedTimeline, filteredTimeline);
+      LOG.error("Unable to find instant {} in [isArchived: {}] timeline: {}", issuedInstant, isReadArchivedTimeline, filteredTimeline.getInstants());
       throw new HoodieException("Unable to find completionTime in timeline for instant: " + issuedInstant);
     }
     String issuedOffset = filteredTimeline.firstInstant().get().getCompletionTime();

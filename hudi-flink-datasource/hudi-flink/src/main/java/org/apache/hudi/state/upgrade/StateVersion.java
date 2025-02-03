@@ -20,7 +20,8 @@ package org.apache.hudi.state.upgrade;
 
 public enum StateVersion {
   V0(0),
-  V1(1);
+  V1(1),
+  UNKNOWN(-1);
 
   private final int version;
 
