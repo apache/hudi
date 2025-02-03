@@ -28,12 +28,12 @@ public class StateUpgradeHelper<T> {
 
   private final ListState<T> state;
   private final StateUpgrader<T> upgrader;
-  private final StateVersion currentVersion;
+  private final StateVersion targetVersion;
 
-  public StateUpgradeHelper(ListState<T> state, StateUpgrader<T> upgrader, StateVersion currentVersion) {
+  public StateUpgradeHelper(ListState<T> state, StateUpgrader<T> upgrader, StateVersion targetVersion) {
     this.state = state;
     this.upgrader = upgrader;
-    this.currentVersion = currentVersion;
+    this.targetVersion = targetVersion;
   }
 
   public void upgradeState() throws Exception {
@@ -42,8 +42,8 @@ public class StateUpgradeHelper<T> {
         .collect(Collectors.toList());
 
     StateVersion detectedVersion = upgrader.detectVersion(currentState);
-    if (upgrader.canUpgrade(detectedVersion, currentVersion)) {
-      List<T> upgradedState = upgrader.upgrade(currentState, detectedVersion, currentVersion);
+    if (upgrader.canUpgrade(detectedVersion, targetVersion)) {
+      List<T> upgradedState = upgrader.upgrade(currentState, detectedVersion, targetVersion);
       state.clear();
       state.addAll(upgradedState);
     }
