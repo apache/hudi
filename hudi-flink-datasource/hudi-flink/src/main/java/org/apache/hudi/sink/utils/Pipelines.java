@@ -454,11 +454,7 @@ public class Pipelines {
             new ClusteringPlanOperator(conf))
         .setParallelism(1) // plan generate must be singleton
         .setMaxParallelism(1) // plan generate must be singleton
-        .keyBy(plan ->
-            // make the distribution strategy deterministic to avoid concurrent modifications
-            // on the same bucket files
-            plan.getClusteringGroupInfo().getOperations()
-                .stream().map(ClusteringOperation::getFileId).collect(Collectors.joining()))
+        .partitionCustom(new IndexPartitioner(), ClusteringPlanEvent::getIndex)
         .transform("clustering_task",
             TypeInformation.of(ClusteringCommitEvent.class),
             new ClusteringOperator(conf, rowType))

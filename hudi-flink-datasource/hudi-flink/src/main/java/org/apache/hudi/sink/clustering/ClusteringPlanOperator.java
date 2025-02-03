@@ -139,11 +139,13 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
       ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(clusteringInstant, Option.empty(), table.getActiveTimeline());
       table.getMetaClient().reloadActiveTimeline();
 
+      int operationIndex = 0;
       for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {
         LOG.info("Execute clustering plan for instant {} as {} file slices", clusteringInstantTime, clusteringGroup.getSlices().size());
         output.collect(new StreamRecord<>(
-            new ClusteringPlanEvent(clusteringInstantTime, ClusteringGroupInfo.create(clusteringGroup), clusteringPlan.getStrategy().getStrategyParams())
+            new ClusteringPlanEvent(clusteringInstantTime, ClusteringGroupInfo.create(clusteringGroup), clusteringPlan.getStrategy().getStrategyParams(), operationIndex)
         ));
+        operationIndex++;
       }
     }
   }
