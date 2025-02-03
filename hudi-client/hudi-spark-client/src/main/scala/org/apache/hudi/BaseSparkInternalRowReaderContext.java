@@ -19,16 +19,17 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -43,9 +44,8 @@ import java.util.function.UnaryOperator;
 
 import scala.Function1;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
-import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
-import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
 /**
@@ -55,14 +55,25 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
 
   @Override
-  public HoodieRecordMerger getRecordMerger(String mergerStrategy) {
-    switch (mergerStrategy) {
-      case DEFAULT_MERGER_STRATEGY_UUID:
-        return new HoodieSparkRecordMerger();
-      case OVERWRITE_MERGER_STRATEGY_UUID:
-        return new OverwriteWithLatestSparkMerger();
+  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
+    // TODO(HUDI-7843):
+    // get rid of event time and commit time ordering. Just return Option.empty
+    switch (mergeMode) {
+      case EVENT_TIME_ORDERING:
+        return Option.of(new DefaultSparkRecordMerger());
+      case COMMIT_TIME_ORDERING:
+        return Option.of(new OverwriteWithLatestSparkRecordMerger());
+      case CUSTOM:
       default:
-        throw new HoodieException("The merger strategy UUID is not supported: " + mergerStrategy);
+        if (mergeStrategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+          return Option.of(HoodieAvroRecordMerger.INSTANCE);
+        }
+        Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.SPARK, mergeImplClasses, mergeStrategyId);
+        if (mergerClass.isEmpty()) {
+          throw new IllegalArgumentException("No valid spark merger implementation set for `"
+              + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
+        }
+        return mergerClass;
     }
   }
 
@@ -77,24 +88,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public Comparable getOrderingValue(Option<InternalRow> rowOption,
-                                     Map<String, Object> metadataMap,
-                                     Schema schema,
-                                     TypedProperties props) {
-    if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
-      return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
-    }
-
-    if (!rowOption.isPresent()) {
-      return 0;
-    }
-
-    String orderingFieldName = ConfigUtils.getOrderingField(props);
-    Object value = getFieldValueFromInternalRow(rowOption.get(), schema, orderingFieldName);
-    return value != null ? (Comparable) value : 0;
-  }
-
-  @Override
   public HoodieRecord<InternalRow> constructHoodieRecord(Option<InternalRow> rowOption,
                                                          Map<String, Object> metadataMap) {
     if (!rowOption.isPresent()) {
@@ -104,7 +97,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
-    Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
+    Schema schema = getSchemaFromMetadata(metadataMap);
     InternalRow row = rowOption.get();
     return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
   }
@@ -134,16 +127,18 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   }
 
-  @Override
-  public int compareTo(Comparable o1, Comparable o2) {
-    if ((o1 instanceof String && o2 instanceof UTF8String)
-        || (o1 instanceof UTF8String && o2 instanceof String)) {
-      return o1.toString().compareTo(o2.toString());
-    }
-    return super.compareTo(o1, o2);
-  }
-
   protected UnaryOperator<InternalRow> getIdentityProjection() {
     return row -> row;
+  }
+
+  @Override
+  public Comparable convertValueToEngineType(Comparable value) {
+    if (value instanceof String) {
+      // Spark reads String field values as UTF8String.
+      // To foster value comparison, if the value is of String type, e.g., from
+      // the delete record, we convert it to UTF8String type.
+      return UTF8String.fromString((String) value);
+    }
+    return value;
   }
 }

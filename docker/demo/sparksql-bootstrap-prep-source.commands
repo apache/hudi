@@ -17,7 +17,7 @@
  */
 import org.apache.spark.sql.functions.col
 
-val df = spark.read.format("org.apache.hudi").load("/user/hive/warehouse/stock_ticks_cow/*/*/*").drop("_hoodie_commit_time", "_hoodie_record_key", "_hoodie_file_name", "_hoodie_commit_seqno", "_hoodie_partition_path")
+val df = spark.read.format("org.apache.hudi").load("/user/hive/warehouse/stock_ticks_cow").drop("_hoodie_commit_time", "_hoodie_record_key", "_hoodie_file_name", "_hoodie_commit_seqno", "_hoodie_partition_path")
 // TODO(HUDI-4944): fix the test to use a partition column with slashes (`/`) included
 //  in the value.  Currently it fails the tests due to slash encoding.
 df.write.format("parquet").save("/user/hive/warehouse/stock_ticks_cow_bs_src/2018/08/31/")

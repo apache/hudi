@@ -19,6 +19,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
@@ -89,7 +91,7 @@ public class HiveIncrPullSource extends AvroSource {
   /**
    * Finds the first commit from source, greater than the target's last commit, and reads it out.
    */
-  private Option<String> findCommitToPull(Option<String> latestTargetCommit) throws IOException {
+  private Option<Checkpoint> findCommitToPull(Option<Checkpoint> latestTargetCommit) throws IOException {
 
     LOG.info("Looking for commits ");
 
@@ -104,30 +106,30 @@ public class HiveIncrPullSource extends AvroSource {
 
     if (!latestTargetCommit.isPresent()) {
       // start from the beginning
-      return Option.of(commitTimes.get(0));
+      return Option.of(new StreamerCheckpointV2(commitTimes.get(0)));
     }
 
     for (String instantTime : commitTimes) {
       // TODO(vc): Add an option to delete consumed commits
-      if (instantTime.compareTo(latestTargetCommit.get()) > 0) {
-        return Option.of(instantTime);
+      if (instantTime.compareTo(latestTargetCommit.get().getCheckpointKey()) > 0) {
+        return Option.of(new StreamerCheckpointV2(instantTime));
       }
     }
     return Option.empty();
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     try {
       // find the source commit to pull
-      Option<String> commitToPull = findCommitToPull(lastCheckpointStr);
+      Option<Checkpoint> commitToPull = findCommitToPull(lastCheckpoint);
 
       if (!commitToPull.isPresent()) {
-        return new InputBatch<>(Option.empty(), lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
+        return new InputBatch<>(Option.empty(), lastCheckpoint.isPresent() ? lastCheckpoint.get() : new StreamerCheckpointV2(""));
       }
 
       // read the files out.
-      List<FileStatus> commitDeltaFiles = Arrays.asList(fs.listStatus(new Path(incrPullRootPath, commitToPull.get())));
+      List<FileStatus> commitDeltaFiles = Arrays.asList(fs.listStatus(new Path(incrPullRootPath, commitToPull.get().getCheckpointKey())));
       String pathStr = commitDeltaFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
       JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr, AvroKeyInputFormat.class,
           AvroKey.class, NullWritable.class, sparkContext.hadoopConfiguration());
@@ -135,7 +137,7 @@ public class HiveIncrPullSource extends AvroSource {
       return new InputBatch<>(Option.of(avroRDD.keys().map(r -> ((GenericRecord) r.datum()))),
           String.valueOf(commitToPull.get()));
     } catch (Exception e) {
-      throw new HoodieReadFromSourceException("Unable to read from source from checkpoint: " + lastCheckpointStr, e);
+      throw new HoodieReadFromSourceException("Unable to read from source from checkpoint: " + lastCheckpoint, e);
     }
   }
 }

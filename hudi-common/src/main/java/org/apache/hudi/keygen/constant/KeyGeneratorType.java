@@ -27,6 +27,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
@@ -128,6 +129,16 @@ public enum KeyGeneratorType {
       return config.getString(KEY_GENERATOR_CLASS_NAME);
     } else if (config.contains(KEY_GENERATOR_TYPE)) {
       return KeyGeneratorType.valueOf(config.getString(KEY_GENERATOR_TYPE)).getClassName();
+    }
+    return null;
+  }
+
+  @Nullable
+  public static String getKeyGeneratorClassName(Map<String, String> config) {
+    if (config.containsKey(KEY_GENERATOR_CLASS_NAME.key())) {
+      return config.get(KEY_GENERATOR_CLASS_NAME.key());
+    } else if (config.containsKey(KEY_GENERATOR_TYPE.key())) {
+      return KeyGeneratorType.valueOf(config.get(KEY_GENERATOR_TYPE.key())).getClassName();
     }
     return null;
   }

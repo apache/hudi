@@ -51,7 +51,7 @@ public class SavepointsCommand {
     String[][] rows = new String[commits.size()][];
     for (int i = 0; i < commits.size(); i++) {
       HoodieInstant commit = commits.get(i);
-      rows[i] = new String[] {commit.getTimestamp()};
+      rows[i] = new String[] {commit.requestedTime()};
     }
     return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_SAVEPOINT_TIME}, rows);
   }
@@ -77,7 +77,7 @@ public class SavepointsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.SAVEPOINT.toString(), master, sparkMemory, commitTime,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.SAVEPOINT, master, sparkMemory, commitTime,
         user, comments, HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -107,14 +107,14 @@ public class SavepointsCommand {
     }
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(instant -> instant.getTimestamp().equals(instantTime)).collect(Collectors.toList());
+    List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(instant -> instant.requestedTime().equals(instantTime)).collect(Collectors.toList());
 
     if (instants.isEmpty()) {
       return String.format("Commit %s not found in Commits %s", instantTime, timeline);
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK_TO_SAVEPOINT.toString(), master, sparkMemory,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.ROLLBACK_TO_SAVEPOINT, master, sparkMemory,
         instantTime, HoodieCLI.basePath, lazyFailedWritesCleanPolicy);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -141,14 +141,15 @@ public class SavepointsCommand {
     if (completedInstants.empty()) {
       throw new HoodieException("There are no completed savepoint to run delete");
     }
-    HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, instantTime);
+    HoodieInstant savePoint = metaClient.createNewInstant(HoodieInstant.State.COMPLETED,
+        HoodieTimeline.SAVEPOINT_ACTION, instantTime);
 
     if (!completedInstants.containsInstant(savePoint)) {
       return String.format("Commit %s not found in Commits %s", instantTime, completedInstants);
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.DELETE_SAVEPOINT.toString(), master, sparkMemory, instantTime,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.DELETE_SAVEPOINT, master, sparkMemory, instantTime,
         HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);

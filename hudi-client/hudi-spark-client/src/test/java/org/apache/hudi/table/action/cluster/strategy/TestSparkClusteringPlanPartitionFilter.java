@@ -63,7 +63,7 @@ public class TestSparkClusteringPlanPartitionFilter {
     fakeTimeBasedPartitionsPath.add("20210718");
     fakeTimeBasedPartitionsPath.add("20210716");
     fakeTimeBasedPartitionsPath.add("20210719");
-    List list = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    List list = (List)sg.filterPartitionPaths(null, fakeTimeBasedPartitionsPath).getLeft();
     assertEquals(3, list.size());
   }
 
@@ -81,7 +81,7 @@ public class TestSparkClusteringPlanPartitionFilter {
     fakeTimeBasedPartitionsPath.add("20210718");
     fakeTimeBasedPartitionsPath.add("20210716");
     fakeTimeBasedPartitionsPath.add("20210719");
-    List list = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    List list = (List)sg.filterPartitionPaths(null, fakeTimeBasedPartitionsPath).getLeft();
     assertEquals(1, list.size());
     assertSame("20210718", list.get(0));
   }
@@ -101,7 +101,7 @@ public class TestSparkClusteringPlanPartitionFilter {
     fakeTimeBasedPartitionsPath.add("20211221");
     fakeTimeBasedPartitionsPath.add("20211222");
     fakeTimeBasedPartitionsPath.add("20211224");
-    List list = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    List list = (List)sg.filterPartitionPaths(config, fakeTimeBasedPartitionsPath).getLeft();
     assertEquals(1, list.size());
     assertSame("20211222", list.get(0));
   }
@@ -117,7 +117,7 @@ public class TestSparkClusteringPlanPartitionFilter {
     for (int i = 0; i < 24; i++) {
       fakeTimeBasedPartitionsPath.add("20220301" + (i >= 10 ? String.valueOf(i) : "0" + i));
     }
-    List filterPartitions = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    List filterPartitions = (List)sg.filterPartitionPaths(null, fakeTimeBasedPartitionsPath).getLeft();
     assertEquals(1, filterPartitions.size());
     assertEquals(fakeTimeBasedPartitionsPath.get(DateTime.now().getHourOfDay()), filterPartitions.get(0));
     fakeTimeBasedPartitionsPath = new ArrayList<>();
@@ -125,7 +125,7 @@ public class TestSparkClusteringPlanPartitionFilter {
       fakeTimeBasedPartitionsPath.add("20220301" + (i >= 10 ? String.valueOf(i) : "0" + i));
       fakeTimeBasedPartitionsPath.add("20220302" + (i >= 10 ? String.valueOf(i) : "0" + i));
     }
-    filterPartitions = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    filterPartitions = (List)sg.filterPartitionPaths(null, fakeTimeBasedPartitionsPath).getLeft();
     assertEquals(2, filterPartitions.size());
 
     int hourOfDay = DateTime.now().getHourOfDay();

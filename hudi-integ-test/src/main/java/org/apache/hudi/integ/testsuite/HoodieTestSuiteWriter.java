@@ -23,6 +23,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -59,7 +60,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
   protected HoodieWriteConfig writeConfig;
   protected SparkRDDWriteClient writeClient;
   protected HoodieTestSuiteJob.HoodieTestSuiteConfig cfg;
-  protected Option<String> lastCheckpoint;
+  protected Option<Checkpoint> lastCheckpoint;
   protected HoodieReadClient hoodieReadClient;
   protected Properties props;
   protected String schema;
@@ -115,7 +116,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
 
   public abstract RDD<GenericRecord> getNextBatch() throws Exception;
 
-  public abstract Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception;
+  public abstract Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> fetchSource() throws Exception;
 
   public abstract Option<String> startCommit();
 
@@ -169,7 +170,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
     return sparkContext;
   }
 
-  public Option<String> getLastCheckpoint() {
+  public Option<Checkpoint> getLastCheckpoint() {
     return lastCheckpoint;
   }
 

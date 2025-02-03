@@ -86,8 +86,7 @@ public class ArchivedCommitsCommand {
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    String cmd = SparkCommand.ARCHIVE.toString();
-    sparkLauncher.addAppArgs(cmd, master, sparkMemory, Integer.toString(minCommits), Integer.toString(maxCommits),
+    SparkMain.addAppArgs(sparkLauncher, SparkCommand.ARCHIVE, master, sparkMemory, Integer.toString(minCommits), Integer.toString(maxCommits),
         Integer.toString(retained), Boolean.toString(enableMetadata), HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -185,7 +184,7 @@ public class ArchivedCommitsCommand {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     StoragePath basePath = metaClient.getBasePath();
     StoragePath archivePath =
-        new StoragePath(metaClient.getArchivePath() + "/.commits_.archive*");
+        new StoragePath(metaClient.getArchivePath(), ".commits_.archive*");
     List<StoragePathInfo> pathInfoList =
         HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
     List<Comparable[]> allCommits = new ArrayList<>();

@@ -19,6 +19,8 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -83,7 +85,7 @@ public class CloudDataFetcher implements Serializable {
         : getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING);
   }
 
-  public Pair<Option<Dataset<Row>>, String> fetchPartitionedSource(
+  public Pair<Option<Dataset<Row>>, Checkpoint> fetchPartitionedSource(
       CloudObjectsSelectorCommon.Type cloudType,
       CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint,
       Option<SourceProfileSupplier> sourceProfileSupplier,
@@ -107,7 +109,7 @@ public class CloudDataFetcher implements Serializable {
             filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
     if (!checkPointAndDataset.getRight().isPresent()) {
       LOG.info("Empty source, returning endpoint:" + checkPointAndDataset.getLeft());
-      return Pair.of(Option.empty(), checkPointAndDataset.getLeft().toString());
+      return Pair.of(Option.empty(), new StreamerCheckpointV1(checkPointAndDataset.getLeft().toString()));
     }
     LOG.info("Adjusted end checkpoint :" + checkPointAndDataset.getLeft());
 
@@ -117,18 +119,23 @@ public class CloudDataFetcher implements Serializable {
 
     long bytesPerPartition = props.containsKey(SOURCE_MAX_BYTES_PER_PARTITION.key()) ? props.getLong(SOURCE_MAX_BYTES_PER_PARTITION.key()) :
         props.getLong(PARQUET_MAX_FILE_SIZE.key(), Long.parseLong(PARQUET_MAX_FILE_SIZE.defaultValue()));
+    int numSourcePartitions = 0;
     if (isSourceProfileSupplierAvailable) {
       long bytesPerPartitionFromProfile = (long) sourceProfileSupplier.get().getSourceProfile().getSourceSpecificContext();
       if (bytesPerPartitionFromProfile > 0) {
         LOG.debug("Using bytesPerPartition from source profile bytesPerPartitionFromConfig {} bytesPerPartitionFromProfile {}", bytesPerPartition, bytesPerPartitionFromProfile);
         bytesPerPartition = bytesPerPartitionFromProfile;
       }
+      numSourcePartitions = sourceProfileSupplier.get().getSourceProfile().getSourcePartitions();
     }
-    Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition);
-    return Pair.of(datasetOption, checkPointAndDataset.getLeft().toString());
+    Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition, numSourcePartitions);
+    return Pair.of(datasetOption, new StreamerCheckpointV1(checkPointAndDataset.getLeft().toString()));
   }
 
-  private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata, Option<SchemaProvider> schemaProviderOption, long bytesPerPartition) {
+  private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata,
+                                                    Option<SchemaProvider> schemaProviderOption,
+                                                    long bytesPerPartition,
+                                                    int numSourcePartitions) {
     long totalSize = 0;
     for (CloudObjectMetadata o : cloudObjectMetadata) {
       totalSize += o.getSize();
@@ -137,6 +144,10 @@ public class CloudDataFetcher implements Serializable {
     double totalSizeWithHoodieMetaFields = totalSize * 1.1;
     metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(totalSize);
     int numPartitions = (int) Math.max(Math.ceil(totalSizeWithHoodieMetaFields / bytesPerPartition), 1);
+    // If the number of source partitions is configured to be greater, then use it instead.
+    if (numPartitions < numSourcePartitions) {
+      numPartitions = numSourcePartitions;
+    }
     metrics.updateStreamerSourceParallelism(numPartitions);
     return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadata, getFileFormat(props), schemaProviderOption, numPartitions);
   }

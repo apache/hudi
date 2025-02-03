@@ -112,7 +112,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
         .onParentPath(new StoragePath(partitionPath))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-log-fileid1").withDeltaCommit("100").withStorage(storage)
+        .withFileId("test-log-fileid1").withInstantTime("100").withStorage(storage)
         .withSizeThreshold(1).build()) {
 
       // write data to file
@@ -120,7 +120,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-      dataBlock = new HoodieAvroDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       writer.appendBlock(dataBlock);
 
       Map<HoodieLogBlock.HeaderMetadataType, String> rollbackHeader = new HashMap<>();
@@ -209,7 +209,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       writer =
           HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionPath))
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-              .withFileId("test-log-fileid1").withDeltaCommit(INSTANT_TIME).withStorage(
+              .withFileId("test-log-fileid1").withInstantTime(INSTANT_TIME).withStorage(
                   storage)
               .withSizeThreshold(500).build();
 
@@ -218,7 +218,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-      HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       writer.appendBlock(dataBlock);
     } finally {
       if (writer != null) {

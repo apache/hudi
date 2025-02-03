@@ -35,10 +35,9 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -106,6 +105,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
 import static org.apache.spark.sql.functions.callUDF;
@@ -177,7 +178,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     String filePath =
         HadoopFSUtils.toPath(
             BootstrapUtils.getAllLeafFoldersWithFiles(getConfig().getBaseFileFormat(),
-                    (FileSystem) metaClient.getStorage().getFileSystem(),
+                    metaClient.getStorage(),
                     srcPath, context).stream().findAny().map(p -> p.getValue().stream().findAny())
                 .orElse(null).get().getPath()).toString();
     HoodieAvroParquetReader parquetReader =
@@ -266,7 +267,8 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
             .withBootstrapParallelism(3)
             .withBootstrapModeSelector(bootstrapModeSelectorClass)
             .withBootstrapModeForRegexMatch(modeForRegexMatch).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMaxNumDeltaCommitsBeforeCompaction(3).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMaxNumDeltaCommitsBeforeCompaction(3)
+            .withMetadataIndexColumnStats(false).build()) // HUDI-8774
         .build();
 
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
@@ -276,17 +278,17 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
 
     // Rollback Bootstrap
     metaClient.getActiveTimeline().reload().getInstantsAsStream()
-        .filter(s -> s.equals(new HoodieInstant(State.COMPLETED,
+        .filter(s -> s.equals(INSTANT_GENERATOR.createNewInstant(State.COMPLETED,
             deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION,
             bootstrapCommitInstantTs)))
-        .forEach(instant -> HoodieActiveTimeline.deleteInstantFile(
-            metaClient.getStorage(), metaClient.getMetaPath(), instant));
+        .forEach(instant -> TimelineUtils.deleteInstantFile(
+            metaClient.getStorage(), metaClient.getTimelinePath(), instant, INSTANT_FILE_NAME_GENERATOR));
     metaClient.reloadActiveTimeline();
     client.getTableServiceClient().rollbackFailedBootstrap();
     metaClient.reloadActiveTimeline();
     assertEquals(0, metaClient.getCommitsTimeline().countInstants());
     assertEquals(0L, BootstrapUtils.getAllLeafFoldersWithFiles(config.getBaseFileFormat(),
-            (FileSystem) metaClient.getStorage().getFileSystem(), basePath, context)
+            metaClient.getStorage(), basePath, context)
         .stream().mapToLong(f -> f.getValue().size()).sum());
 
     BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
@@ -314,7 +316,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     generateNewDataSetAndReturnSchema(updateTimestamp, totalRecords, partitions, updateSPath);
     JavaRDD<HoodieRecord> updateBatch =
         generateInputBatch(jsc, BootstrapUtils.getAllLeafFoldersWithFiles(config.getBaseFileFormat(),
-                (FileSystem) metaClient.getStorage().getFileSystem(), updateSPath, context),
+                metaClient.getStorage(), updateSPath, context),
                 schema);
     String newInstantTs = client.startCommit();
     client.upsert(updateBatch, newInstantTs);
@@ -379,7 +381,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     metaClient.reloadActiveTimeline();
     assertEquals(expNumInstants, metaClient.getCommitsTimeline().filterCompletedInstants().countInstants());
     assertEquals(instant, metaClient.getActiveTimeline()
-        .getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
+        .getCommitsTimeline().filterCompletedInstants().lastInstant().get().requestedTime());
     verifyNoMarkerInTempFolder();
 
     Dataset<Row> bootstrapped = sqlContext.read().format("parquet").load(basePath);
@@ -389,7 +391,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     if (checkNumRawFiles) {
       List<HoodieFileStatus> files =
           BootstrapUtils.getAllLeafFoldersWithFiles(getConfig().getBaseFileFormat(),
-              (FileSystem) metaClient.getStorage().getFileSystem(),
+              metaClient.getStorage(),
           bootstrapBasePath, context).stream().flatMap(x -> x.getValue().stream()).collect(Collectors.toList());
       assertEquals(files.size() * numVersions,
           sqlContext.sql("select distinct _hoodie_file_name from bootstrapped").count());
@@ -414,7 +416,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     reloadInputFormats();
     List<GenericRecord> records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
-        FSUtils.getAllPartitionPaths(context, storage, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS).stream()
+        FSUtils.getAllPartitionPaths(context, storage, basePath, false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
     assertEquals(totalRecords, records.size());

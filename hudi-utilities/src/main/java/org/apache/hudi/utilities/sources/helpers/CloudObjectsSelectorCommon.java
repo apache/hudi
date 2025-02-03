@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -39,11 +40,17 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.MapPartitionsFunction;
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,23 +58,31 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.PATH_BASED_PARTITION_FIELDS;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.SELECT_RELATIVE_PATH_REGEX;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SPARK_DATASOURCE_READER_COMMA_SEPARATED_PATH_FORMAT;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_PREFIX;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_SUBSTRING;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_KEY_PREFIX;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.coalesceOrRepartition;
 import static org.apache.spark.sql.functions.input_file_name;
 import static org.apache.spark.sql.functions.split;
 
@@ -143,7 +158,7 @@ public class CloudObjectsSelectorCommon {
     final Configuration configuration = storageConf.unwrapCopy();
 
     String bucket = row.getString(0);
-    String filePath = storageUrlSchemePrefix + bucket + "/" + row.getString(1);
+    String filePath = storageUrlSchemePrefix + bucket + StoragePath.SEPARATOR + row.getString(1);
 
     try {
       String filePathUrl = URLDecoder.decode(filePath, StandardCharsets.UTF_8.name());
@@ -180,6 +195,7 @@ public class CloudObjectsSelectorCommon {
     Option<String> selectRelativePathPrefix = getPropVal(props, SELECT_RELATIVE_PATH_PREFIX);
     Option<String> ignoreRelativePathPrefix = getPropVal(props, IGNORE_RELATIVE_PATH_PREFIX);
     Option<String> ignoreRelativePathSubStr = getPropVal(props, IGNORE_RELATIVE_PATH_SUBSTR);
+    Option<String> selectRelativePathRegex = getPropVal(props, SELECT_RELATIVE_PATH_REGEX);
 
     String objectKey;
     String objectSizeKey;
@@ -196,8 +212,19 @@ public class CloudObjectsSelectorCommon {
     }
 
     StringBuilder filter = new StringBuilder(String.format("%s > 0", objectSizeKey));
-    if (selectRelativePathPrefix.isPresent()) {
-      filter.append(SPACE_DELIMTER).append(String.format("and %s like '%s%%'", objectKey, selectRelativePathPrefix.get()));
+    if (selectRelativePathPrefix.isPresent() || selectRelativePathRegex.isPresent()) {
+      String prefix = selectRelativePathPrefix.orElse("");
+      String regex = selectRelativePathRegex.orElse("");
+
+      // Update path if regex is present
+      if (!regex.isEmpty()) {
+        String updatedPathRegex = prefix.isEmpty() || prefix.endsWith(StoragePath.SEPARATOR)
+            ? prefix + regex : prefix + StoragePath.SEPARATOR + regex;
+        filter.append(SPACE_DELIMTER).append(String.format("and %s rlike '%s'", objectKey, updatedPathRegex));
+      } else if (!prefix.isEmpty()) {
+        // Build the condition based on whether regex or prefix is present
+        filter.append(SPACE_DELIMTER).append(String.format("and %s like '%s%%'", objectKey, prefix));
+      }
     }
     if (ignoreRelativePathPrefix.isPresent()) {
       filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%s%%'", objectKey, ignoreRelativePathPrefix.get()));
@@ -257,12 +284,20 @@ public class CloudObjectsSelectorCommon {
     }
     DataFrameReader reader = spark.read().format(fileFormat);
     String datasourceOpts = getStringWithAltKeys(properties, CloudSourceConfig.SPARK_DATASOURCE_OPTIONS, true);
+
+    StructType rowSchema = null;
     if (schemaProviderOption.isPresent()) {
       Schema sourceSchema = schemaProviderOption.get().getSourceSchema();
       if (sourceSchema != null && !sourceSchema.equals(InputBatch.NULL_SCHEMA)) {
-        reader = reader.schema(AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema));
+        rowSchema = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
+        if (isCoalesceRequired(properties, sourceSchema)) {
+          reader = reader.schema(addAliasesToRowSchema(sourceSchema, rowSchema));
+        } else {
+          reader = reader.schema(rowSchema);
+        }
       }
     }
+
     if (StringUtils.isNullOrEmpty(datasourceOpts)) {
       // fall back to legacy config for BWC. TODO consolidate in HUDI-6020
       datasourceOpts = getStringWithAltKeys(properties, S3EventsHoodieIncrSourceConfig.SPARK_DATASOURCE_OPTIONS, true);
@@ -291,6 +326,13 @@ public class CloudObjectsSelectorCommon {
       dataset = reader.load(paths.toArray(new String[cloudObjectMetadata.size()]));
     }
 
+    if (schemaProviderOption.isPresent()) {
+      Schema sourceSchema = schemaProviderOption.get().getSourceSchema();
+      if (isCoalesceRequired(properties, sourceSchema)) {
+        dataset = spark.createDataFrame(coalesceAliasFields(dataset, sourceSchema).rdd(), rowSchema);
+      }
+    }
+
     // add partition column from source path if configured
     if (containsConfigProperty(properties, PATH_BASED_PARTITION_FIELDS)) {
       String[] partitionKeysToAdd = getStringWithAltKeys(properties, PATH_BASED_PARTITION_FIELDS).split(",");
@@ -298,22 +340,202 @@ public class CloudObjectsSelectorCommon {
       for (String partitionKey : partitionKeysToAdd) {
         String partitionPathPattern = String.format("%s=", partitionKey);
         LOG.info(String.format("Adding column %s to dataset", partitionKey));
-        dataset = dataset.withColumn(partitionKey, split(split(input_file_name(), partitionPathPattern).getItem(1), "/").getItem(0));
+        dataset = dataset.withColumn(partitionKey, split(split(input_file_name(), partitionPathPattern).getItem(1), StoragePath.SEPARATOR).getItem(0));
       }
     }
     dataset = coalesceOrRepartition(dataset, numPartitions);
     return Option.of(dataset);
   }
 
-  private static Dataset<Row> coalesceOrRepartition(Dataset dataset, int numPartitions) {
-    int existingNumPartitions = dataset.rdd().getNumPartitions();
-    LOG.info(String.format("existing number of partitions=%d, required number of partitions=%d", existingNumPartitions, numPartitions));
-    if (existingNumPartitions < numPartitions) {
-      dataset = dataset.repartition(numPartitions);
+  private static boolean isCoalesceRequired(TypedProperties properties, Schema sourceSchema) {
+    return getBooleanWithAltKeys(properties, CloudSourceConfig.SPARK_DATASOURCE_READER_COALESCE_ALIAS_COLUMNS)
+        && Objects.nonNull(sourceSchema)
+        && hasFieldWithAliases(sourceSchema);
+  }
+
+  /**
+   * Recursively checks if an Avro schema or any of its nested fields contain aliases.
+   *
+   * @param schema The Avro schema to check.
+   * @return True if the schema or any of its fields contain aliases, false otherwise.
+   */
+  private static boolean hasFieldWithAliases(Schema schema) {
+    // If the schema is a record, check its fields recursively
+    if (isNestedRecord(schema)) {
+      for (Schema.Field field : getRecordFields(schema)) {
+        // Check if the field has aliases
+        if (!field.aliases().isEmpty()) {
+          return true;
+        }
+        // Recursively check the field's schema for aliases
+        if (hasFieldWithAliases(field.schema())) {
+          return true;
+        }
+      }
+    }
+    // No aliases found
+    return false;
+  }
+
+  private static StructType addAliasesToRowSchema(Schema avroSchema, StructType rowSchema) {
+    Map<String, StructField> rowFieldsMap = Arrays.stream(rowSchema.fields())
+        .collect(Collectors.toMap(StructField::name, Function.identity()));
+
+    StructField[] modifiedFields = getRecordFields(avroSchema).stream()
+        .flatMap(avroField -> generateRowFieldsWithAliases(avroField, rowFieldsMap.get(avroField.name())).stream())
+        .toArray(StructField[]::new);
+
+    return new StructType(modifiedFields);
+  }
+
+  private static List<Schema.Field> getRecordFields(Schema schema) {
+    if (schema.getType() == Schema.Type.RECORD) {
+      return schema.getFields();
+    }
+
+    if (schema.getType() == Schema.Type.UNION) {
+      return schema.getTypes().stream()
+          .filter(subSchema -> subSchema.getType() == Schema.Type.RECORD)
+          .findFirst()
+          .map(Schema::getFields)
+          .orElse(Collections.emptyList());
+    }
+
+    return Collections.emptyList();
+  }
+
+  /**
+   * Generates a list of StructFields with aliases applied based on the provided Avro field schema.
+   * <p>
+   * This method processes a given Avro field and its corresponding Spark SQL StructField, handling
+   * nested records and aliases. If the Avro field contains nested records, the method recursively
+   * updates the schema for these records and applies any aliases defined in the Avro schema.
+   * If the Avro field has aliases, they are added as new fields with nullable set to true and
+   * appropriate metadata in the returned list. If no aliases or nesting are present, the original
+   * StructField is returned unchanged.
+   *
+   * @param avroField The Avro field schema to process.
+   * @param rowField  The corresponding Spark SQL StructField to map the Avro field to.
+   * @return A list of StructFields with aliases applied as per the Avro schema.
+   */
+  private static List<StructField> generateRowFieldsWithAliases(Schema.Field avroField, StructField rowField) {
+    List<StructField> fieldList = new ArrayList<>();
+
+    // Handle nested records
+    if (isNestedRecord(avroField.schema())) {
+      StructType updatedSchema = addAliasesToRowSchema(avroField.schema(), (StructType) rowField.dataType());
+
+      if (schemaModifiedOrHasAliases(avroField, updatedSchema, rowField)) {
+        // Add the original field with the updated schema and add aliases if present
+        addFieldWithAliases(fieldList, avroField.name(), updatedSchema, rowField.metadata(), avroField.aliases());
+      } else {
+        fieldList.add(rowField);
+      }
+    } else if (!avroField.aliases().isEmpty()) {
+      // If the field has aliases, add them to the schema
+      addFieldWithAliases(fieldList, avroField.name(), rowField.dataType(), rowField.metadata(), avroField.aliases());
     } else {
-      dataset = dataset.coalesce(numPartitions);
+      // No aliases or nesting, return the original field
+      fieldList.add(rowField);
+    }
+    return fieldList;
+  }
+
+  private static void addFieldWithAliases(List<StructField> fieldList, String fieldName, DataType dataType, Metadata metadata, Set<String> aliases) {
+    fieldList.add(new StructField(fieldName, dataType, true, metadata));
+    aliases.forEach(alias -> fieldList.add(new StructField(alias, dataType, true, metadata)));
+  }
+
+  private static Dataset<Row> coalesceAliasFields(Dataset<Row> dataset, Schema sourceSchema) {
+    return coalesceNestedAliases(coalesceTopLevelAliases(dataset, sourceSchema), sourceSchema);
+  }
+
+  /**
+   * Merges top-level fields with their aliases in the dataset.
+   * <p>
+   * This method goes through the top-level fields in the Avro schema, and for any field that has aliases,
+   * it combines them in the dataset using a coalesce operation. This ensures that if a field is null,
+   * the value from its alias is used instead.
+   *
+   * @param dataset      The dataset to process.
+   * @param sourceSchema The Avro schema defining the fields and their aliases.
+   * @return A dataset with fields merged with their aliases.
+   */
+  private static Dataset<Row> coalesceTopLevelAliases(Dataset<Row> dataset, Schema sourceSchema) {
+    return getRecordFields(sourceSchema).stream()
+        .filter(field -> !field.aliases().isEmpty())
+        .reduce(dataset,
+            (ds, field) -> coalesceAndDropAliasFields(ds, field.name(), field.aliases()), (ds1, ds2) -> ds1);
+  }
+
+  private static Dataset<Row> coalesceAndDropAliasFields(Dataset<Row> dataset, String fieldName, Set<String> aliases) {
+    List<Column> columns = new ArrayList<>();
+    columns.add(dataset.col(fieldName));
+    aliases.forEach(alias -> columns.add(dataset.col(alias)));
+
+    return dataset.withColumn(fieldName, functions.coalesce(columns.toArray(new Column[0])))
+        .drop(aliases.toArray(new String[0]));
+  }
+
+  /**
+   * Merges nested fields with their aliases in the dataset.
+   * <p>
+   * This method iterates through the fields of the provided Avro schema and checks if they represent
+   * nested records. For each nested record, it verifies if there are any alias fields present. If
+   * aliases are found, the method generates a list of nested fields, coalescing them with their aliases,
+   * and creates a new column in the dataset with the merged data.
+   *
+   * @param dataset      The dataset to process.
+   * @param sourceSchema The Avro schema defining the structure and aliases of the data.
+   * @return A dataset with nested fields merged with their aliases.
+   */
+  private static Dataset<Row> coalesceNestedAliases(Dataset<Row> dataset, Schema sourceSchema) {
+    for (Schema.Field field : getRecordFields(sourceSchema)) {
+      // check if this is a nested record and contains an alias field within
+      if (isNestedRecord(field.schema()) && hasFieldWithAliases(field.schema())) {
+        dataset = dataset.withColumn(field.name(), functions.struct(getNestedFields("", field, dataset)));
+      }
     }
     return dataset;
+  }
+
+  private static Column[] getNestedFields(String parentField, Schema.Field field, Dataset<Row> dataset) {
+    return getRecordFields(field.schema()).stream()
+        .map(avroField -> {
+          List<Column> columns = new ArrayList<>();
+          String newParentField = getFullName(parentField, field.name());
+          if (isNestedRecord(avroField.schema())) {
+            // if field is nested, recursively fetch nested column
+            columns.add(functions.struct(getNestedFields(newParentField, avroField, dataset)));
+          } else {
+            columns.add(dataset.col(getFullName(newParentField, avroField.name())));
+          }
+          avroField.aliases().forEach(alias -> columns.add(dataset.col(getFullName(newParentField, alias))));
+          // if avro field contains aliases, coalesce the column with others matching the aliases otherwise return actual column
+          return avroField.aliases().isEmpty() ? columns.get(0)
+              : functions.coalesce(columns.toArray(new Column[0])).alias(avroField.name());
+        }).toArray(Column[]::new);
+  }
+
+  private static boolean isNestedRecord(Schema schema) {
+    if (schema.getType() == Schema.Type.RECORD) {
+      return true;
+    }
+
+    if (schema.getType() == Schema.Type.UNION) {
+      return schema.getTypes().stream()
+          .anyMatch(subSchema -> subSchema.getType() == Schema.Type.RECORD);
+    }
+
+    return false;
+  }
+
+  private static String getFullName(String namespace, String fieldName) {
+    return namespace.isEmpty() ? fieldName : namespace + "." + fieldName;
+  }
+
+  private static boolean schemaModifiedOrHasAliases(Schema.Field avroField, StructType modifiedNestedSchema, StructField rowField) {
+    return !modifiedNestedSchema.equals(rowField.dataType()) || !avroField.aliases().isEmpty();
   }
 
   private static Option<String> getPropVal(TypedProperties props, ConfigProperty<String> configProperty) {

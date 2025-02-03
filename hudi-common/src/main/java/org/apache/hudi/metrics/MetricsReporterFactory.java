@@ -92,6 +92,9 @@ public class MetricsReporterFactory {
       case M3:
         reporter = new M3MetricsReporter(metricsConfig, registry);
         break;
+      case SLF4J:
+        reporter = new Slf4jMetricsReporter(registry);
+        break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");
         break;

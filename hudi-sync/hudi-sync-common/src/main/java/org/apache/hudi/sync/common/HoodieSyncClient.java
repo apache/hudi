@@ -44,6 +44,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
@@ -59,14 +60,10 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   protected final HoodieTableMetaClient metaClient;
   private static final String TEMP_SUFFIX = "_temp";
 
-  public HoodieSyncClient(HoodieSyncConfig config) {
+  public HoodieSyncClient(HoodieSyncConfig config, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.partitionValueExtractor = ReflectionUtils.loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
-    this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(config.getHadoopConf()))
-        .setBasePath(config.getString(META_SYNC_BASE_PATH))
-        .setLoadActiveTimelineOnLoad(true)
-        .build();
+    this.metaClient = Objects.requireNonNull(metaClient, "metaClient is null");
   }
 
   public HoodieTimeline getActiveTimeline() {
@@ -131,12 +128,11 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
   public List<String> getWrittenPartitionsSince(Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
-      LOG.info("Last commit time synced is not known, listing all partitions in "
-          + config.getString(META_SYNC_BASE_PATH)
-          + ",FS :" + config.getHadoopFileSystem());
+      LOG.info("Last commit time synced is not known, listing all partitions in {} , FS: {}",
+          config.getString(META_SYNC_BASE_PATH), config.getHadoopFileSystem());
       return getAllPartitionPathsOnStorage();
     } else {
-      LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
+      LOG.info("Last commit time synced is {}, Getting commits since then", lastCommitTimeSynced.get());
       return TimelineUtils.getWrittenPartitions(
           TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced));
     }
@@ -188,8 +184,8 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
             metaClient.getBasePath(), new StoragePath(storagePath));
         events.add(PartitionEvent.newPartitionDropEvent(relativePath));
       } catch (IllegalArgumentException e) {
-        LOG.error("Cannot parse the path stored in the metastore, ignoring it for "
-            + "generating DROP partition event: \"" + storagePath + "\".", e);
+        LOG.error("Cannot parse the path stored in the metastore, ignoring it for generating DROP partition event: \"{}\".",
+            storagePath, e);
       }
     });
     return events;

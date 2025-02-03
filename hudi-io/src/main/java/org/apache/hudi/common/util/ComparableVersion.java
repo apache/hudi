@@ -58,7 +58,9 @@ import java.util.Stack;
  * This class is copied from {@code org.apache.hadoop.util.ComparableVersion} to avoid Hadoop dependency.
  */
 public class ComparableVersion
-    implements Comparable<ComparableVersion> {
+        implements Comparable<ComparableVersion> {
+  private static final String INVALID_ITEM = "invalid item: ";
+
   private String value;
 
   private String canonical;
@@ -81,8 +83,8 @@ public class ComparableVersion
    * Represents a numeric item in the version item list.
    */
   private static class IntegerItem
-      implements ComparableVersion.Item {
-    private static final BigInteger BIG_INTEGER_ZERO = new BigInteger("0");
+          implements ComparableVersion.Item {
+    private static final BigInteger BIG_INTEGER_ZERO = BigInteger.ZERO;
 
     private final BigInteger value;
 
@@ -120,7 +122,7 @@ public class ComparableVersion
           return 1; // 1.1 > 1-1
 
         default:
-          throw new RuntimeException("invalid item: " + item.getClass());
+          throw new RuntimeException(INVALID_ITEM + item.getClass());
       }
     }
 
@@ -133,7 +135,7 @@ public class ComparableVersion
    * Represents a string in the version item list, usually a qualifier.
    */
   private static class StringItem
-      implements ComparableVersion.Item {
+          implements ComparableVersion.Item {
     private static final String[] QUALIFIERS = {"alpha", "beta", "milestone", "rc", "snapshot", "", "sp"};
 
     private static final List<String> QUALIFIER_LIST = Arrays.asList(QUALIFIERS);
@@ -216,7 +218,7 @@ public class ComparableVersion
           return -1; // 1.any < 1-1
 
         default:
-          throw new RuntimeException("invalid item: " + item.getClass());
+          throw new RuntimeException(INVALID_ITEM + item.getClass());
       }
     }
 
@@ -275,7 +277,7 @@ public class ComparableVersion
             ComparableVersion.Item r = right.hasNext() ? right.next() : null;
 
             // if this is shorter, then invert the compare and mul with -1
-            int result = l == null ? -1 * r.compareTo(l) : l.compareTo(r);
+            int result = (l == null && r != null) ? -1 : (l != null && r == null) ? 1 : l.compareTo(r);
 
             if (result != 0) {
               return result;
@@ -285,10 +287,11 @@ public class ComparableVersion
           return 0;
 
         default:
-          throw new RuntimeException("invalid item: " + item.getClass());
+          throw new RuntimeException(INVALID_ITEM + item.getClass());
       }
     }
 
+    @Override
     public String toString() {
       StringBuilder buffer = new StringBuilder("(");
       for (Iterator<ComparableVersion.Item> iter = iterator(); iter.hasNext(); ) {
@@ -315,7 +318,7 @@ public class ComparableVersion
 
     ComparableVersion.ListItem list = items;
 
-    Stack<ComparableVersion.Item> stack = new Stack<ComparableVersion.Item>();
+    Stack<ComparableVersion.Item> stack = new Stack<>();
     stack.push(list);
 
     boolean isDigit = false;
@@ -346,7 +349,8 @@ public class ComparableVersion
           if ((i + 1 < version.length()) && Character.isDigit(version.charAt(i + 1))) {
             // new ListItem only if previous were digits and new char is a digit,
             // ie need to differentiate only 1.1 from 1-1
-            list.add(list = new ComparableVersion.ListItem());
+            ComparableVersion.ListItem item = new ComparableVersion.ListItem();
+            list.add(item);
 
             stack.push(list);
           }

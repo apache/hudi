@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
@@ -37,9 +37,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.PairFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -176,9 +173,10 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
      * created by clustering, which has smaller average record size, which affects assigning inserts and
      * may result in OOM by making spark underestimate the actual input record sizes.
      */
+    TimelineLayout layout = TimelineLayout.fromVersion(table.getActiveTimeline().getTimelineLayoutVersion());
     long averageRecordSize = AverageRecordSizeUtils.averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
         .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION))
-        .filterCompletedInstants(), config);
+        .filterCompletedInstants(), config,  layout.getCommitMetadataSerDe());
     LOG.info("AvgRecordSize => " + averageRecordSize);
 
     Map<String, List<SmallFile>> partitionSmallFilesMap =
@@ -277,7 +275,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   }
 
   private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, HoodieEngineContext context) {
-    if (config.getParquetSmallFileLimit() <= 0) {
+    if (config.getParquetSmallFileLimit() <= 0 || (partitionPaths == null || partitionPaths.isEmpty())) {
       return Collections.emptyMap();
     }
 
@@ -285,16 +283,10 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
       return Collections.emptyMap();
     }
 
-    JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
-    Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
-
-    if (partitionPaths != null && partitionPaths.size() > 0) {
-      context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
-      JavaRDD<String> partitionPathRdds = jsc.parallelize(partitionPaths, partitionPaths.size());
-      partitionSmallFilesMap = partitionPathRdds.mapToPair((PairFunction<String, String, List<SmallFile>>)
-          partitionPath -> new Tuple2<>(partitionPath, getSmallFiles(partitionPath))).collectAsMap();
-    }
-
+    context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
+    long startTimeMs = System.currentTimeMillis();
+    Map<String, List<SmallFile>> partitionSmallFilesMap = context.mapToPair(partitionPaths, paritionPath -> Pair.of(paritionPath, getSmallFiles(paritionPath)), partitionPaths.size());
+    LOG.info("Fetched small files in {}ms", System.currentTimeMillis() - startTimeMs);
     return partitionSmallFilesMap;
   }
 
@@ -311,7 +303,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
     if (!commitTimeline.empty()) { // if we have some commits
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
       List<HoodieBaseFile> allFiles = table.getBaseFileOnlyView()
-          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
+          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.requestedTime()).collect(Collectors.toList());
 
       for (HoodieBaseFile file : allFiles) {
         if (file.getFileSize() < config.getParquetSmallFileLimit()) {

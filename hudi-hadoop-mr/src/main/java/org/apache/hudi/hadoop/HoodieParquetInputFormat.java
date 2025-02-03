@@ -19,11 +19,13 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
@@ -115,21 +117,21 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
                                                                    final Reporter reporter) throws IOException {
     HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
-    if (shouldUseFilegroupReader(job)) {
+    if (shouldUseFilegroupReader(job, split)) {
       try {
         if (!(split instanceof FileSplit) || !checkIfHudiTable(split, job)) {
           return super.getRecordReader(split, job, reporter);
         }
         if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
-          return new HoodieFileGroupReaderBasedRecordReader((s, j, r) -> {
+          return new HoodieFileGroupReaderBasedRecordReader((s, j) -> {
             try {
-              return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), s, j, r);
+              return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(Option.empty()), s, j, reporter);
             } catch (InterruptedException e) {
               throw new RuntimeException(e);
             }
-          }, split, job, reporter);
+          }, split, job);
         } else {
-          return new HoodieFileGroupReaderBasedRecordReader(super::getRecordReader, split, job, reporter);
+          return new HoodieFileGroupReaderBasedRecordReader((s, j) -> super.getRecordReader(s, j, reporter), split, job);
         }
       } catch (final IOException e) {
         throw new RuntimeException("Cannot create a RecordReaderWrapper", e);
@@ -152,21 +154,29 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     }
 
     // adapt schema evolution
-    new SchemaEvolutionContext(split, job).doEvolutionForParquetFormat();
+    SchemaEvolutionContext schemaEvolutionContext = new SchemaEvolutionContext(split, job);
+    schemaEvolutionContext.doEvolutionForParquetFormat();
 
     if (LOG.isDebugEnabled()) {
       LOG.debug("EMPLOYING DEFAULT RECORD READER - " + split);
     }
 
-    return getRecordReaderInternal(split, job, reporter);
+    return getRecordReaderInternal(split, job, reporter, schemaEvolutionContext.internalSchemaOption);
   }
 
   private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
                                                                             JobConf job,
                                                                             Reporter reporter) throws IOException {
+    return getRecordReaderInternal(split, job, reporter, Option.empty());
+  }
+
+  private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
+                                                                            JobConf job,
+                                                                            Reporter reporter,
+                                                                            Option<InternalSchema> internalSchemaOption) throws IOException {
     try {
       if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
-        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), split, job, reporter);
+        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(internalSchemaOption), split, job, reporter);
       } else {
         return super.getRecordReader(split, job, reporter);
       }

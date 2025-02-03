@@ -93,7 +93,7 @@ public class SparkSampleWritesUtils {
   private static Pair<Boolean, String> doSampleWrites(JavaSparkContext jsc, Option<JavaRDD<HoodieRecord>> recordsOpt, HoodieWriteConfig writeConfig, String instantTime)
       throws IOException {
     final String sampleWritesBasePath = getSampleWritesBasePath(jsc, writeConfig, instantTime);
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(String.format("%s_samples_%s", writeConfig.getTableName(), instantTime))
         .setCDCEnabled(false)
@@ -151,8 +151,8 @@ public class SparkSampleWritesUtils {
     Option<HoodieInstant> lastInstantOpt = metaClient.getCommitTimeline().filterCompletedInstants().lastInstant();
     checkState(lastInstantOpt.isPresent(), "The only completed instant should be present in sample_writes table.");
     HoodieInstant instant = lastInstantOpt.get();
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-        .fromBytes(metaClient.getCommitTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe()
+        .deserialize(instant, metaClient.getCommitTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
     long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
     long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
     return (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);

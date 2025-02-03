@@ -19,16 +19,17 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
@@ -51,6 +52,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -63,16 +65,20 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
 
   private static final String ROW_INDEX_COLUMN_NAME = "row_index";
   public static final String ROW_INDEX_TEMPORARY_COLUMN_NAME = "_tmp_metadata_" + ROW_INDEX_COLUMN_NAME;
+  protected final String baseFileInstantTime;
   private long nextRecordPosition = 0L;
   private boolean needToDoHybridStrategy = false;
 
   public HoodiePositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                                   HoodieTableMetaClient hoodieTableMetaClient,
+                                                  RecordMergeMode recordMergeMode,
                                                   Option<String> partitionNameOverrideOpt,
                                                   Option<String[]> partitionPathFieldOpt,
-                                                  HoodieRecordMerger recordMerger,
-                                                  TypedProperties props) {
-    super(readerContext, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt, recordMerger, props);
+                                                  String baseFileInstantTime,
+                                                  TypedProperties props,
+                                                  HoodieReadStats readStats) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
+    this.baseFileInstantTime = baseFileInstantTime;
   }
 
   @Override
@@ -87,7 +93,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       return;
     }
     // Extract positions from data block.
-    List<Long> recordPositions = extractRecordPositions(dataBlock);
+    List<Long> recordPositions = extractRecordPositions(dataBlock, baseFileInstantTime);
     if (recordPositions == null) {
       LOG.warn("Falling back to key based merge for Read");
       fallbackToKeyBasedBuffer();
@@ -164,7 +170,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       return;
     }
 
-    List<Long> recordPositions = extractRecordPositions(deleteBlock);
+    List<Long> recordPositions = extractRecordPositions(deleteBlock, baseFileInstantTime);
     if (recordPositions == null) {
       LOG.warn("Falling back to key based merge for Read");
       fallbackToKeyBasedBuffer();
@@ -173,10 +179,11 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     }
 
     switch (recordMergeMode) {
-      case OVERWRITE_WITH_LATEST:
+      case COMMIT_TIME_ORDERING:
         for (Long recordPosition : recordPositions) {
           records.putIfAbsent(recordPosition,
-              Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", 0L)));
+              Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
+                  null, "", DEFAULT_ORDERING_VALUE)));
         }
         return;
       case EVENT_TIME_ORDERING:
@@ -199,7 +206,8 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     if (recordOpt.isPresent()) {
       String recordKey = recordOpt.get().getRecordKey();
       records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue())));
+          recordKey, recordOpt.get().getPartitionPath(),
+          getOrderingValue(readerContext, recordOpt.get()))));
     }
   }
 
@@ -277,15 +285,26 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
   }
 
   /**
-   * Extract the record positions from a log block header.
+   * Extracts valid record positions from a log block header.
    *
-   * @param logBlock
-   * @return
-   * @throws IOException
+   * @param logBlock            {@link HoodieLogBlock} instance of the log block
+   * @param baseFileInstantTime base file instant time for the file group to read
+   *
+   * @return valid record positions
+   * @throws IOException upon I/O errors
    */
-  protected static List<Long> extractRecordPositions(HoodieLogBlock logBlock) throws IOException {
+  protected static List<Long> extractRecordPositions(HoodieLogBlock logBlock,
+                                                     String baseFileInstantTime) throws IOException {
     List<Long> blockPositions = new ArrayList<>();
 
+    String blockBaseFileInstantTime = logBlock.getBaseFileInstantTimeOfPositions();
+    if (StringUtils.isNullOrEmpty(blockBaseFileInstantTime) || !baseFileInstantTime.equals(blockBaseFileInstantTime)) {
+      LOG.debug("The record positions cannot be used because the base file instant time "
+              + "is either missing or different from the base file to merge. "
+              + "Instant time in the header: {}, base file instant time of the file group: {}.",
+          blockBaseFileInstantTime, baseFileInstantTime);
+      return null;
+    }
     Roaring64NavigableMap positions = logBlock.getRecordPositions();
     if (positions == null || positions.isEmpty()) {
       LOG.warn("No record position info is found when attempt to do position based merge.");

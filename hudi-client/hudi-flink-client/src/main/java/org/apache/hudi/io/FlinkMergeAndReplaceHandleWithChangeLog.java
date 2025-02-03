@@ -33,7 +33,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,9 +62,9 @@ public class FlinkMergeAndReplaceHandleWithChangeLog<T, I, K, O>
         config,
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
-        (FileSystem) getStorage().getFileSystem(),
+        getStorage(),
         getWriterSchema(),
-        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
+        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 

@@ -29,23 +29,18 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -58,7 +53,6 @@ import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.HASHI
 import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.HASHING_METADATA_FILE_SUFFIX;
 import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.getTimestampFromFile;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Utilities class for consistent bucket index metadata management.
@@ -77,7 +71,6 @@ public class ConsistentBucketIndexUtils {
    * @param table      Hoodie table
    * @param partition  Table partition
    * @param numBuckets Default bucket number
-   *
    * @return Consistent hashing metadata
    */
   public static HoodieConsistentHashingMetadata loadOrCreateMetadata(HoodieTable table, String partition, int numBuckets) {
@@ -90,7 +83,7 @@ public class ConsistentBucketIndexUtils {
 
     // There is no metadata, so try to create a new one and save it.
     HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
-    if (saveMetadata(table, metadata, false)) {
+    if (saveMetadata(table, metadata)) {
       return metadata;
     }
 
@@ -110,30 +103,30 @@ public class ConsistentBucketIndexUtils {
    */
   public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTable table, String partition) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    Path metadataPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(metaClient.getHashingMetadataPath(), partition);
-    Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePath().toString(), partition);
+    StoragePath metadataPath = FSUtils.constructAbsolutePath(metaClient.getHashingMetadataPath(), partition);
     try {
-      Predicate<FileStatus> hashingMetaCommitFilePredicate = fileStatus -> {
-        String filename = fileStatus.getPath().getName();
-        return filename.contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX);
+      Predicate<StoragePathInfo> hashingMetaCommitFilePredicate = pathInfo -> {
+        String filename = pathInfo.getPath().getName();
+        return filename.endsWith(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX);
       };
-      Predicate<FileStatus> hashingMetadataFilePredicate = fileStatus -> {
-        String filename = fileStatus.getPath().getName();
-        return filename.contains(HASHING_METADATA_FILE_SUFFIX);
+      Predicate<StoragePathInfo> hashingMetadataFilePredicate = pathInfo -> {
+        String filename = pathInfo.getPath().getName();
+        return filename.endsWith(HASHING_METADATA_FILE_SUFFIX);
       };
-      final FileStatus[] metaFiles =
-          ((FileSystem) metaClient.getStorage().getFileSystem()).listStatus(metadataPath);
-      final TreeSet<String> commitMetaTss = Arrays.stream(metaFiles).filter(hashingMetaCommitFilePredicate)
+      final List<StoragePathInfo> metaFiles = metaClient.getStorage().listDirectEntries(metadataPath);
+      final TreeSet<String> commitMetaTss = metaFiles.stream().filter(hashingMetaCommitFilePredicate)
           .map(commitFile -> HoodieConsistentHashingMetadata.getTimestampFromFile(commitFile.getPath().getName()))
           .sorted()
           .collect(Collectors.toCollection(TreeSet::new));
-      final FileStatus[] hashingMetaFiles = Arrays.stream(metaFiles).filter(hashingMetadataFilePredicate)
+      final List<StoragePathInfo> hashingMetaFiles = metaFiles.stream().filter(hashingMetadataFilePredicate)
           .sorted(Comparator.comparing(f -> f.getPath().getName()))
-          .toArray(FileStatus[]::new);
+          .collect(Collectors.toList());
       // max committed metadata file
       final String maxCommitMetaFileTs = commitMetaTss.isEmpty() ? null : commitMetaTss.last();
       // max updated metadata file
-      FileStatus maxMetadataFile = hashingMetaFiles.length > 0 ? hashingMetaFiles[hashingMetaFiles.length - 1] : null;
+      StoragePathInfo maxMetadataFile = hashingMetaFiles.isEmpty()
+              ? null
+              : hashingMetaFiles.get(hashingMetaFiles.size() - 1);
       // If single file present in metadata and if its default file return it
       if (maxMetadataFile != null && HoodieConsistentHashingMetadata.getTimestampFromFile(maxMetadataFile.getPath().getName()).equals(HoodieTimeline.INIT_INSTANT_TS)) {
         return loadMetadataFromGivenFile(table, maxMetadataFile);
@@ -146,9 +139,18 @@ public class ConsistentBucketIndexUtils {
       HoodieTimeline completedCommits = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
 
       // fix the in-consistency between un-committed and committed hashing metadata files.
-      List<FileStatus> fixed = new ArrayList<>();
-      Arrays.stream(hashingMetaFiles).forEach(hashingMetaFile -> {
-        Path path = hashingMetaFile.getPath();
+      List<StoragePathInfo> fixed = new ArrayList<>();
+      Option<StoragePathInfo> maxCommittedMetadataFileOpt = Option.empty();
+      if (maxCommitMetaFileTs != null) {
+        maxCommittedMetadataFileOpt = Option.fromJavaOptional(hashingMetaFiles.stream().filter(hashingMetaFile -> {
+          String timestamp = getTimestampFromFile(hashingMetaFile.getPath().getName());
+          return maxCommitMetaFileTs.equals(timestamp);
+        }).findFirst());
+        ValidationUtils.checkState(maxCommittedMetadataFileOpt.isPresent(),
+            "Failed to find max committed metadata file but commit marker file exist with instant: " + maxCommittedMetadataFileOpt);
+      }
+      hashingMetaFiles.forEach(hashingMetaFile -> {
+        StoragePath path = hashingMetaFile.getPath();
         String timestamp = HoodieConsistentHashingMetadata.getTimestampFromFile(path.getName());
         if (maxCommitMetaFileTs != null && timestamp.compareTo(maxCommitMetaFileTs) <= 0) {
           // only fix the metadata with greater timestamp than max committed timestamp
@@ -158,7 +160,7 @@ public class ConsistentBucketIndexUtils {
         if (isRehashingCommitted) {
           if (!commitMetaTss.contains(timestamp)) {
             try {
-              createCommitMarker(table, path, partitionPath);
+              createCommitMarker(table, path, metadataPath);
             } catch (IOException e) {
               throw new HoodieIOException("Exception while creating marker file " + path.getName() + " for partition " + partition, e);
             }
@@ -168,8 +170,11 @@ public class ConsistentBucketIndexUtils {
           fixed.add(hashingMetaFile);
         }
       });
-
-      return fixed.isEmpty() ? Option.empty() : loadMetadataFromGivenFile(table, fixed.get(fixed.size() - 1));
+      if (!fixed.isEmpty()) {
+        return loadMetadataFromGivenFile(table, fixed.get(fixed.size() - 1));
+      }
+      // we should return max committed metadata file if there is not any metadata file can be successfully fixed.
+      return maxCommittedMetadataFileOpt.isPresent() ? loadMetadataFromGivenFile(table, maxCommittedMetadataFileOpt.get()) : Option.empty();
     } catch (FileNotFoundException e) {
       return Option.empty();
     } catch (IOException e) {
@@ -181,39 +186,49 @@ public class ConsistentBucketIndexUtils {
   /**
    * Saves the metadata into storage
    *
-   * @param table     Hoodie table
-   * @param metadata  Hashing metadata to be saved
-   * @param overwrite Whether to overwrite existing metadata
+   * @param table    Hoodie table
+   * @param metadata Hashing metadata to be saved
    * @return true if the metadata is saved successfully
    */
-  public static boolean saveMetadata(HoodieTable table, HoodieConsistentHashingMetadata metadata, boolean overwrite) {
+  public static boolean saveMetadata(HoodieTable table, HoodieConsistentHashingMetadata metadata) {
     HoodieStorage storage = table.getStorage();
     StoragePath dir = FSUtils.constructAbsolutePath(
         table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
     StoragePath fullPath = new StoragePath(dir, metadata.getFilename());
-    try (OutputStream out = storage.create(fullPath, overwrite)) {
-      byte[] bytes = metadata.toBytes();
-      out.write(bytes);
-      out.close();
+    try {
+      if (storage.exists(fullPath)) {
+        // the file has been created by other tasks
+        return true;
+      }
+      storage.createImmutableFileInPath(fullPath, Option.of(metadata.toBytes()), true);
       return true;
-    } catch (IOException e) {
-      LOG.warn("Failed to update bucket metadata: " + metadata, e);
+    } catch (IOException e1) {
+      // ignore the exception and check the file existence
+      try {
+        if (storage.exists(fullPath)) {
+          return true;
+        }
+      } catch (IOException e2) {
+        // ignore the exception and return false
+        LOG.warn("Failed to check the existence of bucket metadata file: " + fullPath, e2);
+      }
+      LOG.warn("Failed to update bucket metadata: " + metadata, e1);
+      return false;
     }
-    return false;
   }
 
   /***
    * Creates commit marker corresponding to hashing metadata file after post commit clustering operation.
    *
    * @param table         Hoodie table
-   * @param fileStatus    File for which commit marker should be created
-   * @param partitionPath Partition path the file belongs to
+   * @param path          File for which commit marker should be created
+   * @param metadataPath Consistent-Bucket metadata path the file belongs to
    * @throws IOException
    */
-  private static void createCommitMarker(HoodieTable table, Path fileStatus, Path partitionPath) throws IOException {
+  private static void createCommitMarker(HoodieTable table, StoragePath path, StoragePath metadataPath) throws IOException {
     HoodieStorage storage = table.getStorage();
-    StoragePath fullPath = new StoragePath(convertToStoragePath(partitionPath),
-        getTimestampFromFile(fileStatus.getName()) + HASHING_METADATA_COMMIT_FILE_SUFFIX);
+    StoragePath fullPath = new StoragePath(metadataPath,
+        getTimestampFromFile(path.getName()) + HASHING_METADATA_COMMIT_FILE_SUFFIX);
     if (storage.exists(fullPath)) {
       return;
     }
@@ -236,11 +251,11 @@ public class ConsistentBucketIndexUtils {
    * @param metaFile Hashing metadata file
    * @return HoodieConsistentHashingMetadata object
    */
-  private static Option<HoodieConsistentHashingMetadata> loadMetadataFromGivenFile(HoodieTable table, FileStatus metaFile) {
+  private static Option<HoodieConsistentHashingMetadata> loadMetadataFromGivenFile(HoodieTable table, StoragePathInfo metaFile) {
     if (metaFile == null) {
       return Option.empty();
     }
-    try (InputStream is = table.getStorage().open(convertToStoragePath(metaFile.getPath()))) {
+    try (InputStream is = table.getStorage().open(metaFile.getPath())) {
       byte[] content = FileIOUtils.readAsByteArray(is);
       return Option.of(HoodieConsistentHashingMetadata.fromBytes(content));
     } catch (FileNotFoundException e) {
@@ -267,8 +282,8 @@ public class ConsistentBucketIndexUtils {
    * @param partition Partition metadata file belongs to
    * @return true if hashing metadata file is latest else false
    */
-  private static boolean recommitMetadataFile(HoodieTable table, FileStatus metaFile, String partition) {
-    Path partitionPath = new Path(FSUtils.constructAbsolutePath(table.getMetaClient().getBasePath(), partition).toUri());
+  private static boolean recommitMetadataFile(HoodieTable table, StoragePathInfo metaFile, String partition) {
+    StoragePath metadataPath = FSUtils.constructAbsolutePath(table.getMetaClient().getHashingMetadataPath(), partition);
     String timestamp = getTimestampFromFile(metaFile.getPath().getName());
     if (table.getPendingCommitsTimeline().containsInstant(timestamp)) {
       return false;
@@ -279,11 +294,14 @@ public class ConsistentBucketIndexUtils {
     }
     HoodieConsistentHashingMetadata hoodieConsistentHashingMetadata = hoodieConsistentHashingMetadataOption.get();
 
-    Predicate<String> hoodieFileGroupIdPredicate = hoodieBaseFile -> hoodieConsistentHashingMetadata.getNodes().stream().anyMatch(node -> node.getFileIdPrefix().equals(hoodieBaseFile));
+    Predicate<String> hoodieFileGroupIdPredicate = hoodieBaseFile ->
+        hoodieConsistentHashingMetadata.getNodes()
+            .stream()
+            .anyMatch(node -> node.getFileIdPrefix().equals(hoodieBaseFile));
     if (table.getBaseFileOnlyView().getLatestBaseFiles(partition)
         .map(fileIdPrefix -> FSUtils.getFileIdPfxFromFileId(fileIdPrefix.getFileId())).anyMatch(hoodieFileGroupIdPredicate)) {
       try {
-        createCommitMarker(table, metaFile.getPath(), partitionPath);
+        createCommitMarker(table, metaFile.getPath(), metadataPath);
         return true;
       } catch (IOException e) {
         throw new HoodieIOException("Exception while creating marker file " + metaFile.getPath().getName() + " for partition " + partition, e);

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.gcp.bigquery;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -59,6 +60,8 @@ import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BIG_
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BILLING_PROJECT_ID;
+
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER;
 
 public class HoodieBigQuerySyncClient extends HoodieSyncClient {
@@ -67,42 +70,35 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
 
   protected final BigQuerySyncConfig config;
   private final String projectId;
+  private final String billingProjectId;
   private final String bigLakeConnectionId;
   private final String datasetName;
   private final boolean requirePartitionFilter;
   private transient BigQuery bigquery;
 
-  public HoodieBigQuerySyncClient(final BigQuerySyncConfig config) {
-    super(config);
-    this.config = config;
-    this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
-    this.bigLakeConnectionId = config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID);
-    this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
-    this.requirePartitionFilter = config.getBoolean(BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER);
-    this.createBigQueryConnection();
+  public HoodieBigQuerySyncClient(final BigQuerySyncConfig config, HoodieTableMetaClient metaClient) {
+    this(config, createBigQueryConnection(config), metaClient);
   }
 
   @VisibleForTesting
-  HoodieBigQuerySyncClient(final BigQuerySyncConfig config, final BigQuery bigquery) {
-    super(config);
+  HoodieBigQuerySyncClient(final BigQuerySyncConfig config, final BigQuery bigquery, HoodieTableMetaClient metaClient) {
+    super(config, metaClient);
     this.config = config;
     this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
+    this.billingProjectId = config.getStringOrDefault(BIGQUERY_SYNC_BILLING_PROJECT_ID, this.projectId);
     this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
     this.requirePartitionFilter = config.getBoolean(BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER);
     this.bigquery = bigquery;
     this.bigLakeConnectionId = config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID);
   }
 
-  private void createBigQueryConnection() {
-    if (bigquery == null) {
-      try {
-        // Initialize client that will be used to send requests. This client only needs to be created
-        // once, and can be reused for multiple requests.
-        bigquery = BigQueryOptions.newBuilder().setLocation(config.getString(BIGQUERY_SYNC_DATASET_LOCATION)).build().getService();
-        LOG.info("Successfully established BigQuery connection.");
-      } catch (BigQueryException e) {
-        throw new HoodieBigQuerySyncException("Cannot create bigQuery connection ", e);
-      }
+  private static BigQuery createBigQueryConnection(BigQuerySyncConfig config) {
+    try {
+      // Initialize client that will be used to send requests. This client only needs to be created
+      // once, and can be reused for multiple requests.
+      return BigQueryOptions.newBuilder().setLocation(config.getString(BIGQUERY_SYNC_DATASET_LOCATION)).build().getService();
+    } catch (BigQueryException e) {
+      throw new HoodieBigQuerySyncException("Cannot create bigQuery connection ", e);
     }
   }
 
@@ -132,7 +128,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       QueryJobConfiguration queryConfig = QueryJobConfiguration.newBuilder(query)
           .setUseLegacySql(false)
           .build();
-      JobId jobId = JobId.newBuilder().setProject(projectId).setRandomJob().build();
+      JobId jobId = JobId.newBuilder().setProject(billingProjectId).setRandomJob().build();
       Job queryJob = bigquery.create(JobInfo.newBuilder(queryConfig).setJobId(jobId).build());
 
       queryJob = queryJob.waitFor();

@@ -63,6 +63,7 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 
 /**
+ * TODO: [HUDI-8294]
  * A tool to run metadata indexing asynchronously.
  * <p>
  * Example command (assuming indexer.properties contains related index configs, see {@link org.apache.hudi.common.config.HoodieMetadataConfig} for configs):
@@ -281,7 +282,7 @@ public class HoodieIndexer {
             .filterPendingIndexTimeline()
             .firstInstant();
         if (earliestPendingIndexInstant.isPresent()) {
-          cfg.indexInstantTime = earliestPendingIndexInstant.get().getTimestamp();
+          cfg.indexInstantTime = earliestPendingIndexInstant.get().requestedTime();
           LOG.info("Found the earliest scheduled indexing instant which will be executed: "
               + cfg.indexInstantTime);
         } else {
@@ -305,7 +306,8 @@ public class HoodieIndexer {
   }
 
   private int dropIndex(JavaSparkContext jsc) throws Exception {
-    List<MetadataPartitionType> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes, Option.empty());
+    List<String> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes, Option.empty())
+        .stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       client.dropIndex(partitionTypes);
@@ -322,8 +324,7 @@ public class HoodieIndexer {
       return false;
     }
     List<HoodieIndexPartitionInfo> indexPartitionInfos = commitMetadata.get().getIndexPartitionInfos();
-    LOG.info(String.format("Indexing complete for partitions: %s",
-        indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList())));
+    LOG.info("Indexing complete for partitions: {}", indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList()));
     return isIndexBuiltForAllRequestedTypes(indexPartitionInfos);
   }
 
@@ -333,7 +334,11 @@ public class HoodieIndexer {
     Set<String> requestedPartitions = getRequestedPartitionTypes(cfg.indexTypes, Option.empty()).stream()
         .map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedPartitions.removeAll(indexedPartitions);
-    return requestedPartitions.isEmpty();
+    if (requestedPartitions.isEmpty()) {
+      return true;
+    }
+    metaClient.reloadTableConfig();
+    return metaClient.getTableConfig().getMetadataPartitions().containsAll(indexedPartitions);
   }
 
   List<MetadataPartitionType> getRequestedPartitionTypes(String indexTypes, Option<HoodieMetadataConfig> metadataConfig) {

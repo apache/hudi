@@ -17,31 +17,36 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.HoodieSparkRecordMerger
+import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.common.config.HoodieStorageConfig
-import org.apache.hudi.common.model.HoodieAvroRecordMerger
+import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
+import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.types.StructField
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.util.TimeZone
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
@@ -70,7 +75,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     .config(sparkConf())
     .getOrCreate()
 
-  private var tableId = 0
+  private var tableId = new AtomicInteger(0)
 
   private var extraConf = Map[String, String]()
 
@@ -113,9 +118,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def generateTableName: String = {
-    val name = s"h$tableId"
-    tableId = tableId + 1
-    name
+    s"h${tableId.incrementAndGet()}"
   }
 
   override protected def afterAll(): Unit = {
@@ -129,6 +132,26 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   protected def checkAnswer(array: Array[Row])(expects: Seq[Any]*): Unit = {
     assertResult(expects.map(row => Row(row: _*)).toArray)(array)
+  }
+
+  protected def checkNestedExceptionContains(sql: String)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable =>
+        var t = e
+        while (t != null) {
+          if (t.getMessage.trim.contains(errorMsg.trim)) {
+            hasException = true
+          }
+          t = t.getCause
+        }
+        if (!hasException) {
+          e.printStackTrace(System.err)
+        }
+    }
+    assertResult(true)(hasException)
   }
 
   protected def checkExceptions(sql: String)(errorMsgs: Seq[String]): Unit = {
@@ -155,6 +178,49 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     assertResult(true)(hasException)
   }
 
+  protected def checkException(runnable: Runnable)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      runnable.run()
+    } catch {
+      case e: Throwable =>
+        assertResult(errorMsg.trim)(e.getMessage.trim)
+        hasException = true
+    }
+    assertResult(true)(hasException)
+  }
+
+  protected def checkNestedException(sql: String)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable =>
+        var t = e
+        while (t != null) {
+          if (errorMsg.trim.equals(t.getMessage.trim)) {
+            hasException = true
+          }
+          t = t.getCause
+        }
+    }
+    assertResult(true)(hasException)
+  }
+
+  protected def checkExceptionContain(runnable: Runnable)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      runnable.run()
+    } catch {
+      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(getRootCause(e), errorMsg) =>
+        hasException = true
+
+      case f: Throwable =>
+        fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
+    }
+    assertResult(true)(hasException)
+  }
+
   protected def checkExceptionContain(sql: String)(errorMsg: String): Unit = {
     var hasException = false
     try {
@@ -167,6 +233,47 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
     }
     assertResult(true)(hasException)
+  }
+
+  protected def checkExceptionMatch(sql: String)(errorMsgRegex: String): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable if getRootCause(e).getMessage.matches(errorMsgRegex) =>
+        hasException = true
+
+      case f: Throwable =>
+        fail("Exception should match pattern: " + errorMsgRegex + ", error message: " + getRootCause(f).getMessage, f)
+    }
+    assertResult(true)(hasException)
+  }
+
+  protected def getExpectedUnresolvedColumnExceptionMessage(columnName: String,
+                                                            targetTableName: String): String = {
+    val targetTableFields = spark.sql(s"select * from $targetTableName").schema.fields
+      .map(e => (e.name, targetTableName, s"spark_catalog.default.$targetTableName.${e.name}"))
+    getExpectedUnresolvedColumnExceptionMessage(columnName, targetTableFields)
+  }
+
+  protected def getExpectedUnresolvedColumnExceptionMessage(columnName: String,
+                                                            fieldNameTuples: Seq[(String, String, String)]): String = {
+    val fieldNames = fieldNameTuples.sortBy(e => (e._1, e._2))
+      .map(e => e._3).mkString("[", ", ", "]")
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
+        s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
+    } else {
+      s"cannot resolve $columnName in MERGE command given columns $fieldNames" +
+        (if (HoodieSparkUtils.gteqSpark3_4) "." else "")
+    }
+  }
+
+  protected def validateTableSchema(tableName: String,
+                                    expectedStructFields: List[StructField]): Unit = {
+    assertResult(expectedStructFields)(
+      spark.sql(s"select * from $tableName").schema.fields
+        .filter(e => !HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(e.name)))
   }
 
   def dropTypeLiteralPrefix(value: Any): Any = {
@@ -202,7 +309,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         Some(conf.getConfString(k))
       } else None
     }
-    pairs.foreach { case(k, v) => conf.setConfString(k, v) }
+    pairs.foreach { case (k, v) => conf.setConfString(k, v) }
     try f finally {
       pairs.unzip._1.zip(currentValues).foreach {
         case (key, Some(value)) => conf.setConfString(key, value)
@@ -215,35 +322,47 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       f(tableName)
     } finally {
-      spark.sql(s"drop table if exists $tableName")
+      spark.sql(s"drop table if exists $tableName purge")
+    }
+  }
+
+  protected def withSparkSqlSessionConfig(configNameValues: (String, String)*
+                                         )(f: => Unit): Unit = {
+    withSparkSqlSessionConfigWithCondition(configNameValues.map(e => (e, true)): _*)(f)
+  }
+
+  protected def withSparkSqlSessionConfigWithCondition(configNameValues: ((String, String), Boolean)*
+                                                      )(f: => Unit): Unit = {
+    try {
+      configNameValues.foreach { case ((configName, configValue), condition) =>
+        if (condition) {
+          spark.sql(s"set $configName=$configValue")
+        }
+      }
+      f
+    } finally {
+      configNameValues.foreach { case ((configName, configValue), condition) =>
+        spark.sql(s"reset $configName")
+      }
     }
   }
 
   protected def withRecordType(recordTypes: Seq[HoodieRecordType] = Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK),
-                               recordConfig: Map[HoodieRecordType, Map[String, String]]=Map.empty)(f: => Unit) {
+                               recordConfig: Map[HoodieRecordType, Map[String, String]] = Map.empty)(f: => Unit) {
     // TODO HUDI-5264 Test parquet log with avro record in spark sql test
     recordTypes.foreach { recordType =>
       val (merger, format) = recordType match {
-        case HoodieRecordType.SPARK => (classOf[HoodieSparkRecordMerger].getName, "parquet")
+        case HoodieRecordType.SPARK => (classOf[DefaultSparkRecordMerger].getName, "parquet")
         case _ => (classOf[HoodieAvroRecordMerger].getName, "avro")
       }
       val config = Map(
-        HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> merger,
+        HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> merger,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> format) ++ recordConfig.getOrElse(recordType, Map.empty)
-      withSQLConf(config.toList:_*) {
+      withSQLConf(config.toList: _*) {
         f
         // We need to clear indexed location in memory after each test.
         HoodieInMemoryHashIndex.clear()
       }
-    }
-  }
-
-  protected def getRecordType(): HoodieRecordType = {
-    val merger = spark.sessionState.conf.getConfString(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue())
-    if (merger.equals(classOf[HoodieSparkRecordMerger].getName)) {
-      HoodieRecordType.SPARK
-    } else {
-      HoodieRecordType.AVRO
     }
   }
 }
@@ -267,7 +386,19 @@ object HoodieSparkSqlTestBase {
       .getActiveTimeline.getInstantDetails(cleanInstant).get)
   }
 
+  def validateTableConfig(storage: HoodieStorage,
+                          basePath: String,
+                          expectedConfigs: Map[String, String],
+                          nonExistentConfigs: Seq[String]): Unit = {
+    val tableConfig = HoodieTableConfig.loadFromHoodieProps(storage, basePath)
+    expectedConfigs.foreach(e => {
+      assertEquals(e._2, tableConfig.getString(e._1),
+        s"Table config ${e._1} should be ${e._2} but is ${tableConfig.getString(e._1)}")
+    })
+    nonExistentConfigs.foreach(e => assertFalse(
+      tableConfig.contains(e), s"$e should not be present in the table config"))
+  }
+
   private def checkMessageContains(e: Throwable, text: String): Boolean =
     e.getMessage.trim.contains(text.trim)
-
 }

@@ -137,7 +137,7 @@ public class CompactionUtil {
   }
 
   public static void rollbackCompaction(HoodieFlinkTable<?> table, String instantTime) {
-    HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(instantTime);
+    HoodieInstant inflightInstant = table.getInstantGenerator().getCompactionInflightInstant(instantTime);
     if (table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(inflightInstant)) {
       LOG.warn("Rollback failed compaction instant: [" + instantTime + "]");
       table.rollbackInflightCompaction(inflightInstant);
@@ -149,14 +149,14 @@ public class CompactionUtil {
    *
    * @param table The hoodie table
    */
-  public static void rollbackCompaction(HoodieFlinkTable<?> table) {
+  public static void rollbackCompaction(HoodieFlinkTable<?> table, HoodieFlinkWriteClient writeClient) {
     HoodieTimeline inflightCompactionTimeline = table.getActiveTimeline()
         .filterPendingCompactionTimeline()
         .filter(instant ->
             instant.getState() == HoodieInstant.State.INFLIGHT);
     inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
       LOG.info("Rollback the inflight compaction instant: " + inflightInstant + " for failover");
-      table.rollbackInflightCompaction(inflightInstant);
+      table.rollbackInflightCompaction(inflightInstant, commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
       table.getMetaClient().reloadActiveTimeline();
     });
   }
@@ -177,7 +177,7 @@ public class CompactionUtil {
       HoodieInstant instant = earliestInflight.get();
       String currentTime = table.getMetaClient().createNewInstantTime();
       int timeout = conf.getInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
-      if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.getTimestamp()) >= timeout) {
+      if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.requestedTime()) >= timeout) {
         LOG.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");
         table.rollbackInflightCompaction(instant);
         table.getMetaClient().reloadActiveTimeline();

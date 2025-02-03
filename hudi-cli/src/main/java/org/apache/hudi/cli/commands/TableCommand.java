@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -78,7 +79,6 @@ public class TableCommand {
   @ShellMethod(key = "connect", value = "Connect to a hoodie table")
   public String connect(
       @ShellOption(value = {"--path"}, help = "Base Path of the table") final String path,
-      @ShellOption(value = {"--layoutVersion"}, help = "Timeline Layout version", defaultValue = ShellOption.NULL) Integer layoutVersion,
       @ShellOption(value = {"--eventuallyConsistent"}, defaultValue = "false",
           help = "Enable eventual consistency") final boolean eventuallyConsistent,
       @ShellOption(value = {"--initialCheckIntervalMs"}, defaultValue = "2000",
@@ -106,10 +106,19 @@ public class TableCommand {
             .withDefaultLockProvider(useDefaultLockProvider)
             .build());
     HoodieCLI.initConf();
-    HoodieCLI.connectTo(path, layoutVersion);
+    HoodieCLI.connectTo(path);
     HoodieCLI.initFS(true);
     HoodieCLI.state = HoodieCLI.CLIState.TABLE;
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " loaded";
+  }
+
+  public String createTable(
+      final String path,
+      final String name,
+      final String tableTypeStr,
+      String archiveFolder,
+      final String payloadClass) throws IOException {
+    return createTable(path, name, tableTypeStr, archiveFolder, HoodieTableVersion.current().versionCode(), payloadClass);
   }
 
   /**
@@ -128,8 +137,8 @@ public class TableCommand {
           help = "Hoodie Table Type. Must be one of : COPY_ON_WRITE or MERGE_ON_READ") final String tableTypeStr,
       @ShellOption(value = {"--archiveLogFolder"}, help = "Folder Name for storing archived timeline",
           defaultValue = ShellOption.NULL) String archiveFolder,
-      @ShellOption(value = {"--layoutVersion"}, help = "Specific Layout Version to use",
-          defaultValue = ShellOption.NULL) Integer layoutVersion,
+      @ShellOption(value = {"--tableVersion"}, help = "Specific table Version to create table as",
+          defaultValue = ShellOption.NULL) Integer tableVersion,
       @ShellOption(value = {"--payloadClass"}, defaultValue = "org.apache.hudi.common.model.HoodieAvroPayload",
           help = "Payload Class") final String payloadClass) throws IOException {
 
@@ -149,15 +158,15 @@ public class TableCommand {
       throw new IllegalStateException("Table already existing in path : " + path);
     }
 
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(tableTypeStr)
         .setTableName(name)
         .setArchiveLogFolder(archiveFolder)
         .setPayloadClassName(payloadClass)
-        .setTimelineLayoutVersion(layoutVersion)
+        .setTableVersion(tableVersion == null ? HoodieTableVersion.current().versionCode() : tableVersion)
         .initTable(HoodieCLI.conf.newInstance(), path);
     // Now connect to ensure loading works
-    return connect(path, layoutVersion, false, 0, 0, 0,
+    return connect(path, false, 0, 0, 0,
         "WAIT_TO_ADJUST_SKEW", 200L, true);
   }
 
@@ -312,7 +321,7 @@ public class TableCommand {
         for (int i = 0; i < pendingCompactionInstants.size(); i++) {
           HoodieInstant compactionInstant = pendingCompactionInstants.get(i);
           LOG.info("compact {} instant {}", i + 1, compactionInstant);
-          String result = new CompactionCommand().compact(parallelism, "", master, sparkMemory, retry, compactionInstant.getTimestamp(), propsFilePath, configs);
+          String result = new CompactionCommand().compact(parallelism, "", master, sparkMemory, retry, compactionInstant.requestedTime(), propsFilePath, configs);
           LOG.info("compact instant {} result: {}", compactionInstant, result);
           if (!result.startsWith(CompactionCommand.COMPACTION_EXE_SUCCESSFUL)) {
             throw new HoodieException(String.format("Compact %s failed", compactionInstant));

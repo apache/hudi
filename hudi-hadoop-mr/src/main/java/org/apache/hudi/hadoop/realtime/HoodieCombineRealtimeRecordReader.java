@@ -54,7 +54,7 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
 
   public HoodieCombineRealtimeRecordReader(JobConf jobConf, CombineFileSplit split,
       List<RecordReader> readers) {
-    useFileGroupReader = shouldUseFilegroupReader(jobConf);
+    useFileGroupReader = shouldUseFilegroupReader(jobConf, split);
     try {
       ValidationUtils.checkArgument(((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits().size() == readers
           .size(), "Num Splits does not match number of unique RecordReaders!");

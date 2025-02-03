@@ -170,7 +170,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
     }
     assertRecordCount(numRecords);
 
-    Dataset<Row> df = sparkSession.read().format("hudi").options(readOpts).load(tableBasePath);
+    Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
     df.show(9,false);
     df.select(updateColumn).show(9);
     for (String condition : conditions.keySet()) {
@@ -442,7 +442,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
   protected String typePromoUpdates;
 
   protected void assertDataType(String colName, DataType expectedType) {
-    assertEquals(expectedType, sparkSession.read().format("hudi").options(readOpts).load(tableBasePath).select(colName).schema().fields()[0].dataType());
+    assertEquals(expectedType, sparkSession.read().format("hudi").load(tableBasePath).select(colName).schema().fields()[0].dataType());
   }
 
   protected void testTypePromotionBase(String colName, DataType startType, DataType updateType) throws Exception {
@@ -499,7 +499,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
       assertFileNumber(numFiles, false);
     }
     assertRecordCount(numRecords);
-    sparkSession.read().format("hudi").options(readOpts).load(tableBasePath).select(colName).show(9);
+    sparkSession.read().format("hudi").load(tableBasePath).select(colName).show(9);
     assertDataType(colName, endType);
   }
 

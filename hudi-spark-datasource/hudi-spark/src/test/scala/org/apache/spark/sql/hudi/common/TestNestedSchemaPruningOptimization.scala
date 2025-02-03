@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec, RowDataSourceScanExec, SparkPlan}
@@ -42,137 +42,127 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
   test("Test NestedSchemaPruning optimization successful") {
     withTempDir { tmp =>
-      // NOTE: This tests are only relevant for Spark >= 3.3
-      // TODO extract tests into a separate spark-version-specific module
-      if (HoodieSparkUtils.gteqSpark3_3) {
-        Seq("cow", "mor").foreach { tableType =>
-          val tableName = generateTableName
-          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-          createTableWithNestedStructSchema(tableType, tableName, tablePath)
+        createTableWithNestedStructSchema(tableType, tableName, tablePath)
 
-          val selectDF = spark.sql(s"SELECT id, item.name FROM $tableName")
+        val selectDF = spark.sql(s"SELECT id, item.name FROM $tableName")
 
-          val expectedSchema = StructType(Seq(
-            StructField("id", IntegerType, nullable = true),
-            StructField("item" , StructType(Seq(StructField("name", StringType, nullable = false))), nullable = true)
-          ))
+        val expectedSchema = StructType(Seq(
+          StructField("id", IntegerType, nullable = true),
+          StructField("item" , StructType(Seq(StructField("name", StringType, nullable = false))), nullable = true)
+        ))
 
-          val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string>>"
-          val hint =
-            s"""
-              |Following is expected to be present in the plan (where ReadSchema has properly pruned nested structs, which
-              |is an optimization performed by NestedSchemaPruning rule):
-              |
-              |== Physical Plan ==
-              |*(1) Project [id#45, item#46.name AS name#55]
-              |+- FileScan parquet default.h0[id#45,item#46] Batched: false, DataFilters: [], Format: Parquet, Location: HoodieFileIndex(1 paths)[file:/private/var/folders/kb/cnff55vj041g2nnlzs5ylqk00000gn/T/spark-7137..., PartitionFilters: [], PushedFilters: [], $expectedReadSchemaClause
-              |]
-              |""".stripMargin
+        val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string>>"
+        val hint =
+          s"""
+             |Following is expected to be present in the plan (where ReadSchema has properly pruned nested structs, which
+             |is an optimization performed by NestedSchemaPruning rule):
+             |
+             |== Physical Plan ==
+             |*(1) Project [id#45, item#46.name AS name#55]
+             |+- FileScan parquet default.h0[id#45,item#46] Batched: false, DataFilters: [], Format: Parquet, Location: HoodieFileIndex(1 paths)[file:/private/var/folders/kb/cnff55vj041g2nnlzs5ylqk00000gn/T/spark-7137..., PartitionFilters: [], PushedFilters: [], $expectedReadSchemaClause
+             |]
+             |""".stripMargin
 
-          // NOTE: We're disabling WCE to simplify resulting plan
-          spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
+        // NOTE: We're disabling WCE to simplify resulting plan
+        spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
 
-          // NOTE: Unfortunately, we can't use pattern-matching to extract required fields, due to a need to maintain
-          //       compatibility w/ Spark 2.4
-          selectDF.queryExecution.executedPlan match {
-            // COW
-            case ProjectExec(_, fileScan: FileSourceScanExec) =>
-              val tableIdentifier = fileScan.tableIdentifier
-              val requiredSchema = fileScan.requiredSchema
+        // NOTE: Unfortunately, we can't use pattern-matching to extract required fields, due to a need to maintain
+        //       compatibility w/ Spark 2.4
+        selectDF.queryExecution.executedPlan match {
+          // COW
+          case ProjectExec(_, fileScan: FileSourceScanExec) =>
+            val tableIdentifier = fileScan.tableIdentifier
+            val requiredSchema = fileScan.requiredSchema
 
-              assertEquals(tableName, tableIdentifier.get.table)
-              assertEquals(expectedSchema, requiredSchema, hint)
+            assertEquals(tableName, tableIdentifier.get.table)
+            assertEquals(expectedSchema, requiredSchema, hint)
 
-            // MOR
-            case ProjectExec(_, dataScan: RowDataSourceScanExec) =>
-              // NOTE: This is temporary solution to assert for Spark 2.4, until it's deprecated
-              val explainedPlan = explain(selectDF.queryExecution.logical)
-              assertTrue(explainedPlan.contains(expectedReadSchemaClause))
+          // MOR
+          case ProjectExec(_, dataScan: RowDataSourceScanExec) =>
+            // NOTE: This is temporary solution to assert for Spark 2.4, until it's deprecated
+            val explainedPlan = explain(selectDF.queryExecution.logical)
+            assertTrue(explainedPlan.contains(expectedReadSchemaClause))
 
-              // TODO replace w/ after Spark 2.4 deprecation
-              //val tableIdentifier = dataScan.tableIdentifier
-              //val requiredSchema = dataScan.requiredSchema
-              //
-              //assertEquals(tableName, tableIdentifier.get.table)
-              //assertEquals(expectedSchema, requiredSchema, hint)
-          }
+            val tableIdentifier = dataScan.tableIdentifier
+            val requiredSchema = dataScan.requiredSchema
 
-          // Execute the query to make sure it's working as expected (smoke test)
-          selectDF.count
+            assertEquals(tableName, tableIdentifier.get.table)
+            assertEquals(expectedSchema, requiredSchema, hint)
         }
+
+        // Execute the query to make sure it's working as expected (smoke test)
+        selectDF.count
       }
     }
   }
 
   test("Test NestedSchemaPruning optimization unsuccessful") {
     withTempDir { tmp =>
-      // NOTE: This tests are only relevant for Spark >= 3.3
-      // TODO extract tests into a separate spark-version-specific module
-      if (HoodieSparkUtils.gteqSpark3_3) {
-        // TODO add cow
-        Seq("mor").foreach { tableType =>
-          val tableName = generateTableName
-          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // TODO add cow
+      Seq("mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-          // NOTE: Set of opts that will make [[NestedSchemaPruning]] ineffective
-          val (writeOpts, readOpts): (Map[String, String], Map[String, String]) =
-            tableType match {
-              case "cow" =>
-                (Map(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true"),
-                  Map(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true"))
+        // NOTE: Set of opts that will make [[NestedSchemaPruning]] ineffective
+        val (writeOpts, readOpts): (Map[String, String], Map[String, String]) =
+          tableType match {
+            case "cow" =>
+              (Map(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true"),
+                Map(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true"))
 
-              case "mor" =>
-                (Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> "org.apache.hudi.common.model.DefaultHoodieRecordPayload"),
-                  Map.empty)
-            }
-
-          createTableWithNestedStructSchema(tableType, tableName, tablePath, writeOpts)
-
-          val selectDF = withSQLConf(readOpts.toSeq: _*) {
-            spark.sql(s"SELECT id, item.name FROM $tableName")
+            case "mor" =>
+              (Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> "org.apache.hudi.common.model.DefaultHoodieRecordPayload"),
+                Map.empty)
           }
 
-          val expectedSchema = StructType(Seq(
-            StructField("id", IntegerType, nullable = true),
-            StructField("item",
-              StructType(Seq(
-                StructField("name", StringType, nullable = false))), nullable = true)
-          ))
+        createTableWithNestedStructSchema(tableType, tableName, tablePath, writeOpts)
 
-          val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string,price:int>>"
-
-          // NOTE: We're disabling WCE to simplify resulting plan
-          spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
-
-          // NOTE: Unfortunately, we can't use pattern-matching to extract required fields, due to a need to maintain
-          //       compatibility w/ Spark 2.4
-          selectDF.queryExecution.executedPlan match {
-            // COW
-            case ProjectExec(_, fileScan: FileSourceScanExec) =>
-              val tableIdentifier = fileScan.tableIdentifier
-              val requiredSchema = fileScan.requiredSchema
-
-              assertEquals(tableName, tableIdentifier.get.table)
-              assertEquals(expectedSchema, requiredSchema)
-
-            // MOR
-            case ProjectExec(_, dataScan: RowDataSourceScanExec) =>
-              // NOTE: This is temporary solution to assert for Spark 2.4, until it's deprecated
-              val explainedPlan = explain(selectDF.queryExecution.logical)
-              assertTrue(explainedPlan.contains(expectedReadSchemaClause))
-
-            // TODO replace w/ after Spark 2.4 deprecation
-            //val tableIdentifier = dataScan.tableIdentifier
-            //val requiredSchema = dataScan.requiredSchema
-            //
-            //assertEquals(tableName, tableIdentifier.get.table)
-            //assertEquals(expectedSchema, requiredSchema, hint)
-          }
-
-          // Execute the query to make sure it's working as expected (smoke test)
-          selectDF.count
+        val selectDF = withSQLConf(readOpts.toSeq: _*) {
+          spark.sql(s"SELECT id, item.name FROM $tableName")
         }
+
+        val expectedSchema = StructType(Seq(
+          StructField("id", IntegerType, nullable = true),
+          StructField("item",
+            StructType(Seq(
+              StructField("name", StringType, nullable = false))), nullable = true)
+        ))
+
+        val expectedReadSchemaClause = "ReadSchema: struct<id:int,item:struct<name:string,price:int>>"
+
+        // NOTE: We're disabling WCE to simplify resulting plan
+        spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
+
+        // NOTE: Unfortunately, we can't use pattern-matching to extract required fields, due to a need to maintain
+        //       compatibility w/ Spark 2.4
+        selectDF.queryExecution.executedPlan match {
+          // COW
+          case ProjectExec(_, fileScan: FileSourceScanExec) =>
+            val tableIdentifier = fileScan.tableIdentifier
+            val requiredSchema = fileScan.requiredSchema
+
+            assertEquals(tableName, tableIdentifier.get.table)
+            assertEquals(expectedSchema, requiredSchema)
+
+          // MOR
+          case ProjectExec(_, dataScan: RowDataSourceScanExec) =>
+            // NOTE: This is temporary solution to assert for Spark 2.4, until it's deprecated
+            val explainedPlan = explain(selectDF.queryExecution.logical)
+            assertTrue(explainedPlan.contains(expectedReadSchemaClause))
+
+            val tableIdentifier = dataScan.tableIdentifier
+            //val requiredSchema = dataScan.requiredSchema
+
+            assertEquals(tableName, tableIdentifier.get.table)
+            //assertEquals(expectedSchema, requiredSchema, hint)
+        }
+
+        // Execute the query to make sure it's working as expected (smoke test)
+        selectDF.count
       }
     }
   }

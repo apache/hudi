@@ -75,7 +75,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.common.table.HoodieTableConfig.NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
@@ -112,7 +112,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     // Create table and connect
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
-        HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue(), TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue(), TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
   }
 
   @AfterEach
@@ -126,7 +126,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   @Test
   public void testAddPartitionMetaWithDryRun() throws IOException {
     // create commit instant
-    Files.createFile(Paths.get(tablePath, ".hoodie", "100.commit"));
+    Files.createFile(Paths.get(tablePath, ".hoodie/timeline/", "100.commit"));
 
     // create partition path
     String partition1 = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).toString();
@@ -225,7 +225,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
     // check result
     List<String> allPropsStr = Arrays.asList(NAME.key(), TYPE.key(), VERSION.key(),
-        ARCHIVELOG_FOLDER.key(), TIMELINE_LAYOUT_VERSION.key(), TABLE_CHECKSUM.key(), DROP_PARTITION_COLUMNS.key());
+        TIMELINE_HISTORY_PATH.key(), TIMELINE_LAYOUT_VERSION.key(), TABLE_CHECKSUM.key(), DROP_PARTITION_COLUMNS.key());
     String[][] rows = allPropsStr.stream().sorted().map(key -> new String[] {key,
             oldProps.getOrDefault(key, "null"), result.getOrDefault(key, "null")})
         .toArray(String[][]::new);
@@ -285,7 +285,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       HoodieTestCommitMetadataGenerator.createCommitFile(tablePath, timestamp, conf);
     }
 
-    metaClient.getActiveTimeline().getInstantsAsStream().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.getTimestamp()) % 4 == 0).forEach(hoodieInstant -> {
+    metaClient.getActiveTimeline().getInstantsAsStream().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.requestedTime()) % 4 == 0).forEach(hoodieInstant -> {
       metaClient.getActiveTimeline().deleteInstantFileIfExists(hoodieInstant);
       if (hoodieInstant.isCompleted()) {
         metaClient.getActiveTimeline().createCompleteInstant(hoodieInstant);
@@ -318,12 +318,11 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   @Test
   public void testRepairDeprecatedPartition() throws IOException {
     tablePath = tablePath + "/repair_test/";
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
         .setTableName(tableName())
-        .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
+        .setArchiveLogFolder(HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue())
         .setPayloadClassName("org.apache.hudi.common.model.HoodieAvroPayload")
-        .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")
         .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())
@@ -386,12 +385,11 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   @Test
   public void testRenamePartition() throws IOException {
     tablePath = tablePath + "/rename_partition_test/";
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
         .setTableName(tableName())
-        .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
+        .setArchiveLogFolder(HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue())
         .setPayloadClassName("org.apache.hudi.common.model.HoodieAvroPayload")
-        .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")
         .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())

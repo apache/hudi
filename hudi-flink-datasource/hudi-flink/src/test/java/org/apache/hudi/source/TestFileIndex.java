@@ -20,9 +20,11 @@ package org.apache.hudi.source;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
-import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utils.TestConfigurations;
@@ -41,6 +43,7 @@ import org.apache.flink.table.functions.FunctionIdentifier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -56,9 +59,12 @@ import static org.apache.hudi.configuration.FlinkOptions.KEYGEN_CLASS_NAME;
 import static org.apache.hudi.configuration.FlinkOptions.METADATA_ENABLED;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_DEFAULT_NAME;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_PATH_FIELD;
+import static org.apache.hudi.configuration.FlinkOptions.READ_DATA_SKIPPING_ENABLED;
+import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE;
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -133,7 +139,7 @@ public class TestFileIndex {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), TestConfigurations.ROW_DATA_TYPE_BIGINT);
     conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
-    conf.setBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setBoolean(READ_DATA_SKIPPING_ENABLED, true);
     conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
 
     writeBigintDataset(conf);
@@ -142,7 +148,7 @@ public class TestFileIndex {
         FileIndex.builder()
             .path(new StoragePath(tempFile.getAbsolutePath()))
             .conf(conf).rowType(TestConfigurations.ROW_TYPE_BIGINT)
-            .dataPruner(DataPruner.newInstance(Collections.singletonList(new CallExpression(
+            .columnStatsProbe(ColumnStatsProbe.newInstance(Collections.singletonList(new CallExpression(
                 FunctionIdentifier.of("greaterThan"),
                 BuiltInFunctionDefinitions.GREATER_THAN,
                 Arrays.asList(
@@ -155,6 +161,55 @@ public class TestFileIndex {
 
     List<StoragePathInfo> files = fileIndex.getFilesInPartitions();
     assertThat(files.size(), is(2));
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testFileListingWithPartitionStatsPruning(HoodieTableType tableType) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(READ_DATA_SKIPPING_ENABLED, true);
+    conf.set(METADATA_ENABLED, true);
+    conf.set(TABLE_TYPE, tableType.name());
+    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
+    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      // enable CSI for MOR table to collect col stats for delta write stats,
+      // which will be used to construct partition stats then.
+      conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+    }
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    // uuid > 'id5' and age < 30, only column stats of 'par3' matches the filter.
+    ColumnStatsProbe columnStatsProbe =
+        ColumnStatsProbe.newInstance(Arrays.asList(
+            new CallExpression(
+                FunctionIdentifier.of("greaterThan"),
+                BuiltInFunctionDefinitions.GREATER_THAN,
+                Arrays.asList(
+                    new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
+                    new ValueLiteralExpression("id5", DataTypes.STRING().notNull())
+                ),
+                DataTypes.BOOLEAN()),
+            new CallExpression(
+                FunctionIdentifier.of("lessThan"),
+                BuiltInFunctionDefinitions.LESS_THAN,
+                Arrays.asList(
+                    new FieldReferenceExpression("age", DataTypes.INT(), 2, 2),
+                    new ValueLiteralExpression(30, DataTypes.INT().notNull())
+                ),
+                DataTypes.BOOLEAN())));
+
+    FileIndex fileIndex =
+        FileIndex.builder()
+            .path(new StoragePath(tempFile.getAbsolutePath()))
+            .conf(conf)
+            .rowType(TestConfigurations.ROW_TYPE)
+            .partitionPruner(PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(tempFile.getAbsolutePath()).conf(conf).columnStatsProbe(columnStatsProbe).build())
+            .build();
+
+    List<String> p = fileIndex.getOrBuildPartitionPaths();
+    assertEquals(Arrays.asList("par3"), p);
   }
 
   private void writeBigintDataset(Configuration conf) throws Exception {

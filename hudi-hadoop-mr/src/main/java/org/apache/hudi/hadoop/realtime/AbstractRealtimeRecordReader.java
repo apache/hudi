@@ -18,10 +18,10 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodiePayloadProps;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -94,6 +94,10 @@ public abstract class AbstractRealtimeRecordReader {
       }
       this.usesCustomPayload = usesCustomPayload(metaClient);
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
+
+      // get timestamp columns
+      supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
+
       schemaEvolutionContext = new SchemaEvolutionContext(split, job, Option.of(metaClient));
       if (schemaEvolutionContext.internalSchemaOption.isPresent()) {
         schemaEvolutionContext.doEvolutionForRealtimeInputFormat(this);
@@ -107,8 +111,8 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   private boolean usesCustomPayload(HoodieTableMetaClient metaClient) {
-    return !(metaClient.getTableConfig().getPayloadClass().contains(HoodieAvroPayload.class.getName())
-        || metaClient.getTableConfig().getPayloadClass().contains(OverwriteWithLatestAvroPayload.class.getName()));
+    return metaClient.getTableConfig().getRecordMergeMode().equals(RecordMergeMode.CUSTOM)
+        && metaClient.getTableConfig().getRecordMergeStrategyId().equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
   }
 
   private void prepareHiveAvroSerializer() {
@@ -164,9 +168,6 @@ public abstract class AbstractRealtimeRecordReader {
     readerSchema = HoodieRealtimeRecordReaderUtils.generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
     LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
         split.getDeltaLogPaths(), split.getPath(), projectionFields));
-
-    // get timestamp columns
-    supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
   }
 
   public Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap, String hiveColumnString) {

@@ -37,16 +37,12 @@ public class EmbeddedTimelineServerHelper {
    * @return TimelineServer if configured to run
    * @throws IOException
    */
-  public static Option<EmbeddedTimelineService> createEmbeddedTimelineService(
+  public static EmbeddedTimelineService createEmbeddedTimelineService(
       HoodieEngineContext context, HoodieWriteConfig config) throws IOException {
-    if (config.isEmbeddedTimelineServerEnabled()) {
-      Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
-      EmbeddedTimelineService timelineService = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(context, hostAddr.orElse(null), config);
-      updateWriteConfigWithTimelineServer(timelineService, config);
-      return Option.of(timelineService);
-    } else {
-      return Option.empty();
-    }
+    Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
+    EmbeddedTimelineService timelineService = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(context, hostAddr.orElse(null), config);
+    updateWriteConfigWithTimelineServer(timelineService, config);
+    return timelineService;
   }
 
   /**
@@ -58,7 +54,7 @@ public class EmbeddedTimelineServerHelper {
                                                          HoodieWriteConfig config) {
     // Allow executor to find this newly instantiated timeline service
     if (config.isEmbeddedTimelineServerEnabled()) {
-      config.setViewStorageConfig(timelineServer.getRemoteFileSystemViewConfig());
+      config.setViewStorageConfig(timelineServer.getRemoteFileSystemViewConfig(config));
     }
   }
 }

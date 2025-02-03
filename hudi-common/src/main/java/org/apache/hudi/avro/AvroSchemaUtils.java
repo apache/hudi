@@ -19,6 +19,7 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.InvalidUnionTypeException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
@@ -27,6 +28,9 @@ import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.TableChanges;
+import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +45,9 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter.convert;
 
 /**
  * Utils for Avro Schema.
@@ -168,7 +174,18 @@ public class AvroSchemaUtils {
    * </ol>
    */
   public static boolean isStrictProjectionOf(Schema sourceSchema, Schema targetSchema) {
-    return isProjectionOfInternal(sourceSchema, targetSchema, Objects::equals);
+    return isProjectionOfInternal(sourceSchema, targetSchema, AvroSchemaUtils::isAtomicTypeEquals);
+  }
+
+  private static boolean isAtomicTypeEquals(Schema source, Schema target) {
+    // ignore name/namespace for FIXED type
+    if (source.getType() == Schema.Type.FIXED && target.getType() == Schema.Type.FIXED) {
+      return source.getLogicalType().equals(target.getLogicalType())
+          && source.getFixedSize() == target.getFixedSize()
+          && source.getObjectProps().equals(target.getObjectProps());
+    } else {
+      return Objects.equals(source, target);
+    }
   }
 
   private static boolean isProjectionOfInternal(Schema sourceSchema,
@@ -206,6 +223,36 @@ public class AvroSchemaUtils {
     return atomicTypeEqualityPredicate.apply(sourceSchema, targetSchema);
   }
 
+  public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
+    if (StringUtils.isNullOrEmpty(fieldName)) {
+      return Option.empty();
+    }
+    String[] parts = fieldName.split("\\.");
+
+    for (String part : parts) {
+      Schema.Field foundField = resolveNullableSchema(schema).getField(part);
+      if (foundField == null) {
+        throw new HoodieAvroSchemaException(fieldName + " not a field in " + schema);
+      }
+      schema = foundField.schema();
+    }
+    return Option.of(resolveNullableSchema(schema).getType());
+  }
+
+  /**
+   * Get gets a field from a record, works on nested fields as well (if you provide the whole name, eg: toplevel.nextlevel.child)
+   * @return the field, including its lineage.
+   * For example, if you have a schema: record(a:int, b:record(x:int, y:long, z:record(z1: int, z2: float, z3: double), c:bool)
+   * "fieldName" | output
+   * ---------------------------------
+   * "a"         | a:int
+   * "b"         | b:record(x:int, y:long, z:record(z1: int, z2: int, z3: int)
+   * "c"         | c:bool
+   * "b.x"       | b:record(x:int)
+   * "b.z.z2"    | b:record(z:record(z2:float))
+   *
+   * this is intended to be used with appendFieldsToSchemaDedupNested
+   */
   public static Option<Schema.Field> findNestedField(Schema schema, String fieldName) {
     return findNestedField(schema, fieldName.split("\\."), 0);
   }
@@ -246,6 +293,11 @@ public class AvroSchemaUtils {
     return Option.of(new Schema.Field(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc(), foundField.defaultVal()));
   }
 
+  /**
+   * Adds newFields to the schema. Will add nested fields without duplicating the field
+   * For example if your schema is "a.b.{c,e}" and newfields contains "a.{b.{d,e},x.y}",
+   * It will stitch them together to be "a.{b.{c,d,e},x.y}
+   */
   public static Schema appendFieldsToSchemaDedupNested(Schema schema, List<Schema.Field> newFields) {
     return appendFieldsToSchemaBase(schema, newFields, true);
   }
@@ -554,5 +606,24 @@ public class AvroSchemaUtils {
 
   public static String createSchemaErrorString(String errorMessage, Schema writerSchema, Schema tableSchema) {
     return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
+  }
+
+  /**
+   * Create a new schema by force changing all the fields as nullable.
+   *
+   * @param schema original schema
+   * @return a new schema with all the fields updated as nullable.
+   */
+  public static Schema asNullable(Schema schema) {
+    List<String> filterCols = schema.getFields().stream()
+            .filter(f -> !f.schema().isNullable()).map(Schema.Field::name).collect(Collectors.toList());
+    if (filterCols.isEmpty()) {
+      return schema;
+    }
+    InternalSchema internalSchema = convert(schema);
+    TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(internalSchema);
+    schemaChange = reduce(filterCols, schemaChange,
+            (change, field) -> change.updateColumnNullability(field, true));
+    return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName());
   }
 }

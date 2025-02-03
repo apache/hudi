@@ -19,7 +19,6 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -55,6 +54,7 @@ public class TestInputPathHandler {
 
   // snapshot Table
   public static final String ETL_TRIPS_TEST_NAME = "etl_trips";
+  public static final String MODEL_TRIPS_COW_TEST_NAME = "model_trips_cow";
 
   // non Hoodie table
   public static final String TRIPS_STATS_TEST_NAME = "trips_stats";
@@ -78,6 +78,7 @@ public class TestInputPathHandler {
   private static String basePathTable4 = null; // non hoodie Path
   private static String basePathTable5 = null;
   private static String basePathTable6 = null;
+  private static String basePathTable7 = null;
   private static List<String> incrementalTables;
   private static List<Path> incrementalPaths;
   private static List<Path> snapshotPaths;
@@ -124,6 +125,7 @@ public class TestInputPathHandler {
     String tempPath = "/tmp/";
     basePathTable5 = tempPath + EMPTY_SNAPSHOT_TEST_NAME;
     basePathTable6 = tempPath + EMPTY_INCREMENTAL_TEST_NAME;
+    basePathTable7 = parentPath.resolve(MODEL_TRIPS_COW_TEST_NAME).toAbsolutePath().toString();
 
     dfs.mkdirs(new Path(basePathTable1));
     initTableType(dfs.getConf(), basePathTable1, RAW_TRIPS_TEST_NAME, HoodieTableType.MERGE_ON_READ);
@@ -146,6 +148,10 @@ public class TestInputPathHandler {
     initTableType(dfs.getConf(), basePathTable6, EMPTY_INCREMENTAL_TEST_NAME, HoodieTableType.MERGE_ON_READ);
     incrementalPaths.add(new Path(basePathTable6));
 
+    dfs.mkdirs(new Path(basePathTable7));
+    initTableType(dfs.getConf(), basePathTable7, MODEL_TRIPS_COW_TEST_NAME, HoodieTableType.COPY_ON_WRITE);
+    snapshotPaths.addAll(generatePartitions(dfs, basePathTable7));
+
     inputPaths.addAll(incrementalPaths);
     inputPaths.addAll(snapshotPaths);
     inputPaths.addAll(nonHoodiePaths);
@@ -162,9 +168,9 @@ public class TestInputPathHandler {
     properties.setProperty(HoodieTableConfig.NAME.key(), tableName);
     properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
     properties.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieAvroPayload.class.getName());
-    properties.setProperty(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
-    return HoodieTableMetaClient.initTableAndGetMetaClient(
-        HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath, properties);
+    return HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(properties)
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
   }
 
   static List<Path> generatePartitions(DistributedFileSystem dfs, String basePath)

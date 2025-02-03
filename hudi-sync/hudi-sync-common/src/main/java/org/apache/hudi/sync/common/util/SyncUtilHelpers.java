@@ -20,6 +20,8 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetaSyncException;
@@ -36,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
@@ -67,6 +70,29 @@ public class SyncUtilHelpers {
                                        FileSystem fs,
                                        String targetBasePath,
                                        String baseFileFormat) {
+    runHoodieMetaSync(syncToolClassName, props, hadoopConfig, fs, targetBasePath, baseFileFormat, Option.empty());
+  }
+
+  /**
+   * Create an instance of an implementation of {@link HoodieSyncTool} that will sync all the relevant meta information
+   * with an external metastore such as Hive etc. to ensure Hoodie tables can be queried or read via external systems.
+   *
+   * @param syncToolClassName Class name of the {@link HoodieSyncTool} implementation.
+   * @param props             property map.
+   * @param hadoopConfig      Hadoop confs.
+   * @param fs                Filesystem used.
+   * @param targetBasePath    The target base path that contains the hoodie table.
+   * @param baseFileFormat    The file format used by the hoodie table (defaults to PARQUET).
+   * @param metaClient        An optional {@link HoodieTableMetaClient} to use when running the sync.
+   *                          If the option is empty, a client will be created in the sync tools if one is required by the sync.
+   */
+  public static void runHoodieMetaSync(String syncToolClassName,
+                                       TypedProperties props,
+                                       Configuration hadoopConfig,
+                                       FileSystem fs,
+                                       String targetBasePath,
+                                       String baseFileFormat,
+                                       Option<HoodieTableMetaClient> metaClient) {
     if (targetBasePath == null) {
       throw new IllegalArgumentException("Target base path must not be null");
     }
@@ -75,7 +101,7 @@ public class SyncUtilHelpers {
     Lock tableLock = TABLE_LOCKS.computeIfAbsent(targetBasePath, k -> new ReentrantLock());
     tableLock.lock();
     try {
-      try (HoodieSyncTool syncTool = instantiateMetaSyncTool(syncToolClassName, props, hadoopConfig, fs, targetBasePath, baseFileFormat)) {
+      try (HoodieSyncTool syncTool = instantiateMetaSyncTool(syncToolClassName, props, hadoopConfig, fs, targetBasePath, baseFileFormat, metaClient)) {
         syncTool.syncHoodieTable();
       } catch (Throwable e) {
         throw new HoodieMetaSyncException("Could not sync using the meta sync class " + syncToolClassName, e);
@@ -85,25 +111,31 @@ public class SyncUtilHelpers {
     }
   }
 
-  static HoodieSyncTool instantiateMetaSyncTool(String syncToolClassName,
-                                                TypedProperties props,
-                                                Configuration hadoopConfig,
-                                                FileSystem fs,
-                                                String targetBasePath,
-                                                String baseFileFormat) {
+  public static HoodieSyncTool instantiateMetaSyncTool(String syncToolClassName,
+                                                       TypedProperties props,
+                                                       Configuration hadoopConfig,
+                                                       FileSystem fs,
+                                                       String targetBasePath,
+                                                       String baseFileFormat,
+                                                       Option<HoodieTableMetaClient> metaClient) {
     TypedProperties properties = new TypedProperties();
     properties.putAll(props);
+    properties.put(BASE_PATH.key(), targetBasePath);
     properties.put(META_SYNC_BASE_PATH.key(), targetBasePath);
     properties.put(META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
     if (properties.containsKey(META_SYNC_TABLE_NAME.key())) {
       String tableName = properties.getString(META_SYNC_TABLE_NAME.key());
       if (!tableName.equals(tableName.toLowerCase())) {
         LOG.warn(
-            "Table name \"" + tableName + "\" contains capital letters. Your metastore may automatically convert this to lower case and can cause table not found errors during subsequent syncs.");
+            "Table name \"{}\" contains capital letters. Your metastore may automatically convert this to lower case and can cause table not found errors during subsequent syncs.", tableName);
       }
     }
 
-    if (ReflectionUtils.hasConstructor(syncToolClassName,
+    if (ReflectionUtils.hasConstructor(syncToolClassName, new Class<?>[] {Properties.class, Configuration.class, Option.class})) {
+      return ((HoodieSyncTool) ReflectionUtils.loadClass(syncToolClassName,
+          new Class<?>[] {Properties.class, Configuration.class, Option.class},
+          properties, hadoopConfig, metaClient));
+    } else if (ReflectionUtils.hasConstructor(syncToolClassName,
         new Class<?>[] {Properties.class, Configuration.class})) {
       return ((HoodieSyncTool) ReflectionUtils.loadClass(syncToolClassName,
           new Class<?>[] {Properties.class, Configuration.class},

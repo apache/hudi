@@ -128,6 +128,8 @@ public class LSMTimeline {
         return ArchivedInstantReadSchemas.TIMELINE_LSM_READ_SCHEMA_WITH_METADATA;
       case PLAN:
         return ArchivedInstantReadSchemas.TIMELINE_LSM_READ_SCHEMA_WITH_PLAN;
+      case FULL:
+        return ArchivedInstantReadSchemas.TIMELINE_LSM_READ_SCHEMA_AS_FULL;
       default:
         throw new AssertionError("Unexpected");
     }
@@ -145,8 +147,8 @@ public class LSMTimeline {
   /**
    * Returns the latest snapshot version.
    */
-  public static int latestSnapshotVersion(HoodieTableMetaClient metaClient) throws IOException {
-    StoragePath versionFilePath = getVersionFilePath(metaClient);
+  public static int latestSnapshotVersion(HoodieTableMetaClient metaClient, StoragePath archivePath) throws IOException {
+    StoragePath versionFilePath = getVersionFilePath(archivePath);
     if (metaClient.getStorage().exists(versionFilePath)) {
       try {
         Option<byte[]> content =
@@ -160,18 +162,17 @@ public class LSMTimeline {
       }
     }
 
-    return allSnapshotVersions(metaClient).stream().max(Integer::compareTo).orElse(-1);
+    return allSnapshotVersions(metaClient, archivePath).stream().max(Integer::compareTo).orElse(-1);
   }
 
   /**
    * Returns all the valid snapshot versions.
    */
-  public static List<Integer> allSnapshotVersions(HoodieTableMetaClient metaClient) throws IOException {
-    StoragePath archivedFolderPath = new StoragePath(metaClient.getArchivePath());
-    if (!metaClient.getStorage().exists(archivedFolderPath)) {
+  public static List<Integer> allSnapshotVersions(HoodieTableMetaClient metaClient, StoragePath archivePath) throws IOException {
+    if (!metaClient.getStorage().exists(archivePath)) {
       return Collections.emptyList();
     }
-    return metaClient.getStorage().listDirectEntries(new StoragePath(metaClient.getArchivePath()),
+    return metaClient.getStorage().listDirectEntries(archivePath,
             getManifestFilePathFilter())
         .stream()
         .map(fileStatus -> fileStatus.getPath().getName())
@@ -182,23 +183,22 @@ public class LSMTimeline {
   /**
    * Returns the latest snapshot metadata files.
    */
-  public static HoodieLSMTimelineManifest latestSnapshotManifest(HoodieTableMetaClient metaClient) throws IOException {
-    int latestVersion = latestSnapshotVersion(metaClient);
-    return latestSnapshotManifest(metaClient, latestVersion);
+  public static HoodieLSMTimelineManifest latestSnapshotManifest(HoodieTableMetaClient metaClient, StoragePath archivePath) throws IOException {
+    int latestVersion = latestSnapshotVersion(metaClient, archivePath);
+    return latestSnapshotManifest(metaClient, latestVersion, archivePath);
   }
 
   /**
    * Reads the file list from the manifest file for the latest snapshot.
    */
-  public static HoodieLSMTimelineManifest latestSnapshotManifest(HoodieTableMetaClient metaClient, int latestVersion) {
+  public static HoodieLSMTimelineManifest latestSnapshotManifest(HoodieTableMetaClient metaClient, int latestVersion, StoragePath archivePath) {
     if (latestVersion < 0) {
       // there is no valid snapshot of the timeline.
       return HoodieLSMTimelineManifest.EMPTY;
     }
     // read and deserialize the valid files.
     byte[] content =
-        FileIOUtils.readDataFromPath(metaClient.getStorage(), getManifestFilePath(metaClient,
-            latestVersion)).get();
+        FileIOUtils.readDataFromPath(metaClient.getStorage(), getManifestFilePath(latestVersion, archivePath)).get();
     try {
       return HoodieLSMTimelineManifest.fromJsonString(fromUTF8Bytes(content), HoodieLSMTimelineManifest.class);
     } catch (Exception e) {
@@ -209,32 +209,32 @@ public class LSMTimeline {
   /**
    * Returns the full manifest file path with given version number.
    */
-  public static StoragePath getManifestFilePath(HoodieTableMetaClient metaClient, int snapshotVersion) {
-    return new StoragePath(metaClient.getArchivePath(), MANIFEST_FILE_PREFIX + snapshotVersion);
+  public static StoragePath getManifestFilePath(int snapshotVersion, StoragePath archivePath) {
+    return new StoragePath(archivePath, MANIFEST_FILE_PREFIX + snapshotVersion);
   }
 
   /**
    * Returns the full version file path with given version number.
    */
-  public static StoragePath getVersionFilePath(HoodieTableMetaClient metaClient) {
-    return new StoragePath(metaClient.getArchivePath(), VERSION_FILE_NAME);
+  public static StoragePath getVersionFilePath(StoragePath archivePath) {
+    return new StoragePath(archivePath, VERSION_FILE_NAME);
   }
 
   /**
    * List all the parquet manifest files.
    */
-  public static List<StoragePathInfo> listAllManifestFiles(HoodieTableMetaClient metaClient)
+  public static List<StoragePathInfo> listAllManifestFiles(HoodieTableMetaClient metaClient, StoragePath archivePath)
       throws IOException {
     return metaClient.getStorage().listDirectEntries(
-        new StoragePath(metaClient.getArchivePath()), getManifestFilePathFilter());
+        archivePath, getManifestFilePathFilter());
   }
 
   /**
    * List all the parquet metadata files.
    */
-  public static List<StoragePathInfo> listAllMetaFiles(HoodieTableMetaClient metaClient) throws IOException {
+  public static List<StoragePathInfo> listAllMetaFiles(HoodieTableMetaClient metaClient, StoragePath archivePath) throws IOException {
     return metaClient.getStorage().globEntries(
-        new StoragePath(metaClient.getArchivePath(), "*.parquet"));
+        new StoragePath(archivePath, "*.parquet"));
   }
 
   /**
@@ -255,7 +255,7 @@ public class LSMTimeline {
       }
     } catch (NumberFormatException e) {
       // log and ignore any format warnings
-      LOG.warn("error getting file layout for archived file: " + fileName);
+      LOG.warn("error getting file layout for archived file: {}", fileName);
     }
 
     // return default value in case of any errors

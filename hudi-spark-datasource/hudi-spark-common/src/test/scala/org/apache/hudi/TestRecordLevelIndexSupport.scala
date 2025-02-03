@@ -20,7 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, FromUnixTime, GreaterThan, In, Literal, Not}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, FromUnixTime, GreaterThan, In, Literal, Not, Or}
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
@@ -99,6 +99,36 @@ class TestRecordLevelIndexSupport {
 
     testFilter = GreaterThan(AttributeReference(filterColumnName, StringType, nullable = true)(), Literal("row1"))
     result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
+    assertTrue(result.isEmpty)
+
+    // Case 10: Complex AND query with IN query on multiple columns returns the corresponding literals
+    val rk1InFilter = In(AttributeReference("rk1", StringType, nullable = true)(), List.apply(Literal("a1"), Literal("a2")))
+    val rk2InFilter = In(AttributeReference("rk2", StringType, nullable = true)(), List.apply(Literal("b1"), Literal("b2")))
+    val rk3InFilter = In(AttributeReference("rk3", StringType, nullable = true)(), List.apply(Literal("c1"), Literal("c2")))
+    testFilter = And(rk3InFilter, And(rk2InFilter, rk1InFilter))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("rk1"), RecordLevelIndexSupport.getComplexKeyLiteralGenerator())
+    assertTrue(result.get._2.contains("rk1:a1"))
+    assertTrue(result.get._2.contains("rk1:a2"))
+
+    // Case 11: Complex AND query with EqualTo and In query on multiple columns returns the corresponding literals
+    var rk1EqFilter = EqualTo(AttributeReference("rk1", StringType, nullable = true)(), Literal("a1"))
+    var rk2EqFilter = EqualTo(AttributeReference("rk2", StringType, nullable = true)(), Literal("b1"))
+    testFilter = And(rk3InFilter, And(rk2EqFilter, rk1EqFilter))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("rk1"), RecordLevelIndexSupport.getComplexKeyLiteralGenerator())
+    assertTrue(result.get._2.contains("rk1:a1"))
+
+    // Case 12: Test negative case with complex query using the above testFilter on a different record key
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("rk4"), RecordLevelIndexSupport.getComplexKeyLiteralGenerator())
+    assertTrue(result.isEmpty)
+
+    // Case 11: Test unsupported query type with And
+    testFilter = And(rk3InFilter, Or(rk2EqFilter, rk1EqFilter))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("rk1"), RecordLevelIndexSupport.getComplexKeyLiteralGenerator())
+    assertTrue(result.isEmpty)
+
+    // Case 11: Test unsupported query type with And. Here the unsupported query OR is at second level from the root query type
+    testFilter = And(rk1EqFilter, And(rk1InFilter, Or(rk1EqFilter, rk1EqFilter)))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("rk1"), RecordLevelIndexSupport.getComplexKeyLiteralGenerator())
     assertTrue(result.isEmpty)
   }
 }

@@ -19,6 +19,7 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -52,6 +53,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Test cases for stream write.
  */
 public class TestWriteCopyOnWrite extends TestWriteBase {
+
+  // to trigger buffer flush of 3 rows, each is 576 bytes for INSERT and 624 bytes for UPSERT
+  private static final double BATCH_SIZE_MB = 0.0016;
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -232,13 +236,12 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0008); // 839 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, getBatchSize());
 
     Map<String, String> expected = getMiniBatchExpected();
 
     preparePipeline(conf)
-        // record (operation: 'I') is 304 bytes and record (operation: 'U') is 352 bytes.
-        // so 3 records expect to trigger a mini-batch write
+        // 3 records from 5 should trigger a mini-batch write
         .consume(TestData.DATA_SET_INSERT_DUPLICATES)
         .assertDataBuffer(1, 2)
         .checkpoint(1)
@@ -257,15 +260,14 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithDeduplication() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0008); // 839 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, getBatchSize());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     Map<String, String> expected = new HashMap<>();
     expected.put("par1", "[id1,par1,id1,Danny,23,4,par1]");
 
     preparePipeline(conf)
-        // record (operation: 'I') is 304 bytes and record (operation: 'U') is 352 bytes.
-        // so 3 records expect to trigger a mini-batch write
+        // 3 records from 5 should trigger a mini-batch write
         .consume(TestData.DATA_SET_INSERT_SAME_KEY)
         .assertDataBuffer(1, 2)
         .checkpoint(1)
@@ -308,13 +310,12 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     // reset the config option
     conf.setString(FlinkOptions.OPERATION, "insert");
     conf.setBoolean(FlinkOptions.INSERT_CLUSTER, true);
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0008); // 839 bytes buffer size
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0 + getBatchSize());
 
     TestWriteMergeOnRead.TestHarness.instance()
-        // record (operation: 'I') is 304 bytes and record (operation: 'U') is 352 bytes.
-        // so 3 records expect to trigger a mini-batch write
-        // flush the max size bucket once at a time.
         .preparePipeline(tempFile, conf)
+        // 3 records from 5 should trigger a mini-batch write
+        // flush the max size bucket once at a time
         .consume(TestData.DATA_SET_INSERT_SAME_KEY)
         .assertDataBuffer(1, 2)
         .checkpoint(1)
@@ -357,14 +358,13 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithSmallBufferSize() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0008); // 839 bytes buffer size
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200 + getBatchSize());
 
     Map<String, String> expected = getMiniBatchExpected();
 
     preparePipeline(conf)
-        // record (operation: 'I') is 304 bytes and record (operation: 'U') is 352 bytes.
-        // so 3 records expect to trigger a mini-batch write
-        // flush the max size bucket once at a time.
+        // 3 records from 5 should trigger a mini-batch write
+        // flush the max size bucket once at a time
         .consume(TestData.DATA_SET_INSERT_DUPLICATES)
         .assertDataBuffer(1, 2)
         .checkpoint(1)
@@ -416,6 +416,10 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkCompletedInstantCount(4)
         .checkWrittenData(EXPECTED2)
         .end();
+  }
+
+  protected double getBatchSize() {
+    return BATCH_SIZE_MB;
   }
 
   protected Map<String, String> getMiniBatchExpected() {
@@ -611,6 +615,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testReuseEmbeddedServer() throws IOException {
     conf.setInteger("hoodie.filesystem.view.remote.timeout.secs", 500);
     conf.setString("hoodie.metadata.enable","true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false"); // HUDI-8814
+
     HoodieFlinkWriteClient writeClient = null;
     HoodieFlinkWriteClient writeClient2 = null;
 

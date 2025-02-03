@@ -68,6 +68,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
+ * TODO: [HUDI-8294]
  * This class provides file size updates for the latest files that hudi is consuming. These stats are at table level by default, but
  * specifying --enable-partition-stats will also show stats at the partition level. If a start date (--start-date parameter) and/or
  * end date (--end-date parameter) are specified, stats are based on files that were modified in the half-open interval

@@ -27,8 +27,8 @@
     <name>Apache Hudi</name>
     <homepage rdf:resource="https://hudi.apache.org" />
     <asfext:pmc rdf:resource="https://hudi.apache.org" />
-    <shortdesc>Ingests and Manages storage of large analytical datasets</shortdesc>
-    <description>Hudi (pronounced “Hoodie”) brings stream processing to big data, providing upserts, deletes and incremental data streams.</description>
+    <shortdesc>high-performance open data lakehouse platform</shortdesc>
+    <description>Hudi brings transactions, stream processing, indexes, mutability and incremental processing to data lakes.</description>
     <bug-database rdf:resource="https://issues.apache.org/jira/browse/HUDI" />
     <mailing-list rdf:resource="https://hudi.apache.org/community.html" />
     <download-page rdf:resource="https://hudi.apache.org/community.html" />
@@ -194,6 +194,13 @@
         <name>Apache Hudi 1.0.0-beta2</name>
         <created>2024-07-14</created>
         <revision>1.0.0-beta2</revision>
+      </Version>
+    </release>
+    <release>
+      <Version>
+        <name>Apache Hudi 1.0.0</name>
+        <created>2024-12-11</created>
+        <revision>1.0.0</revision>
       </Version>
     </release>
     <repository>

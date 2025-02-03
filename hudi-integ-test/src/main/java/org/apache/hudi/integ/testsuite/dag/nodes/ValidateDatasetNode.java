@@ -51,7 +51,7 @@ public class ValidateDatasetNode extends BaseValidateDatasetNode {
   public Dataset<Row> getDatasetToValidate(SparkSession session, ExecutionContext context,
                                            StructType inputSchema) {
     String partitionPathField = context.getWriterContext().getProps().getString(DataSourceWriteOptions.PARTITIONPATH_FIELD().key());
-    String hudiPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + (partitionPathField.isEmpty() ? "/" : "/*/*/*");
+    String hudiPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath;
     Dataset<Row> hudiDf = session.read().option(HoodieMetadataConfig.ENABLE.key(), String.valueOf(context.getHoodieTestSuiteWriter().getCfg().enableMetadataOnRead))
         .format("hudi").load(hudiPath);
     return hudiDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
