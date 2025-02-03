@@ -1984,7 +1984,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
 
     // set hoodie.datasource.write.row.writer.enable = false
-    val record4 = List(Row("2", null, 4L, 4L))
+    val record4 = List(Row("4", null, 4L, 4L))
     inputDF = spark.createDataFrame(spark.sparkContext.parallelize(record4, 2), schema)
     inputDF.write.format("org.apache.hudi")
       .options(optsWithCluster)
