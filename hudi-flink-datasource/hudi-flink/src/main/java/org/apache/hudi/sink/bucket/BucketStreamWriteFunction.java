@@ -133,7 +133,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     }
 
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
-    final int bucketNum = BucketIdentifier.getBucketId(hoodieKey, indexKeyFields, this.bucketNum);
+    final int bucketNum = BucketIdentifier.getBucketId(hoodieKey.getRecordKey(), indexKeyFields, this.bucketNum);
     final String bucketId = partition + "/" + bucketNum;
 
     if (incBucketIndex.contains(bucketId)) {
