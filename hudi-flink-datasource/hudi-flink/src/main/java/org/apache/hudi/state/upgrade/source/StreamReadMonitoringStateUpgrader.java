@@ -66,6 +66,18 @@ public class StreamReadMonitoringStateUpgrader implements StateUpgrader<String> 
     return fromVersion.getValue() < toVersion.getValue();
   }
 
+  @Override
+  public StateVersion detectVersion(List<String> state) {
+    switch (state.size()) {
+      case 1:
+        return StateVersion.V0;
+      case 2:
+        return StateVersion.V1;
+      default:
+        throw new IllegalStateException("Unknown state size when detecting version, size: " + state.size());
+    }
+  }
+
   private List<String> upgradeV0ToV1(List<String> oldState) {
     ValidationUtils.checkState(oldState.size() == 1, "Retrieved state must have a size of 1");
 

@@ -24,4 +24,6 @@ public interface StateUpgrader<T> {
   List<T> upgrade(List<T> oldState, StateVersion fromVersion, StateVersion toVersion);
   
   boolean canUpgrade(StateVersion fromVersion, StateVersion toVersion);
+
+  StateVersion detectVersion(List<T> oldState);
 }

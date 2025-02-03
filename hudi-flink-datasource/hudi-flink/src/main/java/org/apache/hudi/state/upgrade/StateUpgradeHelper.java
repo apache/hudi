@@ -41,22 +41,11 @@ public class StateUpgradeHelper<T> {
         .stream(state.get().spliterator(), false)
         .collect(Collectors.toList());
 
-    StateVersion detectedVersion = detectVersion(currentState);
+    StateVersion detectedVersion = upgrader.detectVersion(currentState);
     if (upgrader.canUpgrade(detectedVersion, currentVersion)) {
       List<T> upgradedState = upgrader.upgrade(currentState, detectedVersion, currentVersion);
       state.clear();
       state.addAll(upgradedState);
-    }
-  }
-
-  private StateVersion detectVersion(List<T> state) {
-    switch (state.size()) {
-      case 1:
-        return StateVersion.V0;
-      case 2:
-        return StateVersion.V1;
-      default:
-        throw new IllegalStateException("Unknown state size when detecting version, size: " + state.size());
     }
   }
 }
