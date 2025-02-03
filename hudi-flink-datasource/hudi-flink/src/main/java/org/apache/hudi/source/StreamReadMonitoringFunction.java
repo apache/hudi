@@ -154,7 +154,7 @@ public class StreamReadMonitoringFunction
 
       // Handle state upgrades
       StateUpgrader<String> stateUpgrader = new StreamReadMonitoringStateUpgrader(metaClient, issuedInstant);
-      new StateUpgradeHelper<>(instantState, stateUpgrader, StateVersion.V2).upgradeState();
+      new StateUpgradeHelper<>(instantState, stateUpgrader, StateVersion.V1).upgradeState();
 
       List<String> retrievedStates = new ArrayList<>();
       for (String entry : this.instantState.get()) {

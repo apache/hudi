@@ -19,7 +19,11 @@
 package org.apache.hudi.state.upgrade.source;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.state.upgrade.StateUpgrader;
 import org.apache.hudi.state.upgrade.StateVersion;
 
@@ -44,12 +48,12 @@ public class StreamReadMonitoringStateUpgrader implements StateUpgrader<String> 
   @Override
   public List<String> upgrade(List<String> oldState, StateVersion fromVersion, StateVersion toVersion) {
     switch (fromVersion) {
-      case V1:
-        if (toVersion == StateVersion.V2) {
-          return upgradeV1ToV2(oldState);
+      case V0:
+        if (toVersion == StateVersion.V0) {
+          return upgradeV0ToV1(oldState);
         }
         throw new IllegalStateException("Unsupported version upgrade path");
-      case V2:
+      case V1:
         // Do nothing
         return oldState;
       default:
@@ -62,7 +66,7 @@ public class StreamReadMonitoringStateUpgrader implements StateUpgrader<String> 
     return fromVersion.getValue() < toVersion.getValue();
   }
 
-  private List<String> upgradeV1ToV2(List<String> oldState) {
+  private List<String> upgradeV0ToV1(List<String> oldState) {
     ValidationUtils.checkState(oldState.size() == 1, "Retrieved state must have a size of 1");
 
     // this is the case where we have both legacy and new state.
@@ -71,10 +75,24 @@ public class StreamReadMonitoringStateUpgrader implements StateUpgrader<String> 
         "The " + getClass().getSimpleName() + " has already restored from a previous Flink version.");
 
     String issuedInstant = oldState.get(0);
+    HoodieTimeline filteredTimeline;
+    boolean isReadArchivedTimeline = false;
+    if (metaClient.getActiveTimeline().isBeforeTimelineStarts(issuedInstant)) {
+      isReadArchivedTimeline = true;
+      // if issuedInstant (requestedTime) is in archive timeline, scan archive timeline to find its completion time
+      LOG.warn("The reader's restored instant is in the archive timeline, will scan the archive timeline for issuedOffset (completionTime) using requestTime: {}", issuedInstant);
+      HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline(StringUtils.EMPTY_STRING, false);
+      filteredTimeline = archivedTimeline.findInstantsAfterOrEquals(issuedInstant, 3);
+    } else {
+      filteredTimeline = metaClient.getActiveTimeline().findInstantsAfterOrEquals(issuedInstant, 3);
+    }
 
-    // TODO 1: Find issuedOffset by querying for completion time using metaClient's active offset
-    // TODO 2: If issuedInstant (requestInstant) is in archive timeline, how do we handle that, should we throw an error?
-    String issuedOffset = "";
+    if (filteredTimeline.firstInstant().isEmpty()) {
+      LOG.error("Unable to find instant {} in [isArchived: {}] timeline: {}", issuedInstant, isReadArchivedTimeline, filteredTimeline);
+      throw new HoodieException("Unable to find completionTime in timeline for instant: " + issuedInstant);
+    }
+    String issuedOffset = filteredTimeline.firstInstant().get().getCompletionTime();
+
     return Arrays.asList(issuedInstant, issuedOffset);
   }
 }

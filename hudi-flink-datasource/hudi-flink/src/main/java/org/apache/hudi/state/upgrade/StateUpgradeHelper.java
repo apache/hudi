@@ -50,6 +50,13 @@ public class StateUpgradeHelper<T> {
   }
 
   private StateVersion detectVersion(List<T> state) {
-    return state.size() == 1 ? StateVersion.V1 : StateVersion.V2;
+    switch (state.size()) {
+      case 1:
+        return StateVersion.V0;
+      case 2:
+        return StateVersion.V1;
+      default:
+        throw new IllegalStateException("Unknown state size when detecting version, size: " + state.size());
+    }
   }
 }
