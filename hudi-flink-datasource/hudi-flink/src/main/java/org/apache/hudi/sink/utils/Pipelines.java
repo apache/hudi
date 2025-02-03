@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.StringUtils;
@@ -74,7 +73,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * Utilities to generate all kinds of sub-pipelines.
