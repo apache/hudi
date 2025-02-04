@@ -22,10 +22,12 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
@@ -197,11 +199,12 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
   @Test
   public void multiPartitionReadersRealtimeCombineHoodieInputFormat() throws Exception {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestTable table = HoodieTestTable.of(metaClient);
     // test for HUDI-1718
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
     // Create 3 partitions, each partition holds one parquet file and 1000 records
@@ -209,7 +212,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
         .prepareMultiPartitionedParquetTable(tempDir, schema, 3, numRecords, commitTime, HoodieTableType.MERGE_ON_READ);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, tempDir.toString(), commitTime, Option.of(commitMetadata));
+    table.addDeltaCommit(commitTime, commitMetadata);
 
     TableDesc tblDesc = Utilities.defaultTd;
     // Set the input format

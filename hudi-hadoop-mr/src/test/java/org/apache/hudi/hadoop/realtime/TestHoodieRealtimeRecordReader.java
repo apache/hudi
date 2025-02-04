@@ -30,12 +30,14 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -530,10 +532,11 @@ public class TestHoodieRealtimeRecordReader {
   @MethodSource("testArguments")
   public void testSchemaEvolutionAndRollbackBlockInLastLogFile(ExternalSpillableMap.DiskMapType diskMapType,
                                                                boolean isCompressionEnabled) throws Exception {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestTable table = HoodieTestTable.of(metaClient);
     // initial commit
     List<HoodieLogFile> logFiles = new ArrayList<>();
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
@@ -542,7 +545,7 @@ public class TestHoodieRealtimeRecordReader {
             instantTime, HoodieTableType.MERGE_ON_READ);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, basePath.toString(), instantTime, Option.of(commitMetadata));
+    table.addDeltaCommit(instantTime, commitMetadata);
     // Add the paths
     FileInputFormat.setInputPaths(baseJobConf, partitionDir.getPath());
     List<Field> firstSchemaFields = schema.getFields();
@@ -572,7 +575,7 @@ public class TestHoodieRealtimeRecordReader {
         CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(),
             WriteOperationType.UPSERT,
             schema.toString(), HoodieTimeline.DELTA_COMMIT_ACTION);
-    FileCreateUtilsLegacy.createDeltaCommit(COMMIT_METADATA_SER_DE, basePath.toString(), instantTime, commitMetadata);
+    table.addDeltaCommit(instantTime, commitMetadata);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
@@ -619,21 +622,19 @@ public class TestHoodieRealtimeRecordReader {
 
   @Test
   public void testSchemaEvolution() throws Exception {
-    ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.BITCASK;
-    boolean isCompressionEnabled = true;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestTable table = HoodieTestTable.of(metaClient);
     // initial commit
     List<HoodieLogFile> logFiles = new ArrayList<>();
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     int numberOfRecords = 100;
-    int numberOfLogRecords = numberOfRecords / 2;
     File partitionDir =
         InputFormatTestUtil.prepareSimpleParquetTable(basePath, schema, 1, numberOfRecords,
             instantTime, HoodieTableType.MERGE_ON_READ);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-        schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, basePath.toString(), instantTime, Option.of(commitMetadata));
+        schema.toString(), HoodieTimeline.DELTA_COMMIT_ACTION);
+    table.addDeltaCommit(instantTime, commitMetadata);
     // Add the paths
     FileInputFormat.setInputPaths(baseJobConf, partitionDir.getPath());
     List<Field> firstSchemaFields = schema.getFields();
@@ -646,8 +647,8 @@ public class TestHoodieRealtimeRecordReader {
         InputFormatTestUtil.prepareSimpleParquetTable(basePath, evolvedSchema, 1, numberOfRecords,
             instantTime, HoodieTableType.MERGE_ON_READ, "2017", "05", "01");
     HoodieCommitMetadata commitMetadata1 = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-        evolvedSchema.toString(), HoodieTimeline.COMMIT_ACTION);
-    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, basePath.toString(), newCommitTime, Option.of(commitMetadata1));
+        evolvedSchema.toString(), HoodieTimeline.DELTA_COMMIT_ACTION);
+    table.addDeltaCommit(newCommitTime, commitMetadata1);
     // Add the paths
     FileInputFormat.setInputPaths(baseJobConf, partitionDir1.getPath());
 
@@ -742,6 +743,7 @@ public class TestHoodieRealtimeRecordReader {
 
   @Test
   public void testIncrementalWithReplace() throws Exception {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toString(), HoodieTableType.MERGE_ON_READ);
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
@@ -757,7 +759,7 @@ public class TestHoodieRealtimeRecordReader {
     List<String> replacedFileId = new ArrayList<>();
     replacedFileId.add("fileid0");
     partitionToReplaceFileIds.put("2016/05/01", replacedFileId);
-    createReplaceCommitFile(basePath,
+    createReplaceCommitFile(metaClient,
         "200", "2016/05/01", "2016/05/01/fileid10_1-0-1_200.parquet", "fileid10", partitionToReplaceFileIds);
 
     InputFormatTestUtil.setupIncremental(baseJobConf, "0", 1);
@@ -787,12 +789,12 @@ public class TestHoodieRealtimeRecordReader {
   }
 
   private void createReplaceCommitFile(
-      java.nio.file.Path basePath,
+      HoodieTableMetaClient metaClient,
       String commitNumber,
       String partitionPath,
       String filePath,
       String fileId,
-      Map<String, List<String>> partitionToReplaceFileIds) throws IOException {
+      Map<String, List<String>> partitionToReplaceFileIds) throws Exception {
     List<HoodieWriteStat> writeStats = new ArrayList<>();
     HoodieWriteStat writeStat = createHoodieWriteStat(basePath, commitNumber, partitionPath, filePath, fileId);
     writeStats.add(writeStat);
@@ -804,8 +806,8 @@ public class TestHoodieRealtimeRecordReader {
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
     fileOutputStream.write(serializeCommitMetadata(COMMIT_METADATA_SER_DE, replaceMetadata).get());
-    fileOutputStream.flush();
-    fileOutputStream.close();
+    HoodieTestTable table = HoodieTestTable.of(metaClient);
+    table.addReplaceCommit(commitNumber, Option.empty(), Option.empty(), replaceMetadata);
   }
 
   private HoodieWriteStat createHoodieWriteStat(java.nio.file.Path basePath, String commitNumber, String partitionPath, String filePath, String fileId) {

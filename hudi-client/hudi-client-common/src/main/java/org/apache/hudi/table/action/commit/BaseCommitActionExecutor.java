@@ -50,6 +50,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -293,7 +294,13 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     // Disable auto commit. Strategy is only expected to write data in new files.
     config.setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE, Boolean.FALSE.toString());
 
-    final Schema schema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchemaForClustering(false).get();
+    Schema schema;
+    try {
+      schema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchema(false);
+    } catch (Exception ex) {
+      LOG.warn("Failed to fetch table schema when clustering {}", ex);
+      throw new HoodieException(ex);
+    }
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = (
         (ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>)
             ReflectionUtils.loadClass(config.getClusteringExecutionStrategyClass(),

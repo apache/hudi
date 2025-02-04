@@ -136,7 +136,6 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createSavepointCo
 import static org.apache.hudi.common.testutils.FileCreateUtils.deleteSavepointCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.BASE_FILE_EXTENSION;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
@@ -248,7 +247,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addCommit(String instantTime, Option<String> completionTime, Option<HoodieCommitMetadata> metadata) throws Exception {
     createRequestedCommit(metaClient, instantTime);
     createInflightCommit(metaClient, instantTime);
-    createCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, completionTime, metadata);
+    createCommit(metaClient, metaClient.getTimelineLayout().getCommitMetadataSerDe(), instantTime, completionTime, metadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -294,9 +293,9 @@ public class HoodieTestTable implements AutoCloseable {
 
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
     if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
-      createCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, Option.of(metadata));
+      createCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, Option.of(metadata));
     } else {
-      createDeltaCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, metadata);
+      createDeltaCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, metadata);
     }
     inflightCommits.remove(instantTime);
     currentInstantTime = instantTime;
@@ -322,7 +321,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addDeltaCommit(String instantTime, HoodieCommitMetadata metadata) throws Exception {
     createRequestedDeltaCommit(metaClient, instantTime);
     createInflightDeltaCommit(metaClient, instantTime);
-    createDeltaCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, metadata);
+    createDeltaCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, metadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -333,22 +332,22 @@ public class HoodieTestTable implements AutoCloseable {
       Option<HoodieCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(metaClient, instantTime, requestedReplaceMetadata);
-    createInflightReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
-    createReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, completeReplaceMetadata);
+    createInflightReplaceCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
+    createReplaceCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, completeReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addPendingReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(metaClient, instantTime, requestedReplaceMetadata);
-    createInflightReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
+    createInflightReplaceCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addPendingCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
     createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
-    createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
+    createInflightClusterCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -360,7 +359,7 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addInflightCluster(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
-    createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
+    createInflightClusterCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -371,8 +370,8 @@ public class HoodieTestTable implements AutoCloseable {
       Option<HoodieCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
-    createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
-    createReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, completeReplaceMetadata);
+    createInflightClusterCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
+    createReplaceCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, completeReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -384,8 +383,8 @@ public class HoodieTestTable implements AutoCloseable {
       HoodieReplaceCommitMetadata completeReplaceMetadata,
       String completionTime) throws Exception {
     createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
-    createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
-    createReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, completionTime, completeReplaceMetadata);
+    createInflightClusterCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
+    createReplaceCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, completionTime, completeReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -397,7 +396,7 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addInflightReplace(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
-    createInflightReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
+    createInflightReplaceCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -594,7 +593,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addCompaction(String instantTime, HoodieCommitMetadata commitMetadata) throws Exception {
     addInflightCompaction(instantTime, commitMetadata);
     this.inflightCommits.remove(instantTime);
-    createCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, Option.of(commitMetadata));
+    createCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, Option.of(commitMetadata));
     return this;
   }
 
@@ -640,7 +639,7 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable moveInflightCompactionToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
-    createCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, Option.of(metadata));
+    createCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, Option.of(metadata));
     inflightCommits.remove(instantTime);
     currentInstantTime = instantTime;
     return this;
