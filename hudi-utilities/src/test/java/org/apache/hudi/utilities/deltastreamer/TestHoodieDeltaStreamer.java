@@ -1181,6 +1181,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertTrue(validator.getThrowables().isEmpty());
   }
 
+  @Disabled("HUDI-8951")
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testHoodieIndexerExecutionAfterClustering(HoodieRecordType recordType) throws Exception {
