@@ -20,16 +20,11 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -54,7 +49,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-import java.util.stream.Collectors;
 
 /**
  * Utilities for format.
@@ -173,14 +167,6 @@ public class FormatUtils {
                                                                            InternalSchema internalSchema,
                                                                            Configuration hadoopConf,
                                                                            org.apache.flink.configuration.Configuration flinkConf) {
-    List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
-        .map(String::trim)
-        .distinct()
-        .collect(Collectors.toList());
-
-    HoodieRecordMerger merger = HoodieRecordUtils.createRecordMerger(
-        split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY_ID));
-
     return HoodieUnMergedLogRecordScanner.newBuilder()
         .withStorage(HoodieStorageUtils.getStorage(
             split.getTablePath(), HadoopFSUtils.getStorageConf(hadoopConf)))
@@ -194,7 +180,6 @@ public class FormatUtils {
             flinkConf.getInteger(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(),
                 HoodieMemoryConfig.DEFAULT_MR_MAX_DFS_STREAM_BUFFER_SIZE))
         .withInstantRange(split.getInstantRange())
-        .withRecordMerger(merger)
         .build();
   }
 
