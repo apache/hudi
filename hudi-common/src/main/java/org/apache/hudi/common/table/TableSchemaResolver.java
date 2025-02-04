@@ -164,6 +164,7 @@ public class TableSchemaResolver {
   }
 
   /**
+   * TODO
    * Handles partition column logic for a given schema.
    *
    * @param schema the input schema to process
@@ -183,7 +184,7 @@ public class TableSchemaResolver {
     return getTableAvroSchemaFromTimeline(instantTime)
         .or(this::getTableCreateSchemaWithMetadata)
         .or(this::getTableParquetSchemaFromDataFile)
-        .map(tableSchema -> includeMetadataFields ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get()) : tableSchema)
+        .map(tableSchema -> includeMetadataFields ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get()) : HoodieAvroUtils.removeMetadataFields(tableSchema))
         .map(this::handlePartitionColumnsIfNeeded);
   }
 
