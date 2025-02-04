@@ -54,7 +54,7 @@ import static org.mockito.Mockito.when;
 
 public class TestStreamReadMonitoringStateUpgrader {
 
-  private final static TimelineFactory TIMELINE_FACTORY = new DefaultTimelineFactory();
+  private static final TimelineFactory TIMELINE_FACTORY = new DefaultTimelineFactory();
 
   @Mock
   private HoodieTableMetaClient metaClient;
