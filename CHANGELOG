@@ -591,3 +591,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-02-01 05:34:04] [release-v1.84.0] ---
 [ENG-17393][HUDI-8883] Add ability to configure HoodieCompactionPlanGenerator using reflection (#1147)
 [AUDIT-1071]: Changelog for release-v1.83.0 (#1172)
+
+--- [2025-02-04 16:03:49] [release-v1.85.0] ---
+[ENG-21391][INTERNAL] Lock provider heartbeat manager (#1169)
+[AUDIT-1157]: Changelog for release-v1.84.0 (#1173)
