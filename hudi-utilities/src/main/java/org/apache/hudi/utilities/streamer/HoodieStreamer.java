@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieWriterUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.async.AsyncClusteringService;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.async.SparkAsyncClusteringService;
@@ -77,6 +78,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.hudi.SparkAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -643,12 +645,11 @@ public class HoodieStreamer implements Serializable {
     int exitCode = 0;
     try {
       new HoodieStreamer(cfg, jssc).sync();
-    } catch (Exception e) {
-      LOG.error("Failed to execute HoodieStreamer : {}", e.getMessage());
+    } catch (Throwable throwable) {
       exitCode = 1;
-      throw e;
+      throw new HoodieException("Failed to run HoodieStreamer ", throwable);
     } finally {
-      jssc.sc().stop(exitCode);
+      SparkAdapterSupport$.MODULE$.sparkAdapter().stopSparkContext(jssc, exitCode);
     }
   }
 
