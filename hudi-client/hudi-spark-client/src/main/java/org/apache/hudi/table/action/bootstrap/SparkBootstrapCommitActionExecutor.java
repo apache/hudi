@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -214,9 +215,14 @@ public class SparkBootstrapCommitActionExecutor<T>
       LOG.info("Finished writing bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
           + config.getBasePath());
     }
-    commit(result.getWriteStatuses(), result, bootstrapSourceAndStats.values().stream()
+    commit(result, bootstrapSourceAndStats.values().stream()
         .flatMap(f -> f.stream().map(Pair::getValue)).collect(Collectors.toList()));
     LOG.info("Committing metadata bootstrap !!");
+  }
+
+  @Override
+  protected void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    throw new HoodieNotSupportedException("col stats is not supported with bootstrap operation");
   }
 
   /**

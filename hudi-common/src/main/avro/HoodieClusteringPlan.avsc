@@ -50,6 +50,14 @@
       "name":"preserveHoodieMetadata",
       "type":["null", "boolean"],
       "default": null
-    }
+    },
+     {
+       "name":"missingSchedulePartitions",
+       "type":["null", {
+         "type":"array",
+         "items":"string"
+       }],
+       "default": null
+     }
   ]
 }

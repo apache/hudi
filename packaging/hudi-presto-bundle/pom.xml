@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -81,9 +81,7 @@
                   <include>org.codehaus.jackson:*</include>
                   <include>org.apache.commons:commons-lang3</include>
                   <include>com.yammer.metrics:metrics-core</include>
-                  <include>com.google.guava:guava</include>
                   <include>commons-io:commons-io</include>
-                  <include>commons-lang:commons-lang</include>
                   <include>com.google.protobuf:protobuf-java</include>
                   <include>org.openjdk.jol:jol-core</include>
                 </includes>
@@ -211,26 +209,8 @@
       <scope>compile</scope>
     </dependency>
 
-    <!--Guava needs to be shaded because HBase 1.2.3 depends on an earlier guava version i.e 12.0.1 and hits runtime
-    issues with the guava version present in Presto runtime-->
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-      <version>12.0.1</version>
-      <scope>${presto.bundle.bootstrap.scope}</scope>
-    </dependency>
-
-    <!--commons-lang needs to be shaded because HBase 1.2.3 needs it at runtime, but Presto runtime does not have this
-    dependency-->
-    <dependency>
-      <groupId>commons-lang</groupId>
-      <artifactId>commons-lang</artifactId>
-      <version>2.6</version>
-      <scope>${presto.bundle.bootstrap.scope}</scope>
-    </dependency>
-
-    <!--protobuf needs to be shaded because HBase 1.2.3 needs it at runtime, but Presto runtime does not have this
-    dependency-->
+    <!--protobuf needs to be shaded because HBase 1.2.3 and our native reader needs it at runtime,
+    but Presto runtime does not have this dependency-->
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>

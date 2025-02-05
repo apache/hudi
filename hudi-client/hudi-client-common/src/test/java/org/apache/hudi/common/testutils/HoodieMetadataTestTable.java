@@ -39,8 +39,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createDeltaCommit;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 
 /**
@@ -92,7 +92,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
         partitionToFilesNameLengthMap, bootstrap, true);
     if (writer != null && !createInflightCommit) {
       writer.performTableServices(Option.of(commitTime));
-      writer.updateFromWriteStatuses(commitMetadata, context.get().emptyHoodieData(), commitTime);
+      writer.update(commitMetadata, commitTime);
     }
     // DT should be committed after MDT.
     if (!createInflightCommit) {
@@ -110,7 +110,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
     super.moveInflightCommitToComplete(instantTime, metadata);
     if (writer != null) {
-      writer.updateFromWriteStatuses(metadata, context.get().emptyHoodieData(), instantTime);
+      writer.update(metadata, instantTime);
     }
     return this;
   }
@@ -119,7 +119,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   public HoodieTestTable moveInflightCompactionToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
     super.moveInflightCompactionToComplete(instantTime, metadata);
     if (writer != null) {
-      writer.updateFromWriteStatuses(metadata, context.get().emptyHoodieData(), instantTime);
+      writer.update(metadata, instantTime);
     }
     return this;
   }
@@ -146,7 +146,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   public HoodieTestTable addCompaction(String instantTime, HoodieCommitMetadata commitMetadata) throws Exception {
     super.addCompaction(instantTime, commitMetadata);
     if (writer != null) {
-      writer.updateFromWriteStatuses(commitMetadata, context.get().emptyHoodieData(), instantTime);
+      writer.update(commitMetadata, instantTime);
     }
     return this;
   }
@@ -177,7 +177,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     super.addReplaceCommit(instantTime, requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
     if (writer != null) {
-      writer.updateFromWriteStatuses(completeReplaceMetadata, context.get().emptyHoodieData(), instantTime);
+      writer.update(completeReplaceMetadata, instantTime);
     }
     return this;
   }
@@ -187,7 +187,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
                                     HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     super.addCluster(instantTime, requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
     if (writer != null) {
-      writer.updateFromWriteStatuses(completeReplaceMetadata, context.get().emptyHoodieData(), instantTime);
+      writer.update(completeReplaceMetadata, instantTime);
     }
     return this;
   }

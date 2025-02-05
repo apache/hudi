@@ -54,6 +54,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.table.action.rollback.RollbackUtils.groupSerializableRollbackRequestsBasedOnFileGroup;
+
 /**
  * Contains common methods to be used across engines for rollback operation.
  */
@@ -116,8 +118,13 @@ public class BaseRollbackHelper implements Serializable {
                                                                     HoodieInstant instantToRollback,
                                                                     List<SerializableHoodieRollbackRequest> rollbackRequests,
                                                                     boolean doDelete, int numPartitions) {
+    // The rollback requests for append only exist in table version 6 and below which require groupBy
+    List<SerializableHoodieRollbackRequest> processedRollbackRequests =
+        metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
+            ? rollbackRequests
+            : groupSerializableRollbackRequestsBasedOnFileGroup(rollbackRequests);
     final TaskContextSupplier taskContextSupplier = context.getTaskContextSupplier();
-    return context.flatMap(rollbackRequests, (SerializableFunction<SerializableHoodieRollbackRequest, Stream<Pair<String, HoodieRollbackStat>>>) rollbackRequest -> {
+    return context.flatMap(processedRollbackRequests, (SerializableFunction<SerializableHoodieRollbackRequest, Stream<Pair<String, HoodieRollbackStat>>>) rollbackRequest -> {
       List<String> filesToBeDeleted = rollbackRequest.getFilesToBeDeleted();
       if (!filesToBeDeleted.isEmpty()) {
         List<HoodieRollbackStat> rollbackStats = deleteFiles(metaClient, filesToBeDeleted, doDelete);

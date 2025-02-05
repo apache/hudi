@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -234,25 +236,44 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     return new Schema.Parser().parse(config.getWriteSchema());
   }
 
-  protected HoodieLogFormat.Writer createLogWriter(String instantTime) {
-    return createLogWriter(instantTime, null);
+  protected HoodieLogFormat.Writer createLogWriter(String instantTime, Option<FileSlice> fileSliceOpt) {
+    return createLogWriter(instantTime, null, fileSliceOpt);
   }
 
-  protected HoodieLogFormat.Writer createLogWriter(String instantTime, String fileSuffix) {
+  protected HoodieLogFormat.Writer createLogWriter(String instantTime, String fileSuffix, Option<FileSlice> fileSliceOpt) {
     try {
-      return HoodieLogFormat.newWriterBuilder()
-          .onParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
-          .withFileId(fileId)
-          .withInstantTime(instantTime)
-          .withFileSize(0L)
-          .withSizeThreshold(config.getLogFileMaxSize())
-          .withStorage(storage)
-          .withLogWriteToken(writeToken)
-          .withFileCreationCallback(getLogCreationCallback())
-          .withTableVersion(config.getWriteVersion())
-          .withSuffix(fileSuffix)
-          .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-          .build();
+      if (config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+        return HoodieLogFormat.newWriterBuilder()
+            .onParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+            .withFileId(fileId)
+            .withInstantTime(instantTime)
+            .withFileSize(0L)
+            .withSizeThreshold(config.getLogFileMaxSize())
+            .withStorage(storage)
+            .withLogWriteToken(writeToken)
+            .withFileCreationCallback(getLogCreationCallback())
+            .withTableVersion(config.getWriteVersion())
+            .withSuffix(fileSuffix)
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .build();
+      } else {
+        Option<HoodieLogFile> latestLogFile = fileSliceOpt.isPresent()
+            ? fileSliceOpt.get().getLatestLogFile()
+            : Option.empty();
+        return HoodieLogFormat.newWriterBuilder()
+            .onParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+            .withFileId(fileId)
+            .withInstantTime(instantTime)
+            .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
+            .withFileSize(latestLogFile.map(HoodieLogFile::getFileSize).orElse(0L))
+            .withSizeThreshold(config.getLogFileMaxSize())
+            .withStorage(storage)
+            .withLogWriteToken(latestLogFile.map(HoodieLogFile::getLogWriteToken).orElse(writeToken))
+            .withSuffix(fileSuffix)
+            .withFileCreationCallback(getLogCreationCallback())
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .build();
+      }
     } catch (IOException e) {
       throw new HoodieException("Creating logger writer with fileId: " + fileId + ", "
           + "delta commit time: " + instantTime + ", "

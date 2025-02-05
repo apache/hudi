@@ -43,7 +43,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -101,6 +101,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
@@ -313,7 +314,7 @@ public class HiveTestUtil {
 
   public static void removeCommitFromActiveTimeline(String instantTime, String actionType) {
     List<StoragePath> pathsToDelete = new ArrayList<>();
-    StoragePath metaFolderPath = new StoragePath(basePath, METAFOLDER_NAME);
+    StoragePath metaFolderPath = new StoragePath(new StoragePath(basePath, METAFOLDER_NAME), TIMELINEFOLDER_NAME);
     String actionSuffix = "." + actionType;
     try {
       StoragePath completeInstantPath = HoodieTestUtils
@@ -397,7 +398,7 @@ public class HiveTestUtil {
     Path partPath = new Path(basePath + "/" + partitionPath);
     fileSystem.makeQualified(partPath);
     fileSystem.mkdirs(partPath);
-    FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
+    FileCreateUtilsLegacy.createPartitionMetaFile(basePath, partitionPath);
     List<HoodieWriteStat> writeStats = new ArrayList<>();
     String fileId = UUID.randomUUID().toString();
     Path filePath = new Path(partPath.toString() + "/"
@@ -561,7 +562,7 @@ public class HiveTestUtil {
       Path partPath = new Path(basePath + "/" + partitionPath);
       fileSystem.makeQualified(partPath);
       fileSystem.mkdirs(partPath);
-      FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
+      FileCreateUtilsLegacy.createPartitionMetaFile(basePath, partitionPath);
       List<HoodieWriteStat> writeStats = createTestData(partPath, isParquetSchemaSimple, instantTime);
       startFrom = startFrom.minusDays(1);
       writeStats.forEach(s -> commitMetadata.addWriteStat(partitionPath, s));
@@ -577,7 +578,7 @@ public class HiveTestUtil {
       Path partPath = new Path(basePath + "/" + partitionPath);
       fileSystem.makeQualified(partPath);
       fileSystem.mkdirs(partPath);
-      FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
+      FileCreateUtilsLegacy.createPartitionMetaFile(basePath, partitionPath);
       List<HoodieWriteStat> writeStats = createTestData(partPath, schemaPath, dataPath, instantTime);
       writeStats.forEach(s -> commitMetadata.addWriteStat(partitionPath, s));
     }
@@ -593,7 +594,7 @@ public class HiveTestUtil {
     Path partPath = new Path(basePath + "/" + partitionPath);
     fileSystem.makeQualified(partPath);
     fileSystem.mkdirs(partPath);
-    FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
+    FileCreateUtilsLegacy.createPartitionMetaFile(basePath, partitionPath);
     List<HoodieWriteStat> writeStats = createTestData(partPath, isParquetSchemaSimple, instantTime);
     writeStats.forEach(s -> commitMetadata.addWriteStat(partitionPath, s));
     addSchemaToCommitMetadata(commitMetadata, isParquetSchemaSimple, useSchemaFromCommitMetadata);
@@ -716,7 +717,7 @@ public class HiveTestUtil {
     Map<HeaderMetadataType, String> header = new HashMap<>(2);
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     logWriter.appendBlock(dataBlock);
     logWriter.close();
     return logWriter.getLogFile();
@@ -734,7 +735,7 @@ public class HiveTestUtil {
     Map<HeaderMetadataType, String> header = new HashMap<>(2);
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     logWriter.appendBlock(dataBlock);
     logWriter.close();
     return logWriter.getLogFile();
@@ -807,7 +808,7 @@ public class HiveTestUtil {
 
   private static void createMetaFile(String basePath, String fileName, byte[] bytes)
       throws IOException {
-    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
+    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + TIMELINEFOLDER_NAME + "/" + fileName);
     OutputStream out = fileSystem.create(fullPath, true);
     out.write(bytes);
     out.close();

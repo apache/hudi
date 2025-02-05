@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
@@ -367,6 +368,52 @@ public class StringUtils {
 
     // Concatenate the valid substring of 'a' with 'b'
     return a.substring(0, bestLength) + b;
+  }
+
+  /**
+   * Concatenates the string representation of each object in the list
+   * and returns a single string. The result is capped at "lengthThreshold" characters.
+   *
+   * @param objectList      object list
+   * @param lengthThreshold number of characters to cap the string
+   * @return capped string representation of the object list
+   * @param <T> type of the object
+   */
+  public static <T> String toStringWithThreshold(List<T> objectList, int lengthThreshold) {
+    if (objectList == null || objectList.isEmpty()) {
+      return "";
+    }
+    StringBuilder sb = new StringBuilder();
+
+    for (Object obj : objectList) {
+      if (sb.length() >= lengthThreshold) {
+        setLastThreeDots(sb);
+        break;
+      }
+
+      String objString = (sb.length() > 0 ? "," : "") + obj;
+
+      // Check if appending this string would exceed the limit
+      if (sb.length() + objString.length() > lengthThreshold) {
+        int remaining = lengthThreshold - sb.length();
+        sb.append(objString, 0, remaining);
+        setLastThreeDots(sb);
+        break;
+      } else {
+        sb.append(objString);
+      }
+    }
+
+    return sb.toString();
+  }
+
+  private static void setLastThreeDots(StringBuilder sb) {
+    IntStream.range(1, 4).forEach(i -> {
+      int loc = sb.length() - i;
+      if (loc >= 0) {
+        sb.setCharAt(loc, '.');
+      }
+    });
   }
 
   private static int getBestLength(String a, int threshold) {

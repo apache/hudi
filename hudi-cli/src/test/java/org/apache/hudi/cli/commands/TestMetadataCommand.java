@@ -70,7 +70,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
     HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
         .setTableName(tableName())
-        .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
+        .setArchiveLogFolder(HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue())
         .setPayloadClassName("org.apache.hudi.common.model.HoodieAvroPayload")
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")

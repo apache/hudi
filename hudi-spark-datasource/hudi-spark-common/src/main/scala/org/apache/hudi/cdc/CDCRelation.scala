@@ -26,12 +26,12 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils._
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.log.InstantRange.RangeType
+import org.apache.hudi.common.table.timeline.{HoodieTimeline, InstantComparison}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.internal.schema.InternalSchema
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Row, SparkSession, SQLContext}
+import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -202,9 +202,6 @@ object CDCRelation {
     val endCompletionTime = options.getOrElse(DataSourceReadOptions.END_COMMIT.key(),
       getTimestampOfLatestInstant(metaClient)
     )
-    if (startCompletionTime > endCompletionTime) {
-      throw new HoodieException(s"This is not a valid range between $startCompletionTime and $endCompletionTime")
-    }
 
     new CDCRelation(sqlContext, metaClient, startCompletionTime, endCompletionTime, options, rangeType)
   }

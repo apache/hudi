@@ -28,11 +28,11 @@ object SparkConfigUtils {
    * the alternate config keys for the specified key as well.
    *
    * @param props          Configs in scala map
-   * @param configProperty {@link ConfigProperty} config of String type to fetch.
+   * @param configProperty {@link ConfigProperty} config of type T to fetch.
    * @return String value if the config exists; default String value if the config does not exist
    *         and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
    */
-  def getStringWithAltKeys(props: Map[String, String], configProperty: ConfigProperty[String]): String = {
+  def getStringWithAltKeys[T](props: scala.collection.Map[String, String], configProperty: ConfigProperty[T]): String = {
     ConfigUtils.getStringWithAltKeys(JFunction.toJavaFunction[String, Object](key => props.getOrElse(key, null)), configProperty)
   }
 

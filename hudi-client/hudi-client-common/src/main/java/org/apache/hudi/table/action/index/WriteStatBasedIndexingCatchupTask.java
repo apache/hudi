@@ -19,12 +19,14 @@
 
 package org.apache.hudi.table.action.index;
 
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
 import java.util.List;
@@ -42,14 +44,16 @@ public class WriteStatBasedIndexingCatchupTask extends AbstractIndexingCatchupTa
                                            HoodieTableMetaClient metadataMetaClient,
                                            String currentCaughtupInstant,
                                            TransactionManager txnManager,
-                                           HoodieEngineContext engineContext) {
-    super(metadataWriter, instantsToIndex, metadataCompletedInstants, metaClient, metadataMetaClient, txnManager, currentCaughtupInstant, engineContext);
+                                           HoodieEngineContext engineContext,
+                                           HoodieTable table,
+                                           HoodieHeartbeatClient heartbeatClient) {
+    super(metadataWriter, instantsToIndex, metadataCompletedInstants, metaClient, metadataMetaClient, txnManager, currentCaughtupInstant, engineContext, table, heartbeatClient);
   }
 
   @Override
   public void updateIndexForWriteAction(HoodieInstant instant) throws IOException {
     HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(instant,
         metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-    metadataWriter.updateFromWriteStatuses(commitMetadata, engineContext.emptyHoodieData(), instant.requestedTime());
+    metadataWriter.update(commitMetadata, instant.requestedTime());
   }
 }

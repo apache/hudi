@@ -697,7 +697,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // 0.x meta file name pattern: ${instant_time}.action[.state]
     // 1.x meta file name pattern: ${instant_time}_${completion_time}.action[.state].
     String legacyCompletedFileName = INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(completeInstant.requestedTime());
-    metaClient.getStorage().createImmutableFileInPath(new StoragePath(metaClient.getMetaPath().toString(), legacyCompletedFileName), Option.empty());
+    metaClient.getStorage().createImmutableFileInPath(new StoragePath(metaClient.getTimelinePath().toString(), legacyCompletedFileName), Option.empty());
 
     timeline = timeline.reload();
     assertThat("Some instants might be missing", timeline.countInstants(), is(3));

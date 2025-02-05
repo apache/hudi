@@ -25,12 +25,14 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -39,9 +41,14 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -180,7 +187,8 @@ public class ClusteringUtils {
     } else if (pendingReplaceOrClusterInstant.isRequested()) {
       requestedInstant = pendingReplaceOrClusterInstant;
     } else {
-      requestedInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, pendingReplaceOrClusterInstant.requestedTime());
+      String action = factory instanceof InstantGeneratorV2 ? HoodieTimeline.CLUSTERING_ACTION : HoodieTimeline.REPLACE_COMMIT_ACTION;
+      requestedInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, action, pendingReplaceOrClusterInstant.requestedTime());
     }
     Option<byte[]> content = Option.empty();
     try {
@@ -451,4 +459,18 @@ public class ClusteringUtils {
       throw new HoodieException("Resolve replace commit metadata error for instant: " + instant, e);
     }
   }
+
+  public static Option<HoodieFileReader> getBaseFileReader(HoodieStorage storage, HoodieRecord.HoodieRecordType recordType, HoodieConfig config, String dataFilePath) {
+    if (StringUtils.isNullOrEmpty(dataFilePath)) {
+      return Option.empty();
+    }
+    try {
+      return Option.of(HoodieIOFactory.getIOFactory(storage)
+          .getReaderFactory(recordType)
+          .getFileReader(config, new StoragePath(dataFilePath)));
+    } catch (IOException e) {
+      throw new HoodieIOException("Error reading base file " + dataFilePath, e);
+    }
+  }
+
 }

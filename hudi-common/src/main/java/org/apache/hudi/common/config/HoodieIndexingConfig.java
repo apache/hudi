@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.index.secondary.SecondaryIndexType;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -55,13 +54,13 @@ public class HoodieIndexingConfig extends HoodieConfig {
   public static final String INDEX_DEFINITION_FILE = "index.properties";
   public static final String INDEX_DEFINITION_FILE_BACKUP = "index.properties.backup";
   public static final ConfigProperty<String> INDEX_NAME = ConfigProperty
-      .key("hoodie.functional.index.name")
+      .key("hoodie.index.name")
       .noDefaultValue()
       .sinceVersion("1.0.0")
-      .withDocumentation("Name of the functional index. This is also used for the partition name in the metadata table.");
+      .withDocumentation("Name of the expression index. This is also used for the partition name in the metadata table.");
 
   public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
-      .key("hoodie.functional.index.type")
+      .key("hoodie.expression.index.type")
       .defaultValue(MetadataPartitionType.COLUMN_STATS.name())
       .withValidValues(
           MetadataPartitionType.COLUMN_STATS.name(),
@@ -69,15 +68,15 @@ public class HoodieIndexingConfig extends HoodieConfig {
           MetadataPartitionType.SECONDARY_INDEX.name()
       )
       .sinceVersion("1.0.0")
-      .withDocumentation("Type of the functional index. Default is `column_stats` if there are no functions and expressions in the command. "
+      .withDocumentation("Type of the expression index. Default is `column_stats` if there are no functions and expressions in the command. "
           + "Valid options could be BITMAP, COLUMN_STATS, LUCENE, etc. If index_type is not provided, "
-          + "and there are functions or expressions in the command then a functional index using column stats will be created.");
+          + "and there are functions or expressions in the command then a expression index using column stats will be created.");
 
   public static final ConfigProperty<String> INDEX_FUNCTION = ConfigProperty
-      .key("hoodie.functional.index.function")
+      .key("hoodie.expression.index.function")
       .noDefaultValue()
       .sinceVersion("1.0.0")
-      .withDocumentation("Function to be used for building the functional index.");
+      .withDocumentation("Function to be used for building the expression index.");
 
   public static final ConfigProperty<String> INDEX_DEFINITION_CHECKSUM = ConfigProperty
       .key("hoodie.table.checksum")
@@ -225,52 +224,52 @@ public class HoodieIndexingConfig extends HoodieConfig {
   }
 
   public static class Builder {
-    private final HoodieIndexingConfig functionalIndexConfig = new HoodieIndexingConfig();
+    private final HoodieIndexingConfig expressionIndexConfig = new HoodieIndexingConfig();
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
-        this.functionalIndexConfig.getProps().load(reader);
+        this.expressionIndexConfig.getProps().load(reader);
         return this;
       }
     }
 
     public Builder fromProperties(Properties props) {
-      this.functionalIndexConfig.getProps().putAll(props);
+      this.expressionIndexConfig.getProps().putAll(props);
       return this;
     }
 
-    public Builder fromIndexConfig(HoodieIndexingConfig functionalIndexConfig) {
-      this.functionalIndexConfig.getProps().putAll(functionalIndexConfig.getProps());
+    public Builder fromIndexConfig(HoodieIndexingConfig expressionIndexConfig) {
+      this.expressionIndexConfig.getProps().putAll(expressionIndexConfig.getProps());
       return this;
     }
 
     public Builder withIndexName(String indexName) {
-      functionalIndexConfig.setValue(INDEX_NAME, indexName);
+      expressionIndexConfig.setValue(INDEX_NAME, indexName);
       return this;
     }
 
     public Builder withIndexType(String indexType) {
-      functionalIndexConfig.setValue(INDEX_TYPE, indexType);
+      expressionIndexConfig.setValue(INDEX_TYPE, indexType);
       return this;
     }
 
     public Builder withIndexFunction(String indexFunction) {
-      functionalIndexConfig.setValue(INDEX_FUNCTION, indexFunction);
+      expressionIndexConfig.setValue(INDEX_FUNCTION, indexFunction);
       return this;
     }
 
     public HoodieIndexingConfig build() {
-      functionalIndexConfig.setDefaults(HoodieIndexingConfig.class.getName());
-      return functionalIndexConfig;
+      expressionIndexConfig.setDefaults(HoodieIndexingConfig.class.getName());
+      return expressionIndexConfig;
     }
   }
 
-  public static HoodieIndexingConfig copy(HoodieIndexingConfig functionalIndexConfig) {
-    return newBuilder().fromIndexConfig(functionalIndexConfig).build();
+  public static HoodieIndexingConfig copy(HoodieIndexingConfig expressionIndexConfig) {
+    return newBuilder().fromIndexConfig(expressionIndexConfig).build();
   }
 
-  public static HoodieIndexingConfig merge(HoodieIndexingConfig functionalIndexConfig1, HoodieIndexingConfig functionalIndexConfig2) {
-    return newBuilder().fromIndexConfig(functionalIndexConfig1).fromIndexConfig(functionalIndexConfig2).build();
+  public static HoodieIndexingConfig merge(HoodieIndexingConfig expressionIndexConfig1, HoodieIndexingConfig expressionIndexConfig2) {
+    return newBuilder().fromIndexConfig(expressionIndexConfig1).fromIndexConfig(expressionIndexConfig2).build();
   }
 
   public static HoodieIndexingConfig fromIndexDefinition(HoodieIndexDefinition indexDefinition) {
@@ -294,10 +293,6 @@ public class HoodieIndexingConfig extends HoodieConfig {
 
   public boolean isIndexUsingBloomFilter() {
     return getIndexType().equalsIgnoreCase(MetadataPartitionType.BLOOM_FILTERS.name());
-  }
-
-  public boolean isIndexUsingLucene() {
-    return getIndexType().equalsIgnoreCase(SecondaryIndexType.LUCENE.name());
   }
 
   public boolean isIndexUsingColumnStats() {

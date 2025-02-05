@@ -56,7 +56,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
-import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far.
@@ -76,24 +75,9 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   private DeleteRecord[] recordsToDelete;
 
   public HoodieDeleteBlock(List<Pair<DeleteRecord, Long>> recordsToDelete,
-                           boolean shouldWriteRecordPositions,
                            Map<HeaderMetadataType, String> header) {
     this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
-    if (shouldWriteRecordPositions && !recordsToDelete.isEmpty()) {
-      recordsToDelete.sort((o1, o2) -> {
-        long v1 = o1.getRight();
-        long v2 = o2.getRight();
-        return Long.compare(v1, v2);
-      });
-      if (isPositionValid(recordsToDelete.get(0).getRight())) {
-        addRecordPositionsToHeader(
-            recordsToDelete.stream().map(Pair::getRight).collect(Collectors.toSet()),
-            recordsToDelete.size());
-      } else {
-        LOG.warn("There are delete records without valid positions. "
-            + "Skip writing record positions to the delete block header.");
-      }
-    }
+    addRecordPositionsIfRequired(recordsToDelete, Pair::getRight);
     this.recordsToDelete = recordsToDelete.stream().map(Pair::getLeft).toArray(DeleteRecord[]::new);
   }
 

@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.execution.datasources.parquet;
 
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.spark.memory.MemoryMode;
@@ -32,6 +30,7 @@ import org.apache.spark.sql.vectorized.ColumnVector;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
@@ -55,13 +54,6 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
 
   // The memory mode of the columnarBatch.
   private final MemoryMode memoryMode;
-
-  /**
-   * Batch of rows that we assemble and the current index we've returned. Every time this
-   * batch is used up (batchIdx == numBatched), we populated the batch.
-   */
-  private int batchIdx = 0;
-  private int numBatched = 0;
 
   public Spark3HoodieVectorizedParquetRecordReader(
       ZoneId convertTz,
@@ -94,11 +86,6 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
             idToColumnVectors.put(f.getKey(), vector);
           });
     }
-  }
-
-  @Override
-  public void initialize(InputSplit inputSplit, TaskAttemptContext taskAttemptContext) throws IOException, InterruptedException, UnsupportedOperationException {
-    super.initialize(inputSplit, taskAttemptContext);
   }
 
   @Override
@@ -148,8 +135,7 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
     if (idToColumnVectors != null) {
       idToColumnVectors.entrySet().stream().forEach(e -> e.getValue().reset());
     }
-    numBatched = resultBatch().numRows();
-    batchIdx = 0;
+    resultBatch();
     return result;
   }
 
@@ -169,24 +155,17 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
       return columnarBatch == null ? super.getCurrentValue() : columnarBatch;
     }
 
-    return columnarBatch == null ? super.getCurrentValue() : columnarBatch.getRow(batchIdx - 1);
+    return columnarBatch == null ? super.getCurrentValue() : columnarBatch.getRow(batchIdxFromSuper() - 1);
   }
 
-  @Override
-  public boolean nextKeyValue() throws IOException {
-    resultBatch();
-
-    if (returnColumnarBatch)  {
-      return nextBatch();
+  private int batchIdxFromSuper() {
+    try {
+      Field batchIdxField = VectorizedParquetRecordReader.class.getDeclaredField("batchIdx");
+      batchIdxField.setAccessible(true);
+      return (Integer) batchIdxField.get(this);
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new RuntimeException(e);
     }
-
-    if (batchIdx >= numBatched) {
-      if (!nextBatch()) {
-        return false;
-      }
-    }
-    ++batchIdx;
-    return true;
   }
 }
 

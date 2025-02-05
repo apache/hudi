@@ -105,7 +105,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
     return Option.ofNullable(readCommits.get(instant.requestedTime()));
   }
 
-  public static StoragePath getArchiveLogPath(String archiveFolder) {
+  public static StoragePath getArchiveLogPath(StoragePath archiveFolder) {
     return new StoragePath(archiveFolder, HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX);
   }
 
@@ -175,7 +175,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   /**
    * Callback to read instant details.
    */
-  private class InstantsLoader implements BiConsumer<String, GenericRecord> {
+  public class InstantsLoader implements BiConsumer<String, GenericRecord> {
     private final Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
     private final boolean loadInstantDetails;
 
@@ -215,7 +215,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   }
 
   @Nonnull
-  private Option<String> getMetadataKey(String action) {
+  private static Option<String> getMetadataKey(String action) {
     switch (action) {
       case HoodieTimeline.CLEAN_ACTION:
         return Option.of("hoodieCleanMetadata");

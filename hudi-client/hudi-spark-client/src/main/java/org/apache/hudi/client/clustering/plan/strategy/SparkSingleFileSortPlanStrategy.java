@@ -43,13 +43,13 @@ public class SparkSingleFileSortPlanStrategy<T>
   }
 
   @Override
-  protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
+  protected Pair<Stream<HoodieClusteringGroup>, Boolean> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = fileSlices.stream()
         .map(fileSlice -> Pair.of(Collections.singletonList(fileSlice), 1)).collect(Collectors.toList());
-    return fileSliceGroups.stream().map(fileSliceGroup -> HoodieClusteringGroup.newBuilder()
+    return Pair.of(fileSliceGroups.stream().map(fileSliceGroup -> HoodieClusteringGroup.newBuilder()
         .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
         .setNumOutputFileGroups(fileSliceGroup.getRight())
         .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
-        .build());
+        .build()), true);
   }
 }

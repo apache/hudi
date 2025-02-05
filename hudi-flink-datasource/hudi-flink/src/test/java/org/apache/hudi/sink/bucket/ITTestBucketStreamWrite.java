@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex.IndexType;
@@ -110,7 +110,7 @@ public class ITTestBucketStreamWrite {
 
     // delete successful commit to simulate an unsuccessful write
     HoodieStorage storage = metaClient.getStorage();
-    StoragePath path = new StoragePath(metaClient.getMetaPath(), filename);
+    StoragePath path = new StoragePath(metaClient.getTimelinePath(), filename);
     storage.deleteDirectory(path);
 
     commitMetadata.getFileIdAndRelativePaths().forEach((fileId, relativePath) -> {
@@ -119,8 +119,8 @@ public class ITTestBucketStreamWrite {
       String partition = partitionFileNameSplit[0];
       String fileName = partitionFileNameSplit[1];
       try {
-        String markerFileName = FileCreateUtils.markerFileName(fileName, IOType.CREATE);
-        FileCreateUtils.createMarkerFile(tablePath, partition, commitInstant, markerFileName);
+        String markerFileName = FileCreateUtilsLegacy.markerFileName(fileName, IOType.CREATE);
+        FileCreateUtilsLegacy.createMarkerFile(tablePath, partition, commitInstant, markerFileName);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

@@ -24,7 +24,7 @@ import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
 
-case class HoodieSourceOffset(completionTime: String) extends Offset {
+case class HoodieSourceOffset(offsetCommitTime: String) extends Offset {
 
   override val json: String = {
     HoodieSourceOffset.toJson(this)
@@ -33,13 +33,13 @@ case class HoodieSourceOffset(completionTime: String) extends Offset {
   override def equals(obj: Any): Boolean = {
     obj match {
       case HoodieSourceOffset(otherCompletionTime) =>
-        otherCompletionTime == completionTime
+        otherCompletionTime == offsetCommitTime
       case _=> false
     }
   }
 
   override def hashCode(): Int = {
-    completionTime.hashCode
+    offsetCommitTime.hashCode
   }
 }
 

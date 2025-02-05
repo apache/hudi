@@ -75,7 +75,7 @@ public class BootstrapCommand {
       @ShellOption(value = {"--payloadClass"}, defaultValue = "",
           help = "Payload Class (deprecated). Use `--merge-mode` to specify the equivalent payload update behavior.") final String payloadClass,
       @ShellOption(value = {"--merge-mode", "--record-merge-mode"}, defaultValue = "",
-          help = "Merge mode to use. 'EVENT_TIME_ORDERING', 'OVERWRITE_WITH_LATEST', "
+          help = "Merge mode to use. 'EVENT_TIME_ORDERING', 'COMMIT_TIME_ORDERING', "
               + "or 'CUSTOM' if you want to set a custom merge strategy ID and implementation.") final String recordMergeMode,
       @ShellOption(value = {"--merge-strategy-id", "--record-merge-strategy-id"}, defaultValue = "",
           help = "ID of the merge strategy to use. Only set when using 'CUSTOM' merge mode") final String recordMergeStrategyId,

@@ -100,7 +100,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       HoodieInstant inflightInstant = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);
       try {
         if (!metaClient.getStorage().exists(
-            new StoragePath(metaClient.getMetaPath(), instantFileNameGenerator.getFileName(inflightInstant)))) {
+            new StoragePath(metaClient.getTimelinePath(), instantFileNameGenerator.getFileName(inflightInstant)))) {
           throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", e);
         }
       } catch (IOException ex) {
@@ -189,8 +189,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   @Override
   protected void commit(HoodieWriteMetadata<List<WriteStatus>> result) {
-    commit(HoodieListData.eager(result.getWriteStatuses()), result,
-        result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+    commit(result, result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
   }
 
   protected void setCommitMetadata(HoodieWriteMetadata<List<WriteStatus>> result) {
@@ -298,5 +297,10 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     result.setWriteStatuses(statuses);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
     commitOnAutoCommit(result);
+  }
+
+  @Override
+  protected void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    // no op. HUDI-8801
   }
 }

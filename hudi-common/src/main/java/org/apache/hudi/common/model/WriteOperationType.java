@@ -123,6 +123,10 @@ public enum WriteOperationType {
     return operationType == INSERT_OVERWRITE || operationType == INSERT_OVERWRITE_TABLE;
   }
 
+  public boolean isInsertOverwriteOrDeletePartition() {
+    return this == INSERT_OVERWRITE || this == INSERT_OVERWRITE_TABLE || this == DELETE_PARTITION;
+  }
+
   /**
    * Whether the operation changes the dataset.
    */
@@ -169,7 +173,7 @@ public enum WriteOperationType {
     return operationType == BULK_INSERT_PREPPED || operationType == INSERT_PREPPED | operationType == UPSERT_PREPPED || operationType == DELETE_PREPPED;
   }
 
-  public static boolean isPartitionStatsTightBoundRequired(WriteOperationType operationType) {
+  public static boolean isCompactionOrClustering(WriteOperationType operationType) {
     return operationType == COMPACT || operationType == CLUSTER;
   }
 }

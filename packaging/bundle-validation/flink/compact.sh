@@ -26,7 +26,7 @@ org.apache.hudi.sink.compact.HoodieFlinkCompactor $HUDI_FLINK_JAR \
 sleep 10 # for test stability
 
 # validate
-numCommits=$(ls /tmp/hudi-flink-bundle-test/.hoodie/*.commit | wc -l)
+numCommits=$(ls /tmp/hudi-flink-bundle-test/.hoodie/timeline/*.commit | wc -l)
 if [ $numCommits -gt 0 ]; then
   exit 0
 else

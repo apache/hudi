@@ -22,6 +22,7 @@ package org.apache.hudi.table.action.index;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
@@ -48,8 +49,11 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.model.WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL;
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getSecondaryOrExpressionIndexName;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 
 /**
@@ -96,10 +100,9 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     requestedPartitions.removeAll(indexesInflightOrCompleted);
 
     if (!requestedPartitions.isEmpty()) {
-      LOG.warn(String.format("Following partitions already exist or inflight: %s. Going to schedule indexing of only these partitions: %s",
-          indexesInflightOrCompleted, requestedPartitions));
+      LOG.warn("Following partitions already exist or inflight: {}. Going to schedule indexing of only these partitions: {}", indexesInflightOrCompleted, requestedPartitions);
     } else {
-      LOG.error("All requested index types are inflight or completed: " + partitionIndexTypes);
+      LOG.error("All requested index types are inflight or completed: {}", partitionIndexTypes);
       return Option.empty();
     }
     List<MetadataPartitionType> finalPartitionsToIndex = partitionIndexTypes.stream()
@@ -132,8 +135,15 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
   }
 
   private HoodieIndexPartitionInfo buildIndexPartitionInfo(MetadataPartitionType partitionType, HoodieInstant indexUptoInstant) {
-    // for functional index, we need to pass the index name as the partition name
-    String partitionName = MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType) ? config.getIndexingConfig().getIndexName() : partitionType.getPartitionPath();
+    String partitionName = partitionType.getPartitionPath();
+    HoodieMetadataConfig metadataConfig = config.getMetadataConfig();
+    // for expression or secondary index, we need to pass the metadata config to derive the partition name
+    if (MetadataPartitionType.EXPRESSION_INDEX.equals(partitionType)) {
+      partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
+    }
+    if (MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
+      partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
+    }
     return new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, partitionName, indexUptoInstant.requestedTime(), Collections.emptyMap());
   }
 

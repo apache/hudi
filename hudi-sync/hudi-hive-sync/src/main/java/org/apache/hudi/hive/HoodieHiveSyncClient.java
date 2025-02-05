@@ -404,12 +404,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     // Set the last commit time and commit completion from the TBLproperties
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::requestedTime);
-    Option<String> lastCommitCompletionSynced = activeTimeline
-        .getInstantsOrderedByCompletionTime()
-        .skip(activeTimeline.countInstants() - 1)
-        .findFirst()
-        .map(i -> Option.of(i.getCompletionTime()))
-        .orElse(Option.empty());
+    Option<String> lastCommitCompletionSynced = activeTimeline.getLatestCompletionTime();
     if (lastCommitSynced.isPresent()) {
       try {
         Table table = client.getTable(databaseName, tableName);

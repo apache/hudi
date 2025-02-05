@@ -96,7 +96,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
     if (metadataConfig.isMetricsEnabled()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(HoodieMetricsConfig.newBuilder()
-          .fromProperties(metadataConfig.getProps()).build(), dataMetaClient.getStorage()));
+          .fromProperties(metadataConfig.getProps()).withPath(dataBasePath).build(), dataMetaClient.getStorage()));
     } else {
       this.metrics = Option.empty();
     }
@@ -166,14 +166,14 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName) throws HoodieMetadataException {
-    if (!dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.BLOOM_FILTERS)) {
+  public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName, final String metadataPartitionName) throws HoodieMetadataException {
+    if (!dataMetaClient.getTableConfig().getMetadataPartitions().contains(metadataPartitionName)) {
       LOG.error("Metadata bloom filter index is disabled!");
       return Option.empty();
     }
 
     final Pair<String, String> partitionFileName = Pair.of(partitionName, fileName);
-    Map<Pair<String, String>, BloomFilter> bloomFilters = getBloomFilters(Collections.singletonList(partitionFileName));
+    Map<Pair<String, String>, BloomFilter> bloomFilters = getBloomFilters(Collections.singletonList(partitionFileName), metadataPartitionName);
     if (bloomFilters.isEmpty()) {
       LOG.error("Meta index: missing bloom filter for partition: {}, file: {}", partitionName, fileName);
       return Option.empty();
@@ -184,9 +184,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
+  public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList, final String metadataPartitionName)
       throws HoodieMetadataException {
-    if (!dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.BLOOM_FILTERS)) {
+    if (!dataMetaClient.getTableConfig().getMetadataPartitions().contains(metadataPartitionName)) {
       LOG.error("Metadata bloom filter index is disabled!");
       return Collections.emptyMap();
     }
@@ -206,7 +206,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
     List<String> partitionIDFileIDStringsList = new ArrayList<>(partitionIDFileIDStrings);
     Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
-        getRecordsByKeys(partitionIDFileIDStringsList, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
+        getRecordsByKeys(partitionIDFileIDStringsList, metadataPartitionName);
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
     metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_FILE_COUNT_STR, partitionIDFileIDStringsList.size()));
 
@@ -336,17 +336,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   /**
-   * Returns a map of (record-key -> secondary-key) for the provided record keys.
-   */
-  public Map<String, String> getSecondaryKeys(List<String> recordKeys, String secondaryIndexName) {
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
-        "Record index is not initialized in MDT");
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().getMetadataPartitions().contains(secondaryIndexName),
-        "Secondary index is not initialized in MDT");
-    return getSecondaryKeysForRecordKeys(recordKeys, secondaryIndexName);
-  }
-
-  /**
    * Returns a list of all partitions.
    */
   protected List<String> fetchAllPartitionPaths() {
@@ -458,8 +447,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
   protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
-
-  protected abstract Map<String, String> getSecondaryKeysForRecordKeys(List<String> recordKeys, String partitionName);
 
   /**
    * Returns a map of (secondary-key -> set-of-record-keys) for the provided secondary keys.

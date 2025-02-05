@@ -123,9 +123,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     sourceSchemaFile = "";
     targetSchemaFile = "";
     topicName = "topic" + testNum;
-    if (HoodieSparkUtils.gteqSpark3_3()) {
-      sparkSession.conf().set("spark.sql.parquet.enableNestedColumnVectorizedReader", "false");
-    }
+    sparkSession.conf().set("spark.sql.parquet.enableNestedColumnVectorizedReader", "false");
   }
 
   @AfterEach
@@ -157,6 +155,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected HoodieDeltaStreamer.Config getDeltaStreamerConfig(String[] transformerClasses, boolean nullForDeletedCols,
                                                               TypedProperties extraProps) throws IOException {
+
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnable.toString());
     extraProps.setProperty(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS().key(), Boolean.toString(nullForDeletedCols));

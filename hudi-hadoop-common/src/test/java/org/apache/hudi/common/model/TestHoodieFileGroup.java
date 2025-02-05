@@ -22,7 +22,7 @@ import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.versioning.v2.CompletionTimeQueryViewV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -85,7 +85,7 @@ public class TestHoodieFileGroup {
     for (int i = 0; i < 3; i++) {
       HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i);
       fileGroup.addBaseFile(baseFile);
-      fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtils.logFileName(preTableVersion8 ? "001" : "00" + i, "data", i))));
+      fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(preTableVersion8 ? "001" : "00" + i, "data", i))));
     }
 
     assertEquals(2, fileGroup.getAllFileSlices().count());
@@ -124,16 +124,16 @@ public class TestHoodieFileGroup {
     // when: building a file group with file slices like table version 6.
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "f1", activeTimeline);
 
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtils.logFileName("001", "f1", 0))));
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtils.logFileName(useBaseInstantTime ? "001" : "002", "f1", 1))));
+    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName("001", "f1", 0))));
+    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "001" : "002", "f1", 1))));
 
-    fileGroup.addBaseFile(new HoodieBaseFile(FileCreateUtils.baseFileName("003", "f1")));
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtils.logFileName(useBaseInstantTime ? "003" : "004", "f1", 0))));
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtils.logFileName(useBaseInstantTime ? "003" : "005", "f1", 1))));
+    fileGroup.addBaseFile(new HoodieBaseFile(FileCreateUtilsLegacy.baseFileName("003", "f1")));
+    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "003" : "004", "f1", 0))));
+    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "003" : "005", "f1", 1))));
 
-    fileGroup.addBaseFile(new HoodieBaseFile(FileCreateUtils.baseFileName("006", "f1")));
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtils.logFileName(useBaseInstantTime ? "006" : "007", "f1", 0))));
-    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtils.logFileName(useBaseInstantTime ? "006" : "008", "f1", 1))));
+    fileGroup.addBaseFile(new HoodieBaseFile(FileCreateUtilsLegacy.baseFileName("006", "f1")));
+    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "006" : "007", "f1", 0))));
+    fileGroup.addLogFile(queryView, new HoodieLogFile(new StoragePath(FileCreateUtilsLegacy.logFileName(useBaseInstantTime ? "006" : "008", "f1", 1))));
 
     // then: assert that the file slices are in-tact.
     assertEquals(3, fileGroup.getAllFileSlices().count());

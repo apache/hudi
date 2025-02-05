@@ -36,7 +36,9 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getNullableValAsString;
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * A utility class supports spillable map.
@@ -164,11 +166,11 @@ public class SpillableMapUtils {
    * @return the preCombine field value or 0 if the field does not exist in the avro schema
    */
   private static Object getPreCombineVal(GenericRecord rec, String preCombineField) {
-    if (preCombineField == null) {
-      return 0;
+    if (isNullOrEmpty(preCombineField)) {
+      return DEFAULT_ORDERING_VALUE;
     }
     Schema.Field field = rec.getSchema().getField(preCombineField);
-    return field == null ? 0 : rec.get(field.pos());
+    return field == null ? DEFAULT_ORDERING_VALUE : rec.get(field.pos());
   }
 
   /**

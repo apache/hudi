@@ -19,13 +19,13 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -33,7 +33,6 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.utilities.config.SourceTestConfig;
@@ -43,7 +42,6 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
@@ -104,6 +102,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     props.setProperty("hoodie.write.lock.provider",
         "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    props.setProperty("hoodie.merge.use.record.positions", "false");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, propsFilePath);
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
@@ -238,7 +237,6 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
         cfgIngestionJob2, backfillJob2, cfgBackfillJob2, false, "batch2");
   }
 
-  @Disabled
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE"})
   void testLatestCheckpointCarryOverWithMultipleWriters(HoodieTableType tableType) throws Exception {
@@ -289,10 +287,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
         "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, propsFilePath);
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
-        .setBasePath(tableBasePath)
-        .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).build()).build();
+    HoodieTableMetaClient meta = createMetaClient(new HadoopStorageConfiguration(hadoopConf), tableBasePath);
 
     // get current checkpoint after preparing base dataset with some commits
     HoodieCommitMetadata commitMetadataForLastInstant = getLatestMetadata(meta);
@@ -322,9 +317,9 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
   private void verifyCommitMetadataCheckpoint(HoodieTableMetaClient metaClient, String expectedCheckpoint) throws IOException {
     HoodieCommitMetadata commitMeta = getLatestMetadata(metaClient);
     if (expectedCheckpoint == null) {
-      Assertions.assertNull(commitMeta.getMetadata(CHECKPOINT_KEY));
+      Assertions.assertThrows(HoodieException.class, () -> CheckpointUtils.getCheckpoint(commitMeta));
     } else {
-      Assertions.assertEquals(expectedCheckpoint, commitMeta.getMetadata(CHECKPOINT_KEY));
+      Assertions.assertEquals(expectedCheckpoint, CheckpointUtils.getCheckpoint(commitMeta).getCheckpointKey());
     }
   }
 

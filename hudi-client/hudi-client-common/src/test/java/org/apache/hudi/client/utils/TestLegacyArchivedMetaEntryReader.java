@@ -103,7 +103,7 @@ public class TestLegacyArchivedMetaEntryReader {
   private HoodieLogFormat.Writer openWriter(HoodieTableMetaClient metaClient) {
     try {
       return HoodieLogFormat.newWriterBuilder()
-          .onParentPath(new StoragePath(metaClient.getArchivePath()))
+          .onParentPath(metaClient.getArchivePath())
           .withFileId("commits").withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
           .withStorage(metaClient.getStorage()).withInstantTime("").build();
     } catch (IOException e) {
@@ -136,7 +136,7 @@ public class TestLegacyArchivedMetaEntryReader {
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
       final String keyField = metaClient.getTableConfig().getRecordKeyFieldProp();
       List<HoodieRecord> indexRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
-      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, false, header, keyField);
+      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, header, keyField);
       writer.appendBlock(block);
       records.clear();
     }

@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -203,7 +203,7 @@ public class TestHoodieParquetInputFormat {
         true, schema);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    FileCreateUtils.createCommit(COMMIT_METADATA_SER_DE, basePath.toString(), "100", Option.of(commitMetadata));
+    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, basePath.toString(), "100", Option.of(commitMetadata));
 
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -500,7 +500,7 @@ public class TestHoodieParquetInputFormat {
     List<HoodieWriteStat> writeStats = HoodieTestUtils.generateFakeHoodieWriteStat(1);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     writeStats.forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
-    File file = basePath.resolve(".hoodie")
+    File file = basePath.resolve(".hoodie/timeline")
         .resolve(commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".commit").toFile();
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
@@ -511,7 +511,7 @@ public class TestHoodieParquetInputFormat {
 
   private File createCompactionFile(java.nio.file.Path basePath, String commitTime)
       throws IOException {
-    File file = basePath.resolve(".hoodie")
+    File file = basePath.resolve(".hoodie/timeline")
         .resolve(INSTANT_FILE_NAME_GENERATOR.makeRequestedCompactionFileName(commitTime)).toFile();
     assertTrue(file.createNewFile());
     FileOutputStream os = new FileOutputStream(file);
@@ -673,7 +673,7 @@ public class TestHoodieParquetInputFormat {
 
     // add more files
     InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId2-", 5, "200");
-    FileCreateUtils.createInflightCommit(basePath.toString(), "200");
+    FileCreateUtilsLegacy.createInflightCommit(basePath.toString(), "200");
 
     // Verify that validate mode reads uncommitted files
     InputFormatTestUtil.setupSnapshotIncludePendingCommits(jobConf, "200");
@@ -714,7 +714,7 @@ public class TestHoodieParquetInputFormat {
 
     // create inflight commit add more files with same file_id.
     InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId1", 5, "100");
-    FileCreateUtils.createInflightCommit(basePath.toString(), "100");
+    FileCreateUtilsLegacy.createInflightCommit(basePath.toString(), "100");
 
     // Create another commit without datafiles.
     createCommitFile(basePath, "200", "2016/05/01");

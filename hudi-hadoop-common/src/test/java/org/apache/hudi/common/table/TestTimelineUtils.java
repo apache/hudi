@@ -25,32 +25,27 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.BaseTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -63,7 +58,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
@@ -78,13 +72,10 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -310,6 +301,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     String startTs = "010";
     HoodieTableMetaClient mockMetaClient = prepareMetaClient(
         Arrays.asList(
+            new HoodieInstant(INFLIGHT, COMMIT_ACTION, "008", null, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "009", "013", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "011", "011", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
@@ -380,12 +372,16 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   private HoodieTableMetaClient prepareMetaClient(
       List<HoodieInstant> activeInstants,
       List<HoodieInstant> archivedInstants,
-      String startTs
-  ) throws IOException {
+      String startTs) throws IOException {
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     HoodieArchivedTimeline mockArchivedTimeline = mock(HoodieArchivedTimeline.class);
-    when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), eq(true)))
+    HoodieTableConfig mockTableConfig = mock(HoodieTableConfig.class);
+    when(mockMetaClient.getBasePath()).thenReturn(new StoragePath("file://dummy/path"));
+    when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), any(), eq(true)))
         .thenReturn(activeInstants);
+    when(mockMetaClient.getMetaPath()).thenReturn(new StoragePath("file://dummy/path/.hoodie"));
+    when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
+    when(mockMetaClient.getTableConfig().getTimelinePath()).thenReturn("timeline");
     HoodieActiveTimeline activeTimeline = new ActiveTimelineV2(mockMetaClient);
     when(mockMetaClient.getActiveTimeline())
         .thenReturn(activeTimeline);
@@ -491,8 +487,13 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   private HoodieActiveTimeline prepareActiveTimeline(
       List<HoodieInstant> activeInstants) throws IOException {
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
-    when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), eq(true)))
+    HoodieTableConfig mockTableConfig = mock(HoodieTableConfig.class);
+    when(mockMetaClient.getBasePath()).thenReturn(new StoragePath("file://dummy/path"));
+    when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), any(), eq(true)))
         .thenReturn(activeInstants);
+    when(mockMetaClient.getMetaPath()).thenReturn(new StoragePath("file://dummy/path/.hoodie"));
+    when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
+    when(mockMetaClient.getTableConfig().getTimelinePath()).thenReturn("timeline");
     return new ActiveTimelineV2(mockMetaClient);
   }
 
@@ -530,22 +531,6 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     List<HoodieRollbackStat> rollbackStats = new ArrayList<>();
     rollbackStats.add(rollbackStat);
     return TimelineMetadataUtils.convertRollbackMetadata(commitTs, Option.empty(), rollbacks, rollbackStats);
-  }
-
-  private byte[] getCommitMetadata(String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
-      throws IOException {
-    HoodieCommitMetadata commit = new HoodieCommitMetadata();
-    for (int i = 1; i <= count; i++) {
-      HoodieWriteStat stat = new HoodieWriteStat();
-      stat.setFileId(i + "");
-      stat.setPartitionPath(Paths.get(basePath, partition).toString());
-      stat.setPath(commitTs + "." + i + metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
-      commit.addWriteStat(partition, stat);
-    }
-    for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
-      commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
-    }
-    return serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commit).get();
   }
 
   private byte[] getReplaceCommitMetadata(String basePath, String commitTs, String replacePartition, int replaceCount,
@@ -599,40 +584,6 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         .setPartitionMetadata(partitionToFilesCleaned).build();
 
     return TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata);
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = HollowCommitHandling.class)
-  public void testHandleHollowCommitIfNeeded(HollowCommitHandling handlingMode) throws Exception {
-    HoodieTestTable.of(metaClient)
-        .addCommit("001")
-        .addInflightCommit("003")
-        .addCommit("005");
-    Stream<String> completed = Stream.of("001", "005");
-    HoodieTimeline completedTimeline = new MockHoodieTimeline(completed, Stream.empty());
-    switch (handlingMode) {
-      case FAIL:
-        HoodieException e = assertThrows(HoodieException.class, () ->
-            handleHollowCommitIfNeeded(completedTimeline, metaClient, handlingMode));
-        assertTrue(e.getMessage().startsWith("Found hollow commit:"));
-        break;
-      case BLOCK: {
-        HoodieTimeline filteredTimeline = handleHollowCommitIfNeeded(completedTimeline, metaClient, handlingMode);
-        assertTrue(filteredTimeline.containsInstant("001"));
-        assertFalse(filteredTimeline.containsInstant("003"));
-        assertFalse(filteredTimeline.containsInstant("005"));
-        break;
-      }
-      case USE_TRANSITION_TIME: {
-        HoodieTimeline filteredTimeline = handleHollowCommitIfNeeded(completedTimeline, metaClient, handlingMode);
-        assertTrue(filteredTimeline.containsInstant("001"));
-        assertFalse(filteredTimeline.containsInstant("003"));
-        assertTrue(filteredTimeline.containsInstant("005"));
-        break;
-      }
-      default:
-        fail("should cover all handling mode.");
-    }
   }
 
   @Test

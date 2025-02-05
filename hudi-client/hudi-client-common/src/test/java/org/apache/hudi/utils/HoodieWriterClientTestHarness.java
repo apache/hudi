@@ -43,6 +43,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -141,6 +142,7 @@ import static org.mockito.Mockito.when;
 public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarness {
   protected static int timelineServicePort = FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
   protected static final String CLUSTERING_FAILURE = "CLUSTERING FAILURE";
+  protected static final String CLEANING_FAILURE = "CLEANING FAILURE";
 
   protected HoodieTestTable testTable;
 
@@ -585,15 +587,15 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     HoodieActiveTimeline activeTimeline = TIMELINE_FACTORY.createActiveTimeline(metaClient, false);
     List<HoodieInstant> instants = activeTimeline.getCommitAndReplaceTimeline().getInstants();
     assertEquals(9, instants.size());
-    // Should be corresponding to table version 6
+    // Timeline should be as per new format corresponding to table version 8
     assertEquals(INSTANT_GENERATOR.createNewInstant(REQUESTED, COMMIT_ACTION, "001"), instants.get(0));
     assertEquals(INSTANT_GENERATOR.createNewInstant(INFLIGHT, COMMIT_ACTION, "001"), instants.get(1));
     assertEquals(INSTANT_GENERATOR.createNewInstant(COMPLETED, COMMIT_ACTION, "001"), instants.get(2));
-    assertTrue(instants.get(2).isLegacy());
+    assertFalse(instants.get(2).isLegacy());
     assertEquals(INSTANT_GENERATOR.createNewInstant(REQUESTED, COMMIT_ACTION, "004"), instants.get(3));
     assertEquals(INSTANT_GENERATOR.createNewInstant(INFLIGHT, COMMIT_ACTION, "004"), instants.get(4));
     assertEquals(INSTANT_GENERATOR.createNewInstant(COMPLETED, COMMIT_ACTION, "004"), instants.get(5));
-    assertTrue(instants.get(5).isLegacy());
+    assertFalse(instants.get(5).isLegacy());
     // New Format should have all states of instants
     // Should be corresponding to table version 8
     assertFalse(instants.get(8).isLegacy());
@@ -742,6 +744,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
             .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build();
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
+    client.setOperationType(WriteOperationType.UPSERT);
     Pair<StoragePath, List<WriteStatus>> result = testConsistencyCheck(context, metaClient, instantTime,
               enableOptimisticConsistencyGuard, getHoodieTableFn, transformInputFn, transformOutputFn);
 
@@ -945,19 +948,20 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     assertEquals(200, upserts);
   }
 
-  protected void testFailWritesOnInlineTableServiceExceptions(boolean shouldFail, Function createBrokenClusteringClientFn) throws IOException {
+  protected void testFailWritesOnInlineTableServiceThrowable(
+      boolean shouldFailOnException, boolean actuallyFailed, Function createBrokenClusteringClientFn, String error) throws IOException {
     try {
       Properties properties = new Properties();
-      properties.setProperty("hoodie.fail.writes.on.inline.table.service.exception", String.valueOf(shouldFail));
+      properties.setProperty("hoodie.fail.writes.on.inline.table.service.exception", String.valueOf(shouldFailOnException));
       properties.setProperty("hoodie.auto.commit", "false");
       properties.setProperty("hoodie.clustering.inline.max.commits", "1");
       properties.setProperty("hoodie.clustering.inline", "true");
       properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
       testInsertTwoBatches(true, "2015/03/16", properties, true, createBrokenClusteringClientFn);
-      assertFalse(shouldFail);
-    } catch (HoodieException e) {
-      assertEquals(CLUSTERING_FAILURE, e.getMessage());
-      assertTrue(shouldFail);
+      assertFalse(actuallyFailed);
+    } catch (HoodieException | Error e) {
+      assertEquals(error, e.getMessage());
+      assertTrue(actuallyFailed);
     }
   }
 
@@ -1218,6 +1222,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     new UpgradeDowngrade(metaClient, newConfig, client.getEngineContext(), upgradeDowngrade)
         .run(HoodieTableVersion.EIGHT, null);
 
+    client = getHoodieWriteClient(newConfig);
     client.savepoint("004", "user1", "comment1");
     client.restoreToInstant("004", config.isMetadataTableEnabled());
     metaClient = HoodieTestUtils.createMetaClient(storageConf, new StoragePath(basePath), HoodieTableVersion.EIGHT);

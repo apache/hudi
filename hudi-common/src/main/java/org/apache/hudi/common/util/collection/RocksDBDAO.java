@@ -320,13 +320,7 @@ public class RocksDBDAO {
    * @param <T> Type of object stored.
    */
   public <T extends Serializable> T get(String columnFamilyName, String key) {
-    ValidationUtils.checkArgument(!closed);
-    try {
-      byte[] val = getRocksDB().get(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(key));
-      return val == null ? null : SerializationUtils.deserialize(val);
-    } catch (RocksDBException e) {
-      throw new HoodieException(e);
-    }
+    return get(columnFamilyName, getKeyBytes(key));
   }
 
   /**
@@ -337,9 +331,20 @@ public class RocksDBDAO {
    * @param <T> Type of object stored.
    */
   public <K extends Serializable, T extends Serializable> T get(String columnFamilyName, K key) {
+    return get(columnFamilyName, getKeyBytes(key));
+  }
+
+  /**
+   * Retrieve a value for a given key in a column family.
+   *
+   * @param columnFamilyName Column Family Name
+   * @param key Key to be retrieved
+   * @param <T> Type of object stored.
+   */
+  public <K extends Serializable, T extends Serializable> T get(String columnFamilyName, byte[] key) {
     ValidationUtils.checkArgument(!closed);
     try {
-      byte[] val = getRocksDB().get(managedHandlesMap.get(columnFamilyName), SerializationUtils.serialize(key));
+      byte[] val = getRocksDB().get(managedHandlesMap.get(columnFamilyName), key);
       return val == null ? null : SerializationUtils.deserialize(val);
     } catch (Exception e) {
       throw new HoodieException(e);
@@ -378,9 +383,10 @@ public class RocksDBDAO {
    * Return Iterator of key-value pairs from RocksIterator.
    *
    * @param columnFamilyName Column Family Name
-   * @param <T>              Type of value stored
+   * @param <T>              Type of key stored
+   * @param <R>              Type of value stored
    */
-  public <T extends Serializable> Iterator<T> iterator(String columnFamilyName) {
+  public <T extends Serializable, R extends Serializable> Iterator<Pair<T, R>> iterator(String columnFamilyName) {
     return new IteratorWrapper<>(getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName)));
   }
 
@@ -491,6 +497,18 @@ public class RocksDBDAO {
     return payload;
   }
 
+  private byte[] getKeyBytes(String key) {
+    return getUTF8Bytes(key);
+  }
+
+  private <K extends Serializable> byte[] getKeyBytes(K key) {
+    try {
+      return SerializationUtils.serialize(key);
+    } catch (IOException e) {
+      throw new HoodieException(e);
+    }
+  }
+
   String getRocksDBBasePath() {
     return rocksDBBasePath;
   }
@@ -498,7 +516,7 @@ public class RocksDBDAO {
   /**
    * {@link Iterator} wrapper for RocksDb Iterator {@link RocksIterator}.
    */
-  private static class IteratorWrapper<R> implements Iterator<R> {
+  private static class IteratorWrapper<T, R> implements Iterator<Pair<T, R>> {
 
     private final RocksIterator iterator;
 
@@ -513,13 +531,14 @@ public class RocksDBDAO {
     }
 
     @Override
-    public R next() {
+    public Pair<T, R> next() {
       if (!hasNext()) {
         throw new IllegalStateException("next() called on rocksDB with no more valid entries");
       }
+      T key = SerializationUtils.deserialize(iterator.key());
       R val = SerializationUtils.deserialize(iterator.value());
       iterator.next();
-      return val;
+      return Pair.of(key, val);
     }
   }
 

@@ -20,7 +20,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -83,8 +83,6 @@
                   <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>org.codehaus.jackson:*</include>
                   <include>com.yammer.metrics:metrics-core</include>
-                  <include>com.google.guava:guava</include>
-                  <include>commons-lang:commons-lang</include>
                   <include>commons-io:commons-io</include>
                   <include>com.google.protobuf:protobuf-java</include>
                   <include>org.openjdk.jol:jol-core</include>
@@ -217,26 +215,8 @@
       <scope>compile</scope>
     </dependency>
 
-    <!--Guava needs to be shaded because HBase 1.2.3 depends on an earlier guava version i.e 12.0.1 and hits runtime
-    issues with the guava version present in Trino runtime-->
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-      <version>12.0.1</version>
-      <scope>${trino.bundle.bootstrap.scope}</scope>
-    </dependency>
-
-    <!--commons-lang needs to be shaded because HBase 1.2.3 needs it at runtime, but Trino runtime does not have this
-    dependency-->
-    <dependency>
-      <groupId>commons-lang</groupId>
-      <artifactId>commons-lang</artifactId>
-      <version>2.6</version>
-      <scope>${trino.bundle.bootstrap.scope}</scope>
-    </dependency>
-
-    <!--protobuf needs to be shaded because HBase 1.2.3 needs it at runtime, but Trino runtime does not have this
-    dependency-->
+    <!--protobuf needs to be shaded because HBase 1.2.3 + native HFile reader needs it at runtime,
+    but Trino runtime does not have this dependency-->
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>

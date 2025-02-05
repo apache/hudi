@@ -44,7 +44,7 @@ import org.apache.hudi.common.table.timeline.LSMTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -112,8 +112,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THA
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -249,7 +249,9 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata)
-            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsMetadataTable).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsMetadataTable)
+            .withMetadataIndexColumnStats(false).build())
+        // test uses test table infra. So, col stats is not available/populated.
         .withWriteConcurrencyMode(writeConcurrencyMode)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .build())
@@ -343,7 +345,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(5).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(5).withMetadataIndexColumnStats(false).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
             .withCleanerPolicy(HoodieCleaningPolicy.valueOf(cleaningPolicy))
@@ -411,7 +413,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       partToFileId.forEach((key, value) -> {
         try {
           List<String> files = new ArrayList<>();
-          FileCreateUtils.createPartitionMetaFile(basePath, key);
+          FileCreateUtilsLegacy.createPartitionMetaFile(basePath, key);
           if (addBaseFiles) {
             files.addAll(testTable.withBaseFilesInPartition(key, value.toArray(new String[0])).getValue());
           }
@@ -431,7 +433,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       });
       commitMeta = generateCommitMetadata(instantTime, partToFileIds);
       metadataWriter.performTableServices(Option.of(instantTime));
-      metadataWriter.updateFromWriteStatuses(commitMeta, context.emptyHoodieData(), instantTime);
+      metadataWriter.update(commitMeta, instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
           serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMeta));
@@ -628,9 +630,9 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
 
     // create a version pointer file with invalid version number.
-    metaClient.getStorage().deleteDirectory(LSMTimeline.getVersionFilePath(metaClient));
+    metaClient.getStorage().deleteDirectory(LSMTimeline.getVersionFilePath(metaClient.getArchivePath()));
     FileIOUtils.createFileInPath(metaClient.getStorage(),
-        LSMTimeline.getVersionFilePath(metaClient), Option.of(getUTF8Bytes("invalid_version")));
+        LSMTimeline.getVersionFilePath(metaClient.getArchivePath()), Option.of(getUTF8Bytes("invalid_version")));
 
     // check that invalid manifest file will not block archived timeline loading.
     HoodieActiveTimeline rawActiveTimeline = TIMELINE_FACTORY.createActiveTimeline(metaClient, false);
@@ -676,7 +678,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     // do a single merge small archive files
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
     LSMTimelineWriter timelineWriter = LSMTimelineWriter.getInstance(writeConfig, table);
-    List<String> candidateFiles = LSMTimeline.latestSnapshotManifest(metaClient).getFiles().stream()
+    List<String> candidateFiles = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath()).getFiles().stream()
         .sorted().map(HoodieLSMTimelineManifest.LSMFileEntry::getFileName).collect(Collectors.toList());
 
     String compactedFileName = LSMTimelineWriter.compactedFileName(candidateFiles);
@@ -705,8 +707,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline();
     assertEquals(4 * 3 + 14, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
 
-    assertEquals(9, LSMTimeline.latestSnapshotVersion(metaClient));
-    assertEquals(Arrays.asList(7, 8, 9), LSMTimeline.allSnapshotVersions(metaClient).stream().sorted().collect(Collectors.toList()));
+    assertEquals(9, LSMTimeline.latestSnapshotVersion(metaClient, metaClient.getArchivePath()));
+    assertEquals(Arrays.asList(7, 8, 9), LSMTimeline.allSnapshotVersions(metaClient, metaClient.getArchivePath()).stream().sorted().collect(Collectors.toList()));
   }
 
   @Test
@@ -1593,7 +1595,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     // Delete replacecommit requested instant.
     StoragePath replaceCommitRequestedPath = new StoragePath(
-        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/"
             + INSTANT_FILE_NAME_GENERATOR.makeRequestedReplaceFileName(replaceInstant));
     metaClient.getStorage().deleteDirectory(replaceCommitRequestedPath);
     metaClient.reloadActiveTimeline();
@@ -1652,6 +1654,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
             .withMaxNumDeltaCommitsBeforeCompaction(8)
+            .withMetadataIndexColumnStats(false) // test uses test table infra. So, col stats is not available/populated.
             .build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, true);

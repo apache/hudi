@@ -30,7 +30,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -190,7 +190,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     partToFileId.forEach((key, value) -> {
       try {
         List<String> files = new ArrayList<>();
-        FileCreateUtils.createPartitionMetaFile(basePath, key);
+        FileCreateUtilsLegacy.createPartitionMetaFile(basePath, key);
         if (addBaseFiles) {
           files.addAll(testTable.withBaseFilesInPartition(key, value.toArray(new String[0])).getValue());
         }
@@ -211,7 +211,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     HoodieCommitMetadata commitMeta = generateCommitMetadata(instantTime, partToFileIds);
     try (HoodieTableMetadataWriter metadataWriter = getMetadataWriter(config)) {
       metadataWriter.performTableServices(Option.of(instantTime));
-      metadataWriter.updateFromWriteStatuses(commitMeta, context.emptyHoodieData(), instantTime);
+      metadataWriter.update(commitMeta, instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
           serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMeta));
