@@ -51,6 +51,7 @@ import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand._
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
@@ -148,7 +149,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
    *
    * To be able to leverage Hudi's engine to merge an incoming dataset against the existing table
    * we will have to make sure that both [[source]] and [[target]] tables have the *same*
-   * "primary-key" and "precombine" columns. Since actual MIT condition might be leveraging an arbitrary
+   * "primary-key" and "pre-combine" columns. Since actual MIT condition might be leveraging an arbitrary
    * expression involving [[source]] column(s), we will have to add "phony" column matching the
    * primary-key one of the target table.
    */
@@ -158,13 +159,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     if (primaryKeyFields.isPresent) {
       //pkless tables can have more complex conditions
       if (!conditions.forall(p => p.isInstanceOf[EqualTo])) {
-        throw new AnalysisException(s"Currently only equality predicates are supported in MERGE INTO statement on record key table" +
+        throw new HoodieAnalysisException(s"Currently only equality predicates are supported in MERGE INTO statement on primary key table" +
           s"(provided ${mergeInto.mergeCondition.sql}")
       }
     }
     val resolver = sparkSession.sessionState.analyzer.resolver
     val partitionPathFields = hoodieCatalogTable.tableConfig.getPartitionFields
-    //ensure all record key fields are part of the merge condition
+    //ensure all primary key fields are part of the merge condition
     //allow partition path to be part of the merge condition but not required
     val targetAttr2ConditionExpressions = doCasting(conditions, primaryKeyFields.isPresent)
     val expressionSet = scala.collection.mutable.Set[(Attribute, Expression)](targetAttr2ConditionExpressions:_*)
@@ -188,10 +189,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
           //            ON t.id = s.id + 1
           //            WHEN MATCHED THEN UPDATE *
           //
-          //       Which (in the current design) could result in a record key of the record being modified,
+          //       Which (in the current design) could result in a primary key of the record being modified,
           //       which is not allowed.
           if (!resolvesToSourceAttribute(mergeInto.sourceTable, expr)) {
-            throw new AnalysisException("Only simple conditions of the form `t.id = s.id` are allowed on the " +
+            throw new HoodieAnalysisException("Only simple conditions of the form `t.id = s.id` are allowed on the " +
               s"primary-key and partition path column. Found `${attr.sql} = ${expr.sql}`")
           }
           expressionSet.remove((attr, expr))
@@ -199,7 +200,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       }
       if (resolving.isEmpty && rk._1.equals("primaryKey")
         && sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false") == "true") {
-        throw new AnalysisException(s"Hudi tables with record key are required to match on all record key columns. Column: '${rk._2}' not found")
+        throw new HoodieAnalysisException(s"Hudi tables with primary key are required to match on all primary key colums. Column: '${rk._2}' not found")
       }
       resolving
     }).filter(_.nonEmpty).map(_.get)
@@ -235,7 +236,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
           val targetAttr = targetAttrs.find(f => attributeEquals(f, attr)).get
           targetAttr -> castIfNeeded(expr, attr.dataType)
         } else {
-          throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
+          throw new HoodieAnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
             + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
         }
 
@@ -245,12 +246,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
           val targetAttr = targetAttrs.find(f => attributeEquals(f, attr)).get
           targetAttr -> castIfNeeded(expr, attr.dataType)
         } else {
-          throw new AnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
+          throw new HoodieAnalysisException(s"Invalid MERGE INTO matching condition: ${expr.sql}: "
             + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
         }
 
       case expr if pkTable =>
-        throw new AnalysisException(s"Invalid MERGE INTO matching condition: `${expr.sql}`: "
+        throw new HoodieAnalysisException(s"Invalid MERGE INTO matching condition: `${expr.sql}`: "
           + "expected condition should be 'target.id = <source-column-expr>', e.g. "
           + "`t.id = s.id` or `t.id = cast(s.id, ...)")
     }
@@ -311,7 +312,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
    *
    * <ol>
    *   <li>Contains "primary-key" column (as defined by target table's config)</li>
-   *   <li>Contains "precombine" column (as defined by target table's config, if any)</li>
+   *   <li>Contains "pre-combine" column (as defined by target table's config, if any)</li>
    * </ol>
    *
    * In cases when [[sourceTable]] doesn't contain aforementioned columns, following heuristic
@@ -324,9 +325,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
    * leveraging matching side of such conditional expression (containing [[sourceTable]] attribute)
    * interpreting it as a primary-key column in the [[sourceTable]]</li>
    *
-   * <li>Expression for the "precombine" column (optional) is extracted from the matching update
+   * <li>Expression for the "pre-combine" column (optional) is extracted from the matching update
    * clause ({@code WHEN MATCHED ... THEN UPDATE ...}) as right-hand side of the expression referencing
-   * precombine attribute of the target column</li>
+   * pre-combine attribute of the target column</li>
    * <ul>
    *
    * For example, w/ the following statement (primary-key column is [[id]], while precombine column is [[ts]])
@@ -544,7 +545,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
             assignments.map {
               case Assignment(attr: Attribute, _) => attr
               case a =>
-                throw new AnalysisException(s"Only assignments of the form `t.field = ...` are supported at the moment (provided: `${a.sql}`)")
+                throw new HoodieAnalysisException(s"Only assignments of the form `t.field = ...` are supported at the moment (provided: `${a.sql}`)")
             }
           } else {
             Seq.empty
@@ -641,7 +642,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     val attr2Assignments = assignments.map {
       case assign@Assignment(attr: Attribute, _) => attr -> assign
       case a =>
-        throw new AnalysisException(s"Only assignments of the form `t.field = ...` are supported at the moment (provided: `${a.sql}`)")
+        throw new HoodieAnalysisException(s"Only assignments of the form `t.field = ...` are supported at the moment (provided: `${a.sql}`)")
     }
 
     // Reorder the assignments to follow the ordering of the target table
@@ -676,7 +677,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
                       Assignment(attr, Literal.default(attr.dataType))
                   }
                 case _ =>
-                  throw new AnalysisException(s"Assignment expressions have to assign every attribute of target table " +
+                  throw new HoodieAnalysisException(s"Assignment expressions have to assign every attribute of target table " +
                     s"(provided: `${assignments.map(_.sql).mkString(",")}`)")
               }
           }
@@ -719,11 +720,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
 
   /**
    * Output of the expected (left) join of the a) [[sourceTable]] dataset (potentially amended w/ primary-key,
-   * precombine columns) with b) existing [[targetTable]]
+   * pre-combine columns) with b) existing [[targetTable]]
    */
   private def joinedExpectedOutput: Seq[Attribute] = {
     // NOTE: We're relying on [[sourceDataset]] here instead of [[mergeInto.sourceTable]],
-    //       as it could be amended to add missing primary-key and/or precombine columns.
+    //       as it could be amended to add missing primary-key and/or pre-combine columns.
     //       Please check [[sourceDataset]] scala-doc for more details
     (query.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
   }
@@ -733,7 +734,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     expr.collect { case br: BoundReference => br }
       .foreach(br => {
         if (br.ordinal >= sourceTableOutput.length) {
-          throw new AnalysisException(s"Expressions in insert clause of the MERGE INTO statement can only reference " +
+          throw new HoodieAnalysisException(s"Expressions in insert clause of the MERGE INTO statement can only reference " +
             s"source table attributes (ordinal ${br.ordinal}, total attributes in the source table ${sourceTableOutput.length})")
         }
       })
@@ -828,7 +829,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
 
   private def checkDeletingActions(deletingActions: Seq[DeleteAction]): Unit = {
     if (deletingActions.length > 1) {
-      throw new AnalysisException(s"Only one deleting action is supported in MERGE INTO statement (provided ${deletingActions.length})")
+      throw new HoodieAnalysisException(s"Only one deleting action is supported in MERGE INTO statement (provided ${deletingActions.length})")
     }
   }
 
