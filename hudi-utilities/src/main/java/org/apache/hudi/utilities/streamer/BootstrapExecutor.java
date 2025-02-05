@@ -207,8 +207,7 @@ public class BootstrapExecutor implements Serializable {
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
-        .setPreCombineField(props.getString(
-            PRECOMBINE_FIELD_NAME.key(), PRECOMBINE_FIELD_NAME.defaultValue()))
+        .setPreCombineField(props.getString(PRECOMBINE_FIELD_NAME.key(), null))
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
         .setPopulateMetaFields(props.getBoolean(
             POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue()))

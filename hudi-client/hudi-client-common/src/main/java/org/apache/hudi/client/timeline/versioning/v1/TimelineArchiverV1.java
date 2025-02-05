@@ -440,7 +440,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
       final String keyField = table.getMetaClient().getTableConfig().getRecordKeyFieldProp();
       List<HoodieRecord> indexRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
-      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, false, header, keyField);
+      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, header, keyField);
       writer.appendBlock(block);
       records.clear();
     }

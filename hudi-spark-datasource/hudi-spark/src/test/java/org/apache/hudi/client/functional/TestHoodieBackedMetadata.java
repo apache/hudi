@@ -67,7 +67,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -409,8 +409,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     assertTrue(metadataWriter.isPresent());
     Triple<RecordMergeMode, String, String> inferredMergeConfs =
-        HoodieTableConfig.inferCorrectMergingBehavior(writeConfig.getRecordMergeMode(), writeConfig.getPayloadClass(),
-            writeConfig.getRecordMergeStrategyId());
+        HoodieTableConfig.inferCorrectMergingBehavior(
+            writeConfig.getRecordMergeMode(), writeConfig.getPayloadClass(),
+            writeConfig.getRecordMergeStrategyId(), writeConfig.getPreCombineField(),
+            metaClient.getTableConfig().getTableVersion());
     HoodieTableConfig hoodieTableConfig =
         new HoodieTableConfig(this.storage, metaClient.getMetaPath(), inferredMergeConfs.getLeft(), inferredMergeConfs.getMiddle(), inferredMergeConfs.getRight());
     assertFalse(hoodieTableConfig.getMetadataPartitions().isEmpty());
@@ -430,8 +432,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertFalse(metadataWriter2.isPresent());
 
     Triple<RecordMergeMode, String, String> inferredMergeConfs2 =
-        HoodieTableConfig.inferCorrectMergingBehavior(writeConfig2.getRecordMergeMode(), writeConfig2.getPayloadClass(),
-            writeConfig2.getRecordMergeStrategyId());
+        HoodieTableConfig.inferCorrectMergingBehavior(
+            writeConfig2.getRecordMergeMode(), writeConfig2.getPayloadClass(),
+            writeConfig2.getRecordMergeStrategyId(), writeConfig2.getPreCombineField(),
+            metaClient.getTableConfig().getTableVersion());
     HoodieTableConfig hoodieTableConfig2 =
         new HoodieTableConfig(this.storage, metaClient.getMetaPath(),
             inferredMergeConfs2.getLeft(),
@@ -1006,7 +1010,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             metadataCompactionInstant.get(), HoodieTimeline.COMMIT_ACTION)
         .toUri());
     java.nio.file.Path tempFilePath =
-        FileCreateUtils.renameFileToTemp(metaFilePath, metadataCompactionInstant.get());
+        FileCreateUtilsLegacy.renameFileToTemp(metaFilePath, metadataCompactionInstant.get());
     metaClient.reloadActiveTimeline();
     testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     // this validation will exercise the code path where a compaction is inflight in metadata table, but still metadata based file listing should match non
@@ -1018,7 +1022,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
     } else {
       // let the compaction succeed in metadata and validation should succeed.
-      FileCreateUtils.renameTempToMetaFile(tempFilePath, metaFilePath);
+      FileCreateUtilsLegacy.renameTempToMetaFile(tempFilePath, metaFilePath);
     }
 
     validateMetadata(testTable);
@@ -1041,7 +1045,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
               new StoragePath(new StoragePath(metadataTableBasePath, METAFOLDER_NAME), TIMELINEFOLDER_NAME),
               metadataCompactionInstant.get(), HoodieTimeline.COMMIT_ACTION)
           .toUri());
-      FileCreateUtils.renameFileToTemp(metaFilePath, metadataCompactionInstant.get());
+      FileCreateUtilsLegacy.renameFileToTemp(metaFilePath, metadataCompactionInstant.get());
 
       validateMetadata(testTable);
 
@@ -2348,7 +2352,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(client);
 
     // manually remove clustering completed instant from .hoodie folder and to mimic succeeded clustering in metadata table, but failed in data table.
-    FileCreateUtils.deleteReplaceCommit(basePath, clusteringCommitTime);
+    FileCreateUtilsLegacy.deleteReplaceCommit(basePath, clusteringCommitTime);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> updatedClusterMetadata = newClient.cluster(clusteringCommitTime, true);
 
     metaClient.reloadActiveTimeline();
@@ -2405,7 +2409,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusterMetadata = newClient.cluster(clusteringCommitTime, true);
 
     // manually remove clustering completed instant from .hoodie folder and to mimic succeeded clustering in metadata table, but failed in data table.
-    FileCreateUtils.deleteReplaceCommit(basePath, clusteringCommitTime);
+    FileCreateUtilsLegacy.deleteReplaceCommit(basePath, clusteringCommitTime);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieWriteConfig updatedWriteConfig = HoodieWriteConfig.newBuilder().withProperties(initialConfig.getProps())
@@ -2438,8 +2442,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertNoWriteErrors(writeStatuses);
 
       // make all commits to inflight in metadata table. Still read should go through, just that it may not return any data.
-      FileCreateUtils.deleteDeltaCommit(basePath + "/.hoodie/metadata/", commitTimestamps[0]);
-      FileCreateUtils.deleteDeltaCommit(basePath + " /.hoodie/metadata/", SOLO_COMMIT_TIMESTAMP);
+      FileCreateUtilsLegacy.deleteDeltaCommit(basePath + "/.hoodie/metadata/", commitTimestamps[0]);
+      FileCreateUtilsLegacy.deleteDeltaCommit(basePath + " /.hoodie/metadata/", SOLO_COMMIT_TIMESTAMP);
       assertEquals(getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet()).size(), 0);
     }
   }
@@ -2476,18 +2480,18 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // mark each commit as incomplete and ensure files are not seen
       for (int i = 0; i < commitTimestamps.length; ++i) {
-        FileCreateUtils.deleteCommit(basePath, commitTimestamps[i]);
+        FileCreateUtilsLegacy.deleteCommit(basePath, commitTimestamps[i]);
         timelineTimestamps = getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet());
         assertEquals(timelineTimestamps.size(), commitTimestamps.length - 1);
         for (int j = 0; j < commitTimestamps.length; ++j) {
           assertTrue(j == i || timelineTimestamps.contains(commitTimestamps[j]));
         }
-        FileCreateUtils.createCommit(basePath, commitTimestamps[i]);
+        FileCreateUtilsLegacy.createCommit(basePath, commitTimestamps[i]);
       }
 
       // Test multiple incomplete commits
-      FileCreateUtils.deleteCommit(basePath, commitTimestamps[0]);
-      FileCreateUtils.deleteCommit(basePath, commitTimestamps[2]);
+      FileCreateUtilsLegacy.deleteCommit(basePath, commitTimestamps[0]);
+      FileCreateUtilsLegacy.deleteCommit(basePath, commitTimestamps[2]);
       timelineTimestamps = getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet());
       assertEquals(timelineTimestamps.size(), commitTimestamps.length - 2);
       for (int j = 0; j < commitTimestamps.length; ++j) {
@@ -2496,7 +2500,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Test no completed commits
       for (int i = 0; i < commitTimestamps.length; ++i) {
-        FileCreateUtils.deleteCommit(basePath, commitTimestamps[i]);
+        FileCreateUtilsLegacy.deleteCommit(basePath, commitTimestamps[i]);
       }
       timelineTimestamps = getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet());
       assertEquals(timelineTimestamps.size(), 0);
@@ -2568,8 +2572,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
         if (i == 0) {
           // Mark this commit inflight so compactions don't take place
-          FileCreateUtils.deleteCommit(basePath, newCommitTime);
-          FileCreateUtils.createInflightCommit(basePath, newCommitTime);
+          FileCreateUtilsLegacy.deleteCommit(basePath, newCommitTime);
+          FileCreateUtilsLegacy.createInflightCommit(basePath, newCommitTime);
           inflightCommitTime = newCommitTime;
         }
       }
@@ -2581,7 +2585,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           ((2 * maxDeltaCommitsBeforeCompaction) + (maxDeltaCommitsBeforeCompaction /* clean from dataset */) + 1)/* clean in metadata table */);
 
       // Complete commit
-      FileCreateUtils.createCommit(basePath, inflightCommitTime);
+      FileCreateUtilsLegacy.createCommit(basePath, inflightCommitTime);
 
       // Next commit should lead to compaction
       newCommitTime = client.createNewInstantTime();

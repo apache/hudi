@@ -44,7 +44,7 @@ import org.apache.hudi.common.table.timeline.LSMTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -413,7 +413,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       partToFileId.forEach((key, value) -> {
         try {
           List<String> files = new ArrayList<>();
-          FileCreateUtils.createPartitionMetaFile(basePath, key);
+          FileCreateUtilsLegacy.createPartitionMetaFile(basePath, key);
           if (addBaseFiles) {
             files.addAll(testTable.withBaseFilesInPartition(key, value.toArray(new String[0])).getValue());
           }

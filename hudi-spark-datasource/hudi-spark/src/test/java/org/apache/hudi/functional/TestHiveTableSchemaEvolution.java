@@ -28,6 +28,7 @@ import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.io.TimestampWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.DoubleWritable;
+import org.apache.hadoop.io.FloatWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
@@ -55,6 +56,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
@@ -198,13 +201,64 @@ public class TestHiveTableSchemaEvolution {
     recordReader.close();
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"mor","cow"})
+  public void testHiveReadSchemaEvolutionWithAddingColumns(String tableType) throws Exception {
+    String tableName = "hudi_test" + new Date().getTime();
+    String path = new Path(basePath.toAbsolutePath().toString()).toUri().toString();
+
+    spark.sql("set hoodie.schema.on.read.enable=true");
+
+    spark.sql(String.format("create table %s (col0 int, col1 float, col2 string, col3 timestamp) using hudi "
+                    + "tblproperties (type='%s', primaryKey='col0', preCombineField='col1', "
+                    + "hoodie.compaction.payload.class='org.apache.hudi.common.model.OverwriteWithLatestAvroPayload') location '%s'",
+            tableName, tableType, path));
+    spark.sql(String.format("insert into %s values(1, 1.1, 'text', timestamp('2021-12-25 12:01:01'))", tableName));
+    spark.sql(String.format("update %s set col2 = 'text2' where col0 = 1", tableName));
+    spark.sql(String.format("alter table %s add columns (col4 string)", tableName));
+
+    JobConf jobConf = new JobConf();
+    jobConf.set(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
+    jobConf.set(ColumnProjectionUtils.READ_ALL_COLUMNS, "false");
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "col1,col2,col3,col4");
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "6,7,8,9");
+    jobConf.set(serdeConstants.LIST_COLUMNS, "_hoodie_commit_time,_hoodie_commit_seqno,"
+            + "_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,col0,col1,col2,col3,col4");
+    jobConf.set(serdeConstants.LIST_COLUMN_TYPES, "string,string,string,string,string,int,float,string,timestamp,string,string");
+    FileInputFormat.setInputPaths(jobConf, path);
+
+    HoodieParquetInputFormat inputFormat =
+            tableType.equals("cow") ? new HoodieParquetInputFormat() : new HoodieParquetRealtimeInputFormat();
+    inputFormat.setConf(jobConf);
+
+    InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
+    int expectedSplits = 1;
+    assertEquals(expectedSplits, splits.length);
+
+    RecordReader<NullWritable, ArrayWritable> recordReader = inputFormat.getRecordReader(splits[0], jobConf, null);
+    List<List<Writable>> records = getWritableList(recordReader, false);
+    assertEquals(1, records.size());
+    List<Writable> record1 = records.get(0);
+    assertEquals(10, record1.size());
+    assertEquals(new FloatWritable(1.1f), record1.get(6));
+    assertEquals(new Text("text2"), record1.get(7));
+    assertInstanceOf(TimestampWritable.class, record1.get(8));
+    // field-9 is new added column without any inserts.
+    assertNull(record1.get(9));
+    recordReader.close();
+  }
+
   private List<List<Writable>> getWritableList(RecordReader<NullWritable, ArrayWritable> recordReader) throws IOException {
+    return getWritableList(recordReader, true);
+  }
+
+  private List<List<Writable>> getWritableList(RecordReader<NullWritable, ArrayWritable> recordReader, boolean filterNull) throws IOException {
     List<List<Writable>> records = new ArrayList<>();
     NullWritable key = recordReader.createKey();
     ArrayWritable writable = recordReader.createValue();
     while (writable != null && recordReader.next(key, writable)) {
       records.add(Arrays.stream(writable.get())
-          .filter(Objects::nonNull)
+          .filter(f -> !filterNull || Objects.nonNull(f))
           .collect(Collectors.toList()));
     }
     return records;

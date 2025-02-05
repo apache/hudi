@@ -84,7 +84,7 @@
     <maven-jar-plugin.version>3.2.0</maven-jar-plugin.version>
     <maven-surefire-plugin.version>2.22.2</maven-surefire-plugin.version>
     <maven-failsafe-plugin.version>2.22.2</maven-failsafe-plugin.version>
-    <maven-shade-plugin.version>3.4.0</maven-shade-plugin.version>
+    <maven-shade-plugin.version>3.5.1</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
     <maven-compiler-plugin.version>3.8.0</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
@@ -172,7 +172,7 @@
     <avro.version>1.11.4</avro.version>
     <bijection-avro.version>0.9.8</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
-    <commons.io.version>2.11.0</commons.io.version>
+    <commons.io.version>2.14.0</commons.io.version>
     <scala12.version>2.12.15</scala12.version>
     <scala13.version>2.13.8</scala13.version>
     <scala.version>${scala12.version}</scala.version>

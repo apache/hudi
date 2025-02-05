@@ -31,7 +31,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -88,8 +88,8 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1000 * 1024).parquetMaxFileSize(1000 * 1024).orcMaxFileSize(1000 * 1024).build())
         .build();
 
-    FileCreateUtils.createCommit(basePath, "001");
-    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "001", "file1", fileSize);
+    FileCreateUtilsLegacy.createCommit(basePath, "001");
+    FileCreateUtilsLegacy.createBaseFile(basePath, testPartitionPath, "001", "file1", fileSize);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
@@ -223,7 +223,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(0)
             .insertSplitSize(totalInsertNum / 2).autoTuneInsertSplits(false).build()).build();
 
-    FileCreateUtils.createCommit(basePath, "001");
+    FileCreateUtilsLegacy.createCommit(basePath, "001");
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
@@ -335,10 +335,10 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
     // This will generate initial commits and create a compaction plan which includes file groups created as part of this
     HoodieCompactionPlan plan = CompactionTestUtils.createCompactionPlan(metaClient, "001", "002", 1, true, false);
-    FileCreateUtils.createRequestedCompactionCommit(basePath, "002", plan);
+    FileCreateUtilsLegacy.createRequestedCompactionCommit(basePath, "002", plan);
     // Simulate one more commit so that inflight compaction is considered when building file groups in file system view
-    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "003", "2", 1);
-    FileCreateUtils.createCommit(basePath, "003");
+    FileCreateUtilsLegacy.createBaseFile(basePath, testPartitionPath, "003", "2", 1);
+    FileCreateUtilsLegacy.createCommit(basePath, "003");
 
     // Partitioner will attempt to assign inserts to file groups including base file created by inflight compaction
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -372,11 +372,11 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     // create requested replace commit
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
             .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
-    FileCreateUtils.createRequestedClusterCommit(basePath,"002", requestedReplaceMetadata);
+    FileCreateUtilsLegacy.createRequestedClusterCommit(basePath,"002", requestedReplaceMetadata);
 
     // create file slice 003
-    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "003", "3", 1);
-    FileCreateUtils.createCommit(basePath, "003");
+    FileCreateUtilsLegacy.createBaseFile(basePath, testPartitionPath, "003", "3", 1);
+    FileCreateUtilsLegacy.createCommit(basePath, "003");
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -409,13 +409,13 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             .build();
 
     // Create file group with only one log file
-    FileCreateUtils.createLogFile(basePath, testPartitionPath, "001", "fg1", 1);
-    FileCreateUtils.createDeltaCommit(basePath, "001");
+    FileCreateUtilsLegacy.createLogFile(basePath, testPartitionPath, "001", "fg1", 1);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "001");
     // Create another file group size set to max parquet file size so should not be considered during small file sizing
-    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "002", "fg2", 1024);
-    FileCreateUtils.createCommit(basePath, "002");
-    FileCreateUtils.createLogFile(basePath, testPartitionPath, "003", "fg2", 1);
-    FileCreateUtils.createDeltaCommit(basePath, "003");
+    FileCreateUtilsLegacy.createBaseFile(basePath, testPartitionPath, "002", "fg2", 1024);
+    FileCreateUtilsLegacy.createCommit(basePath, "002");
+    FileCreateUtilsLegacy.createLogFile(basePath, testPartitionPath, "003", "fg2", 1);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "003");
 
     // Partitioner will attempt to assign inserts to file groups including base file created by inflight compaction
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -449,11 +449,11 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             .build();
 
     // Bootstrap base files ("small-file targets")
-    FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-1", 1024);
-    FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-2", 1024);
-    FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-3", 1024);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-1", 1024);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-2", 1024);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-3", 1024);
 
-    FileCreateUtils.createCommit(basePath, "002");
+    FileCreateUtilsLegacy.createCommit(basePath, "002");
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
     // Default estimated record size will be 1024 based on last file group created.

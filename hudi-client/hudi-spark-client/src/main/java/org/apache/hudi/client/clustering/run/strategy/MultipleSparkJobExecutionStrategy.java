@@ -373,8 +373,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         .map(ClusteringOperation::create).collect(Collectors.toList());
     boolean canUseFileGroupReaderBasedClustering = getWriteConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && getWriteConfig().getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
-        && clusteringOps.stream().allMatch(slice -> StringUtils.isNullOrEmpty(slice.getBootstrapFilePath()))
-        && StringUtils.isNullOrEmpty(getWriteConfig().getInternalSchema());
+        && clusteringOps.stream().allMatch(slice -> StringUtils.isNullOrEmpty(slice.getBootstrapFilePath()));
 
     if (canUseFileGroupReaderBasedClustering) {
       return readRecordsForGroupAsRowWithFileGroupReader(jsc, instantTime, tableSchemaWithMetaFields, clusteringOps);

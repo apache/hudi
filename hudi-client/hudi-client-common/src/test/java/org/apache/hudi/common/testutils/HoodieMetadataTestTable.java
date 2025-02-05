@@ -39,8 +39,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createDeltaCommit;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 
 /**

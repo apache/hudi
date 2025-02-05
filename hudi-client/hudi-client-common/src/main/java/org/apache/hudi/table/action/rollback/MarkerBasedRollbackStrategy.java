@@ -79,7 +79,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       List<String> markerPaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
           table, context, instantToRollback.requestedTime(), config.getRollbackParallelism());
       int parallelism = Math.max(Math.min(markerPaths.size(), config.getRollbackParallelism()), 1);
-      return context.map(markerPaths, markerFilePath -> {
+      List<HoodieRollbackRequest> rollbackRequestList = context.map(markerPaths, markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
         IOType type = IOType.valueOf(typeStr);
         String filePathStr = WriteMarkers.stripMarkerSuffix(markerFilePath);
@@ -97,6 +97,10 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
             throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
         }
       }, parallelism);
+      // The rollback requests for append only exist in table version 6 and below which require groupBy
+      return table.version().greaterThanOrEquals(HoodieTableVersion.EIGHT)
+          ? rollbackRequestList
+          : RollbackUtils.groupRollbackRequestsBasedOnFileGroup(rollbackRequestList);
     } catch (Exception e) {
       throw new HoodieRollbackException("Error rolling back using marker files written for " + instantToRollback, e);
     }

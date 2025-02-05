@@ -153,8 +153,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   }
 
   private static final List<Class> LOCK_PROVIDER_CLASSES = Arrays.asList(
-      InProcessLockProvider.class,
-      FileSystemBasedLockProvider.class);
+      // [HUDI-8887] Based on OS/docker container used, the underlying file system API might not support
+      // atomic operations which impairs the functionality of lock provider. Disable the test dimension to
+      // avoid false alarm in java CI.
+      // FileSystemBasedLockProvider.class,
+      InProcessLockProvider.class
+  );
 
   private static final List<ConflictResolutionStrategy> CONFLICT_RESOLUTION_STRATEGY_CLASSES = Arrays.asList(
       new SimpleConcurrentFileWritesConflictResolutionStrategy(),

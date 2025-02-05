@@ -32,6 +32,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
@@ -66,8 +67,8 @@ public class HoodieColumnStatsIndexUtils {
               HoodieCommitMetadata.class);
           if (mdtCommitMetadata.getPartitionToWriteStats().containsKey(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
             // update data table's table config for list of columns indexed.
-            List<String> columnsToIndex = HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig(),
-                Option.of(config.getRecordMerger().getRecordType()));
+            List<String> columnsToIndex = new ArrayList(HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig(),
+                Option.of(config.getRecordMerger().getRecordType())).keySet());
             // if col stats is getting updated, lets also update list of columns indexed if changed.
             updateColSatsFunc.apply(dataTable.getMetaClient(), columnsToIndex);
           }

@@ -338,7 +338,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      shouldValidate = false))
+      shouldValidateColStats = false))
 
     assertEquals(4, getLatestDataFilesCount(commonOpts))
     assertEquals(0, getLatestDataFilesCount(commonOpts, includeLogFiles = false))
@@ -384,7 +384,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = "",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false))
+      shouldValidateColStats = false))
     verifyFileIndexAndSQLQueries(commonOpts, verifyFileCount = false)
   }
 
@@ -446,7 +446,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = "",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false))
+      shouldValidateColStats = false))
     verifyFileIndexAndSQLQueries(commonOpts)
   }
 
@@ -477,7 +477,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = "",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false))
+      shouldValidateColStats = false))
     verifyFileIndexAndSQLQueries(commonOpts)
 
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + ("path" -> basePath), includeLogFiles = true)

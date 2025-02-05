@@ -1258,10 +1258,13 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
 
         // Validate partition stat records
+        // first form the keys to validate, because partition stats gets built for all columns
+        val riderCalifornia = getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider")
+        val riderTexas = getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider")
         checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
-          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), "RIDER-D", "RIDER-F")
+          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} AND key IN ('$riderCalifornia', '$riderTexas')")(
+          Seq(riderCalifornia, "RIDER-A", "RIDER-C"),
+          Seq(riderTexas, "RIDER-D", "RIDER-F")
         )
 
         spark.sql(s"update $tableName set rider = 'rider-G' where id = 'trip5'")
@@ -1275,9 +1278,9 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         // For MOR table, min value would still be RIDER-D since the update is in log file and old parquet file with value RIDER-D is still present
         val partitionMinRiderValue = if (isTableMOR) "RIDER-D" else "RIDER-E"
         checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
-          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), partitionMinRiderValue, "RIDER-G")
+          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} AND key IN ('$riderCalifornia', '$riderTexas')")(
+          Seq(riderCalifornia, "RIDER-A", "RIDER-C"),
+          Seq(riderTexas, partitionMinRiderValue, "RIDER-G")
         )
 
         if (isTableMOR) {
@@ -1293,9 +1296,9 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
         // Validate partition stat records after update
         checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
-          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), "RIDER-E", "RIDER-H")
+          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} AND key IN ('$riderCalifornia', '$riderTexas')")(
+          Seq(riderCalifornia, "RIDER-A", "RIDER-C"),
+          Seq(riderTexas, "RIDER-E", "RIDER-H")
         )
 
         if (isTableMOR) {
@@ -1388,10 +1391,13 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
 
         // Validate partition stat records
+        // first form the keys to validate, because partition stats gets built for all columns
+        val riderCalifornia = getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider")
+        val riderTexas = getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider")
         checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
-          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), "RIDER-D", "RIDER-F")
+          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} AND key IN ('$riderCalifornia', '$riderTexas')")(
+          Seq(riderCalifornia, "RIDER-A", "RIDER-C"),
+          Seq(riderTexas, "RIDER-D", "RIDER-F")
         )
 
         spark.sql(s"delete from $tableName where id = 'trip5'")
@@ -1405,9 +1411,9 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         // For MOR table, min value would still be RIDER-D since the delete is in log file and old parquet file with value RIDER-D is still present
         val partitionMinRiderValue = if (isTableMOR) "RIDER-D" else "RIDER-E"
         checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
-          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), partitionMinRiderValue, "RIDER-F")
+          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} AND key IN ('$riderCalifornia', '$riderTexas')")(
+          Seq(riderCalifornia, "RIDER-A", "RIDER-C"),
+          Seq(riderTexas, partitionMinRiderValue, "RIDER-F")
         )
 
         if (isTableMOR) {
@@ -1424,9 +1430,9 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
         // Validate partition stat records after update
         checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
-          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), "RIDER-F", "RIDER-F")
+          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} AND key IN ('$riderCalifornia', '$riderTexas')")(
+          Seq(riderCalifornia, "RIDER-A", "RIDER-C"),
+          Seq(riderTexas, "RIDER-F", "RIDER-F")
         )
 
         if (isTableMOR) {
@@ -1863,7 +1869,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              | options (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  preCombineField = 'ts',
+             |  hoodie.metadata.index.partition.stats.enable = false
              | )
              | $partitionByClause
              | location '$basePath'
@@ -1947,6 +1954,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       val lastCompletedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants().lastInstant()
       val writeConfig = getWriteConfig(Map.empty, metaClient.getBasePath.toString)
       writeConfig.setValue("hoodie.metadata.index.column.stats.enable", "false")
+      writeConfig.setValue("hoodie.metadata.index.partition.stats.enable", "false")
       val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), writeConfig)
       writeClient.rollback(lastCompletedInstant.get().requestedTime)
       // validate the expression index

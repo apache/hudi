@@ -53,9 +53,9 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -1045,12 +1045,17 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private boolean shouldDeleteMetadataPartition(MetadataPartitionType partitionType) {
     // Only delete metadata table partition when all the following conditions are met:
     // (1) This is data table.
-    // (2) Index corresponding to this metadata partition is disabled in HoodieWriteConfig.
+    // (2) This metadata partition does NOT exist on storage.
     // (3) The completed metadata partitions in table config contains this partition.
     // NOTE: Inflight metadata partitions are not considered as they could have been inflight due to async indexer.
     if (isMetadataTable() || !config.isMetadataTableEnabled()) {
       return false;
     }
+    boolean metadataIndexDisabled = isMetadataIndexDisabled(partitionType);
+    return metadataIndexDisabled && metaClient.getTableConfig().getMetadataPartitions().contains(partitionType.getPartitionPath());
+  }
+
+  private boolean isMetadataIndexDisabled(MetadataPartitionType partitionType) {
     boolean metadataIndexDisabled;
     switch (partitionType) {
       // NOTE: FILES partition type is always considered in sync with hoodie.metadata.enable.
@@ -1064,12 +1069,21 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       case RECORD_INDEX:
         metadataIndexDisabled = !config.isRecordIndexEnabled();
         break;
+      // PARTITION_STATS should have same behavior as COLUMN_STATS
+      case PARTITION_STATS:
+        metadataIndexDisabled = !config.isPartitionStatsIndexEnabled();
+        break;
+      // Expression and Secondary index can be in different partitions for different keys,
+      // and do not delete unless DROP INDEX is called.
+      case EXPRESSION_INDEX:
+      case SECONDARY_INDEX:
+        metadataIndexDisabled = !partitionType.isMetadataPartitionAvailable(metaClient);
+        break;
       default:
         LOG.debug("Not a valid metadata partition type: " + partitionType.name());
         return false;
     }
-    return metadataIndexDisabled
-        && metaClient.getTableConfig().getMetadataPartitions().contains(partitionType.getPartitionPath());
+    return metadataIndexDisabled;
   }
 
   private boolean shouldExecuteMetadataTableDeletion() {
