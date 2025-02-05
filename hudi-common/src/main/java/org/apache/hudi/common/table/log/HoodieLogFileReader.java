@@ -472,7 +472,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
                                                            HoodieLogFile logFile,
                                                            int bufferSize) {
     try {
-      return storage.openSeekable(logFile.getPath(), bufferSize, true);
+      return storage.openSeekable(logFile.getPath(), bufferSize);
     } catch (IOException e) {
       throw new HoodieIOException("Unable to get seekable input stream for " + logFile, e);
     }

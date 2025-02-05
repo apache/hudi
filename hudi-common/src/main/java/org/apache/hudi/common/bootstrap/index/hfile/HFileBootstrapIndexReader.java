@@ -96,7 +96,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
     LOG.info("Opening HFile for reading :" + hFilePath);
     StoragePath path = new StoragePath(hFilePath);
     long fileSize = storage.getPathInfo(path).getLength();
-    SeekableDataInputStream stream = storage.openSeekable(path, false);
+    SeekableDataInputStream stream = storage.openSeekable(path);
     return new HFileReaderImpl(stream, fileSize);
   }
 
