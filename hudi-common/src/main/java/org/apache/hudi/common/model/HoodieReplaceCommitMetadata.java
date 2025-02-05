@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.JsonUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.slf4j.Logger;
@@ -50,6 +51,12 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
 
   public HoodieReplaceCommitMetadata(boolean compacted) {
     super(compacted);
+    partitionToReplaceFileIds = new HashMap<>();
+  }
+
+  @VisibleForTesting
+  public HoodieReplaceCommitMetadata(HoodieCommitMetadata metadata) {
+    super(metadata);
     partitionToReplaceFileIds = new HashMap<>();
   }
 

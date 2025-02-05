@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -67,6 +68,14 @@ public class HoodieCommitMetadata implements Serializable {
     extraMetadata = new HashMap<>();
     partitionToWriteStats = new HashMap<>();
     this.compacted = compacted;
+  }
+
+  @VisibleForTesting
+  public HoodieCommitMetadata(HoodieCommitMetadata metadata) {
+    extraMetadata = metadata.getExtraMetadata();
+    partitionToWriteStats = metadata.getPartitionToWriteStats();
+    compacted = metadata.getCompacted();
+    operationType = metadata.getOperationType();
   }
 
   public void addWriteStat(String partitionPath, HoodieWriteStat stat) {
