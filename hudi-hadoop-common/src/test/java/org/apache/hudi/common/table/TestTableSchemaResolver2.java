@@ -493,4 +493,86 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
       assertEquals(schema2.toString(), schema2Option.get().toString());
     }
   }
+
+  @Test
+  void testTableAvroSchemaFromTimelineCachingBehavior() throws Exception {
+    // Initialize with COW table type
+    initMetaClient(false, HoodieTableType.COPY_ON_WRITE);
+    testTable = HoodieTestTable.of(metaClient);
+
+    // Create test schema
+    Schema schema1 = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    Schema schema2 = new Schema.Parser().parse(HoodieTestDataGenerator.SHORT_TRIP_SCHEMA);
+
+    // Create a commit with schema1
+    String commitTime1 = "001";
+    testTable.addCommit(commitTime1, Option.of(buildMetadata(
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        Option.empty(),
+        WriteOperationType.UNKNOWN,
+        schema1.toString(),
+        COMMIT_ACTION)));
+    // Create a commit with schema1
+    String commitTime2 = "002";
+    testTable.addCommit(commitTime2, Option.of(buildMetadata(
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        Option.empty(),
+        WriteOperationType.UNKNOWN,
+        schema2.toString(),
+        COMMIT_ACTION)));
+
+    metaClient.reloadActiveTimeline();
+
+    // Create spy of TableSchemaResolver to track method calls
+    TableSchemaResolver resolver = spy(new TableSchemaResolver(metaClient));
+    HoodieInstant instant2 = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
+    HoodieInstant instant1 = metaClient.getCommitsTimeline().filterCompletedInstants().nthInstant(0).get();
+
+    // Case 1: First call with empty instant - should fetch from timeline and cache
+    Option<Schema> schemaOption1 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.empty());
+    assertTrue(schemaOption1.isPresent());
+    assertEquals(schema2, schemaOption1.get());
+
+    // Verify getLastCommitMetadataWithValidSchemaFromTimeline was called
+    verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any());
+
+    // Case 2: Second call with empty instant - should use cache
+    Option<Schema> schemaOption2 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.empty());
+    assertTrue(schemaOption2.isPresent());
+    assertEquals(schema2, schemaOption2.get());
+
+    // Verify no additional calls to timeline
+    verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any());
+
+    // Case 3: Call with the latest valid instant - there should be a cache hit
+    Option<Schema> schemaOption3 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.of(instant2));
+    assertTrue(schemaOption3.isPresent());
+    assertEquals(schema2, schemaOption3.get());
+
+    // Verify no additional calls to timeline
+    verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any());
+
+    // Case 4: Second call with some other instant - should use cache
+    Option<Schema> schemaOption4 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.of(instant1));
+    assertTrue(schemaOption4.isPresent());
+    assertEquals(schema1, schemaOption4.get());
+
+    // Verify no additional calls to timeline
+    verify(resolver, times(2)).getLastCommitMetadataWithValidSchemaFromTimeline(any());
+
+    // Case 5: Call with future instant - should return the latest schema
+    String nonExistentTime = "999";
+    HoodieInstant nonExistentInstant = metaClient.getInstantGenerator().createNewInstant(
+        HoodieInstant.State.COMPLETED, COMMIT_ACTION, nonExistentTime);
+    Option<Schema> schemaOption5 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.of(nonExistentInstant));
+    assertEquals(schema2, schemaOption5.get());
+
+    // Verify one more call to timeline for non-existent instant
+    verify(resolver, times(3)).getLastCommitMetadataWithValidSchemaFromTimeline(any());
+
+    // Cache contains 3 entries: 001, 002, 999.
+    assertEquals(3L, resolver.getTableSchemaCache().size());
+  }
 }
