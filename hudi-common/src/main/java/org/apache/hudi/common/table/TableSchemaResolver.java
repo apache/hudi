@@ -75,6 +75,8 @@ import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
@@ -101,27 +103,21 @@ public class TableSchemaResolver {
    *       commits' metadata
    *
    *       Please check out corresponding methods to fetch commonly used instances of {@link HoodieCommitMetadata}:
-   *       {@link #getLatestCommitMetadataWithValidSchema()},
-   *       {@link #getLatestCommitMetadataWithValidSchema()},
    *       {@link #getCachedCommitMetadata(HoodieInstant)}
    */
   private final Lazy<ConcurrentHashMap<HoodieInstant, HoodieCommitMetadata>> commitMetadataCache;
 
-  private volatile HoodieInstant latestCommitWithValidSchema = null;
   private volatile HoodieInstant latestCommitWithValidData = null;
 
   public TableSchemaResolver(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
+    // Unbounded sized map. Should replace with some caching library.
     this.commitMetadataCache = Lazy.lazily(() -> new ConcurrentHashMap<>(2));
     this.hasOperationField = Lazy.lazily(this::hasOperationField);
   }
 
   public Schema getTableAvroSchemaFromDataFile() throws Exception {
-    return getTableAvroSchemaFromDataFileInternal().orElseThrow(schemaNotFoundError());
-  }
-
-  private Option<Schema> getTableAvroSchemaFromDataFileInternal() {
-    return getTableParquetSchemaFromDataFile();
+    return getTableParquetSchemaFromDataFile().orElseThrow(schemaNotFoundError());
   }
 
   /**
@@ -131,18 +127,18 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchema() throws Exception {
-    return getTableAvroSchema(metaClient.getTableConfig().populateMetaFields());
+    return getTableAvroSchemaIfPresent(metaClient.getTableConfig().populateMetaFields(), Option.empty()).orElseThrow(schemaNotFoundError());
   }
 
   /**
-   * Gets schema for a hoodie table in Avro format, can choice if include metadata fields.
+   * Gets schema for a hoodie table in Avro format, can choose if include metadata fields.
    *
    * @param includeMetadataFields choice if include metadata fields
    * @return Avro schema for this table
    * @throws Exception
    */
   public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
-    return getTableAvroSchemaInternal(includeMetadataFields, Option.empty()).orElseThrow(schemaNotFoundError());
+    return getTableAvroSchemaIfPresent(includeMetadataFields, Option.empty()).orElseThrow(schemaNotFoundError());
   }
 
   /**
@@ -151,12 +147,7 @@ public class TableSchemaResolver {
    * @param timestamp as of which table's schema will be fetched
    */
   public Schema getTableAvroSchema(String timestamp) throws Exception {
-    Option<HoodieInstant> instant = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants()
-        .findInstantsBeforeOrEquals(timestamp)
-        .lastInstant();
-    return getTableAvroSchemaInternal(metaClient.getTableConfig().populateMetaFields(), instant)
-        .orElseThrow(schemaNotFoundError());
+    return getTableAvroSchemaIfPresent(metaClient.getTableConfig().populateMetaFields(), Option.of(timestamp)).orElseThrow(schemaNotFoundError());
   }
 
   /**
@@ -165,51 +156,15 @@ public class TableSchemaResolver {
    * @param instant as of which table's schema will be fetched
    */
   public Schema getTableAvroSchema(HoodieInstant instant, boolean includeMetadataFields) throws Exception {
-    return getTableAvroSchemaInternal(includeMetadataFields, Option.of(instant)).orElseThrow(schemaNotFoundError());
-  }
-
-  /**
-   * Gets users data schema for a hoodie table in Avro format.
-   *
-   * @return  Avro user data schema
-   * @throws Exception
-   *
-   * @deprecated use {@link #getTableAvroSchema(boolean)} instead
-   */
-  @Deprecated
-  public Schema getTableAvroSchemaWithoutMetadataFields() throws Exception {
-    return getTableAvroSchemaInternal(false, Option.empty()).orElseThrow(schemaNotFoundError());
+    return getTableAvroSchemaIfPresent(includeMetadataFields, Option.of(instant.getCompletionTime())).orElseThrow(schemaNotFoundError());
   }
 
   public Option<Schema> getTableAvroSchemaIfPresent(boolean includeMetadataFields) {
-    return getTableAvroSchemaInternal(includeMetadataFields, Option.empty());
-  }
-
-  Option<Schema> getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt) {
-    return (instantOpt.isPresent()
-        ? getTableSchemaFromCommitMetadata(instantOpt.get(), includeMetadataFields)
-        : getTableSchemaFromLatestCommitMetadata(includeMetadataFields))
-        .or(() -> getTableCreateSchemaWithMetadata(includeMetadataFields))
-        .or(() -> getSchemaFromDataFileIfPresent(includeMetadataFields))
-        .map(this::handlePartitionColumnsIfNeeded);
+    return getTableAvroSchemaIfPresent(includeMetadataFields, Option.empty());
   }
 
   /**
-   * Retrieves the table creation schema with metadata fields and partition columns handled.
-   *
-   * @param includeMetadataFields whether to include metadata fields in the schema
-   * @return Option containing the fully processed schema if available, empty Option otherwise
-   */
-  public Option<Schema> getTableCreateSchemaWithMetadata(boolean includeMetadataFields) {
-    return metaClient.getTableConfig().getTableCreateSchema()
-        .map(tableSchema ->
-            includeMetadataFields
-                ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get())
-                : tableSchema)
-        .map(this::handlePartitionColumnsIfNeeded);
-  }
-
-  /**
+   * TODO
    * Handles partition column logic for a given schema.
    *
    * @param schema the input schema to process
@@ -225,51 +180,40 @@ public class TableSchemaResolver {
     return schema;
   }
 
-  private Option<Schema> getTableSchemaFromLatestCommitMetadata(boolean includeMetadataFields) {
-    Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = getLatestCommitMetadataWithValidSchema();
-    if (instantAndCommitMetadata.isPresent()) {
-      HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
-      String schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
-      Schema schema = new Schema.Parser().parse(schemaStr);
-      if (includeMetadataFields) {
-        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField.get());
-      } else {
-        schema = HoodieAvroUtils.removeMetadataFields(schema);
-      }
-      return Option.of(schema);
-    } else {
-      return Option.empty();
-    }
-  }
-
-  // [HUDI-8219]: needs to be cleaned up when the jira is fully implemented.
-  public Option<Schema> getTableAvroSchemaForClustering(boolean includeMetadataFields) {
-    return getTableSchemaFromLatestCommitMetadataForClustering(includeMetadataFields)
-      .or(() -> getTableCreateSchemaWithMetadata(includeMetadataFields))
-      .or(() -> getSchemaFromDataFileIfPresent(includeMetadataFields))
+  public Option<Schema> getTableAvroSchemaIfPresent(boolean includeMetadataFields, Option<String> instantTime) {
+    return getTableAvroSchemaFromTimeline(instantTime)
+        .or(this::getTableCreateSchemaWithMetadata)
+        .or(this::getTableParquetSchemaFromDataFile)
+        .map(tableSchema -> includeMetadataFields ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get()) : HoodieAvroUtils.removeMetadataFields(tableSchema))
         .map(this::handlePartitionColumnsIfNeeded);
   }
 
-  private Option<Schema> getSchemaFromDataFileIfPresent(boolean includeMetadataFields) {
-    Option<Schema> schemaFromDataFile = getTableAvroSchemaFromDataFileInternal();
-    return (includeMetadataFields
-        ? schemaFromDataFile
-        : schemaFromDataFile.map(HoodieAvroUtils::removeMetadataFields));
+  private Option<Schema> getTableCreateSchemaWithMetadata() {
+    return metaClient.getTableConfig().getTableCreateSchema();
   }
 
-  private Option<Schema> getTableSchemaFromLatestCommitMetadataForClustering(boolean includeMetadataFields) {
+  private Option<Schema> getTableAvroSchemaFromTimeline(Option<String> instantTime) {
     HoodieTimeline reversedTimeline = getSchemaEvolutionTimelineInReverseOrder();
     // To find the table schema given an instant time, need to walk backwards from the latest instant in
     // the timeline finding a completed instant containing a valid schema.
+    ConcurrentHashMap<HoodieInstant, String> tableSchemaAtInstant = new ConcurrentHashMap<>();
     Option<HoodieInstant> instantWithTableSchema = Option.fromJavaOptional(reversedTimeline.getInstantsAsStream()
+        // If a completion time is specified, find the first eligible instant in the schema evolution timeline.
+        // Should switch to completion time based.
+        .filter(s -> instantTime.isEmpty() || compareTimestamps(s.requestedTime(), LESSER_THAN_OR_EQUALS, instantTime.get()))
         // Make sure the commit metadata has a valid schema inside. Same caching the result for expensive operation.
         .filter(s -> {
           try {
-            return !StringUtils.isNullOrEmpty(metaClient.getCommitMetadataSerDe().deserialize(
-                      s,
-                      reversedTimeline.getInstantDetails(s).get(),
-                      HoodieCommitMetadata.class)
-                .getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
+            String schemaStr = metaClient.getCommitMetadataSerDe().deserialize(
+                    s,
+                    reversedTimeline.getInstantDetails(s).get(),
+                    HoodieCommitMetadata.class)
+                .getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
+            boolean validSchemaStr = !StringUtils.isNullOrEmpty(schemaStr);
+            if (validSchemaStr) {
+              tableSchemaAtInstant.putIfAbsent(s, schemaStr);
+            }
+            return validSchemaStr;
           } catch (IOException e) {
             throw new RuntimeException(e);
           }
@@ -277,35 +221,10 @@ public class TableSchemaResolver {
         .findFirst());
 
     if (instantWithTableSchema.isPresent()) {
-      // If there is a qualified instant, parse the table schema out of it.
-      try {
-        return Option.of(getTableAvroSchema(instantWithTableSchema.get(), includeMetadataFields));
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
+      Schema tableSchema = new Schema.Parser().parse(tableSchemaAtInstant.get(instantWithTableSchema.get()));
+      return Option.of(tableSchema);
     }
     return Option.empty();
-  }
-
-  private Option<Schema> getTableSchemaFromCommitMetadata(HoodieInstant instant, boolean includeMetadataFields) {
-    try {
-      HoodieCommitMetadata metadata = getCachedCommitMetadata(instant);
-      String existingSchemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
-
-      if (StringUtils.isNullOrEmpty(existingSchemaStr)) {
-        return Option.empty();
-      }
-
-      Schema schema = new Schema.Parser().parse(existingSchemaStr);
-      if (includeMetadataFields) {
-        schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField.get());
-      } else {
-        schema = HoodieAvroUtils.removeMetadataFields(schema);
-      }
-      return Option.of(schema);
-    } catch (Exception e) {
-      throw new HoodieException("Failed to read schema from commit metadata", e);
-    }
   }
 
   /**
@@ -345,34 +264,9 @@ public class TableSchemaResolver {
    * This method differs from {@link #getTableAvroSchema(boolean)} in that it won't fallback
    * to use table's schema used at creation
    */
-  public Option<Schema> getTableAvroSchemaFromLatestCommit(boolean includeMetadataFields) throws Exception {
-    if (metaClient.isTimelineNonEmpty()) {
-      return getTableAvroSchemaInternal(includeMetadataFields, Option.empty());
-    }
-
-    return Option.empty();
-  }
-
-  /**
-   * Read schema from a data file from the last compaction commit done.
-   *
-   * @deprecated please use {@link #getTableAvroSchema(HoodieInstant, boolean)} instead
-   */
-  public Schema readSchemaFromLastCompaction(Option<HoodieInstant> lastCompactionCommitOpt) throws Exception {
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-
-    HoodieInstant lastCompactionCommit = lastCompactionCommitOpt.orElseThrow(() -> new Exception(
-        "Could not read schema from last compaction, no compaction commits found on path " + metaClient));
-
-    // Read from the compacted file wrote
-    HoodieCommitMetadata compactionMetadata = metaClient.getCommitMetadataSerDe().deserialize(
-        lastCompactionCommit, activeTimeline.getInstantDetails(lastCompactionCommit).get(),HoodieCommitMetadata.class);
-    String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
-        .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for compaction "
-            + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath()));
-    StoragePath path = new StoragePath(filePath);
-    return HoodieIOFactory.getIOFactory(metaClient.getStorage())
-        .getFileFormatUtils(path).readAvroSchema(metaClient.getStorage(), path);
+  public Option<Schema> getTableAvroSchemaFromLatestCommit(boolean includeMetadataFields) {
+        .map(tableSchema -> includeMetadataFields ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get()) : HoodieAvroUtils.removeMetadataFields(tableSchema))
+        .map(this::handlePartitionColumnsIfNeeded);
   }
 
   private Schema readSchemaFromLogFile(StoragePath path) throws IOException {
@@ -401,6 +295,7 @@ public class TableSchemaResolver {
   }
 
   /**
+   * Need to check and deprecate this.
    * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
    *
    * @return InternalSchema for this table
@@ -421,6 +316,7 @@ public class TableSchemaResolver {
   }
 
   /**
+   * Need to check and deprecate this.
    * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
    *
    * @return InternalSchema for this table
@@ -452,6 +348,7 @@ public class TableSchemaResolver {
   }
 
   /**
+   * Need to check and deprecate this.
    * Gets the history schemas as String for a hoodie table from the HoodieCommitMetadata of the instant.
    *
    * @return history schemas string for this table
@@ -476,26 +373,6 @@ public class TableSchemaResolver {
       LOG.info("Failed to read operation field from avro schema ({})", e.getMessage());
       return false;
     }
-  }
-
-  private Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLatestCommitMetadataWithValidSchema() {
-    if (latestCommitWithValidSchema == null) {
-      Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata =
-          metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema();
-      if (instantAndCommitMetadata.isPresent()) {
-        HoodieInstant instant = instantAndCommitMetadata.get().getLeft();
-        HoodieCommitMetadata metadata = instantAndCommitMetadata.get().getRight();
-        synchronized (this) {
-          if (latestCommitWithValidSchema == null) {
-            latestCommitWithValidSchema = instant;
-          }
-          commitMetadataCache.get().putIfAbsent(instant, metadata);
-        }
-      }
-    }
-
-    return Option.ofNullable(latestCommitWithValidSchema)
-        .map(instant -> Pair.of(instant, commitMetadataCache.get().get(instant)));
   }
 
   private Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLatestCommitMetadataWithValidData() {
@@ -607,6 +484,7 @@ public class TableSchemaResolver {
 
     // We only care committed instant when it comes to table schema.
     TimelineLayout timelineLayout = metaClient.getTimelineLayout();
+    // Should we use completion time based?
     Comparator<HoodieInstant> reversedComparator = timelineLayout.getInstantComparator().requestedTimeOrderedComparator().reversed();
 
     // The timeline still contains DELTA_COMMIT_ACTION/COMMIT_ACTION which might not contain a valid schema
