@@ -183,7 +183,7 @@ case class HoodieFileIndex(spark: SparkSession,
           val c = fileSlices.filter(f => f.hasLogFiles || f.hasBootstrapBase).foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-              new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
+              sparkAdapter.createHoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
           } else {
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
               InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
@@ -538,10 +538,10 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
 
       // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS
-      val dataBase = Some(tableConfig.getDatabaseName)
+      val dataBase = if (StringUtils.isNullOrEmpty(tableConfig.getDatabaseName)) "default" else tableConfig.getDatabaseName
       val tableName = tableConfig.getTableName
-      if (spark.catalog.tableExists(dataBase.getOrElse("default"), tableName)) {
-        val tableIdentifier = TableIdentifier(tableName, dataBase)
+      if (spark.catalog.tableExists(dataBase, tableName)) {
+        val tableIdentifier = TableIdentifier(tableName, Some(dataBase))
         val table = HoodieCatalogTable(spark, tableIdentifier)
         table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
       }
