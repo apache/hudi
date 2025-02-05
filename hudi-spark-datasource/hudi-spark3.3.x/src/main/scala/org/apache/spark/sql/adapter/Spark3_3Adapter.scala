@@ -146,7 +146,7 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     Spark33ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 
-  override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int) = {
+  override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
     jssc.stop()
   }
 }
