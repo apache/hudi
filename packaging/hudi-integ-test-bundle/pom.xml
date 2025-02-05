@@ -445,6 +445,10 @@
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>ch.qos.logback</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
 
@@ -456,6 +460,10 @@
       <exclusions>
         <exclusion>
           <groupId>org.pentaho</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>ch.qos.logback</groupId>
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
@@ -490,6 +498,10 @@
         </exclusion>
         <exclusion>
           <groupId>org.pentaho</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>ch.qos.logback</groupId>
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>

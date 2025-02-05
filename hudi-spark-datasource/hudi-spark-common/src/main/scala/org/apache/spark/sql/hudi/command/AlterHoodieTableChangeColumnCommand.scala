@@ -23,10 +23,11 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.avro.Schema
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{StructField, StructType}
 
 /**
@@ -44,12 +45,12 @@ case class AlterHoodieTableChangeColumnCommand(
 
     // Find the origin column from dataSchema by column name.
     val originColumn = findColumnByName(hoodieCatalogTable.dataSchema, columnName, resolver).getOrElse(
-      throw new AnalysisException(s"Can't find column `$columnName` given table data columns " +
+      throw new HoodieAnalysisException(s"Can't find column `$columnName` given table data columns " +
         s"${hoodieCatalogTable.dataSchema.fieldNames.mkString("[`", "`, `", "`]")}")
     )
-    // Throw an AnalysisException if the column name/dataType is changed.
+    // Throw an HoodieAnalysisException if the column name/dataType is changed.
     if (!columnEqual(originColumn, newColumn, resolver)) {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         "ALTER TABLE CHANGE COLUMN is not supported for changing column " +
           s"'${originColumn.name}' with type '${originColumn.dataType}' to " +
           s"'${newColumn.name}' with type '${newColumn.dataType}'")
