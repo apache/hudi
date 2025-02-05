@@ -20,6 +20,7 @@ package org.apache.spark.sql.adapter
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.Spark34HoodieFileScanRDD
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolvedTable}
@@ -146,6 +147,6 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   }
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int) = {
-    jssc.stop()
+    jssc.sc.stop(exitCode)
   }
 }

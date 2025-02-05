@@ -26,7 +26,7 @@ import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
+import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SparkSession, SQLContext}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.util.DateFormatter
@@ -35,12 +35,13 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 
 import java.time.ZoneId
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
+
 import scala.collection.JavaConverters._
 
 /**
@@ -105,7 +106,5 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
       SQLExecution.withNewExecutionId(queryExecution, name)(body)
   }
 
-  override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
-    jssc.stop()
-  }
+  def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 }
