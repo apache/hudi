@@ -133,6 +133,12 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   }
 
   @Test
+  public void testValidationWithoutDataTable() throws IOException {
+    storage.deleteDirectory(metaClient.getBasePath());
+    validateSecondaryIndex();
+  }
+
+  @Test
   public void testAggregateColumnStats() {
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range1 = HoodieColumnRangeMetadata.<Comparable>create(
         "path/to/file1", "col1", 1, 5, 0, 10, 100, 200);
@@ -553,7 +559,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       validator.setPartitionCreationTime(Option.of(partition3CreationTime));
       // validate that exception is thrown since MDT has one additional partition.
       assertThrows(HoodieValidationException.class, () -> {
-        validator.validatePartitions(engineContext, baseStoragePath, metaClient);
+        validator.validatePartitions(engineContext, baseStoragePath);
       });
     } else {
       // 3rd partition creation time is > last completed instant
@@ -564,7 +570,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       validator.setPartitionCreationTime(Option.of(TimelineUtils.generateInstantTime(true, timeGenerator)));
 
       // validate that all 3 partitions are returned
-      assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath, metaClient));
+      assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath));
     }
   }
 

@@ -601,7 +601,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     // compare partitions
 
-    List<String> allPartitions = validatePartitions(engineContext, basePath, metaClient);
+    List<String> allPartitions = validatePartitions(engineContext, basePath);
     if (allPartitions.isEmpty()) {
       LOG.warn("The result of getting all partitions is null or empty, skip current validation. {}", taskLabels);
       return true;
@@ -728,10 +728,9 @@ public class HoodieMetadataTableValidator implements Serializable {
    * Compare the listing partitions result between metadata table and fileSystem.
    */
   @VisibleForTesting
-  List<String> validatePartitions(HoodieSparkEngineContext engineContext, StoragePath basePath, HoodieTableMetaClient metaClient) {
+  List<String> validatePartitions(HoodieSparkEngineContext engineContext, StoragePath basePath) {
     // compare partitions
     HoodieTableMetaClient metaClient = this.metaClientOpt.orElseThrow(() -> new HoodieValidationException("Data table metaClient is not available for: " + cfg.basePath));
-    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, cfg.assumeDatePartitioning);
     HoodieTimeline completedTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
     List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, basePath, metaClient.getStorage(),
         completedTimeline);
@@ -1008,7 +1007,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
         AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()), metadataTableBasedContext.getMetadataConfig(),
-        metaClient, false);
+        metaClientOpt.get(), false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
         partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(
             metadataTableBasedContext.allColumnNameList).asScala().toSeq(), scala.Option.empty(), false)
