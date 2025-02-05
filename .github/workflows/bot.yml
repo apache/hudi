@@ -361,13 +361,16 @@ jobs:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.4"
             sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:
       - uses: actions/checkout@v3
-      - name: Set up JDK 8
+      - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
-          java-version: '8'
+          java-version: '17'
           distribution: 'temurin'
           architecture: x64
       - name: Build Project
@@ -375,7 +378,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -422,13 +425,16 @@ jobs:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.4"
             sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:
       - uses: actions/checkout@v3
-      - name: Set up JDK 8
+      - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
-          java-version: '8'
+          java-version: '17'
           distribution: 'temurin'
           architecture: x64
       - name: Build Project
@@ -436,7 +442,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -964,12 +970,18 @@ jobs:
         include:
           - sparkProfile: 'spark3.5'
             sparkArchive: 'spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz'
+            scalaProfile: '-Dscala-2.12 -Dscala.binary.version=2.12'
+
+          - sparkProfile: 'spark4'
+            sparkArchive: 'spark-4.0.0-preview1/spark-4.0.0-preview1-bin-hadoop3.tgz'
+            scalaProfile: '-Dscala-2.13 -Dscala.binary.version=2.13'
+
     steps:
       - uses: actions/checkout@v3
-      - name: Set up JDK 8
+      - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
-          java-version: '8'
+          java-version: '17'
           distribution: 'temurin'
           architecture: x64
       - name: Check disk space
@@ -977,20 +989,20 @@ jobs:
       - name: Build Project
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
         run:
-          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 -Pjava17 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
       - name: 'UT integ-test'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
         run:
-          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
+          mvn test -Pjava17 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
       - name: 'IT'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
-          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
         run: |
           echo "Downloading $SPARK_ARCHIVE"
           curl https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
@@ -1000,7 +1012,7 @@ jobs:
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
           rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
           docker system prune --all --force
-          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS
+          mvn verify -Pjava17 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   build-spark-java17:
     runs-on: ubuntu-latest
@@ -1022,6 +1034,10 @@ jobs:
           - scalaProfile: "scala-2.13"
             sparkProfile: "spark3.5"
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:
       - uses: actions/checkout@v3

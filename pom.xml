@@ -86,7 +86,7 @@
     <maven-failsafe-plugin.version>2.22.2</maven-failsafe-plugin.version>
     <maven-shade-plugin.version>3.5.1</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
-    <maven-compiler-plugin.version>3.8.0</maven-compiler-plugin.version>
+    <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
     <genjavadoc-plugin.version>0.18_2.13.10</genjavadoc-plugin.version>
     <build-helper-maven-plugin.version>1.7</build-helper-maven-plugin.version>
@@ -96,6 +96,7 @@
     <java.version>8</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
+    <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
     <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
     <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
     <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -118,7 +119,7 @@
     <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
-    <hadoop.version>2.10.2</hadoop.version>
+    <hadoop.version>3.4.0</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.4</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
@@ -139,6 +140,7 @@
     <httpclient.version>4.5.14</httpclient.version>
     <spark.version>${spark3.version}</spark.version>
     <spark3.version>3.5.1</spark3.version>
+    <spark4.version>4.0.0-preview1</spark4.version>
     <sparkbundle.version></sparkbundle.version>
     <flink1.20.version>1.20.1</flink1.20.version>
     <flink1.19.version>1.19.2</flink1.19.version>
@@ -153,7 +155,7 @@
     <flink.avro.version>1.11.4</flink.avro.version>
     <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
     <!-- check kafka version -->
-    <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version> 
+    <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
     <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>
@@ -168,6 +170,7 @@
     <spark33.version>3.3.4</spark33.version>
     <spark34.version>3.4.3</spark34.version>
     <spark35.version>3.5.5</spark35.version>
+    <spark40.version>4.0.0-preview1</spark40.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>1.11.4</avro.version>
@@ -182,6 +185,8 @@
     <apache-rat-plugin.version>0.16.1</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
+    <!-- TODO: Need to upgrade to 3.2.18+ after removing deprecated FunSuite -->
+    <scalatest.spark4.version>3.1.4</scalatest.spark4.version>
     <scalatest.version>${scalatest.spark3.version}</scalatest.version>
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.13.0</thrift.version>
@@ -196,6 +201,7 @@
     <skipFTs>${skipTests}</skipFTs>
     <skipITs>${skipTests}</skipITs>
     <skip.hudi-spark3.unit.tests>${skipTests}</skip.hudi-spark3.unit.tests>
+    <skip.hudi-spark4.unit.tests>${skipTests}</skip.hudi-spark4.unit.tests>
     <skipDocker>${skipTests}</skipDocker>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.basedir>${project.basedir}</main.basedir>
@@ -1257,6 +1263,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -2343,6 +2353,9 @@
           <name>scala-2.12</name>
         </property>
       </activation>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink1.14.x</module>
+      </modules>
       <build>
         <plugins>
           <plugin>
@@ -2399,7 +2412,8 @@
                     <bannedDependencies>
                       <excludes combine.children="append">
                         <exclude>*:*_2.11</exclude>
-                        <exclude>*:*_2.12</exclude>
+                        <!-- flink-hadoop-compatibility_2.12 is necessary -->
+                        <!--<exclude>*:*_2.12</exclude>-->
                       </excludes>
                     </bannedDependencies>
                   </rules>
@@ -2617,6 +2631,66 @@
         <activeByDefault>true</activeByDefault>
         <property>
           <name>spark3.5</name>
+        </property>
+      </activation>
+    </profile>
+
+    <profile>
+      <id>spark4</id>
+      <properties>
+        <spark4.version>${spark40.version}</spark4.version>
+        <spark.version>${spark4.version}</spark.version>
+        <sparkbundle.version>4</sparkbundle.version>
+        <scala13.version>2.13.14</scala13.version>
+        <scala.version>${scala13.version}</scala.version>
+        <scala.binary.version>2.13</scala.binary.version>
+        <hudi.spark.module>hudi-spark4.0.x</hudi.spark.module>
+        <!-- This glob has to include hudi-spark4-common -->
+        <hudi.spark.common.module>hudi-spark4-common</hudi.spark.common.module>
+        <scalatest.version>${scalatest.spark4.version}</scalatest.version>
+        <kafka.version>3.8.0</kafka.version>
+        <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
+                   hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
+                   bringing these file-formats as dependencies as well, we need to make sure that versions are
+                   synchronized to avoid classpath ambiguity -->
+        <parquet.version>1.13.1</parquet.version>
+        <orc.spark.version>2.0.1</orc.spark.version>
+        <avro.version>1.11.3</avro.version>
+        <antlr.version>4.13.1</antlr.version>
+        <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
+        <fasterxml.version>${fasterxml.spark4.version}</fasterxml.version>
+        <fasterxml.jackson.databind.version>${fasterxml.spark4.version}</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>${fasterxml.spark4.version}</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark4.version}
+        </fasterxml.jackson.dataformat.yaml.version>
+        <pulsar.spark.version>${pulsar.spark.scala13.version}</pulsar.spark.version>
+        <glassfish.version>3.0.12</glassfish.version>
+        <log4j2.version>2.20.0</log4j2.version>
+        <slf4j.version>2.0.7</slf4j.version>
+        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
+        <skipITs>true</skipITs>
+      </properties>
+      <modules>
+        <module>hudi-spark-datasource/hudi-spark4.0.x</module>
+        <module>hudi-spark-datasource/hudi-spark4-common</module>
+      </modules>
+      <dependencies>
+        <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+          <version>${slf4j.version}</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>${hive.groupid}</groupId>
+          <artifactId>hive-storage-api</artifactId>
+          <version>${hive.storage.version}</version>
+        </dependency>
+      </dependencies>
+      <activation>
+        <property>
+          <name>spark4</name>
         </property>
       </activation>
     </profile>

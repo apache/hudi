@@ -1242,9 +1242,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   public static void deleteMetaFile(HoodieStorage storage,
-                                    String basePath,
-                                    String instantTime,
-                                    String suffix) throws IOException {
+      String basePath,
+      String instantTime,
+      String suffix) throws IOException {
     if (suffix.contains(REQUESTED_EXTENSION) || suffix.contains(INFLIGHT_EXTENSION)) {
       String targetPath = basePath + "/" + METAFOLDER_NAME + "/" + TIMELINEFOLDER_NAME + "/" + instantTime + suffix;
       deleteFileFromStorage(storage, targetPath);
@@ -1350,8 +1350,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * @param enableMetaFields      - Enable meta fields for the table records
    */
   private void verifyMetadataRecordKeyExcludeFromPayloadLogFiles(HoodieTable table, HoodieTableMetaClient metadataMetaClient,
-                                                                 String latestCommitTimestamp,
-                                                                 boolean enableMetaFields) throws IOException {
+      String latestCommitTimestamp,
+      boolean enableMetaFields) throws IOException {
     table.getHoodieView().sync();
 
     // Compaction should not be triggered yet. Let's verify no base file
@@ -1442,7 +1442,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * @param enableMetaFields      - Enable meta fields
    */
   private void verifyMetadataMergedRecords(HoodieTableMetaClient metadataMetaClient, List<String> logFilePaths,
-                                           String latestCommitTimestamp, boolean enableMetaFields) {
+      String latestCommitTimestamp, boolean enableMetaFields) {
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     if (enableMetaFields) {
       schema = HoodieAvroUtils.addMetadataFields(schema);
@@ -3077,13 +3077,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(MERGE_ON_READ, true);
     final int maxNumDeltaCommits = 3;
     writeConfig = getWriteConfigBuilder(true, true, false)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-                    .enable(true)
-                    .enableMetrics(false)
-                    .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommits - 1)
-                    .withMaxNumDeltacommitsWhenPending(maxNumDeltaCommits)
-                    .build())
-            .build();
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommits - 1)
+            .withMaxNumDeltacommitsWhenPending(maxNumDeltaCommits)
+            .build())
+        .build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
     // write deltacommits to data-table and do compaction in metadata-table (with commit-instant)
     doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(1));
@@ -3094,7 +3094,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
       final HoodieActiveTimeline activeTimeline = metadataMetaClient.reloadActiveTimeline();
       Option<HoodieInstant> lastCompaction = activeTimeline.filterCompletedInstants()
-              .filter(s -> s.getAction().equals(COMMIT_ACTION)).lastInstant();
+          .filter(s -> s.getAction().equals(COMMIT_ACTION)).lastInstant();
       assertTrue(lastCompaction.isPresent());
       // create pending instant in data table
       testTable.addRequestedCommit(InProcessTimeGenerator.createNewInstantTime(1));
@@ -3393,7 +3393,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   @Override
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
-                                                    HoodieFailedWritesCleaningPolicy cleaningPolicy) {
+      HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     Properties properties = getDisabledRowWriterProperties();
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)

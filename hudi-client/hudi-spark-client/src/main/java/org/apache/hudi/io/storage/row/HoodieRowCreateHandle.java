@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.fs.FSUtils;
@@ -184,7 +185,7 @@ public class HoodieRowCreateHandle implements Serializable {
       UTF8String writeCommitTime = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
           : commitTime;
 
-      InternalRow updatedRow = new HoodieInternalRow(writeCommitTime, seqId, recordKey,
+      InternalRow updatedRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(writeCommitTime, seqId, recordKey,
           partitionPath, fileName, row, true);
       try {
         fileWriter.writeRow(recordKey, updatedRow);

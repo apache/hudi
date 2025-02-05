@@ -54,7 +54,9 @@ import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.collection.mutable
 
 object HoodieDatasetBulkInsertHelper
-  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df))) with Logging {
+  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df)))
+    with Logging
+    with SparkAdapterSupport {
 
   /**
    * Prepares [[DataFrame]] for bulk-insert into Hudi table, taking following steps:
@@ -115,7 +117,8 @@ object HoodieDatasetBulkInsertHelper
             val filename = UTF8String.EMPTY_UTF8
 
             // TODO use mutable row, avoid re-allocating
-            new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
+            sparkAdapter.createInternalRow(
+              commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
           }
         }, SQLConf.get)
       }
@@ -260,7 +263,13 @@ object HoodieDatasetBulkInsertHelper
       .reduceByKey ((oneRow, otherRow) => {
         val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
         val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-        if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+        if (onePreCombineVal.isInstanceOf[UTF8String]) {
+          if (sparkAdapter.compareUTF8String(onePreCombineVal.asInstanceOf[UTF8String], otherPreCombineVal.asInstanceOf[UTF8String]) >= 0) {
+            oneRow
+          } else {
+            otherRow
+          }
+        } else if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
           oneRow
         } else {
           otherRow
