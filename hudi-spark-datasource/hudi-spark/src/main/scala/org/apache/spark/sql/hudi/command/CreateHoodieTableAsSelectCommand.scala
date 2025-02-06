@@ -106,7 +106,8 @@ case class CreateHoodieTableAsSelectCommand(
         HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES.key -> ConfigUtils.configToString(updatedTable.properties.asJava),
         HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> "false",
         DataSourceWriteOptions.SQL_INSERT_MODE.key -> InsertMode.NON_STRICT.value(),
-        DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key -> "true"
+        DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key -> "true",
+        "path" -> tablePath
       )
       val partitionSpec = updatedTable.partitionColumnNames.map((_, None)).toMap
       val success = InsertIntoHoodieTableCommand.run(sparkSession, updatedTable, plan, partitionSpec,

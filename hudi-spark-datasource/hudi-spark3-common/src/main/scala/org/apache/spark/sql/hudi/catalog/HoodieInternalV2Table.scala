@@ -115,7 +115,7 @@ private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
             SaveMode.Append
           }
 
-          data.write.format("org.apache.hudi")
+          data.write.format("hudi")
             .mode(mode)
             .options(buildHoodieConfig(hoodieCatalogTable) ++
               buildHoodieInsertConfig(hoodieCatalogTable, spark, overwritePartition, overwriteTable, Map.empty, Map.empty))

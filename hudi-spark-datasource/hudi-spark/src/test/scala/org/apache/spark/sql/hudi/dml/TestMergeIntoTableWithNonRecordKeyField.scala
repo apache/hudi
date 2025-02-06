@@ -133,7 +133,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |""".stripMargin)
 
         if (sparkSqlOptimizedWrites) {
-          val errorMessage2 = "Hudi tables with record key are required to match on all record key columns. Column: 'name' not found"
+          val errorMessage2 = "Hudi tables with primary key are required to match on all primary key columns. Column: 'name' not found"
           checkException(
             s"""
                | merge into $tableName3 as t0

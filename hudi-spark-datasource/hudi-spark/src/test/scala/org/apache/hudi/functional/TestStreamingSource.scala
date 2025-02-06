@@ -65,7 +65,7 @@ class TestStreamingSource extends StreamTest {
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
-        .format("org.apache.hudi")
+        .format("hudi")
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
@@ -116,7 +116,7 @@ class TestStreamingSource extends StreamTest {
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
-        .format("org.apache.hudi")
+        .format("hudi")
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
@@ -161,7 +161,7 @@ class TestStreamingSource extends StreamTest {
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
-        .format("org.apache.hudi")
+        .format("hudi")
         .option(START_OFFSET.key(), "latest")
         .load(tablePath)
         .select("id", "name", "price", "ts")
@@ -199,7 +199,7 @@ class TestStreamingSource extends StreamTest {
           .firstInstant().get().getCompletionTime
 
       val df = spark.readStream
-        .format("org.apache.hudi")
+        .format("hudi")
         .option(START_OFFSET.key(), timestamp)
         .load(tablePath)
         .select("id", "name", "price", "ts")
@@ -234,7 +234,7 @@ class TestStreamingSource extends StreamTest {
             .firstInstant().get().getCompletionTime
 
         val df = spark.readStream
-          .format("org.apache.hudi")
+          .format("hudi")
           .option(START_OFFSET.key(), timestamp)
           .option(DataSourceReadOptions.INCREMENTAL_READ_SKIP_CLUSTER.key(), skipCluster)
           .load(tablePath)
@@ -270,7 +270,7 @@ class TestStreamingSource extends StreamTest {
 
         addData(tablePath, Seq(("1", "a1", "10", "000")))
         val df = spark.readStream
-          .format("org.apache.hudi")
+          .format("hudi")
           .option(DataSourceReadOptions.INCREMENTAL_READ_SKIP_COMPACT.key(), skipCompact)
           .load(tablePath)
           .select("id", "name", "price", "ts")
@@ -319,7 +319,7 @@ class TestStreamingSource extends StreamTest {
       val startTimestamp = instants.get(1).requestedTime
       for (streamingReadTableVersion <- List(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.EIGHT.versionCode())) {
         val df = spark.readStream
-          .format("org.apache.hudi")
+          .format("hudi")
           .option(START_OFFSET.key, startTimestamp)
           .option(WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode().toString)
           .option(STREAMING_READ_TABLE_VERSION.key, streamingReadTableVersion.toString)
@@ -345,7 +345,7 @@ class TestStreamingSource extends StreamTest {
                       enableInlineCluster: Boolean = false) : Unit = {
     rows.toDF(columns: _*)
       .write
-      .format("org.apache.hudi")
+      .format("hudi")
       .options(commonOptions)
       .option(TBL_NAME.key, getTableName(inputPath))
       .option(HoodieCompactionConfig.INLINE_COMPACT.key(), enableInlineCompaction.toString)

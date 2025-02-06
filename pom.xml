@@ -119,7 +119,7 @@
     <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
-    <hadoop.version>3.4.0</hadoop.version>
+    <hadoop.version>2.10.2</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.4</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
@@ -2648,6 +2648,7 @@
         <!-- This glob has to include hudi-spark4-common -->
         <hudi.spark.common.module>hudi-spark4-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark4.version}</scalatest.version>
+        <hadoop.version>3.4.0</hadoop.version>
         <kafka.version>3.8.0</kafka.version>
         <hive.storage.version>2.8.1</hive.storage.version>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,

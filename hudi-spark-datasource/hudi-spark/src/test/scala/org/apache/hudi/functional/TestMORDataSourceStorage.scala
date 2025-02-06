@@ -88,7 +88,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     // Bulk Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(options)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -99,7 +99,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
     // Read RO View
-    val hudiRODF1 = spark.read.format("org.apache.hudi")
+    val hudiRODF1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath)
@@ -112,14 +112,14 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     // Upsert operation without Hudi metadata columns
     val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).asScala.toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("org.apache.hudi")
+    inputDF2.write.format("hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
 
     // Read Snapshot query
     val updateCommitTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
+    val hudiSnapshotDF2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath)
@@ -131,7 +131,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     val verificationRowKey = hudiSnapshotDF2.limit(1).select("_row_key").first.getString(0)
     val inputDF3 = hudiSnapshotDF2.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
 
-    inputDF3.write.format("org.apache.hudi")
+    inputDF3.write.format("hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -164,7 +164,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     // Bulk Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
@@ -173,7 +173,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
-    val hudiDF1 = spark.read.format("org.apache.hudi")
+    val hudiDF1 = spark.read.format("hudi")
       .load(basePath)
 
     assertEquals(100, hudiDF1.count())
@@ -182,7 +182,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     for ( a <- 1 to 5) {
       val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).asScala.toList
       val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-      inputDF2.write.format("org.apache.hudi")
+      inputDF2.write.format("hudi")
         .options(options)
         .mode(SaveMode.Append)
         .save(basePath)

@@ -76,14 +76,14 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     // First Operation:
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     val commit1Time = HoodieDataSourceHelpers.latestCommit(storage, basePath)
-    val partitionsForCommit1 = spark.read.format("org.apache.hudi").load(basePath)
+    val partitionsForCommit1 = spark.read.format("hudi").load(basePath)
       .select("_hoodie_partition_path")
       .distinct().collect()
       .map(_.get(0).toString).sorted
@@ -103,14 +103,14 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
 
     // Second Operation:
     // Drop Partition on 2015/03/16
-    spark.emptyDataFrame.write.format("org.apache.hudi")
+    spark.emptyDataFrame.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key, "2015/03/16")
       .mode(SaveMode.Append)
       .save(basePath)
     val commit2Time = HoodieDataSourceHelpers.latestCommit(storage, basePath)
-    val countPartitionDropped = spark.read.format("org.apache.hudi").load(basePath)
+    val countPartitionDropped = spark.read.format("hudi").load(basePath)
       .where("_hoodie_partition_path = '2015/03/16'").count()
     assertEquals(countPartitionDropped, 0)
 
@@ -128,7 +128,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     // Upsert with 50 duplicate records. Produced the second log file for each parquet.
     val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).asScala.toList
     val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
-    inputDF3.write.format("org.apache.hudi")
+    inputDF3.write.format("hudi")
       .options(commonOpts)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -150,7 +150,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     // First Operation:
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -175,7 +175,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     // Upsert with duplicate records. Produced a log file for each parquet.
     val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).asScala.toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("org.apache.hudi")
+    inputDF2.write.format("hudi")
       .options(commonOpts)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -197,7 +197,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     // And trigger compaction.
     val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).asScala.toList
     val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
-    inputDF3.write.format("org.apache.hudi")
+    inputDF3.write.format("hudi")
       .options(commonOpts).option("hoodie.compact.inline", "true")
       .option("hoodie.compact.inline.max.delta.commits", "1")
       .mode(SaveMode.Append).save(basePath)
@@ -217,7 +217,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     // Upsert with 50 duplicate records.
     val records4 = recordsToStrings(dataGen.generateUniqueUpdates("004", 50)).asScala.toList
     val inputDF4: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records4, 2))
-    inputDF4.write.format("org.apache.hudi")
+    inputDF4.write.format("hudi")
       .options(commonOpts)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -239,7 +239,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     // First Operation:
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)

@@ -68,7 +68,7 @@ class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase
   def testReadingWithStateTransitionTime(tableType: HoodieTableType): Unit = {
     val records = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    inputDF.write.format("org.apache.hudi")
+    inputDF.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
       .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -80,7 +80,7 @@ class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase
     val firstInstant = metaClient.getActiveTimeline.filterCompletedInstants().getInstantsOrderedByCompletionTime
       .findFirst().get()
 
-    val result1 = spark.read.format("org.apache.hudi")
+    val result1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key(), "000")
       .option(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), USE_TRANSITION_TIME.name())
@@ -89,7 +89,7 @@ class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase
       .count()
 
     Assertions.assertEquals(result1, 0)
-    val result2 = spark.read.format("org.apache.hudi")
+    val result2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key(), "000")
       .option(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), USE_TRANSITION_TIME.name())

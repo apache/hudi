@@ -200,7 +200,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       }
       if (resolving.isEmpty && rk._1.equals("primaryKey")
         && sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false") == "true") {
-        throw new HoodieAnalysisException(s"Hudi tables with primary key are required to match on all primary key colums. Column: '${rk._2}' not found")
+        throw new HoodieAnalysisException(s"Hudi tables with primary key are required to match on all primary key columns. Column: '${rk._2}' not found")
       }
       resolving
     }).filter(_.nonEmpty).map(_.get)

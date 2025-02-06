@@ -368,6 +368,17 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
+   * Compares two values.
+   * As [SPARK-46832] UTF8String doesn't support compareTo anymore, we need to have engine-specific implementations.
+   * @param a first value that is compared to
+   * @param b second value
+   * @return a negative integer, zero, or a positive integer as first object is less than, equal to, or greater than the second.
+   */
+  public int compareValues(Comparable a, Comparable b) {
+    return a.compareTo(b);
+  }
+
+  /**
    * Extracts the record position value from the record itself.
    *
    * @return the record position in the base file.
