@@ -44,7 +44,7 @@ import org.apache.hudi.common.table.timeline.LSMTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -249,7 +249,9 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata)
-            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsMetadataTable).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsMetadataTable)
+            .withMetadataIndexColumnStats(false).build())
+        // test uses test table infra. So, col stats is not available/populated.
         .withWriteConcurrencyMode(writeConcurrencyMode)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .build())
@@ -343,7 +345,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(5).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(5).withMetadataIndexColumnStats(false).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
             .withCleanerPolicy(HoodieCleaningPolicy.valueOf(cleaningPolicy))
@@ -411,7 +413,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       partToFileId.forEach((key, value) -> {
         try {
           List<String> files = new ArrayList<>();
-          FileCreateUtils.createPartitionMetaFile(basePath, key);
+          FileCreateUtilsLegacy.createPartitionMetaFile(basePath, key);
           if (addBaseFiles) {
             files.addAll(testTable.withBaseFilesInPartition(key, value.toArray(new String[0])).getValue());
           }
@@ -1652,6 +1654,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
             .withMaxNumDeltaCommitsBeforeCompaction(8)
+            .withMetadataIndexColumnStats(false) // test uses test table infra. So, col stats is not available/populated.
             .build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, true);

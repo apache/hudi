@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,7 +43,7 @@ public class TestBaseFileUtils {
         "path/to/file2", COLUMN_NAME, 3, 8, 1, 15, 120, 250);
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
-    HoodieColumnRangeMetadata<Comparable> result = FileFormatUtils.getColumnRangeInPartition(PARTITION_PATH, fileColumnRanges);
+    HoodieColumnRangeMetadata<Comparable> result = FileFormatUtils.getColumnRangeInPartition(PARTITION_PATH, fileColumnRanges, Collections.emptyMap());
     // Step 3: Assertions
     assertEquals(PARTITION_PATH, result.getFilePath());
     assertEquals(COLUMN_NAME, result.getColumnName());
@@ -64,7 +65,7 @@ public class TestBaseFileUtils {
 
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
-    HoodieColumnRangeMetadata<Comparable> result = FileFormatUtils.getColumnRangeInPartition(PARTITION_PATH, fileColumnRanges);
+    HoodieColumnRangeMetadata<Comparable> result = FileFormatUtils.getColumnRangeInPartition(PARTITION_PATH, fileColumnRanges, Collections.emptyMap());
     // Step 3: Assertions
     assertEquals(PARTITION_PATH, result.getFilePath());
     assertEquals(COLUMN_NAME, result.getColumnName());
@@ -85,6 +86,7 @@ public class TestBaseFileUtils {
         "path/to/file2", "columnName2", null, 8, 1, 15, 120, 250);
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
-    assertThrows(IllegalArgumentException.class, () -> FileFormatUtils.getColumnRangeInPartition(PARTITION_PATH, fileColumnRanges));
+    assertThrows(IllegalArgumentException.class, () -> FileFormatUtils.getColumnRangeInPartition(PARTITION_PATH, fileColumnRanges,
+        Collections.emptyMap()));
   }
 }

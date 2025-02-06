@@ -94,9 +94,9 @@ Learn more about Hudi at [https://hudi.apache.org](https://hudi.apache.org)
 Prerequisites for building Apache Hudi:
 
 * Unix-like system (like Linux, Mac OS X)
-* Java 8 (Java 9 or 11 may work)
+* Java 8, 11 or 17
 * Git
-* Maven (>=3.3.1)
+* Maven (>=3.6.0)
 
 ```
 # Checkout code and build
@@ -114,10 +114,10 @@ spark-3.5.0-bin-hadoop3/bin/spark-shell \
 
 To build for integration tests that include `hudi-integ-test-bundle`, use `-Dintegration-tests`.
 
-To build the Javadoc for all Java and Scala classes:
+To build the Javadoc for all Java and Scala classes (project should be already compiled):
 ```
 # Javadoc generated under target/site/apidocs
-mvn clean javadoc:aggregate -Pjavadocs
+mvn javadoc:aggregate -Pjavadocs
 ```
 
 ### Build with different Spark versions

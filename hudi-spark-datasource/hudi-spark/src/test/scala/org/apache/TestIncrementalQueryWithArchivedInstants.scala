@@ -61,7 +61,7 @@ class TestIncrementalQueryWithArchivedInstants extends SparkClientFunctionalTest
       "hoodie.datasource.write.recordkey.field" -> "id",
       "hoodie.datasource.write.precombined.field" -> "ts",
       "hoodie.datasource.write.partitionpath.field" -> "name",
-      "hoodie.populate.meta.fields=true" -> "false",
+      "hoodie.populate.meta.fields" -> "true",
       "hoodie.compaction.payload.class" -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
       "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
       RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name)

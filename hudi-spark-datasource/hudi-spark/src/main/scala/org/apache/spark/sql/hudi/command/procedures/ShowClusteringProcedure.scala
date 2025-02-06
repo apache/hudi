@@ -67,7 +67,7 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
 
     val clusteringPlans = clusteringInstants.map(instant =>
       ClusteringUtils.getClusteringPlan(metaClient, instant)
-    )
+    ).filter(clusteringPlan => clusteringPlan.isPresent)
 
     if (showInvolvedPartitions) {
       clusteringPlans.map { p =>

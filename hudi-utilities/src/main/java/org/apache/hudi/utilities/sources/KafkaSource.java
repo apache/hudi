@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
@@ -31,6 +32,8 @@ import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka010.OffsetRange;
@@ -75,6 +78,11 @@ public abstract class KafkaSource<T> extends Source<T> {
           lastCheckpoint, sourceLimit));
     } catch (org.apache.kafka.common.errors.TimeoutException e) {
       throw new HoodieSourceTimeoutException("Kafka Source timed out " + e.getMessage());
+    } catch (KafkaException ex) {
+      if (hasConfigException(ex)) {
+        throw new HoodieReadFromSourceException("kafka source config issue ", ex);
+      }
+      throw ex;
     }
   }
 
@@ -125,5 +133,17 @@ public abstract class KafkaSource<T> extends Source<T> {
     if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET)) {
       offsetGen.commitOffsetToKafka(lastCkptStr);
     }
+  }
+
+  private boolean hasConfigException(Throwable e) {
+    if (e == null) {
+      return false;
+    }
+
+    if (e instanceof ConfigException || e instanceof io.confluent.common.config.ConfigException) {
+      return true;
+    }
+
+    return hasConfigException(e.getCause());
   }
 }

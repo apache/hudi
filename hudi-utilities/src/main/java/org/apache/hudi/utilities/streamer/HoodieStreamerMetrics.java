@@ -49,10 +49,10 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
     super(writeConfig, storage);
     if (writeConfig.isMetricsOn()) {
       metrics = Metrics.getInstance(writeConfig, storage);
-      this.overallTimerName = getMetricsName("timer", "deltastreamer");
-      this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
-      this.metaSyncTimerName = getMetricsName("timer", "deltastreamerMetaSync");
-      this.errorTableWriteTimerName = getMetricsName("timer", "errorTableWrite");
+      this.overallTimerName = getMetricsName("deltastreamer", "timer");
+      this.hiveSyncTimerName = getMetricsName("deltastreamer", "deltastreamerHiveSync.timer");
+      this.metaSyncTimerName = getMetricsName("deltastreamer", "deltastreamerMetaSync.timer");
+      this.errorTableWriteTimerName = getMetricsName("deltastreamer", "errorTableWrite.timer");
     }
   }
 

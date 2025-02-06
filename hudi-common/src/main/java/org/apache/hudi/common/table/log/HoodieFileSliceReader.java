@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
 
@@ -43,12 +44,13 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
 
   private TypedProperties payloadProps = new TypedProperties();
   private Option<Pair<String, String>> simpleKeyGenFieldsOpt;
+  private Option<BaseKeyGenerator> keyGeneratorOpt;
   Map<String, HoodieRecord> records;
   HoodieRecordMerger merger;
 
   public HoodieFileSliceReader(Option<HoodieFileReader> baseFileReader,
                                    HoodieMergedLogRecordScanner scanner, Schema schema, String preCombineField, HoodieRecordMerger merger,
-                               Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt) throws IOException {
+                               Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Option<BaseKeyGenerator> keyGeneratorOpt) throws IOException {
     super(scanner);
     if (baseFileReader.isPresent()) {
       this.baseFileIterator = Option.of(baseFileReader.get().getRecordIterator(schema));
@@ -63,20 +65,22 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
     }
     this.props = props;
     this.simpleKeyGenFieldsOpt = simpleKeyGenFieldsOpt;
+    this.keyGeneratorOpt = keyGeneratorOpt;
     this.records = scanner.getRecords();
   }
 
   private boolean hasNextInternal() {
     while (baseFileIterator.isPresent() && baseFileIterator.get().hasNext()) {
       try {
-        HoodieRecord currentRecord = baseFileIterator.get().next().wrapIntoHoodieRecordPayloadWithParams(schema, props,
-            simpleKeyGenFieldsOpt, scanner.isWithOperationField(), scanner.getPartitionNameOverride(), false, Option.empty());
-        Option<HoodieRecord> logRecord = removeLogRecord(currentRecord.getRecordKey());
+        HoodieRecord currentRecord = baseFileIterator.get().next();
+        String recordKey = currentRecord.getRecordKey(schema, keyGeneratorOpt);
+        Option<HoodieRecord> logRecord = removeLogRecord(recordKey);
         if (!logRecord.isPresent()) {
-          nextRecord = currentRecord;
+          nextRecord = currentRecord.wrapIntoHoodieRecordPayloadWithParams(schema, props, simpleKeyGenFieldsOpt, scanner.isWithOperationField(),
+              scanner.getPartitionNameOverride(), false, Option.empty());
           return true;
         }
-        Option<Pair<HoodieRecord, Schema>> mergedRecordOpt =  merger.merge(currentRecord, schema, logRecord.get(), schema, payloadProps);
+        Option<Pair<HoodieRecord, Schema>> mergedRecordOpt = merger.merge(currentRecord, schema, logRecord.get(), schema, payloadProps);
         if (mergedRecordOpt.isPresent()) {
           HoodieRecord<T> mergedRecord = (HoodieRecord<T>) mergedRecordOpt.get().getLeft();
           nextRecord = mergedRecord.wrapIntoHoodieRecordPayloadWithParams(schema, props, simpleKeyGenFieldsOpt, scanner.isWithOperationField(),

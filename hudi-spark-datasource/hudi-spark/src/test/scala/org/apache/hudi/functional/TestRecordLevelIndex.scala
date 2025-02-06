@@ -243,6 +243,27 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     validateDataAndRecordIndices(hudiOpts, deleteDf)
   }
 
+  @Test
+  def testRLIWithEmptyPayload(): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
+      HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0")
+    val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+
+    val deleteDf = insertDf.limit(2)
+    deleteDf.cache()
+    deleteDf.write.format("hudi")
+      .options(hudiOpts)
+      .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.EmptyHoodieRecordPayload")
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val prevDf = mergedDfList.last
+    mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
+    validateDataAndRecordIndices(hudiOpts, deleteDf)
+  }
+
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIForDeletesWithHoodieIsDeletedColumn(tableType: HoodieTableType): Unit = {
@@ -299,8 +320,8 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     assertEquals(0, getFileGroupCountForRecordIndex(writeConfig))
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(0, metaClient.getTableConfig.getMetadataPartitionsInflight.size())
-    // only files partition should be present
-    assertEquals(1, metaClient.getTableConfig.getMetadataPartitions.size())
+    // only files, col stats, partition stats partition should be present.
+    assertEquals(3, metaClient.getTableConfig.getMetadataPartitions.size())
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -516,7 +537,6 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     assertTrue(compactionBaseFile.isPresent)
   }
 
-  @Disabled("Would take a long time to run on regular basis")
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIWithMDTCleaning(tableType: HoodieTableType): Unit = {
@@ -527,11 +547,14 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
 
-    hudiOpts = hudiOpts + (HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "40")
+    hudiOpts = hudiOpts + (
+      HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED.key() -> "1",
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "4"
+    )
     val function = () => doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    executeFunctionNTimes(function, 20)
+    executeFunctionNTimes(function, 5)
 
     assertTrue(getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isPresent)
     rollbackLastInstant(hudiOpts)

@@ -147,6 +147,7 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
     return new HoodieListPairData<>(asStream().map(p -> Pair.of(p.getKey(), uncheckedMapper.apply(p.getValue()))), lazy);
   }
 
+  @Override
   public <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func) {
     Function<V, Iterator<W>> uncheckedMapper = throwingMapWrapper(func);
     return new HoodieListPairData<>(asStream().flatMap(p -> {
@@ -189,6 +190,13 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
     });
 
     return new HoodieListPairData<>(leftOuterJoined, lazy);
+  }
+
+  @Override
+  public HoodiePairData<K, V> union(HoodiePairData<K, V> other) {
+    ValidationUtils.checkArgument(other instanceof HoodieListPairData);
+    Stream<Pair<K, V>> unionStream = Stream.concat(asStream(), ((HoodieListPairData<K, V>) other).asStream());
+    return new HoodieListPairData<>(unionStream, lazy);
   }
 
   @Override
