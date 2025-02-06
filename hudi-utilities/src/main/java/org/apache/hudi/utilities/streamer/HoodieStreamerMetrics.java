@@ -205,6 +205,14 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   }
 
   @Override
+  public void updateHoodieIncrSourceMetrics(long numCommitsInProgress, long numUnprocessedCommits) {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "numCommitsInProgress"), numCommitsInProgress);
+      metrics.registerGauge(getMetricsName("deltastreamer", "numUnprocessedCommits"), numUnprocessedCommits);
+    }
+  }
+
+  @Override
   public void shutdown() {
     if (metrics != null) {
       metrics.shutdown();

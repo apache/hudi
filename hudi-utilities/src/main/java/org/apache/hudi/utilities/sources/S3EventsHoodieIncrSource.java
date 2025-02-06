@@ -131,7 +131,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             HoodieRecord.COMMIT_TIME_METADATA_FIELD,
             CloudObjectsSelectorCommon.S3_OBJECT_KEY,
             CloudObjectsSelectorCommon.S3_OBJECT_SIZE, true,
-            Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
+    Option.ofNullable(cloudObjectIncrCheckpoint.getKey()), metricsOption);
     log.info("Querying S3 with:{}, queryInfo:{}", cloudObjectIncrCheckpoint, queryInfo);
 
     if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryInfo.areStartAndEndInstantsEqual()) {
