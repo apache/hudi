@@ -362,7 +362,7 @@ public class HoodieIncrSource extends RowSource {
     QueryInfo queryInfo = generateQueryInfo(sparkContext, srcPath,
         numInstantsPerFetch, beginInstant, missingCheckpointStrategy, handlingMode,
         HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        null, false, Option.empty());
+        null, false, Option.empty(), metricsOption);
 
     if (queryInfo.areStartAndEndInstantsEqual()) {
       LOG.info("Already caught up. No new data to process");
