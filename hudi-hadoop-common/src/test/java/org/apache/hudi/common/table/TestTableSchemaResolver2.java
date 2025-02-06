@@ -198,7 +198,7 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
       testTable.addReplaceCommit(commitTime1,
           Option.of(requestedMetadata),
           Option.empty(),
-          new HoodieReplaceCommitMetadata(buildMetadata(
+          (HoodieReplaceCommitMetadata)(buildMetadata(
               Collections.emptyList(),
               Collections.emptyMap(),
               Option.empty(),
@@ -276,8 +276,8 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
         HoodieClusteringStrategy.newBuilder().build(), Collections.emptyMap(), 1, false, null);
     HoodieRequestedReplaceMetadata requestedMetadata = new HoodieRequestedReplaceMetadata(WriteOperationType.CLUSTER.name(), plan, Collections.emptyMap(), 1);
     testTable.addReplaceCommit(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH), Option.of(requestedMetadata), Option.empty(),
-        new HoodieReplaceCommitMetadata(buildMetadata(
-            Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UNKNOWN, SCHEMA_WITH_METADATA.toString(), CLUSTERING_ACTION)));
+            (HoodieReplaceCommitMetadata)buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UNKNOWN,
+                SCHEMA_WITH_METADATA.toString(), CLUSTERING_ACTION));
     startCommitTime += 1;
 
     // Inflight commits
