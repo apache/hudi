@@ -90,7 +90,7 @@ class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMix
 
     Assertions.assertDoesNotThrow(new Executable {
       override def execute(): Unit =
-        inputDF1.write.format("org.apache.hudi")
+        inputDF1.write.format("hudi")
           .options(writeOpts)
           .mode(SaveMode.Overwrite)
           .save(basePath)
