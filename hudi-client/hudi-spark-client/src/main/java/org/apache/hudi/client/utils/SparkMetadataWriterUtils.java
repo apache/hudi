@@ -29,6 +29,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -59,6 +60,7 @@ import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.JavaScalaConverters;
 
@@ -404,8 +406,9 @@ public class SparkMetadataWriterUtils {
       LOG.debug("Indexing following columns for partition stats index: {}", validColumnsToIndex);
       List<String> partitionPaths = new ArrayList<>(commitMetadata.getWritePartitionPaths());
       int parallelism = Math.max(Math.min(partitionPaths.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
+      final StorageConfiguration<?> storageConfiguration = engineContext.getStorageConf();
       return engineContext.parallelize(partitionPaths, parallelism).mapToPair(partitionName -> {
-        try (HoodieTableFileSystemView fileSystemView = getFileSystemView(engineContext, dataMetaClient)) {
+        try (HoodieTableFileSystemView fileSystemView = getFileSystemView(new HoodieLocalEngineContext(storageConfiguration), dataMetaClient)) {
           checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
           // Collect Column Metadata for Each File part of active file system view of latest snapshot
           // Get all file names, including log files, in a set from the file slices

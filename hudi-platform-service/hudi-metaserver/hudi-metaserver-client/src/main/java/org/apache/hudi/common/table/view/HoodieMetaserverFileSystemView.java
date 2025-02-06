@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.view;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metaserver.client.HoodieMetaserverClient;
 import org.apache.hudi.metaserver.client.HoodieMetaserverClientProxy;
 
