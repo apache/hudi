@@ -195,7 +195,8 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
         try {
           Option<byte[]> content = activeTimeline.getInstantDetails(cleanPlanInstant);
-          if (content.isPresent()) {
+          // Deserialize plan if it is non-empty
+          if (content.map(bytes -> bytes.length > 0).orElse(false)) {
             return Option.of(TimelineMetadataUtils.deserializeCleanerPlan(content.get()));
           } else {
             return Option.of(new HoodieCleanerPlan());
