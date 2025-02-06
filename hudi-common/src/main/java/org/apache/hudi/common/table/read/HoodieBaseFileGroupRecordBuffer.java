@@ -243,7 +243,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             }
             Comparable incomingOrderingValue = readerContext.getOrderingValue(
                 Option.of(record), metadata, readerSchema, orderingFieldName);
-            if (incomingOrderingValue.compareTo(existingOrderingValue) > 0) {
+            if (readerContext.compareValues(incomingOrderingValue, existingOrderingValue) > 0) {
               return Option.of(Pair.of(isDeleteRecord(Option.of(record), readerContext.getSchemaFromMetadata(metadata))
                   ? Option.empty() : Option.of(record), metadata));
             }
@@ -326,7 +326,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           // because we use 0 as the default value which means natural order
           boolean chooseExisting = !deleteOrderingVal.equals(0)
               && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
-              && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
+              && readerContext.compareValues(existingOrderingVal, deleteOrderingVal) > 0;
           if (chooseExisting) {
             // The DELETE message is obsolete if the old message has greater orderingVal.
             return Option.empty();
@@ -426,7 +426,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           Comparable oldOrderingValue = readerContext.getOrderingValue(
               older, olderInfoMap, readerSchema, orderingFieldName);
           if (!isDeleteRecordWithNaturalOrder(older, oldOrderingValue)
-              && oldOrderingValue.compareTo(newOrderingValue) > 0) {
+              && readerContext.compareValues(oldOrderingValue, newOrderingValue) > 0) {
             return isDeleteRecord(older, readerContext.getSchemaFromMetadata(olderInfoMap)) ? Option.empty() : older;
           }
           return isDeleteRecord(newer, readerContext.getSchemaFromMetadata(newerInfoMap)) ? Option.empty() : newer;

@@ -71,7 +71,7 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
   @Test def testDoubleInsert(): Unit = {
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -81,14 +81,14 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
     val records2 = recordsToStrings(dataGen.generateInserts("002", 100)).asScala.toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("org.apache.hudi")
+    inputDF2.write.format("hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
-    val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
+    val hudiSnapshotDF1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath)
     assertEquals(200, hudiSnapshotDF1.count())
@@ -100,7 +100,7 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
     // SNAPSHOT view on MOR table with parquet files only.
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
@@ -108,7 +108,7 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
       .mode(SaveMode.Append)
       .save(basePath)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
-    val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
+    val hudiSnapshotDF1 = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath)
     assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
@@ -118,11 +118,11 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
     // SNAPSHOT view should read the log files only with the latest commit time.
     val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).asScala.toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("org.apache.hudi")
+    inputDF2.write.format("hudi")
         .options(commonOpts)
         .mode(SaveMode.Append)
         .save(basePath)
-    val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
+    val hudiSnapshotDF2 = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath)
     assertEquals(100, hudiSnapshotDF2.count()) // still 100, since we only updated
@@ -137,11 +137,11 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
     val newDataGen = new HoodieTestDataGenerator(partitionPaths)
     val records4 = recordsToStrings(newDataGen.generateInserts("004", 100)).asScala.toList
     val inputDF4: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records4, 2))
-    inputDF4.write.format("org.apache.hudi")
+    inputDF4.write.format("hudi")
         .options(commonOpts)
         .mode(SaveMode.Append)
         .save(basePath)
-    val hudiSnapshotDF4 = spark.read.format("org.apache.hudi")
+    val hudiSnapshotDF4 = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath)
     // 200, because we insert 100 records to a new partition
@@ -156,7 +156,7 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
     val newDataGen = new HoodieTestDataGenerator(partitionPaths)
     val records1 = recordsToStrings(newDataGen.generateInserts("001", 100)).asScala.toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -166,14 +166,14 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
     val records2 = recordsToStrings(newDataGen.generateInserts("002", 20)).asScala.toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("org.apache.hudi")
+    inputDF2.write.format("hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
-    val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
+    val hudiSnapshotDF1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath)
     assertEquals(20, hudiSnapshotDF1.count())
