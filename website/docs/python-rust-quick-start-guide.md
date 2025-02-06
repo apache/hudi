@@ -6,7 +6,7 @@ last_modified_at: 2024-11-28T12:53:57+08:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This guide will help you get started with [hudi-rs](https://github.com/apache/hudi-rs), the native Rust implementation for Apache Hudi with Python bindings. Learn how to install, set up, and perform basic operations using both Python and Rust interfaces.
+This guide will help you get started with [Hudi-rs](https://github.com/apache/hudi-rs), the native Rust implementation for Apache Hudi with Python bindings. Learn how to install, set up, and perform basic operations using both Python and Rust interfaces.
 
 ## Installation
 
