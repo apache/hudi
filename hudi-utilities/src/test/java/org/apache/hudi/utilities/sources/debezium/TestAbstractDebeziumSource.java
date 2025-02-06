@@ -39,6 +39,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -136,6 +137,23 @@ public abstract class TestAbstractDebeziumSource extends UtilitiesTestBase {
 
     // Validate DB specific meta fields
     validateMetaFields(fetch.getBatch().get());
+  }
+
+  @Test
+  public void testDatasetRowSchemaWithoutData() throws Exception {
+    String sourceClass = getSourceClass();
+
+    // topic setup without message
+    testUtils.createTopic(testTopicName, 2);
+    TypedProperties props = createPropsForJsonSource();
+
+    SchemaProvider schemaProvider = new MockSchemaRegistryProvider(props, jsc, this);
+    SourceFormatAdapter debeziumSource = new SourceFormatAdapter(UtilHelpers.createSource(sourceClass, props, jsc, sparkSession, metrics, new DefaultStreamContext(schemaProvider, Option.empty())));
+    InputBatch<Dataset<Row>> fetch = debeziumSource.fetchNewDataInRowFormat(Option.empty(), 10);
+    Dataset<Row> result = fetch.getBatch().get();
+
+    assertEquals(result.count(), 0);
+    assertTrue(result.columns().length > 0);
   }
 
   private GenericRecord generateDebeziumEvent(Operation op) {

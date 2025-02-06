@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -95,7 +96,7 @@ public abstract class BaseConsistentHashingBucketClusteringPlanStrategy<T extend
    * Generate cluster group based on split, merge and sort rules
    */
   @Override
-  protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
+  protected Pair<Stream<HoodieClusteringGroup>, Boolean> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
     Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(getHoodieTable(), partitionPath);
     ValidationUtils.checkArgument(metadata.isPresent(), "Metadata is empty for partition: " + partitionPath);
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata.get());
@@ -128,7 +129,7 @@ public abstract class BaseConsistentHashingBucketClusteringPlanStrategy<T extend
             .build();
       }).collect(Collectors.toList()));
     }
-    return ret.stream();
+    return Pair.of(ret.stream(), true);
   }
 
   /**

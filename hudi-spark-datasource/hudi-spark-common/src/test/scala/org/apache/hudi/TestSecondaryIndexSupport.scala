@@ -101,5 +101,4 @@ class TestSecondaryIndexSupport {
     result = filterQueriesWithSecondaryKey(Seq(testFilter), Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))._2
     assertTrue(result.isEmpty)
   }
-
 }

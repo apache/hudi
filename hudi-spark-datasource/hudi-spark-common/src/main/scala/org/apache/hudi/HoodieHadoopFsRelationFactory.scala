@@ -39,7 +39,8 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
-import org.apache.spark.sql.{SparkSession, SQLContext}
+import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.execution.datasources._
@@ -65,7 +66,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
                                                  val options: Map[String, String],
                                                  val schemaSpec: Option[StructType],
                                                  val isBootstrap: Boolean
-                                                ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory {
+                                                ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory with Logging {
   protected lazy val sparkSession: SparkSession = sqlContext.sparkSession
   protected lazy val optParams: Map[String, String] = options
   protected lazy val hadoopConfig: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
@@ -79,6 +80,9 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   protected lazy val basePath: StoragePath = metaClient.getBasePath
   protected lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
+  // very much not recommended to use a partition column as the precombine
+  private lazy val partitionColumnsHasPrecombine = preCombineFieldOpt.isDefined && partitionColumns.contains(preCombineFieldOpt.get)
+
   private lazy val keygenTypeHasVariablePartitionCols = isTimestampKeygen || isCustomKeygen
 
   private lazy val isTimestampKeygen = !isNullOrEmpty(tableConfig.getKeyGeneratorClassName) &&
@@ -89,12 +93,9 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     (tableConfig.getKeyGeneratorClassName.equals(classOf[CustomKeyGenerator].getName) ||
     tableConfig.getKeyGeneratorClassName.equals(classOf[CustomAvroKeyGenerator].getName))
 
-  protected lazy val partitionColumnsToRead: Seq[String] = if (shouldExtractPartitionValuesFromPartitionPath || !keygenTypeHasVariablePartitionCols) {
-    Seq.empty
-  } else if (isTimestampKeygen) {
+  private lazy val variableTimestampKeygenPartitionCols = if (isTimestampKeygen) {
     tableConfig.getPartitionFields.orElse(Array.empty).toSeq
-  } else {
-    //it's custom keygen
+  } else if (isCustomKeygen) {
     val timestampFieldsOpt = CustomAvroKeyGenerator.getTimestampFields(tableConfig)
     if (timestampFieldsOpt.isPresent) {
       timestampFieldsOpt.get().asScala.toSeq
@@ -102,6 +103,33 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
       // timestamp fields above are determined using partition type
       // For older tables the partition type may not be available so falling back to partition fields in those cases
       tableConfig.getPartitionFields.orElse(Array.empty).toSeq
+    }
+  } else {
+    Seq.empty
+  }
+
+  protected lazy val partitionColumnsToRead: Seq[String] = {
+    if (shouldExtractPartitionValuesFromPartitionPath) {
+      Seq.empty
+    } else if (partitionColumnsHasPrecombine) {
+      logWarning(s"Not recommended for field '${preCombineFieldOpt.get}' to be both precombine and partition")
+      if (keygenTypeHasVariablePartitionCols) {
+        // still need to read any timestamp/custom keygen timestamp columns
+        if (variableTimestampKeygenPartitionCols.contains(preCombineFieldOpt.get)) {
+          // precombine is already included in the list
+          variableTimestampKeygenPartitionCols
+        } else {
+          // precombine is not included in the list so we append it
+          variableTimestampKeygenPartitionCols :+ preCombineFieldOpt.get
+        }
+      } else {
+        // not timestamp/custom keygen so just need to read precombine
+        Seq(preCombineFieldOpt.get)
+      }
+    } else if (keygenTypeHasVariablePartitionCols) {
+      variableTimestampKeygenPartitionCols
+    } else {
+      Seq.empty
     }
   }
 
@@ -138,7 +166,8 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   }
 
   protected lazy val validCommits: String = if (internalSchemaOpt.nonEmpty) {
-    timeline.getInstants.iterator.asScala.map(_.getFileName).mkString(",")
+    val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator
+    timeline.getInstants.iterator.asScala.map(instant => instantFileNameGenerator.getFileName(instant)).mkString(",")
   } else {
     ""
   }
@@ -200,7 +229,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   protected lazy val shouldUseRecordPosition: Boolean = checkIfAConfigurationEnabled(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS)
 
   protected def queryTimestamp: Option[String] =
-    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
+    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.requestedTime))
 
   protected def hasSchemaOnRead: Boolean = internalSchemaOpt.isDefined
 
@@ -235,8 +264,7 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
     optParams,
     FileStatusCache.getOrCreate(sparkSession),
     includeLogFiles = true,
-    shouldEmbedFileSlices = true,
-    shouldUseStringTypeForTimestampPartitionKeyType = true)
+    shouldEmbedFileSlices = true)
 
   val configProperties: TypedProperties = getConfigProperties(sparkSession, options, metaClient.getTableConfig)
   val metadataConfig: HoodieMetadataConfig = HoodieMetadataConfig.newBuilder
@@ -334,8 +362,7 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
     Some(tableStructSchema),
     optParams,
     FileStatusCache.getOrCreate(sparkSession),
-    shouldEmbedFileSlices = true,
-    shouldUseStringTypeForTimestampPartitionKeyType = true)
+    shouldEmbedFileSlices = true)
 
   override def buildFileFormat(): FileFormat = {
     if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {

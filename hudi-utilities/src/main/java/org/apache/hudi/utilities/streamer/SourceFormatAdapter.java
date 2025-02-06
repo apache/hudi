@@ -23,6 +23,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
@@ -167,20 +168,20 @@ public class SourceFormatAdapter implements Closeable {
   /**
    * Fetch new data in avro format. If the source provides data in different format, they are translated to Avro format
    */
-  public InputBatch<JavaRDD<GenericRecord>> fetchNewDataInAvroFormat(Option<String> lastCkptStr, long sourceLimit) {
+  public InputBatch<JavaRDD<GenericRecord>> fetchNewDataInAvroFormat(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     switch (source.getSourceType()) {
       case AVRO:
         //don't need to sanitize because it's already avro
-        return ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCkptStr, sourceLimit);
+        return ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCheckpoint, sourceLimit);
       case JSON: {
         //sanitizing is done inside the convertor in transformJsonToGenericRdd if enabled
-        InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCheckpoint, sourceLimit);
         JavaRDD<GenericRecord> eventsRdd = transformJsonToGenericRdd(r);
         return new InputBatch<>(Option.ofNullable(eventsRdd),r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       case ROW: {
         //we do the sanitizing here if enabled
-        InputBatch<Dataset<Row>> r = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<Dataset<Row>> r = ((Source<Dataset<Row>>) source).fetchNext(lastCheckpoint, sourceLimit);
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
             rdd -> {
                 SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
@@ -197,7 +198,7 @@ public class SourceFormatAdapter implements Closeable {
       }
       case PROTO: {
         //TODO([HUDI-5830]) implement field name sanitization
-        InputBatch<JavaRDD<Message>> r = ((Source<JavaRDD<Message>>) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<Message>> r = ((Source<JavaRDD<Message>>) source).fetchNext(lastCheckpoint, sourceLimit);
         AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(rdd -> rdd.map(convertor::fromProtoMessage)).orElse(null)),
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
@@ -223,21 +224,21 @@ public class SourceFormatAdapter implements Closeable {
   /**
    * Fetch new data in row format. If the source provides data in different format, they are translated to Row format
    */
-  public InputBatch<Dataset<Row>> fetchNewDataInRowFormat(Option<String> lastCkptStr, long sourceLimit) {
+  public InputBatch<Dataset<Row>> fetchNewDataInRowFormat(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     switch (source.getSourceType()) {
       case ROW:
         //we do the sanitizing here if enabled
-        InputBatch<Dataset<Row>> datasetInputBatch = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<Dataset<Row>> datasetInputBatch = ((Source<Dataset<Row>>) source).fetchNext(lastCheckpoint, sourceLimit);
         return new InputBatch<>(processErrorEvents(datasetInputBatch.getBatch(),
             ErrorEvent.ErrorReason.JSON_ROW_DESERIALIZATION_FAILURE),
             datasetInputBatch.getCheckpointForNextBatch(), datasetInputBatch.getSchemaProvider());
       case AVRO: {
         //don't need to sanitize because it's already avro
-        InputBatch<JavaRDD<GenericRecord>> r = ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<GenericRecord>> r = ((Source<JavaRDD<GenericRecord>>) source).fetchNext(lastCheckpoint, sourceLimit);
         return avroDataInRowFormat(r);
       }
       case JSON: {
-        InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCheckpoint, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
 
         if (isFieldNameSanitizingEnabled()) {
@@ -279,7 +280,7 @@ public class SourceFormatAdapter implements Closeable {
       }
       case PROTO: {
         //TODO([HUDI-5830]) implement field name sanitization
-        InputBatch<JavaRDD<Message>> r = ((Source<JavaRDD<Message>>) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<Message>> r = ((Source<JavaRDD<Message>>) source).fetchNext(lastCheckpoint, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
         AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
         return new InputBatch<>(

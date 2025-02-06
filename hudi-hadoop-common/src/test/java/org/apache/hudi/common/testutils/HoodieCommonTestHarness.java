@@ -20,11 +20,14 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -54,8 +57,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -69,6 +73,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 /**
  * The common hoodie test harness to provide the basic infrastructure.
@@ -148,6 +153,14 @@ public class HoodieCommonTestHarness {
       initPath();
     }
     metaClient = HoodieTestUtils.init(basePath, getTableType());
+  }
+
+  protected void initMetaClient(boolean preTableVersion8) throws IOException {
+    if (basePath == null) {
+      initPath();
+    }
+    metaClient = HoodieTestUtils.init(basePath, getTableType(), "", false, null, "datestr",
+        preTableVersion8 ? Option.of(HoodieTableVersion.SIX) : Option.of(HoodieTableVersion.current()));
   }
 
   protected void cleanMetaClient() {
@@ -258,24 +271,24 @@ public class HoodieCommonTestHarness {
     Set<String> completedInstants = completedTimeline
         .getInstants()
         .stream()
-        .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+        .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
     List<String> pendingInstants = timeline
         .getInstants()
         .stream()
-        .map(HoodieInstant::getTimestamp)
+        .map(HoodieInstant::requestedTime)
         .filter(t -> !completedInstants.contains(t))
         .collect(Collectors.toList());
     return !pendingInstants.isEmpty();
   }
 
-  protected static Set<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                    Schema schema,
-                                                    List<HoodieRecord> records,
-                                                    int numFiles,
-                                                    HoodieStorage storage,
-                                                    Properties props,
-                                                    String fileId,
-                                                    String commitTime)
+  protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
+                                                     Schema schema,
+                                                     List<HoodieRecord> records,
+                                                     int numFiles,
+                                                     HoodieStorage storage,
+                                                     Properties props,
+                                                     String fileId,
+                                                     String commitTime)
       throws IOException, InterruptedException {
     List<IndexedRecord> indexedRecords = records.stream()
         .map(record -> {
@@ -289,32 +302,32 @@ public class HoodieCommonTestHarness {
         .map(Option::get)
         .map(HoodieRecord::getData)
         .collect(Collectors.toList());
-    return writeLogFiles(partitionPath, schema, indexedRecords, numFiles, false, storage, fileId, commitTime);
+    return writeLogFiles(partitionPath, schema, indexedRecords, numFiles, storage, fileId, commitTime, "100");
   }
 
-  protected static Set<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                    Schema schema,
-                                                    List<IndexedRecord> records,
-                                                    int numFiles,
-                                                    HoodieStorage storage)
+  protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
+                                                     Schema schema,
+                                                     List<IndexedRecord> records,
+                                                     int numFiles,
+                                                     HoodieStorage storage)
       throws IOException, InterruptedException {
-    return writeLogFiles(partitionPath, schema, records, numFiles, false, storage, "test-fileid1", "100");
+    return writeLogFiles(partitionPath, schema, records, numFiles, storage, "test-fileid1", "100", "100");
   }
 
-  protected static Set<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                    Schema schema,
-                                                    List<IndexedRecord> records,
-                                                    int numFiles,
-                                                    boolean enableBlockSequenceNumbers,
-                                                    HoodieStorage storage,
-                                                    String fileId,
-                                                    String commitTime)
+  protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
+                                                     Schema schema,
+                                                     List<IndexedRecord> records,
+                                                     int numFiles,
+                                                     HoodieStorage storage,
+                                                     String fileId,
+                                                     String commitTime,
+                                                     String logBlockInstantTime)
       throws IOException, InterruptedException {
-    int blockSeqNo = 0;
     HoodieLogFormat.Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withSizeThreshold(1024).withFileId(fileId).withDeltaCommit(commitTime)
+            .withSizeThreshold(1024).withFileId(fileId)
+            .withInstantTime(commitTime)
             .withStorage(storage).build();
     if (storage.exists(writer.getLogFile().getPath())) {
       // enable append for reader test.
@@ -322,10 +335,10 @@ public class HoodieCommonTestHarness {
           (FSDataOutputStream) storage.append(writer.getLogFile().getPath()));
     }
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, logBlockInstantTime);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
 
-    Set<HoodieLogFile> logFiles = new HashSet<>();
+    List<HoodieLogFile> logFiles = new ArrayList<>();
 
     // Create log files
     int recordsPerFile = records.size() / numFiles;
@@ -359,13 +372,34 @@ public class HoodieCommonTestHarness {
       case CDC_DATA_BLOCK:
         return new HoodieCDCDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        return new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(records, header, HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(), pathForReader, HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, PARQUET_COMPRESSION_CODEC_NAME.defaultValue(), 0.1, true);
+        return new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, PARQUET_COMPRESSION_CODEC_NAME.defaultValue(), 0.1, true);
       default:
         throw new RuntimeException("Unknown data block type " + dataBlockType);
     }
+  }
+
+  public byte[] getCommitMetadata(String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
+      throws IOException {
+    return getCommitMetadata(metaClient, basePath, partition, commitTs, count, extraMetadata);
+  }
+
+  public static byte[] getCommitMetadata(HoodieTableMetaClient metaClient, String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
+      throws IOException {
+    HoodieCommitMetadata commit = new HoodieCommitMetadata();
+    for (int i = 1; i <= count; i++) {
+      HoodieWriteStat stat = new HoodieWriteStat();
+      stat.setFileId(i + "");
+      stat.setPartitionPath(Paths.get(basePath, partition).toString());
+      stat.setPath(commitTs + "." + i + metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
+      commit.addWriteStat(partition, stat);
+    }
+    for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
+      commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
+    }
+    return serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commit).get();
   }
 }

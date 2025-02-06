@@ -21,10 +21,14 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
+import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.SchemaBuilder;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.stubbing.Answer;
@@ -32,6 +36,8 @@ import org.mockito.stubbing.Answer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
@@ -72,6 +78,30 @@ public class TestHoodieLogBlock {
     Option<byte[]> actual = dataBlock.getContent();
     assertTrue(actual.isPresent());
     assertArrayEquals(expected, actual.get());
+  }
+
+  @Test
+  public void testHeaderMetadata() throws IOException {
+    Map<HoodieLogBlock.HeaderMetadataType, String> a = new HashMap<>();
+    a.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    a.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "1");
+    a.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, "{}");
+    a.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE, "rollback");
+    a.put(HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES, "1");
+    a.put(HoodieLogBlock.HeaderMetadataType.RECORD_POSITIONS, "");
+    a.put(HoodieLogBlock.HeaderMetadataType.BLOCK_IDENTIFIER, "1");
+    a.put(HoodieLogBlock.HeaderMetadataType.IS_PARTIAL, "true");
+    byte[] bytes = HoodieLogBlock.getHeaderMetadataBytes(a);
+
+    Map<HoodieLogBlock.HeaderMetadataType, String> b = HoodieLogBlock.getHeaderMetadata(new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(bytes)));
+    Assertions.assertEquals("100", b.get(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME));
+    Assertions.assertEquals("1", b.get(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME));
+    Assertions.assertEquals("{}", b.get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
+    Assertions.assertEquals("rollback", b.get(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE));
+    Assertions.assertEquals("1", b.get(HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES));
+    Assertions.assertEquals("", b.get(HoodieLogBlock.HeaderMetadataType.RECORD_POSITIONS));
+    Assertions.assertEquals("1", b.get(HoodieLogBlock.HeaderMetadataType.BLOCK_IDENTIFIER));
+    Assertions.assertEquals("true", b.get(HoodieLogBlock.HeaderMetadataType.IS_PARTIAL));
   }
 
   private SeekableDataInputStream prepareMockedLogInputStream(int contentSize,

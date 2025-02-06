@@ -19,6 +19,7 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -214,14 +215,17 @@ public class StreamReadMonitoringFunction
     }
     IncrementalInputSplits.Result result =
         incrementalInputSplits.inputSplits(metaClient, this.issuedOffset, this.cdcEnabled);
-    if (result.isEmpty()) {
+
+    if (result.isEmpty() && StringUtils.isNullOrEmpty(result.getEndInstant())) {
       // no new instants, returns early
+      LOG.warn("No new instants to read for current run.");
       return;
     }
 
     for (MergeOnReadInputSplit split : result.getInputSplits()) {
       context.collect(split);
     }
+
     // update the issues instant time
     this.issuedInstant = result.getEndInstant();
     this.issuedOffset = result.getOffset();
@@ -231,6 +235,9 @@ public class StreamReadMonitoringFunction
             + "---------- consumed to instant: {}\n"
             + "------------------------------------------------------------",
         conf.getString(FlinkOptions.TABLE_NAME), this.issuedInstant);
+    if (result.isEmpty()) {
+      LOG.warn("No new files to read for current run.");
+    }
   }
 
   @Override
@@ -280,4 +287,9 @@ public class StreamReadMonitoringFunction
     readMetrics = new FlinkStreamReadMetrics(metrics);
     readMetrics.registerMetrics();
   }
+
+  public String getIssuedOffset() {
+    return issuedOffset;
+  }
+
 }

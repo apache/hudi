@@ -35,6 +35,7 @@ import org.apache.hadoop.fs.FileSystem;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * List of helpers to aid, construction of instanttime for read and write operations using datasource.
@@ -64,24 +65,28 @@ public class HoodieDataSourceHelpers {
                                               String instantTimestamp) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
     return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE).getInstantsAsStream()
-        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .map(HoodieInstant::requestedTime).collect(Collectors.toList());
   }
 
   public static List<String> listCommitsSince(HoodieStorage storage, String basePath,
                                               String instantTimestamp) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(storage, basePath);
     return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE).getInstantsAsStream()
-        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .map(HoodieInstant::requestedTime).collect(Collectors.toList());
   }
 
   // this is used in the integration test script: docker/demo/sparksql-incremental.commands
-  public static List<String> listCompletionTimeSince(FileSystem fs, String basePath,
-      String instantTimestamp) {
+  public static Stream<String> streamCompletionTimeSince(FileSystem fs, String basePath,
+                                                         String instantTimestamp) {
+    return streamCompletedInstantSince(fs, basePath, instantTimestamp)
+        .map(HoodieInstant::getCompletionTime);
+  }
+
+  public static Stream<HoodieInstant> streamCompletedInstantSince(FileSystem fs, String basePath,
+                                                                  String instantTimestamp) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
     return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE)
-        .getInstantsOrderedByCompletionTime()
-        .map(HoodieInstant::getCompletionTime)
-        .collect(Collectors.toList());
+        .getInstantsOrderedByCompletionTime();
   }
 
   /**
@@ -89,13 +94,25 @@ public class HoodieDataSourceHelpers {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public static String latestCommit(FileSystem fs, String basePath) {
-    HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
-    return timeline.lastInstant().get().getTimestamp();
+    return latestCompletedCommit(fs, basePath).requestedTime();
   }
 
   public static String latestCommit(HoodieStorage storage, String basePath) {
+    return latestCompletedCommit(storage, basePath).requestedTime();
+  }
+
+  /**
+   * Returns the last successful write operation's completed instant.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public static HoodieInstant latestCompletedCommit(FileSystem fs, String basePath) {
+    HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
+    return timeline.lastInstant().get();
+  }
+
+  public static HoodieInstant latestCompletedCommit(HoodieStorage storage, String basePath) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(storage, basePath);
-    return timeline.lastInstant().get().getTimestamp();
+    return timeline.lastInstant().get();
   }
 
   /**
@@ -140,7 +157,7 @@ public class HoodieDataSourceHelpers {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
         .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
-    Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().filter(instant -> instant.getTimestamp().equals(instantTime)
+    Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().filter(instant -> instant.requestedTime().equals(instantTime)
             && ClusteringUtils.isClusteringOrReplaceCommitAction(instant.getAction()))
         .firstInstant();
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlan =

@@ -20,8 +20,10 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -104,6 +106,7 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
         ? writeConfig.get() : getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true,
         enableMetadataTable, enableMetrics, true,
         validateMetadataPayloadStateConsistency)
+        .withEngineType(EngineType.JAVA)
         .build();
     initWriteConfigAndMetatableWriter(this.writeConfig, enableMetadataTable);
   }
@@ -250,7 +253,7 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
 
   protected void archiveDataTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) throws IOException {
     HoodieTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
-    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(writeConfig, table);
+    HoodieTimelineArchiver archiver = new TimelineArchiverV2(writeConfig, table);
     archiver.archiveIfRequired(context);
   }
 
@@ -303,8 +306,10 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(useFileListingMetadata)
+            .withMetadataIndexColumnStats(false)
             .enableMetrics(enableMetrics)
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
+            .withMetadataIndexColumnStats(false) // HUDI-8774
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
             .withExecutorMetrics(enableMetrics).withReporterType(MetricsReporterType.INMEMORY.name()).build())

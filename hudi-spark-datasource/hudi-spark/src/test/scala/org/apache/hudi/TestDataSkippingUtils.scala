@@ -85,7 +85,7 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
       )
     )
 
-  val (indexSchema: StructType, targetIndexedColumns:  Seq[String]) = composeIndexSchema(indexedCols, indexedCols.toSet, sourceTableSchema)
+  val (indexSchema: StructType, targetIndexedColumns:  Seq[String]) = composeIndexSchema(indexedCols, indexedCols, sourceTableSchema)
 
   @ParameterizedTest
   @MethodSource(Array(
@@ -125,7 +125,7 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
   @MethodSource(Array("testStringsLookupFilterExpressionsSource"))
   def testStringsLookupFilterExpressions(sourceExpr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
     val resolvedExpr = resolveExpr(spark, sourceExpr, sourceTableSchema)
-    val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
+    val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexedCols = indexedCols)
 
     val sparkB = spark
     import sparkB.implicits._
@@ -155,7 +155,7 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
   }
 
   private def applyFilterExpr(resolvedExpr: Expression, input: Seq[IndexRow]): Seq[String] = {
-    val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
+    val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexedCols = indexedCols)
 
     val indexDf = spark.createDataFrame(input.map(_.toRow).asJava, indexSchema)
 

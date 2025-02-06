@@ -17,22 +17,20 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis
-import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
+import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
+import org.apache.hudi.common.table.timeline.{HoodieInstant, InstantComparison}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{SaveMode, SparkSession}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -118,8 +116,8 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     val startOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
     val endOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
 
-    assertTrue(HoodieTimeline.compareTimestamps(startOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
-    assertTrue(HoodieTimeline.compareTimestamps(endOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
+    assertTrue(compareTimestamps(startOutOfRangeCommitTs, InstantComparison.GREATER_THAN, completedCommits.lastInstant().get().requestedTime))
+    assertTrue(compareTimestamps(endOutOfRangeCommitTs, InstantComparison.GREATER_THAN, completedCommits.lastInstant().get().requestedTime))
 
     // Test both start and end commits are archived
     runIncrementalQueryAndCompare(startArchivedCompletionTs, endArchivedCompletionTs, 1, true)
@@ -180,12 +178,12 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
   private def shouldThrowIfFallbackIsFalse(fn: () => Unit): Unit = {
     val msg = "Should fail with Path does not exist"
-    val exp = assertThrows(classOf[HoodieIOException], new Executable {
+    val exp = assertThrows(classOf[SparkException], new Executable {
       override def execute(): Unit = {
         fn()
       }
     }, msg)
-    assertTrue(exp.getMessage.contains("Could not read commit details"),
-      "Expected to fail with 'Could not read commit details' but the message was: " + exp.getMessage)
+    assertTrue(exp.getMessage.contains("FileNotFoundException"),
+      "Expected to fail with 'FileNotFoundException' but the message was: " + exp.getMessage)
   }
 }

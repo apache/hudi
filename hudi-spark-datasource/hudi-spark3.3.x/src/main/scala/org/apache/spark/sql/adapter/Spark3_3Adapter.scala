@@ -18,20 +18,19 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark33HoodieFileScanRDD
-
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
+import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolvedTable}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
-import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
+import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark33LegacyHoodieParquetFileFormat, Spark33ParquetReader, SparkParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
@@ -57,6 +56,8 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
         //       on top of it
         case PhysicalOperation(_, _, DataSourceV2Relation(v2: V2TableWithV1Fallback, _, _, _, _)) if isHoodieTable(v2.v1Table) =>
           Some(v2.v1Table)
+        case ResolvedTable(_, _, V1Table(v1Table), _) if isHoodieTable(v1Table) =>
+          Some(v1Table)
         case _ => None
       }
     }

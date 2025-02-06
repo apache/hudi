@@ -32,6 +32,8 @@ import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
+import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
+import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.util.{ClusteringUtils, Option}
@@ -667,8 +669,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(1000, snapshotDF1.count())
 
     val countDownLatch = new CountDownLatch(2)
+    val sharedUpdates = recordsToStrings(dataGen.generateUpdatesForAllRecords("300")).asScala.toList
+
     for (x <- 1 to 2) {
-      val thread = new Thread(new UpdateThread(dataGen, spark, CommonOptionUtils.commonOpts, basePath, x + "00", countDownLatch, numRetries))
+      val thread = new Thread(new UpdateThread(
+        dataGen, spark, CommonOptionUtils.commonOpts, basePath, x + "00", countDownLatch, numRetries, sharedUpdates))
       thread.setName(x + "00_THREAD")
       thread.start()
     }
@@ -685,12 +690,17 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
-  class UpdateThread(dataGen: HoodieTestDataGenerator, spark: SparkSession, commonOpts: Map[String, String], basePath: String,
-                     instantTime: String, countDownLatch: CountDownLatch, numRetries: Integer = 0) extends Runnable {
+  class UpdateThread(dataGen: HoodieTestDataGenerator,
+                     spark: SparkSession,
+                     commonOpts: Map[String, String],
+                     basePath: String,
+                     instantTime: String,
+                     countDownLatch: CountDownLatch,
+                     numRetries: Integer = 0,
+                     sharedUpdates: List[String]) extends Runnable {
     override def run() {
-      val updateRecs = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 500)).asScala.toList
       val insertRecs = recordsToStrings(dataGen.generateInserts(instantTime, 1000)).asScala.toList
-      val updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecs, 2))
+      val updateDf = spark.read.json(spark.sparkContext.parallelize(sharedUpdates, 2))
       val insertDf = spark.read.json(spark.sparkContext.parallelize(insertRecs, 2))
       try {
         updateDf.union(insertDf).write.format("org.apache.hudi")
@@ -785,7 +795,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
     val metaClient = createMetaClient(spark, basePath)
 
-    val instantTime = metaClient.getActiveTimeline.filterCompletedInstants().getInstantsAsStream.findFirst().get().getTimestamp
+    val instantTime = metaClient.getActiveTimeline.filterCompletedInstants().getInstantsAsStream.findFirst().get().requestedTime
 
     val record1FilePaths = storage.listDirectEntries(new StoragePath(basePath, dataGen.getPartitionPaths.head))
       .asScala
@@ -1866,7 +1876,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         // Last instant is clustering
         assertTrue(TimelineUtils.getCommitMetadata(lastInstant, metaClient.getActiveTimeline)
           .getOperationType.equals(WriteOperationType.CLUSTER))
-        assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline, new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, lastInstant.getTimestamp)))
+        assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline,
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, lastInstant.requestedTime),
+          INSTANT_GENERATOR))
         lastClustering = lastInstant
         assertEquals(
           lastClustering,
@@ -1874,7 +1886,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       } else {
         assertTrue(TimelineUtils.getCommitMetadata(lastInstant, metaClient.getActiveTimeline)
           .getOperationType.equals(WriteOperationType.INSERT_OVERWRITE))
-        assertFalse(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline, lastInstant))
+        assertFalse(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline, lastInstant, metaClient.getTimelineLayout.getInstantGenerator))
         assertEquals(
           lastClustering,
           metaClient.getActiveTimeline.getLastClusteringInstant.get)
@@ -1888,7 +1900,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         if (firstClusteringState == HoodieInstant.State.INFLIGHT
           || firstClusteringState == HoodieInstant.State.REQUESTED) {
           // Move the clustering to inflight for testing
-          storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName))
+          storage.deleteFile(new StoragePath(metaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant)))
           val inflightClustering = metaClient.reloadActiveTimeline.lastInstant.get
           assertTrue(inflightClustering.isInflight)
           assertEquals(
@@ -1914,8 +1926,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         // This should not schedule any new clustering
         new SparkRDDWriteClient(context, writeConfig)
           .scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]().asJava))
-        assertEquals(lastInstant.getTimestamp,
-          metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get.getTimestamp)
+        assertEquals(lastInstant.requestedTime,
+          metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get.requestedTime)
       }
     }
     val timeline = metaClient.reloadActiveTimeline
@@ -1944,7 +1956,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
 
     val fileStatuses = storage.listDirectEntries(
-      new StoragePath(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME),
+      new StoragePath(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME
+        + StoragePath.SEPARATOR + HoodieTableMetaClient.TIMELINEFOLDER_NAME),
       new StoragePathFilter {
         override def accept(path: StoragePath): Boolean = {
           path.getName.endsWith(HoodieTimeline.COMMIT_ACTION)

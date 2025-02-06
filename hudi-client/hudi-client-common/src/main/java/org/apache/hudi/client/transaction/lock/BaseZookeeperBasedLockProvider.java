@@ -63,8 +63,6 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
   protected final String zkBasePath;
   protected final String lockKey;
 
-  public static final int MAX_ZK_BASE_PATH_NUM_BYTES = 4096;
-
   public BaseZookeeperBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;

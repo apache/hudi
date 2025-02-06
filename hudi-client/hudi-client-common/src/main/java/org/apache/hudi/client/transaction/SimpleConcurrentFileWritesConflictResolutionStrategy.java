@@ -38,6 +38,9 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+
 /**
  * This class is a basic implementation of a conflict resolution strategy for concurrent writes {@link ConflictResolutionStrategy}.
  */
@@ -58,14 +61,14 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     Stream<HoodieInstant> completedCommitsInstantStream = activeTimeline
         .getCommitsTimeline()
         .filterCompletedInstants()
-        .findInstantsAfter(lastSuccessfulInstant.isPresent() ? lastSuccessfulInstant.get().getTimestamp() : HoodieTimeline.INIT_INSTANT_TS)
+        .findInstantsAfter(lastSuccessfulInstant.isPresent() ? lastSuccessfulInstant.get().requestedTime() : HoodieTimeline.INIT_INSTANT_TS)
         .getInstantsAsStream();
 
     Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
         .filterPendingReplaceClusteringAndCompactionTimeline()
-        .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant)
+        .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant, metaClient.getInstantGenerator())
             || HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction()))
-        .findInstantsAfter(currentInstant.getTimestamp())
+        .findInstantsAfter(currentInstant.requestedTime())
         .getInstantsAsStream();
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
   }
@@ -96,7 +99,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     // supported for CLUSTER (https://issues.apache.org/jira/browse/HUDI-1042),
     // add that to the below check so that concurrent updates do not conflict.
     if (otherOperation.getOperationType() == WriteOperationType.COMPACT) {
-      if (HoodieTimeline.compareTimestamps(otherOperation.getInstantTimestamp(), HoodieTimeline.LESSER_THAN, thisOperation.getInstantTimestamp())) {
+      if (compareTimestamps(otherOperation.getInstantTimestamp(), LESSER_THAN, thisOperation.getInstantTimestamp())) {
         return thisOperation.getCommitMetadataOption();
       }
     } else if (HoodieTimeline.LOG_COMPACTION_ACTION.equals(thisOperation.getInstantActionType())) {
@@ -106,7 +109,8 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
       return thisOperation.getCommitMetadataOption();
     }
     // just abort the current write if conflicts are found
-    throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes"));
+    throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes between first operation = " + thisOperation
+        + ", second operation = " + otherOperation));
   }
 
   @Override

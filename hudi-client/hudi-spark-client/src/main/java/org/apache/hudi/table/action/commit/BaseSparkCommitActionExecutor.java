@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -289,7 +291,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   @Override
   protected void commit(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
-    commit(result.getWriteStatuses(), result, result.getWriteStats().isPresent()
+    commit(result, result.getWriteStats().isPresent()
         ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
   }
 
@@ -386,5 +388,10 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   @Override
   protected void runPrecommitValidators(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
     SparkValidatorUtils.runValidators(config, writeMetadata, context, table, instantTime);
+  }
+
+  @Override
+  protected void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    new HoodieSparkIndexClient(config, context).createOrUpdateColumnStatsIndexDefinition(metaClient, columnsToIndex);
   }
 }

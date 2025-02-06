@@ -20,7 +20,6 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
-import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
@@ -204,7 +203,7 @@ public class HoodieLockConfig extends HoodieConfig {
   // Pluggable type of lock provider
   public static final ConfigProperty<String> LOCK_PROVIDER_CLASS_NAME = ConfigProperty
       .key(LOCK_PREFIX + "provider")
-      .defaultValue(ZookeeperBasedLockProvider.class.getName())
+      .noDefaultValue()
       .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Lock provider class name, user can provide their own implementation of LockProvider "
@@ -241,11 +240,6 @@ public class HoodieLockConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String LOCK_PROVIDER_CLASS_PROP = LOCK_PROVIDER_CLASS_NAME.key();
-  /**
-   * @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead
-   */
-  @Deprecated
-  public static final String DEFAULT_LOCK_PROVIDER_CLASS = LOCK_PROVIDER_CLASS_NAME.defaultValue();
 
   private HoodieLockConfig() {
     super();

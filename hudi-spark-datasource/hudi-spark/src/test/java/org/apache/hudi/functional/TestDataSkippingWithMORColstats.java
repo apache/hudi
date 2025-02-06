@@ -55,6 +55,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.spark.sql.SaveMode.Append;
@@ -113,6 +114,10 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
    */
   @Test
   public void testBaseFileOnly() {
+    // note that this config is here just to test that it does nothing since
+    // we have specified which columns to index
+    options.put(HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.key(), "1");
+
     options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     Dataset<Row> inserts = makeInsertDf("000", 100);
     Dataset<Row> batch1 = inserts.where(matchCond);
@@ -475,8 +480,8 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
   }
 
   public void deleteLatestDeltacommit() {
-    String filename = metaClient.getActiveTimeline().lastInstant().get().getFileName();
-    File deltacommit = new File(metaClient.getBasePath() + "/.hoodie/" + filename);
+    String filename = INSTANT_FILE_NAME_GENERATOR.getFileName(metaClient.getActiveTimeline().lastInstant().get());
+    File deltacommit = new File(metaClient.getBasePath() + "/.hoodie/timeline/" + filename);
     deltacommit.delete();
   }
 

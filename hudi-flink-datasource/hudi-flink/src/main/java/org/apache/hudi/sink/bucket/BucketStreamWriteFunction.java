@@ -133,7 +133,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     }
 
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
-    final int bucketNum = BucketIdentifier.getBucketId(hoodieKey, indexKeyFields, this.bucketNum);
+    final int bucketNum = BucketIdentifier.getBucketId(hoodieKey.getRecordKey(), indexKeyFields, this.bucketNum);
     final String bucketId = partition + "/" + bucketNum;
 
     if (incBucketIndex.contains(bucketId)) {
@@ -141,7 +141,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     } else if (bucketToFileId.containsKey(bucketNum)) {
       location = new HoodieRecordLocation("U", bucketToFileId.get(bucketNum));
     } else {
-      String newFileId = BucketIdentifier.newBucketFileIdPrefix(bucketNum, isNonBlockingConcurrencyControl);
+      String newFileId = isNonBlockingConcurrencyControl ? BucketIdentifier.newBucketFileIdForNBCC(bucketNum) : BucketIdentifier.newBucketFileIdPrefix(bucketNum);
       location = new HoodieRecordLocation("I", newFileId);
       bucketToFileId.put(bucketNum, newFileId);
       incBucketIndex.add(bucketId);

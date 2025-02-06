@@ -74,7 +74,7 @@ public class TestFlinkSizeBasedClusteringPlanStrategy {
           .build())
         .build();
     PartitionAwareClusteringPlanStrategy strategyWithSortEnabled = new FlinkSizeBasedClusteringPlanStrategy(table, context, configWithSortEnabled);
-    Stream<HoodieClusteringGroup> groupStreamSort = strategyWithSortEnabled.buildClusteringGroupsForPartition(partition,fileSliceGroups);
+    Stream<HoodieClusteringGroup> groupStreamSort = (Stream<HoodieClusteringGroup>) strategyWithSortEnabled.buildClusteringGroupsForPartition(partition,fileSliceGroups).getLeft();
     assertEquals(1, groupStreamSort.count());
 
     // test buildClusteringGroupsForPartition without ClusteringSortColumns config
@@ -86,7 +86,7 @@ public class TestFlinkSizeBasedClusteringPlanStrategy {
           .build())
         .build();
     PartitionAwareClusteringPlanStrategy strategyWithSortDisabled = new FlinkSizeBasedClusteringPlanStrategy(table, context, configWithSortDisabled);
-    Stream<HoodieClusteringGroup> groupStreamWithOutSort = strategyWithSortDisabled.buildClusteringGroupsForPartition(partition,fileSliceGroups);
+    Stream<HoodieClusteringGroup> groupStreamWithOutSort = (Stream<HoodieClusteringGroup>) strategyWithSortDisabled.buildClusteringGroupsForPartition(partition,fileSliceGroups).getLeft();
     assertEquals(0, groupStreamWithOutSort.count());
   }
 

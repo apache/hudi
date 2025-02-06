@@ -93,6 +93,11 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
+  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
+    // no op. HUDI-8801 to fix.
+  }
+
+  @Override
   protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
   }
@@ -123,19 +128,14 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
+  protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf,
                                                                String instantTime) {
-    throw new HoodieNotSupportedException("Functional index not supported for Java metadata table writer yet.");
+    throw new HoodieNotSupportedException("Expression index not supported for Java metadata table writer yet.");
   }
 
   @Override
   protected EngineType getEngineType() {
     return EngineType.JAVA;
-  }
-
-  @Override
-  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieIndexDefinition indexDefinition) {
-    throw new HoodieNotSupportedException("Java metadata table writer does not support secondary index yet.");
   }
 }

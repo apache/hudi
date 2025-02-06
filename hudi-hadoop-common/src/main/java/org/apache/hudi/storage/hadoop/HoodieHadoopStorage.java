@@ -213,6 +213,11 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
+  public void setModificationTime(StoragePath path, long modificationTimeInMillisEpoch) throws IOException {
+    fs.setTimes(HadoopFSUtils.convertToHadoopPath(path), modificationTimeInMillisEpoch, modificationTimeInMillisEpoch);
+  }
+
+  @Override
   public List<StoragePathInfo> listDirectEntries(List<StoragePath> pathList,
                                                  StoragePathFilter filter) throws IOException {
     return Arrays.stream(fs.listStatus(

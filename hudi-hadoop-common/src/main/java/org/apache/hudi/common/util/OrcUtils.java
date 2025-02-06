@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -58,6 +59,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.BinaryUtil.toBytes;
@@ -78,6 +80,36 @@ public class OrcUtils extends FileFormatUtils {
    */
   @Override
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
+    return getHoodieKeyIterator(storage, filePath, Option.empty(), Option.empty());
+  }
+
+  /**
+   * Fetch {@link HoodieKey}s from the given ORC file.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath The ORC file path.
+   * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
+   */
+  @Override
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
+    return fetchRecordKeysWithPositions(storage, filePath, Option.empty(), Option.empty());
+  }
+
+  @Override
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
+    try {
+      if (!storage.exists(filePath)) {
+        return ClosableIterator.wrap(Collections.emptyIterator());
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
+    }
+    AtomicLong position = new AtomicLong(0);
+    return new CloseableMappingIterator<>(getHoodieKeyIterator(storage, filePath, keyGeneratorOpt, partitionPath), key -> Pair.of(key, position.getAndIncrement()));
+  }
+
+  @Override
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
     try {
       Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
       conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
@@ -102,47 +134,11 @@ public class OrcUtils extends FileFormatUtils {
       if (keyCol == -1 || partitionCol == -1) {
         throw new HoodieException(String.format("Couldn't find row keys or partition path in %s.", filePath));
       }
-      return new OrcReaderIterator<>(recordReader, readSchema, orcSchema);
+      return HoodieKeyIterator.getInstance(
+          new OrcReaderIterator<>(recordReader, readSchema, orcSchema), keyGeneratorOpt, partitionPath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to open reader from ORC file:" + filePath, e);
     }
-  }
-
-  /**
-   * Fetch {@link HoodieKey}s from the given ORC file.
-   *
-   * @param storage  {@link HoodieStorage} instance.
-   * @param filePath The ORC file path.
-   * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
-   */
-  @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
-    try {
-      if (!storage.exists(filePath)) {
-        return Collections.emptyList();
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
-    }
-    List<Pair<HoodieKey, Long>> hoodieKeysAndPositions = new ArrayList<>();
-    long position = 0;
-    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(storage, filePath, Option.empty())) {
-      while (iterator.hasNext()) {
-        hoodieKeysAndPositions.add(Pair.of(iterator.next(), position));
-        position++;
-      }
-    }
-    return hoodieKeysAndPositions;
-  }
-
-  @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    throw new UnsupportedOperationException("Custom key generator is not supported yet");
-  }
-
-  @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    throw new UnsupportedOperationException("Custom key generator is not supported yet");
   }
 
   /**

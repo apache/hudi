@@ -54,7 +54,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
@@ -207,13 +207,12 @@ public class BootstrapExecutor implements Serializable {
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
-        .setPreCombineField(props.getString(
-            PRECOMBINE_FIELD_NAME.key(), PRECOMBINE_FIELD_NAME.defaultValue()))
+        .setPreCombineField(props.getString(PRECOMBINE_FIELD_NAME.key(), null))
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
         .setPopulateMetaFields(props.getBoolean(
             POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue()))
         .setArchiveLogFolder(props.getString(
-            ARCHIVELOG_FOLDER.key(), ARCHIVELOG_FOLDER.defaultValue()))
+            TIMELINE_HISTORY_PATH.key(), TIMELINE_HISTORY_PATH.defaultValue()))
         .setPayloadClassName(cfg.payloadClassName)
         .setRecordMergeMode(cfg.recordMergeMode)
         .setRecordMergeStrategyId(cfg.recordMergeStrategyId)

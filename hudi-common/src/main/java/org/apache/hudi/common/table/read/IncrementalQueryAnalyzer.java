@@ -30,6 +30,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -106,6 +110,7 @@ import java.util.stream.Stream;
  */
 public class IncrementalQueryAnalyzer {
   public static final String START_COMMIT_EARLIEST = "earliest";
+  private static final Logger LOG = LoggerFactory.getLogger(IncrementalQueryAnalyzer.class);
 
   private final HoodieTableMetaClient metaClient;
   private final Option<String> startCompletionTime;
@@ -155,7 +160,7 @@ public class IncrementalQueryAnalyzer {
    * @return An incremental query context including the instant time range info.
    */
   public QueryContext analyze() {
-    try (CompletionTimeQueryView completionTimeQueryView = new CompletionTimeQueryView(this.metaClient)) {
+    try (CompletionTimeQueryView completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(this.metaClient)) {
       if (completionTimeQueryView.isEmptyTable()) {
         // no dataset committed in the table
         return QueryContext.EMPTY;
@@ -175,7 +180,7 @@ public class IncrementalQueryAnalyzer {
       List<HoodieInstant> activeInstants = new ArrayList<>();
       HoodieTimeline archivedReadTimeline = null;
       if (!activeInstantTime.isEmpty()) {
-        activeInstants = filteredTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.getTimestamp())).collect(Collectors.toList());
+        activeInstants = filteredTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.requestedTime())).collect(Collectors.toList());
         if (limit > 0 && limit < activeInstants.size()) {
           // streaming read speed limit, limits the maximum number of commits allowed to read for each run
           activeInstants = activeInstants.subList(0, limit);
@@ -183,9 +188,9 @@ public class IncrementalQueryAnalyzer {
       }
       if (!archivedInstantTime.isEmpty()) {
         archivedReadTimeline = getArchivedReadTimeline(metaClient, archivedInstantTime.get(0));
-        archivedInstants = archivedReadTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.getTimestamp())).collect(Collectors.toList());
+        archivedInstants = archivedReadTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.requestedTime())).collect(Collectors.toList());
       }
-      List<String> instants = Stream.concat(archivedInstants.stream(), activeInstants.stream()).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+      List<String> instants = Stream.concat(archivedInstants.stream(), activeInstants.stream()).map(HoodieInstant::requestedTime).collect(Collectors.toList());
       if (instants.isEmpty()) {
         // no instants completed within the give time range, returns early.
         return QueryContext.EMPTY;
@@ -200,6 +205,9 @@ public class IncrementalQueryAnalyzer {
           startCompletionTime.isEmpty() ? lastInstant : instants.get(0);
       String endInstant = endCompletionTime.isEmpty() ? null : lastInstant;
       return QueryContext.create(startInstant, endInstant, instants, archivedInstants, activeInstants, filteredTimeline, archivedReadTimeline);
+    } catch (Exception ex) {
+      LOG.error("Got exception when generating incremental query info", ex);
+      throw new HoodieException(ex);
     }
   }
 

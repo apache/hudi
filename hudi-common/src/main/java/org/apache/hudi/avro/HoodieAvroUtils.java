@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.DecimalWrapper;
 import org.apache.hudi.avro.model.DoubleWrapper;
 import org.apache.hudi.avro.model.FloatWrapper;
 import org.apache.hudi.avro.model.IntWrapper;
+import org.apache.hudi.avro.model.LocalDateWrapper;
 import org.apache.hudi.avro.model.LongWrapper;
 import org.apache.hudi.avro.model.StringWrapper;
 import org.apache.hudi.avro.model.TimestampMicrosWrapper;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
@@ -116,6 +118,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
 public class HoodieAvroUtils {
 
   public static final String AVRO_VERSION = Schema.class.getPackage().getImplementationVersion();
+
   private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
   private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
 
@@ -145,6 +148,7 @@ public class HoodieAvroUtils {
   private static final Lazy<TimestampMicrosWrapper.Builder> TIMESTAMP_MICROS_WRAPPER_BUILDER_STUB = Lazy.lazily(TimestampMicrosWrapper::newBuilder);
   private static final Lazy<DecimalWrapper.Builder> DECIMAL_WRAPPER_BUILDER_STUB = Lazy.lazily(DecimalWrapper::newBuilder);
   private static final Lazy<DateWrapper.Builder> DATE_WRAPPER_BUILDER_STUB = Lazy.lazily(DateWrapper::newBuilder);
+  private static final Lazy<LocalDateWrapper.Builder> LOCAL_DATE_WRAPPER_BUILDER_STUB = Lazy.lazily(LocalDateWrapper::newBuilder);
 
   private static final long MILLIS_PER_DAY = 86400000L;
 
@@ -202,6 +206,7 @@ public class HoodieAvroUtils {
   /**
    * Convert a given avro record to a JSON string. If the record contents are invalid, return the record.toString().
    * Use this method over {@link HoodieAvroUtils#avroToJsonString} when simply trying to print the record contents without any guarantees around their correctness.
+   *
    * @param record The GenericRecord to convert
    * @return a JSON string
    */
@@ -676,13 +681,19 @@ public class HoodieAvroUtils {
    */
   public static Schema getNestedFieldSchemaFromWriteSchema(Schema writeSchema, String fieldName) {
     String[] parts = fieldName.split("\\.");
-    int i = 0;
-    for (; i < parts.length; i++) {
+    Schema currentSchema = writeSchema;
+    for (int i = 0; i < parts.length; i++) {
       String part = parts[i];
-      Schema schema = writeSchema.getField(part).schema();
+      try {
+        // Resolve nullable/union schema to the actual schema
+        currentSchema = resolveNullableSchema(currentSchema.getField(part).schema());
 
-      if (i == parts.length - 1) {
-        return resolveNullableSchema(schema);
+        if (i == parts.length - 1) {
+          // Return the schema for the final part
+          return resolveNullableSchema(currentSchema);
+        }
+      } catch (Exception e) {
+        throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
       }
     }
     throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
@@ -1404,14 +1415,20 @@ public class HoodieAvroUtils {
   public static Object wrapValueIntoAvro(Comparable<?> value) {
     if (value == null) {
       return null;
-    } else if (value instanceof Date || value instanceof LocalDate) {
+    } else if (value instanceof Date) {
       // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
       //       rely on logical types to do proper encoding of the native Java types,
       //       and hereby have to encode value manually
-      LocalDate localDate = value instanceof LocalDate
-          ? (LocalDate) value
-          : ((Date) value).toLocalDate();
+      LocalDate localDate = ((Date) value).toLocalDate();
       return DateWrapper.newBuilder(DATE_WRAPPER_BUILDER_STUB.get())
+          .setValue((int) localDate.toEpochDay())
+          .build();
+    } else if (value instanceof LocalDate) {
+      // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
+      //       rely on logical types to do proper encoding of the native Java types,
+      //       and hereby have to encode value manually
+      LocalDate localDate = (LocalDate) value;
+      return LocalDateWrapper.newBuilder(LOCAL_DATE_WRAPPER_BUILDER_STUB.get())
           .setValue((int) localDate.toEpochDay())
           .build();
     } else if (value instanceof BigDecimal) {
@@ -1456,8 +1473,17 @@ public class HoodieAvroUtils {
   public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper) {
     if (avroValueWrapper == null) {
       return null;
-    } else if (avroValueWrapper instanceof DateWrapper) {
-      return LocalDate.ofEpochDay(((DateWrapper) avroValueWrapper).getValue());
+    }
+
+    Pair<Boolean, String> isValueWrapperObfuscated = getIsValueWrapperObfuscated(avroValueWrapper);
+    if (isValueWrapperObfuscated.getKey()) {
+      return unwrapAvroValueWrapper(avroValueWrapper, isValueWrapperObfuscated.getValue());
+    }
+
+    if (avroValueWrapper instanceof DateWrapper) {
+      return Date.valueOf(LocalDate.ofEpochDay(((DateWrapper) avroValueWrapper).getValue()));
+    } else if (avroValueWrapper instanceof LocalDateWrapper) {
+      return LocalDate.ofEpochDay(((LocalDateWrapper) avroValueWrapper).getValue());
     } else if (avroValueWrapper instanceof DecimalWrapper) {
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
       return AVRO_DECIMAL_CONVERSION.fromBytes(((DecimalWrapper) avroValueWrapper).getValue(), valueSchema, valueSchema.getLogicalType());
@@ -1481,11 +1507,72 @@ public class HoodieAvroUtils {
       // NOTE: This branch could be hit b/c Avro records could be reconstructed
       //       as {@code GenericRecord)
       // TODO add logical type decoding
-      GenericRecord record = (GenericRecord) avroValueWrapper;
-      return (Comparable<?>) record.get("value");
+      GenericRecord genRec = (GenericRecord) avroValueWrapper;
+      return (Comparable<?>) genRec.get("value");
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
     }
   }
 
+  public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper, String wrapperClassName) {
+    if (avroValueWrapper == null) {
+      return null;
+    } else if (DateWrapper.class.getSimpleName().equals(wrapperClassName)) {
+      ValidationUtils.checkArgument(avroValueWrapper instanceof GenericRecord);
+      return Date.valueOf(LocalDate.ofEpochDay((Integer) ((GenericRecord) avroValueWrapper).get(0)));
+    } else if (LocalDateWrapper.class.getSimpleName().equals(wrapperClassName)) {
+      ValidationUtils.checkArgument(avroValueWrapper instanceof GenericRecord);
+      return LocalDate.ofEpochDay((Integer) ((GenericRecord) avroValueWrapper).get(0));
+    } else if (TimestampMicrosWrapper.class.getSimpleName().equals(wrapperClassName)) {
+      ValidationUtils.checkArgument(avroValueWrapper instanceof GenericRecord);
+      Instant instant = microsToInstant((Long) ((GenericRecord) avroValueWrapper).get(0));
+      return Timestamp.from(instant);
+    } else if (DecimalWrapper.class.getSimpleName().equals(wrapperClassName)) {
+      Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
+      ValidationUtils.checkArgument(avroValueWrapper instanceof GenericRecord);
+      return AVRO_DECIMAL_CONVERSION.fromBytes((ByteBuffer)((GenericRecord) avroValueWrapper).get(0), valueSchema, valueSchema.getLogicalType());
+    } else {
+      throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+    }
+  }
+
+  private static Pair<Boolean, String> getIsValueWrapperObfuscated(Object statsValue) {
+    if (statsValue != null) {
+      String statsValueSchemaClassName = ((GenericRecord) statsValue).getSchema().getName();
+      boolean toReturn = statsValueSchemaClassName.equals(DateWrapper.class.getSimpleName())
+          || statsValueSchemaClassName.equals(LocalDateWrapper.class.getSimpleName())
+          || statsValueSchemaClassName.equals(TimestampMicrosWrapper.class.getSimpleName())
+          || statsValueSchemaClassName.equals(DecimalWrapper.class.getSimpleName());
+      if (toReturn) {
+        return Pair.of(true, ((GenericRecord) statsValue).getSchema().getName());
+      }
+    }
+    return Pair.of(false, null);
+  }
+
+  /**
+   * Returns field name and the resp data type of the field. The data type will always refer to the leaf node.
+   * for eg, for a.b.c, we turn Pair.of(a.b.c, DataType(c))
+   * @param schema schema of table.
+   * @param fieldName field name of interest.
+   * @return
+   */
+  @VisibleForTesting
+  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName) {
+    return getSchemaForField(schema, fieldName, StringUtils.EMPTY_STRING);
+  }
+
+  @VisibleForTesting
+  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName, String prefix) {
+    if (!fieldName.contains(".")) {
+      return Pair.of(prefix + fieldName, schema.getField(fieldName));
+    } else {
+      int rootFieldIndex = fieldName.indexOf(".");
+      Schema.Field rootField = schema.getField(fieldName.substring(0, rootFieldIndex));
+      if (rootField == null) {
+        throw new HoodieException("Failed to find " + fieldName + " in the table schema ");
+      }
+      return getSchemaForField(rootField.schema(), fieldName.substring(rootFieldIndex + 1), prefix + fieldName.substring(0, rootFieldIndex + 1));
+    }
+  }
 }

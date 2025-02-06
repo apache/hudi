@@ -18,8 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-
 import java.io.IOException;
 import java.io.Serializable;
 
@@ -36,7 +34,7 @@ public abstract class BaseCompactor<T, I, K, O> implements Serializable {
     this.compactionClient = compactionClient;
   }
 
-  public abstract void compact(HoodieInstant instant) throws IOException;
+  public abstract void compact(String instantTime) throws IOException;
 
   public void updateWriteClient(BaseHoodieWriteClient<T, I, K, O> writeClient) {
     this.compactionClient = writeClient;

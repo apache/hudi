@@ -20,8 +20,10 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -38,15 +40,30 @@ public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrat
     implements Comparator<HoodieCompactionOperation> {
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
-      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig,
+                                                                            List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // Filter the file group which log files size is greater than the threshold in bytes.
     // Order the operations based on the reverse size of the logs and limit them by the IO
     long threshold = writeConfig.getCompactionLogFileSizeThreshold();
-    return super.orderAndFilter(writeConfig, operations.stream()
-            .filter(e -> e.getMetrics().getOrDefault(TOTAL_LOG_FILE_SIZE, 0d) >= threshold)
-            .sorted(this).collect(Collectors.toList()),
-        pendingCompactionPlans);
+    ArrayList<String> missingPartitions = new ArrayList<>();
+    boolean incrementalTableServiceEnabled = writeConfig.isIncrementalTableServiceEnabled();
+    List<HoodieCompactionOperation> filterOperator = operations.stream()
+        .filter(e -> {
+          if (incrementalTableServiceEnabled && e.getMetrics().getOrDefault(TOTAL_LOG_FILE_SIZE, 0d) < threshold) {
+            missingPartitions.add(e.getPartitionPath());
+          }
+          return e.getMetrics().getOrDefault(TOTAL_LOG_FILE_SIZE, 0d) >= threshold;
+        }).sorted(this).collect(Collectors.toList());
+
+    if (incrementalTableServiceEnabled) {
+      Pair<List<HoodieCompactionOperation>, List<String>> resPair = super.orderAndFilter(writeConfig, filterOperator, pendingCompactionPlans);
+      List<HoodieCompactionOperation> compactOperations = resPair.getLeft();
+      List<String> innerMissingPartitions = resPair.getRight();
+      missingPartitions.addAll(innerMissingPartitions);
+      return Pair.of(compactOperations, missingPartitions);
+    } else {
+      return super.orderAndFilter(writeConfig, filterOperator, pendingCompactionPlans);
+    }
   }
 
   @Override

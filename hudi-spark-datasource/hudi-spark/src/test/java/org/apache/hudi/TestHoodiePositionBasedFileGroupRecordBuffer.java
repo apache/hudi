@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.HoodiePositionBasedSchemaHandler;
+import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -50,6 +51,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -61,6 +64,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -72,13 +76,14 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
   private Schema avroSchema;
   private HoodiePositionBasedFileGroupRecordBuffer<InternalRow> buffer;
   private String partitionPath;
+  private HoodieReadStats readStats;
 
-  public void prepareBuffer(RecordMergeMode mergeMode) throws Exception {
+  public void prepareBuffer(RecordMergeMode mergeMode, String baseFileInstantTime) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>();
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
     writeConfigs.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     writeConfigs.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
-    writeConfigs.put("hoodie.datasource.write.precombine.field",mergeMode.equals(RecordMergeMode.OVERWRITE_WITH_LATEST) ? "" : "timestamp");
+    writeConfigs.put("hoodie.datasource.write.precombine.field",mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING) ? "" : "timestamp");
     writeConfigs.put("hoodie.payload.ordering.field", "timestamp");
     writeConfigs.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "hoodie_test");
     writeConfigs.put("hoodie.insert.shuffle.parallelism", "4");
@@ -130,19 +135,26 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
       writeConfigs.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), getCustomPayload());
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
+    readStats = new HoodieReadStats();
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
         mergeMode,
         partitionNameOpt,
         partitionFields,
-        props);
+        baseFileInstantTime,
+        props,
+        readStats);
   }
 
-  public Map<HoodieLogBlock.HeaderMetadataType, String> getHeader() {
+  public Map<HoodieLogBlock.HeaderMetadataType, String> getHeader(boolean shouldWriteRecordPositions,
+                                                                  String baseFileInstantTime) {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, avroSchema.toString());
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    if (shouldWriteRecordPositions) {
+      header.put(BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS, baseFileInstantTime);
+    }
     return header;
   }
 
@@ -157,7 +169,8 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     return deletedRecords;
   }
 
-  public HoodieDeleteBlock getDeleteBlockWithPositions() throws IOException, URISyntaxException {
+  public HoodieDeleteBlock getDeleteBlockWithPositions(String baseFileInstantTime)
+      throws IOException, URISyntaxException {
     List<DeleteRecord> deletedRecords = getDeleteRecords();
     List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
 
@@ -165,7 +178,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     for (DeleteRecord dr : deletedRecords) {
       deleteRecordList.add(Pair.of(dr, position++));
     }
-    return new HoodieDeleteBlock(deleteRecordList, true, getHeader());
+    return new HoodieDeleteBlock(deleteRecordList, getHeader(true, baseFileInstantTime));
   }
 
   public HoodieDeleteBlock getDeleteBlockWithoutPositions() throws IOException, URISyntaxException {
@@ -175,23 +188,34 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     for (DeleteRecord dr : deletedRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    return new HoodieDeleteBlock(deleteRecordList, true, getHeader());
+    return new HoodieDeleteBlock(deleteRecordList, getHeader(false, ""));
   }
 
-  @Test
-  public void testProcessDeleteBlockWithPositions() throws Exception {
-    prepareBuffer(RecordMergeMode.OVERWRITE_WITH_LATEST);
-    HoodieDeleteBlock deleteBlock = getDeleteBlockWithPositions();
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testProcessDeleteBlockWithPositions(boolean sameBaseInstantTime) throws Exception {
+    String baseFileInstantTime = "090";
+    prepareBuffer(RecordMergeMode.COMMIT_TIME_ORDERING, baseFileInstantTime);
+    HoodieDeleteBlock deleteBlock = getDeleteBlockWithPositions(
+        sameBaseInstantTime ? baseFileInstantTime : baseFileInstantTime + "1");
     buffer.processDeleteBlock(deleteBlock);
     assertEquals(50, buffer.getLogRecords().size());
-    // With record positions, we do not need the record keys.
-    assertNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_RECORD_KEY));
+    if (sameBaseInstantTime) {
+      // If the log block's base instant time of record positions match the base file
+      // to merge, the log records are stored based on the position
+      assertNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_RECORD_KEY));
+    } else {
+      // If the log block's base instant time of record positions does not match the
+      // base file to merge, the log records are stored based on the record key
+      assertNull(buffer.getLogRecords().get(0L));
+    }
   }
 
   @Test
   public void testProcessDeleteBlockWithCustomMerger() throws Exception {
-    prepareBuffer(RecordMergeMode.CUSTOM);
-    HoodieDeleteBlock deleteBlock = getDeleteBlockWithPositions();
+    String baseFileInstantTime = "090";
+    prepareBuffer(RecordMergeMode.CUSTOM, baseFileInstantTime);
+    HoodieDeleteBlock deleteBlock = getDeleteBlockWithPositions(baseFileInstantTime);
     buffer.processDeleteBlock(deleteBlock);
     assertEquals(50, buffer.getLogRecords().size());
     assertNotNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_RECORD_KEY));
@@ -199,7 +223,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
 
   @Test
   public void testProcessDeleteBlockWithoutPositions() throws Exception {
-    prepareBuffer(RecordMergeMode.OVERWRITE_WITH_LATEST);
+    prepareBuffer(RecordMergeMode.COMMIT_TIME_ORDERING, "090");
     HoodieDeleteBlock deleteBlock = getDeleteBlockWithoutPositions();
     buffer.processDeleteBlock(deleteBlock);
     assertEquals(50, buffer.getLogRecords().size());
