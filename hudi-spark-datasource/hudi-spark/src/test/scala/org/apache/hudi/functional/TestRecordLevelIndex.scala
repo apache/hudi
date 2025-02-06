@@ -79,7 +79,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     var operation = INSERT_OPERATION_OPT_VAL
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 1))
     latestBatchDf.cache()
-    latestBatchDf.write.format("org.apache.hudi")
+    latestBatchDf.write.format("hudi")
       .options(hudiOpts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -97,7 +97,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val latestBatchDf2_3 = spark.read.json(spark.sparkContext.parallelize(latestBatch2_3, 1))
     val latestBatchDf2Final = latestBatchDf2_3.union(latestBatchDf2_2)
     latestBatchDf2Final.cache()
-    latestBatchDf2Final.write.format("org.apache.hudi")
+    latestBatchDf2Final.write.format("hudi")
       .options(hudiOpts)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -117,7 +117,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val latestBatch3 = recordsToStrings(dataGen2.generateUniqueUpdates(instantTime3, 2)).asScala.toSeq
     val latestBatchDf3 = spark.read.json(spark.sparkContext.parallelize(latestBatch3, 1))
     latestBatchDf3.cache()
-    latestBatchDf.write.format("org.apache.hudi")
+    latestBatchDf.write.format("hudi")
       .options(hudiOpts2)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -247,7 +247,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
     val deleteDf = insertDf.limit(1)
-    deleteDf.write.format("org.apache.hudi")
+    deleteDf.write.format("hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DELETE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -291,7 +291,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
     deleteDf.cache()
     val recordKeyToDelete = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
-    deleteDf.write.format("org.apache.hudi")
+    deleteDf.write.format("hudi")
       .options(hudiOpts)
       .mode(SaveMode.Append)
       .save(basePath)

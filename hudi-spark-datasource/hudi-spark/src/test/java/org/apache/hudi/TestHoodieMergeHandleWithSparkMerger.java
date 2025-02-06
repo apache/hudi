@@ -245,7 +245,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     Dataset<Row> rows = spark()
         .read()
         .options(properties)
-        .format("org.apache.hudi")
+        .format("hudi")
         .load(basePath());
     List<Row> result = rows.collectAsList();
     assertEquals(numRecords, result.size());

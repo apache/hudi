@@ -299,4 +299,6 @@ trait SparkAdapter extends Serializable {
                         exception: AnalysisException,
                         start: Origin,
                         stop: Origin): ParseException
+
+  def compareValues[T <% Comparable[T]](a: T, b: T): Int = a.compareTo(b)
 }
