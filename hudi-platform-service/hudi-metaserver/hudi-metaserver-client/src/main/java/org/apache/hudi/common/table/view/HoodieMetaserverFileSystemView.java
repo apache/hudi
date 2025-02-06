@@ -36,7 +36,8 @@ public class HoodieMetaserverFileSystemView extends HoodieTableFileSystemView {
 
   public HoodieMetaserverFileSystemView(HoodieTableMetaClient metaClient,
                                         HoodieTimeline visibleActiveTimeline, HoodieMetaserverConfig config) {
-    super(metaClient, visibleActiveTimeline);
+    super(new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(), metaClient.getStorage(),
+        metaClient.getBasePath().toString()), metaClient, visibleActiveTimeline);
     this.metaserverClient = HoodieMetaserverClientProxy.getProxy(config);
     this.databaseName = metaClient.getTableConfig().getDatabaseName();
     this.tableName = metaClient.getTableConfig().getTableName();
