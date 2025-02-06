@@ -30,11 +30,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.InstantComparator;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.timeline.versioning.DefaultCommitMetadataSerDe;
+import org.apache.hudi.common.table.timeline.versioning.DefaultInstantComparator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameParser;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
@@ -92,6 +94,7 @@ public class HoodieTestUtils {
   public static final InstantFileNameGenerator INSTANT_FILE_NAME_GENERATOR = new DefaultInstantFileNameGenerator();
   public static final InstantFileNameParser INSTANT_FILE_NAME_PARSER = new DefaultInstantFileNameParser();
   public static final CommitMetadataSerDe COMMIT_METADATA_SER_DE = new DefaultCommitMetadataSerDe();
+  public static final InstantComparator INSTANT_COMPARATOR = new DefaultInstantComparator();
 
   public static StorageConfiguration<Configuration> getDefaultStorageConf() {
     return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
