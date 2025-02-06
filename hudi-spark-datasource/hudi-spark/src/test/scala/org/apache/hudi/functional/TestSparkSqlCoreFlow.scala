@@ -384,7 +384,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
   }
 
   def doMORReadOptimizedQuery(isMetadataEnabledOnRead: Boolean, basePath: String): sql.DataFrame = {
-    spark.read.format("org.apache.hudi")
+    spark.read.format("hudi")
       .option(QUERY_TYPE.key, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .option(HoodieMetadataConfig.ENABLE.key(), isMetadataEnabledOnRead)
       .load(basePath)

@@ -87,7 +87,7 @@ object StructuredStreamingSinkTestWriter {
     val parquetdf = spark.readStream.option("spark.sql.streaming.schemaInference", "true").option("maxFilesPerTrigger", "1")
       .schema(inputDfSchema).parquet(inputPath)
 
-    val writer = parquetdf.writeStream.format("org.apache.hudi").
+    val writer = parquetdf.writeStream.format("hudi").
       option(TABLE_TYPE.key, tableType).
       option(PRECOMBINE_FIELD.key, preCombineField).
       option(RECORDKEY_FIELD.key, recordKeyField).
