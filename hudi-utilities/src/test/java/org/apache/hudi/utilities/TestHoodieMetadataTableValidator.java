@@ -1175,7 +1175,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertFalse(validator.hasValidationFailure());
 
     // lets override one of the latest base file w/ another. so that file slice validation succeeds, but record index comparison fails.
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext,
         metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
     List<HoodieBaseFile> allBaseFiles = fsView.getLatestBaseFiles(StringUtils.EMPTY_STRING).collect(Collectors.toList());
 

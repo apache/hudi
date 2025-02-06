@@ -403,29 +403,30 @@ public class SparkMetadataWriterUtils {
       // Step 2: Compute expression index records for the modified partitions
       LOG.debug("Indexing following columns for partition stats index: {}", validColumnsToIndex);
       List<String> partitionPaths = new ArrayList<>(commitMetadata.getWritePartitionPaths());
-      HoodieTableFileSystemView fileSystemView = getFileSystemView(dataMetaClient);
       int parallelism = Math.max(Math.min(partitionPaths.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
       return engineContext.parallelize(partitionPaths, parallelism).mapToPair(partitionName -> {
-        checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
-        // Collect Column Metadata for Each File part of active file system view of latest snapshot
-        // Get all file names, including log files, in a set from the file slices
-        Set<String> fileNames = HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.of(fileSystemView), partitionName).stream()
-            .flatMap(fileSlice -> Stream.concat(
-                Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
-                fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
-            .filter(Objects::nonNull)
-            .collect(Collectors.toSet());
-        // Fetch EI column stat records for above files
-        List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
-            tableMetadata.getRecordsByKeyPrefixes(HoodieTableMetadataUtil.generateKeyPrefixes(validColumnsToIndex, partitionName), indexPartition, false)
-                // schema and properties are ignored in getInsertValue, so simply pass as null
-                .map(record -> record.getData().getInsertValue(null, null))
-                .filter(Option::isPresent)
-                .map(data -> ((HoodieMetadataRecord) data.get()).getColumnStatsMetadata())
-                .filter(stats -> fileNames.contains(stats.getFileName()))
-                .map(HoodieColumnRangeMetadata::fromColumnStats)
-                .collectAsList();
-        return Pair.of(partitionName, partitionColumnMetadata);
+        try (HoodieTableFileSystemView fileSystemView = getFileSystemView(engineContext, dataMetaClient)) {
+          checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
+          // Collect Column Metadata for Each File part of active file system view of latest snapshot
+          // Get all file names, including log files, in a set from the file slices
+          Set<String> fileNames = HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight(fileSystemView, partitionName).stream()
+              .flatMap(fileSlice -> Stream.concat(
+                  Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
+                  fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
+              .filter(Objects::nonNull)
+              .collect(Collectors.toSet());
+          // Fetch EI column stat records for above files
+          List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
+              tableMetadata.getRecordsByKeyPrefixes(HoodieTableMetadataUtil.generateKeyPrefixes(validColumnsToIndex, partitionName), indexPartition, false)
+                  // schema and properties are ignored in getInsertValue, so simply pass as null
+                  .map(record -> record.getData().getInsertValue(null, null))
+                  .filter(Option::isPresent)
+                  .map(data -> ((HoodieMetadataRecord) data.get()).getColumnStatsMetadata())
+                  .filter(stats -> fileNames.contains(stats.getFileName()))
+                  .map(HoodieColumnRangeMetadata::fromColumnStats)
+                  .collectAsList();
+          return Pair.of(partitionName, partitionColumnMetadata);
+        }
       });
     } catch (Exception e) {
       throw new HoodieException("Failed to generate column stats records for metadata table", e);

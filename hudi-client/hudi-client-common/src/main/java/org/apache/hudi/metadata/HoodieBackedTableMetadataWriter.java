@@ -1174,7 +1174,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
     // Load file system view for only the affected partitions on the driver.
     // By loading on the driver one time, we avoid loading the same metadata multiple times on the executors.
-    HoodieMetadataFileSystemView fsView = getMetadataView();
+    HoodieTableFileSystemView fsView = getMetadataView();
     fsView.loadPartitions(new ArrayList<>(commitMetadata.getWritePartitionPaths()));
     return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition, dataWriteConfig.getMetadataConfig(), fsView, dataMetaClient, engineContext, getEngineType());
   }

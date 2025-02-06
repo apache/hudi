@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -99,7 +100,7 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                   String instantTime,
                                                                                   HoodieIndexDefinition indexDefinition,
                                                                                   HoodieMetadataConfig metadataConfig,
-                                                                                  HoodieMetadataFileSystemView fsView,
+                                                                                  HoodieTableFileSystemView fsView,
                                                                                   HoodieTableMetaClient dataMetaClient,
                                                                                   HoodieEngineContext engineContext,
                                                                                   EngineType engineType) {
@@ -136,7 +137,7 @@ public class SecondaryIndexRecordGenerationUtils {
         recordKeyToSecondaryKeyForPreviousFileSlice =
             getRecordKeyToSecondaryKey(dataMetaClient, engineType, logFiles, tableSchema, partition, Option.ofNullable(previousBaseFile), indexDefinition, instantTime);
       }
-      List<FileSlice> latestIncludingInflightFileSlices = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.empty(), partition);
+      List<FileSlice> latestIncludingInflightFileSlices = getPartitionLatestFileSlicesIncludingInflight(fsView, partition);
       FileSlice currentFileSliceForFileId = latestIncludingInflightFileSlices.stream().filter(fs -> fs.getFileId().equals(fileId)).findFirst()
           .orElseThrow(() -> new HoodieException("Could not find any file slice for fileId " + fileId));
       StoragePath currentBaseFile = currentFileSliceForFileId.getBaseFile().map(HoodieBaseFile::getStoragePath).orElse(null);

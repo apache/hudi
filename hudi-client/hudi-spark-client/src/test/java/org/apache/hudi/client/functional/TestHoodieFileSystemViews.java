@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -61,7 +62,6 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
@@ -126,7 +126,11 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
 
       // mimic failed write for last completed operation and retry few more operations.
       HoodieInstant lastInstant = metaClient.reloadActiveTimeline().lastInstant().get();
-      metaClient.getStorage().deleteFile(new StoragePath(metaClient.getBasePath() + "/" + METAFOLDER_NAME + "/" + lastInstant.getFileName()));
+      StoragePath instantPath = HoodieTestUtils
+          .getCompleteInstantPath(metaClient.getStorage(),
+              metaClient.getTimelinePath(),
+              lastInstant.requestedTime(), lastInstant.getAction());
+      metaClient.getStorage().deleteFile(instantPath);
 
       assertFileSystemViews(config, enableMdt, storageType);
       // add few more updates

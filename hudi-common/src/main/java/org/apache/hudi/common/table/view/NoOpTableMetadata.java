@@ -77,7 +77,17 @@ class NoOpTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
+  public Option<BloomFilter> getBloomFilter(String partitionName, String fileName, String metadataPartitionName) throws HoodieMetadataException {
+    throw new HoodieMetadataException("Unsupported operation: getBloomFilter!");
+  }
+
+  @Override
   public Map<Pair<String, String>, BloomFilter> getBloomFilters(List<Pair<String, String>> partitionNameFileNameList) throws HoodieMetadataException {
+    throw new HoodieMetadataException("Unsupported operation: getBloomFilters!");
+  }
+
+  @Override
+  public Map<Pair<String, String>, BloomFilter> getBloomFilters(List<Pair<String, String>> partitionNameFileNameList, String metadataPartitionName) throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation: getBloomFilters!");
   }
 
