@@ -71,7 +71,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       confs = confs ++ HoodieCLIUtils.extractOptions(getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String])
     }
     var specificInstants = getArgValueOrDefault(args, PARAMETERS(5))
-    val limit = getArgValueOrDefault(args, PARAMETERS(6))
+    val limit = getArgValueOrDefault(args, PARAMETERS(6)).asInstanceOf[Option[Int]]
 
     // For old version compatibility
     if (op.equals("run")) {
@@ -91,7 +91,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       .toSeq.sortBy(f => f)
 
     var (filteredPendingCompactionInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
-      pendingCompactionInstants, specificInstants.asInstanceOf[Option[String]], Option(op), limit.asInstanceOf[Option[Int]])
+      pendingCompactionInstants, specificInstants.asInstanceOf[Option[String]], Option(op), limit)
 
     var client: SparkRDDWriteClient[_] = null
     try {
@@ -107,10 +107,15 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       if (operation.isSchedule) {
         val instantTime = client.createNewInstantTime()
         if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
-          filteredPendingCompactionInstants = Seq(instantTime)
+          filteredPendingCompactionInstants +: instantTime
         }
       }
 
+      filteredPendingCompactionInstants = if (limit.isDefined) {
+        filteredPendingCompactionInstants.take(limit.get)
+      } else {
+        filteredPendingCompactionInstants
+      }
       logInfo(s"Compaction instants to run: ${filteredPendingCompactionInstants.mkString(",")}.")
 
       if (operation.isExecute) {
