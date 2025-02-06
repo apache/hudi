@@ -1323,6 +1323,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       writeClient = null;
     }
     if (metadataView != null) {
+      metadataView.close();
       metadataView = null;
     }
   }
