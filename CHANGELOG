@@ -595,3 +595,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-02-04 16:03:49] [release-v1.85.0] ---
 [ENG-21391][INTERNAL] Lock provider heartbeat manager (#1169)
 [AUDIT-1157]: Changelog for release-v1.84.0 (#1173)
+
+--- [2025-02-06 16:03:29] [release-v1.86.0] ---
+[ENG-20982][HUDI-8940] Fix Bloom Index Partitioner to distribute keys uniformly across partitions (#1171)
+[AUDIT-1071]: Changelog for release-v1.85.0 (#1175)
