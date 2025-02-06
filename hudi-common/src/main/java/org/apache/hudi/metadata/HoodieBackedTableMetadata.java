@@ -784,7 +784,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     dataMetaClient.reloadActiveTimeline();
     if (metadataMetaClient != null) {
       metadataMetaClient.reloadActiveTimeline();
-      metadataFileSystemView.close();
+      if (metadataFileSystemView != null) {
+        metadataFileSystemView.close();
+      }
       metadataFileSystemView = getFileSystemView(engineContext, metadataMetaClient);
     }
     // the cached reader has max instant time restriction, they should be cleared
@@ -797,7 +799,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
     partitionFileSliceMap.computeIfAbsent(partition.getPartitionPath(),
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient,
-            metadataFileSystemView, partition.getPartitionPath()));
+            getMetadataFileSystemView(), partition.getPartitionPath()));
     return partitionFileSliceMap.get(partition.getPartitionPath()).size();
   }
 
