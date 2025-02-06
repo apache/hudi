@@ -54,7 +54,8 @@ public class SparkSortUtils {
         return SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(
             prependPartitionPathAndSuffixRecordKey(record.getPartitionPath(), record.getRecordKey(), columnValues));
       }
-      return FlatLists.ofComparableArray(prependPartitionPath(record.getPartitionPath(), columnValues));
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(
+          prependPartitionPath(record.getPartitionPath(), columnValues));
     } else if (record.getRecordType() == HoodieRecord.HoodieRecordType.AVRO) {
       return SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(
           HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(
@@ -62,5 +63,9 @@ public class SparkSortUtils {
           ));
     }
     throw new IllegalArgumentException("Invalid recordType" + record.getRecordType());
+  }
+
+  public static int compareValues(Comparable a, Comparable b) {
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().compareValues(a, b, o -> (Comparable)o);
   }
 }

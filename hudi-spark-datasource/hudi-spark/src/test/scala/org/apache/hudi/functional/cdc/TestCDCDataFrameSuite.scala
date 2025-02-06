@@ -68,7 +68,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -91,7 +91,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val hoodieRecords2 = dataGen.generateUniqueUpdates("001", 50)
     val records2 = recordsToStrings(hoodieRecords2).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("org.apache.hudi")
+    inputDF2.write.format("hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -120,7 +120,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // Delete Operation With Clustering Operation
     val records3 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).asScala.toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
-    inputDF3.write.format("org.apache.hudi")
+    inputDF3.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
       .option("hoodie.clustering.inline", "true")
@@ -149,7 +149,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // Insert Overwrite Operation
     val records4 = recordsToStrings(dataGen.generateInserts("003", 50)).asScala.toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
-    inputDF4.write.format("org.apache.hudi")
+    inputDF4.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -171,14 +171,14 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     val records5 = recordsToStrings(dataGen.generateInserts("005", 7)).asScala.toList
     val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
-    inputDF5.write.format("org.apache.hudi")
+    inputDF5.write.format("hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
 
     val records6 = recordsToStrings(dataGen.generateInserts("006", 3)).asScala.toList
     val inputDF6 = spark.read.json(spark.sparkContext.parallelize(records6, 2))
-    inputDF6.write.format("org.apache.hudi")
+    inputDF6.write.format("hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -186,7 +186,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // Upsert Operation With Clean Operation
     val records7 = recordsToStrings(dataGen.generateUniqueUpdates("007", 30)).asScala.toList
     val inputDF7 = spark.read.json(spark.sparkContext.parallelize(records7, 2))
-    inputDF7.write.format("org.apache.hudi")
+    inputDF7.write.format("hudi")
       .options(options)
       .option("hoodie.clean.automatic", "true")
       .option("hoodie.keep.min.commits", "4")
@@ -213,7 +213,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // Bulk_Insert Operation With Clean Operation
     val records8 = recordsToStrings(dataGen.generateInserts("008", 20)).asScala.toList
     val inputDF8 = spark.read.json(spark.sparkContext.parallelize(records8, 2))
-    inputDF8.write.format("org.apache.hudi")
+    inputDF8.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -262,7 +262,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // 1. Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -286,7 +286,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val inputDF2_1 = spark.read.json(spark.sparkContext.parallelize(records2_1, 2))
     val records2_2 = recordsToStrings(dataGen.generateInserts("001", 20)).asScala.toList
     val inputDF2_2 = spark.read.json(spark.sparkContext.parallelize(records2_2, 2))
-    inputDF2_1.union(inputDF2_2).write.format("org.apache.hudi")
+    inputDF2_1.union(inputDF2_2).write.format("hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -313,7 +313,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // 3. Delete Operation With Compaction Operation
     val records3 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).asScala.toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
-    inputDF3.write.format("org.apache.hudi")
+    inputDF3.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
       .option("hoodie.compact.inline", "true")
@@ -338,7 +338,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // 4. Bulk_Insert Operation
     val records4 = recordsToStrings(dataGen.generateInserts("003", 100)).asScala.toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
-    inputDF4.write.format("org.apache.hudi")
+    inputDF4.write.format("hudi")
       .options(options)
       .option("hoodie.compact.inline", "false")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
@@ -361,7 +361,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // 5. Upsert Operation With Clustering Operation
     val records5 = recordsToStrings(dataGen.generateUniqueUpdates("004", 60)).asScala.toList
     val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
-    inputDF5.write.format("org.apache.hudi")
+    inputDF5.write.format("hudi")
       .options(options)
       .option("hoodie.clustering.inline", "true")
       .option("hoodie.clustering.inline.max.commits", "1")
@@ -392,7 +392,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // 6. Insert Overwrite Operation
     val records6 = recordsToStrings(dataGen.generateInserts("005", 70)).asScala.toList
     val inputDF6 = spark.read.json(spark.sparkContext.parallelize(records6, 2))
-    inputDF6.write.format("org.apache.hudi")
+    inputDF6.write.format("hudi")
       .options(options)
       .option("hoodie.compact.inline", "false")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
@@ -415,7 +415,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // 7,8. insert 10 records
     val records7 = recordsToStrings(dataGen.generateInserts("006", 7)).asScala.toList
     val inputDF7 = spark.read.json(spark.sparkContext.parallelize(records7, 2))
-    inputDF7.write.format("org.apache.hudi")
+    inputDF7.write.format("hudi")
       .options(options)
       .option("hoodie.compact.inline", "false")
       .mode(SaveMode.Append)
@@ -424,7 +424,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     val records8 = recordsToStrings(dataGen.generateInserts("007", 3)).asScala.toList
     val inputDF8 = spark.read.json(spark.sparkContext.parallelize(records8, 2))
-    inputDF8.write.format("org.apache.hudi")
+    inputDF8.write.format("hudi")
       .options(options)
       .option("hoodie.compact.inline", "false")
       .mode(SaveMode.Append)
@@ -436,7 +436,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // 8. Upsert Operation With Clean Operation
     val inputDF9 = inputDF6.limit(30) // 30 updates to inserts added after insert overwrite table. if not for this, updates generated from datagne,
     // could split as inserts and updates from hudi standpoint due to insert overwrite table operation.
-    inputDF9.write.format("org.apache.hudi")
+    inputDF9.write.format("hudi")
       .options(options)
       .option("hoodie.clean.automatic", "true")
       .option("hoodie.keep.min.commits", "16")
@@ -485,7 +485,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -509,7 +509,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // Insert Overwrite Partition Operation
     val records2 = recordsToStrings(dataGen.generateInsertsForPartition("001", 30, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("org.apache.hudi")
+    inputDF2.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -531,7 +531,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Drop Partition
-    spark.emptyDataFrame.write.format("org.apache.hudi")
+    spark.emptyDataFrame.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(), HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
@@ -557,7 +557,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // Upsert Operation
     val records4 = recordsToStrings(dataGen.generateUniqueUpdates("000", 50)).asScala.toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
-    inputDF4.write.format("org.apache.hudi")
+    inputDF4.write.format("hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -599,7 +599,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -614,7 +614,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val hoodieRecords2 = dataGen.generateUniqueUpdates("001", 50)
     val records2 = recordsToStrings(hoodieRecords2).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("org.apache.hudi")
+    inputDF2.write.format("hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -667,13 +667,13 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     val df = spark.createDataFrame(data.map(Row.fromTuple).asJava, schema)
     df.write
-      .format("org.apache.hudi")
+      .format("hudi")
       .option("hoodie.datasource.write.operation", "upsert")
       .options(options)
       .mode("append")
       .save(basePath)
 
-    assertEquals(spark.read.format("org.apache.hudi").load(basePath).count(), 3)
+    assertEquals(spark.read.format("hudi").load(basePath).count(), 3)
 
     val newData: Seq[(String, String, String, String)] = Seq(
       ("3", "D", "2023-06-14 15:47:09.953746", "B")
@@ -682,13 +682,13 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val newDf = spark.createDataFrame(newData.map(Row.fromTuple).asJava, schema)
 
     newDf.write
-      .format("org.apache.hudi")
+      .format("hudi")
       .option("hoodie.datasource.write.operation", "upsert")
       .options(options)
       .mode("append")
       .save(basePath)
 
-    assertEquals(spark.read.format("org.apache.hudi").load(basePath).count(), 2)
+    assertEquals(spark.read.format("hudi").load(basePath).count(), 2)
   }
 
   @ParameterizedTest
@@ -711,7 +711,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    inputDF1.write.format("hudi")
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -722,7 +722,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val hoodieRecords2 = dataGen.generateUniqueUpdates("001", 50)
     val records2 = recordsToStrings(hoodieRecords2).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("org.apache.hudi")
+    inputDF2.write.format("hudi")
       .options(options)
       .option("hoodie.datasource.write.operation", "upsert")
       .mode(SaveMode.Append)
@@ -735,7 +735,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val hoodieRecords3 = dataGen.generateUniqueUpdates("002", 50)
     val records3 = recordsToStrings(hoodieRecords3).asScala.toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
-    inputDF3.write.format("org.apache.hudi")
+    inputDF3.write.format("hudi")
       .options(options)
       .option("hoodie.datasource.write.operation", "upsert")
       .mode(SaveMode.Append)
@@ -745,7 +745,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val hoodieRecords4 = dataGen.generateUniqueUpdates("003", 50)
     val records4 = recordsToStrings(hoodieRecords4).asScala.toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
-    inputDF4.write.format("org.apache.hudi")
+    inputDF4.write.format("hudi")
       .options(options)
       .option("hoodie.datasource.write.operation", "upsert")
       .mode(SaveMode.Append)
