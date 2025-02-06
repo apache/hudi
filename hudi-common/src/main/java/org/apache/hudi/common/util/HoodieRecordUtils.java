@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.OperationModeAwareness;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
+import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,14 +80,25 @@ public class HoodieRecordUtils {
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
     } else {
-      return mergerClassList.stream()
-          .map(clazz -> loadRecordMerger(clazz))
-          .filter(Objects::nonNull)
-          .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
-          .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
-          .findFirst()
+      return createValidRecordMerger(engineType, mergerClassList, recordMergerStrategy)
           .orElse(HoodieAvroRecordMerger.INSTANCE);
     }
+  }
+
+  public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
+                                                                   String mergerImpls, String recordMergerStrategy) {
+    return createValidRecordMerger(engineType,ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
+  }
+
+  public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
+                                                                   List<String> mergeImplClassList,
+                                                                   String recordMergeStrategyId) {
+    return Option.fromJavaOptional(mergeImplClassList.stream()
+        .map(clazz -> loadRecordMerger(clazz))
+        .filter(Objects::nonNull)
+        .filter(merger -> merger.getMergingStrategy().equals(recordMergeStrategyId))
+        .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
+        .findFirst());
   }
 
   /**
@@ -101,6 +113,10 @@ public class HoodieRecordUtils {
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
       throw new HoodieException("Unable to instantiate payload class ", e);
     }
+  }
+
+  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, GenericRecord record, Comparable orderingValue) {
+    return HoodieRecordUtils.loadPayload(recordPayloadClass, new Object[] {record, orderingValue}, GenericRecord.class, Comparable.class);
   }
 
   public static boolean recordTypeCompatibleEngine(HoodieRecordType recordType, EngineType engineType) {

@@ -21,8 +21,15 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
+import org.apache.hudi.common.table.log.InstantRange.RangeType;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -30,6 +37,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
+import org.apache.hudi.utilities.streamer.SourceProfile;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -44,6 +52,8 @@ import org.slf4j.LoggerFactory;
 import java.util.function.Function;
 
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.convertToCheckpointV1ForCommitTime;
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -56,20 +66,8 @@ import static org.apache.spark.sql.functions.sum;
 public class IncrSourceHelper {
 
   private static final Logger LOG = LoggerFactory.getLogger(IncrSourceHelper.class);
-  public static final String DEFAULT_BEGIN_TIMESTAMP = HoodieTimeline.INIT_INSTANT_TS;
+  public static final String DEFAULT_START_TIMESTAMP = HoodieTimeline.INIT_INSTANT_TS;
   private static final String CUMULATIVE_COLUMN_NAME = "cumulativeSize";
-
-  /**
-   * Get a timestamp which is the next value in a descending sequence.
-   *
-   * @param timestamp Timestamp
-   */
-  private static String getStrictlyLowerTimestamp(String timestamp) {
-    long ts = Long.parseLong(timestamp);
-    ValidationUtils.checkArgument(ts > 0, "Timestamp must be positive");
-    long lower = ts - 1;
-    return "" + lower;
-  }
 
   /**
    * When hollow commits are found while using incremental source with {@link HoodieDeltaStreamer},
@@ -103,7 +101,7 @@ public class IncrSourceHelper {
    * @return begin and end instants along with query type and other information.
    */
   public static QueryInfo generateQueryInfo(JavaSparkContext jssc, String srcBasePath,
-                                            int numInstantsPerFetch, Option<String> beginInstant,
+                                            int numInstantsPerFetch, Option<Checkpoint> beginInstant,
                                             MissingCheckpointStrategy missingCheckpointStrategy,
                                             HollowCommitHandling handlingMode,
                                             String orderColumn, String keyColumn, String limitColumn,
@@ -115,36 +113,43 @@ public class IncrSourceHelper {
         .setConf(HadoopFSUtils.getStorageConfWithCopy(jssc.hadoopConfiguration()))
         .setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
 
+    // TODO(yihua): handle transition time in StreamerCheckpointV1
     HoodieTimeline completedCommitTimeline = srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
     final HoodieTimeline activeCommitTimeline = handleHollowCommitIfNeeded(completedCommitTimeline, srcMetaClient, handlingMode);
     Function<HoodieInstant, String> timestampForLastInstant = instant -> handlingMode == HollowCommitHandling.USE_TRANSITION_TIME
-        ? instant.getCompletionTime() : instant.getTimestamp();
-    String beginInstantTime = beginInstant.orElseGet(() -> {
+        ? instant.getCompletionTime() : instant.requestedTime();
+
+    Option<Checkpoint> translatedCheckpoint = beginInstant.isPresent()
+        ? Option.of(convertToCheckpointV1ForCommitTime(beginInstant.get(), srcMetaClient))
+        : Option.empty();
+    String beginInstantTime = translatedCheckpoint.orElseGet(() -> {
       if (missingCheckpointStrategy != null) {
         if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
           Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-          return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(timestampForLastInstant.apply(hoodieInstant))).orElse(DEFAULT_BEGIN_TIMESTAMP);
+          return new StreamerCheckpointV1(lastInstant.map(
+              hoodieInstant -> instantTimeMinusMillis(timestampForLastInstant.apply(hoodieInstant), 1))
+              .orElse(DEFAULT_START_TIMESTAMP));
         } else {
-          return DEFAULT_BEGIN_TIMESTAMP;
+          return new StreamerCheckpointV1(DEFAULT_START_TIMESTAMP);
         }
       } else {
         throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
             + "committed instant set hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy to a valid value");
       }
-    });
+    }).getCheckpointKey();
 
     // When `beginInstantTime` is present, `previousInstantTime` is set to the completed commit before `beginInstantTime` if that exists.
     // If there is no completed commit before `beginInstantTime`, e.g., `beginInstantTime` is the first commit in the active timeline,
     // `previousInstantTime` is set to `DEFAULT_BEGIN_TIMESTAMP`.
-    String previousInstantTime = DEFAULT_BEGIN_TIMESTAMP;
-    if (!beginInstantTime.equals(DEFAULT_BEGIN_TIMESTAMP)) {
+    String previousInstantTime = DEFAULT_START_TIMESTAMP;
+    if (!beginInstantTime.equals(DEFAULT_START_TIMESTAMP)) {
       Option<HoodieInstant> previousInstant = activeCommitTimeline.findInstantBefore(beginInstantTime);
       if (previousInstant.isPresent()) {
-        previousInstantTime = previousInstant.get().getTimestamp();
+        previousInstantTime = previousInstant.get().requestedTime();
       } else {
         // if begin instant time matches first entry in active timeline, we can set previous = beginInstantTime - 1
         if (activeCommitTimeline.filterCompletedInstants().firstInstant().isPresent()
-            && activeCommitTimeline.filterCompletedInstants().firstInstant().get().getTimestamp().equals(beginInstantTime)) {
+            && activeCommitTimeline.filterCompletedInstants().firstInstant().get().requestedTime().equals(beginInstantTime)) {
           previousInstantTime = String.valueOf(Long.parseLong(beginInstantTime) - 1);
         }
       }
@@ -163,15 +168,75 @@ public class IncrSourceHelper {
             .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstantsAsStream().reduce((x, y) -> y));
       }
       return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL(), previousInstantTime,
-          beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime),
+          beginInstantTime, nthInstant.map(HoodieInstant::requestedTime).orElse(beginInstantTime),
           orderColumn, keyColumn, limitColumn);
     } else {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
       Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
       return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(),
-          previousInstantTime, beginInstantTime, lastInstant.get().getTimestamp(),
+          previousInstantTime, beginInstantTime, lastInstant.get().requestedTime(),
           orderColumn, keyColumn, limitColumn);
     }
+  }
+
+  public static IncrementalQueryAnalyzer getIncrementalQueryAnalyzer(
+      JavaSparkContext jssc,
+      String srcPath,
+      Option<Checkpoint> lastCheckpoint,
+      MissingCheckpointStrategy missingCheckpointStrategy,
+      int numInstantsFromConfig,
+      Option<SourceProfile<Integer>> latestSourceProfile, TimelineUtils.HollowCommitHandling handlingMode) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(jssc.hadoopConfiguration()))
+        .setBasePath(srcPath)
+        .setLoadActiveTimelineOnLoad(true)
+        .build();
+
+    String startCompletionTime;
+    RangeType rangeType;
+
+    if (lastCheckpoint.isPresent() && !lastCheckpoint.get().getCheckpointKey().isEmpty()) {
+      // Translate checkpoint
+      StreamerCheckpointV2 lastStreamerCheckpointV2 = CheckpointUtils.convertToCheckpointV2ForCommitTime(
+          lastCheckpoint.get(), metaClient, handlingMode);
+      startCompletionTime = lastStreamerCheckpointV2.getCheckpointKey();
+      rangeType = RangeType.OPEN_CLOSED;
+    } else if (missingCheckpointStrategy != null) {
+      rangeType = RangeType.CLOSED_CLOSED;
+      switch (missingCheckpointStrategy) {
+        case READ_UPTO_LATEST_COMMIT:
+          startCompletionTime = DEFAULT_START_TIMESTAMP;
+          // disrespect numInstantsFromConfig when reading up to latest
+          numInstantsFromConfig = -1;
+          break;
+        case READ_LATEST:
+          // rely on IncrementalQueryAnalyzer to use the latest completed instant
+          startCompletionTime = null;
+          break;
+        default:
+          throw new IllegalArgumentException("Unknown missing checkpoint strategy: " + missingCheckpointStrategy);
+      }
+    } else {
+      throw new IllegalArgumentException("Missing start completion time for incremental pull. For reading from latest "
+          + "committed instant, set " + MISSING_CHECKPOINT_STRATEGY.key() + " to a valid value");
+    }
+
+    final int numInstantsFromConfigFinal = numInstantsFromConfig;
+    // If source profile exists, use the numInstants from source profile.
+    int numInstantsPerFetch = latestSourceProfile.map(sourceProfile -> {
+      int numInstantsFromSourceProfile = sourceProfile.getSourceSpecificContext();
+      LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}",
+          numInstantsFromSourceProfile, numInstantsFromConfigFinal);
+      return numInstantsFromSourceProfile;
+    }).orElse(numInstantsFromConfig);
+
+    return IncrementalQueryAnalyzer.builder()
+        .metaClient(metaClient)
+        .startCompletionTime(startCompletionTime)
+        .endCompletionTime(null)
+        .rangeType(rangeType)
+        .limit(numInstantsPerFetch)
+        .build();
   }
 
   /**
@@ -246,7 +311,7 @@ public class IncrSourceHelper {
   }
 
   /**
-   * Determine the policy to choose if a checkpoint is missing (detected by the absence of a beginInstant),
+   * Determine the policy to choose if a checkpoint is missing (detected by the absence of a start commit),
    * during a run of a {@link HoodieIncrSource}.
    *
    * @param props the usual Hudi props object

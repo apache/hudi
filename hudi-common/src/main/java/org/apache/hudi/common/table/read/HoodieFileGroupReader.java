@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -29,9 +28,9 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -39,6 +38,7 @@ import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
@@ -50,13 +50,13 @@ import org.apache.avro.Schema;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
-import java.util.Properties;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A file group reader that iterates through the records in a single file group.
@@ -79,10 +79,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final long length;
   // Core structure to store and process records.
   private final HoodieFileGroupRecordBuffer<T> recordBuffer;
-  private final RecordMergeMode recordMergeMode;
   private ClosableIterator<T> baseFileIterator;
-  private final HoodieRecordMerger recordMerger;
   private final Option<UnaryOperator<T>> outputConverter;
+  private final HoodieReadStats readStats;
 
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
                                HoodieStorage storage,
@@ -104,10 +103,20 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.props = props;
     this.start = start;
     this.length = length;
-    this.recordMergeMode = getRecordMergeMode(props);
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    this.recordMerger = readerContext.getRecordMerger(tableConfig.getRecordMergerStrategy());
-    readerContext.setRecordMerger(this.recordMerger);
+    RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
+    String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
+    if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
+          recordMergeMode, tableConfig.getPayloadClass(),
+          mergeStrategyId, null, tableConfig.getTableVersion());
+      recordMergeMode = triple.getLeft();
+      mergeStrategyId = triple.getRight();
+    }
+    readerContext.setRecordMerger(readerContext.getRecordMerger(
+        recordMergeMode, mergeStrategyId,
+        props.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
+            props.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, ""))));
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
@@ -118,25 +127,39 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
     readerContext.setHasBootstrapBaseFile(hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent());
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
-        ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig)
-        : new HoodieFileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig));
+        ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
+        : new HoodieFileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient, recordMerger, props, this.logFiles.isEmpty(), isSkipMerge, shouldUseRecordPosition);
+    this.readStats = new HoodieReadStats();
+    this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
+        recordMergeMode, props, hoodieBaseFileOption, this.logFiles.isEmpty(),
+        isSkipMerge, shouldUseRecordPosition, readStats);
   }
 
   /**
    * Initialize correct record buffer
    */
-  private static HoodieFileGroupRecordBuffer getRecordBuffer(HoodieReaderContext readerContext, HoodieTableMetaClient hoodieTableMetaClient, HoodieRecordMerger recordMerger,
-                                                             TypedProperties props, boolean hasNoLogFiles, boolean isSkipMerge, boolean shouldUseRecordPosition) {
+  private static HoodieFileGroupRecordBuffer getRecordBuffer(HoodieReaderContext readerContext,
+                                                             HoodieTableMetaClient hoodieTableMetaClient,
+                                                             RecordMergeMode recordMergeMode,
+                                                             TypedProperties props,
+                                                             Option<HoodieBaseFile> baseFileOption,
+                                                             boolean hasNoLogFiles,
+                                                             boolean isSkipMerge,
+                                                             boolean shouldUseRecordPosition,
+                                                             HoodieReadStats readStats) {
     if (hasNoLogFiles) {
       return null;
     } else if (isSkipMerge) {
-      return new HoodieUnmergedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
-    } else if (shouldUseRecordPosition) {
-      return new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
+      return new HoodieUnmergedFileGroupRecordBuffer<>(
+          readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats);
+    } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
+      return new HoodiePositionBasedFileGroupRecordBuffer<>(
+          readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(),
+          Option.empty(), baseFileOption.get().getCommitTime(), props, readStats);
     } else {
-      return new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
+      return new HoodieKeyBasedFileGroupRecordBuffer<>(
+          readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats);
     }
   }
 
@@ -239,6 +262,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   /**
+   * @return statistics of reading a file group.
+   */
+  public HoodieReadStats getStats() {
+    return readStats;
+  }
+
+  /**
    * @return The next record after calling {@link #hasNext}.
    */
   public T next() {
@@ -251,7 +281,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private void scanLogFiles() {
     String path = readerContext.getTablePath();
-    HoodieMergedLogRecordReader logRecordReader = HoodieMergedLogRecordReader.newBuilder()
+    try (HoodieMergedLogRecordReader logRecordReader = HoodieMergedLogRecordReader.newBuilder()
         .withHoodieReaderContext(readerContext)
         .withStorage(storage)
         .withLogFiles(logFiles)
@@ -259,11 +289,16 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
         .withPartition(getRelativePartitionPath(
             new StoragePath(path), logFiles.get(0).getPath().getParent()))
-        .withRecordMerger(recordMerger)
-        .withRecordMergeMode(recordMergeMode)
         .withRecordBuffer(recordBuffer)
-        .build();
-    logRecordReader.close();
+        .build()) {
+      readStats.setTotalLogReadTimeMs(logRecordReader.getTotalTimeTakenToReadAndMergeBlocks());
+      readStats.setTotalUpdatedRecordsCompacted(logRecordReader.getNumMergedRecordsInLog());
+      readStats.setTotalLogFilesCompacted(logRecordReader.getTotalLogFiles());
+      readStats.setTotalLogRecords(logRecordReader.getTotalLogRecords());
+      readStats.setTotalLogBlocks(logRecordReader.getTotalLogBlocks());
+      readStats.setTotalCorruptLogBlock(logRecordReader.getTotalCorruptBlocks());
+      readStats.setTotalRollbackBlocks(logRecordReader.getTotalRollbacks());
+    }
   }
 
   @Override
@@ -274,15 +309,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (recordBuffer != null) {
       recordBuffer.close();
     }
+    if (readerContext != null) {
+      readerContext.close();
+    }
   }
 
   public HoodieFileGroupReaderIterator<T> getClosableIterator() {
     return new HoodieFileGroupReaderIterator<>(this);
-  }
-
-  public static RecordMergeMode getRecordMergeMode(Properties props) {
-    String mergeMode = getStringWithAltKeys(props, HoodieCommonConfig.RECORD_MERGE_MODE, true).toUpperCase();
-    return RecordMergeMode.valueOf(mergeMode);
   }
 
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {

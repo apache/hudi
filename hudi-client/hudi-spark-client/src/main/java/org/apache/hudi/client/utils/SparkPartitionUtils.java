@@ -40,7 +40,7 @@ public class SparkPartitionUtils {
       return new Object[0];
     }
     SparkParsePartitionUtil sparkParsePartitionUtil = SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkParsePartitionUtil();
-    return HoodieSparkUtils.parsePartitionColumnValues(
+    return HoodieSparkUtils.doParsePartitionColumnValues(
         partitionFields.get(),
         partitionPath,
         new StoragePath(basePath),

@@ -24,7 +24,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -99,6 +98,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
+  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
+    // no op. HUDI-8801 to fix.
+  }
+
+  @Override
   protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
   }
@@ -143,7 +147,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       // are upserts to metadata table and so only a new delta commit will be created.
       // once rollback is complete in datatable, compaction will be retried again, which will eventually hit this code block where the respective commit is
       // already part of completed commit. So, we have to manually rollback the completed instant and proceed.
-      Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime))
+      Option<HoodieInstant> alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.requestedTime().equals(instantTime))
           .lastInstant();
       LOG.info(String.format("%s completed commit at %s being applied to MDT.",
           alreadyCompletedInstant.isPresent() ? "Already" : "Partially", instantTime));
@@ -189,9 +193,10 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, FileSlice>> partitionFileSlicePairs, HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient,
-                                                               int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf) {
-    throw new HoodieNotSupportedException("Flink metadata table does not support functional index yet.");
+  protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
+                                                               HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf,
+                                                               String instantTime) {
+    throw new HoodieNotSupportedException("Flink metadata table does not support expression index yet.");
   }
 
   @Override
@@ -202,10 +207,5 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected EngineType getEngineType() {
     return EngineType.FLINK;
-  }
-
-  @Override
-  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieIndexDefinition indexDefinition) {
-    throw new HoodieNotSupportedException("Flink metadata table does not support secondary index yet.");
   }
 }

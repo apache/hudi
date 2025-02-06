@@ -24,7 +24,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -85,7 +84,7 @@ public class DataSourceInternalWriterHelper {
   public void commit(List<WriteStatus> writeStatuses) {
     try {
       List<HoodieWriteStat> writeStatList = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-      writeClient.commitStats(instantTime, writeClient.getEngineContext().parallelize(writeStatuses), writeStatList, Option.of(extraMetadata),
+      writeClient.commitStats(instantTime, writeStatList, Option.of(extraMetadata),
           CommitUtils.getCommitActionType(operationType, metaClient.getTableType()));
     } catch (Exception ioe) {
       throw new HoodieException(ioe.getMessage(), ioe);
@@ -101,9 +100,8 @@ public class DataSourceInternalWriterHelper {
 
   public void createInflightCommit() {
     metaClient.getActiveTimeline().transitionRequestedToInflight(
-        new HoodieInstant(State.REQUESTED,
-                          CommitUtils.getCommitActionType(operationType, metaClient.getTableType()),
-                          instantTime), Option.empty());
+        metaClient.createNewInstant(State.REQUESTED,
+            CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime), Option.empty());
   }
 
   public HoodieTable getHoodieTable() {

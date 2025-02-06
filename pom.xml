@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>1.1.0-SNAPSHOT</version>
   <description>Apache Hudi brings stream style processing on big data</description>
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
@@ -84,11 +84,11 @@
     <maven-jar-plugin.version>3.2.0</maven-jar-plugin.version>
     <maven-surefire-plugin.version>2.22.2</maven-surefire-plugin.version>
     <maven-failsafe-plugin.version>2.22.2</maven-failsafe-plugin.version>
-    <maven-shade-plugin.version>3.4.0</maven-shade-plugin.version>
+    <maven-shade-plugin.version>3.5.1</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
     <maven-compiler-plugin.version>3.8.0</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
-    <genjavadoc-plugin.version>0.15</genjavadoc-plugin.version>
+    <genjavadoc-plugin.version>0.18_2.13.10</genjavadoc-plugin.version>
     <build-helper-maven-plugin.version>1.7</build-helper-maven-plugin.version>
     <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
     <maven-docker-plugin.version>0.45.0</maven-docker-plugin.version>
@@ -120,7 +120,7 @@
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.4</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
-    <hive.avro.version>1.8.2</hive.avro.version>
+    <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
     <trino.version>390</trino.version>
     <hive.exec.classifier>core</hive.exec.classifier>
@@ -133,7 +133,8 @@
     <prometheus.version>0.8.0</prometheus.version>
     <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
     <aws.sdk.httpcore.version>4.4.13</aws.sdk.httpcore.version>
-    <http.version>4.4.1</http.version>
+    <httpcore.version>4.4.16</httpcore.version>
+    <httpclient.version>4.5.14</httpclient.version>
     <spark.version>${spark3.version}</spark.version>
     <spark3.version>3.5.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
@@ -148,7 +149,7 @@
     <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
     <flink.bundle.version>1.20</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
-    <flink.avro.version>1.11.3</flink.avro.version>
+    <flink.avro.version>1.11.4</flink.avro.version>
     <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
     <!-- check kafka version -->
     <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version> 
@@ -165,13 +166,13 @@
     <rocksdbjni.version>7.5.3</rocksdbjni.version>
     <spark33.version>3.3.4</spark33.version>
     <spark34.version>3.4.3</spark34.version>
-    <spark35.version>3.5.1</spark35.version>
+    <spark35.version>3.5.4</spark35.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
-    <avro.version>1.8.2</avro.version>
-    <bijection-avro.version>0.9.7</bijection-avro.version>
+    <avro.version>1.11.4</avro.version>
+    <bijection-avro.version>0.9.8</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
-    <commons.io.version>2.11.0</commons.io.version>
+    <commons.io.version>2.14.0</commons.io.version>
     <scala12.version>2.12.15</scala12.version>
     <scala13.version>2.13.8</scala13.version>
     <scala.version>${scala12.version}</scala.version>
@@ -212,8 +213,8 @@
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.8</antlr.version>
     <aws.sdk.version>2.25.69</aws.sdk.version>
-    <proto.version>3.21.7</proto.version>
-    <protoc.version>3.21.5</protoc.version>
+    <proto.version>3.25.5</proto.version>
+    <protoc.version>3.25.5</protoc.version>
     <dynamodb.lockclient.version>1.2.0</dynamodb.lockclient.version>
     <zookeeper.version>3.5.7</zookeeper.version>
     <openjdk.jol.version>0.16</openjdk.jol.version>
@@ -226,7 +227,7 @@
     <moto.endpoint>http://localhost:${moto.port}</moto.endpoint>
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
-    <snappy.version>1.1.8.3</snappy.version>
+    <snappy.version>1.1.10.7</snappy.version>
   </properties>
 
   <scm>
@@ -1162,7 +1163,7 @@
       <dependency>
         <groupId>xerces</groupId>
         <artifactId>xercesImpl</artifactId>
-        <version>2.9.1</version>
+        <version>2.12.2</version>
       </dependency>
 
       <dependency>
@@ -1181,17 +1182,17 @@
       <dependency>
         <groupId>org.apache.httpcomponents</groupId>
         <artifactId>fluent-hc</artifactId>
-        <version>${http.version}</version>
+        <version>${httpclient.version}</version>
       </dependency>
       <dependency>
         <groupId>org.apache.httpcomponents</groupId>
         <artifactId>httpcore</artifactId>
-        <version>${http.version}</version>
+        <version>${httpcore.version}</version>
       </dependency>
       <dependency>
         <groupId>org.apache.httpcomponents</groupId>
         <artifactId>httpclient</artifactId>
-        <version>${http.version}</version>
+        <version>${httpclient.version}</version>
       </dependency>
 
       <!-- Hadoop -->
@@ -2121,27 +2122,22 @@
                 </goals>
                 <configuration>
                   <excludes>
-                    <exclude>${project.basedir}/src/main/scala</exclude>
+                    <exclude>**/*.scala</exclude>
                   </excludes>
                   <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
+                  <args>
+                    <arg>-P:genjavadoc:out=${project.build.directory}/genjavadoc</arg>
+                  </args>
+                  <compilerPlugins>
+                    <compilerPlugin>
+                      <groupId>com.typesafe.genjavadoc</groupId>
+                      <artifactId>genjavadoc-plugin_${scala.version}</artifactId>
+                      <version>${genjavadoc-plugin.version}</version>
+                    </compilerPlugin>
+                  </compilerPlugins>
                 </configuration>
               </execution>
             </executions>
-            <configuration>
-              <args>
-                <arg>-P:genjavadoc:out=${project.build.directory}/genjavadoc</arg>
-              </args>
-              <compilerPlugins>
-                <compilerPlugin>
-                  <groupId>com.typesafe.genjavadoc</groupId>
-                  <artifactId>genjavadoc-plugin_${scala.version}</artifactId>
-                  <version>${genjavadoc-plugin.version}</version>
-                </compilerPlugin>
-              </compilerPlugins>
-              <excludes>
-                <exclude>**/*.scala</exclude>
-              </excludes>
-            </configuration>
           </plugin>
           <plugin>
             <groupId>org.codehaus.mojo</groupId>
@@ -2308,7 +2304,7 @@
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.13.1</parquet.version>
         <orc.spark.version>1.9.1</orc.spark.version>
-        <avro.version>1.11.2</avro.version>
+        <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
         <fasterxml.spark3.version>2.15.2</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2319,6 +2315,7 @@
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <log4j2.version>2.20.0</log4j2.version>
         <slf4j.version>2.0.7</slf4j.version>
+        <genjavadoc-plugin.version>0.19</genjavadoc-plugin.version>
         <skipITs>true</skipITs>
       </properties>
       <modules>
@@ -2365,7 +2362,7 @@
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.2</parquet.version>
         <orc.spark.version>1.7.8</orc.spark.version>
-        <avro.version>1.11.1</avro.version>
+        <avro.version>1.11.4</avro.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2406,7 +2403,7 @@
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.3</parquet.version>
         <orc.spark.version>1.8.3</orc.spark.version>
-        <avro.version>1.11.1</avro.version>
+        <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
         <fasterxml.spark3.version>2.14.2</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2457,7 +2454,7 @@
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.13.1</parquet.version>
         <orc.spark.version>1.9.1</orc.spark.version>
-        <avro.version>1.11.2</avro.version>
+        <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
         <fasterxml.spark3.version>2.15.2</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2466,6 +2463,7 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <log4j2.version>2.20.0</log4j2.version>
         <slf4j.version>2.0.7</slf4j.version>
+        <genjavadoc-plugin.version>0.19</genjavadoc-plugin.version>
         <skipITs>false</skipITs>
       </properties>
       <modules>
@@ -2497,7 +2495,7 @@
       <id>flink1.20</id>
       <properties>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.3</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
       </properties>
       <activation>
@@ -2513,7 +2511,7 @@
         <hudi.flink.module>hudi-flink1.19.x</hudi.flink.module>
         <flink.bundle.version>1.19</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
         <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
       </properties>
@@ -2530,7 +2528,7 @@
         <hudi.flink.module>hudi-flink1.18.x</hudi.flink.module>
         <flink.bundle.version>1.18</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
         <flink.connector.kafka.version>3.2.0-1.18</flink.connector.kafka.version>
       </properties>
@@ -2547,7 +2545,7 @@
         <hudi.flink.module>hudi-flink1.17.x</hudi.flink.module>
         <flink.bundle.version>1.17</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.17.version}</flink.connector.kafka.version>
       </properties>
@@ -2564,7 +2562,7 @@
         <hudi.flink.module>hudi-flink1.16.x</hudi.flink.module>
         <flink.bundle.version>1.16</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.16.version}</flink.connector.kafka.version>
       </properties>
@@ -2581,7 +2579,7 @@
         <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
         <flink.bundle.version>1.15</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.15.version}</flink.connector.kafka.version>
       </properties>
@@ -2598,7 +2596,7 @@
         <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
         <flink.bundle.version>1.14</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
         <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
         <flink.parquet.artifactId>flink-parquet_${scala.binary.version}</flink.parquet.artifactId>

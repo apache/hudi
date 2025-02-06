@@ -25,10 +25,14 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.EngineBroadcastManager;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.SparkBroadcastManager;
 
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
@@ -42,14 +46,20 @@ public class HoodieSparkMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
   @Override
+  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context,
+                                                                  HoodieTableMetaClient metaClient) {
+    return Option.of(new SparkBroadcastManager(context, metaClient));
+  }
+
+  @Override
   public void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime) {
     HoodieInstant requestedCompactionInstantTime = WriteOperationType.COMPACT.equals(operationType)
-        ? HoodieTimeline.getCompactionRequestedInstant(instantTime)
-        : HoodieTimeline.getLogCompactionRequestedInstant(instantTime);
+        ? table.getInstantGenerator().getCompactionRequestedInstant(instantTime)
+        : table.getInstantGenerator().getLogCompactionRequestedInstant(instantTime);
     if (!pendingCompactionTimeline.containsInstant(requestedCompactionInstantTime)) {
       throw new IllegalStateException(
-          "No Compaction request available at " + requestedCompactionInstantTime.getTimestamp() + " to run compaction");
+          "No Compaction request available at " + requestedCompactionInstantTime.requestedTime() + " to run compaction");
     }
   }
 

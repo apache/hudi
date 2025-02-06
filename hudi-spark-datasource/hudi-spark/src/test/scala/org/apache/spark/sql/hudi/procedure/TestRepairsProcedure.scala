@@ -20,9 +20,9 @@ package org.apache.spark.sql.hudi.procedure
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, SchemaTestUtil}
+import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -62,7 +62,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            | )
        """.stripMargin)
       // create commit instant
-      Files.createFile(Paths.get(tablePath, ".hoodie", "100.commit"))
+      Files.createFile(Paths.get(tablePath, ".hoodie/timeline", "100.commit"))
 
       val metaClient = createMetaClient(spark, tablePath)
 
@@ -135,10 +135,13 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       // overwrite hoodie props
       val expectedOutput ="""
           |[hoodie.archivelog.folder,archived,archive]
+          |[hoodie.compaction.payload.class,org.apache.hudi.common.model.DefaultHoodieRecordPayload,null]
           |[hoodie.database.name,default,null]
           |[hoodie.datasource.write.drop.partition.columns,false,false]
           |[hoodie.datasource.write.hive_style_partitioning,true,null]
           |[hoodie.datasource.write.partitionpath.urlencode,false,null]
+          |[hoodie.record.merge.mode,EVENT_TIME_ORDERING,null]
+          |[hoodie.record.merge.strategy.id,eeb8d96f-b1e4-49fd-bbf8-28ac514178e5,null]
           |[hoodie.table.checksum,,]
           |[hoodie.table.create.schema,,]
           |[hoodie.table.initial.version,8,8]
@@ -148,7 +151,9 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.table.recordkey.fields,id,null]
           |[hoodie.table.type,COPY_ON_WRITE,COPY_ON_WRITE]
           |[hoodie.table.version,,]
-          |[hoodie.timeline.layout.version,,]""".stripMargin.trim
+          |[hoodie.timeline.history.path,history,history]
+          |[hoodie.timeline.layout.version,,]
+          |[hoodie.timeline.path,timeline,timeline]""".stripMargin.trim
 
       val actual = spark.sql(s"""call repair_overwrite_hoodie_props(table => '$tableName', new_props_file_path => '${newProps.getPath}')""")
         .collect()
@@ -544,7 +549,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
   @throws[IOException]
   def createEmptyCleanRequestedFile(basePath: String, instantTime: String, configuration: Configuration): Unit = {
-    val commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeRequestedCleanerFileName(instantTime))
+    val commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME
+      + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/" + INSTANT_FILE_NAME_GENERATOR.makeRequestedCleanerFileName(instantTime))
     val fs = HadoopFSUtils.getFs(basePath, configuration)
     val os = fs.create(commitFilePath, true)
     os.close()

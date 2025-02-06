@@ -21,10 +21,12 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -35,6 +37,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.util.CommonClientUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +53,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.table.action.rollback.RollbackUtils.groupSerializableRollbackRequestsBasedOnFileGroup;
 
 /**
  * Contains common methods to be used across engines for rollback operation.
@@ -113,7 +118,13 @@ public class BaseRollbackHelper implements Serializable {
                                                                     HoodieInstant instantToRollback,
                                                                     List<SerializableHoodieRollbackRequest> rollbackRequests,
                                                                     boolean doDelete, int numPartitions) {
-    return context.flatMap(rollbackRequests, (SerializableFunction<SerializableHoodieRollbackRequest, Stream<Pair<String, HoodieRollbackStat>>>) rollbackRequest -> {
+    // The rollback requests for append only exist in table version 6 and below which require groupBy
+    List<SerializableHoodieRollbackRequest> processedRollbackRequests =
+        metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
+            ? rollbackRequests
+            : groupSerializableRollbackRequestsBasedOnFileGroup(rollbackRequests);
+    final TaskContextSupplier taskContextSupplier = context.getTaskContextSupplier();
+    return context.flatMap(processedRollbackRequests, (SerializableFunction<SerializableHoodieRollbackRequest, Stream<Pair<String, HoodieRollbackStat>>>) rollbackRequest -> {
       List<String> filesToBeDeleted = rollbackRequest.getFilesToBeDeleted();
       if (!filesToBeDeleted.isEmpty()) {
         List<HoodieRollbackStat> rollbackStats = deleteFiles(metaClient, filesToBeDeleted, doDelete);
@@ -125,17 +136,22 @@ public class BaseRollbackHelper implements Serializable {
         final StoragePath filePath;
         try {
           String fileId = rollbackRequest.getFileId();
+          HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
 
           writer = HoodieLogFormat.newWriterBuilder()
               .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
-              .withDeltaCommit(instantToRollback.getTimestamp())
+              .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
+              .withInstantTime(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+                      ? instantToRollback.requestedTime() : rollbackRequest.getLatestBaseInstant()
+                  )
               .withStorage(metaClient.getStorage())
+              .withTableVersion(tableVersion)
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
           // generate metadata
           if (doDelete) {
-            Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
+            Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.requestedTime());
             // if update belongs to an existing log file
             // use the log file path from AppendResult in case the file handle may roll over
             filePath = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getPath();
@@ -162,20 +178,19 @@ public class BaseRollbackHelper implements Serializable {
             1L
         );
 
-        return Collections.singletonList(
+        return Stream.of(
                 Pair.of(rollbackRequest.getPartitionPath(),
                     HoodieRollbackStat.newBuilder()
                         .withPartitionPath(rollbackRequest.getPartitionPath())
                         .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-                        .build()))
-            .stream();
+                        .build()));
       } else {
-        return Collections.singletonList(
+        // no action needed.
+        return Stream.of(
             Pair.of(rollbackRequest.getPartitionPath(),
                 HoodieRollbackStat.newBuilder()
                     .withPartitionPath(rollbackRequest.getPartitionPath())
-                    .build()))
-            .stream();
+                    .build()));
       }
     }, numPartitions);
   }
@@ -212,7 +227,7 @@ public class BaseRollbackHelper implements Serializable {
   protected Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String commit) {
     // generate metadata
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>(3);
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().getTimestamp());
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().requestedTime());
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, commit);
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));

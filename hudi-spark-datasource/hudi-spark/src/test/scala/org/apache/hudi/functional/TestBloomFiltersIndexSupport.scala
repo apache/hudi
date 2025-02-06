@@ -152,7 +152,7 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
-    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().requestedTime)
       .values()
       .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
         (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](

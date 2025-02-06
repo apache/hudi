@@ -20,6 +20,7 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -60,11 +61,11 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   private final transient HoodieMetaserverClient metaserverClient;
 
   public HoodieTableMetaserverClient(HoodieStorage storage, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
-                                     String mergerStrategy, HoodieTimeGeneratorConfig timeGeneratorConfig,
-                                     FileSystemRetryConfig fileSystemRetryConfig,
+                                     RecordMergeMode recordMergeMode, String payloadClassName, String recordMergeStrategyId,
+                                     HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig,
                                      Option<String> databaseName, Option<String> tableName, HoodieMetaserverConfig config) {
     super(storage, basePath, false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
-        config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), mergerStrategy, timeGeneratorConfig, fileSystemRetryConfig);
+        recordMergeMode, payloadClassName, recordMergeStrategyId, timeGeneratorConfig, fileSystemRetryConfig);
     this.databaseName = databaseName.isPresent() ? databaseName.get() : tableConfig.getDatabaseName();
     this.tableName = tableName.isPresent() ? tableName.get() : tableConfig.getTableName();
     this.metaserverConfig = config;
@@ -108,6 +109,7 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   /**
    * @return Hoodie Table Type
    */
+  @Override
   public HoodieTableType getTableType() {
     return HoodieTableType.valueOf(table.getTableType());
   }
@@ -117,6 +119,7 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
    *
    * @return Active instants timeline
    */
+  @Override
   public synchronized HoodieActiveTimeline getActiveTimeline() {
     if (activeTimeline == null) {
       activeTimeline = new HoodieMetaserverBasedTimeline(this, metaserverConfig);
@@ -129,14 +132,10 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
    *
    * @return Active instants timeline
    */
+  @Override
   public synchronized HoodieActiveTimeline reloadActiveTimeline() {
     activeTimeline = new HoodieMetaserverBasedTimeline(this, metaserverConfig);
     return activeTimeline;
-  }
-
-  public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Set<String> includedExtensions,
-                                                              boolean applyLayoutVersionFilters) {
-    throw new HoodieException("Unsupport operation");
   }
 
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Path timelinePath, Set<String> includedExtensions,

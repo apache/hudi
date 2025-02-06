@@ -44,7 +44,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     // And available public methods does not allow to specify exact instant to get schema from, only latest after some filtering
     // which may lead to false positives in test scenarios.
     val lastInstant = metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant().get()
-    val commitMetadata = HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline.getInstantDetails(lastInstant).get(), classOf[HoodieCommitMetadata])
+    val commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(lastInstant, metaClient.getActiveTimeline.getInstantDetails(lastInstant).get(), classOf[HoodieCommitMetadata])
     val schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)
     val schema = new Schema.Parser().parse(schemaStr)
     val fields = schema.getFields.asScala.map(_.name())
@@ -265,13 +265,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     spark.sql(s"""insert into $tableName values (1, "z3", "v1", "2021-10-01"), (2, "l4", "v1", "2021-10-02")""")
 
     // specify duplicate partition columns
-    if (HoodieSparkUtils.gteqSpark3_3) {
-      checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01', dt='2021-10-02')")(
-        "Found duplicate keys `dt`")
-    } else {
-      checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01', dt='2021-10-02')")(
-        "Found duplicate keys 'dt'")
-    }
+    checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01', dt='2021-10-02')")(
+      "Found duplicate keys `dt`")
 
     // insert data
     spark.sql(s"""insert into $tableName values (3, "z5", "v1", "2021-10-01"), (4, "l5", "v1", "2021-10-02")""")
@@ -505,7 +500,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         // check schema
         val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
         val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.lastInstant()
-        val commitMetadata = HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline.getInstantDetails(
+        val commitMetadata = metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(lastInstant.get(), metaClient.getActiveTimeline.getInstantDetails(
           lastInstant.get()).get(), classOf[HoodieCommitMetadata])
         val schemaStr = commitMetadata.getExtraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY)
         Assertions.assertFalse(StringUtils.isNullOrEmpty(schemaStr))

@@ -24,7 +24,6 @@ import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
@@ -113,7 +112,7 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
     assertTrue(Files.exists(Paths.get(metaPath)), "Hoodie table not exist.");
 
     // Load meta data
-    new TableCommand().connect(targetPath.toString(), TimelineLayoutVersion.VERSION_1, false, 2000, 300000, 7,
+    new TableCommand().connect(targetPath.toString(), false, 2000, 300000, 7,
         "WAIT_TO_ADJUST_SKEW", 200L, false);
     metaClient = HoodieCLI.getTableMetaClient();
 
@@ -138,7 +137,7 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
     dataImporter.dataImport(jsc, 0);
 
     // Load meta data
-    new TableCommand().connect(targetPath.toString(), TimelineLayoutVersion.VERSION_1, false, 2000, 300000, 7,
+    new TableCommand().connect(targetPath.toString(), false, 2000, 300000, 7,
         "WAIT_TO_ADJUST_SKEW", 200L, false);
     metaClient = HoodieCLI.getTableMetaClient();
 

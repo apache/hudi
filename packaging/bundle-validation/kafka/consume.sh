@@ -26,7 +26,7 @@ curl -X DELETE http://localhost:8083/connectors/hudi-sink &
 sleep 10
 
 # validate
-numCommits=$(ls /tmp/hudi-kafka-test/.hoodie/*.commit | wc -l)
+numCommits=$(ls /tmp/hudi-kafka-test/.hoodie/timeline/*.commit | wc -l)
 if [ $numCommits -gt 0 ]; then
   exit 0
 else

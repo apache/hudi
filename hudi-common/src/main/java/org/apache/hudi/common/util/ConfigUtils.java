@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.PropertiesConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
-import org.apache.hudi.common.model.RecordPayloadType;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -93,11 +93,11 @@ public class ConfigUtils {
    * Get payload class.
    */
   public static String getPayloadClass(Properties properties) {
-    return RecordPayloadType.getPayloadClassName(new HoodieConfig(properties));
+    return HoodieRecordPayload.getPayloadClassName(new HoodieConfig(properties));
   }
 
   public static List<String> split2List(String param) {
-    return Arrays.stream(param.split(","))
+    return StringUtils.split(param, ",").stream()
         .map(String::trim).distinct().collect(Collectors.toList());
   }
 
@@ -383,12 +383,13 @@ public class ConfigUtils {
    * config, if exists, is returned if the config is not found in the properties.
    *
    * @param props          Configs in {@link Map}.
-   * @param configProperty {@link ConfigProperty} config of String type to fetch.
+   * @param configProperty {@link ConfigProperty} config to fetch.
    * @return String value if the config exists; default String value if the config does not exist
-   * and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
+   * and there is default value defined in the {@link ConfigProperty} config and is convertible to
+   * String type; {@code null} otherwise.
    */
   public static String getStringWithAltKeys(Map<String, Object> props,
-                                            ConfigProperty<String> configProperty) {
+                                            ConfigProperty<?> configProperty) {
     return getStringWithAltKeys(props::get, configProperty);
   }
 
@@ -398,12 +399,13 @@ public class ConfigUtils {
    * config, if exists, is returned if the config is not found in the properties.
    *
    * @param keyMapper      Mapper function to map the key to values.
-   * @param configProperty {@link ConfigProperty} config of String type to fetch.
+   * @param configProperty {@link ConfigProperty} config to fetch.
    * @return String value if the config exists; default String value if the config does not exist
-   * and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
+   * and there is default value defined in the {@link ConfigProperty} config and is convertible to
+   * String type; {@code null} otherwise.
    */
   public static String getStringWithAltKeys(Function<String, Object> keyMapper,
-                                            ConfigProperty<String> configProperty) {
+                                            ConfigProperty<?> configProperty) {
     Object value = keyMapper.apply(configProperty.key());
     if (value != null) {
       return value.toString();
@@ -417,7 +419,7 @@ public class ConfigUtils {
         return value.toString();
       }
     }
-    return configProperty.hasDefaultValue() ? configProperty.defaultValue() : null;
+    return configProperty.hasDefaultValue() ? configProperty.defaultValue().toString() : null;
   }
 
   /**

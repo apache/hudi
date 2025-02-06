@@ -18,15 +18,18 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.HoodieSparkFunctionalIndex;
+import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.utils.SparkMetadataWriterUtils;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -38,17 +41,17 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.index.functional.HoodieFunctionalIndex;
+import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
+import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.Column;
-import org.apache.spark.sql.SQLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,13 +59,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.client.utils.SparkMetadataWriterUtils.getFunctionalIndexRecordsUsingBloomFilter;
-import static org.apache.hudi.client.utils.SparkMetadataWriterUtils.getFunctionalIndexRecordsUsingColumnStats;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
 
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> {
 
@@ -158,40 +160,65 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     writeClient.deletePartitions(partitionsToDrop, instantTime);
   }
 
+  /**
+   * Loads the file slices touched by the commit due to given instant time and returns the records for the expression index.
+   * This generates partition stat record updates along with EI column stat update records. Partition stat record updates are generated
+   * by reloading the affected partitions column range metadata from EI and then merging it with partition stat record from the updated data.
+   *
+   * @param commitMetadata {@code HoodieCommitMetadata}
+   * @param indexPartition partition name of the expression index
+   * @param instantTime    timestamp at of the current update commit
+   */
   @Override
-  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, FileSlice>> partitionFileSlicePairs,
+  protected HoodieData<HoodieRecord> getExpressionIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
+    boolean isExprIndexUsingColumnStats = indexDefinition.getIndexType().equals(PARTITION_NAME_COLUMN_STATS);
+    Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt = Option.empty();
+    if (isExprIndexUsingColumnStats) {
+      // Fetch column range metadata for affected partitions in the commit
+      HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> exprIndexPartitionStatUpdates =
+          SparkMetadataWriterUtils.getExpressionIndexPartitionStatUpdates(commitMetadata, indexPartition, engineContext, getTableMetadata(), dataMetaClient, dataWriteConfig.getMetadataConfig(),
+                  Option.of(dataWriteConfig.getRecordMerger().getRecordType()))
+              .flatMapValues(List::iterator);
+      // The function below merges the column range metadata from the updated data with latest column range metadata of affected partition computed above
+      partitionRecordsFunctionOpt = Option.of(rangeMetadata ->
+          HoodieTableMetadataUtil.collectAndProcessExprIndexPartitionStatRecords(exprIndexPartitionStatUpdates.union(rangeMetadata), true, Option.of(indexDefinition.getIndexName())));
+    }
+
+    // Step 1: Generate partition name, file path and size triplets from the newly created files in the commit metadata
+    List<Pair<String, Pair<String, Long>>> partitionFilePathPairs = new ArrayList<>();
+    commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> writeStats.forEach(writeStat -> partitionFilePathPairs.add(
+        Pair.of(writeStat.getPartitionPath(), Pair.of(new StoragePath(dataMetaClient.getBasePath(), writeStat.getPath()).toString(), writeStat.getFileSizeInBytes())))));
+    int parallelism = Math.min(partitionFilePathPairs.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
+    Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient);
+    // Step 2: Compute the expression index column stat and partition stat records for these newly created files
+    // partitionRecordsFunctionOpt - Function used to generate partition stats. These stats are generated only for expression index created using column stats
+    //
+    // In the partitionRecordsFunctionOpt function we merge the expression index records from the new files created in the commit metadata
+    // with the expression index records from the unmodified files to get the new partition stat records
+    HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata expressionIndexComputationMetadata =
+        SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, instantTime, engineContext, dataWriteConfig,
+            metadataWriteConfig, partitionRecordsFunctionOpt);
+    return expressionIndexComputationMetadata.getPartitionStatRecordsOption().isPresent()
+        ? expressionIndexComputationMetadata.getExpressionIndexRecords().union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get())
+        : expressionIndexComputationMetadata.getExpressionIndexRecords();
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
                                                                HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism,
-                                                               Schema readerSchema, StorageConfiguration<?> storageConf) {
-    HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
-    if (indexDefinition.getSourceFields().isEmpty()) {
-      // In case there are no columns to index, bail
-      return sparkEngineContext.emptyHoodieData();
+                                                               Schema readerSchema, StorageConfiguration<?> storageConf,
+                                                               String instantTime) {
+    ExpressionIndexComputationMetadata expressionIndexComputationMetadata = SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathAndSizeTriplet, indexDefinition,
+        metaClient, parallelism, readerSchema, instantTime, engineContext, dataWriteConfig, metadataWriteConfig,
+        Option.of(rangeMetadata ->
+            HoodieTableMetadataUtil.collectAndProcessExprIndexPartitionStatRecords(rangeMetadata, true, Option.of(indexDefinition.getIndexName()))));
+    HoodieData<HoodieRecord> exprIndexRecords = expressionIndexComputationMetadata.getExpressionIndexRecords();
+    if (indexDefinition.getIndexType().equals(PARTITION_NAME_COLUMN_STATS)) {
+      exprIndexRecords = exprIndexRecords.union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get());
     }
-
-    // NOTE: We are assuming that the index expression is operating on a single column
-    //       HUDI-6994 will address this.
-    String columnToIndex = indexDefinition.getSourceFields().get(0);
-    SQLContext sqlContext = sparkEngineContext.getSqlContext();
-
-    // Group FileSlices by partition
-    Map<String, List<FileSlice>> partitionToFileSlicesMap = partitionFileSlicePairs.stream()
-        .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
-    HoodieFunctionalIndex<Column, Column> functionalIndex =
-        new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
-    List<HoodieRecord> allRecords = new ArrayList<>();
-    for (Map.Entry<String, List<FileSlice>> entry : partitionToFileSlicesMap.entrySet()) {
-      String partition = entry.getKey();
-      List<FileSlice> fileSlices = entry.getValue();
-      List<HoodieRecord> recordsForPartition = Collections.emptyList();
-      if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-        recordsForPartition = getFunctionalIndexRecordsUsingColumnStats(metaClient, readerSchema, fileSlices, partition, functionalIndex, columnToIndex, sqlContext);
-      } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-        recordsForPartition = getFunctionalIndexRecordsUsingBloomFilter(metaClient, readerSchema, fileSlices, partition, functionalIndex, columnToIndex, sqlContext, metadataWriteConfig);
-      }
-      allRecords.addAll(recordsForPartition);
-    }
-    return HoodieJavaRDD.of(allRecords, sparkEngineContext, parallelism);
+    return exprIndexRecords;
   }
 
   @Override
@@ -210,18 +237,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieIndexDefinition indexDefinition) {
-    HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
-    if (recordKeySecondaryKeyMap.isEmpty()) {
-      return sparkEngineContext.emptyHoodieData();
-    }
-
-    List<HoodieRecord> deletedRecords = new ArrayList<>();
-    recordKeySecondaryKeyMap.forEach((key, value) -> {
-      HoodieRecord<HoodieMetadataPayload> siRecord = HoodieMetadataPayload.createSecondaryIndex(key, value, indexDefinition.getIndexName(), true);
-      deletedRecords.add(siRecord);
-    });
-
-    return HoodieJavaRDD.of(deletedRecords, sparkEngineContext, 1);
+  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
+    new HoodieSparkIndexClient(dataWriteConfig, engineContext).createOrUpdateColumnStatsIndexDefinition(dataMetaClient, columnsToIndex);
   }
 }

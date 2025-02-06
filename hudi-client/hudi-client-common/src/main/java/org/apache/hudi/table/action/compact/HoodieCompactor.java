@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -45,6 +46,7 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.EngineBroadcastManager;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
@@ -88,10 +90,21 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
   public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime);
 
   /**
+   * @param context {@link HoodieEngineContext} instance
+   *
+   * @return the {@link EngineBroadcastManager} if available.
+   */
+  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context,
+                                                                  HoodieTableMetaClient metaClient) {
+    return Option.empty();
+  }
+
+  /**
    * Execute compaction operations and report back status.
    */
   public HoodieData<WriteStatus> compact(
-      HoodieEngineContext context, HoodieCompactionPlan compactionPlan,
+      HoodieEngineContext context, WriteOperationType operationType,
+      HoodieCompactionPlan compactionPlan,
       HoodieTable table, HoodieWriteConfig config, String compactionInstantTime,
       HoodieCompactionHandler compactionHandler) {
     if (compactionPlan == null || (compactionPlan.getOperations() == null)
@@ -130,13 +143,31 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
     // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
-    return context.parallelize(operations).map(operation -> compact(
-        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper))
-        .flatMap(List::iterator);
+
+    boolean useFileGroupReaderBasedCompaction = context.supportsFileGroupReader()   // the engine needs to support fg reader first
+        && !metaClient.isMetadataTable()
+        && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+        && operationType == WriteOperationType.COMPACT
+        && !hasBootstrapFile(operations)                                            // bootstrap file read for fg reader is not ready
+        && config.populateMetaFields();                                             // Virtual key support by fg reader is not ready
+
+    if (useFileGroupReaderBasedCompaction) {
+      Option<EngineBroadcastManager> broadcastManagerOpt = getEngineBroadcastManager(context, metaClient);
+      // Broadcast required information.
+      broadcastManagerOpt.ifPresent(EngineBroadcastManager::prepareAndBroadcast);
+      return context.parallelize(operations).map(
+              operation -> compact(compactionHandler, metaClient, config, operation, compactionInstantTime, broadcastManagerOpt))
+          .flatMap(List::iterator);
+    } else {
+      return context.parallelize(operations).map(
+              operation -> compact(compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
+                  instantRange, taskContextSupplier, executionHelper))
+          .flatMap(List::iterator);
+    }
   }
 
   /**
-   * Execute a single compaction operation and report back status.
+   * Execute a single compaction operation using file group reader and report back status.
    */
   public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
                                    HoodieTableMetaClient metaClient,
@@ -237,6 +268,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     Iterator<List<WriteStatus>> result;
     result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
     scanner.close();
+
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
       final HoodieWriteStat stat = s.getStat();
@@ -261,11 +293,25 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     }).collect(toList());
   }
 
+  /**
+   * Execute a single compaction operation and report back status.
+   */
+  public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
+                                   HoodieTableMetaClient metaClient,
+                                   HoodieWriteConfig writeConfig,
+                                   CompactionOperation operation,
+                                   String instantTime,
+                                   Option<EngineBroadcastManager> broadcastManagerOpt) throws IOException {
+    return compactionHandler.compactUsingFileGroupReader(instantTime, operation,
+        writeConfig, broadcastManagerOpt.get().retrieveFileGroupReaderContext(metaClient.getBasePath()).get(),
+        broadcastManagerOpt.get().retrieveStorageConfig().get());
+  }
+
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {
     String maxInstantTime = metaClient
         .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
+        .filterCompletedInstants().lastInstant().get().requestedTime();
     return maxInstantTime;
   }
 
@@ -278,4 +324,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     }
   }
 
+  private boolean hasBootstrapFile(List<CompactionOperation> operationList) {
+    return operationList.stream().anyMatch(operation -> operation.getBootstrapFilePath().isPresent());
+  }
 }

@@ -202,7 +202,21 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @return BloomFilter if available, otherwise empty
    * @throws HoodieMetadataException
    */
-  Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName)
+  default Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName)
+      throws HoodieMetadataException {
+    return getBloomFilter(partitionName, fileName, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
+  }
+
+  /**
+   * Get the bloom filter for the FileID from the metadata table.
+   *
+   * @param partitionName         - Partition name
+   * @param fileName              - File name for which bloom filter needs to be retrieved
+   * @param metadataPartitionName - Metadata partition name
+   * @return BloomFilter if available, otherwise empty
+   * @throws HoodieMetadataException
+   */
+  Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName, final String metadataPartitionName)
       throws HoodieMetadataException;
 
   /**
@@ -212,7 +226,20 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @return Map of partition file name pair to its bloom filter
    * @throws HoodieMetadataException
    */
-  Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
+  default Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
+      throws HoodieMetadataException {
+    return getBloomFilters(partitionNameFileNameList, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
+  }
+
+  /**
+   * Get bloom filters for files from the metadata table index.
+   *
+   * @param partitionNameFileNameList - List of partition and file name pair for which bloom filters need to be retrieved
+   * @param metadataPartitionName     - Metadata partition name
+   * @return Map of partition file name pair to its bloom filter
+   * @throws HoodieMetadataException
+   */
+  Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList, final String metadataPartitionName)
       throws HoodieMetadataException;
 
   /**

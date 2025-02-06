@@ -20,11 +20,15 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -37,6 +41,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -44,10 +49,17 @@ import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.FloatWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
@@ -63,6 +75,8 @@ import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 
 /**
  * {@link HoodieReaderContext} for Hive-specific {@link HoodieFileGroupReaderBasedRecordReader}.
@@ -157,8 +171,31 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public HoodieRecordMerger getRecordMerger(String mergerStrategy) {
-    return HoodieHiveRecordMerger.getRecordMerger(mergerStrategy);
+  public GenericRecord convertToAvroRecord(ArrayWritable record, Schema schema) {
+    return objectInspectorCache.serialize(record, schema);
+  }
+
+  @Override
+  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
+    // TODO(HUDI-7843):
+    // get rid of event time and commit time ordering. Just return Option.empty
+    switch (mergeMode) {
+      case EVENT_TIME_ORDERING:
+        return Option.of(new DefaultHiveRecordMerger());
+      case COMMIT_TIME_ORDERING:
+        return Option.of(new OverwriteWithLatestHiveRecordMerger());
+      case CUSTOM:
+      default:
+        if (mergeStrategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+          return Option.of(HoodieAvroRecordMerger.INSTANCE);
+        }
+        Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
+        if (mergerClass.isEmpty()) {
+          throw new IllegalArgumentException("No valid hive merger implementation set for `"
+              + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
+        }
+        return mergerClass;
+    }
   }
 
   @Override
@@ -176,7 +213,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     if (!recordOption.isPresent()) {
       return new HoodieEmptyRecord<>(new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)), HoodieRecord.HoodieRecordType.HIVE);
     }
-    Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
+    Schema schema = getSchemaFromMetadata(metadataMap);
     ArrayWritable writable = recordOption.get();
     return new HoodieHiveRecord(new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)), writable, schema, objectInspectorCache);
   }
@@ -233,8 +270,26 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public Comparable castValue(Comparable value, Schema.Type newType) {
-    //TODO: [HUDI-8261] actually do casting here
+  public Comparable convertValueToEngineType(Comparable value) {
+    if (value instanceof WritableComparable) {
+      return value;
+    }
+    //TODO: [HUDI-8261] cover more types
+    if (value == null) {
+      return null;
+    } else if (value instanceof String) {
+      return new Text((String) value);
+    } else if (value instanceof Integer) {
+      return new IntWritable((int) value);
+    } else if (value instanceof Long) {
+      return new LongWritable((long) value);
+    } else if (value instanceof Float) {
+      return new FloatWritable((float) value);
+    } else if (value instanceof Double) {
+      return new DoubleWritable((double) value);
+    } else if (value instanceof Boolean) {
+      return new BooleanWritable((boolean) value);
+    }
     return value;
   }
 

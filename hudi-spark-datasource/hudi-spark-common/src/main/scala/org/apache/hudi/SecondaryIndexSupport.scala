@@ -63,7 +63,7 @@ class SecondaryIndexSupport(spark: SparkSession,
   }
 
   /**
-   * Return true if metadata table is enabled and functional index metadata partition is available.
+   * Return true if metadata table is enabled and expression index metadata partition is available.
    */
   override def isIndexAvailable: Boolean = {
     metadataConfig.isEnabled && metaClient.getIndexMetadata.isPresent && !metaClient.getIndexMetadata.get().getIndexDefinitions.isEmpty
@@ -98,7 +98,7 @@ class SecondaryIndexSupport(spark: SparkSession,
 
   /**
    * Returns the configured secondary key for the table
-   * TODO: [HUDI-8302] Handle multiple secondary indexes (similar to functional index)
+   * TODO: [HUDI-8302] Handle multiple secondary indexes (similar to expression index)
    */
   private def getSecondaryKeyConfig(queryReferencedColumns: Seq[String],
                                     metaClient: HoodieTableMetaClient): Option[(String, String)] = {
@@ -117,12 +117,14 @@ object SecondaryIndexSupport {
                                     secondaryKeyConfigOpt: Option[String]): (List[Expression], List[String]) = {
     var secondaryKeyQueries: List[Expression] = List.empty
     var secondaryKeys: List[String] = List.empty
-    for (query <- queryFilters) {
-      filterQueryWithRecordKey(query, secondaryKeyConfigOpt).foreach({
-        case (exp: Expression, recKeys: List[String]) =>
-          secondaryKeys = secondaryKeys ++ recKeys
-          secondaryKeyQueries = secondaryKeyQueries :+ exp
-      })
+    if (secondaryKeyConfigOpt.isDefined) {
+      for (query <- queryFilters) {
+        filterQueryWithRecordKey(query, secondaryKeyConfigOpt).foreach({
+          case (exp: Expression, recKeys: List[String]) =>
+            secondaryKeys = secondaryKeys ++ recKeys
+            secondaryKeyQueries = secondaryKeyQueries :+ exp
+        })
+      }
     }
 
     Tuple2.apply(secondaryKeyQueries, secondaryKeys)

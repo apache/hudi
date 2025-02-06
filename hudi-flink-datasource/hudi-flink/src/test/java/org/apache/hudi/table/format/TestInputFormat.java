@@ -77,6 +77,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -398,7 +399,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
-        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
+        .partitionPruner(PartitionPruners.builder().candidatePartitions(Arrays.asList("par1", "par2", "par3", "par4")).build())
         .skipCompaction(false)
         .build();
 
@@ -437,7 +438,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
-        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
+        .partitionPruner(PartitionPruners.builder().candidatePartitions(Arrays.asList("par1", "par2", "par3", "par4")).build())
         .skipCompaction(true)
         .build();
 
@@ -502,7 +503,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
-        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
+        .partitionPruner(PartitionPruners.builder().candidatePartitions(Arrays.asList("par1", "par2", "par3", "par4")).build())
         .skipClustering(true)
         .build();
 
@@ -579,9 +580,9 @@ public class TestInputFormat {
     List<HoodieInstant> instants = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
     assertThat(instants.size(), is(2));
 
-    String c2 = oriInstants.get(1).getTimestamp();
-    String c3 = oriInstants.get(2).getTimestamp();
-    String c4 = oriInstants.get(3).getTimestamp();
+    String c2 = oriInstants.get(1).requestedTime();
+    String c3 = oriInstants.get(2).requestedTime();
+    String c4 = oriInstants.get(3).requestedTime();
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
@@ -659,7 +660,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
-        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
+        .partitionPruner(PartitionPruners.builder().candidatePartitions(Arrays.asList("par1", "par2", "par3", "par4")).build())
         .build();
 
     // default read the latest commit
@@ -1204,9 +1205,8 @@ public class TestInputFormat {
     assertTrue(firstCommit.isPresent());
     assertThat(firstCommit.get().getAction(), is(HoodieTimeline.DELTA_COMMIT_ACTION));
 
-    java.nio.file.Path metaFilePath = Paths.get(metaClient.getMetaPath().toString(), firstCommit.get().getFileName());
-    String newCompletionTime = TestUtils.amendCompletionTimeToLatest(metaClient, metaFilePath, firstCommit.get().getTimestamp());
-
+    java.nio.file.Path metaFilePath = Paths.get(metaClient.getTimelinePath().toString(), INSTANT_FILE_NAME_GENERATOR.getFileName(firstCommit.get()));
+    String newCompletionTime = TestUtils.amendCompletionTimeToLatest(metaClient, metaFilePath, firstCommit.get().requestedTime());
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
 

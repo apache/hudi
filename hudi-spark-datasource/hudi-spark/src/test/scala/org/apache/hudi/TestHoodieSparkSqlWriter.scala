@@ -18,9 +18,9 @@
 package org.apache.hudi
 
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieReplaceCommitMetadata, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.timeline.TimelineUtils
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieReplaceCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
@@ -28,15 +28,17 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
-import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+import org.apache.hudi.DataSourceWriteOptions.{DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY, INSERT_DROP_DUPS, INSERT_DUP_POLICY}
+import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig}
 
 import org.apache.avro.Schema
 import org.apache.commons.io.FileUtils
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
-import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -235,6 +237,30 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
 
     //on same path try write with different partitionpath and Overwrite SaveMode should be successful.
     assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier2, dataFrame2)._1)
+  }
+
+  /**
+   * Test case for do not let the parttitonpath field change
+   */
+  @Test
+  def testChangeWriteTableVersion(): Unit = {
+    Seq(6, 8).foreach { tableVersion =>
+      val tempPath = s"$tempBasePath/${tableVersion}"
+      val tableModifier1 = Map(
+        "path" -> tempPath,
+        HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+        "hoodie.write.table.version" -> s"$tableVersion",
+        "hoodie.datasource.write.recordkey.field" -> "uuid",
+        "hoodie.datasource.write.partitionpath.field" -> "ts"
+      )
+      val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
+
+      // Make sure table version is adopted.
+      val metaClient = HoodieTableMetaClient.builder().setBasePath(tempPath)
+        .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())).build()
+      assertEquals(metaClient.getTableConfig.getTableVersion.versionCode(), tableVersion)
+    }
   }
 
   /**
@@ -475,7 +501,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      HoodieTableConfig.POPULATE_META_FIELDS.key() -> String.valueOf(populateMetaFields))
+      HoodieTableConfig.POPULATE_META_FIELDS.key() -> String.valueOf(populateMetaFields),
+      DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getCanonicalName)
     val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
     // generate the inserts
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -517,13 +544,14 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
 
   /**
    * Test cases for HoodieSparkSqlWriter functionality with datasource bootstrap
-   * for different type of tables.
+   * for different type of tables and table versions.
    *
    * @param tableType Type of table
+   * @param tableVersion Version of table
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testWithDatasourceBootstrapForTableType(tableType: String): Unit = {
+  @MethodSource(Array("bootstrapTestParams"))
+  def testWithDatasourceBootstrapForTableType(tableType: String, tableVersion: Int): Unit = {
     val srcPath = java.nio.file.Files.createTempDirectory("hoodie_bootstrap_source_path")
     try {
       val sourceDF = TestBootstrap.generateTestRawTripDataset(Instant.now.toEpochMilli, 0, 100, Collections.emptyList(), sc,
@@ -539,7 +567,10 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL,
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
-        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName,
+        DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getCanonicalName,
+        "hoodie.write.table.version" -> tableVersion.toString,
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
       initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
 
@@ -561,6 +592,9 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       assertFalse(ignoreResult)
       verify(client, times(2)).close()
 
+      // Assert the table version is adopted.
+      val metaClient = createMetaClient(spark, tempBasePath)
+      assertEquals(metaClient.getTableConfig.getTableVersion.versionCode(), tableVersion)
       // fetch all records from parquet files generated from write to hudi
       val actualDf = sqlContext.read.parquet(tempBasePath)
       assert(actualDf.count == 100)
@@ -579,9 +613,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       .setRecordKeyFields(fooTableParams(DataSourceWriteOptions.RECORDKEY_FIELD.key))
       .setBaseFileFormat(fooTableParams.getOrElse(HoodieWriteConfig.BASE_FILE_FORMAT.key,
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name))
-      .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
-      .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key)
-      .setPreCombineField(fooTableParams.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, DataSourceWriteOptions.PRECOMBINE_FIELD.defaultValue()))
+      .setArchiveLogFolder(HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue())
+      .setPreCombineField(fooTableParams.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, null))
       .setPartitionFields(fooTableParams(DataSourceWriteOptions.PARTITIONPATH_FIELD.key))
       .setKeyGeneratorClassProp(fooTableParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key,
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue()))
@@ -621,8 +654,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, noReconciliationOpts, df1)
 
-    val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF1 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(10, snapshotDF1.count())
 
     assertEquals(df1.except(dropMetaFields(snapshotDF1)).count(), 0)
@@ -632,8 +664,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val df2 = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df2)
 
-    val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF2 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(10, snapshotDF2.count())
 
     // Ensure 2nd batch of updates matches.
@@ -649,8 +680,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     // write to Hudi with new column
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df3)
 
-    val snapshotDF3 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF3 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(15, snapshotDF3.count())
 
     // Ensure 3d batch matches
@@ -669,8 +699,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val df4 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, reconciliationOpts, df4)
 
-    val snapshotDF4 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF4 = spark.read.format("org.apache.hudi").load(tempBasePath)
 
     assertEquals(25, snapshotDF4.count())
 
@@ -710,7 +739,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     )
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, allowOpts, df5)
 
-    val snapshotDF5 = spark.read.format("org.apache.hudi").load(tempBasePath + "/*/*/*/*")
+    val snapshotDF5 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(35, snapshotDF5.count())
     assertEquals(df5.intersect(dropMetaFields(snapshotDF5)).except(df5).count, 0)
 
@@ -734,7 +763,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
-        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test")
+        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
       val df = spark.range(0, 1000).toDF("keyid")
         .withColumn("col3", expr("keyid"))
         .withColumn("age", lit(1))
@@ -755,8 +785,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       val currentCommits = spark.read.format("hudi").load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
       val incrementalKeyIdNum = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "0000")
-        .option(DataSourceReadOptions.END_INSTANTTIME.key, currentCommits(0))
+        .option(DataSourceReadOptions.START_COMMIT.key, "0000")
+        .option(DataSourceReadOptions.END_COMMIT.key, currentCommits(0))
         .load(tempBasePath).select("keyid").orderBy("keyid").count
       assert(incrementalKeyIdNum == 1000)
 
@@ -774,8 +804,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       val currentCommitsBootstrap = spark.read.format("hudi").load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
       val incrementalKeyIdNumBootstrap = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "0000")
-        .option(DataSourceReadOptions.END_INSTANTTIME.key, currentCommitsBootstrap(0))
+        .option(DataSourceReadOptions.START_COMMIT.key, "0000")
+        .option(DataSourceReadOptions.END_COMMIT.key, currentCommitsBootstrap(0))
         .load(tempBasePath).select("keyid").orderBy("keyid").count
       assert(incrementalKeyIdNumBootstrap == 1000)
     }
@@ -795,8 +825,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     // write to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableModifier, df1)
-    val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF1 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(10, snapshotDF1.count())
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf1 = dropMetaFields(snapshotDF1)
@@ -806,8 +835,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
     // write updates to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, updatesDf)
-    val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF2 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(10, snapshotDF2.count())
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf2 = dropMetaFields(snapshotDF2)
@@ -839,8 +867,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
 
     fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, recordsToDelete)
-    val snapshotDF3 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF3 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
       !partitionPath.equals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
@@ -861,8 +888,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
     val recordsToDelete = spark.emptyDataFrame
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, recordsToDelete)
-    val snapshotDF3 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF3 = spark.read.format("org.apache.hudi").load(tempBasePath)
     snapshotDF3.show()
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
@@ -1142,7 +1168,6 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     assert(configConflictException.getMessage.contains(s"KeyGenerator:\t${classOf[NonpartitionedKeyGenerator].getName}\t${classOf[SimpleKeyGenerator].getName}"))
   }
 
-
   @Test
   def testNoKeyGenToSimpleKeyGen(): Unit = {
     val _spark = spark
@@ -1252,6 +1277,57 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     assert(exc.getMessage.contains("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table."))
   }
 
+  @Test
+  def testShouldDropDuplicatesForInserts(): Unit = {
+    val hoodieConfig: HoodieConfig = new HoodieConfig()
+    var shouldDrop: Boolean = HoodieSparkSqlWriterInternal.shouldDropDuplicatesForInserts(hoodieConfig)
+    assertFalse(shouldDrop)
+
+    hoodieConfig.setValue(INSERT_DUP_POLICY.key, DROP_INSERT_DUP_POLICY)
+    shouldDrop = HoodieSparkSqlWriterInternal.shouldDropDuplicatesForInserts(hoodieConfig)
+    assertTrue(shouldDrop)
+  }
+
+  @Test
+  def testShouldFailWhenDuplicatesFound(): Unit = {
+    val hoodieConfig: HoodieConfig = new HoodieConfig()
+    var shouldFail: Boolean = HoodieSparkSqlWriterInternal.shouldFailWhenDuplicatesFound(hoodieConfig)
+    assertFalse(shouldFail)
+
+    hoodieConfig.setValue(INSERT_DUP_POLICY.key, FAIL_INSERT_DUP_POLICY)
+    shouldFail = HoodieSparkSqlWriterInternal.shouldFailWhenDuplicatesFound(hoodieConfig)
+    assertTrue(shouldFail)
+  }
+
+  @Test
+  def testIsDeduplicationRequired(): Unit = {
+    val hoodieConfig: HoodieConfig = new HoodieConfig()
+    var isRequired: Boolean = HoodieSparkSqlWriterInternal.isDeduplicationRequired(hoodieConfig)
+    assertFalse(isRequired)
+
+    hoodieConfig.setValue(INSERT_DUP_POLICY.key, FAIL_INSERT_DUP_POLICY)
+    isRequired = HoodieSparkSqlWriterInternal.isDeduplicationRequired(hoodieConfig)
+    assertTrue(isRequired)
+
+    hoodieConfig.setValue(INSERT_DUP_POLICY.key, DROP_INSERT_DUP_POLICY)
+    isRequired = HoodieSparkSqlWriterInternal.isDeduplicationRequired(hoodieConfig)
+    assertTrue(isRequired)
+
+    hoodieConfig.setValue(INSERT_DUP_POLICY.key, "")
+    hoodieConfig.setValue(INSERT_DROP_DUPS.key, "true")
+    isRequired = HoodieSparkSqlWriterInternal.isDeduplicationRequired(hoodieConfig)
+    assertTrue(isRequired)
+  }
+
+  @Test
+  def testIsDeduplicationNeeded(): Unit = {
+    assertFalse(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT_OVERWRITE))
+    assertFalse(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT_OVERWRITE_TABLE))
+    assertFalse(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.UPSERT))
+    assertFalse(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT_PREPPED))
+    assertTrue(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT))
+  }
+
   private def fetchActualSchema(): Schema = {
     val tableMetaClient = createMetaClient(spark, tempBasePath)
     new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false)
@@ -1269,14 +1345,7 @@ object TestHoodieSparkSqlWriter {
 
     val parquetScenarios = scenarios.map { _ :+ "parquet" }
     val orcScenarios = scenarios.map { _ :+ "orc" }
-
-    // NOTE: Hudi doesn't support Orc in Spark < 3.0
-    //       Please check HUDI-4496 for more details
-    val targetScenarios = if (HoodieSparkUtils.gteqSpark3_3) {
-      parquetScenarios ++ orcScenarios
-    } else {
-      parquetScenarios
-    }
+    val targetScenarios = parquetScenarios ++ orcScenarios
 
     java.util.Arrays.stream(targetScenarios.map(as => Arguments.arguments(as.map(_.asInstanceOf[AnyRef]):_*)))
   }
@@ -1287,4 +1356,11 @@ object TestHoodieSparkSqlWriter {
       Arguments.arguments("2016/03/*", Seq("2015/03/16", "2015/03/17")))
   }
 
+  def bootstrapTestParams(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      Arguments.arguments("MERGE_ON_READ", Integer.valueOf(8)),
+      Arguments.arguments("MERGE_ON_READ", Integer.valueOf(6)),
+      Arguments.arguments("COPY_ON_WRITE", Integer.valueOf(8))
+    )
+  }
 }

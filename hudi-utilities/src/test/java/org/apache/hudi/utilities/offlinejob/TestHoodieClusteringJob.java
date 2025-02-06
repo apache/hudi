@@ -37,11 +37,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
 import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_NAME;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.utilities.UtilHelpers.PURGE_PENDING_INSTANT;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.deleteFileFromDfs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -115,12 +116,12 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     // remove the completed instant from timeline and trigger purge of pending clustering instant.
     HoodieInstant latestClusteringInstant = metaClient.getActiveTimeline()
         .filterCompletedInstantsOrRewriteTimeline().getCompletedReplaceTimeline().getInstants().get(0);
-    String completedFilePath = tableBasePath + "/" + METAFOLDER_NAME + "/" + latestClusteringInstant.getFileName();
+    String completedFilePath = tableBasePath + "/" + METAFOLDER_NAME + "/" + TIMELINEFOLDER_NAME + "/" + INSTANT_FILE_NAME_GENERATOR.getFileName(latestClusteringInstant);
     deleteFileFromDfs(fs, completedFilePath);
 
     // trigger purge.
     hoodieCluster =
-        getClusteringConfigForPurge(tableBasePath, true, PURGE_PENDING_INSTANT, latestClusteringInstant.getTimestamp());
+        getClusteringConfigForPurge(tableBasePath, true, PURGE_PENDING_INSTANT, latestClusteringInstant.requestedTime());
     hoodieCluster.cluster(0);
     // validate that there are no clustering commits in timeline.
     HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(0, tableBasePath);
@@ -130,13 +131,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", tableBasePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals(0, HoodieClientTestUtils.read(jsc, tableBasePath, sqlContext, storage, fullPartitionPaths).filter("_hoodie_commit_time = " + latestClusteringInstant.getTimestamp()).count(),
+    assertEquals(0, HoodieClientTestUtils.read(jsc, tableBasePath, sqlContext, storage, fullPartitionPaths).filter("_hoodie_commit_time = " + latestClusteringInstant.requestedTime()).count(),
         "Must not contain any records w/ clustering instant time");
-  }
-
-  private void deleteCommitMetaFile(String instantTime, String suffix) throws IOException {
-    String targetPath = basePath + "/" + METAFOLDER_NAME + "/" + instantTime + suffix;
-    deleteFileFromDfs(fs, targetPath);
   }
 
   // -------------------------------------------------------------------------

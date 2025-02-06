@@ -19,9 +19,8 @@
 
 package org.apache.hudi.common.testutils.reader;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -40,6 +39,7 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -50,7 +50,6 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
 
 public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> {
@@ -85,20 +84,16 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public HoodieRecordMerger getRecordMerger(String mergerStrategy) {
-    // Utilize the custom merger if provided.
-    if (customMerger.isPresent()) {
-      return customMerger.get();
-    }
+  public GenericRecord convertToAvroRecord(IndexedRecord record, Schema schema) {
+    return (GenericRecord) record;
+  }
 
-    // Otherwise.
-    switch (mergerStrategy) {
-      case DEFAULT_MERGER_STRATEGY_UUID:
-        return new HoodieAvroRecordMerger();
-      default:
-        throw new HoodieException(
-            "The merger strategy UUID is not supported: " + mergerStrategy);
+  @Override
+  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
+    if (mergeMode == RecordMergeMode.CUSTOM) {
+      return customMerger;
     }
+    return Option.of(HoodieAvroRecordMerger.INSTANCE);
   }
 
   @Override
@@ -190,40 +185,15 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
     };
   }
 
-  @Override
-  public Comparable castValue(Comparable value, Schema.Type newType) {
-    Schema newSchema = Schema.create(newType);
-    Schema oldType;
-    if (value instanceof Integer) {
-      oldType = Schema.create(Schema.Type.INT);
-    } else if (value instanceof Long) {
-      oldType = Schema.create(Schema.Type.LONG);
-    } else if (value instanceof Float) {
-      oldType = Schema.create(Schema.Type.FLOAT);
-    } else if (value instanceof Double) {
-      oldType = Schema.create(Schema.Type.DOUBLE);
-    } else if (value instanceof String) {
-      oldType = Schema.create(Schema.Type.STRING);
-    } else {
-      throw new UnsupportedOperationException("Cast from " + value.getClass() + " to " + newType + " is not supported");
-    }
-    return (Comparable) HoodieAvroUtils.rewritePrimaryType(value, oldType, newSchema);
-  }
-
-  @Override
-  public IndexedRecord constructRawDeleteRecord(Map<String, Object> metadata) {
-    return new HoodieDeleteRecord(
-        (String) metadata.get(INTERNAL_META_RECORD_KEY),
-        (String) metadata.get(INTERNAL_META_PARTITION_PATH),
-        metadata.get(INTERNAL_META_ORDERING_FIELD));
-  }
-
   private Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
       Schema recordSchema,
       String fieldName
   ) {
     Schema.Field field = recordSchema.getField(fieldName);
+    if (field == null) {
+      return null;
+    }
     int pos = field.pos();
     return record.get(pos);
   }

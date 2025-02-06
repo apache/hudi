@@ -80,7 +80,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
     StoragePath metaPath =
         new StoragePath(dataBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    HoodieTableConfig tableConfig = new HoodieTableConfig(storage, metaPath, null, null);
+    HoodieTableConfig tableConfig = new HoodieTableConfig(storage, metaPath, null, null, null);
     this.hiveStylePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled =
@@ -286,13 +286,13 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     // no-op
   }
 
-  public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName)
+  public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName, final String metadataPartitionName)
       throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation: getBloomFilter for " + fileName);
   }
 
   @Override
-  public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
+  public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList, final String metadataPartitionName)
       throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation: getBloomFilters!");
   }

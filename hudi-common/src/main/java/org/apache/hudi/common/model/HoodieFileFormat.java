@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -72,5 +73,12 @@ public enum HoodieFileFormat {
       }
     }
     throw new IllegalArgumentException("Unknown file extension :" + extension);
+  }
+
+  public static HoodieFileFormat getValue(String fileFormat) {
+    if (StringUtils.isNullOrEmpty(fileFormat)) {
+      return null;
+    }
+    return HoodieFileFormat.valueOf(fileFormat.toUpperCase());
   }
 }

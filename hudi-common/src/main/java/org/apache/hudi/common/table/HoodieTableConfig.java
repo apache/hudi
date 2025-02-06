@@ -31,9 +31,10 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.model.RecordPayloadType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -43,6 +44,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -74,6 +76,10 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
+import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
@@ -83,9 +89,15 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 @Immutable
 @ConfigClassProperty(name = "Hudi Table Basic Configs",
@@ -185,48 +197,47 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
-
-  //TODO: why is this the default? not OVERWRITE_WITH_LATEST?
-  public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
+  
+  public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
-      .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
+      .defaultValue((RecordMergeMode) null,
+          "COMMIT_TIME_ORDERING if precombine is not set; EVENT_TIME_ORDERING if precombine is set")
       .sinceVersion("1.0.0")
       .withDocumentation(RecordMergeMode.class);
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
-      .defaultValue(DefaultHoodieRecordPayload.class.getName())
+      .noDefaultValue()
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
-  public static final ConfigProperty<String> PAYLOAD_TYPE = ConfigProperty
-      .key("hoodie.compaction.payload.type")
-      .defaultValue(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())
-      .sinceVersion("1.0.0")
-      .withDocumentation(RecordPayloadType.class);
+  // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
+  public static final String DEFAULT_PAYLOAD_CLASS_NAME = DefaultHoodieRecordPayload.class.getName();
 
-  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
-      .key("hoodie.compaction.record.merger.strategy")
-      .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
-      .withInferFunction(cfg -> {
-        switch (RecordMergeMode.valueOf(cfg.getStringOrDefault(RECORD_MERGE_MODE))) {
-          case EVENT_TIME_ORDERING:
-            return Option.of(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
-          case OVERWRITE_WITH_LATEST:
-            return Option.of(HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID);
-          case CUSTOM:
-          default:
-            return Option.empty();
-        }
-      })
+  public static final ConfigProperty<String> RECORD_MERGE_STRATEGY_ID = ConfigProperty
+      .key("hoodie.record.merge.strategy.id")
+      .noDefaultValue()
+      .withAlternatives("hoodie.compaction.record.merger.strategy")
       .sinceVersion("0.13.0")
-      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
+      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in `"
+          + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "` which has the same merger strategy id");
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
       .key("hoodie.archivelog.folder")
       .defaultValue("archived")
+      .deprecatedAfter("1.0.0")
       .withDocumentation("path under the meta folder, to store archived timeline instants at.");
+
+  public static final ConfigProperty<String> TIMELINE_HISTORY_PATH = ConfigProperty
+      .key("hoodie.timeline.history.path")
+      .defaultValue("history")
+      .withDocumentation("path under the meta folder, to store timeline history at.");
+
+  public static final ConfigProperty<String> TIMELINE_PATH = ConfigProperty
+      .key("hoodie.timeline.path")
+      .defaultValue("timeline")
+      .withDocumentation("path under the meta folder, to store timeline instants at.");
 
   public static final ConfigProperty<Boolean> BOOTSTRAP_INDEX_ENABLE = ConfigProperty
       .key("hoodie.bootstrap.index.enable")
@@ -334,11 +345,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("The metadata of secondary indexes");
 
-  public static final ConfigProperty<String> INDEX_DEFINITION_PATH = ConfigProperty
+  public static final ConfigProperty<String> RELATIVE_INDEX_DEFINITION_PATH = ConfigProperty
       .key("hoodie.table.index.defs.path")
       .noDefaultValue()
       .sinceVersion("1.0.0")
-      .withDocumentation("Absolute path where the index definitions are stored");
+      .withDocumentation("Relative path to table base path where the index definitions are stored");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
@@ -359,26 +370,74 @@ public class HoodieTableConfig extends HoodieConfig {
         .collect(Collectors.toList());
   }
 
-  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, String payloadClassName, String recordMergerStrategyId) {
+  /**
+   * Loads the table config from properties file.
+   *
+   * @param storage  The storage.
+   * @param basePath The table base path.
+   *
+   * @return The reloaded table config.
+   */
+  public static HoodieTableConfig loadFromHoodieProps(HoodieStorage storage, String basePath) {
+    StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    return new HoodieTableConfig(storage, metaPath);
+  }
+
+  /**
+   * Loads the table config from properties file.
+   *
+   * @param storage  The storage.
+   * @param metaPath The table metadata path.
+   *
+   * @return The reloaded table config.
+   */
+  public static HoodieTableConfig loadFromHoodieProps(HoodieStorage storage, StoragePath metaPath) {
+    return new HoodieTableConfig(storage, metaPath);
+  }
+
+  private HoodieTableConfig(HoodieStorage storage, StoragePath metaPath) {
+    this(storage, metaPath, null, null, null, false);
+  }
+
+  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
+                           String recordMergeStrategyId) {
+    this(storage, metaPath, recordMergeMode, payloadClassName, recordMergeStrategyId, true);
+  }
+
+  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
+                           String recordMergeStrategyId, boolean autoUpdate) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
       this.props = fetchConfigs(storage, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
+      if (autoUpdate) {
+        autoUpdateHoodieProperties(storage, metaPath, recordMergeMode, payloadClassName, recordMergeStrategyId);
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not load properties from " + propertyPath, e);
+    }
+  }
+
+  private void autoUpdateHoodieProperties(HoodieStorage storage, StoragePath metaPath,
+                                          RecordMergeMode recordMergeMode, String payloadClassName,
+                                          String recordMergeStrategyId) {
+    StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
+    try {
       boolean needStore = false;
       if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
           && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
         needStore = true;
       }
-      if (contains(PAYLOAD_TYPE) && payloadClassName != null
-          && !payloadClassName.equals(RecordPayloadType.valueOf(getString(PAYLOAD_TYPE)).getClassName())) {
-        setValue(PAYLOAD_TYPE, RecordPayloadType.fromClassName(payloadClassName).name());
+      if (contains(RECORD_MERGE_MODE) && recordMergeMode != null
+          && !recordMergeMode.equals(RecordMergeMode.getValue(getString(RECORD_MERGE_MODE)))) {
+        setValue(RECORD_MERGE_MODE, recordMergeMode.name());
         needStore = true;
       }
-      if (contains(RECORD_MERGER_STRATEGY) && recordMergerStrategyId != null
-          && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
-        setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
+      if (contains(RECORD_MERGE_STRATEGY_ID) && recordMergeStrategyId != null
+          && !getString(RECORD_MERGE_STRATEGY_ID).equals(recordMergeStrategyId)) {
+        setValue(RECORD_MERGE_STRATEGY_ID, recordMergeStrategyId);
         needStore = true;
       }
       if (needStore) {
@@ -387,7 +446,7 @@ public class HoodieTableConfig extends HoodieConfig {
         }
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not load properties from " + propertyPath, e);
+      throw new HoodieIOException("Could not store properties in " + propertyPath, e);
     }
   }
 
@@ -513,13 +572,8 @@ public class HoodieTableConfig extends HoodieConfig {
         throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
       }
       hoodieConfig.setDefaultValue(TYPE);
-      if (hoodieConfig.getString(TYPE).equals(HoodieTableType.MERGE_ON_READ.name())) {
-        if (tableVersion.greaterThan(HoodieTableVersion.SEVEN)) {
-          hoodieConfig.setDefaultValue(PAYLOAD_TYPE);
-        }
-        hoodieConfig.setDefaultValue(RECORD_MERGER_STRATEGY);
-      }
-      hoodieConfig.setDefaultValue(ARCHIVELOG_FOLDER);
+      hoodieConfig.setDefaultValue(TIMELINE_HISTORY_PATH);
+      hoodieConfig.setDefaultValue(TIMELINE_PATH);
       if (!hoodieConfig.contains(TIMELINE_LAYOUT_VERSION)) {
         // Use latest Version as default unless forced by client
         hoodieConfig.setValue(TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.CURR_VERSION.toString());
@@ -677,6 +731,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public void setTableVersion(HoodieTableVersion tableVersion) {
     setValue(VERSION, Integer.toString(tableVersion.versionCode()));
+    setValue(TIMELINE_LAYOUT_VERSION, Integer.toString(tableVersion.getTimelineLayoutVersion().getVersion()));
   }
 
   public void setInitialVersion(HoodieTableVersion initialVersion) {
@@ -684,21 +739,135 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public RecordMergeMode getRecordMergeMode() {
-    return RecordMergeMode.valueOf(getStringOrDefault(RECORD_MERGE_MODE).toUpperCase());
+    return RecordMergeMode.getValue(getString(RECORD_MERGE_MODE));
   }
 
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
   public String getPayloadClass() {
-    return RecordPayloadType.getPayloadClassName(this);
+    return HoodieRecordPayload.getPayloadClassName(this);
+  }
+
+  public String getRecordMergeStrategyId() {
+    return getString(RECORD_MERGE_STRATEGY_ID);
   }
 
   /**
-   * Read the payload class for HoodieRecords from the table properties.
+   * Infers the merging behavior based on what the user sets (or doesn't set).
+   * Validates that the user has not set an illegal combination of configs
    */
-  public String getRecordMergerStrategy() {
-    return getStringOrDefault(RECORD_MERGER_STRATEGY);
+  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
+                                                                                    String payloadClassName,
+                                                                                    String recordMergeStrategyId,
+                                                                                    String orderingFieldName,
+                                                                                    HoodieTableVersion tableVersion) {
+    RecordMergeMode inferredRecordMergeMode;
+    String inferredPayloadClassName;
+    String inferredRecordMergeStrategyId;
+
+    // Inferring record merge mode
+    if (isNullOrEmpty(payloadClassName) && isNullOrEmpty(recordMergeStrategyId)) {
+      // If nothing is set on record merge mode, payload class, or record merge strategy ID,
+      // use the default merge mode determined by whether the ordering field name is set.
+      inferredRecordMergeMode = recordMergeMode != null
+          ? recordMergeMode
+          : (isNullOrEmpty(orderingFieldName) ? COMMIT_TIME_ORDERING : EVENT_TIME_ORDERING);
+    } else {
+      // Infer the merge mode from either the payload class or record merge strategy ID
+      RecordMergeMode modeBasedOnPayload = inferRecordMergeModeFromPayloadClass(payloadClassName);
+      RecordMergeMode modeBasedOnStrategyId = inferRecordMergeModeFromMergeStrategyId(recordMergeStrategyId);
+      checkArgument(modeBasedOnPayload != null || modeBasedOnStrategyId != null,
+          String.format("Cannot infer record merge mode from payload class (%s) or record merge "
+              + "strategy ID (%s).", payloadClassName, recordMergeStrategyId));
+      // TODO(HUDI-8925): once payload class name is not required, remove the check on
+      //  modeBasedOnStrategyId
+      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+          && modeBasedOnStrategyId != CUSTOM && modeBasedOnPayload != null && modeBasedOnStrategyId != null) {
+        checkArgument(modeBasedOnPayload.equals(modeBasedOnStrategyId),
+            String.format("Configured payload class (%s) and record merge strategy ID (%s) conflict "
+                    + "with each other. Please only set one of them in the write config.",
+                payloadClassName, recordMergeStrategyId));
+      }
+      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+        inferredRecordMergeMode = modeBasedOnStrategyId != null ? modeBasedOnStrategyId : modeBasedOnPayload;
+      } else {
+        inferredRecordMergeMode = modeBasedOnPayload != null ? modeBasedOnPayload : modeBasedOnStrategyId;
+      }
+    }
+    if (recordMergeMode != null) {
+      checkArgument(inferredRecordMergeMode == recordMergeMode,
+          String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
+                  + "or record merge strategy ID (%s) configured. Please revisit the configs.",
+              recordMergeMode, payloadClassName, recordMergeStrategyId));
+    }
+
+    // Check ordering field name based on record merge mode
+    if (inferredRecordMergeMode == COMMIT_TIME_ORDERING) {
+      if (nonEmpty(orderingFieldName)) {
+        LOG.warn("The precombine or ordering field ({}) is specified. COMMIT_TIME_ORDERING "
+            + "merge mode does not use precombine or ordering field anymore.", orderingFieldName);
+      }
+    } else if (inferredRecordMergeMode == EVENT_TIME_ORDERING) {
+      if (isNullOrEmpty(orderingFieldName)) {
+        LOG.warn("The precombine or ordering field is not specified. EVENT_TIME_ORDERING "
+            + "merge mode requires precombine or ordering field to be set for getting the "
+            + "event time. Using commit time-based ordering now.");
+      }
+    }
+
+    // Inferring payload class name
+    inferredPayloadClassName = HoodieRecordPayload.getAvroPayloadForMergeMode(
+        inferredRecordMergeMode, payloadClassName);
+    // Inferring record merge strategy ID
+    inferredRecordMergeStrategyId = HoodieRecordMerger.getRecordMergeStrategyId(
+        inferredRecordMergeMode, inferredPayloadClassName, recordMergeStrategyId);
+
+    // For custom merge mode, either payload class name or record merge strategy ID must be configured
+    if (inferredRecordMergeMode == CUSTOM) {
+      checkArgument(nonEmpty(inferredPayloadClassName) || nonEmpty(inferredRecordMergeStrategyId),
+          "Either payload class name or record merge strategy ID must be configured "
+              + "in CUSTOM merge mode.");
+      if (PAYLOAD_BASED_MERGE_STRATEGY_UUID.equals(inferredRecordMergeStrategyId)) {
+        checkArgument(nonEmpty(inferredPayloadClassName),
+            "For payload class based merge strategy as a fallback, payload class name is "
+                + "required to be set.");
+      }
+      // TODO(HUDI-8925): remove this once the payload class name is no longer required
+      if (isNullOrEmpty(inferredPayloadClassName)) {
+        inferredPayloadClassName = DEFAULT_PAYLOAD_CLASS_NAME;
+      }
+    }
+
+    return Triple.of(inferredRecordMergeMode, inferredPayloadClassName, inferredRecordMergeStrategyId);
+  }
+
+  static RecordMergeMode inferRecordMergeModeFromPayloadClass(String payloadClassName) {
+    if (isNullOrEmpty(payloadClassName)) {
+      return null;
+    }
+    if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)) {
+      // DefaultHoodieRecordPayload matches with EVENT_TIME_ORDERING.
+      return EVENT_TIME_ORDERING;
+    } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+      // OverwriteWithLatestAvroPayload matches with COMMIT_TIME_ORDERING.
+      return COMMIT_TIME_ORDERING;
+    } else {
+      return CUSTOM;
+    }
+  }
+
+  static RecordMergeMode inferRecordMergeModeFromMergeStrategyId(String recordMergeStrategyId) {
+    if (isNullOrEmpty(recordMergeStrategyId)) {
+      return null;
+    }
+    if (recordMergeStrategyId.equals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID)) {
+      return EVENT_TIME_ORDERING;
+    } else if (recordMergeStrategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)) {
+      return COMMIT_TIME_ORDERING;
+    } else {
+      return CUSTOM;
+    }
   }
 
   public String getPreCombineField() {
@@ -787,10 +956,24 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
-   * Get the relative path of archive log folder under metafolder, for this table.
+   * Get the relative path of legacy archive log folder under metafolder, for this table.
    */
   public String getArchivelogFolder() {
     return getStringOrDefault(ARCHIVELOG_FOLDER);
+  }
+
+  /**
+   * Get the relative path of timeline history folder under metafolder, for this table.
+   */
+  public String getTimelineHistoryPath() {
+    return getStringOrDefault(TIMELINE_HISTORY_PATH);
+  }
+
+  /**
+   * Get the relative path of archive log folder under metafolder, for this table.
+   */
+  public String getTimelinePath() {
+    return getStringOrDefault(TIMELINE_PATH);
   }
 
   /**
@@ -861,8 +1044,8 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * @returns the index definition path.
    */
-  public Option<String> getIndexDefinitionPath() {
-    return Option.ofNullable(getString(INDEX_DEFINITION_PATH));
+  public Option<String> getRelativeIndexDefinitionPath() {
+    return Option.ofNullable(getString(RELATIVE_INDEX_DEFINITION_PATH));
   }
 
   /**
@@ -1007,10 +1190,10 @@ public class HoodieTableConfig extends HoodieConfig {
   @Deprecated
   public static final String HOODIE_PAYLOAD_CLASS_PROP_NAME = PAYLOAD_CLASS_NAME.key();
   /**
-   * @deprecated Use {@link #ARCHIVELOG_FOLDER} and its methods.
+   * @deprecated Use {@link #TIMELINE_HISTORY_PATH} and its methods.
    */
   @Deprecated
-  public static final String HOODIE_ARCHIVELOG_FOLDER_PROP_NAME = ARCHIVELOG_FOLDER.key();
+  public static final String HOODIE_ARCHIVELOG_FOLDER_PROP_NAME = TIMELINE_HISTORY_PATH.key();
   /**
    * @deprecated Use {@link #BOOTSTRAP_INDEX_CLASS_NAME} and its methods.
    */
@@ -1042,18 +1225,13 @@ public class HoodieTableConfig extends HoodieConfig {
   @Deprecated
   public static final HoodieFileFormat DEFAULT_LOG_FILE_FORMAT = LOG_FILE_FORMAT.defaultValue();
   /**
-   * @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods.
-   */
-  @Deprecated
-  public static final String DEFAULT_PAYLOAD_CLASS = PAYLOAD_CLASS_NAME.defaultValue();
-  /**
    * @deprecated Use {@link #BOOTSTRAP_INDEX_CLASS_NAME} and its methods.
    */
   @Deprecated
   public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = BOOTSTRAP_INDEX_CLASS_NAME.defaultValue();
   /**
-   * @deprecated Use {@link #ARCHIVELOG_FOLDER} and its methods.
+   * @deprecated Use {@link #TIMELINE_HISTORY_PATH} and its methods.
    */
   @Deprecated
-  public static final String DEFAULT_ARCHIVELOG_FOLDER = ARCHIVELOG_FOLDER.defaultValue();
+  public static final String DEFAULT_ARCHIVELOG_FOLDER = TIMELINE_HISTORY_PATH.defaultValue();
 }

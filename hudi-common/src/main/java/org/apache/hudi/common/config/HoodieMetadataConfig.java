@@ -23,14 +23,19 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * Configurations used by the HUDI Metadata Table.
@@ -62,7 +67,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
 
-  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
+  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 
   // Enable metrics for internal Metadata Table
   public static final ConfigProperty<Boolean> METRICS_ENABLE = ConfigProperty
@@ -172,6 +177,17 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
+
+  public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_MAX_COLUMNS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.max.columns.to.index")
+      .defaultValue(32)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Maximum number of columns to generate column stats for. If the config `"
+          + COLUMN_STATS_INDEX_FOR_COLUMNS.key() + "` is set, this config will be ignored. "
+          + "If the config `" + COLUMN_STATS_INDEX_FOR_COLUMNS.key() + "` is not set, "
+          + "the column stats of the first `n` columns (`n` defined by this config) in the "
+          + "table schema are generated.");
 
   public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY = "in-memory";
   public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_ENGINE = "engine";
@@ -316,26 +332,48 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
-  public static final ConfigProperty<Boolean> FUNCTIONAL_INDEX_ENABLE_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".index.functional.enable")
+  public static final ConfigProperty<Boolean> EXPRESSION_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".index.expression.enable")
       .defaultValue(false)
       .sinceVersion("1.0.0")
-      .withDocumentation("Enable functional index within the Metadata Table. Note that this config is to enable/disable all functional indexes. "
-          + "To enable or disable each functional index individually, users still need to use CREATE/DROP INDEX SQL commands.");
+      .withDocumentation("Enable expression index within the metadata table. "
+          + " When this configuration property is enabled (`true`), the Hudi writer automatically "
+          + " keeps all expression indexes consistent with the data table. "
+          + " When disabled (`false`), all expression indexes are deleted. "
+          + " Note that individual expression index can only be created through a `CREATE INDEX` "
+          + " and deleted through a `DROP INDEX` statement in Spark SQL.");
 
-  public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_FILE_GROUP_COUNT = ConfigProperty
-      .key(METADATA_PREFIX + ".index.functional.file.group.count")
+  public static final ConfigProperty<Integer> EXPRESSION_INDEX_FILE_GROUP_COUNT = ConfigProperty
+      .key(METADATA_PREFIX + ".index.expression.file.group.count")
       .defaultValue(2)
       .markAdvanced()
       .sinceVersion("1.0.0")
-      .withDocumentation("Metadata functional index partition file group count.");
+      .withDocumentation("Metadata expression index partition file group count.");
 
-  public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_PARALLELISM = ConfigProperty
-      .key(METADATA_PREFIX + ".index.functional.parallelism")
+  public static final ConfigProperty<Integer> EXPRESSION_INDEX_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".index.expression.parallelism")
       .defaultValue(200)
       .markAdvanced()
       .sinceVersion("1.0.0")
-      .withDocumentation("Parallelism to use, when generating functional index.");
+      .withDocumentation("Parallelism to use, when generating expression index.");
+
+  public static final ConfigProperty<String> EXPRESSION_INDEX_COLUMN = ConfigProperty
+      .key(METADATA_PREFIX + ".index.expression.column")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Column for which expression index will be built.");
+
+  public static final ConfigProperty<String> EXPRESSION_INDEX_NAME = HoodieIndexingConfig.INDEX_NAME;
+
+  public static final ConfigProperty<String> EXPRESSION_INDEX_TYPE = HoodieIndexingConfig.INDEX_TYPE;
+
+  public static final ConfigProperty<String> EXPRESSION_INDEX_OPTIONS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.expression.options")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Options for the expression index, e.g. \"expr='from_unixtime', format='yyyy-MM-dd'\"");
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.enable")
@@ -358,26 +396,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating partition stats index.");
 
-  public static final ConfigProperty<Boolean> ENABLE_PARTITION_STATS_INDEX_TIGHT_BOUND = ConfigProperty
-      .key(METADATA_PREFIX + ".index.partition.stats.tightBound.enable")
-      .defaultValue(true)
-      .sinceVersion("1.0.0")
-      .withDocumentation("Enable tight bound for the min/max value for each column at the storage partition level. "
-          + "Typically, the min/max range for each column can become wider (i.e. the minValue is <= all valid values "
-          + "in the file, and the maxValue >= all valid values in the file) with updates and deletes. If this config is enabled, "
-          + "the min/max range will be updated to the tight bound of the valid values in the latest snapshot of the partition.");
-
   public static final ConfigProperty<Boolean> SECONDARY_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("1.0.0")
-      .withDocumentation("Enable secondary index within the Metadata Table.");
-
-  public static final ConfigProperty<String> SECONDARY_INDEX_COLUMN = ConfigProperty
-      .key(METADATA_PREFIX + ".index.secondary.column")
-      .noDefaultValue()
-      .sinceVersion("1.0.0")
-      .withDocumentation("Column for which secondary index will be enabled within the Metadata Table.");
+      .withDocumentation("Enable secondary index within the metadata table. "
+          + " When this configuration property is enabled (`true`), the Hudi writer automatically "
+          + " keeps all secondary indexes consistent with the data table. "
+          + " When disabled (`false`), all secondary indexes are deleted. "
+          + " Note that individual secondary index can only be created through a `CREATE INDEX` "
+          + " and deleted through a `DROP INDEX` statement in Spark SQL. ");
 
   public static final ConfigProperty<Integer> SECONDARY_INDEX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.parallelism")
@@ -385,6 +413,25 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating secondary index.");
+
+  public static final ConfigProperty<String> SECONDARY_INDEX_NAME = HoodieIndexingConfig.INDEX_NAME;
+
+  public static final ConfigProperty<String> SECONDARY_INDEX_COLUMN = ConfigProperty
+      .key(METADATA_PREFIX + ".index.secondary.column")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Column for which secondary index will be built.");
+
+  // Config to specify metadata index to delete
+  public static final ConfigProperty<String> DROP_METADATA_INDEX = ConfigProperty
+      .key(METADATA_PREFIX + ".index.drop")
+      .noDefaultValue()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Drop the specified index. "
+          + "The value should be the name of the index to delete. You can check index names using `SHOW INDEXES` command. "
+          + "The index name either starts with or matches exactly can be one of the following: "
+          + StringUtils.join(Arrays.stream(MetadataPartitionType.values()).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList()), ", "));
 
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
@@ -420,6 +467,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
     return StringUtils.split(getString(COLUMN_STATS_INDEX_FOR_COLUMNS), CONFIG_VALUES_DELIMITER);
+  }
+
+  public Integer maxColumnsToIndexForColStats() {
+    return getIntOrDefault(COLUMN_STATS_INDEX_MAX_COLUMNS);
   }
 
   public String getColumnStatsIndexProcessingModeOverride() {
@@ -510,16 +561,52 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(AUTO_INITIALIZE);
   }
 
-  public boolean isFunctionalIndexEnabled() {
-    return getBooleanOrDefault(FUNCTIONAL_INDEX_ENABLE_PROP);
+  public boolean isExpressionIndexEnabled() {
+    return getBooleanOrDefault(EXPRESSION_INDEX_ENABLE_PROP);
   }
 
-  public int getFunctionalIndexFileGroupCount() {
-    return getInt(FUNCTIONAL_INDEX_FILE_GROUP_COUNT);
+  public int getExpressionIndexFileGroupCount() {
+    return getInt(EXPRESSION_INDEX_FILE_GROUP_COUNT);
   }
 
-  public int getFunctionalIndexParallelism() {
-    return getInt(FUNCTIONAL_INDEX_PARALLELISM);
+  public int getExpressionIndexParallelism() {
+    return getInt(EXPRESSION_INDEX_PARALLELISM);
+  }
+
+  public String getExpressionIndexColumn() {
+    return getString(EXPRESSION_INDEX_COLUMN);
+  }
+
+  public String getExpressionIndexName() {
+    return getString(EXPRESSION_INDEX_NAME);
+  }
+
+  public String getExpressionIndexType() {
+    return getString(EXPRESSION_INDEX_TYPE);
+  }
+
+  public Map<String, String> getExpressionIndexOptions() {
+    return getExpressionIndexOptions(getString(EXPRESSION_INDEX_OPTIONS));
+  }
+
+  private Map<String, String> getExpressionIndexOptions(String configValue) {
+    Map<String, String> optionsMap = new HashMap<>();
+    if (StringUtils.isNullOrEmpty(configValue)) {
+      return optionsMap;
+    }
+
+    // Split the string into key-value pairs by comma
+    String[] keyValuePairs = configValue.split(",");
+    for (String pair : keyValuePairs) {
+      String[] keyValue = pair.split("=", 2); // Split into key and value, allowing '=' in the value
+      if (keyValue.length == 2) {
+        optionsMap.put(keyValue[0].trim(), keyValue[1].trim());
+      } else {
+        throw new IllegalArgumentException("Invalid key-value pair: " + pair);
+      }
+    }
+
+    return optionsMap;
   }
 
   public boolean isPartitionStatsIndexEnabled() {
@@ -534,21 +621,25 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getInt(PARTITION_STATS_INDEX_PARALLELISM);
   }
 
-  public boolean isPartitionStatsIndexTightBoundEnabled() {
-    return getBooleanOrDefault(ENABLE_PARTITION_STATS_INDEX_TIGHT_BOUND);
-  }
-
   public boolean isSecondaryIndexEnabled() {
     // Secondary index is enabled only iff record index (primary key index) is also enabled
     return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP);
+  }
+
+  public int getSecondaryIndexParallelism() {
+    return getInt(SECONDARY_INDEX_PARALLELISM);
   }
 
   public String getSecondaryIndexColumn() {
     return getString(SECONDARY_INDEX_COLUMN);
   }
 
-  public int getSecondaryIndexParallelism() {
-    return getInt(SECONDARY_INDEX_PARALLELISM);
+  public String getSecondaryIndexName() {
+    return getString(SECONDARY_INDEX_NAME);
+  }
+
+  public String getMetadataIndexToDrop() {
+    return getString(DROP_METADATA_INDEX);
   }
 
   public static class Builder {
@@ -605,6 +696,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withColumnStatsIndexForColumns(String columns) {
       metadataConfig.setValue(COLUMN_STATS_INDEX_FOR_COLUMNS, columns);
+      return this;
+    }
+
+    public Builder withMaxColumnsToIndexForColStats(int maxCols) {
+      metadataConfig.setValue(COLUMN_STATS_INDEX_MAX_COLUMNS, String.valueOf(maxCols));
       return this;
     }
 
@@ -724,13 +820,35 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withFunctionalIndexFileGroupCount(int fileGroupCount) {
-      metadataConfig.setValue(FUNCTIONAL_INDEX_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+    public Builder withExpressionIndexFileGroupCount(int fileGroupCount) {
+      metadataConfig.setValue(EXPRESSION_INDEX_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
       return this;
     }
 
-    public Builder withFunctionalIndexParallelism(int parallelism) {
-      metadataConfig.setValue(FUNCTIONAL_INDEX_PARALLELISM, String.valueOf(parallelism));
+    public Builder withExpressionIndexParallelism(int parallelism) {
+      metadataConfig.setValue(EXPRESSION_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withExpressionIndexColumn(String column) {
+      metadataConfig.setValue(EXPRESSION_INDEX_COLUMN, column);
+      return this;
+    }
+
+    public Builder withExpressionIndexName(String name) {
+      metadataConfig.setValue(EXPRESSION_INDEX_NAME, name);
+      return this;
+    }
+
+    public Builder withExpressionIndexType(String type) {
+      metadataConfig.setValue(EXPRESSION_INDEX_TYPE, type);
+      return this;
+    }
+
+    public Builder withExpressionIndexOptions(Map<String, String> options) {
+      metadataConfig.setValue(EXPRESSION_INDEX_OPTIONS, options.entrySet().stream()
+          .map(e -> e.getKey() + "=" + e.getValue())
+          .collect(Collectors.joining(",")));
       return this;
     }
 
@@ -749,13 +867,31 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withPartitionStatsIndexTightBound(boolean enable) {
-      metadataConfig.setValue(ENABLE_PARTITION_STATS_INDEX_TIGHT_BOUND, String.valueOf(enable));
+    public Builder withSecondaryIndexForColumn(String column) {
+      metadataConfig.setValue(SECONDARY_INDEX_COLUMN, column);
+      return this;
+    }
+
+    public Builder withSecondaryIndexName(String name) {
+      metadataConfig.setValue(SECONDARY_INDEX_NAME, name);
+      return this;
+    }
+
+    public Builder withSecondaryIndexParallelism(int parallelism) {
+      metadataConfig.setValue(SECONDARY_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withDropMetadataIndex(String indexName) {
+      metadataConfig.setValue(DROP_METADATA_INDEX, indexName);
       return this;
     }
 
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
+      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
+      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, metadataConfig.isColumnStatsIndexEnabled());
+      // fix me: disable when schema on read is enabled.
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
     }
@@ -767,6 +903,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           return ENABLE.defaultValue();
         case JAVA:
           return false;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+
+    private boolean getDefaultColStatsEnable(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return true;
+        case FLINK:
+        case JAVA:
+          return false; // HUDI-8814
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.testutils.providers;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -35,6 +36,8 @@ import java.util.Properties;
 public interface HoodieMetaClientProvider {
 
   HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException;
+
+  HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props, HoodieTableType tableType) throws IOException;
 
   default HoodieTableFileSystemView getHoodieTableFileSystemView(
       HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,

@@ -85,7 +85,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     SparkRDDWriteClient writeClient;
     if (passInTimelineServer) {
       EmbeddedTimelineService timelineService = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(context(), null, writeConfig);
-      writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig());
+      writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig(writeConfig));
       writeClient = new SparkRDDWriteClient(context(), writeConfig, Option.of(timelineService));
       // Both the write client and the table service client should use the same passed-in
       // timeline server instance.
@@ -140,7 +140,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath());
     List<Integer> metadataTableCacheIds0 = context().getCachedDataIds(HoodieDataCacheKey.of(metadataTableBasePath, instant0));
     List<Integer> metadataTableCacheIds1 = context().getCachedDataIds(HoodieDataCacheKey.of(metadataTableBasePath, instant1));
-    writeClient.commitStats(instant1, context().parallelize(writeStatuses, 1), writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+    writeClient.commitStats(instant1, writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(), metaClient.getCommitActionType());
     writeClient.close();
 

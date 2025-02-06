@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -131,10 +130,6 @@ public class FSUtils {
         .defaultValue().getFileExtension());
   }
 
-  public static String getCommitFromCommitFile(String commitFileName) {
-    return HoodieInstant.extractTimestamp(commitFileName);
-  }
-
   public static String getCommitTime(String fullFileName) {
     try {
       if (isLogFile(fullFileName)) {
@@ -146,12 +141,30 @@ public class FSUtils {
     }
   }
 
+  public static String getCommitTimeWithFullPath(String path) {
+    String fullFileName;
+    if (path.contains("/")) {
+      fullFileName = path.substring(path.lastIndexOf("/") + 1);
+    } else {
+      fullFileName = path;
+    }
+    return getCommitTime(fullFileName);
+  }
+
   public static long getFileSize(HoodieStorage storage, StoragePath path) throws IOException {
     return storage.getPathInfo(path).getLength();
   }
 
   public static String getFileId(String fullFileName) {
     return fullFileName.split("_", 2)[0];
+  }
+
+  /**
+   * @param filePath
+   * @returns the filename from the given path. Path could be the absolute path or just partition path and file name.
+   */
+  public static String getFileNameFromPath(String filePath) {
+    return filePath.substring(filePath.lastIndexOf("/") + 1);
   }
 
   /**

@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.HoodieLogFormat
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.{HeaderMetadataType, HoodieLogBlockType}
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.{FooterMetadataType, HeaderMetadataType, HoodieLogBlockType}
 import org.apache.hudi.common.table.log.block.{HoodieCorruptBlock, HoodieDataBlock}
 import org.apache.hudi.storage.StoragePath
 
@@ -60,7 +60,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
     val commitCountAndMetadata =
-      new java.util.HashMap[String, java.util.List[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[HeaderMetadataType, String]), Int)]]()
+      new java.util.HashMap[String, java.util.List[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[FooterMetadataType, String]), Int)]]()
     var numCorruptBlocks = 0
     var dummyInstantTimeCount = 0
     logFilePaths.foreach {
@@ -102,7 +102,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
             val list = commitCountAndMetadata.get(instantTime)
             list.add((block.getBlockType, (block.getLogBlockHeader, block.getLogBlockFooter), recordCount.get()))
           } else {
-            val list = new java.util.ArrayList[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[HeaderMetadataType, String]), Int)]
+            val list = new java.util.ArrayList[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[FooterMetadataType, String]), Int)]
             list.add(block.getBlockType, (block.getLogBlockHeader, block.getLogBlockFooter), recordCount.get())
             commitCountAndMetadata.put(instantTime, list)
           }

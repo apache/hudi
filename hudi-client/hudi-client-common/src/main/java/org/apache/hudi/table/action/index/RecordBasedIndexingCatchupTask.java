@@ -19,24 +19,16 @@
 
 package org.apache.hudi.table.action.index;
 
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -52,38 +44,16 @@ public class RecordBasedIndexingCatchupTask extends AbstractIndexingCatchupTask 
                                         HoodieTableMetaClient metadataMetaClient,
                                         String currentCaughtupInstant,
                                         TransactionManager transactionManager,
-                                        HoodieEngineContext engineContext) {
-    super(metadataWriter, instantsToIndex, metadataCompletedInstants, metaClient, metadataMetaClient, transactionManager, currentCaughtupInstant, engineContext);
+                                        HoodieEngineContext engineContext,
+                                        HoodieTable table,
+                                        HoodieHeartbeatClient heartbeatClient) {
+    super(metadataWriter, instantsToIndex, metadataCompletedInstants, metaClient, metadataMetaClient, transactionManager, currentCaughtupInstant, engineContext, table, heartbeatClient);
   }
 
   @Override
   public void updateIndexForWriteAction(HoodieInstant instant) throws IOException {
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+    HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(instant,
         metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-    HoodieData<HoodieRecord> records = readRecordKeysFromFileSlices(instant);
-    metadataWriter.update(commitMetadata, records, instant.getTimestamp());
-  }
-
-  private HoodieData<HoodieRecord> readRecordKeysFromFileSlices(HoodieInstant instant) throws IOException {
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
-    HoodieTableMetadata metadata = HoodieTableMetadata.create(
-        engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), false);
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline().filter(i -> i.equals(instant)));
-    // Collect the list of latest file slices present in each partition
-    List<String> partitions = metadata.getAllPartitionPaths();
-    fsView.loadAllPartitions();
-    final List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-    for (String partition : partitions) {
-      fsView.getLatestFileSlices(partition).forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs)));
-    }
-
-    return HoodieTableMetadataUtil.readRecordKeysFromFileSlices(
-        engineContext,
-        partitionFileSlicePairs,
-        false,
-        metadataConfig.getRecordIndexMaxParallelism(),
-        this.getClass().getSimpleName(),
-        metaClient,
-        EngineType.SPARK);
+    metadataWriter.update(commitMetadata, instant.requestedTime());
   }
 }

@@ -19,17 +19,19 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.common.config.HoodieStorageConfig
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.engine.{HoodieEngineContext, HoodieLocalEngineContext}
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, SparkDatasetMixin}
-
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.slf4j.LoggerFactory
 
@@ -52,7 +54,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
   val sparkOpts = Map(
-    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
+    HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 
@@ -100,13 +102,25 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     inputDF2.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
-      .option(HoodieTableConfig.BASE_FILE_FORMAT.key, HoodieFileFormat.ORC.name())
+      .option(HoodieWriteConfig.BASE_FILE_FORMAT.key, HoodieFileFormat.ORC.name())
       .mode(SaveMode.Append)
       .save(basePath)
 
+    // Check if the ORC files exist.
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setStorage(storage).build
+    val engineContext: HoodieEngineContext = new HoodieLocalEngineContext(storageConf)
+    val metadataConfig: HoodieMetadataConfig = HoodieMetadataConfig.newBuilder.build
+    val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
+      engineContext, FileSystemViewStorageConfig.newBuilder.build,
+      HoodieCommonConfig.newBuilder.build,
+      (mc: HoodieTableMetaClient) => HoodieTableMetadata.create(engineContext, mc.getStorage, metadataConfig, basePath))
+    val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
+    val orcFiles = fsView.getAllBaseFiles(DEFAULT_SECOND_PARTITION_PATH).filter(bf => bf.getFileName.endsWith("orc"))
+    assertTrue(orcFiles.count() > 0)
+
     // Snapshot Read the table
-    val hudiDf = spark.read.format("hudi").load(basePath + "/*")
-    assertEquals(0, hudiDf.count())
+    val hudiDf = spark.read.format("hudi").load(basePath)
+    assertEquals(20, hudiDf.count())
 
     // Update and generate new slice across partitions.
     val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 10)).asScala.toSeq
@@ -118,7 +132,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
       .save(basePath)
 
     // Snapshot Read the table
-    val hudiDfAfterUpdate = spark.read.format("hudi").load(basePath + "/*")
-    assertEquals(0, hudiDfAfterUpdate.count())
+    val hudiDfAfterUpdate = spark.read.format("hudi").load(basePath)
+    assertEquals(20, hudiDfAfterUpdate.count())
   }
 }

@@ -18,17 +18,17 @@
 
 package org.apache.spark.sql.execution.benchmark
 
+import org.apache.hudi.DefaultSparkRecordMerger
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.sql.{DataFrame, SparkSession}
 
 object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
 
@@ -45,6 +45,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
     .config("spark.executor.memory", "4G")
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
     .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
     .config("hoodie.insert.shuffle.parallelism", "2")
     .config("hoodie.upsert.shuffle.parallelism", "2")
     .config("hoodie.delete.shuffle.parallelism", "2")
@@ -54,10 +55,6 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
 
   def sparkConf(): SparkConf = {
     val sparkConf = new SparkConf()
-    if (HoodieSparkUtils.gteqSpark3_3) {
-      sparkConf.set("spark.sql.catalog.spark_catalog",
-        "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
-    }
     sparkConf
   }
 
@@ -82,7 +79,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
     if (spark.catalog.tableExists(tableName)) {
       spark.sql(s"drop table if exists $tableName")
     }
-    spark.sql(s"set ${HoodieWriteConfig.RECORD_MERGER_IMPLS.key} = $mergerImpl")
+    spark.sql(s"set ${HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key} = $mergerImpl")
     spark.sql(
       s"""
          |create table $tableName(
@@ -157,7 +154,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
         prepareHoodieTable(sparkTable, new Path(sparkPath.getCanonicalPath, sparkTable).toUri.toString, "mor", sparkMergerImpl, df)
         Seq(avroMergerImpl, sparkMergerImpl).zip(Seq(avroTable, sparkTable)).foreach {
           case (mergerImpl, tableName) => upsertBenchmark.addCase(mergerImpl) { _ =>
-            spark.sql(s"set ${HoodieWriteConfig.RECORD_MERGER_IMPLS.key} = $mergerImpl")
+            spark.sql(s"set ${HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key} = $mergerImpl")
             spark.sql(s"update $tableName set s1 = 's1_new_1' where id > 0")
           }
         }
@@ -166,7 +163,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
         val readBenchmark = new HoodieBenchmark("pref read", 10000, 3)
         Seq(avroMergerImpl, sparkMergerImpl).zip(Seq(avroTable, sparkTable)).foreach {
           case (mergerImpl, tableName) => readBenchmark.addCase(mergerImpl) { _ =>
-            spark.sql(s"set ${HoodieWriteConfig.RECORD_MERGER_IMPLS.key} = $mergerImpl")
+            spark.sql(s"set ${HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key} = $mergerImpl")
             spark.sql(s"select * from $tableName").collect()
           }
         }

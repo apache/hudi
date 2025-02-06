@@ -84,4 +84,9 @@ public class HoodieReaderConfig extends HoodieConfig {
           + "1) skip_merge: read the base file records plus the log file records without merging;\n"
           + "2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the\n"
           + "   log file records (combines the two records with same key for base and log file records), then read the left log file records");
+
+  public static final String RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY =
+      "hoodie.write.record.merge.custom.implementation.classes";
+  public static final String RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY =
+      "hoodie.datasource.write.record.merger.impls";
 }
