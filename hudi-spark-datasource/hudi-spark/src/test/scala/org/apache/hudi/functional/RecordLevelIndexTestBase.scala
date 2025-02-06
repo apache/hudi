@@ -84,7 +84,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()
-    latestBatchDf.write.format("org.apache.hudi")
+    latestBatchDf.write.format("hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(saveMode)

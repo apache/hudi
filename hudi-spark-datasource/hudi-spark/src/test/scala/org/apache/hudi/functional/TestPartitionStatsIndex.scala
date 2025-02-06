@@ -100,7 +100,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val snapshot0 = spark.read.format("org.apache.hudi").options(hudiOpts).load(basePath)
+    val snapshot0 = spark.read.format("hudi").options(hudiOpts).load(basePath)
     assertEquals(100, snapshot0.count())
 
     val updateRecords = recordsToStrings(dataGen.generateUniqueUpdates("002", 50)).asScala.toList
@@ -115,7 +115,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       HoodieMetadataConfig.ENABLE.key -> "true",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
     )
-    val snapshot1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    val snapshot1 = spark.read.format("hudi").options(readOpts).load(basePath)
     val dataFilter = EqualTo(attribute("current_date"), Literal(snapshot1.limit(1).collect().head.getAs("current_date")))
     verifyFilePruning(readOpts, dataFilter, shouldSkipFiles = false)
   }
@@ -298,7 +298,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val snapshot0 = spark.read.format("org.apache.hudi").options(hudiOpts).load(basePath).where("partition > '2015/03/16'")
+    val snapshot0 = spark.read.format("hudi").options(hudiOpts).load(basePath).where("partition > '2015/03/16'")
     snapshot0.cache()
     assertTrue(checkPartitionFilters(snapshot0.queryExecution.executedPlan.toString, "partition.* > 2015/03/16"))
     assertEquals(67, snapshot0.count())
