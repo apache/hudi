@@ -34,8 +34,8 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.TimeUnit;
 
 public class HoodieLockMetrics {
-
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLockMetrics.class);
+
   public static final String LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME = "lock.acquire.attempts";
   public static final String LOCK_ACQUIRE_SUCCESS_COUNTER_NAME = "lock.acquire.success";
   public static final String LOCK_ACQUIRE_FAILURES_COUNTER_NAME = "lock.acquire.failure";
@@ -101,7 +101,7 @@ public class HoodieLockMetrics {
       if (durationMs.isPresent()) {
         lockApiRequestDuration.update(durationMs.get(), TimeUnit.MILLISECONDS);
       } else {
-        LOG.warn("Unable to get lock request duration");
+        LOG.info("Unable to get lock request duration");
       }
       lockAttempts.inc();
       successfulLockAttempts.inc();
@@ -115,7 +115,7 @@ public class HoodieLockMetrics {
       if (durationMs.isPresent()) {
         lockApiRequestDuration.update(durationMs.get(), TimeUnit.MILLISECONDS);
       } else {
-        LOG.warn("Unable to get lock request duration");
+        LOG.info("Unable to get lock request duration");
       }
       failedLockAttempts.inc();
     }
@@ -127,7 +127,7 @@ public class HoodieLockMetrics {
       if (lockDurationInMs.isPresent()) {
         lockDuration.update(lockDurationInMs.get(), TimeUnit.MILLISECONDS);
       } else {
-        LOG.warn("Unable to get lock duration");
+        LOG.info("Unable to get lock duration");
       }
     }
   }
