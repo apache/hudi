@@ -787,7 +787,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       if (metadataFileSystemView != null) {
         metadataFileSystemView.close();
       }
-      metadataFileSystemView = getFileSystemView(engineContext, metadataMetaClient);
+      metadataFileSystemView = null;
     }
     // the cached reader has max instant time restriction, they should be cleared
     // because the metadata timeline may have changed.
