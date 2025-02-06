@@ -342,7 +342,7 @@ public class HiveTestUtil {
     createCOWTable(instantTime, numberOfPartitions, useSchemaFromCommitMetadata, basePath, DB_NAME, TABLE_NAME);
   }
 
-  public static void createReplaceCommit(String instantTime, String partitions, WriteOperationType type, boolean isParquetSchemaSimple, boolean useSchemaFromCommitMetadata)
+  public static HoodieReplaceCommitMetadata getHoodieReplaceCommitMetadata(String partitions, WriteOperationType type, boolean isParquetSchemaSimple, boolean useSchemaFromCommitMetadata)
       throws IOException {
     HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
     addSchemaToCommitMetadata(replaceCommitMetadata, isParquetSchemaSimple, useSchemaFromCommitMetadata);
@@ -350,7 +350,7 @@ public class HiveTestUtil {
     Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
     partitionToReplaceFileIds.put(partitions, new ArrayList<>());
     replaceCommitMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
-    createReplaceCommitFile(replaceCommitMetadata, instantTime);
+    return replaceCommitMetadata;
   }
 
   public static void addRollbackInstantToTable(String instantTime, String commitToRollback)

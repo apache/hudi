@@ -18,16 +18,22 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieClusteringStrategy;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
@@ -45,8 +51,8 @@ import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -101,6 +107,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_OMIT_METADATA_FIELDS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
@@ -1010,6 +1017,7 @@ public class TestHiveSyncTool {
   public void testSyncMergeOnRead(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+    hiveSyncProps.setProperty(HIVE_SYNC_OMIT_METADATA_FIELDS.key(), "true");
 
     String instantTime = "100";
     String deltaCommitTime = "101";
@@ -1024,17 +1032,10 @@ public class TestHiveSyncTool {
 
     assertTrue(hiveClient.tableExists(roTableName), "Table " + roTableName + " should exist after sync completes");
 
-    if (useSchemaFromCommitMetadata) {
-      assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
-          SchemaTestUtil.getSimpleSchema().getFields().size() + getPartitionFieldSize()
-              + HoodieRecord.HOODIE_META_COLUMNS.size(),
-          "Hive Schema should match the table schema + partition field");
-    } else {
-      // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
-      assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
-          SchemaTestUtil.getSimpleSchema().getFields().size() + getPartitionFieldSize(),
-          "Hive Schema should match the table schema + partition field");
-    }
+    // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
+    assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
+        SchemaTestUtil.getSimpleSchema().getFields().size() + getPartitionFieldSize(),
+        "Hive Schema should match the table schema + partition field");
 
     assertEquals(5, hiveClient.getAllPartitions(roTableName).size(),
         "Table partitions should match the number of partitions we wrote");
@@ -1053,17 +1054,10 @@ public class TestHiveSyncTool {
     reInitHiveSyncClient();
     reSyncHiveTable();
 
-    if (useSchemaFromCommitMetadata) {
-      assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
-          SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize()
-              + HoodieRecord.HOODIE_META_COLUMNS.size(),
-          "Hive Schema should match the evolved table schema + partition field");
-    } else {
-      // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
-      assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
-          SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize(),
-          "Hive Schema should match the evolved table schema + partition field");
-    }
+    // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
+    assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
+        SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize(),
+        "Hive Schema should match the evolved table schema + partition field");
     // Sync should add the one partition
     assertEquals(6, hiveClient.getAllPartitions(roTableName).size(),
         "The 2 partitions we wrote should be added to hive");
@@ -1135,6 +1129,7 @@ public class TestHiveSyncTool {
   public void testSyncMergeOnReadRT(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+    hiveSyncProps.setProperty(HIVE_SYNC_OMIT_METADATA_FIELDS.key(), "true");
 
     String instantTime = "100";
     String deltaCommitTime = "101";
@@ -1152,17 +1147,9 @@ public class TestHiveSyncTool {
         "Table " + HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE
             + " should exist after sync completes");
 
-    if (useSchemaFromCommitMetadata) {
-      assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
-          SchemaTestUtil.getSimpleSchema().getFields().size() + getPartitionFieldSize()
-              + HoodieRecord.HOODIE_META_COLUMNS.size(),
-          "Hive Schema should match the table schema + partition field");
-    } else {
-      // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
-      assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
-          SchemaTestUtil.getSimpleSchema().getFields().size() + getPartitionFieldSize(),
-          "Hive Schema should match the table schema + partition field");
-    }
+    assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
+        SchemaTestUtil.getSimpleSchema().getFields().size() + getPartitionFieldSize(),
+        "Hive Schema should match the table schema + partition field");
 
     assertEquals(5, hiveClient.getAllPartitions(snapshotTableName).size(),
         "Table partitions should match the number of partitions we wrote");
@@ -1180,17 +1167,9 @@ public class TestHiveSyncTool {
     reInitHiveSyncClient();
     reSyncHiveTable();
 
-    if (useSchemaFromCommitMetadata) {
-      assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
-          SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize()
-              + HoodieRecord.HOODIE_META_COLUMNS.size(),
-          "Hive Schema should match the evolved table schema + partition field");
-    } else {
-      // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
-      assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
-          SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize(),
-          "Hive Schema should match the evolved table schema + partition field");
-    }
+    assertEquals(hiveClient.getMetastoreSchema(snapshotTableName).size(),
+        SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize(),
+        "Hive Schema should match the evolved table schema + partition field");
     // Sync should add the one partition
     assertEquals(6, hiveClient.getAllPartitions(snapshotTableName).size(),
         "The 2 partitions we wrote should be added to hive");
@@ -1414,6 +1393,9 @@ public class TestHiveSyncTool {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
 
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    HoodieTestTable table = HoodieTestTable.of(metaClient);
+
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 1, true);
 
@@ -1446,9 +1428,25 @@ public class TestHiveSyncTool {
     // create two replace commits to delete current partitions, but do not sync in between
     String partitiontoDelete = partitions.get(0).getValues().get(0).replace("-", "/");
     String instantTime3 = "102";
-    HiveTestUtil.createReplaceCommit(instantTime3, partitiontoDelete, WriteOperationType.DELETE_PARTITION, true, true);
+    HoodieClusteringGroup group = new HoodieClusteringGroup();
+    HoodieClusteringPlan plan = new HoodieClusteringPlan(Collections.singletonList(group),
+        HoodieClusteringStrategy.newBuilder().build(), Collections.emptyMap(), 1, false, null);
+    HoodieRequestedReplaceMetadata requestedMetadata = new HoodieRequestedReplaceMetadata(WriteOperationType.CLUSTER.name(), plan, Collections.emptyMap(), 1);
+    table.addReplaceCommit(
+        instantTime3,
+        Option.of(requestedMetadata),
+        Option.empty(),
+        HiveTestUtil.getHoodieReplaceCommitMetadata(partitiontoDelete, WriteOperationType.DELETE_PARTITION, true, true)
+    );
     String instantTime4 = "103";
-    HiveTestUtil.createReplaceCommit(instantTime4, newPartition, WriteOperationType.DELETE_PARTITION, true, true);
+    requestedMetadata = new HoodieRequestedReplaceMetadata(WriteOperationType.CLUSTER.name(), plan, Collections.emptyMap(), 1);
+    table.addReplaceCommit(
+        instantTime4,
+        Option.of(requestedMetadata),
+        Option.empty(),
+        HiveTestUtil.getHoodieReplaceCommitMetadata(newPartition, WriteOperationType.DELETE_PARTITION, true, true)
+    );
+
 
     // now run hive sync
     reInitHiveSyncClient();
@@ -1935,6 +1933,9 @@ public class TestHiveSyncTool {
     String commitTime4 = InProcessTimeGenerator.createNewInstantTime(4);
     String commitTime5 = InProcessTimeGenerator.createNewInstantTime(5);
 
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestTable table = HoodieTestTable.of(metaClient);
+
     // Commit 4 and commit5 will be committed first
     HiveTestUtil.createMORTable(commitTime4, commitTime5, 2, true, true);
     reInitHiveSyncClient();
@@ -1961,8 +1962,16 @@ public class TestHiveSyncTool {
     // create two replace commits to delete current partitions, but do not sync in between
     String partitiontoDelete = partitions.get(0).getValues().get(0).replace("-", "/");
     // Add commit1 to the table that replace some partitions
-    HiveTestUtil.createReplaceCommit(commitTime1, partitiontoDelete, WriteOperationType.DELETE_PARTITION, true, true);
-
+    HoodieClusteringGroup group = new HoodieClusteringGroup();
+    HoodieClusteringPlan plan = new HoodieClusteringPlan(Collections.singletonList(group),
+        HoodieClusteringStrategy.newBuilder().build(), Collections.emptyMap(), 1, false, null);
+    HoodieRequestedReplaceMetadata requestedMetadata = new HoodieRequestedReplaceMetadata(WriteOperationType.CLUSTER.name(), plan, Collections.emptyMap(), 1);
+    table.addReplaceCommit(
+        commitTime1,
+        Option.of(requestedMetadata),
+        Option.empty(),
+        HiveTestUtil.getHoodieReplaceCommitMetadata(partitiontoDelete, WriteOperationType.DELETE_PARTITION, true, true)
+    );
     reInitHiveSyncClient();
     reSyncHiveTable();
 
