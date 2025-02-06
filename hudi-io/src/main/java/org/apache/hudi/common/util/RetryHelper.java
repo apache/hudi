@@ -112,7 +112,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
     }
 
     if (retries > 0) {
-      LOG.info("Success to " + taskInfo + " after retried " + retries + " times.");
+      LOG.info("Success to {} after retried {} times.", taskInfo, retries);
     }
 
     return functionResult;
