@@ -115,6 +115,15 @@ public class TableSchemaResolver {
   @GuardedBy("this")
   private volatile HoodieInstant latestCommitWithValidData = null;
 
+  // If we want to compute based on the latest state of metaClient, purge all cached state so no cached result
+  // would be returned.
+  public synchronized void purgeAllCachedStates() {
+    commitMetadataCache.get().clear();
+    tableSchemaCache.get().clear();
+    latestCommitWithValidSchema = Option.empty();
+    latestCommitWithValidData = null;
+  }
+
   @VisibleForTesting
   public ConcurrentHashMap<HoodieInstant, Schema> getTableSchemaCache() {
     return tableSchemaCache.get();
@@ -196,9 +205,10 @@ public class TableSchemaResolver {
   }
 
   public Option<Schema> getTableAvroSchemaIfPresent(boolean includeMetadataFields, Option<HoodieInstant> instant) {
-    return getTableAvroSchemaFromTimelineWithCache(instant)
-        .or(this::getTableCreateSchemaWithoutMetaField)
-        .or(this::getTableParquetSchemaFromDataFile)
+    return getTableAvroSchemaFromTimelineWithCache(instant) // Get table schema from schema evolution timeline.
+        .or(this::getTableCreateSchemaWithoutMetaField) // Fall back 1: read create schema from table config.
+        .or(getTableAvroSchemaFromTimelineWithCache(computeSchemaCommitTimelineInReverseOrder(), instant)) // Fall back 2: read any writer schema available in commit timeline.
+        .or(this::getTableParquetSchemaFromDataFile) // Fall back 3: try parsing data file.
         .map(tableSchema -> includeMetadataFields ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get()) : HoodieAvroUtils.removeMetadataFields(tableSchema))
         .map(this::handlePartitionColumnsIfNeeded);
   }
@@ -217,6 +227,10 @@ public class TableSchemaResolver {
 
   @VisibleForTesting
   Option<Schema> getTableAvroSchemaFromTimelineWithCache(Option<HoodieInstant> instantTime) {
+    return getTableAvroSchemaFromTimelineWithCache(computeSchemaEvolutionTimelineInReverseOrder(), instantTime);
+  }
+
+  Option<Schema> getTableAvroSchemaFromTimelineWithCache(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instantTime) {
     // If instantTime is empty it means read the latest one. In that case, get the cached instant if there is one.
     boolean fetchFromLastValidCommit = instantTime.isEmpty();
     Option<HoodieInstant> targetInstant = instantTime.or(getCachedLatestCommitWithValidSchema());
@@ -229,7 +243,7 @@ public class TableSchemaResolver {
 
     // Cache miss on either latestCommitWithValidSchema or commitMetadataCache. Compute the result.
     if (cachedTableSchema == null) {
-      Option<Pair<HoodieInstant, Schema>> instantWithSchema = getLastCommitMetadataWithValidSchemaFromTimeline(targetInstant);
+      Option<Pair<HoodieInstant, Schema>> instantWithSchema = getLastCommitMetadataWithValidSchemaFromTimeline(reversedTimelineStream, targetInstant);
       if (instantWithSchema.isPresent()) {
         targetInstant = Option.of(instantWithSchema.get().getLeft());
         cachedTableSchema = instantWithSchema.get().getRight();
@@ -262,21 +276,25 @@ public class TableSchemaResolver {
   }
 
   @VisibleForTesting
-  Option<Pair<HoodieInstant, Schema>> getLastCommitMetadataWithValidSchemaFromTimeline(Option<HoodieInstant> instant) {
-    HoodieTimeline reversedTimeline = getSchemaEvolutionTimelineInReverseOrder();
+  Option<Pair<HoodieInstant, Schema>> getLastCommitMetadataWithValidSchemaFromTimeline(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instant) {
     // To find the table schema given an instant time, need to walk backwards from the latest instant in
     // the timeline finding a completed instant containing a valid schema.
     ConcurrentHashMap<HoodieInstant, Schema> tableSchemaAtInstant = new ConcurrentHashMap<>();
-    Option<HoodieInstant> instantWithTableSchema = Option.fromJavaOptional(reversedTimeline.getInstantsAsStream()
+    Option<HoodieInstant> instantWithTableSchema = Option.fromJavaOptional(reversedTimelineStream
         // If a completion time is specified, find the first eligible instant in the schema evolution timeline.
         // Should switch to completion time based.
         .filter(s -> instant.isEmpty() || compareTimestamps(s.requestedTime(), LESSER_THAN_OR_EQUALS, instant.get().requestedTime()))
         // Make sure the commit metadata has a valid schema inside. Same caching the result for expensive operation.
         .filter(s -> {
           try {
+            // If we processed the instant before, do not parse the commit metadata again.
+            if (tableSchemaCache.get().containsKey(s)) {
+              tableSchemaAtInstant.putIfAbsent(s, tableSchemaCache.get().get(s));
+              return true;
+            }
             HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(
                     s,
-                    reversedTimeline.getInstantDetails(s).get(),
+                    metaClient.getActiveTimeline().getInstantDetails(s).get(),
                     HoodieCommitMetadata.class);
             String schemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
             boolean validSchemaStr = !StringUtils.isNullOrEmpty(schemaStr);
@@ -285,8 +303,9 @@ public class TableSchemaResolver {
             }
             return validSchemaStr;
           } catch (IOException e) {
-            throw new RuntimeException(e);
+            LOG.warn("Failed to parse commit metadata for instant {} ", s, e);
           }
+          return false;
         })
         .findFirst());
 
@@ -334,7 +353,7 @@ public class TableSchemaResolver {
    * to use table's schema used at creation
    */
   public Option<Schema> getTableAvroSchemaFromLatestCommit(boolean includeMetadataFields) {
-    return getTableAvroSchemaFromTimelineWithCache(Option.empty())
+    return getTableAvroSchemaFromTimelineWithCache(computeSchemaEvolutionTimelineInReverseOrder(), Option.empty())
         .map(tableSchema -> includeMetadataFields ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get()) : HoodieAvroUtils.removeMetadataFields(tableSchema))
         .map(this::handlePartitionColumnsIfNeeded);
   }
@@ -527,15 +546,18 @@ public class TableSchemaResolver {
     return () -> new HoodieSchemaNotFoundException("No schema found for table at " + metaClient.getBasePath());
   }
 
+  Stream<HoodieInstant> computeSchemaCommitTimelineInReverseOrder() {
+    return metaClient.getCommitsTimeline().filterCompletedInstants()
+        .getInstantsAsStream()
+        .sorted(Comparator.comparing(HoodieInstant::requestedTime).reversed());
+  }
+
   /**
-   * WARNING: This method should be only used as part of HUDI-8438 before the jira owner fully accommodate all existing use
-   * cases.
-   *
    * Get timeline in REVERSE order that only contains completed instants which POTENTIALLY evolve the table schema.
    * For types of instants that are included and not reflecting table schema at their instant completion time please refer
    * comments inside the code.
    * */
-  HoodieTimeline getSchemaEvolutionTimelineInReverseOrder() {
+  public Stream<HoodieInstant> computeSchemaEvolutionTimelineInReverseOrder() {
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     Stream<HoodieInstant> timelineStream = timeline.getInstantsAsStream();
     final Set<String> actions;
@@ -570,8 +592,6 @@ public class TableSchemaResolver {
         // We reverse the order as the operation against this timeline would be very efficient if
         // we always start from the tail.
         .sorted(reversedComparator);
-    return timelineLayout.getTimelineFactory().createDefaultTimeline(
-        reversedTimelineWithTableSchema,
-        metaClient.getActiveTimeline()::getInstantDetails);
+    return reversedTimelineWithTableSchema;
   }
 }

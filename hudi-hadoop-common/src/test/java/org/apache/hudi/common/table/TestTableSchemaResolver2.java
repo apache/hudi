@@ -62,6 +62,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -163,23 +164,7 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
     String commitTime1 = "001";
     if (type.equals("commitOrDeltaCommit")) {
       // Case 1: Regular commit
-      if (tableType == HoodieTableType.COPY_ON_WRITE) {
-        testTable.addCommit(commitTime1, Option.of(buildMetadata(
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            Option.empty(),
-            WriteOperationType.UNKNOWN,
-            SCHEMA_WITH_METADATA.toString(),
-            COMMIT_ACTION)));
-      } else {
-        testTable.addDeltaCommit(commitTime1, buildMetadata(
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            Option.empty(),
-            WriteOperationType.UNKNOWN,
-            SCHEMA_WITH_METADATA.toString(),
-            DELTA_COMMIT_ACTION));
-      }
+      addCommitOrDeltaCommitWithSchema(tableType, commitTime1, SCHEMA_WITH_METADATA.toString());
     } else if (type.equals("replacementCommit")) {
       // Case 2: Replacement commit
       HoodieClusteringGroup group = new HoodieClusteringGroup();
@@ -215,6 +200,26 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
     assertEquals(SCHEMA_WITHOUT_METADATA, schemaOption.get());
   }
 
+  private void addCommitOrDeltaCommitWithSchema(HoodieTableType tableType, String commitTime1, String schemaStr) throws Exception {
+    if (tableType == HoodieTableType.COPY_ON_WRITE) {
+      testTable.addCommit(commitTime1, Option.of(buildMetadata(
+          Collections.emptyList(),
+          Collections.emptyMap(),
+          Option.empty(),
+          WriteOperationType.UNKNOWN,
+          schemaStr,
+          COMMIT_ACTION)));
+    } else {
+      testTable.addDeltaCommit(commitTime1, buildMetadata(
+          Collections.emptyList(),
+          Collections.emptyMap(),
+          Option.empty(),
+          WriteOperationType.UNKNOWN,
+          schemaStr,
+          DELTA_COMMIT_ACTION));
+    }
+  }
+
   private static Stream<Arguments> commonTableConfigTestDimension() {
     return Stream.of(
       // version 6 or 8, tableType
@@ -238,21 +243,36 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
     assertFalse(schemaOption.isPresent());
   }
 
-  // Covers all instants that will be ignored when resolving table schema.
+  // Test fall back behavior of table schema resolver - if there is no schema extracted from the schema evolution timeline, we will
+  // try commit timeline and parse any usable writer schema. As long as there is anything usable in the schema evolution timeline,
+  // we will only use that and ignore the other instants.
   @ParameterizedTest
   @MethodSource("commonTableConfigTestDimension")
-  void testGetTableAvroSchemaInternalNoSchemaFoundDisqualifiedInstant(boolean enableMetadata, HoodieTableType tableType) throws Exception {
+  void testGetTableAvroSchemaInternalNoSchemaFoundDisqualifiedInstant(boolean preTableVersion8, HoodieTableType tableType) throws Exception {
     // Don't set any schema in commit metadata or table config
-    initMetaClient(enableMetadata, tableType);
+    initMetaClient(preTableVersion8, tableType);
     testTable = HoodieTestTable.of(metaClient);
     int startCommitTime = 1;
 
-    createExhaustiveDisqualifiedInstants(startCommitTime, tableType);
+    // Create instants that won't show up in the schema evolution timeline.
+    startCommitTime = createExhaustiveDisqualifiedInstants(startCommitTime, tableType);
     metaClient.reloadActiveTimeline();
 
     TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
     Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(true);
-    assertFalse(schemaOption.isPresent());
+    assertTrue(schemaOption.isPresent());
+    assertEquals(SCHEMA_WITH_METADATA, schemaOption.get());
+
+    // Now create 1 instant that would show up in the schema evolution timeline and then followed by more disqualified instants.
+    // Table schema resolver will ignore all disqualified instants and land on the only instants captured by the schema evolution timeline.
+    Schema schema2 = new Schema.Parser().parse(TRIP_SCHEMA);
+    addCommitOrDeltaCommitWithSchema(tableType, padWithLeadingZeros(Integer.toString(startCommitTime + 1), REQUEST_TIME_LENGTH), TRIP_SCHEMA);
+    createExhaustiveDisqualifiedInstants(startCommitTime + 2, tableType);
+    metaClient.reloadActiveTimeline();
+    resolver.purgeAllCachedStates();
+    schemaOption = resolver.getTableAvroSchemaIfPresent(false);
+    assertTrue(schemaOption.isPresent());
+    assertEquals(schema2, schemaOption.get());
   }
 
   private int createExhaustiveDisqualifiedInstants(int startCommitTime, HoodieTableType tableType) throws Exception {
@@ -440,7 +460,7 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
     testTable = HoodieTestTable.of(metaClient);
 
     Schema schema1 = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-    Schema schema2 = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_SCHEMA);
+    Schema schema2 = new Schema.Parser().parse(TRIP_SCHEMA);
 
     // Create two commits with different schemas
     int startCommitTime = 1;
@@ -536,7 +556,7 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
     assertEquals(schema2, schemaOption1.get());
 
     // Verify getLastCommitMetadataWithValidSchemaFromTimeline was called
-    verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any());
+    verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any(), any());
 
     // Case 2: Second call with empty instant - should use cache
     Option<Schema> schemaOption2 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.empty());
@@ -544,7 +564,7 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
     assertEquals(schema2, schemaOption2.get());
 
     // Verify no additional calls to timeline
-    verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any());
+    verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any(), any());
 
     // Case 3: Call with the latest valid instant - there should be a cache hit
     Option<Schema> schemaOption3 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.of(instant2));
@@ -552,7 +572,7 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
     assertEquals(schema2, schemaOption3.get());
 
     // Verify no additional calls to timeline
-    verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any());
+    verify(resolver, times(1)).getLastCommitMetadataWithValidSchemaFromTimeline(any(), any());
 
     // Case 4: Second call with some other instant - should use cache
     Option<Schema> schemaOption4 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.of(instant1));
@@ -560,7 +580,7 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
     assertEquals(schema1, schemaOption4.get());
 
     // Verify no additional calls to timeline
-    verify(resolver, times(2)).getLastCommitMetadataWithValidSchemaFromTimeline(any());
+    verify(resolver, times(2)).getLastCommitMetadataWithValidSchemaFromTimeline(any(), any());
 
     // Case 5: Call with future instant - should return the latest schema
     String nonExistentTime = "999";
@@ -570,7 +590,7 @@ public class TestTableSchemaResolver2 extends HoodieCommonTestHarness {
     assertEquals(schema2, schemaOption5.get());
 
     // Verify one more call to timeline for non-existent instant
-    verify(resolver, times(3)).getLastCommitMetadataWithValidSchemaFromTimeline(any());
+    verify(resolver, times(3)).getLastCommitMetadataWithValidSchemaFromTimeline(any(), any());
 
     // Cache contains 3 entries: 001, 002, 999.
     assertEquals(3L, resolver.getTableSchemaCache().size());
