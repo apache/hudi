@@ -1246,11 +1246,11 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // File groups should be created as in the config
       HoodieBackedTableMetadata metadataReader = (HoodieBackedTableMetadata) metadata(client);
-      HoodieTableFileSystemView metadataTableFSView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metadataReader.getMetadataMetaClient(),
-          metadataReader.getMetadataMetaClient().getActiveTimeline());
-      assertEquals(HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataReader.getMetadataMetaClient(), metadataTableFSView,
+      assertEquals(HoodieTableMetadataUtil.getPartitionLatestFileSlices(
+          metadataReader.getMetadataMetaClient(), Option.empty(),
           MetadataPartitionType.FILES.getPartitionPath()).size(), 1);
-      assertEquals(HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataReader.getMetadataMetaClient(), metadataTableFSView,
+      assertEquals(HoodieTableMetadataUtil.getPartitionLatestFileSlices(
+          metadataReader.getMetadataMetaClient(), Option.empty(),
           MetadataPartitionType.RECORD_INDEX.getPartitionPath()).size(), 5);
     }
 
@@ -1289,11 +1289,9 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // File groups should be created as in the config
       HoodieBackedTableMetadata metadataReader = (HoodieBackedTableMetadata) metadata(client);
-      HoodieTableFileSystemView metadataTableFSView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metadataReader.getMetadataMetaClient(),
-          metadataReader.getMetadataMetaClient().getActiveTimeline());
-      assertEquals(HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataReader.getMetadataMetaClient(), metadataTableFSView,
+      assertEquals(HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataReader.getMetadataMetaClient(), Option.empty(),
           MetadataPartitionType.FILES.getPartitionPath()).size(), 1);
-      assertEquals(HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataReader.getMetadataMetaClient(), metadataTableFSView,
+      assertEquals(HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataReader.getMetadataMetaClient(), Option.empty(),
           MetadataPartitionType.RECORD_INDEX.getPartitionPath()).size(), 3);
     }
   }

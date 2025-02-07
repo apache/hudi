@@ -435,7 +435,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
-            metadataMetaClient, getFileSystemView(context(), metadataMetaClient), COLUMN_STATS.getPartitionPath());
+            metadataMetaClient, getFileSystemView(metadataMetaClient), COLUMN_STATS.getPartitionPath());
     assertEquals(partitionFileSlices.size(), colStatsFileGroupCount);
   }
 
@@ -487,7 +487,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
-            metadataMetaClient, getFileSystemView(context(), metadataMetaClient), COLUMN_STATS.getPartitionPath());
+            metadataMetaClient, getFileSystemView(metadataMetaClient), COLUMN_STATS.getPartitionPath());
     assertEquals(partitionFileSlices.size(), HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.defaultValue());
   }
 

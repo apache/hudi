@@ -746,7 +746,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   public HoodieTableFileSystemView getMetadataFileSystemView() {
     if (metadataFileSystemView == null) {
-      metadataFileSystemView = getFileSystemView(engineContext, metadataMetaClient);
+      metadataFileSystemView = getFileSystemView(metadataMetaClient);
     }
     return metadataFileSystemView;
   }

@@ -45,6 +45,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
@@ -1361,7 +1362,7 @@ public class HoodieTableMetadataUtil {
   public static List<FileSlice> getPartitionLatestMergedFileSlices(
       HoodieTableMetaClient metaClient, HoodieTableFileSystemView fsView, String partition) {
     LOG.info("Loading latest merged file slices for metadata table partition {}", partition);
-    return getPartitionFileSlices(metaClient, fsView, partition, true);
+    return getPartitionFileSlices(metaClient, Option.of(fsView), partition, true);
   }
 
   /**
@@ -1374,7 +1375,7 @@ public class HoodieTableMetadataUtil {
    * @return List of latest file slices for all file groups in a given partition.
    */
   public static List<FileSlice> getPartitionLatestFileSlices(HoodieTableMetaClient metaClient,
-                                                             HoodieTableFileSystemView fsView, String partition) {
+                                                             Option<HoodieTableFileSystemView> fsView, String partition) {
     LOG.info("Loading latest file slices for metadata table partition {}", partition);
     return getPartitionFileSlices(metaClient, fsView, partition, false);
   }
@@ -1382,11 +1383,10 @@ public class HoodieTableMetadataUtil {
   /**
    * Get metadata table file system view.
    *
-   * @param engineContext - engine context for loading view
    * @param metaClient - Metadata table meta client
    * @return Filesystem view for the metadata table
    */
-  public static HoodieTableFileSystemView getFileSystemView(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient) {
+  public static HoodieTableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) {
     // If there are no commits on the metadata table then the table's
     // default FileSystemView will not return any file slices even
     // though we may have initialized them.
@@ -1397,9 +1397,8 @@ public class HoodieTableMetadataUtil {
           metaClient.createNewInstantTime(false));
       timeline = factory.createDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline()::getInstantDetails);
     }
-    HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(),
-        metaClient.getStorage(), metaClient.getBasePath().toString());
-    return new HoodieTableFileSystemView(tableMetadata, metaClient, timeline);
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    return HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metaClient, timeline);
   }
 
   /**
@@ -1414,38 +1413,56 @@ public class HoodieTableMetadataUtil {
    * @return List of latest file slices for all file groups in a given partition.
    */
   private static List<FileSlice> getPartitionFileSlices(HoodieTableMetaClient metaClient,
-                                                        HoodieTableFileSystemView fileSystemView,
+                                                        Option<HoodieTableFileSystemView> fileSystemView,
                                                         String partition,
                                                         boolean mergeFileSlices) {
-    Stream<FileSlice> fileSliceStream;
-    if (mergeFileSlices) {
-      if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
-        fileSliceStream = fileSystemView.getLatestMergedFileSlicesBeforeOrOn(
-            // including pending compaction instant as the last instant so that the finished delta commits
-            // that start earlier than the compaction can be queried.
-            partition, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().requestedTime());
+    HoodieTableFileSystemView fsView = null;
+    try {
+      fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
+      Stream<FileSlice> fileSliceStream;
+      if (mergeFileSlices) {
+        if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
+          fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
+              // including pending compaction instant as the last instant so that the finished delta commits
+              // that start earlier than the compaction can be queried.
+              partition, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().requestedTime());
+        } else {
+          return Collections.emptyList();
+        }
       } else {
-        return Collections.emptyList();
+        fileSliceStream = fsView.getLatestFileSlices(partition);
       }
-    } else {
-      fileSliceStream = fileSystemView.getLatestFileSlices(partition);
+      return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
+    } finally {
+      if (!fileSystemView.isPresent()) {
+        fsView.close();
+      }
     }
-    return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
   }
 
   /**
    * Get the latest file slices for a given partition including the inflight ones.
    *
-   * @param fileSystemView - hoodie table file system view
+   * @param metaClient     - instance of {@link HoodieTableMetaClient}
+   * @param fileSystemView - hoodie table file system view, which will be fetched from meta client if not already present
    * @param partition      - name of the partition whose file groups are to be loaded
    * @return
    */
-  public static List<FileSlice> getPartitionLatestFileSlicesIncludingInflight(HoodieTableFileSystemView fileSystemView,
+  public static List<FileSlice> getPartitionLatestFileSlicesIncludingInflight(HoodieTableMetaClient metaClient,
+                                                                              Option<HoodieTableFileSystemView> fileSystemView,
                                                                               String partition) {
-    Stream<FileSlice> fileSliceStream = fileSystemView.getLatestFileSlicesIncludingInflight(partition);
-    return fileSliceStream
-        .sorted(Comparator.comparing(FileSlice::getFileId))
-        .collect(Collectors.toList());
+    HoodieTableFileSystemView fsView = null;
+    try {
+      fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
+      Stream<FileSlice> fileSliceStream = fsView.getLatestFileSlicesIncludingInflight(partition);
+      return fileSliceStream
+          .sorted(Comparator.comparing(FileSlice::getFileId))
+          .collect(Collectors.toList());
+    } finally {
+      if (!fileSystemView.isPresent() && fsView != null) {
+        fsView.close();
+      }
+    }
   }
 
   public static HoodieData<HoodieRecord> convertMetadataToColumnStatsRecords(HoodieCommitMetadata commitMetadata,
@@ -2638,27 +2655,25 @@ public class HoodieTableMetadataUtil {
           checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
           // Collect Column Metadata for Each File part of active file system view of latest snapshot
           // Get all file names, including log files, in a set from the file slices
-          try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata, dataMetaClient, dataMetaClient.getActiveTimeline())) {
-            Set<String> fileNames = getPartitionLatestFileSlicesIncludingInflight(fsView, partitionName).stream()
-                .flatMap(fileSlice -> Stream.concat(
-                    Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
-                    fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-            // Fetch metadata table COLUMN_STATS partition records for above files
-            List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
-                .getRecordsByKeyPrefixes(generateKeyPrefixes(colsToIndex, partitionName), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
-                // schema and properties are ignored in getInsertValue, so simply pass as null
-                .map(record -> ((HoodieMetadataPayload) record.getData()).getColumnStatMetadata())
-                .filter(Option::isPresent)
-                .map(colStatsOpt -> colStatsOpt.get())
-                .filter(stats -> fileNames.contains(stats.getFileName()))
-                .map(HoodieColumnRangeMetadata::fromColumnStats).collectAsList();
-            if (!partitionColumnMetadata.isEmpty()) {
-              // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
-              // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
-              fileColumnMetadata.addAll(partitionColumnMetadata);
-            }
+          Set<String> fileNames = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.empty(), partitionName).stream()
+              .flatMap(fileSlice -> Stream.concat(
+                  Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
+                  fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
+              .filter(Objects::nonNull)
+              .collect(Collectors.toSet());
+          // Fetch metadata table COLUMN_STATS partition records for above files
+          List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
+              .getRecordsByKeyPrefixes(generateKeyPrefixes(colsToIndex, partitionName), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
+              // schema and properties are ignored in getInsertValue, so simply pass as null
+              .map(record -> ((HoodieMetadataPayload)record.getData()).getColumnStatMetadata())
+              .filter(Option::isPresent)
+              .map(colStatsOpt -> colStatsOpt.get())
+              .filter(stats -> fileNames.contains(stats.getFileName()))
+              .map(HoodieColumnRangeMetadata::fromColumnStats).collectAsList();
+          if (!partitionColumnMetadata.isEmpty()) {
+            // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
+            // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
+            fileColumnMetadata.addAll(partitionColumnMetadata);
           }
         }
 
