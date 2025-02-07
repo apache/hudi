@@ -286,7 +286,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testScheduleCompactionAfterPendingIngestion() throws Exception {
     // Case: Failure case. Earliest ingestion inflight instant time must be later than compaction time
 
-    HoodieWriteConfig cfg = getConfig(false);
+    HoodieWriteConfig cfg = getConfigBuilder(false).withWriteTableVersion(6).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     SparkRDDReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
@@ -308,18 +308,17 @@ public class TestAsyncCompaction extends CompactionTestBase {
         metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
     assertEquals(inflightInstantTime, inflightInstant.requestedTime(), "inflight instant has expected instant time");
 
-/*<<<<<<< HEAD:hudi-spark-datasource/hudi-spark/src/test/java/org/apache/hudi/table/action/compact/TestAsyncCompaction.java
+    /*<<<<<<< HEAD:hudi-spark-datasource/hudi-spark/src/test/java/org/apache/hudi/table/action/compact/TestAsyncCompaction.java
     assertDoesNotThrow(() -> {
       // Schedule compaction but do not run them
       scheduleCompaction(compactionInstantTime, client, cfg);
     }, "Earliest ingestion inflight instant time can be smaller than the compaction time");
-=======*/
+    =======*/
     // since there is a pending delta commit, compaction schedule should not generate any plan
     client = getHoodieWriteClient(cfg);
     client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
-    metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
+    metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf()).setBasePath(cfg.getBasePath()).build();
     assertFalse(metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().isPresent());
-//>>>>>>> 11fc9eb4a17 ([HUDI-7460] Relaxing compaction scheduling when there are pending delta commits (#549)):hudi-client/hudi-spark-client/src/test/java/org/apache/hudi/table/action/compact/TestAsyncCompaction.java
   }
 
   @Test
