@@ -33,7 +33,6 @@ import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
-
 import org.apache.avro.Schema
 import org.apache.spark.sql._
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, MatchCast}
@@ -53,9 +52,15 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
+import java.util
 import java.util.Base64
-
 import scala.collection.JavaConverters._
+
+/**
+ * Exception thrown when field resolution fails during MERGE INTO validation
+ */
+class MergeIntoFieldResolutionException(message: String)
+  extends AnalysisException(s"MERGE INTO field resolution error: $message")
 
 /**
  * Hudi's implementation of the {@code MERGE INTO} (MIT) Spark SQL statement.
@@ -790,9 +795,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // Precombine field and record key field must be present in the assignment clause of all insert actions for event time ordering mode.
     // Check has no effect if we don't have such fields in target table or we don't have insert actions
     // Please note we are relying on merge mode in the table config as writer merge mode is always "CUSTOM" for MIT.
-    if (RecordMergeMode.EVENT_TIME_ORDERING.name()
-      .equals(getStringWithAltKeys(props.asJava.asInstanceOf[java.util.Map[String, Object]],
-        HoodieTableConfig.RECORD_MERGE_MODE))) {
+    if (isEventTimeOrdering(props)) {
       insertActions.foreach(action =>
         hoodieCatalogTable.preCombineKey.foreach(
           field => {
@@ -810,11 +813,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         mergeInto.targetTable,
         hoodieCatalogTable.tableConfig.getRecordKeyFields.orElse(Array.empty),
         "record key field",
-        action.assignments)
-    )
+        action.assignments))
 
     val insertAssignments = insertActions.flatMap(_.assignments)
-    checkSchemaMergeIntoCompatibility(insertAssignments)
+    checkSchemaMergeIntoCompatibility(insertAssignments, props)
+  }
+
+  private def isEventTimeOrdering(props: Map[String, String]) = {
+    RecordMergeMode.EVENT_TIME_ORDERING.name()
+      .equals(getStringWithAltKeys(props.asJava.asInstanceOf[util.Map[String, Object]],
+        HoodieTableConfig.RECORD_MERGE_MODE))
   }
 
   /**
@@ -827,19 +835,25 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     * @param assignments the assignment clause of the insert/update statement for figuring out
     *                    the mapping between the target table and the source table.
     */
-  private def checkSchemaMergeIntoCompatibility(assignments: Seq[Assignment]): Unit = {
+  private def checkSchemaMergeIntoCompatibility(assignments: Seq[Assignment], props: Map[String, String]): Unit = {
     if (assignments.nonEmpty) {
       // Assert data type matching for partition key
-      val partitionAttributeAssociatedExpression: Array[(Attribute, Expression)] =
-        resolveFieldAssociationsBetweenSourceAndTarget(
-          sparkSession.sessionState.conf.resolver,
-          mergeInto.targetTable,
-          mergeInto.sourceTable,
-          hoodieCatalogTable.partitionFields,
-          "partition key",
-          assignments).toArray
-      partitionAttributeAssociatedExpression.foreach { case (attr, expr) =>
-        validateDataTypes(attr, expr, "Partition key")
+      hoodieCatalogTable.partitionFields.foreach {
+        partitionField => {
+          try {
+            val association = resolveFieldAssociationsBetweenSourceAndTarget(
+              sparkSession.sessionState.conf.resolver,
+              mergeInto.targetTable,
+              mergeInto.sourceTable,
+              Seq(partitionField),
+              "partition key",
+              assignments).head
+            validateDataTypes(association._1, association._2, "Partition key")
+          } catch {
+            // Only catch AnalysisException from resolveFieldAssociationsBetweenSourceAndTarget
+            case _: MergeIntoFieldResolutionException =>
+          }
+        }
       }
       val primaryAttributeAssociatedExpression: Array[(Attribute, Expression)] =
         resolveFieldAssociationsBetweenSourceAndTarget(
@@ -852,19 +866,24 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       primaryAttributeAssociatedExpression.foreach { case (attr, expr) =>
         validateDataTypes(attr, expr, "Primary key")
       }
-      val preCombineAttributeAssociatedExpression: Option[(Attribute, Expression)] =
+      if (isEventTimeOrdering(props)) {
         hoodieCatalogTable.preCombineKey.map {
-          preCombineField =>
-            resolveFieldAssociationsBetweenSourceAndTarget(
-              sparkSession.sessionState.conf.resolver,
-              mergeInto.targetTable,
-              mergeInto.sourceTable,
-              Seq(preCombineField),
-              "precombine field",
-              assignments).head
+          preCombineField => {
+            try {
+              val association = resolveFieldAssociationsBetweenSourceAndTarget(
+                sparkSession.sessionState.conf.resolver,
+                mergeInto.targetTable,
+                mergeInto.sourceTable,
+                Seq(preCombineField),
+                "precombine field",
+                assignments).head
+              validateDataTypes(association._1, association._2, "Precombine field")
+            } catch {
+              // Only catch AnalysisException from resolveFieldAssociationsBetweenSourceAndTarget
+              case _: MergeIntoFieldResolutionException =>
+            }
+          }
         }
-      preCombineAttributeAssociatedExpression.foreach { case (attr, expr) =>
-        validateDataTypes(attr, expr, "Precombine field")
       }
     }
   }
@@ -879,7 +898,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           s"targetTable field size[${targetTableSchema.length}]"))
 
     val updateAssignments = updateActions.flatMap(_.assignments)
-    checkSchemaMergeIntoCompatibility(updateAssignments)
+    checkSchemaMergeIntoCompatibility(updateAssignments, props)
 
     if (targetTableType == MOR_TABLE_TYPE_OPT_VAL) {
       // For MOR table, the target table field cannot be the right-value in the update action.
@@ -951,23 +970,16 @@ object MergeIntoHoodieTableCommand {
                                                  fields: Seq[String],
                                                  fieldType: String,
                                                  assignments: Seq[Assignment]): Unit = {
-    // To find corresponding [[fieldType]] attribute w/in the [[assignments]] we do
-    //    - Check if target table itself has the attribute
-    //    - Check if in any of the assignment actions, whose right-hand side attribute
-    // resolves to the source attribute. For example,
-    //        WHEN MATCHED THEN UPDATE SET targetTable.attribute = <expr>
-    // the left-hand side of the assignment can be resolved to the target fields we are
-    // validating here.
     fields.foreach { field =>
       targetTable.output
         .find(attr => resolver(attr.name, field))
-        .getOrElse(throw new AnalysisException(s"Failed to resolve $fieldType `$field` in target table"))
+        .getOrElse(throw new MergeIntoFieldResolutionException(s"Failed to resolve $fieldType `$field` in target table"))
 
       if (!assignments.exists {
         case Assignment(attr: AttributeReference, _) if resolver(attr.name, field) => true
         case _ => false
       }) {
-        throw new AnalysisException(s"No matching assignment found for target table $fieldType `$field`")
+        throw new MergeIntoFieldResolutionException(s"No matching assignment found for target table $fieldType `$field`")
       }
     }
   }
@@ -993,18 +1005,10 @@ object MergeIntoHoodieTableCommand {
                                                      fieldType: String,
                                                      assignments: Seq[Assignment]
                              ): Seq[(Attribute, Expression)] = {
-    // To find corresponding [[fieldType]] attribute w/in the [[sourceTable]] we do
-    //    - Check if we can resolve the attribute w/in the source table as is;
-    // if unsuccessful, then
-    //    - Check if in any of the assignment actions, if any of the right-hand side expressions
-    // resolves to the source attribute. For example,
-    //        WHEN MATCHED THEN UPDATE SET targetTable.fieldWithTypeX = <expr>
-    // the left-hand side of the assignment is the target table's field, the right-hand side
-    // is the expression that should resolve to the source table's field.
     fields.map { field =>
       val targetAttribute = targetTable.output
         .find(attr => resolver(attr.name, field))
-        .getOrElse(throw new AnalysisException(
+        .getOrElse(throw new MergeIntoFieldResolutionException(
           s"Failed to resolve $fieldType `$field` in target table"))
 
       val sourceExpr = sourceTable.output
@@ -1014,7 +1018,7 @@ object MergeIntoHoodieTableCommand {
             case Assignment(attr: AttributeReference, expr)
               if resolver(attr.name, field) && resolvesToSourceAttribute(sourceTable, expr) => expr
           }.getOrElse {
-            throw new AnalysisException(
+            throw new MergeIntoFieldResolutionException(
               s"Failed to resolve $fieldType `$field` w/in the source-table output")
           }
         }
