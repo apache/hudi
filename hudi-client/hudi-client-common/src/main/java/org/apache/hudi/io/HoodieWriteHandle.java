@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieOSSStorageStrategy;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -48,11 +49,13 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
@@ -114,8 +117,21 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     return FSUtils.makeWriteToken(getPartitionId(), getStageId(), getAttemptId());
   }
 
+  protected StoragePath getPartitionPath(String partitionPath) {
+    boolean isMDT = hoodieTable.getMetaClient().getTableConfig().getTableName().contains("metadata");
+    if (isMDT) {
+      return FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath);
+    } else {
+      HashMap<String, String> configMap = new HashMap<>();
+      Path basePath = new Path(config.getBasePath());
+      configMap.put(HoodieOSSStorageStrategy.FILE_ID_KEY, fileId);
+      configMap.put(HoodieOSSStorageStrategy.TABLE_BASE_PATH, basePath.toUri().getPath());
+      return storage.storageLocation(partitionPath, configMap);
+    }
+  }
+
   public StoragePath makeNewPath(String partitionPath) {
-    StoragePath path = FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath);
+    StoragePath path = getPartitionPath(partitionPath);
     try {
       if (!storage.exists(path)) {
         storage.createDirectory(path); // create a new partition as needed.
