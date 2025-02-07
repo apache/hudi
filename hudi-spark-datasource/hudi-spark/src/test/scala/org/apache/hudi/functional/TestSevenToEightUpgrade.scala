@@ -22,21 +22,29 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, HoodieTableType, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.config.HoodieLockConfig
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.CsvSource
 
 class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testPartitionFieldsWithUpgrade(tableType: HoodieTableType): Unit = {
+  @CsvSource(value = Array(
+    "COPY_ON_WRITE,null",
+    "COPY_ON_WRITE,org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+    "COPY_ON_WRITE,org.apache.hudi.client.transaction.lock.NoopLockProvider",
+    "MERGE_ON_READ,null",
+    "MERGE_ON_READ,org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+    "MERGE_ON_READ,org.apache.hudi.client.transaction.lock.NoopLockProvider"
+  ))
+  def testPartitionFieldsWithUpgrade(tableType: HoodieTableType, lockProviderClass: String): Unit = {
     val partitionFields = "partition:simple"
     // Downgrade handling for metadata not yet ready.
-    val hudiOpts = commonOpts ++ Map(
+    val hudiOptsWithoutLockConfigs = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> KeyGeneratorType.CUSTOM.getClassName,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> partitionFields,
@@ -44,6 +52,12 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       // "OverwriteWithLatestAvroPayload" is used to trigger merge mode upgrade/downgrade.
       DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName,
       DataSourceWriteOptions.RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name)
+
+    val hudiOpts = if (!lockProviderClass.equals("null")) {
+      hudiOptsWithoutLockConfigs ++ Map(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> lockProviderClass)
+    } else {
+      hudiOptsWithoutLockConfigs
+    }
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,

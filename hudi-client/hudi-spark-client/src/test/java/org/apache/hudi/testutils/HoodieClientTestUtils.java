@@ -18,7 +18,6 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -108,7 +107,7 @@ public class HoodieClientTestUtils {
       sparkConf.set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
     }
 
-    if (canLoadClass("org.apache.spark.sql.hudi.catalog.HoodieCatalog") && HoodieSparkUtils.gteqSpark3_3()) {
+    if (canLoadClass("org.apache.spark.sql.hudi.catalog.HoodieCatalog")) {
       sparkConf.set("spark.sql.catalog.spark_catalog",
           "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
     }
@@ -326,7 +325,7 @@ public class HoodieClientTestUtils {
     return HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(spark.sessionState().newHadoopConf()), basePath);
   }
 
-  private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+  public static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     try {
       HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
       byte[] data = timeline.getInstantDetails(instant).get();

@@ -23,27 +23,28 @@ import org.apache.hudi.ColumnStatsIndexSupport.{composeColumnStatStructType, des
 import org.apache.hudi.ExpressionIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.HoodieSparkExpressionIndex.SPARK_FUNCTION_MAP
-import org.apache.hudi.RecordLevelIndexSupport.{fetchQueryWithAttribute, filterQueryWithRecordKey}
+import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.collection
 import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
+import org.apache.hudi.common.util.{StringUtils, collection}
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.index.functional.HoodieExpressionIndex.SPARK_FROM_UNIXTIME
+import org.apache.hudi.index.expression.HoodieExpressionIndex
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.{PARTITION_NAME_COLUMN_STATS, getPartitionStatsIndexKey}
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{EqualTo, Expression, FromUnixTime, In, Literal, UnaryExpression}
+import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.catalyst.util.TimestampFormatter
 import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import scala.collection.JavaConverters._
@@ -54,10 +55,11 @@ import scala.collection.parallel.mutable.ParHashMap
 class ExpressionIndexSupport(spark: SparkSession,
                              tableSchema: StructType,
                              metadataConfig: HoodieMetadataConfig,
-                             metaClient: HoodieTableMetaClient)
+                             metaClient: HoodieTableMetaClient,
+                             allowCaching: Boolean = false)
   extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) {
 
-  @transient private lazy val cachedColumnStatsIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
+  @transient private lazy val cachedExpressionIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
 
 
   // NOTE: Since [[metadataConfig]] is transient this has to be eagerly persisted, before this will be passed on to the executor
@@ -80,11 +82,58 @@ class ExpressionIndexSupport(spark: SparkSession,
         val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(fileIndex, prunedPartitionsAndFileSlices)
         val expressionIndexRecords = loadExpressionIndexRecords(indexPartition, prunedPartitions, readInMemory)
         loadTransposed(queryReferencedColumns, readInMemory, expressionIndexRecords, expressionIndexQuery) {
-          transposedColStatsDF =>Some(getCandidateFiles(transposedColStatsDF, Seq(expressionIndexQuery), prunedFileNames, isExpressionIndex = true))
+          transposedColStatsDF =>Some(getCandidateFiles(transposedColStatsDF, Seq(expressionIndexQuery), prunedFileNames, isExpressionIndex = true, Option.apply(indexDefinition)))
         }
       } else if (indexDefinition.getIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)) {
         val prunedPartitionAndFileNames = getPrunedPartitionsAndFileNamesMap(prunedPartitionsAndFileSlices, includeLogFiles = true)
         Option.apply(getCandidateFilesForKeys(indexPartition, prunedPartitionAndFileNames, literals))
+      } else {
+        Option.empty
+      }
+    } else {
+      Option.empty
+    }
+  }
+
+  def prunePartitions(fileIndex: HoodieFileIndex,
+                      queryFilters: Seq[Expression],
+                      queryReferencedColumns: Seq[String]): Option[Set[String]] = {
+    lazy val expressionIndexPartitionOpt = getExpressionIndexPartitionAndLiterals(queryFilters)
+    if (isIndexAvailable && queryFilters.nonEmpty && expressionIndexPartitionOpt.nonEmpty) {
+      val (indexPartition, expressionIndexQuery, _) = expressionIndexPartitionOpt.get
+      val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
+      if (indexDefinition.getIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
+        val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
+        val expressionIndexRecords = loadExpressionIndexPartitionStatRecords(indexDefinition, readInMemory)
+        loadTransposed(queryReferencedColumns, readInMemory, expressionIndexRecords, expressionIndexQuery) {
+          transposedPartitionStatsDF => {
+            try {
+              transposedPartitionStatsDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
+              val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                .collect()
+                .map(_.getString(0))
+                .toSet
+              if (allPartitions.nonEmpty) {
+                // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
+                //       column in a filter does not have the stats available, by making sure such a
+                //       filter does not prune any partition.
+                val indexSchema = transposedPartitionStatsDF.schema
+                val indexedCols : Seq[String] = indexDefinition.getSourceFields.asScala.toSeq
+                val indexFilter = Seq(expressionIndexQuery).map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex = true, indexedCols = indexedCols)).reduce(And)
+                Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+                  .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                  .collect()
+                  .map(_.getString(0))
+                  .toSet)
+              } else {
+                // Partition stats do not exist, skip the pruning
+                Option.empty
+              }
+            } finally {
+              transposedPartitionStatsDF.unpersist()
+            }
+          }
+        }
       } else {
         Option.empty
       }
@@ -102,8 +151,8 @@ class ExpressionIndexSupport(spark: SparkSession,
   def loadTransposed[T](targetColumns: Seq[String],
                         shouldReadInMemory: Boolean,
                         colStatRecords: HoodieData[HoodieMetadataColumnStats],
-                        expressionIndexQuery: Expression) (block: DataFrame => T): T = {
-    cachedColumnStatsIndexViews.get(targetColumns) match {
+                        expressionIndexQuery: Expression)(block: DataFrame => T): T = {
+    cachedExpressionIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
         block(cachedDF)
       case None =>
@@ -121,9 +170,8 @@ class ExpressionIndexSupport(spark: SparkSession,
             spark.createDataFrame(rdd, indexSchema)
           }
 
-          val allowCaching: Boolean = false
           if (allowCaching) {
-            cachedColumnStatsIndexViews.put(targetColumns, df)
+            cachedExpressionIndexViews.put(targetColumns, df)
             // NOTE: Instead of collecting the rows from the index and hold them in memory, we instead rely
             //       on Spark as (potentially distributed) cache managing data lifecycle, while we simply keep
             //       the referenced to persisted [[DataFrame]] instance
@@ -323,8 +371,8 @@ class ExpressionIndexSupport(spark: SparkSession,
   }
 
   override def invalidateCaches(): Unit = {
-    cachedColumnStatsIndexViews.foreach { case (_, df) => df.unpersist() }
-    cachedColumnStatsIndexViews.clear()
+    cachedExpressionIndexViews.foreach { case (_, df) => df.unpersist() }
+    cachedExpressionIndexViews.clear()
   }
 
   /**
@@ -334,16 +382,10 @@ class ExpressionIndexSupport(spark: SparkSession,
     metadataConfig.isEnabled && metaClient.getIndexMetadata.isPresent && !metaClient.getIndexMetadata.get().getIndexDefinitions.isEmpty
   }
 
-  private def filterQueriesWithFunctionalFilterKey(queryFilters: Seq[Expression], sourceFieldOpt: Option[String]): List[Tuple2[Expression, List[String]]] = {
+  private def filterQueriesWithFunctionalFilterKey(queryFilters: Seq[Expression], sourceFieldOpt: Option[String],
+                                                   attributeFetcher: Function1[Expression, Expression]): List[Tuple2[Expression, List[String]]] = {
     var expressionIndexQueries: List[Tuple2[Expression, List[String]]] = List.empty
     for (query <- queryFilters) {
-      val attributeFetcher = (expr: Expression) => {
-        expr match {
-          case expression: UnaryExpression => expression.child
-          case expression: FromUnixTime => expression.sec
-          case other => other
-        }
-      }
       filterQueryWithRecordKey(query, sourceFieldOpt, attributeFetcher).foreach({
         case (exp: Expression, literals: List[String]) =>
           expressionIndexQueries = expressionIndexQueries :+ Tuple2.apply(exp, literals)
@@ -389,37 +431,59 @@ class ExpressionIndexSupport(spark: SparkSession,
    * Extracts mappings from function names to column names from a sequence of expressions.
    *
    * This method iterates over a given sequence of Spark SQL expressions and identifies expressions
-   * that contain function calls corresponding to keys in the `SPARK_FUNCTION_MAP`. It supports only
+   * that contain function calls corresponding to keys in the ExpressionIndexFunction. It supports only
    * expressions that are simple binary expressions involving a single column. If an expression contains
    * one of the functions and operates on a single column, this method maps the function name to the
    * column name.
    */
   private def extractQueryAndLiterals(queryFilters: Seq[Expression], indexDefinition: HoodieIndexDefinition): Option[(Expression, List[String])] = {
-    val expressionIndexQueries = filterQueriesWithFunctionalFilterKey(queryFilters, Option.apply(indexDefinition.getSourceFields.get(0)))
+    val attributeFetcher = (expr: Expression) => {
+      expr match {
+        case expression: UnaryExpression => expression.child
+        case expression: DateFormatClass if expression.right.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption()) =>
+          expression.left
+        case expression: FromUnixTime
+          if expression.format.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption(TimestampFormatter.defaultPattern())) =>
+          expression.sec
+        case expression: UnixTimestamp if expression.right.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption(TimestampFormatter.defaultPattern())) =>
+          expression.timeExp
+        case expression: ParseToDate if (expression.format.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexFormatOption()))
+          || (expression.format.isDefined && expression.format.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption())) =>
+          expression.left
+        case expression: ParseToTimestamp if (expression.format.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexFormatOption()))
+          || (expression.format.isDefined && expression.format.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption())) =>
+          expression.left
+        case expression: DateAdd if expression.days.isInstanceOf[Literal] && expression.days.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexDaysOption) =>
+          expression.startDate
+        case expression: DateSub if expression.days.isInstanceOf[Literal] && expression.days.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexDaysOption) =>
+          expression.startDate
+        case expression: Substring if expression.pos.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPositionOption)
+          && expression.len.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexLengthOption)=>
+          expression.str
+        case expression: StringTrim if (expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
+          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption))  => expression.srcStr
+        case expression: StringTrimLeft if (expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
+          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption))  => expression.srcStr
+        case expression: StringTrimRight if (expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
+          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption)) => expression.srcStr
+        case expression: RegExpReplace if expression.pos.asInstanceOf[Literal].value.toString.equals("1")
+          && expression.regexp.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPatternOption)
+          && expression.rep.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexReplacementOption) =>
+          expression.subject
+        case expression: RegExpExtract if expression.regexp.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPatternOption)
+          && expression.idx.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexIndexOption) =>
+          expression.subject
+        case expression: StringSplit if expression.limit.asInstanceOf[Literal].value.toString.equals("-1")
+          && expression.regex.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPatternOption) =>
+          expression.str
+        case other => other
+      }
+    }
+    val expressionIndexQueries = filterQueriesWithFunctionalFilterKey(queryFilters, Option.apply(indexDefinition.getSourceFields.get(0)), attributeFetcher)
     var queryAndLiteralsOpt: Option[(Expression, List[String])] = Option.empty
     expressionIndexQueries.foreach { tuple =>
       val (expr, literals) = (tuple._1, tuple._2)
-      val functionNameOption = SPARK_FUNCTION_MAP.asScala.keys.find(expr.toString.contains)
-      val functionName = functionNameOption.getOrElse("identity")
-      if (indexDefinition.getIndexFunction.equals(functionName)) {
-        val attributeFetcher = (expr: Expression) => {
-          expr match {
-            case expression: UnaryExpression => expression.child
-            case expression: FromUnixTime => expression.sec
-            case other => other
-          }
-        }
-        if (functionName.equals(SPARK_FROM_UNIXTIME)) {
-          val configuredFormat = indexDefinition.getIndexOptions.getOrDefault("format", TimestampFormatter.defaultPattern)
-          if (expr.toString().contains(configuredFormat)) {
-            val pruningExpr = fetchQueryWithAttribute(expr, Option.apply(indexDefinition.getSourceFields.get(0)), RecordLevelIndexSupport.getSimpleLiteralGenerator(), attributeFetcher)._1.get._1
-            queryAndLiteralsOpt = Option.apply(Tuple2.apply(pruningExpr, literals))
-          }
-        } else {
-          val pruningExpr = fetchQueryWithAttribute(expr, Option.apply(indexDefinition.getSourceFields.get(0)), RecordLevelIndexSupport.getSimpleLiteralGenerator(), attributeFetcher)._1.get._1
-          queryAndLiteralsOpt = Option.apply(Tuple2.apply(pruningExpr, literals))
-        }
-      }
+      queryAndLiteralsOpt = Option.apply(Tuple2.apply(expr, literals))
     }
     queryAndLiteralsOpt
   }
@@ -430,6 +494,15 @@ class ExpressionIndexSupport(spark: SparkSession,
     val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
     val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadExpressionIndexForColumnsInternal(
       indexDefinition.getSourceFields.asScala.toSeq, prunedPartitions, indexPartition, shouldReadInMemory)
+    //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
+    colStatsRecords
+  }
+
+  private def loadExpressionIndexPartitionStatRecords(indexDefinition: HoodieIndexDefinition, shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
+    // We are omitting the partition name and only using the column name and expression index partition stat prefix to fetch the records
+    val recordKeyPrefix = getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, indexDefinition.getSourceFields.get(0))
+    val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadExpressionIndexForColumnsInternal(
+      indexDefinition.getIndexName, shouldReadInMemory, Seq(recordKeyPrefix))
     //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
     colStatsRecords
   }
@@ -480,6 +553,10 @@ class ExpressionIndexSupport(spark: SparkSession,
     } else {
       encodedTargetColumnNames
     }
+    loadExpressionIndexForColumnsInternal(indexPartition, shouldReadInMemory, keyPrefixes)
+  }
+
+  private def loadExpressionIndexForColumnsInternal(indexPartition: String, shouldReadInMemory: Boolean, keyPrefixes: Iterable[String] with (String with Int => Any)) = {
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
       metadataTable.getRecordsByKeyPrefixes(keyPrefixes.toSeq.asJava, indexPartition, shouldReadInMemory)
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
@@ -534,7 +611,7 @@ class ExpressionIndexSupport(spark: SparkSession,
 }
 
 object ExpressionIndexSupport {
-  val INDEX_NAME = "FUNCTIONAL"
+  val INDEX_NAME = "EXPRESSION"
   /**
    * Target Column Stats Index columns which internally are mapped onto fields of the corresponding
    * Column Stats record payload ([[HoodieMetadataColumnStats]]) persisted w/in Metadata Table

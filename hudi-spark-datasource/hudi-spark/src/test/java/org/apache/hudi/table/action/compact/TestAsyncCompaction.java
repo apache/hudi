@@ -42,10 +42,12 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.fs.FSUtils.getCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -241,9 +243,8 @@ public class TestAsyncCompaction extends CompactionTestBase {
           metaClient.reloadActiveTimeline()
               .readCompactionPlanAsBytes(INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime)).get());
       assertTrue(compactionPlan.getOperations().stream()
-              .noneMatch(op -> op.getDeltaFilePaths().stream().anyMatch(deltaFile -> deltaFile.contains(pendingInstantTime))),
-          "compaction plan should not include pending log files");
-
+              .noneMatch(op -> op.getDeltaFilePaths().stream().anyMatch(deltaFile -> getCommitTime(deltaFile).equals(pendingInstantTime))),
+          "compaction plan should not include pending log files. Data file paths " + new HashSet<>(compactionPlan.getOperations()));
       // execute inflight compaction.
       executeCompaction(compactionInstantTime, client, hoodieTable, cfg, numRecs, true);
     }

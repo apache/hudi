@@ -24,6 +24,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -122,13 +123,19 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
   }
 
   @Override
-  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props,
+      HoodieTableType tableType) throws IOException {
     return HoodieTableMetaClient.newTableBuilder()
       .setTableName(RAW_TRIPS_TEST_NAME)
-      .setTableType(COPY_ON_WRITE)
+      .setTableType(tableType)
       .setPayloadClass(HoodieAvroPayload.class)
       .fromProperties(props)
       .initTable(storageConf.newInstance(), basePath);
+  }
+
+  @Override
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
+    return getHoodieMetaClient(storageConf, basePath, props, COPY_ON_WRITE);
   }
 
   @Override

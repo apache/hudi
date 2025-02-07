@@ -21,6 +21,7 @@ package org.apache.hudi.client.embedded;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.timeline.service.TimelineService;
@@ -29,8 +30,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -60,11 +63,18 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
         .withPath(tempDir.resolve("table2").toString())
         .withEmbeddedTimelineServerEnabled(true)
         .withEmbeddedTimelineServerReuseEnabled(true)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteTimelineClientRetry(true)
+            .build())
         .build();
     EmbeddedTimelineService.TimelineServiceCreator mockCreator2 = Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
     // do not mock the create method since that should never be called
     EmbeddedTimelineService service2 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, null, writeConfig2, mockCreator2);
     assertSame(service1, service2);
+
+    // Test client properties are not overridden
+    assertFalse(service1.getRemoteFileSystemViewConfig(writeConfig1).isRemoteTimelineClientRetryEnabled());
+    assertTrue(service1.getRemoteFileSystemViewConfig(writeConfig2).isRemoteTimelineClientRetryEnabled());
 
     // test shutdown happens after the last path is removed
     service1.stopForBasePath(writeConfig2.getBasePath());

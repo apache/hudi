@@ -34,7 +34,8 @@ import org.apache.hudi.util.JFunction
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -319,9 +320,8 @@ case class HoodieFileIndex(spark: SparkSession,
       } else if (isPartitionedTable && isDataSkippingEnabled) {
         // For partitioned table and no partition filters, if data skipping is enabled,
         // try using the PARTITION_STATS index to prune the partitions
-        lazy val filterReferencedColumns = collectReferencedColumns(spark, dataFilters, schema)
         val prunedPartitionPaths = new PartitionStatsIndexSupport(spark, schema, metadataConfig, metaClient)
-          .prunePartitions(this, dataFilters, filterReferencedColumns)
+          .prunePartitions(this, dataFilters)
         if (prunedPartitionPaths.nonEmpty) {
           try {
             (true, prunedPartitionPaths.get.map(e => convertToPartitionPath(e)).toSeq)
@@ -330,9 +330,20 @@ case class HoodieFileIndex(spark: SparkSession,
             // fall back to listing all partitions
             case _: HoodieException => (false, listMatchingPartitionPaths(Seq.empty))
           }
+        } else if (isExpressionIndexEnabled) {
+          val expressionIndexSupport = getExpressionIndexSupport
+          lazy val filterReferencedColumns = collectReferencedColumns(spark, dataFilters, schema)
+          val exprIndexPrunedPartitionsOpt = expressionIndexSupport.prunePartitions(this, dataFilters, filterReferencedColumns)
+          if (exprIndexPrunedPartitionsOpt.nonEmpty) {
+            (true, exprIndexPrunedPartitionsOpt.get.map(e => convertToPartitionPath(e)).toSeq)
+          } else {
+            // Cannot use expression index for pruning partitions,
+            // fall back to listing all partitions
+            (false, listMatchingPartitionPaths(Seq.empty))
+          }
         } else {
-          // Cannot use partition stats index (not available) for pruning partitions,
-          // fall back to listing all partitions
+          // Both partition stats pruning and expression index pruning was not helpful
+          // Falling back to listing all partitions
           (false, listMatchingPartitionPaths(Seq.empty))
         }
       } else {
@@ -344,6 +355,10 @@ case class HoodieFileIndex(spark: SparkSession,
     (prunedPartitionsTuple._1, getInputFileSlices(prunedPartitionsTuple._2: _*).asScala.map(
       { case (partition, fileSlices) =>
         (Option.apply(partition), fileSlices.asScala.map(f => f.withLogFiles(includeLogFiles)).toSeq) }).toSeq)
+  }
+
+  private def getExpressionIndexSupport: ExpressionIndexSupport = {
+    indicesSupport.find(indexSupport => indexSupport.isInstanceOf[ExpressionIndexSupport]).get.asInstanceOf[ExpressionIndexSupport]
   }
 
   /**
@@ -491,7 +506,7 @@ object HoodieFileIndex extends Logging {
     val Strict: Val   = Val("strict")
   }
 
-  private def collectReferencedColumns(spark: SparkSession, queryFilters: Seq[Expression], schema: StructType): Seq[String] = {
+  def collectReferencedColumns(spark: SparkSession, queryFilters: Seq[Expression], schema: StructType): Seq[String] = {
     val resolver = spark.sessionState.analyzer.resolver
     val refs = queryFilters.flatMap(_.references)
     schema.fieldNames.filter { colName => refs.exists(r => resolver.apply(colName, r.name)) }
@@ -520,6 +535,15 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(RECORDKEY_FIELD.key, tableConfig.getRecordKeyFields.orElse(Array.empty).mkString(","))
       properties.setProperty(PRECOMBINE_FIELD.key, Option(tableConfig.getPreCombineField).getOrElse(""))
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
+
+      // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS
+      val dataBase = Some(tableConfig.getDatabaseName)
+      val tableName = tableConfig.getTableName
+      if (spark.catalog.tableExists(dataBase.getOrElse("default"), tableName)) {
+        val tableIdentifier = TableIdentifier(tableName, dataBase)
+        val table = HoodieCatalogTable(spark, tableIdentifier)
+        table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
+      }
     }
 
     properties

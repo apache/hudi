@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
+import org.apache.hudi.common.util.AvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
@@ -33,12 +34,16 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import javax.annotation.Nullable;
+
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
@@ -52,7 +57,7 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  * @param <T> The type of engine-specific record representation, e.g.,{@code InternalRow} in Spark
  *            and {@code RowData} in Flink.
  */
-public abstract class HoodieReaderContext<T> {
+public abstract class HoodieReaderContext<T> implements Closeable {
 
   private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
@@ -62,6 +67,9 @@ public abstract class HoodieReaderContext<T> {
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
   private Boolean shouldMergeUseRecordPosition = null;
+
+  // for encoding and decoding schemas to the spillable map
+  private final AvroSchemaCache avroSchemaCache = AvroSchemaCache.getInstance();
 
   // Getter and Setter for schemaHandler
   public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
@@ -226,26 +234,22 @@ public abstract class HoodieReaderContext<T> {
    * @param metadataMap  A map containing the record metadata.
    * @param schema       The Avro schema of the record.
    * @param orderingFieldName name of the ordering field
-   * @param orderingFieldTypeOpt type of the ordering field
-   * @param orderingFieldDefault default value for ordering
    * @return The ordering value.
    */
   public Comparable getOrderingValue(Option<T> recordOption,
                                      Map<String, Object> metadataMap,
                                      Schema schema,
-                                     String orderingFieldName,
-                                     Option<Schema.Type> orderingFieldTypeOpt,
-                                     Comparable orderingFieldDefault) {
+                                     Option<String> orderingFieldName) {
     if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
       return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
     }
 
-    if (!recordOption.isPresent() || !orderingFieldTypeOpt.isPresent()) {
-      return orderingFieldDefault;
+    if (!recordOption.isPresent() || orderingFieldName.isEmpty()) {
+      return DEFAULT_ORDERING_VALUE;
     }
 
-    Object value = getValue(recordOption.get(), schema, orderingFieldName);
-    Comparable finalOrderingVal = value != null ? castValue((Comparable) value, orderingFieldTypeOpt.get()) : orderingFieldDefault;
+    Object value = getValue(recordOption.get(), schema, orderingFieldName.get());
+    Comparable finalOrderingVal = value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
     metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
     return finalOrderingVal;
   }
@@ -277,11 +281,11 @@ public abstract class HoodieReaderContext<T> {
    * @return A mapping containing the metadata.
    */
   public Map<String, Object> generateMetadataForRecord(
-      String recordKey, String partitionPath, Comparable orderingVal, Option<Schema.Type> orderingFieldType) {
+      String recordKey, String partitionPath, Comparable orderingVal) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, recordKey);
     meta.put(INTERNAL_META_PARTITION_PATH, partitionPath);
-    meta.put(INTERNAL_META_ORDERING_FIELD, orderingFieldType.map(type -> castValue(orderingVal, type)).orElse(orderingVal));
+    meta.put(INTERNAL_META_ORDERING_FIELD, orderingVal);
     return meta;
   }
 
@@ -295,8 +299,18 @@ public abstract class HoodieReaderContext<T> {
   public Map<String, Object> generateMetadataForRecord(T record, Schema schema) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, getRecordKey(record, schema));
-    meta.put(INTERNAL_META_SCHEMA_ID, this.schemaHandler.encodeAvroSchema(schema));
+    meta.put(INTERNAL_META_SCHEMA_ID, encodeAvroSchema(schema));
     return meta;
+  }
+
+  /**
+   * Gets the schema encoded in the metadata map
+   *
+   * @param infoMap The record metadata
+   * @return the avro schema if it is encoded in the metadata map, else null
+   */
+  public Schema getSchemaFromMetadata(Map<String, Object> infoMap) {
+    return decodeAvroSchema(infoMap.get(INTERNAL_META_SCHEMA_ID));
   }
 
   /**
@@ -309,7 +323,7 @@ public abstract class HoodieReaderContext<T> {
   public Map<String, Object> updateSchemaAndResetOrderingValInMetadata(Map<String, Object> meta,
                                                                        Schema schema) {
     meta.remove(INTERNAL_META_ORDERING_FIELD);
-    meta.put(INTERNAL_META_SCHEMA_ID, this.schemaHandler.encodeAvroSchema(schema));
+    meta.put(INTERNAL_META_SCHEMA_ID, encodeAvroSchema(schema));
     return meta;
   }
 
@@ -342,7 +356,21 @@ public abstract class HoodieReaderContext<T> {
     return projectRecord(from, to, Collections.emptyMap());
   }
 
-  public abstract Comparable castValue(Comparable value, Schema.Type newType);
+  /**
+   * Returns the value to a type representation in a specific engine.
+   * <p>
+   * This can be overridden by the reader context implementation on a specific engine to handle
+   * engine-specific field type system.  For example, Spark uses {@code UTF8String} to represent
+   * {@link String} field values, so we need to convert the values to {@code UTF8String} type
+   * in Spark for proper value comparison.
+   *
+   * @param value {@link Comparable} value to be converted.
+   *
+   * @return the converted value in a type representation in a specific engine.
+   */
+  public Comparable convertValueToEngineType(Comparable value) {
+    return value;
+  }
 
   /**
    * Extracts the record position value from the record itself.
@@ -363,5 +391,27 @@ public abstract class HoodieReaderContext<T> {
 
   public boolean supportsParquetRowIndex() {
     return false;
+  }
+
+  /**
+   * Encodes the given avro schema for efficient serialization.
+   */
+  private Integer encodeAvroSchema(Schema schema) {
+    return this.avroSchemaCache.cacheSchema(schema);
+  }
+
+  /**
+   * Decodes the avro schema with given version ID.
+   */
+  @Nullable
+  private Schema decodeAvroSchema(Object versionId) {
+    return this.avroSchemaCache.getSchema((Integer) versionId).orElse(null);
+  }
+
+  @Override
+  public void close() {
+    if (this.avroSchemaCache != null) {
+      this.avroSchemaCache.close();
+    }
   }
 }

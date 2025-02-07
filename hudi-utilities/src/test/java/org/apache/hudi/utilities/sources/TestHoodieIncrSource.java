@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -506,7 +505,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
                 .withScheduleInlineCompaction(true)
                 .withMaxNumDeltaCommitsBeforeCompaction(1)
                 .build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).build())
+        // if col stats is enabled, col stats based pruning kicks in and changes expected value in this test.
         .build();
     List<WriteResult> inserts = new ArrayList<>();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
@@ -607,8 +607,6 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
     properties.setProperty("hoodie.streamer.source.hoodieincr.path", basePath());
     properties.setProperty("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy", missingCheckpointStrategy.name());
-    // TODO: [HUDI-7081] get rid of this
-    properties.setProperty(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
     properties.putAll(extraProps);
     snapshotCheckPointImplClassOpt.map(className ->
         properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));

@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
@@ -345,8 +345,8 @@ public class TestHiveSyncTool {
     assertEquals(5, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "No new partition should be added");
     hiveClient.addPartitionsToTable(HiveTestUtil.TABLE_NAME, newPartition);
-    FileCreateUtils.createPartitionMetaFile(basePath, "2050/01/01");
-    FileCreateUtils.createPartitionMetaFile(basePath, "2040/02/01");
+    FileCreateUtilsLegacy.createPartitionMetaFile(basePath, "2050/01/01");
+    FileCreateUtilsLegacy.createPartitionMetaFile(basePath, "2040/02/01");
     assertEquals(7, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "New partition should be added");
 
@@ -1393,7 +1393,7 @@ public class TestHiveSyncTool {
     assertEquals(1, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "No new partition should be added");
     hiveClient.addPartitionsToTable(HiveTestUtil.TABLE_NAME, newPartition);
-    FileCreateUtils.createPartitionMetaFile(basePath, "2050/01/01");
+    FileCreateUtilsLegacy.createPartitionMetaFile(basePath, "2050/01/01");
     assertEquals(2, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "New partition should be added");
 
@@ -1979,9 +1979,7 @@ public class TestHiveSyncTool {
   }
 
   private String getLastCommitCompletionTimeSynced() {
-    return hiveClient.getActiveTimeline()
-        .getInstantsOrderedByCompletionTime()
-        .skip(hiveClient.getActiveTimeline().countInstants() - 1).findFirst().get().getCompletionTime();
+    return hiveClient.getActiveTimeline().getLatestCompletionTime().get();
   }
 
   private void reInitHiveSyncClient() {

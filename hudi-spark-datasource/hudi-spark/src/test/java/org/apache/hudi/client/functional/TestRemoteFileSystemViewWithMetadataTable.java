@@ -203,7 +203,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
 
     int timelineServerPort = useExistingTimelineServer
         ? timelineService.getServerPort()
-        : writeClient.getTimelineServer().get().getRemoteFileSystemViewConfig().getRemoteViewServerPort();
+        : writeClient.getTimelineServer().get().getRemoteFileSystemViewConfig(writeClient.getConfig()).getRemoteViewServerPort();
 
     LOG.info("Connecting to Timeline Server: " + timelineServerPort);
     RemoteHoodieTableFileSystemView view =

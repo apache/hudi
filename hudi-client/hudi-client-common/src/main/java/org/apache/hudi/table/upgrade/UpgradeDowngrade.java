@@ -58,7 +58,7 @@ public class UpgradeDowngrade {
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
 
-  public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
+  public static boolean needsUpgradeOrDowngrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
     // If table version is less than SIX, then we need to upgrade to SIX first before upgrading to any other version, irrespective of autoUpgrade flag
     if (fromTableVersion.versionCode() < HoodieTableVersion.SIX.versionCode() && toWriteVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
@@ -74,6 +74,10 @@ public class UpgradeDowngrade {
 
     // allow upgrades/downgrades otherwise.
     return toWriteVersion.versionCode() != fromTableVersion.versionCode();
+  }
+
+  public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
+    return needsUpgradeOrDowngrade(metaClient, config, toWriteVersion);
   }
 
   /**

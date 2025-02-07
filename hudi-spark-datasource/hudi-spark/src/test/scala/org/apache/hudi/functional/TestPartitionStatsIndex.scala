@@ -36,7 +36,9 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieMetadataFileSy
 import org.apache.hudi.util.{JFunction, JavaConversions}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, PartitionStatsIndexSupport}
 import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualNullSafe, EqualTo, Expression, GreaterThanOrEqual, IsNotNull, IsNull, LessThanOrEqual, Literal, Not, Or}
+import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
@@ -65,7 +67,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   @Test
   def testPartitionStatsWithoutColumnStats(): Unit = {
     // remove column stats enable key from commonOpts
-    val hudiOpts = commonOpts - HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key
+    val hudiOpts = commonOpts + (HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
     // should throw an exception as column stats is required for partition stats
     assertThrows[HoodieException] {
       doWriteAndValidateDataAndPartitionStats(
@@ -474,6 +476,143 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     }
   }
 
+  /**
+   * 1. Create a table and enable column_stats, partition_stats.
+   * 2. Do an insert and validate the partition stats index initialization.
+   * 3. Form a filter expression containing isNull on an indexed column.
+   * 4. Validate that the partition stats lookup is skipped for the filter expression.
+   */
+  @Test
+  def testPartitionStatsLookupSkippedForCertainFilters(): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
+      HoodieMetadataConfig.ENABLE.key() -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key() -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key() -> "true",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+
+    doWriteAndValidateDataAndPartitionStats(
+      hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+
+    // Filter expression with isNull on an indexed column
+    val dataFilter = IsNull(attribute("_row_key"))
+    val indexedCols = Seq("_row_key")
+    // Because there is a null filter, the partition stats lookup should be skipped.
+    validateContainsNullAndValueFilters(dataFilter, indexedCols, expectedValue = true)
+    verifyFilePruning(hudiOpts, dataFilter, shouldSkipFiles = false)
+  }
+
+  @Test
+  def testTranslateIntoColumnStatsIndexFilterExpr(): Unit = {
+    var dataFilter: Expression = EqualTo(attribute("c1"), literal("619sdc"))
+    validateContainsNullAndValueFilters(dataFilter, Seq("c1"), false)
+
+    // c1 = 619sdc and c2 = 100, where both c1 and c2 are indexed.
+    val dataFilter1 = And(dataFilter, EqualTo(attribute("c2"), literal("100")))
+    validateContainsNullAndValueFilters(dataFilter1, Seq("c1","c2"), false)
+
+    // add contains null
+    val dataFilter2 = And(dataFilter, IsNull(attribute("c3")))
+    validateContainsNullAndValueFilters(dataFilter2, Seq("c1","c2","c3"), true)
+
+    // checks for not null
+    val dataFilter3 = And(dataFilter, IsNotNull(attribute("c4")))
+    validateContainsNullAndValueFilters(dataFilter3, Seq("c1","c2","c3","c4"), true)
+
+    // nested And and Or case
+    val dataFilter4 = And(
+      Or(
+        EqualTo(attribute("c1"), literal("619sdc")),
+        And(EqualTo(attribute("c2"), literal("100")), EqualTo(attribute("c3"), literal("200")))
+      ),
+      EqualTo(attribute("c4"), literal("300"))
+    )
+    validateContainsNullAndValueFilters(dataFilter4, Seq("c1","c2","c3","c4"), false)
+
+    // embed a null filter and validate
+    val dataFilter5 = Or(dataFilter4, And(
+      Or(
+        EqualTo(attribute("c1"), literal("619sdc")),
+        And(EqualTo(attribute("c2"), literal("100")), EqualTo(attribute("c3"), literal("200")))
+      ),
+      IsNotNull(attribute("c4"))
+    ))
+    validateContainsNullAndValueFilters(dataFilter5, Seq("c1","c2","c3","c4"), true)
+
+    // unsupported filter type
+    val dataFilter6 = BitwiseOr(
+      EqualTo(attribute("c1"), literal("619sdc")),
+      EqualTo(attribute("c2"), literal("100"))
+    )
+    validateContainsNullAndValueFilters(dataFilter6, Seq("c1","c2","c3","c4"), false)
+
+    // too many filters, out of which only half are indexed.
+    val largeFilter = (1 to 100).map(i => EqualTo(attribute(s"c$i"), literal("value"))).reduce(And)
+    val indexedColumns = (1 to 50).map(i => s"c$i")
+    validateContainsNullAndValueFilters(largeFilter, indexedColumns, false)
+
+    // add just 1 null check
+    val largeFilter1 = And(largeFilter, IsNull(attribute("c10")))
+    validateContainsNullAndValueFilters(largeFilter1, indexedColumns, true)
+
+    // Not(IsNull(...)) → IsNotNull(...)
+    dataFilter = Not(IsNull(attribute("c1")))
+    // Because pushDownNot should translate Not(IsNull(...)) -> IsNotNull(...)
+    // The result should be true if c1 is in indexedCols
+    validateContainsNullAndValueFilters(dataFilter, Seq("c1"), expectedValue = true)
+    // If c1 is not indexed, result should be false
+    validateContainsNullAndValueFilters(dataFilter, Seq("c2"), expectedValue = false)
+
+    // Not(IsNotNull(...)) → IsNull(...)
+    dataFilter = Not(IsNotNull(attribute("c2")))
+    // pushDownNot translates Not(IsNotNull(...)) -> IsNull(...)
+    validateContainsNullAndValueFilters(dataFilter, Seq("c2"), expectedValue = true)
+
+    // Not(EqualNullSafe(attr, Literal(null, ...)))
+    dataFilter = Not(EqualNullSafe(attribute("c3"), Literal("value")))
+    // This doesn’t have a direct pushDownNot pattern unless you explicitly handle it,
+    // but verifying that it doesn’t break your logic is useful.
+    validateContainsNullAndValueFilters(dataFilter, Seq("c3"), expectedValue = false)
+
+    // Double-Negation: Not(Not(IsNull(...)))
+    dataFilter = Not(Not(IsNull(attribute("c1"))))
+    validateContainsNullAndValueFilters(dataFilter, Seq("c1"), expectedValue = true)
+
+    // Complex Nested: Not(And(IsNull(c1), Or(IsNotNull(c2), EqualNullSafe(c3, null))))
+    dataFilter = Not(
+      And(
+        IsNull(attribute("c1")),
+        Or(
+          IsNotNull(attribute("c2")),
+          EqualNullSafe(attribute("c3"), literal("value"))
+        )
+      )
+    )
+
+    // If columns c1, c2, c3 are all indexed:
+    //   - We have IsNull/IsNotNull/EqualNullSafe references => returns true
+    validateContainsNullAndValueFilters(dataFilter, Seq("c1", "c2", "c3"), expectedValue = true)
+
+    // If none are indexed: returns false
+    validateContainsNullAndValueFilters(dataFilter, Seq.empty, expectedValue = false)
+  }
+
+  def validateContainsNullAndValueFilters(dataFilter: Expression, indexedCols: Seq[String],
+                                          expectedValue: Boolean): Unit = {
+    assertEquals(expectedValue, DataSkippingUtils.containsNullOrValueCountBasedFilters(dataFilter, indexedCols))
+  }
+
+  private def literal(value: String): Literal = {
+    Literal.create(value)
+  }
+
+  def generateColStatsExprForGreaterthanOrEquals(colName: String, colValue: String): Expression = {
+    val expectedExpr: Expression = GreaterThanOrEqual(UnresolvedAttribute(colName + "_maxValue"), literal(colValue))
+    And(LessThanOrEqual(UnresolvedAttribute(colName + "_minValue"), literal(colValue)), expectedExpr)
+  }
+
   def verifyQueryPredicate(hudiOpts: Map[String, String]): Unit = {
     val candidateRow = mergedDfList.last.groupBy("_row_key").count().limit(1).collect().head
     val rowKey = candidateRow.getAs[String]("_row_key")
@@ -481,6 +620,10 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     val dataFilter = EqualTo(attribute("_row_key"), Literal(rowKey))
     assertEquals(count, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
     verifyFilePruning(hudiOpts, dataFilter)
+
+    // validate that if filter contains null filters, there is no data skipping
+    val dataFilter1 = IsNotNull(attribute("_row_key"))
+    verifyFilePruning(hudiOpts, dataFilter1, false)
   }
 
   private def attribute(partition: String): AttributeReference = {

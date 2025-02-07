@@ -122,6 +122,18 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
       assert recordKeys.contains(rec.getRecordKey());
     }
     assertEquals(recordKeys.size(), cntSize);
+
+    // test iterator with predicate
+    String firstKey = recordKeys.stream().findFirst().get();
+    recordKeys.remove(firstKey);
+    itr = rocksDBBasedMap.iterator(key -> !key.equals(firstKey));
+    cntSize = 0;
+    while (itr.hasNext()) {
+      HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
+      cntSize++;
+      assert recordKeys.contains(rec.getRecordKey());
+    }
+    assertEquals(recordKeys.size(), cntSize);
   }
 
   @Test

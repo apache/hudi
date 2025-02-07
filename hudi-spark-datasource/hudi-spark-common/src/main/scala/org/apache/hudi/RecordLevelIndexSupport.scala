@@ -31,7 +31,7 @@ import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, In, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Cast, EqualTo, Expression, In, Literal}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 import scala.collection.JavaConverters._
@@ -165,80 +165,6 @@ object RecordLevelIndexSupport {
           val literal = attributeLiteralTuple._2
           if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
             val recordKeyLiteral = literalGenerator.apply(attribute, literal)
-            (Option.apply(equalToQuery, List.apply(recordKeyLiteral)), true)
-          } else {
-            (Option.empty, true)
-          }
-        } else {
-          (Option.empty, true)
-        }
-
-      case inQuery: In =>
-        var validINQuery = true
-        val attributeOpt = Option.apply(
-          attributeFetcher.apply(inQuery.value) match {
-            case attribute: AttributeReference =>
-              if (!attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
-                validINQuery = false
-                null
-              } else {
-                attribute
-              }
-            case _ =>
-              validINQuery = false
-              null
-          })
-        var literals: List[String] = List.empty
-        inQuery.list.foreach {
-          case literal: Literal if attributeOpt.isDefined =>
-            val recordKeyLiteral = literalGenerator.apply(attributeOpt.get, literal)
-            literals = literals :+ recordKeyLiteral
-          case _ => validINQuery = false
-        }
-        if (validINQuery) {
-          (Option.apply(inQuery, literals), true)
-        } else {
-          (Option.empty, true)
-        }
-
-      // Handle And expression (composite filter)
-      case andQuery: And =>
-        val leftResult = filterQueryWithRecordKey(andQuery.left, recordKeyOpt, literalGenerator, attributeFetcher)
-        val rightResult = filterQueryWithRecordKey(andQuery.right, recordKeyOpt, literalGenerator, attributeFetcher)
-
-        val isSupported = leftResult._2 && rightResult._2
-        if (!isSupported) {
-          (Option.empty, false)
-        } else {
-          // If both left and right filters are valid, concatenate their results
-          (leftResult._1, rightResult._1) match {
-            case (Some((leftExp, leftKeys)), Some((rightExp, rightKeys))) =>
-              // Return concatenated expressions and record keys
-              (Option.apply(And(leftExp, rightExp), leftKeys ++ rightKeys), true)
-            case (Some((leftExp, leftKeys)), None) =>
-              // Return concatenated expressions and record keys
-              (Option.apply(leftExp, leftKeys), true)
-            case (None, Some((rightExp, rightKeys))) =>
-              // Return concatenated expressions and record keys
-              (Option.apply(rightExp, rightKeys), true)
-            case _ => (Option.empty, true)
-          }
-        }
-
-      case _ => (Option.empty, false)
-    }
-  }
-
-  def fetchQueryWithAttribute(queryFilter: Expression, recordKeyOpt: Option[String], literalGenerator: Function2[AttributeReference, Literal, String],
-                               attributeFetcher: Function1[Expression, Expression]): (Option[(Expression, List[String])], Boolean) = {
-    queryFilter match {
-      case equalToQuery: EqualTo =>
-        val attributeLiteralTuple = getAttributeLiteralTuple(attributeFetcher.apply(equalToQuery.left), attributeFetcher.apply(equalToQuery.right)).orNull
-        if (attributeLiteralTuple != null) {
-          val attribute = attributeLiteralTuple._1
-          val literal = attributeLiteralTuple._2
-          if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
-            val recordKeyLiteral = literalGenerator.apply(attribute, literal)
             (Option.apply(EqualTo(attribute, literal), List.apply(recordKeyLiteral)), true)
           } else {
             (Option.empty, true)
@@ -351,6 +277,14 @@ object RecordLevelIndexSupport {
       case literal: Literal => expression2 match {
         case attr: AttributeReference =>
           Option.apply(attr, literal)
+        case cast: Cast if cast.child.isInstanceOf[AttributeReference] =>
+          Option.apply(cast.child.asInstanceOf[AttributeReference], literal)
+        case _ =>
+          Option.empty
+      }
+      case cast: Cast if cast.child.isInstanceOf[AttributeReference] => expression2 match {
+        case literal: Literal =>
+          Option.apply(cast.child.asInstanceOf[AttributeReference], literal)
         case _ =>
           Option.empty
       }

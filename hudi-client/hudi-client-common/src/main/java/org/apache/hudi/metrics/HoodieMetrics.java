@@ -19,6 +19,8 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -63,15 +65,22 @@ public class HoodieMetrics {
   public static final String COMMIT_LATENCY_IN_MS_STR = "commitLatencyInMs";
   public static final String COMMIT_FRESHNESS_IN_MS_STR = "commitFreshnessInMs";
   public static final String COMMIT_TIME_STR = "commitTime";
+  public static final String EARLIEST_INFLIGHT_CLUSTERING_INSTANT_STR = "earliestInflightClusteringInstant";
+  public static final String LATEST_COMPLETED_CLUSTERING_INSTANT_STR = "latestCompletedClusteringInstant";
+  public static final String PENDING_CLUSTERING_INSTANT_COUNT_STR = "pendingClusteringInstantCount";
   public static final String SUCCESS_EXTENSION = ".success";
   public static final String FAILURE_EXTENSION = ".failure";
 
-  public static final String TIMER_ACTION = "timer";
-  public static final String COUNTER_ACTION = "counter";
+  public static final String TIMER_METRIC = "timer";
+  public static final String COUNTER_METRIC = "counter";
   public static final String ARCHIVE_ACTION = "archive";
   public static final String FINALIZE_ACTION = "finalize";
   public static final String INDEX_ACTION = "index";
   public static final String SOURCE_READ_AND_INDEX_ACTION = "source_read_and_index";
+
+  public static final String COUNTER_METRIC_EXTENSION = "." + COUNTER_METRIC;
+  public static final String SUCCESS_COUNTER = "success" + COUNTER_METRIC_EXTENSION;
+  public static final String FAILURE_COUNTER = "failure" + COUNTER_METRIC_EXTENSION;
 
   private Metrics metrics;
   // Some timers
@@ -115,22 +124,22 @@ public class HoodieMetrics {
     this.tableName = config.getTableName();
     if (config.isMetricsOn()) {
       metrics = Metrics.getInstance(config.getMetricsConfig(), storage);
-      this.rollbackTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.ROLLBACK_ACTION);
-      this.cleanTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.CLEAN_ACTION);
-      this.archiveTimerName = getMetricsName(TIMER_ACTION, ARCHIVE_ACTION);
-      this.commitTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.COMMIT_ACTION);
-      this.deltaCommitTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION);
-      this.clusterCommitTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.CLUSTERING_ACTION);
-      this.finalizeTimerName = getMetricsName(TIMER_ACTION, FINALIZE_ACTION);
-      this.compactionTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.COMPACTION_ACTION);
-      this.logCompactionTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION);
-      this.indexTimerName = getMetricsName(TIMER_ACTION, INDEX_ACTION);
-      this.sourceReadAndIndexTimerName = getMetricsName(TIMER_ACTION, SOURCE_READ_AND_INDEX_ACTION);
-      this.conflictResolutionTimerName = getMetricsName(TIMER_ACTION, CONFLICT_RESOLUTION_STR);
-      this.conflictResolutionSuccessCounterName = getMetricsName(COUNTER_ACTION, CONFLICT_RESOLUTION_STR + SUCCESS_EXTENSION);
-      this.conflictResolutionFailureCounterName = getMetricsName(COUNTER_ACTION, CONFLICT_RESOLUTION_STR + FAILURE_EXTENSION);
-      this.compactionRequestedCounterName = getMetricsName(COUNTER_ACTION, HoodieTimeline.COMPACTION_ACTION + HoodieTimeline.REQUESTED_EXTENSION);
-      this.compactionCompletedCounterName = getMetricsName(COUNTER_ACTION, HoodieTimeline.COMPACTION_ACTION + HoodieTimeline.COMPLETED_EXTENSION);
+      this.rollbackTimerName = getMetricsName(HoodieTimeline.ROLLBACK_ACTION, TIMER_METRIC);
+      this.cleanTimerName = getMetricsName(HoodieTimeline.CLEAN_ACTION, TIMER_METRIC);
+      this.archiveTimerName = getMetricsName(ARCHIVE_ACTION, TIMER_METRIC);
+      this.commitTimerName = getMetricsName(HoodieTimeline.COMMIT_ACTION, TIMER_METRIC);
+      this.deltaCommitTimerName = getMetricsName(HoodieTimeline.DELTA_COMMIT_ACTION, TIMER_METRIC);
+      this.clusterCommitTimerName = getMetricsName(HoodieTimeline.CLUSTERING_ACTION, TIMER_METRIC);
+      this.finalizeTimerName = getMetricsName(FINALIZE_ACTION, TIMER_METRIC);
+      this.compactionTimerName = getMetricsName(HoodieTimeline.COMPACTION_ACTION, TIMER_METRIC);
+      this.logCompactionTimerName = getMetricsName(HoodieTimeline.LOG_COMPACTION_ACTION, TIMER_METRIC);
+      this.indexTimerName = getMetricsName(INDEX_ACTION, TIMER_METRIC);
+      this.sourceReadAndIndexTimerName = getMetricsName(SOURCE_READ_AND_INDEX_ACTION, TIMER_METRIC);
+      this.conflictResolutionTimerName = getMetricsName(CONFLICT_RESOLUTION_STR, TIMER_METRIC);
+      this.conflictResolutionSuccessCounterName = getMetricsName(CONFLICT_RESOLUTION_STR, SUCCESS_COUNTER);
+      this.conflictResolutionFailureCounterName = getMetricsName(CONFLICT_RESOLUTION_STR, FAILURE_COUNTER);
+      this.compactionRequestedCounterName = getMetricsName(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REQUESTED_COMPACTION_SUFFIX + COUNTER_METRIC_EXTENSION);
+      this.compactionCompletedCounterName = getMetricsName(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMPLETED_COMPACTION_SUFFIX + COUNTER_METRIC_EXTENSION);
     }
   }
 
@@ -372,6 +381,30 @@ public class HoodieMetrics {
 
   public void updateClusteringFileCreationMetrics(long durationInMs) {
     reportMetrics(HoodieTimeline.CLUSTERING_ACTION, "fileCreationTime", durationInMs);
+  }
+
+  public void updateClusteringTimeLineInstantMetrics(final HoodieActiveTimeline activeTimeline) {
+    if (config.isMetricsOn()) {
+      // Compute Metrics
+      long pendingClusteringInstantCount = activeTimeline.filterPendingClusteringTimeline().getInstants().size();
+      long earliestInflightClusteringInstantLong = 0L;
+      Option<HoodieInstant> earliestInflightClusteringInstant = activeTimeline.filterPendingClusteringTimeline().getFirstPendingClusterInstant();
+      if (earliestInflightClusteringInstant.isPresent()) {
+        earliestInflightClusteringInstantLong = Long.valueOf(earliestInflightClusteringInstant.get().requestedTime());
+      }
+      long latestCompletedClusteringInstantLong = 0L;
+      Option<HoodieInstant> latestCompletedClusteringInstant = activeTimeline.filterCompletedInstants().getLastClusteringInstant();
+      if (latestCompletedClusteringInstant.isPresent()) {
+        latestCompletedClusteringInstantLong = Long.valueOf(latestCompletedClusteringInstant.get().requestedTime());
+      }
+
+      LOG.info(
+          String.format("Sending timeline clustering instant metrics (%s=%d, %s=%d, %s=%d)", EARLIEST_INFLIGHT_CLUSTERING_INSTANT_STR, earliestInflightClusteringInstantLong,
+              LATEST_COMPLETED_CLUSTERING_INSTANT_STR, latestCompletedClusteringInstantLong, PENDING_CLUSTERING_INSTANT_COUNT_STR, pendingClusteringInstantCount));
+      metrics.registerGauge(getMetricsName(HoodieTimeline.CLUSTERING_ACTION, EARLIEST_INFLIGHT_CLUSTERING_INSTANT_STR), earliestInflightClusteringInstantLong);
+      metrics.registerGauge(getMetricsName(HoodieTimeline.CLUSTERING_ACTION, LATEST_COMPLETED_CLUSTERING_INSTANT_STR), latestCompletedClusteringInstantLong);
+      metrics.registerGauge(getMetricsName(HoodieTimeline.CLUSTERING_ACTION, PENDING_CLUSTERING_INSTANT_COUNT_STR), pendingClusteringInstantCount);
+    }
   }
 
   /**

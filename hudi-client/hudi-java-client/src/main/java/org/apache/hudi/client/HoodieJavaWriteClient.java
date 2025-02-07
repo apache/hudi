@@ -57,6 +57,11 @@ public class HoodieJavaWriteClient<T> extends
     this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
   }
 
+  @Override
+  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    // no op
+  }
+
   public HoodieJavaWriteClient(HoodieEngineContext context,
                                HoodieWriteConfig writeConfig,
                                boolean rollbackPending,

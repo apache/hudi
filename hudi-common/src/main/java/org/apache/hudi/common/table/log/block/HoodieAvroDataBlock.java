@@ -90,11 +90,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   public HoodieAvroDataBlock(@Nonnull List<HoodieRecord> records,
-                             boolean shouldWriteRecordPositions,
                              @Nonnull Map<HeaderMetadataType, String> header,
                              @Nonnull String keyField
   ) {
-    super(records, shouldWriteRecordPositions, header, new HashMap<>(), keyField);
+    super(records, header, new HashMap<>(), keyField);
   }
 
   @Override
@@ -126,12 +125,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
           writer.write(data, encoder);
           encoder.flush();
 
-          // Get the size of the bytes
-          int size = temp.toByteArray().length;
           // Write the record size
-          output.writeInt(size);
+          output.writeInt(temp.size());
           // Write the content
-          output.write(temp.toByteArray());
+          temp.writeTo(output);
         } catch (IOException e) {
           throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);
         }
@@ -412,7 +409,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
    */
   @Deprecated
   public HoodieAvroDataBlock(List<HoodieRecord> records, Schema schema) {
-    super(records, false, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    super(records, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
@@ -516,12 +513,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
           writer.write(s, encoder);
           encoder.flush();
 
-          // Get the size of the bytes
-          int size = temp.toByteArray().length;
           // Write the record size
-          output.writeInt(size);
+          output.writeInt(temp.size());
           // Write the content
-          output.write(temp.toByteArray());
+          temp.writeTo(output);
           itr.remove();
         } catch (IOException e) {
           throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);

@@ -425,7 +425,7 @@ Set up a few environment variables to simplify Maven commands that follow. This 
       ./scripts/release/validate_staged_bundles.sh orgapachehudi-<stage_repo_number> ${RELEASE_VERSION}-rc${RC_NUM} 2>&1 | tee -a /tmp/validate_staged_bundles_output.txt
       ```
    9. Run the release candidate bundle validation in GitHub Action by following the instruction in
-      ["Running Bundle Validation on a Release Candidate"](packaging/bundle-validation/README.md#running-bundle-validation-on-a-release-candidate).
+      ["Running Bundle Validation on a Release Candidate"](../packaging/bundle-validation/README.md#running-bundle-validation-on-a-release-candidate).
 
 ## Checklist to proceed to the next step
 
@@ -584,7 +584,15 @@ Once the release candidate has been reviewed and approved by the community, the 
    > Note: we should close jira and choose 'resolution = Fixed' rather than resolve jira.
 9. Finalize the Release in Jira by providing the release date. 
 10. Update [DOAP](https://github.com/apache/hudi/blob/master/doap_HUDI.rdf) file in the root of the project via sending a PR like [this one](https://github.com/apache/incubator-hudi/pull/1448). 
-11. Create a new Github release, off the release version tag, you pushed before
+11. Create a new GitHub release, off the release version tag, you pushed before.
+
+After the release candidate artifacts are finalized and released from the staging repository, the artifacts usually take
+24 hours to be available in [Maven Central](https://repo1.maven.org/maven2/org/apache/hudi). Once the artifacts are
+available in Maven Central, please run the bundle validation GitHub Action to ensure the artifacts are valid. Steps to
+run the bundle validation GitHub Action are available in
+the [bundle validation documentation](../packaging/bundle-validation/README.md#running-bundle-validation-on-release-artifacts-in-maven-central).
+
+In the meantime, you can proceed with documentation changes and website updates.
 
 ## Steps to cut doc version and update website.
 

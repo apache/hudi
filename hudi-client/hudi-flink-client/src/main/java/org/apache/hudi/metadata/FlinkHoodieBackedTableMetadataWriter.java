@@ -98,6 +98,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
+  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
+    // no op. HUDI-8801 to fix.
+  }
+
+  @Override
   protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
   }
@@ -202,10 +207,5 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected EngineType getEngineType() {
     return EngineType.FLINK;
-  }
-
-  @Override
-  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieIndexDefinition indexDefinition) {
-    throw new HoodieNotSupportedException("Flink metadata table does not support secondary index yet.");
   }
 }

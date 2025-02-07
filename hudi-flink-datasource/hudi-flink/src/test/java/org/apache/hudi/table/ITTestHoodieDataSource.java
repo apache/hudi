@@ -21,6 +21,8 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -2320,6 +2322,32 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result4, expected4);
   }
 
+  @ParameterizedTest
+  @MethodSource("parametersForMetaColumnsSkip")
+  void testWriteWithoutMetaColumns(HoodieTableType tableType, WriteOperationType operation)
+      throws TableNotExistException, InterruptedException {
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    streamTableEnv.executeSql(createSource);
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false")
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    streamTableEnv.executeSql("drop table t1");
+    hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    List<Row> rows = execSelectSql(streamTableEnv, "select * from t1", 10);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
   @Test
   void testReadWithParquetPredicatePushDown() {
     TableEnvironment tableEnv = batchTableEnv;
@@ -2416,6 +2444,15 @@ public class ITTestHoodieDataSource {
             {"FLINK_STATE", HoodieTableType.MERGE_ON_READ},
             {"BUCKET", HoodieTableType.COPY_ON_WRITE},
             {"BUCKET", HoodieTableType.MERGE_ON_READ}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  private static Stream<Arguments> parametersForMetaColumnsSkip() {
+    Object[][] data =
+        new Object[][] {
+            {HoodieTableType.COPY_ON_WRITE, WriteOperationType.INSERT},
+            {HoodieTableType.MERGE_ON_READ, WriteOperationType.UPSERT}
+        };
     return Stream.of(data).map(Arguments::of);
   }
 
