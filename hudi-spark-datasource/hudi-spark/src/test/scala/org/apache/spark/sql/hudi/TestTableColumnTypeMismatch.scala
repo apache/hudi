@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.ScalaAssertionSupport
+import org.apache.hudi.{DataSourceWriteOptions, ScalaAssertionSupport}
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.ErrorMessageChecker.isIncompatibleDataException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -653,6 +653,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         expectedErrorPattern = "Precombine field data type mismatch between source table and target table. Target table uses LongType for column 'ts', source table uses IntegerType for 's0.ts'"
       )
     )
+
     def createTable(tableName: String, schema: Seq[(String, String)], partitionCols: Seq[String],
                     primaryKey: String, preCombineField: String, tableType: String, location: String): Unit = {
       val schemaStr = schema.map { case (name, dataType) => s"$name $dataType" }.mkString(",\n  ")
@@ -698,67 +699,219 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
 
     // Run test cases
     testCases.foreach { testCase =>
+      withSparkSqlSessionConfig(s"${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}" -> "false") {
+        withRecordType()(withTempDir { tmp =>
+          val targetTable = generateTableName
+          val sourceTable = generateTableName
+
+          // Create target and source tables
+          createTable(
+            targetTable,
+            testCase.targetSchema,
+            testCase.partitionCols,
+            testCase.primaryKey,
+            testCase.preCombineField,
+            testCase.tableType,
+            s"${tmp.getCanonicalPath}/$targetTable"
+          )
+
+          createTable(
+            sourceTable,
+            testCase.sourceSchema,
+            Seq.empty,
+            testCase.primaryKey,
+            testCase.preCombineField,
+            testCase.tableType,
+            s"${tmp.getCanonicalPath}/$sourceTable"
+          )
+
+          // Insert sample data
+          insertSampleData(targetTable, testCase.targetSchema)
+          insertSampleData(sourceTable, testCase.sourceSchema)
+
+          // Construct merge query based on action type
+          val mergeQuery = testCase.mergeAction match {
+            case "UPDATE" =>
+              s"""
+                 |merge into $targetTable t
+                 |using $sourceTable s0
+                 |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
+                 |when matched then update set *
+             """.stripMargin
+            case "INSERT" =>
+              s"""
+                 |merge into $targetTable t
+                 |using $sourceTable s0
+                 |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
+                 |when not matched then insert *
+             """.stripMargin
+            case "DELETE" =>
+              s"""
+                 |merge into $targetTable t
+                 |using $sourceTable s0
+                 |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
+                 |when matched then delete
+             """.stripMargin
+          }
+
+          // Attempt merge operation which should fail with expected error
+          val errorMsg = intercept[AnalysisException] {
+            spark.sql(mergeQuery)
+          }.getMessage
+
+          assert(errorMsg.contains(testCase.expectedErrorPattern),
+            s"Expected error pattern '${testCase.expectedErrorPattern}' not found in actual error: $errorMsg")
+        })
+      }
+    }
+  }
+
+  test("Test MergeInto with partition column type mismatch should throw") {
+    withSparkSqlSessionConfig(s"${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}" -> "false") {
       withRecordType()(withTempDir { tmp =>
         val targetTable = generateTableName
         val sourceTable = generateTableName
 
-        // Create target and source tables
-        createTable(
-          targetTable,
-          testCase.targetSchema,
-          testCase.partitionCols,
-          testCase.primaryKey,
-          testCase.preCombineField,
-          testCase.tableType,
-          s"${tmp.getCanonicalPath}/$targetTable"
-        )
+        // Create target table with string partition
+        spark.sql(
+          s"""
+             |create table $targetTable (
+             |  id int,
+             |  name long,
+             |  ts int
+             |) using hudi
+             |partitioned by (name)
+             |location '${tmp.getCanonicalPath}/$targetTable'
+             |tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             |)
+         """.stripMargin)
 
-        createTable(
-          sourceTable,
-          testCase.sourceSchema,
-          Seq.empty,
-          testCase.primaryKey,
-          testCase.preCombineField,
-          testCase.tableType,
-          s"${tmp.getCanonicalPath}/$sourceTable"
-        )
+        // Create source table with int partition
+        spark.sql(
+          s"""
+             |create table $sourceTable (
+             |  id int,
+             |  name int,
+             |  ts int
+             |) using hudi
+             |location '${tmp.getCanonicalPath}/$sourceTable'
+             |tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             |)
+         """.stripMargin)
 
         // Insert sample data
-        insertSampleData(targetTable, testCase.targetSchema)
-        insertSampleData(sourceTable, testCase.sourceSchema)
+        spark.sql(
+          s"""
+             |insert into $targetTable
+             |select 1 as id, 124L as name, 1000 as ts
+         """.stripMargin)
+        spark.sql(
+          s"""
+             |insert into $sourceTable
+             |select 1 as id, 123 as name, 1001L as ts
+         """.stripMargin)
 
-        // Construct merge query based on action type
-        val mergeQuery = testCase.mergeAction match {
-          case "UPDATE" =>
+        val e = intercept[AnalysisException] {
+          spark.sql(
             s"""
                |merge into $targetTable t
-               |using $sourceTable s0
-               |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
-               |when matched then update set *
-           """.stripMargin
-          case "INSERT" =>
-            s"""
-               |merge into $targetTable t
-               |using $sourceTable s0
-               |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
-               |when not matched then insert *
-           """.stripMargin
-          case "DELETE" =>
-            s"""
-               |merge into $targetTable t
-               |using $sourceTable s0
-               |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
-               |when matched then delete
-           """.stripMargin
+               |using $sourceTable s
+               |on t.id = s.id
+               |when matched then update set name = s.name
+           """.stripMargin)
         }
+        assert(e.getMessage.contains("data type mismatch between source table and target table"))
+      })
+    }
+  }
 
-        // Attempt merge operation which should fail with expected error
-        val errorMsg = intercept[AnalysisException] {
-          spark.sql(mergeQuery)
-        }.getMessage
+  test("Test MergeInto with precombine column type mismatch behavior based on record.merge.mode") {
+    withSparkSqlSessionConfig(s"${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}" -> "false") {
+      withRecordType()(withTempDir { tmp =>
+        Seq("EVENT_TIME_ORDERING", "COMMIT_TIME_ORDERING").foreach { mergeMode =>
+          val targetTable = generateTableName
+          val sourceTable = generateTableName
 
-        assert(errorMsg.contains(testCase.expectedErrorPattern),
-          s"Expected error pattern '${testCase.expectedErrorPattern}' not found in actual error: $errorMsg")
+          // Create target table with int ts
+          spark.sql(
+            s"""
+               |create table $targetTable (
+               |  id int,
+               |  name string,
+               |  ts int
+               |) using hudi
+               |partitioned by (name)
+               |location '${tmp.getCanonicalPath}/$targetTable'
+               |tblproperties (
+               |  type = 'cow',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts',
+               |  'hoodie.record.merge.mode' = '$mergeMode'
+               |)
+           """.stripMargin)
+
+          // Create source table with long ts
+          spark.sql(
+            s"""
+               |create table $sourceTable (
+               |  id int,
+               |  name string,
+               |  ts long
+               |) using hudi
+               |location '${tmp.getCanonicalPath}/$sourceTable'
+               |tblproperties (
+               |  type = 'cow',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               |)
+           """.stripMargin)
+
+          // Insert sample data
+          spark.sql(
+            s"""
+               |insert into $targetTable
+               |select 1 as id, 'John' as name, 1000 as ts
+           """.stripMargin)
+          spark.sql(
+            s"""
+               |insert into $sourceTable
+               |select 1 as id, 'John' as name, 1001L as ts
+           """.stripMargin)
+
+          if (mergeMode == "EVENT_TIME_ORDERING") {
+            // Should throw exception for EVENT_TIME_ORDERING
+            val e = intercept[AnalysisException] {
+              spark.sql(
+                s"""
+                   |merge into $targetTable t
+                   |using $sourceTable s
+                   |on t.id = s.id
+                   |when matched then update set ts = s.ts
+               """.stripMargin)
+            }
+            assert(e.getMessage.contains("data type mismatch between source table and target table"))
+          } else {
+            // Should succeed for COMMIT_TIME_ORDERING
+            spark.sql(
+              s"""
+                 |merge into $targetTable t
+                 |using $sourceTable s
+                 |on t.id = s.id
+                 |when matched then update set ts = s.ts
+             """.stripMargin)
+
+            // Verify the update succeeded
+            checkAnswer(s"select id, name, ts from $targetTable where id = 1")(
+              Seq(1, "John", 1001)
+            )
+          }
+        }
       })
     }
   }
