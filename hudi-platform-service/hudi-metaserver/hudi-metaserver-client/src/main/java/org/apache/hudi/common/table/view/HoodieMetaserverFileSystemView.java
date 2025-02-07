@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
@@ -37,7 +38,7 @@ public class HoodieMetaserverFileSystemView extends HoodieTableFileSystemView {
 
   public HoodieMetaserverFileSystemView(HoodieTableMetaClient metaClient,
                                         HoodieTimeline visibleActiveTimeline, HoodieMetaserverConfig config) {
-    super(new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(), metaClient.getStorage(),
+    super(new FileSystemBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getTableConfig(), metaClient.getStorage(),
         metaClient.getBasePath().toString()), metaClient, visibleActiveTimeline);
     this.metaserverClient = HoodieMetaserverClientProxy.getProxy(config);
     this.databaseName = metaClient.getTableConfig().getDatabaseName();

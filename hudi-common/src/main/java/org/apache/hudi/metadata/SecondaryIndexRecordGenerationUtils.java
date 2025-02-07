@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -89,7 +90,6 @@ public class SecondaryIndexRecordGenerationUtils {
    * @param instantTime     instant time
    * @param indexDefinition secondary index definition
    * @param metadataConfig  metadata config
-   * @param fsView          file system view as of instant time
    * @param dataMetaClient  data table meta client
    * @param engineContext   engine context
    * @param engineType      engine type (e.g. SPARK, FLINK or JAVA)
@@ -100,7 +100,6 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                   String instantTime,
                                                                                   HoodieIndexDefinition indexDefinition,
                                                                                   HoodieMetadataConfig metadataConfig,
-                                                                                  HoodieTableFileSystemView fsView,
                                                                                   HoodieTableMetaClient dataMetaClient,
                                                                                   HoodieEngineContext engineContext,
                                                                                   EngineType engineType) {
@@ -121,52 +120,59 @@ public class SecondaryIndexRecordGenerationUtils {
     Map<String, List<HoodieWriteStat>> writeStatsByFileId = allWriteStats.stream().collect(Collectors.groupingBy(HoodieWriteStat::getFileId));
     int parallelism = Math.max(Math.min(writeStatsByFileId.size(), metadataConfig.getSecondaryIndexParallelism()), 1);
 
+    final StorageConfiguration<?> storageConfig = engineContext.getStorageConf();
+    // TODO: Should this use map-partitions?
     return engineContext.parallelize(new ArrayList<>(writeStatsByFileId.entrySet()), parallelism).flatMap(writeStatsByFileIdEntry -> {
-      String fileId = writeStatsByFileIdEntry.getKey();
-      List<HoodieWriteStat> writeStats = writeStatsByFileIdEntry.getValue();
-      String partition = writeStats.get(0).getPartitionPath();
-      FileSlice previousFileSliceForFileId = fsView.getLatestFileSlice(partition, fileId).orElse(null);
-      Map<String, String> recordKeyToSecondaryKeyForPreviousFileSlice;
-      if (previousFileSliceForFileId == null) {
-        // new file slice, so empty mapping for previous slice
-        recordKeyToSecondaryKeyForPreviousFileSlice = Collections.emptyMap();
-      } else {
-        StoragePath previousBaseFile = previousFileSliceForFileId.getBaseFile().map(HoodieBaseFile::getStoragePath).orElse(null);
-        List<String> logFiles =
-            previousFileSliceForFileId.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).map(HoodieLogFile::getPath).map(StoragePath::toString).collect(Collectors.toList());
-        recordKeyToSecondaryKeyForPreviousFileSlice =
-            getRecordKeyToSecondaryKey(dataMetaClient, engineType, logFiles, tableSchema, partition, Option.ofNullable(previousBaseFile), indexDefinition, instantTime);
-      }
-      List<FileSlice> latestIncludingInflightFileSlices = getPartitionLatestFileSlicesIncludingInflight(fsView, partition);
-      FileSlice currentFileSliceForFileId = latestIncludingInflightFileSlices.stream().filter(fs -> fs.getFileId().equals(fileId)).findFirst()
-          .orElseThrow(() -> new HoodieException("Could not find any file slice for fileId " + fileId));
-      StoragePath currentBaseFile = currentFileSliceForFileId.getBaseFile().map(HoodieBaseFile::getStoragePath).orElse(null);
-      List<String> logFilesIncludingInflight =
-          currentFileSliceForFileId.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).map(HoodieLogFile::getPath).map(StoragePath::toString).collect(Collectors.toList());
-      Map<String, String> recordKeyToSecondaryKeyForCurrentFileSlice =
-          getRecordKeyToSecondaryKey(dataMetaClient, engineType, logFilesIncludingInflight, tableSchema, partition, Option.ofNullable(currentBaseFile), indexDefinition, instantTime);
-      // Need to find what secondary index record should be deleted, and what should be inserted.
-      // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is not present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be inserted.
-      // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be updated.
-      // For each entry in recordKeyToSecondaryKeyForPreviousFileSlice, if it is not present in recordKeyToSecondaryKeyForCurrentFileSlice, then it should be deleted.
-      List<HoodieRecord> records = new ArrayList<>();
-      recordKeyToSecondaryKeyForCurrentFileSlice.forEach((recordKey, secondaryKey) -> {
-        if (!recordKeyToSecondaryKeyForPreviousFileSlice.containsKey(recordKey)) {
-          records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), false));
+      try (HoodieTableMetadata metadata = HoodieTableMetadata.createHoodieBackedTableMetadata(new HoodieLocalEngineContext(storageConfig), dataMetaClient.getStorage(),
+          metadataConfig, dataMetaClient.getBasePath().toString(), true);
+           HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadata, dataMetaClient, dataMetaClient.getActiveTimeline())) {
+        fsView.loadPartitions(writeStatsByFileIdEntry.getValue().stream().map(HoodieWriteStat::getPartitionPath).distinct().collect(Collectors.toList()));
+        String fileId = writeStatsByFileIdEntry.getKey();
+        List<HoodieWriteStat> writeStats = writeStatsByFileIdEntry.getValue();
+        String partition = writeStats.get(0).getPartitionPath();
+        FileSlice previousFileSliceForFileId = fsView.getLatestFileSlice(partition, fileId).orElse(null);
+        Map<String, String> recordKeyToSecondaryKeyForPreviousFileSlice;
+        if (previousFileSliceForFileId == null) {
+          // new file slice, so empty mapping for previous slice
+          recordKeyToSecondaryKeyForPreviousFileSlice = Collections.emptyMap();
         } else {
-          // delete previous entry and insert new value if secondaryKey is different
-          if (!recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey).equals(secondaryKey)) {
-            records.add(createSecondaryIndexRecord(recordKey, recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey), indexDefinition.getIndexName(), true));
+          StoragePath previousBaseFile = previousFileSliceForFileId.getBaseFile().map(HoodieBaseFile::getStoragePath).orElse(null);
+          List<String> logFiles =
+              previousFileSliceForFileId.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).map(HoodieLogFile::getPath).map(StoragePath::toString).collect(Collectors.toList());
+          recordKeyToSecondaryKeyForPreviousFileSlice =
+              getRecordKeyToSecondaryKey(dataMetaClient, engineType, logFiles, tableSchema, partition, Option.ofNullable(previousBaseFile), indexDefinition, instantTime);
+        }
+        List<FileSlice> latestIncludingInflightFileSlices = getPartitionLatestFileSlicesIncludingInflight(fsView, partition);
+        FileSlice currentFileSliceForFileId = latestIncludingInflightFileSlices.stream().filter(fs -> fs.getFileId().equals(fileId)).findFirst()
+            .orElseThrow(() -> new HoodieException("Could not find any file slice for fileId " + fileId));
+        StoragePath currentBaseFile = currentFileSliceForFileId.getBaseFile().map(HoodieBaseFile::getStoragePath).orElse(null);
+        List<String> logFilesIncludingInflight =
+            currentFileSliceForFileId.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).map(HoodieLogFile::getPath).map(StoragePath::toString).collect(Collectors.toList());
+        Map<String, String> recordKeyToSecondaryKeyForCurrentFileSlice =
+            getRecordKeyToSecondaryKey(dataMetaClient, engineType, logFilesIncludingInflight, tableSchema, partition, Option.ofNullable(currentBaseFile), indexDefinition, instantTime);
+        // Need to find what secondary index record should be deleted, and what should be inserted.
+        // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is not present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be inserted.
+        // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be updated.
+        // For each entry in recordKeyToSecondaryKeyForPreviousFileSlice, if it is not present in recordKeyToSecondaryKeyForCurrentFileSlice, then it should be deleted.
+        List<HoodieRecord> records = new ArrayList<>();
+        recordKeyToSecondaryKeyForCurrentFileSlice.forEach((recordKey, secondaryKey) -> {
+          if (!recordKeyToSecondaryKeyForPreviousFileSlice.containsKey(recordKey)) {
             records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), false));
+          } else {
+            // delete previous entry and insert new value if secondaryKey is different
+            if (!recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey).equals(secondaryKey)) {
+              records.add(createSecondaryIndexRecord(recordKey, recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey), indexDefinition.getIndexName(), true));
+              records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), false));
+            }
           }
-        }
-      });
-      recordKeyToSecondaryKeyForPreviousFileSlice.forEach((recordKey, secondaryKey) -> {
-        if (!recordKeyToSecondaryKeyForCurrentFileSlice.containsKey(recordKey)) {
-          records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), true));
-        }
-      });
-      return records.iterator();
+        });
+        recordKeyToSecondaryKeyForPreviousFileSlice.forEach((recordKey, secondaryKey) -> {
+          if (!recordKeyToSecondaryKeyForCurrentFileSlice.containsKey(recordKey)) {
+            records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), true));
+          }
+        });
+        return records.iterator();
+      }
     });
   }
 

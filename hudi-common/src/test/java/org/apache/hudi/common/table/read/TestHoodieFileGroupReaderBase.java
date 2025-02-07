@@ -31,6 +31,7 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -186,7 +187,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       for (Boolean isCompressionEnabled : new boolean[] {true, false}) {
         try (ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> spillableMap =
                  new ExternalSpillableMap<>(16L, baseMapPath, new DefaultSizeEstimator(),
-                     new HoodieRecordSizeEstimator(avroSchema), diskMapType, isCompressionEnabled)) {
+                     new HoodieRecordSizeEstimator(avroSchema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled)) {
           Long position = 0L;
           for (T record : records) {
             String recordKey = readerContext.getRecordKey(record, avroSchema);
