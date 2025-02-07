@@ -96,7 +96,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
                |  id int,
                |  name string,
                |  price double,
-               |  ts long
+               |  ts int
                | ) using hudi
                | tblproperties (
                |  $writeTableVersionClause
@@ -242,7 +242,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
                |  id int,
                |  name string,
                |  price double,
-               |  ts long
+               |  ts int
                | ) using hudi
                | tblproperties (
                |  $writeTableVersionClause
@@ -259,13 +259,13 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
           spark.sql(
             s"""
                | insert into $tableName
-               | select 1 as id, 'A' as name, 10.0 as price, 100L as ts union all
-               | select 0, 'X', 20.0, 100L union all
-               | select 2, 'B', 20.0, 100L union all
-               | select 3, 'C', 30.0, 100L union all
-               | select 4, 'D', 40.0, 100L union all
-               | select 5, 'E', 50.0, 100L union all
-               | select 6, 'F', 60.0, 100L
+               | select 1 as id, 'A' as name, 10.0 as price, 100 as ts union all
+               | select 0, 'X', 20.0, 100 union all
+               | select 2, 'B', 20.0, 100 union all
+               | select 3, 'C', 30.0, 100 union all
+               | select 4, 'D', 40.0, 100 union all
+               | select 5, 'E', 50.0, 100 union all
+               | select 6, 'F', 60.0, 100
            """.stripMargin)
           validateTableConfig(
             storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
@@ -278,9 +278,9 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
               s"""
                  | merge into $tableName t
                  | using (
-                 |   select 1 as id, 'B2' as name, 25.0 as price, 101L as ts union all
-                 |   select 2, '', 55.0, 99L as ts union all
-                 |   select 0, '', 55.0, 100L as ts
+                 |   select 1 as id, 'B2' as name, 25.0 as price, 101 as ts union all
+                 |   select 2, '', 55.0, 99 as ts union all
+                 |   select 0, '', 55.0, 100 as ts
                  | ) s
                  | on t.id = s.id
                  | when matched then delete
@@ -292,9 +292,9 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
             s"""
                | merge into $tableName t
                | using (
-               |   select 4 as id, 'D2' as name, 45.0 as price, 101L as ts union all
-               |   select 5, 'E2', 55.0, 99L as ts union all
-               |   select 6, 'F2', 65.0, 100L as ts
+               |   select 4 as id, 'D2' as name, 45.0 as price, 101 as ts union all
+               |   select 5, 'E2', 55.0, 99 as ts union all
+               |   select 6, 'F2', 65.0, 100 as ts
                | ) s
                | on t.id = s.id
                | when matched then update set *
@@ -323,8 +323,8 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
             s"""
                | merge into $tableName t
                | using (
-               |   select 7 as id, 'D2' as name, 45.0 as price, 100L as ts union all
-               |   select 8, 'E2', 55.0, 100L as ts
+               |   select 7 as id, 'D2' as name, 45.0 as price, 100 as ts union all
+               |   select 8, 'E2', 55.0, 100 as ts
                | ) s
                | on t.id = s.id
                | when not matched then insert *
