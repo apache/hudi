@@ -289,7 +289,7 @@ public class TestHoodieAvroDataBlock {
     Map<HeaderMetadataType, String> header = new HashMap<>();
     header.put(HeaderMetadataType.SCHEMA, schema.toString());
 
-    return new HoodieAvroDataBlock(records, false, header, RECORD_KEY_FIELD);
+    return new HoodieAvroDataBlock(records, header, RECORD_KEY_FIELD);
   }
 
   /**
@@ -304,7 +304,7 @@ public class TestHoodieAvroDataBlock {
     Map<HeaderMetadataType, String> header = new HashMap<>();
     header.put(HeaderMetadataType.SCHEMA, schema.toString());
 
-    return new HoodieAvroDataBlock(records, false, header, RECORD_KEY_FIELD).getContentBytes(null);
+    return new HoodieAvroDataBlock(records, header, RECORD_KEY_FIELD).getContentBytes(null);
   }
 
   /**
