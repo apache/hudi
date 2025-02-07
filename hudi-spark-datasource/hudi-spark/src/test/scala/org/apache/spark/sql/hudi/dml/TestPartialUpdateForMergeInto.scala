@@ -94,7 +94,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -144,7 +144,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -205,7 +205,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -219,7 +219,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         StructField("id", IntegerType, nullable = true),
         StructField("name", StringType, nullable = true),
         StructField("price", DoubleType, nullable = true),
-        StructField("_ts", LongType, nullable = true),
+        StructField("_ts", IntegerType, nullable = true),
         StructField("description", StringType, nullable = true))
 
       spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
@@ -274,7 +274,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -288,7 +288,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         StructField("id", IntegerType, nullable = true),
         StructField("name", StringType, nullable = true),
         StructField("price", DoubleType, nullable = true),
-        StructField("_ts", LongType, nullable = true),
+        StructField("_ts", IntegerType, nullable = true),
         StructField("description", StringType, nullable = true))
       spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
         "(2, 'a2', 20, 1200, 'a2: desc2'), (3, 'a3', 30, 1250, 'a3: desc3')")
@@ -444,7 +444,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(

@@ -805,15 +805,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           }))
     }
     insertActions.foreach(action =>
-      hoodieCatalogTable.preCombineKey.foreach(
-      field => {
       validateTargetTableAttrExistsInAssignments(
         sparkSession.sessionState.conf.resolver,
         mergeInto.targetTable,
         hoodieCatalogTable.tableConfig.getRecordKeyFields.orElse(Array.empty),
         "record key field",
         action.assignments)
-      }))
+    )
 
     val insertAssignments = insertActions.flatMap(_.assignments)
     checkSchemaMergeIntoCompatibility(insertAssignments)

@@ -186,7 +186,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |create table ${targetTable} (
            |  `id` string,
            |  `name` string,
-           |  `dt` bigint,
+           |  `dt` int,
            |  `day` STRING,
            |  `hour` INT
            |) using hudi
