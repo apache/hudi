@@ -49,6 +49,6 @@ public class TimelineDTO {
     TimelineFactory factory = metaClient.getTimelineLayout().getTimelineFactory();
     // TODO: For Now, we will assume, only active-timeline will be transferred.
     return factory.createDefaultTimeline(dto.instants.stream().map(d -> InstantDTO.toInstant(d, instantGenerator)),
-        metaClient.getActiveTimeline().getInstantReader());
+        metaClient.getActiveTimeline());
   }
 }
