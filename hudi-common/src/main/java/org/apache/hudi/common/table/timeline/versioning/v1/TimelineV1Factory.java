@@ -21,15 +21,14 @@ package org.apache.hudi.common.table.timeline.versioning.v1;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantReader;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
-import org.apache.hudi.common.util.Option;
 
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 public class TimelineV1Factory extends TimelineFactory {
@@ -41,8 +40,8 @@ public class TimelineV1Factory extends TimelineFactory {
   }
 
   @Override
-  public HoodieTimeline createDefaultTimeline(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details) {
-    return new BaseTimelineV1(instants, details);
+  public HoodieTimeline createDefaultTimeline(Stream<HoodieInstant> instants, HoodieInstantReader instantReader) {
+    return new BaseTimelineV1(instants, instantReader);
   }
 
   @Override

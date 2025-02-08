@@ -41,7 +41,6 @@ import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.useExternalHdfs;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestHoodieWrapperFileSystem {
@@ -78,8 +77,8 @@ class TestHoodieWrapperFileSystem {
 
     // create same commit twice
     HoodieStorage storage = new HoodieHadoopStorage(fs);
-    storage.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
-    storage.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
+    storage.createImmutableFileInPath(testFile, Option.of(outputStream -> outputStream.write(testContent.getBytes())));
+    storage.createImmutableFileInPath(testFile, Option.of(outputStream -> outputStream.write(testContent.getBytes())));
     List<StoragePathInfo> pathInfoList = storage.listDirectEntries(new StoragePath(basePath));
 
     assertEquals(1, pathInfoList.size(),

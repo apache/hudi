@@ -22,6 +22,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.util.IOUtils;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -140,7 +141,7 @@ public abstract class TestHoodieStorageBase {
 
     StoragePath path3 = new StoragePath(getTempDir(), "testCreateAppendAndRead/3.file");
     assertFalse(storage.exists(path3));
-    storage.createImmutableFileInPath(path3, Option.of(data));
+    storage.createImmutableFileInPath(path3, Option.of(HoodieInstantWriter.convertByteArrayToWriter(data)));
     validatePathInfo(storage, path3, data, false);
 
     StoragePath path4 = new StoragePath(getTempDir(), "testCreateAppendAndRead/4");
