@@ -28,16 +28,15 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
 import org.apache.hudi.metadata.SecondaryIndexKeyUtils
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
-
 import scala.collection.JavaConverters._
 
 class TestSecondaryIndex extends HoodieSparkSqlTestBase {
@@ -98,6 +97,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
         checkAnswer(s"show indexes from default.$tableName")(
+          Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("record_index", "record_index", "")
         )
 
@@ -108,6 +109,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         // Secondary index is created by default for non record key column when index type is not specified
         spark.sql(s"create index idx_name on $tableName (name)")
         checkAnswer(s"show indexes from default.$tableName")(
+          Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("secondary_index_idx_name", "secondary_index", "name"),
           Seq("record_index", "record_index", "")
         )
@@ -120,6 +123,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
         // Both indexes should be shown
         checkAnswer(s"show indexes from $tableName")(
+          Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("secondary_index_idx_name", "secondary_index", "name"),
           Seq("secondary_index_idx_price", "secondary_index", "price"),
           Seq("record_index", "record_index", "")
@@ -128,6 +133,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         checkAnswer(s"drop index idx_name on $tableName")()
         // show index shows only one index after dropping
         checkAnswer(s"show indexes from $tableName")(
+          Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("secondary_index_idx_price", "secondary_index", "price"),
           Seq("record_index", "record_index", "")
         )
@@ -139,6 +146,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         // drop index should work now
         checkAnswer(s"drop index idx_name on $tableName")()
         checkAnswer(s"show indexes from $tableName")(
+          Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("secondary_index_idx_price", "secondary_index", "price"),
           Seq("record_index", "record_index", "")
         )
@@ -151,16 +160,21 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           .build()
         assertFalse(metaClient.getTableConfig.getRelativeIndexDefinitionPath.get().contains(metaClient.getBasePath))
         assertTrue(metaClient.getIndexDefinitionPath.contains(metaClient.getBasePath.toString))
-        val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.values().stream().findFirst().get()
+        val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.values().stream()
+          .filter(indexDefn => indexDefn.getIndexType.equals(PARTITION_NAME_SECONDARY_INDEX)).findFirst().get()
 
         metaClient.getTableConfig.setMetadataPartitionState(metaClient, indexDefinition.getIndexName, false)
         checkAnswer(s"drop index idx_price on $tableName")()
         checkAnswer(s"show indexes from $tableName")(
+          Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("record_index", "record_index", "")
         )
 
         // Drop the record index and show index should show no index
         checkAnswer(s"drop index record_index on $tableName")()
+        checkAnswer(s"drop index column_stats on $tableName")()
+        checkAnswer(s"drop index partition_stats on $tableName")()
         checkAnswer(s"show indexes from $tableName")()
 
         checkException(s"drop index idx_price on $tableName")("Index does not exist: idx_price")
@@ -231,62 +245,6 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Secondary Index Creation Failure For Unsupported payloads") {
-    withTempDir {
-      tmp => {
-        val tableName = generateTableName
-        val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  ts bigint,
-             |  id string,
-             |  rider string,
-             |  driver string,
-             |  fare int,
-             |  city string,
-             |  state string
-             |) using hudi
-             | options (
-             |  primaryKey ='id',
-             |  type = 'mor',
-             |  preCombineField = 'ts',
-             |  hoodie.metadata.enable = 'true',
-             |  hoodie.metadata.record.index.enable = 'true',
-             |  hoodie.metadata.index.secondary.enable = 'true',
-             |  hoodie.datasource.write.recordkey.field = 'id',
-             |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload'
-             | )
-             | partitioned by(state)
-             | location '$basePath'
-       """.stripMargin)
-        spark.sql(
-          s"""
-             | insert into $tableName
-             | values
-             | (1695159649087, '334e26e9-8355-45cc-97c6-c31daf0df330', 'rider-A', 'driver-K', 19, 'san_francisco', 'california'),
-             | (1695091554787, 'e96c4396-3fad-413a-a942-4cb36106d720', 'rider-B', 'driver-M', 27, 'austin', 'texas')
-             | """.stripMargin
-        )
-
-        // validate record_index created successfully
-        val metadataDF = spark.sql(s"select key from hudi_metadata('$basePath') where type=5")
-        assert(metadataDF.count() == 2)
-
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(basePath)
-          .setConf(HoodieTestUtils.getDefaultStorageConf)
-          .build()
-        assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
-        // create secondary index throws error when trying to create on multiple fields at a time
-        checkException(sql = s"create index idx_city on $tableName (city)")(
-          "Secondary Index can only be enabled on table with OverwriteWithLatestAvroPayload payload class or Merge mode set to OVERWRITE_WITH_LATEST"
-        )
-      }
-    }
-  }
-
   test("Test Secondary Index With Updates Compaction Clustering Deletes") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -298,6 +256,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       // Verify initial state of secondary index
       val initialKeys = spark.sql(s"select _row_key from $tableName limit 5").collect().map(_.getString(0))
       validateSecondaryIndex(basePath, tableName, initialKeys)
+      val initialRecordsCount = spark.sql(s"select _row_key from $tableName").count()
 
       // Step 3: Perform Update Operations on Subset of Records
       var updateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
@@ -328,6 +287,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       // Verify secondary index after compaction
       updateKeys = updateDf.select("_row_key").collect().map(_.getString(0))
       validateSecondaryIndex(basePath, tableName, updateKeys)
+      // Verify count of records
+      assertEquals(initialRecordsCount, spark.sql(s"select _row_key from $tableName").count())
 
       // Step 5: Trigger Clustering with this update as the clustering frequency is set to 4 commits
       updateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
@@ -504,6 +465,72 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         .load(basePath).count())(s"${dataFile.toString} is not a Parquet file")
 
       dataGen.close()
+    }
+  }
+
+  /**
+   * Test secondary index with auto generation of record keys
+   */
+  test("Test Secondary Index With Auto Record Key Generation") {
+    withTempDir { tmp =>
+      val tableName = generateTableName + s"_si_auto_keygen"
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+      spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+
+      spark.sql(
+        s"""
+           CREATE TABLE $tableName (
+           |    ts LONG,
+           |    id STRING,
+           |    rider STRING,
+           |    driver STRING,
+           |    fare DOUBLE,
+           |    dateDefault STRING,
+           |    date STRING,
+           |    city STRING,
+           |    state STRING
+           |) USING HUDI
+           |options(
+           |    type = 'mor',
+           |    hoodie.metadata.enable = 'true',
+           |    hoodie.enable.data.skipping = 'true',
+           |    hoodie.metadata.record.index.enable = 'true',
+           |    hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
+           |)
+           |PARTITIONED BY (state)
+           |location '$basePath'
+           |""".stripMargin)
+
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      if (HoodieSparkUtils.gteqSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled=false")
+      }
+
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName(ts, id, rider, driver, fare, dateDefault, date, city, state) VALUES
+           |  (1695414520,'trip2','rider-C','driver-M',27.70,'2024-11-30 01:30:40', '2024-11-30', 'sunnyvale','california'),
+           |  (1699349649,'trip5','rider-A','driver-Q',3.32, '2019-11-30 01:30:40', '2019-11-30', 'san_diego','texas')
+           |""".stripMargin)
+
+      // create secondary index
+      spark.sql(s"CREATE INDEX idx_city on $tableName (city)")
+      // validate secondary index
+      var expectedSecondaryKeys = spark.sql(s"SELECT _hoodie_record_key, city from $tableName")
+        .collect().map(row => SecondaryIndexKeyUtils.constructSecondaryIndexKey(row.getString(1), row.getString(0)))
+      var actualSecondaryKeys = spark.sql(s"SELECT key FROM hudi_metadata('$basePath') WHERE type=7 AND key LIKE '%$SECONDARY_INDEX_RECORD_KEY_SEPARATOR%'")
+        .collect().map(indexKey => indexKey.getString(0))
+      assertEquals(expectedSecondaryKeys.toSet, actualSecondaryKeys.toSet)
+
+      // update record
+      spark.sql(s"UPDATE $tableName SET city = 'san_francisco' WHERE rider = 'rider-C'")
+      // validate secondary index
+      expectedSecondaryKeys = spark.sql(s"SELECT _hoodie_record_key, city from $tableName")
+        .collect().map(row => SecondaryIndexKeyUtils.constructSecondaryIndexKey(row.getString(1), row.getString(0)))
+      actualSecondaryKeys = spark.sql(s"SELECT key FROM hudi_metadata('$basePath') WHERE type=7 AND key LIKE '%$SECONDARY_INDEX_RECORD_KEY_SEPARATOR%'")
+        .collect().map(indexKey => indexKey.getString(0))
+      assertEquals(expectedSecondaryKeys.toSet, actualSecondaryKeys.toSet)
     }
   }
 

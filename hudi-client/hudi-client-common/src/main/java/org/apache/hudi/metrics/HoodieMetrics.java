@@ -19,6 +19,8 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -63,6 +65,11 @@ public class HoodieMetrics {
   public static final String COMMIT_LATENCY_IN_MS_STR = "commitLatencyInMs";
   public static final String COMMIT_FRESHNESS_IN_MS_STR = "commitFreshnessInMs";
   public static final String COMMIT_TIME_STR = "commitTime";
+  public static final String EARLIEST_INFLIGHT_CLUSTERING_INSTANT_STR = "earliestInflightClusteringInstant";
+  public static final String LATEST_COMPLETED_CLUSTERING_INSTANT_STR = "latestCompletedClusteringInstant";
+  public static final String PENDING_CLUSTERING_INSTANT_COUNT_STR = "pendingClusteringInstantCount";
+  public static final String SUCCESS_EXTENSION = ".success";
+  public static final String FAILURE_EXTENSION = ".failure";
 
   public static final String TIMER_METRIC = "timer";
   public static final String COUNTER_METRIC = "counter";
@@ -374,6 +381,30 @@ public class HoodieMetrics {
 
   public void updateClusteringFileCreationMetrics(long durationInMs) {
     reportMetrics(HoodieTimeline.CLUSTERING_ACTION, "fileCreationTime", durationInMs);
+  }
+
+  public void updateClusteringTimeLineInstantMetrics(final HoodieActiveTimeline activeTimeline) {
+    if (config.isMetricsOn()) {
+      // Compute Metrics
+      long pendingClusteringInstantCount = activeTimeline.filterPendingClusteringTimeline().getInstants().size();
+      long earliestInflightClusteringInstantLong = 0L;
+      Option<HoodieInstant> earliestInflightClusteringInstant = activeTimeline.filterPendingClusteringTimeline().getFirstPendingClusterInstant();
+      if (earliestInflightClusteringInstant.isPresent()) {
+        earliestInflightClusteringInstantLong = Long.valueOf(earliestInflightClusteringInstant.get().requestedTime());
+      }
+      long latestCompletedClusteringInstantLong = 0L;
+      Option<HoodieInstant> latestCompletedClusteringInstant = activeTimeline.filterCompletedInstants().getLastClusteringInstant();
+      if (latestCompletedClusteringInstant.isPresent()) {
+        latestCompletedClusteringInstantLong = Long.valueOf(latestCompletedClusteringInstant.get().requestedTime());
+      }
+
+      LOG.info(
+          String.format("Sending timeline clustering instant metrics (%s=%d, %s=%d, %s=%d)", EARLIEST_INFLIGHT_CLUSTERING_INSTANT_STR, earliestInflightClusteringInstantLong,
+              LATEST_COMPLETED_CLUSTERING_INSTANT_STR, latestCompletedClusteringInstantLong, PENDING_CLUSTERING_INSTANT_COUNT_STR, pendingClusteringInstantCount));
+      metrics.registerGauge(getMetricsName(HoodieTimeline.CLUSTERING_ACTION, EARLIEST_INFLIGHT_CLUSTERING_INSTANT_STR), earliestInflightClusteringInstantLong);
+      metrics.registerGauge(getMetricsName(HoodieTimeline.CLUSTERING_ACTION, LATEST_COMPLETED_CLUSTERING_INSTANT_STR), latestCompletedClusteringInstantLong);
+      metrics.registerGauge(getMetricsName(HoodieTimeline.CLUSTERING_ACTION, PENDING_CLUSTERING_INSTANT_COUNT_STR), pendingClusteringInstantCount);
+    }
   }
 
   /**

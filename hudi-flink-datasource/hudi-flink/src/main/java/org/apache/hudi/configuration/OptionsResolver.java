@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.StringUtils;
@@ -373,6 +374,16 @@ public class OptionsResolver {
    */
   public static boolean readCDCFromChangelog(Configuration conf) {
     return conf.getBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG);
+  }
+
+  /**
+   * Returns whether to populate meta fields or not
+   */
+  public static boolean isPopulateMetaFields(Configuration conf) {
+    return Boolean.parseBoolean(
+        conf.getString(
+            HoodieTableConfig.POPULATE_META_FIELDS.key(),
+            HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString()));
   }
 
   /**

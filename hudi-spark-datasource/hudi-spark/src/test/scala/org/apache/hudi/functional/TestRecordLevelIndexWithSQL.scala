@@ -45,10 +45,13 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
   def testRLIWithSQL(tableType: String): Unit = {
-    var hudiOpts = commonOpts
-    hudiOpts = hudiOpts + (
+    val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      "hoodie.metadata.index.column.stats.enable" -> "false",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+
+    // some negative test cases in this class assumes
+    // only RLI being enabled. So, disabling col stats for now.
 
     val df = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -276,7 +279,8 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> tableName,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "record_key_col,name",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_key_col",
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      "hoodie.metadata.index.column.stats.enable" -> "false"
     ) ++ metadataOpts
 
     spark.sql(
@@ -292,7 +296,8 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.datasource.write.recordkey.field = 'record_key_col,name',
-         |  hoodie.enable.data.skipping = 'true'
+         |  hoodie.enable.data.skipping = 'true',
+         |  hoodie.metadata.index.column.stats.enable = 'false'
          | )
          | partitioned by(partition_key_col)
          | location '$dummyTablePath'
@@ -338,7 +343,8 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.datasource.write.recordkey.field = 'record_key_col1,record_key_col2,record_key_col3',
-         |  hoodie.enable.data.skipping = 'true'
+         |  hoodie.enable.data.skipping = 'true',
+         |  hoodie.metadata.index.column.stats.enable = 'false'
          | )
          | partitioned by(partition_key_col)
          | location '$dummyTablePath'

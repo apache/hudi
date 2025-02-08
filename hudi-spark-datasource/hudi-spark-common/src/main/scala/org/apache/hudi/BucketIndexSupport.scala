@@ -45,7 +45,7 @@ class BucketIndexSupport(spark: SparkSession,
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  private val keyGenerator = {
+  private lazy val keyGenerator = {
     val props = new TypedProperties(metadataConfig.getProps())
     TypedProperties.putAll(props, metaClient.getTableConfig.getProps)
     HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
@@ -135,7 +135,7 @@ class BucketIndexSupport(spark: SparkSession,
       val record = new GenericData.Record(avroSchema)
       hashValuePairs.foreach(p => record.put(p.getKey, p.getValue))
       val hoodieKey = keyGenerator.getKey(record)
-      matchedBuckets.set(BucketIdentifier.getBucketId(hoodieKey, indexBucketHashFieldsOpt.get, numBuckets))
+      matchedBuckets.set(BucketIdentifier.getBucketId(hoodieKey.getRecordKey, indexBucketHashFieldsOpt.get, numBuckets))
     }
     matchedBuckets
   }
@@ -155,7 +155,7 @@ class BucketIndexSupport(spark: SparkSession,
       val record = new GenericData.Record(avroSchema)
       record.put(attr.name, v)
       val hoodieKey = keyGenerator.getKey(record)
-      BucketIdentifier.getBucketId(hoodieKey, indexBucketHashFieldsOpt.get, numBuckets)
+      BucketIdentifier.getBucketId(hoodieKey.getRecordKey, indexBucketHashFieldsOpt.get, numBuckets)
     }
 
     def getBucketSetFromIterable(attr: Attribute, iter: Iterable[Any]): BitSet = {

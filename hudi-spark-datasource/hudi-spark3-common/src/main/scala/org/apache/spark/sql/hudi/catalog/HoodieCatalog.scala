@@ -331,12 +331,8 @@ class HoodieCatalog extends DelegatingCatalogExtension
 
   private def isPathIdentifier(ident: Identifier) = new Path(ident.name()).isAbsolute
 
-  protected def isPathIdentifier(table: CatalogTable): Boolean = {
-    isPathIdentifier(table.identifier)
-  }
-
   protected def isPathIdentifier(tableIdentifier: TableIdentifier): Boolean = {
-    isPathIdentifier(HoodieIdentifier(tableIdentifier.database.toArray, tableIdentifier.table))
+    isPathIdentifier(Identifier.of(tableIdentifier.database.toArray, tableIdentifier.table))
   }
 
   private def getExistingTableIfExists(table: TableIdentifier): Option[CatalogTable] = {

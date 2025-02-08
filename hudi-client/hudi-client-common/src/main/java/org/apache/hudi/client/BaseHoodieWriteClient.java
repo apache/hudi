@@ -42,7 +42,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
-import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -56,6 +55,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -256,17 +256,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // trigger clean and archival.
     // Each internal call should ensure to lock if required.
     mayBeCleanAndArchive(table);
-    // We don't want to fail the commit if hoodie.fail.writes.on.inline.table.service.exception is false. We catch warn if false
-    try {
-      // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
-      runTableServicesInline(table, metadata, extraMetadata);
-    } catch (Exception e) {
-      if (config.isFailOnInlineTableServiceExceptionEnabled()) {
-        throw e;
-      }
-      LOG.warn("Inline compaction or clustering failed with exception: " + e.getMessage()
-          + ". Moving further since \"hoodie.fail.writes.on.inline.table.service.exception\" is set to false.");
-    }
+    runTableServicesInline(table, metadata, extraMetadata);
 
     emitCommitMetrics(instantTime, metadata, commitActionType);
 
@@ -296,6 +286,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     writeTableMetadata(table, instantTime, metadata);
     activeTimeline.saveAsComplete(false, table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime),
         serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata));
+    // update cols to Index as applicable
+    HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata,
+        (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
+          updateColumnsToIndexWithColStats(metaClient, columnsToIndex);
+          return null;
+        });
   }
 
   // Save internal schema
@@ -568,6 +564,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      metrics.updateClusteringTimeLineInstantMetrics(table.getActiveTimeline());
     } finally {
       this.heartbeatClient.stop(instantTime);
     }
@@ -578,11 +575,32 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param table instance of {@link HoodieTable} of interest.
    */
   protected void mayBeCleanAndArchive(HoodieTable table) {
-    autoCleanOnCommit();
-    autoArchiveOnCommit(table);
+    try {
+      autoCleanOnCommit();
+      autoArchiveOnCommit(table);
+    } catch (Throwable t) {
+      LOG.error("Inline cleaning or clustering failed for {}", table.getConfig().getBasePath(), t);
+      throw t;
+    }
   }
 
   protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
+    // We don't want to fail the commit if hoodie.fail.writes.on.inline.table.service.exception is false. We catch warn if false
+    try {
+      // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
+      runTableServicesInlineInternal(table, metadata, extraMetadata);
+    } catch (Throwable t) {
+      // Throw if this is exception and the exception is configured to throw or if it is something else like Error.
+      if (config.isFailOnInlineTableServiceExceptionEnabled() || !(t instanceof Exception)) {
+        LOG.error("Inline compaction or clustering failed for table {}.", table.getConfig().getBasePath(), t);
+        throw t;
+      }
+      LOG.warn("Inline compaction or clustering failed for table {}. Moving further since "
+          + "\"hoodie.fail.writes.on.inline.table.service.exception\" is set to false.", table.getConfig().getBasePath(), t);
+    }
+  }
+
+  protected void runTableServicesInlineInternal(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
     tableServiceClient.runTableServicesInline(table, metadata, extraMetadata);
   }
 
@@ -1641,24 +1659,5 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
       }
     });
-  }
-
-  protected final void maybeDisableWriteRecordPositions(HoodieTableMetaClient metaClient) {
-    // Disabling {@link WRITE_RECORD_POSITIONS} in the following two cases for correctness
-    // even if the record positions are enabled in MOR:
-    // (1) When there is a pending compaction, the new base files to be generated by compaction
-    // is not available during this transaction. Given the log files in MOR from a new transaction
-    // after a compaction is scheduled can be attached to the base file generated by the compaction
-    // in the latest file slice, the accurate record positions may not be derived.
-    // (2) When NBCC is enabled, the compaction can be scheduled while there are inflight
-    // deltacommits, and unlike OCC, such an inflight deltacommit updating the same file group
-    // under compaction can still be successfully committed.  This can also introduce the
-    // correctness problem as (1) that the positions in the log file can be inaccurate.
-    if (config.shouldWriteRecordPositions()
-        && config.getTableType() == HoodieTableType.MERGE_ON_READ
-        && (config.getWriteConcurrencyMode() == WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL
-        || !metaClient.getActiveTimeline().filterPendingCompactionTimeline().empty())) {
-      config.setValue(HoodieWriteConfig.WRITE_RECORD_POSITIONS, String.valueOf(false));
-    }
   }
 }

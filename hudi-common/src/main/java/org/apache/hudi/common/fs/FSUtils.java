@@ -141,6 +141,16 @@ public class FSUtils {
     }
   }
 
+  public static String getCommitTimeWithFullPath(String path) {
+    String fullFileName;
+    if (path.contains("/")) {
+      fullFileName = path.substring(path.lastIndexOf("/") + 1);
+    } else {
+      fullFileName = path;
+    }
+    return getCommitTime(fullFileName);
+  }
+
   public static long getFileSize(HoodieStorage storage, StoragePath path) throws IOException {
     return storage.getPathInfo(path).getLength();
   }

@@ -143,12 +143,12 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       List<HoodieInstant> instantsToArchive = getInstantsToArchive();
       if (!instantsToArchive.isEmpty()) {
         this.writer = openWriter(archiveFilePath.getParent());
-        LOG.info("Archiving instants {}", instantsToArchive);
+        LOG.info("Archiving instants {} for table {}", instantsToArchive, config.getBasePath());
         archive(context, instantsToArchive);
-        LOG.info("Deleting archived instants {}", instantsToArchive);
+        LOG.info("Deleting archived instants {} for table {}", instantsToArchive, config.getBasePath());
         deleteArchivedInstants(instantsToArchive, context);
       } else {
-        LOG.info("No Instants to archive");
+        LOG.info("No Instants to archive for table {}", config.getBasePath());
       }
 
       return instantsToArchive.size();
@@ -440,7 +440,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
       final String keyField = table.getMetaClient().getTableConfig().getRecordKeyFieldProp();
       List<HoodieRecord> indexRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
-      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, false, header, keyField);
+      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, header, keyField);
       writer.appendBlock(block);
       records.clear();
     }

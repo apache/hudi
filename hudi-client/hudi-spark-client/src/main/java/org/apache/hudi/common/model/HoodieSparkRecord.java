@@ -54,6 +54,7 @@ import java.util.Properties;
 import scala.Function1;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
 import static org.apache.spark.sql.types.DataTypes.BooleanType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
@@ -315,13 +316,16 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String orderingField = ConfigUtils.getOrderingField(props);
+    if (isNullOrEmpty(orderingField)) {
+      return DEFAULT_ORDERING_VALUE;
+    }
     scala.Option<NestedFieldPath> cachedNestedFieldPath =
         HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
     if (cachedNestedFieldPath.isDefined()) {
       NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
       return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
     } else {
-      return 0;
+      return DEFAULT_ORDERING_VALUE;
     }
   }
 

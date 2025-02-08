@@ -30,7 +30,7 @@ import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, MetadataPartition
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, GreaterThan, LessThan, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, IsNotNull, LessThan, Literal, Or}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, StringType}
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
@@ -261,6 +261,40 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")),
           HoodieTableMetaClient.reload(metaClient),
           isDataSkippingExpected = true)
+        // Include an isNotNull check
+        verifyFilePruningExpressions(
+          Map(
+            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+            HoodieMetadataConfig.ENABLE.key -> "true"),
+          Seq(IsNotNull(AttributeReference("rider", StringType)()), GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D"))),
+          HoodieTableMetaClient.reload(metaClient),
+          isDataSkippingExpected = true)
+        // if we predicate on a col which is not indexed, we expect full scan.
+        verifyFilePruning(
+          Map(
+            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+            HoodieMetadataConfig.ENABLE.key -> "true"),
+          GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O")),
+          HoodieTableMetaClient.reload(metaClient),
+          isDataSkippingExpected = false)
+
+        // if we predicate on two cols, one of which is indexed, while the other is not indexed. and using `AND` operator
+        verifyFilePruning(
+          Map(
+            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+            HoodieMetadataConfig.ENABLE.key -> "true"),
+          And(GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")), GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O"))),
+          HoodieTableMetaClient.reload(metaClient),
+          isDataSkippingExpected = true) // pruning should happen
+
+        // if we predicate on two cols, one of which is indexed, while the other is not indexed. and using `OR` operator
+        verifyFilePruning(
+          Map(
+            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+            HoodieMetadataConfig.ENABLE.key -> "true"),
+          Or(GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")), GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O"))),
+          HoodieTableMetaClient.reload(metaClient),
+          isDataSkippingExpected = false)
 
         // Test predicate that does not match any partition, should scan no files
         checkAnswer(s"select uuid, rider, city, state from $tableName where rider > 'rider-Z'")()
@@ -599,12 +633,18 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
       isDataSkippingExpected = false)
   }
 
-  private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient, isDataSkippingExpected: Boolean, isNoScanExpected: Boolean = false): Unit = {
+  private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient,
+                                isDataSkippingExpected: Boolean, isNoScanExpected: Boolean = false): Unit = {
+    verifyFilePruningExpressions(opts, Seq(dataFilter), metaClient, isDataSkippingExpected, isNoScanExpected)
+  }
+
+  private def verifyFilePruningExpressions(opts: Map[String, String], dataFilters: Seq[Expression], metaClient: HoodieTableMetaClient,
+                                           isDataSkippingExpected: Boolean, isNoScanExpected: Boolean = false): Unit = {
     // with data skipping
     val commonOpts = opts + ("path" -> metaClient.getBasePath.toString)
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
     try {
-      val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
+      val filteredPartitionDirectories = fileIndex.listFiles(Seq(), dataFilters)
       val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
       val latestDataFilesCount = getLatestDataFilesCount(metaClient = metaClient)
       if (isDataSkippingExpected) {
@@ -620,7 +660,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
 
       // with no data skipping
       fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
-      val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
+      val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), dataFilters).flatMap(s => s.files).size
       assertTrue(filesCountWithNoSkipping == latestDataFilesCount)
     } finally {
       fileIndex.close()

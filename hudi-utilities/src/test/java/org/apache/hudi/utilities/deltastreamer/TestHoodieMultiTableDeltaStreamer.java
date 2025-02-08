@@ -34,7 +34,6 @@ import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.streamer.TableExecutionContext;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -150,18 +149,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
         getStringWithAltKeys(streamer.getTableExecutionContexts().get(0).getProperties(),
             HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
   }
-
-  @Test
-  @Disabled
-  public void testInvalidIngestionProps() {
-    Exception e = assertThrows(Exception.class, () -> {
-      HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, basePath + "/config", TestDataSource.class.getName(), true, true, null);
-      new HoodieMultiTableDeltaStreamer(cfg, jsc);
-    }, "Creation of execution object should fail without kafka topic");
-    LOG.debug("Creation of execution object failed with error: " + e.getMessage(), e);
-    assertTrue(e.getMessage().contains("Please provide valid table config arguments!"));
-  }
-
+  
   @Test //0 corresponds to fg
   public void testMultiTableExecutionWithKafkaSource() throws IOException {
     //create topics for each table

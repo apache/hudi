@@ -30,16 +30,16 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.InstantFileNameParser;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.timeline.versioning.DefaultCommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameParser;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultTimelineFactory;
 import org.apache.hudi.common.util.CleanerUtils;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
-import org.apache.hudi.common.table.timeline.InstantFileNameParser;
-import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -66,12 +66,15 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * A utility class for testing.
@@ -415,5 +418,20 @@ public class HoodieTestUtils {
       deletedFiles.forEach(entry -> deleteFileList.add(Pair.of(partition, entry)));
     });
     return deleteFileList;
+  }
+
+  public static void validateTableConfig(HoodieStorage storage,
+                                         String basePath,
+                                         Map<String, String> expectedConfigs,
+                                         List<String> nonExistentConfigs) {
+    HoodieTableConfig tableConfig = HoodieTableConfig.loadFromHoodieProps(storage, basePath);
+    expectedConfigs.forEach((key, value) -> {
+      String actual = tableConfig.getString(key);
+      assertEquals(value, actual,
+          String.format("Table config %s should be %s but is %s}",
+              key, value, actual));
+    });
+    nonExistentConfigs.forEach(key -> assertFalse(
+        tableConfig.contains(key), key + " should not be present in the table config"));
   }
 }

@@ -60,8 +60,6 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
   protected Properties getMetaProps() {
     Properties metaProps =  super.getMetaProps();
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.COMMIT_TIME_ORDERING.name());
-    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
-    metaProps.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), OverwriteWithLatestAvroPayload.class.getName());
     return metaProps;
   }
 

@@ -16,18 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table;
+package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.model.ConsistentHashingNode;
+import java.util.Iterator;
+import java.util.function.Predicate;
 
-import java.util.List;
-
-public interface ConsistentHashingBucketInsertPartitioner {
+/**
+ * An iterable that allows filtering on the element keys.
+ *
+ * @param <K> the type of element keys
+ * @param <V> the type of elements returned by the iterator
+ */
+public interface KeyFilteringIterable<K, V> extends Iterable<V> {
   /**
-   * Set consistent hashing for partition, used in clustering
+   * Returns an iterator over elements of type {@code V}.
    *
-   * @param partition partition to set Consistent Hashing nodes
-   * @param nodes     nodes from clustering plan
+   * @param filter The filter on the key of type {@code K}.
+   *
+   * @return an Iterator.
    */
-  void addHashingChildrenNodes(String partition, List<ConsistentHashingNode> nodes);
+  Iterator<V> iterator(Predicate<K> filter);
 }

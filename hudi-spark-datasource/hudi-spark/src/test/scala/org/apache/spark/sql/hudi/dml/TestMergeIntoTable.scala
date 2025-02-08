@@ -17,16 +17,23 @@
 
 package org.apache.spark.sql.hudi.dml
 
-import org.apache.hudi.{DataSourceReadOptions, ScalaAssertionSupport}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
+import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.testutils.DataSourceTestUtils
-
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.getClass
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField}
+import org.slf4j.LoggerFactory
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
+  private val log = LoggerFactory.getLogger(getClass)
 
   test("Test MergeInto Basic") {
     Seq(true, false).foreach { sparkSqlOptimizedWrites =>
@@ -52,6 +59,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         // test with optimized sql merge enabled / disabled.
         spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
 
+        val structFields = List(
+          StructField("id", IntegerType, nullable = true),
+          StructField("name", StringType, nullable = true),
+          StructField("price", DoubleType, nullable = true),
+          StructField("ts", LongType, nullable = true))
         // First merge with a extra input field 'flag' (insert a new record)
         spark.sql(
           s"""
@@ -64,22 +76,23 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
              | when not matched and flag = '1' then insert *
        """.stripMargin)
+        validateTableSchema(tableName, structFields)
         checkAnswer(s"select id, name, price, ts from $tableName")(
           Seq(1, "a1", 10.0, 1000)
         )
 
-        // Second merge (update the record)
+        // Second merge (update the record) with different field names in the source
         spark.sql(
           s"""
              | merge into $tableName
              | using (
-             |  select 1 as id, 'a1' as name, 10 as price, 1001 as ts
+             |  select 1 as _id, 'a1' as name, 10 as _price, 1001 as _ts
              | ) s0
-             | on s0.id = $tableName.id
+             | on s0._id = $tableName.id
              | when matched then update set
-             | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
-             | when not matched then insert *
-       """.stripMargin)
+             | id = s0._id, name = s0.name, price = s0._price + $tableName.price, ts = s0._ts
+             | """.stripMargin)
+        validateTableSchema(tableName, structFields)
         checkAnswer(s"select id, name, price, ts from $tableName")(
           Seq(1, "a1", 20.0, 1001)
         )
@@ -100,6 +113,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
              | when not matched and s0.id % 2 = 0 then insert *
        """.stripMargin)
+        validateTableSchema(tableName, structFields)
         checkAnswer(s"select id, name, price, ts from $tableName")(
           Seq(1, "a1", 30.0, 1002),
           Seq(2, "a2", 12.0, 1001)
@@ -128,6 +142,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
    * In Spark 3.0.x, UPDATE and DELETE can appear at most once in MATCHED clauses in a MERGE INTO statement.
    * Refer to: `org.apache.spark.sql.catalyst.parser.AstBuilder#visitMergeIntoTable`
    *
+   * The test also provides test coverage for "Test merge into allowed patterns of assignment clauses".
    */
   test("Test MergeInto with more than once update actions") {
 
@@ -420,7 +435,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test MergeInto for MOR table ") {
+  test("Test MergeInto for MOR table") {
     spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
     withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
@@ -443,17 +458,25 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            | partitioned by(dt)
            | location '${tmp.getCanonicalPath}'
          """.stripMargin)
+      val structFields = List(
+        StructField("id", IntegerType, nullable = true),
+        StructField("name", StringType, nullable = true),
+        StructField("price", DoubleType, nullable = true),
+        StructField("ts", LongType, nullable = true),
+        StructField("dt", StringType, nullable = true))
+
       // Insert data
       spark.sql(
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 1 as id, 'a1' as name, 10 as price, 1000L as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when not matched and s0.id % 2 = 1 then insert *
          """.stripMargin
       )
+      validateTableSchema(tableName, structFields)
       checkAnswer(s"select id,name,price,dt from $tableName")(
         Seq(1, "a1", 10, "2021-03-21")
       )
@@ -462,12 +485,14 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 12 as price, 1001 as ts, '2021-03-21' as dt
+           |  select 1 as _id, 'a1' as name, 12 as _price, 1001L as _ts, '2021-03-21' as dt
            | ) as s0
-           | on t0.id = s0.id
-           | when matched and s0.id % 2 = 0 then update set *
+           | on t0.id = s0._id
+           | when matched and s0._id % 2 = 0 then update set
+           |  id = s0._id, name = s0.name, price = s0._price, ts = s0._ts, dt = s0.dt
          """.stripMargin
       )
+      validateTableSchema(tableName, structFields)
       checkAnswer(s"select id,name,price,dt from $tableName")(
         Seq(1, "a1", 10, "2021-03-21")
       )
@@ -476,12 +501,14 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 12 as price, 1001 as ts, '2021-03-21' as dt
+           |  select 1 as _id, 'a1' as name, 12 as _price, 1001L as _ts, '2021-03-21' as dt
            | ) as s0
-           | on t0.id = s0.id
-           | when matched and s0.id % 2 = 1 then update set *
+           | on t0.id = s0._id
+           | when matched and s0._id % 2 = 1 then update set
+           |  id = s0._id, name = s0.name, price = s0._price, ts = s0._ts, dt = s0.dt
          """.stripMargin
       )
+      validateTableSchema(tableName, structFields)
       checkAnswer(s"select id,name,price,dt from $tableName")(
         Seq(1, "a1", 12, "2021-03-21")
       )
@@ -490,7 +517,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 2 as id, 'a2' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
+           |  select 2 as id, 'a2' as name, 10 as price, 1000L as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when not matched and s0.id % 2 = 0 then insert *
@@ -505,13 +532,14 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName t0
            | using (
-           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as s_ts, '2021-03-21' as dt
+           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001L as s_ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id
            | when matched and s_ts = 1001
            | then update set id = s_id, name = s_name, price = s_price, ts = s_ts, t0.dt = s0.dt
          """.stripMargin
       )
+      validateTableSchema(tableName, structFields)
       checkAnswer(s"select id,name,price,dt from $tableName order by id")(
         Seq(1, "a1", 12, "2021-03-21"),
         Seq(2, "a2", 15, "2021-03-21")
@@ -524,7 +552,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName t0
            | using (
-           |  select 1 as s_id, 'a2' as s_name, 15 as s_price, 1001 as s_ts, '2021-03-21' as dt
+           |  select 1 as s_id, 'a2' as s_name, 15 as s_price, 1001L as s_ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id + 1
            | when matched and s_ts = 1001 then delete
@@ -535,7 +563,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName t0
            | using (
-           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as ts, '2021-03-21' as dt
+           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001L as ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id
            | when matched and s0.ts = 1001 then delete
@@ -726,7 +754,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         //
         // 2) set source column name to be different with target column
         //
-        val errorMessage = "Failed to resolve pre-combine field `v` w/in the source-table output"
+        val errorMessage = "Failed to resolve precombine field `v` w/in the source-table output"
 
         checkException(
           s"""
@@ -814,9 +842,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       )
 
       //
-      // 2.a) set source column name to be different with target column (should fail unable to match pre-combine field)
+      // 2.a) set source column name to be different with target column (should fail unable to match precombine field)
       //
-      val failedToResolveErrorMessage = "Failed to resolve pre-combine field `v` w/in the source-table output"
+      val failedToResolveErrorMessage = "Failed to resolve precombine field `v` w/in the source-table output"
 
       checkException(
         s"""merge into $tableName1 t0
@@ -1099,10 +1127,17 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  hoodie.compact.inline = 'true'
            | )
        """.stripMargin)
+      val structFields = List(
+        StructField("id", IntegerType, nullable = true),
+        StructField("name", StringType, nullable = true),
+        StructField("price", DoubleType, nullable = true),
+        StructField("ts", LongType, nullable = true))
+
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
       spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
       spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
+      validateTableSchema(tableName, structFields)
       checkAnswer(s"select id, name, price, ts from $tableName order by id")(
         Seq(1, "a1", 10.0, 1000),
         Seq(2, "a2", 10.0, 1000),
@@ -1114,12 +1149,14 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            |merge into $tableName h0
            |using (
-           | select 4 as id, 'a4' as name, 11 as price, 1000 as ts
+           | select 4 as _id, 'a4' as name, 11 as _price, 1000 as ts
            | ) s0
-           | on h0.id = s0.id
-           | when matched then update set *
+           | on h0.id = s0._id
+           | when matched then update set
+           |   id = s0._id, name = s0.name, price = s0._price, ts = s0.ts
            |""".stripMargin)
 
+      validateTableSchema(tableName, structFields)
       // 5 commits will trigger compaction.
       checkAnswer(s"select id, name, price, ts from $tableName order by id")(
         Seq(1, "a1", 10.0, 1000),
@@ -1258,6 +1295,64 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     })
   }
 
+  test("Test partial insert with inline clustering") {
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      val tableType = "mor"
+      val logDataBlockFormat = "parquet"
+      withSparkSqlSessionConfig(
+          HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
+          DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "true",
+          HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logDataBlockFormat,
+          HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> "true",
+          HoodieClusteringConfig.INLINE_CLUSTERING.key -> "true",
+          HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "2",
+          HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key -> "id,price") {
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |   id int,
+             |   name string,
+             |   price long,
+             |   ts long,
+             |   description string
+             | ) using hudi
+             | tblproperties(
+             |   type ='$tableType',
+             |   primaryKey = 'id',
+             |   preCombineField = 'ts'
+             | )
+             | location '$basePath'
+            """.stripMargin)
+        spark.sql(s"insert into $tableName values " +
+          "(1, 'a1', 10, 1000, 'a1: desc1')," +
+          "(2, 'a2', 20, 1200, 'a2: desc2'), " +
+          "(3, 'a3', 30.0, 1250, 'a3: desc3')")
+
+        // Partial updates using MERGE INTO statement with changed fields: "price" and "ts"
+        spark.sql(
+          s"""
+             | merge into $tableName t0
+             | using (
+             |   select 1 as id, 'a1' as name1, 12 as price, 1001 as _ts
+             | union
+             |   select 3 as id, 'a3' as name1, 25 as price, 1260 as _ts
+             |   ) s0
+             | on t0.id = s0.id
+             | when matched then update set price = s0.price, ts = s0._ts
+          """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, description from $tableName order by id")(
+          Seq(1, "a1", 12, 1001, "a1: desc1"),
+          Seq(2, "a2", 20, 1200, "a2: desc2"),
+          Seq(3, "a3", 25, 1260, "a3: desc3")
+        )
+        assert(createMetaClient(spark, basePath).getActiveTimeline.lastInstant().get().getAction.equals(
+          HoodieTimeline.REPLACE_COMMIT_ACTION))
+      }
+    })
+  }
+
   test("Test Merge Into with target matched columns cast-ed") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
@@ -1377,6 +1472,217 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(2, "a2", null, "2021-03-20")
         )
       })
+    }
+  }
+
+  test("Test MergeInto with partial update and insert") {
+    spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
+
+    // Test combinations: (tableType, sparkSqlOptimizedWrites)
+    val testConfigs = Seq(
+      // Uncomment once HUDI-8835 is fixed.
+      // ("mor", true),
+      // ("mor", false),
+      ("cow", true),
+      ("cow", false)
+    )
+
+    testConfigs.foreach { case (tableType, sparkSqlOptimizedWrites) =>
+      log.info(s"=== Testing MergeInto with partial insert: tableType=$tableType, sparkSqlOptimizedWrites=$sparkSqlOptimizedWrites ===")
+      withRecordType()(withTempDir { tmp =>
+        withSparkSqlSessionConfig("hoodie.payload.combined.schema.validate" -> "true",
+          SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
+          // Create a partitioned table
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |  id bigint,
+               |  name string,
+               |  price double,
+               |  ts bigint,
+               |  dt string
+               | ) using hudi
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id'
+               | )
+               | partitioned by(dt)
+               | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
+
+          spark.sql(s"insert into $tableName select 1, 'a1', 10, 1L, '2021-03-21'")
+
+          spark.sql(
+            s"""
+               | merge into $tableName as t0
+               | using (
+               |  select 2 as id, 'a2' as name, 10 as price, 2L as ts, '2021-03-20' as dt
+               |  union
+               |  select 1 as id, 'a1_updated' as name, 11 as price, 3L as ts, '2021-03-21' as dt
+               | ) s0
+               | on s0.id = t0.id
+               | when matched then update set t0.id = s0.id, t0.name = s0.name
+               | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
+               | values(s0.id, s0.name, s0.dt)
+           """.stripMargin)
+          checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+            Seq(1, "a1_updated", 10, "2021-03-21"),
+            Seq(2, "a2", null, "2021-03-20")
+          )
+        }
+      })
+    }
+  }
+
+  test("Test unresolved columns in Merge Into statement") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  dt string,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
+             | """.stripMargin)
+
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt = '2024-01-14')
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+             | union
+             | select 2 as id, 'a2' as name, 20 as price, 1002 as ts
+             | """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2024-01-14"),
+          Seq(2, "a2", 20.0, 1002, "2024-01-14")
+        )
+
+        val targetTableFields = spark.sql(s"select * from $tableName").schema.fields
+          .map(e => (e.name, tableName, s"spark_catalog.default.$tableName.${e.name}"))
+        val sourceTableFields = Seq("s0._id", "s0._price", "s0._ts", "s0.dt", "s0.name")
+          .map(e => {
+            val splits = e.split('.')
+            (splits(1), splits(0), e)
+          })
+        // Target table column cannot be found
+        val sqlStatement1 =
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 2 as _id, '2024-01-14' as dt, 'a2_new' as name, 25 as _price, 1005 as _ts
+             |  union
+             |  select 3 as _id, '2024-01-14' as dt, 'a3' as name, 30 as _price, 1003 as _ts
+             | ) s0
+             | on s0._id = $tableName.id
+             | when matched then update set
+             | id = s0._id, dt = s0.dt, new_col = s0.name, price = s0._price + $tableName.price,
+             | ts = s0._ts
+             | """.stripMargin
+        // Source table column cannot be found
+        val sqlStatement2 =
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 2 as _id, '2024-01-14' as dt, 'a2_new' as name, 25 as _price, 1005 as _ts
+             |  union
+             |  select 3 as _id, '2024-01-14' as dt, 'a3' as name, 30 as _price, 1003 as _ts
+             | ) s0
+             | on s0._id = $tableName.id
+             | when matched then update set
+             | id = s0._id, dt = s0.dt, name = s0.new_col, price = s0._price + $tableName.price,
+             | ts = s0._ts
+             | """.stripMargin
+
+        checkExceptionContain(sqlStatement1)(
+          getExpectedUnresolvedColumnExceptionMessage("new_col", targetTableFields))
+        checkExceptionContain(sqlStatement2)(
+          getExpectedUnresolvedColumnExceptionMessage("s0.new_col", sourceTableFields ++ targetTableFields))
+      }
+    }
+  }
+
+  test("Test no schema evolution in MERGE INTO") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  dt string,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
+             | """.stripMargin)
+        val structFields = List(
+          StructField("id", IntegerType, nullable = true),
+          StructField("name", StringType, nullable = true),
+          StructField("price", DoubleType, nullable = true),
+          StructField("ts", LongType, nullable = true),
+          StructField("dt", StringType, nullable = true))
+
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt = '2024-01-14')
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+             | union
+             | select 2 as id, 'a2' as name, 20 as price, 1002 as ts
+             | """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2024-01-14"),
+          Seq(2, "a2", 20.0, 1002, "2024-01-14")
+        )
+
+        // MERGE INTO with an additional column that does not exist in the table schema
+        // throws an error if it tries to set the new column in the "UPDATE SET" clause
+        val sqlStatement1 =
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 2 as _id, '2024-01-14' as dt, 'a2_new' as name, 25 as _price, 1005 as _ts, 'x' as new_col
+             |  union
+             |  select 3 as _id, '2024-01-14' as dt, 'a3' as name, 30 as _price, 1003 as _ts, 'y' as new_col
+             | ) s0
+             | on s0._id = $tableName.id
+             | when matched then update set
+             | id = s0._id, dt = s0.dt, name = s0.name, price = s0._price + $tableName.price,
+             | ts = s0._ts, new_col = s0.new_col
+             | """.stripMargin
+        checkExceptionContain(sqlStatement1)(
+          getExpectedUnresolvedColumnExceptionMessage("new_col", tableName))
+        validateTableSchema(tableName, structFields)
+
+        // MERGE INTO with an additional column that does not exist in the table schema
+        // works only if it tries to do inserts (the additional column is dropped before inserts)
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 3 as id, '2024-01-14' as dt, 'a3' as name, 30 as price, 1003 as ts, 'y' as new_col
+             | ) s0
+             | on s0.id = $tableName.id
+             | when not matched then insert *
+             | """.stripMargin)
+        validateTableSchema(tableName, structFields)
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2024-01-14"),
+          Seq(2, "a2", 20.0, 1002, "2024-01-14"),
+          Seq(3, "a3", 30.0, 1003, "2024-01-14"))
+      }
     }
   }
 }
