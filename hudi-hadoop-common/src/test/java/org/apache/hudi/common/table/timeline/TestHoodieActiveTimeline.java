@@ -75,6 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -619,6 +620,13 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.setInstants(allInstants);
     assertEquals(0, timeline.filterRequestedRollbackTimeline().countInstants());
     assertEquals(1, timeline.filterPendingRollbackTimeline().countInstants());
+
+    timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
+    rollbackInstant = metaClient.createNewInstant(State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant.requestedTime());
+    allInstants.set(1, rollbackInstant);
+    timeline.setInstants(allInstants);
+    assertEquals(0, timeline.filterPendingRollbackTimeline().countInstants());
+    assertEquals(0, timeline.filterRequestedRollbackTimeline().countInstants());
   }
 
   @Test
@@ -663,6 +671,12 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
     HoodieInstant commitInstant = metaClient.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
     assertThrows(HoodieIOException.class, () -> timeline.getInstantDetails(commitInstant));
+  }
+
+  @Test
+  void getInstantReaderReferencesSelf() {
+    timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
+    assertSame(timeline, timeline.getInstantReader());
   }
 
   @Test

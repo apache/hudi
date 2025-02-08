@@ -442,9 +442,4 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @return
    */
   Set<String> getValidExtensions();
-
-  /**
-   * Get the instant reader interface.
-   * */
-  public HoodieInstantReader getInstantReader();
 }

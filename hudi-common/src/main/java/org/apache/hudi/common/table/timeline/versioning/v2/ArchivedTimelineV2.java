@@ -74,7 +74,6 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
    * TBD: Should we enforce maximum time range?
    */
   public ArchivedTimelineV2(HoodieTableMetaClient metaClient) {
-    super(null);
     this.metaClient = metaClient;
     setInstants(this.loadInstants());
     this.cursorInstant = firstInstant().map(HoodieInstant::requestedTime).orElse(null);
@@ -88,7 +87,6 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
    * Note that there is no lazy loading, so this may not work if really early startTs is specified.
    */
   public ArchivedTimelineV2(HoodieTableMetaClient metaClient, String startTs) {
-    super(null);
     this.metaClient = metaClient;
     setInstants(loadInstants(new HoodieArchivedTimeline.StartTsFilter(startTs), HoodieArchivedTimeline.LoadMode.METADATA));
     this.cursorInstant = startTs;
@@ -103,8 +101,12 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
    * @deprecated
    */
   public ArchivedTimelineV2() {
-    super(null);
     this.instantReader = this;
+  }
+
+  @Override
+  public HoodieInstantReader getInstantReader() {
+    return this;
   }
 
   /**
