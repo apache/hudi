@@ -31,4 +31,8 @@ public interface HoodieInstantWriter {
    * @throws IOException thrown if there are issues serializing the data
    */
   void writeToStream(OutputStream outputStream) throws IOException;
+
+  static HoodieInstantWriter convertByteArrayToWriter(byte[] bytes) {
+    return outputStream -> outputStream.write(bytes);
+  }
 }
