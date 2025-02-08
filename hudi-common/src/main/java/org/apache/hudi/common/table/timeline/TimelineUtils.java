@@ -596,7 +596,7 @@ public class TimelineUtils {
                                               HoodieTableMetaClient metaClient) {
     return metaClient.getTimelineLayout().getTimelineFactory().createDefaultTimeline(
         Stream.concat(timeline1.getInstantsAsStream(), timeline2.getInstantsAsStream()).sorted(),
-        metaClient.getActiveTimeline().getInstantReader());
+        metaClient.getActiveTimeline());
   }
 
   public static boolean isDeletePartition(WriteOperationType operation) {

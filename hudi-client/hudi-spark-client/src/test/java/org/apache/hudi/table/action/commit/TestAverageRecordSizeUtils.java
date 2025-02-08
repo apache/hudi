@@ -68,7 +68,7 @@ public class TestAverageRecordSizeUtils {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
         .build();
     HoodieTableMetaClient metaClient = HoodieTestUtils.init("/tmp");
-    HoodieTimeline commitsTimeline = new BaseTimelineV2(metaClient.getActiveTimeline().getInstantReader());
+    HoodieTimeline commitsTimeline = new BaseTimelineV2(metaClient.getActiveTimeline());
     List<HoodieInstant> instants = new ArrayList<>();
     instantSizePairs.forEach(entry -> {
       HoodieInstant hoodieInstant = entry.getKey();
@@ -104,7 +104,7 @@ public class TestAverageRecordSizeUtils {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withProps(Collections.singletonMap(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(recordSize)))
         .build(false);
-    BaseTimelineV2 commitsTimeline = new BaseTimelineV2(metaClient.getActiveTimeline().getInstantReader());
+    BaseTimelineV2 commitsTimeline = new BaseTimelineV2(metaClient.getActiveTimeline());
     List<HoodieInstant> instants = Collections.singletonList(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1"));
 
