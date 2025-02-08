@@ -18,10 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -41,7 +38,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -75,6 +71,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -619,43 +616,13 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.setInstants(allInstants);
     assertEquals(0, timeline.filterRequestedRollbackTimeline().countInstants());
     assertEquals(1, timeline.filterPendingRollbackTimeline().countInstants());
-  }
 
-  @Test
-  void testParsingCommitDetails() throws IOException {
-    HoodieInstant commitInstant = metaClient.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
-    HoodieInstant cleanInstant = metaClient.createNewInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "2");
-
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    HoodieWriteStat hoodieWriteStat = new HoodieWriteStat();
-    hoodieWriteStat.setFileId("file_id1");
-    hoodieWriteStat.setPath("path1");
-    hoodieWriteStat.setPrevCommit("1");
-    commitMetadata.addWriteStat("partition1", hoodieWriteStat);
     timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
-    timeline.createNewInstant(commitInstant);
-    timeline.transitionRequestedToInflight(commitInstant, Option.empty());
-    HoodieInstant completeCommitInstant = metaClient.createNewInstant(State.INFLIGHT, commitInstant.getAction(), commitInstant.requestedTime());
-    timeline.saveAsComplete(completeCommitInstant,
-        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-    HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
-
-    HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
-    assertEquals(commitMetadata, timelineAfterFirstInstant.deserializeJsonInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
-
-    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan();
-    cleanerPlan.setLastCompletedCommitTimestamp("1");
-    cleanerPlan.setPolicy("policy");
-    cleanerPlan.setVersion(1);
-    cleanerPlan.setPartitionsToBeDeleted(Collections.singletonList("partition1"));
-    timeline.saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
-
-    assertEquals(cleanerPlan, timeline.deserializeAvroInstantContent(cleanInstant, HoodieCleanerPlan.class));
-
-    HoodieTimeline mergedTimeline = timelineAfterFirstInstant.mergeTimeline(timeline.reload());
-    assertEquals(commitMetadata, mergedTimeline.deserializeJsonInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
-    assertEquals(cleanerPlan, mergedTimeline.deserializeAvroInstantContent(cleanInstant, HoodieCleanerPlan.class));
-    assertEquals(commitMetadata, metaClient.getCommitMetadataSerDe().deserialize(completedCommitInstant, mergedTimeline.getInstantDetails(completedCommitInstant).get(), HoodieCommitMetadata.class));
+    rollbackInstant = metaClient.createNewInstant(State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant.requestedTime());
+    allInstants.set(1, rollbackInstant);
+    timeline.setInstants(allInstants);
+    assertEquals(0, timeline.filterPendingRollbackTimeline().countInstants());
+    assertEquals(0, timeline.filterRequestedRollbackTimeline().countInstants());
   }
 
   @Test
@@ -663,6 +630,12 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
     HoodieInstant commitInstant = metaClient.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
     assertThrows(HoodieIOException.class, () -> timeline.getInstantDetails(commitInstant));
+  }
+
+  @Test
+  void getInstantReaderReferencesSelf() {
+    timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
+    assertSame(timeline, timeline.getInstantReader());
   }
 
   @Test

@@ -192,7 +192,7 @@ public class TestCleanPlanner {
         getCleanCommitMetadata(partitionsInLastClean, lastCleanInstant, earliestInstantsInLastClean, lastCompletedTimeInLastClean,
             savepointsTrackedInLastClean.keySet(), expectedEarliestSavepointInLastClean);
     HoodieCleanerPlan cleanerPlan = mockLastCleanCommit(mockHoodieTable, lastCleanInstant, earliestInstantsInLastClean, activeTimeline, cleanMetadataOptionPair, savepointsTrackedInLastClean.keySet());
-    mockFewActiveInstants(instantReader, mockHoodieTable, activeTimeline, activeInstantsPartitions, savepointsTrackedInLastClean, areCommitsForSavepointsRemoved, replaceCommits);
+    mockFewActiveInstants(mockHoodieTable, activeTimeline, activeInstantsPartitions, savepointsTrackedInLastClean, areCommitsForSavepointsRemoved, replaceCommits);
 
     // mock getAllPartitions
     HoodieStorage storage = mock(HoodieStorage.class);
@@ -655,10 +655,10 @@ public class TestCleanPlanner {
     return cleanerPlan;
   }
 
-  private static void mockFewActiveInstants(HoodieInstantReader instantReader, HoodieTable hoodieTable, HoodieActiveTimeline activeTimeline, Map<String, List<String>> activeInstantsToPartitions,
+  private static void mockFewActiveInstants(HoodieTable hoodieTable, HoodieActiveTimeline activeTimeline, Map<String, List<String>> activeInstantsToPartitions,
                                             Map<String, List<String>> savepointedCommitsToAdd, boolean areCommitsForSavepointsRemoved, List<String> replaceCommits)
       throws IOException {
-    BaseTimelineV2 commitsTimeline = new BaseTimelineV2(instantReader);
+    BaseTimelineV2 commitsTimeline = new BaseTimelineV2();
     List<HoodieInstant> instants = new ArrayList<>();
     Map<String, List<String>> instantstoProcess = new HashMap<>();
     instantstoProcess.putAll(activeInstantsToPartitions);
@@ -688,12 +688,12 @@ public class TestCleanPlanner {
     when(hoodieTable.getActiveTimeline().getInstantsAsStream()).thenReturn(instants.stream());
     when(hoodieTable.getCompletedCommitsTimeline()).thenReturn(commitsTimeline);
 
-    BaseTimelineV2 savepointTimeline = new BaseTimelineV2(instantReader);
+    BaseTimelineV2 savepointTimeline = new BaseTimelineV2();
     List<HoodieInstant> savepointInstants = savepointedCommitsToAdd.keySet().stream().map(sp -> INSTANT_GENERATOR.createNewInstant(COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, sp))
         .collect(Collectors.toList());
     savepointTimeline.setInstants(savepointInstants);
 
-    BaseTimelineV2 completedReplaceTimeline = new BaseTimelineV2(instantReader);
+    BaseTimelineV2 completedReplaceTimeline = new BaseTimelineV2();
     List<HoodieInstant> completedReplaceInstants = replaceCommits.stream().map(rc -> INSTANT_GENERATOR.createNewInstant(COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, rc))
         .collect(Collectors.toList());
     completedReplaceTimeline.setInstants(completedReplaceInstants);

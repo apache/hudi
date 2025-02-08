@@ -56,7 +56,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 
-public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTimeline, HoodieInstantReader {
+public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTimeline {
 
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION,
@@ -78,7 +78,6 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   private ActiveTimelineV2(HoodieTableMetaClient metaClient, Set<String> includedExtensions,
                            boolean applyLayoutFilters) {
-    super(null);
     // Filter all the filter in the metapath and include only the extensions passed and
     // convert them into HoodieInstant
     try {
@@ -90,7 +89,6 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     this.metaClient = metaClient;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.instantReader = this;
     LOG.info("Loaded instants upto : " + lastInstant());
   }
 
@@ -109,8 +107,6 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
    */
   @Deprecated
   public ActiveTimelineV2() {
-    super(null);
-    this.instantReader = this;
   }
 
   /**
@@ -275,7 +271,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public HoodieInstantReader getInstantReader() {
-    return instantReader;
+    return this;
   }
 
   @Override

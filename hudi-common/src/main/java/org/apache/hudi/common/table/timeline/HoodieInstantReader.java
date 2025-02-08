@@ -34,7 +34,9 @@ public interface HoodieInstantReader {
    * @param instant the instant to read
    * @return an InputStream with the content
    */
-  InputStream getContentStream(HoodieInstant instant);
+  default InputStream getContentStream(HoodieInstant instant) {
+    throw new RuntimeException("Not implemented");
+  }
 
   /**
    * Reads the provided instant's content into a byte array for parsing.

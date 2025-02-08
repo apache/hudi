@@ -49,14 +49,14 @@ public class BaseTimelineV2 extends BaseHoodieTimeline {
    * @deprecated
    */
   @Deprecated
-  public BaseTimelineV2(HoodieInstantReader instantReader) {
-    super(TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_2), instantReader);
+  public BaseTimelineV2() {
+    super(TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_2), null);
   }
 
   @Override
   public HoodieTimeline getWriteTimeline() {
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION);
-    return factory.createDefaultTimeline(getInstantsAsStream().filter(s -> validActions.contains(s.getAction())), instantReader);
+    return factory.createDefaultTimeline(getInstantsAsStream().filter(s -> validActions.contains(s.getAction())), getInstantReader());
   }
 
   @Override
@@ -67,14 +67,14 @@ public class BaseTimelineV2 extends BaseHoodieTimeline {
   @Override
   public HoodieTimeline filterPendingClusteringTimeline() {
     return factory.createDefaultTimeline(getInstantsAsStream().filter(
-        s -> s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION) && !s.isCompleted()), instantReader);
+        s -> s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION) && !s.isCompleted()), getInstantReader());
   }
 
   @Override
   public HoodieTimeline filterPendingReplaceOrClusteringTimeline() {
     return factory.createDefaultTimeline(getInstantsAsStream().filter(
         s -> (s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION) || s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION))
-            && !s.isCompleted()), instantReader);
+            && !s.isCompleted()), getInstantReader());
   }
 
   @Override
@@ -82,7 +82,7 @@ public class BaseTimelineV2 extends BaseHoodieTimeline {
     return factory.createDefaultTimeline(getInstantsAsStream().filter(
         s -> !s.isCompleted() && (s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)
             || s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
-            || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))), instantReader);
+            || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))), getInstantReader());
   }
 
   @Override

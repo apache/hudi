@@ -65,12 +65,10 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
    * TBD: Should we enforce maximum time range?
    */
   public ArchivedTimelineV1(HoodieTableMetaClient metaClient) {
-    super(null);
     this.metaClient = metaClient;
     setInstants(this.loadInstants(false));
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.instantReader = this;
   }
 
   /**
@@ -78,13 +76,11 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
    * Note that there is no lazy loading, so this may not work if really early startTs is specified.
    */
   public ArchivedTimelineV1(HoodieTableMetaClient metaClient, String startTs) {
-    super(null);
     this.metaClient = metaClient;
     setInstants(loadInstants(new StartTsFilter(startTs), true,
         record -> HoodieInstant.State.COMPLETED.toString().equals(record.get(ACTION_STATE).toString())));
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.instantReader = this;
   }
 
   /**
@@ -93,8 +89,11 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
    * @deprecated
    */
   public ArchivedTimelineV1() {
-    super(null);
-    this.instantReader = this;
+  }
+
+  @Override
+  public HoodieInstantReader getInstantReader() {
+    return this;
   }
 
   /**

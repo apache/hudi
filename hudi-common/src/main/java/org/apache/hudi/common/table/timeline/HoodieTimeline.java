@@ -42,7 +42,7 @@ import java.util.stream.Stream;
  * @see HoodieInstant
  * @since 0.3.0
  */
-public interface HoodieTimeline extends Serializable {
+public interface HoodieTimeline extends HoodieInstantReader, Serializable {
 
   String COMMIT_ACTION = "commit";
   String DELTA_COMMIT_ACTION = "deltacommit";
@@ -451,11 +451,6 @@ public interface HoodieTimeline extends Serializable {
   boolean isPendingClusteringInstant(String instantTime);
 
   /**
-   * Read the completed instant details.
-   */
-  Option<byte[]> getInstantDetails(HoodieInstant instant);
-
-  /**
    * Read the instant content to an input stream.
    * @param instant the instant to fetch
    * @return stream with content for instant
@@ -546,4 +541,9 @@ public interface HoodieTimeline extends Serializable {
    * @return
    */
   TimelineLayoutVersion getTimelineLayoutVersion();
+
+  /**
+   * Get instant reader
+   * */
+  HoodieInstantReader getInstantReader();
 }
