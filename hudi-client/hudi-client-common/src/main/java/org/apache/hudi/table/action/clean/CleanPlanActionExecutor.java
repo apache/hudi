@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -52,8 +51,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
+import static org.apache.hudi.common.util.CleanerUtils.EARLIEST_COMMIT_TO_NOT_ARCHIVE;
 import static org.apache.hudi.common.util.MapUtils.nonEmpty;
+import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
 
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
   private static final Logger LOG = LoggerFactory.getLogger(CleanPlanActionExecutor.class);
@@ -102,8 +102,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
   private HoodieCleanerPlan getEmptyCleanerPlan(Option<HoodieInstant> earliestInstant, CleanPlanner<T, I, K, O> planner) throws IOException {
     HoodieCleanerPlan.Builder cleanBuilder = HoodieCleanerPlan.newBuilder()
         .setFilePathsToBeDeletedPerPartition(Collections.emptyMap())
-        .setExtraMetadata(prepareExtraMetadata(planner.getSavepointedTimestamps()));
-    //.setExtraMetadata(prepareExtraMetadata(planner.getSavepointedTimestamps(), planner.getEarliestCommitToRetain())); to be fixed.
+        .setExtraMetadata(prepareExtraMetadata(planner.getSavepointedTimestamps(), planner.getEarliestCommitToNotArchive()));
     if (earliestInstant.isPresent()) {
       HoodieInstant hoodieInstant = earliestInstant.get();
       cleanBuilder.setPolicy(config.getCleanerPolicy().name())
@@ -158,7 +157,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
 
         cleanOps.putAll(cleanOpsWithPartitionMeta.entrySet().stream()
             .filter(e -> !e.getValue().getValue().isEmpty())
-                //.filter(entry -> !entry.getValue().getValue().isEmpty())
+            //.filter(entry -> !entry.getValue().getValue().isEmpty())
             .collect(Collectors.toMap(Map.Entry::getKey, e -> CleanerUtils.convertToHoodieCleanFileInfoList(e.getValue().getValue()))));
 
         partitionsToDelete.addAll(cleanOpsWithPartitionMeta.entrySet().stream().filter(entry -> entry.getValue().getKey()).map(Map.Entry::getKey)
@@ -173,19 +172,21 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           CleanPlanner.LATEST_CLEAN_PLAN_VERSION,
           cleanOps,
           partitionsToDelete,
-          prepareExtraMetadata(planner.getSavepointedTimestamps()));
+          prepareExtraMetadata(planner.getSavepointedTimestamps(), planner.getEarliestCommitToNotArchive()));
     } catch (IOException e) {
       throw new HoodieIOException("Failed to schedule clean operation", e);
     }
   }
 
-  private Map<String, String> prepareExtraMetadata(List<String> savepointedTimestamps) {
-    if (savepointedTimestamps.isEmpty()) {
+  private Map<String, String> prepareExtraMetadata(List<String> savepointedTimestamps, Option<String> earliestCommitToNotArchive) {
+    if (savepointedTimestamps.isEmpty() && !earliestCommitToNotArchive.isPresent()) {
       return Collections.emptyMap();
     } else {
       Map<String, String> extraMetadata = new HashMap<>();
       extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointedTimestamps.stream().collect(Collectors.joining(",")));
-      // to fix. add earliest commit to retain or earliest commit to not archive.
+      if (earliestCommitToNotArchive.isPresent()) {
+        extraMetadata.put(EARLIEST_COMMIT_TO_NOT_ARCHIVE, earliestCommitToNotArchive.get());
+      }
       return extraMetadata;
     }
   }
