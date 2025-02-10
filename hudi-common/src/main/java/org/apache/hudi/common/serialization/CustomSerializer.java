@@ -19,12 +19,13 @@
 package org.apache.hudi.common.serialization;
 
 import java.io.IOException;
+import java.io.Serializable;
 
 /**
  * Allows custom serialization for spillable map values.
  * @param <T>
  */
-public interface CustomSerializer<T> {
+public interface CustomSerializer<T> extends Serializable {
 
   byte[] serialize(T input) throws IOException;
 

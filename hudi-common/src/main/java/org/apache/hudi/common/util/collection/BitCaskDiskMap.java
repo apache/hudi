@@ -228,8 +228,8 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
 
   private synchronized R put(T key, R value, boolean flush) {
     try {
-      byte[] val = isCompressionEnabled ? DISK_COMPRESSION_REF.get().compressBytes(SerializationUtils.serialize(value)) :
-          SerializationUtils.serialize(value);
+      byte[] val = isCompressionEnabled ? DISK_COMPRESSION_REF.get().compressBytes(valueSerializer.serialize(value)) :
+          valueSerializer.serialize(value);
       int valueSize = val.length;
       long timestamp = System.currentTimeMillis();
       this.valueMetadataMap.put(key,
