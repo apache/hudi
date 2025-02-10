@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -59,6 +58,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -100,8 +100,8 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
       return createHandle.close().get(0);
     }).collect();
 
-    final Path commitFile = new Path(config.getBasePath() + "/.hoodie/"
-        + HoodieTimeline.makeCommitFileName("100" + "_" + InProcessTimeGenerator.createNewInstantTime()));
+    final Path commitFile = new Path(config.getBasePath() + "/.hoodie/timeline/"
+        + INSTANT_FILE_NAME_GENERATOR.makeCommitFileName("100" + "_" + InProcessTimeGenerator.createNewInstantTime()));
     HadoopFSUtils.getFs(basePath, HoodieTestUtils.getDefaultStorageConf()).create(commitFile);
     return statuses.get(0);
   }

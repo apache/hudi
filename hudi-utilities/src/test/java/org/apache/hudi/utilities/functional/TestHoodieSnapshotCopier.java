@@ -91,9 +91,9 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
     new File(basePath + "/.hoodie").mkdirs();
     new File(basePath + "/.hoodie/hoodie.properties").createNewFile();
     // Only first two have commit files
-    new File(basePath + "/.hoodie/" + commitTime1 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime2 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime3 + ".inflight").createNewFile();
+    new File(basePath + "/.hoodie/timeline/" + commitTime1 + ".commit").createNewFile();
+    new File(basePath + "/.hoodie/timeline/" + commitTime2 + ".commit").createNewFile();
+    new File(basePath + "/.hoodie/timeline/" + commitTime3 + ".inflight").createNewFile();
 
     // Some parquet files
     new File(basePath + "/2016/05/01/").mkdirs();
@@ -140,10 +140,10 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
     assertFalse(fs.exists(new Path(outputPath + "/2016/05/02/" + file32.getName())));
     assertFalse(fs.exists(new Path(outputPath + "/2016/05/06/" + file33.getName())));
 
-    assertTrue(fs.exists(new Path(outputPath + "/.hoodie/" + commitTime1 + ".commit")));
-    assertTrue(fs.exists(new Path(outputPath + "/.hoodie/" + commitTime2 + ".commit")));
-    assertFalse(fs.exists(new Path(outputPath + "/.hoodie/" + commitTime3 + ".commit")));
-    assertFalse(fs.exists(new Path(outputPath + "/.hoodie/" + commitTime3 + ".inflight")));
+    assertTrue(fs.exists(new Path(outputPath + "/.hoodie/timeline/" + commitTime1 + ".commit")));
+    assertTrue(fs.exists(new Path(outputPath + "/.hoodie/timeline/" + commitTime2 + ".commit")));
+    assertFalse(fs.exists(new Path(outputPath + "/.hoodie/timeline/" + commitTime3 + ".commit")));
+    assertFalse(fs.exists(new Path(outputPath + "/.hoodie/timeline/" + commitTime3 + ".inflight")));
     assertTrue(fs.exists(new Path(outputPath + "/.hoodie/hoodie.properties")));
 
     assertTrue(fs.exists(new Path(outputPath + "/_SUCCESS")));

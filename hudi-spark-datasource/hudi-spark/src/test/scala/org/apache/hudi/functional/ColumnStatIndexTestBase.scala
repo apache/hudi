@@ -19,28 +19,34 @@
 package org.apache.hudi.functional
 
 
-import org.apache.avro.Schema
+import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogFile, HoodieTableType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, PartitionStatsIndexSupport}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
+import org.apache.hudi.metadata.HoodieTableMetadataUtil
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
+import org.apache.hudi.util.JavaScalaConverters.convertScalaListToJavaList
+import org.apache.hudi.util.Lazy
 import org.apache.spark.sql.functions.typedLit
+import org.apache.spark.sql.functions.{lit, struct, typedLit}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.DataFrame
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.spark.sql.catalyst.dsl.expressions.StringToAttributeConversionHelper
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.provider.Arguments
 
@@ -50,6 +56,7 @@ import java.util
 import java.util.List
 import java.util.stream.Collectors
 import scala.collection.JavaConverters._
+import scala.collection.immutable.TreeSet
 import scala.util.Random
 
 @Tag("functional")
@@ -65,7 +72,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .add("c4", TimestampType)
       .add("c5", ShortType)
       .add("c6", DateType)
-      .add("c7", BinaryType)
+      .add("c7", StringType) // HUDI-8909. To support Byte w/ partition stats index.
       .add("c8", ByteType)
 
   @BeforeEach
@@ -87,12 +94,24 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     cleanupSparkContexts()
   }
 
-  protected def doWriteAndValidateColumnStats(params: ColumnStatsTestParams): Unit = {
+  protected def doWriteAndValidateColumnStats(params: ColumnStatsTestParams, addNestedFiled : Boolean = false): Unit = {
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource(params.dataSourcePath).toString
 
     // NOTE: Schema here is provided for validation that the input date is in the appropriate format
-    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+    val preInputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+
+    val inputDF = if (addNestedFiled) {
+      preInputDF.withColumn("c9",
+        functions.struct("c2").withField("c9_1_car_brand", lit("abc_brand")))
+      .withColumn("c10",
+        functions.struct("c2").withField("c10_1_car_brand", lit("abc_brand"))
+      .withField("c10_1", functions.struct("c2")
+        .withField("c10_2_1_nested_lvl2_field1", lit("random_val1"))
+        .withField("c10_2_1_nested_lvl2_field2", lit("random_val2"))))
+    } else {
+      preInputDF
+    }
 
     val writeOptions: Map[String, String] = params.hudiOpts ++ params.metadataOpts
 
@@ -111,35 +130,33 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
-    if (params.shouldValidate) {
+    if (params.shouldValidateColStats) {
       // Currently, routine manually validating the column stats (by actually reading every column of every file)
       // only supports parquet files. Therefore we skip such validation when delta-log files are present, and only
       // validate in following cases: (1) COW: all operations; (2) MOR: insert only.
-      val shouldValidateColumnStatsManually = params.testCase.tableType == HoodieTableType.COPY_ON_WRITE ||
-        params.operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      val shouldValidateColumnStatsManually = (params.testCase.tableType == HoodieTableType.COPY_ON_WRITE ||
+        params.operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)) && params.shouldValidateManually
 
-      validateColumnStatsIndex(
-        params.testCase, params.metadataOpts, params.expectedColStatsSourcePath, shouldValidateColumnStatsManually, params.latestCompletedCommit)
+      validateColumnStatsIndex(params.testCase, params.metadataOpts, params.expectedColStatsSourcePath,
+        shouldValidateColumnStatsManually, params.validationSortColumns)
+    } else if (params.shouldValidatePartitionStats) {
+      validatePartitionStatsIndex(params.testCase, params.metadataOpts, params.expectedColStatsSourcePath)
     }
   }
 
-  protected def buildColumnStatsTableManually(tablePath: String,
-                                            includedCols: Seq[String],
-                                            indexedCols: Seq[String],
-                                            indexSchema: StructType): DataFrame = {
+  protected def buildPartitionStatsTableManually(tablePath: String,
+                                                 includedCols: Seq[String],
+                                                 indexedCols: Seq[String],
+                                                 indexSchema: StructType): DataFrame = {
     val metaClient = HoodieTableMetaClient.builder().setConf(new HadoopStorageConfiguration(jsc.hadoopConfiguration())).setBasePath(tablePath).build()
     val fsv = FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().enable(false).build())
     fsv.loadAllPartitions()
-    val filegroupList = fsv.getAllFileGroups.collect(Collectors.toList[HoodieFileGroup])
-    val baseFilesList = filegroupList.stream().flatMap(fileGroup => fileGroup.getAllBaseFiles).collect(Collectors.toList[HoodieBaseFile])
-    val baseFiles = baseFilesList.stream()
-      .map[StoragePath](baseFile => baseFile.getStoragePath).collect(Collectors.toList[StoragePath]).asScala
-
-    val baseFilesDf = spark.createDataFrame(
-      baseFiles.flatMap(file => {
-        val df = spark.read.schema(sourceTableSchema).parquet(file.toString)
+    val allPartitions = fsv.getPartitionNames.stream().map[String](partitionPath => partitionPath).collect(Collectors.toList[String]).asScala
+    spark.createDataFrame(
+      allPartitions.flatMap(partition => {
+        val df = spark.read.format("hudi").load(tablePath) // assumes its partition table, but there is only one partition.
         val exprs: Seq[String] =
-          s"'${typedLit(file.getName)}' AS file" +:
+          s"'${typedLit("")}' AS file" +:
             s"sum(1) AS valueCount" +:
             df.columns
               .filter(col => includedCols.contains(col))
@@ -167,6 +184,50 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       }).asJava,
       indexSchema
     )
+  }
+
+  protected def buildColumnStatsTableManually(tablePath: String,
+                                              includedCols: Seq[String],
+                                            indexedCols: Seq[String],
+                                            indexSchema: StructType,
+                                              sourceTableSchema: StructType): DataFrame = {
+    val metaClient = HoodieTableMetaClient.builder().setConf(new HadoopStorageConfiguration(jsc.hadoopConfiguration())).setBasePath(tablePath).build()
+    val fsv = FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().enable(false).build())
+    fsv.loadAllPartitions()
+    val filegroupList = fsv.getAllFileGroups.collect(Collectors.toList[HoodieFileGroup])
+    val baseFilesList = filegroupList.stream().flatMap(fileGroup => fileGroup.getAllBaseFiles).collect(Collectors.toList[HoodieBaseFile])
+    val baseFiles = baseFilesList.stream()
+      .map[StoragePath](baseFile => baseFile.getStoragePath).collect(Collectors.toList[StoragePath]).asScala
+
+    val baseFilesDf = spark.createDataFrame(
+      baseFiles.flatMap(file => {
+        val df = spark.read.schema(sourceTableSchema).parquet(file.toString)
+        val exprs: Seq[String] =
+          s"'${typedLit(file.getName)}' AS fileName" +:
+            s"sum(1) AS valueCount" +:
+            includedCols.union(indexedCols).distinct.sorted.flatMap(col => {
+          val minColName = s"`${col}_minValue`"
+          val maxColName = s"`${col}_maxValue`"
+          if (indexedCols.contains(col)) {
+            Seq(
+              s"min($col) AS $minColName",
+              s"max($col) AS $maxColName",
+              s"sum(cast(isnull($col) AS long)) AS `${col}_nullCount`"
+            )
+          } else {
+            Seq(
+              s"null AS $minColName",
+              s"null AS $maxColName",
+              s"null AS ${col}_nullCount"
+            )
+          }
+        })
+
+        df.selectExpr(exprs: _*)
+          .collect()
+      }).asJava,
+      indexSchema
+    )
 
     if (metaClient.getTableConfig.getTableType == HoodieTableType.COPY_ON_WRITE) {
       baseFilesDf // COW table
@@ -179,7 +240,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       } else {
         val colsToGenerateStats = indexedCols // check for included cols
         val writerSchemaOpt = LogFileColStatsTestUtil.getSchemaForTable(metaClient)
-        val latestCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+        val latestCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get().requestedTime
         baseFilesDf.union(getColStatsFromLogFiles(allLogFiles, latestCompletedCommit,
           scala.collection.JavaConverters.seqAsJavaList(colsToGenerateStats),
           metaClient,
@@ -217,30 +278,35 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       columnsToIndex, writerSchemaOpt, maxBufferSize)
   }
 
+  protected def validateColumnsToIndex(metaClient: HoodieTableMetaClient, expectedColsToIndex: Seq[String]): Unit = {
+    val indexDefn = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
+    assertEquals(expectedColsToIndex.sorted, indexDefn.getSourceFields.asScala.toSeq.sorted)
+  }
+
+  protected def validateNonExistantColumnsToIndexDefn(metaClient: HoodieTableMetaClient): Unit = {
+    assertTrue(!metaClient.getIndexMetadata.get().getIndexDefinitions.containsKey(PARTITION_NAME_COLUMN_STATS))
+  }
+
   protected def validateColumnStatsIndex(testCase: ColumnStatsTestCase,
                                          metadataOpts: Map[String, String],
                                          expectedColStatsSourcePath: String,
                                          validateColumnStatsManually: Boolean,
-                                         latestCompletedCommit: String): Unit = {
+                                         validationSortColumns: Seq[String]): Unit = {
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
       .build()
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    val tableSchema = schemaUtil.getTableAvroSchema(false)
+    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
 
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, localSourceTableSchema, metadataConfig, metaClient)
+    val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
+    val indexedColumns = indexedColumnswithMeta.filter(colName => !HoodieTableMetadataUtil.META_COL_SET_TO_INDEX.contains(colName))
+    val sortedIndexedColumns : Set[String] = TreeSet(indexedColumns.toSeq:_*)
+    val (expectedColStatsSchema, _) = composeIndexSchema(sortedIndexedColumns.toSeq, indexedColumns.toSeq, localSourceTableSchema)
 
-    val indexedColumns: Set[String] = {
-      val customIndexedColumns = metadataConfig.getColumnsEnabledForColumnStatsIndex
-      if (customIndexedColumns.isEmpty) {
-        sourceTableSchema.fieldNames.toSet
-      } else {
-        customIndexedColumns.asScala.toSet
-      }
-    }
-    val (expectedColStatsSchema, _) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
-    val validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue",
-      "c3_minValue", "c5_maxValue", "c5_minValue")
-
-    columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { transposedColStatsDF =>
+    columnStatsIndex.loadTransposed(indexedColumns.toSeq, testCase.shouldReadInMemory) { transposedColStatsDF =>
       // Match against expected column stats table
       val expectedColStatsIndexTableDf =
         spark.read
@@ -258,10 +324,63 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
         // TODO(HUDI-4557): support validation of column stats of avro log files
         // Collect Column Stats manually (reading individual Parquet files)
         val manualColStatsTableDF =
-        buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, sourceTableSchema.fieldNames, expectedColStatsSchema)
+        buildColumnStatsTableManually(basePath, indexedColumns.toSeq, indexedColumns.toSeq, expectedColStatsSchema, localSourceTableSchema)
 
         assertEquals(asJson(sort(manualColStatsTableDF, validationSortColumns)),
           asJson(sort(transposedColStatsDF, validationSortColumns)))
+      }
+    }
+  }
+
+  protected def validatePartitionStatsIndex(testCase: ColumnStatsTestCase,
+                                            metadataOpts: Map[String, String],
+                                            expectedColStatsSourcePath: String): Unit = {
+    val metadataConfig = HoodieMetadataConfig.newBuilder()
+      .fromProperties(toProperties(metadataOpts))
+      .build()
+
+    val pStatsIndex = new PartitionStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    val tableSchema = schemaUtil.getTableAvroSchema(false)
+    val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
+    val pIndexedColumns = indexedColumnswithMeta.filter(colName => !HoodieTableMetadataUtil.META_COL_SET_TO_INDEX.contains(colName))
+      .toSeq.sorted
+
+    val (pExpectedColStatsSchema, _) = composeIndexSchema(pIndexedColumns, pIndexedColumns, sourceTableSchema)
+    val pValidationSortColumns = if (pIndexedColumns.contains("c5")) {
+      Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue",
+        "c3_minValue", "c5_maxValue", "c5_minValue")
+    } else {
+      Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue", "c3_minValue")
+    }
+
+    pStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { pTransposedColStatsDF =>
+      // Match against expected column stats table
+      val pExpectedColStatsIndexTableDf = {
+        spark.read
+          .schema(pExpectedColStatsSchema)
+          .json(getClass.getClassLoader.getResource(expectedColStatsSourcePath).toString)
+      }
+
+      val colsToDrop = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+        Seq("fileName")
+      } else {
+        Seq("fileName","valueCount") // for MOR, value count may not match, since w/ we could have repeated updates across multiple log files.
+        // So, value count might be larger w/ MOR stats when compared to calculating it manually.
+      }
+
+      assertEquals(asJson(sort(pExpectedColStatsIndexTableDf.drop(colsToDrop: _*), pValidationSortColumns)),
+        asJson(sort(pTransposedColStatsDF.drop(colsToDrop: _*), pValidationSortColumns)))
+
+      val convertedSchema = AvroConversionUtils.convertAvroSchemaToStructType(AvroConversionUtils.convertStructTypeToAvroSchema(pExpectedColStatsSchema, "col_stats_schema"))
+
+      if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+        val manualColStatsTableDF =
+          buildPartitionStatsTableManually(basePath, pIndexedColumns, pIndexedColumns, convertedSchema)
+
+        assertEquals(asJson(sort(manualColStatsTableDF.drop(colsToDrop: _*), pValidationSortColumns)),
+          asJson(sort(pTransposedColStatsDF.drop(colsToDrop: _*), pValidationSortColumns)))
       }
     }
   }
@@ -315,11 +434,12 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   private def sort(df: DataFrame, sortColumns: Seq[String]): DataFrame = {
-    val sortedCols = df.columns.sorted
+    //val sortedCols = df.columns.sorted
     // Sort dataset by specified columns (to minimize non-determinism in case multiple files have the same
     // value of the first column)
-    df.select(sortedCols.head, sortedCols.tail: _*)
+    df.select(sortColumns.head, sortColumns.tail: _*)
       .sort(sortColumns.head, sortColumns.tail: _*)
+      .select(sortColumns.head, sortColumns.tail: _*)
   }
 }
 
@@ -331,6 +451,13 @@ object ColumnStatIndexTestBase {
     java.util.stream.Stream.of(HoodieTableType.values().toStream.flatMap(tableType =>
       Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true)),
         Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false))
+      )
+    ): _*)
+  }
+
+  def testMetadataColumnStatsIndexParamsInMemory: java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(HoodieTableType.values().toStream.flatMap(tableType =>
+      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true))
       )
     ): _*)
   }
@@ -362,9 +489,13 @@ object ColumnStatIndexTestBase {
                                    expectedColStatsSourcePath: String,
                                    operation: String,
                                    saveMode: SaveMode,
-                                   shouldValidate: Boolean = true,
+                                   shouldValidateColStats: Boolean = true,
+                                   shouldValidateManually: Boolean = true,
                                    latestCompletedCommit: String = null,
                                    numPartitions: Integer = 4,
                                    parquetMaxFileSize: Integer = 10 * 1024,
-                                   smallFileLimit: Integer = 100 * 1024 * 1024)
+                                   smallFileLimit: Integer = 100 * 1024 * 1024,
+                                   shouldValidatePartitionStats : Boolean = false,
+                                   validationSortColumns : Seq[String] = Seq("c1_maxValue", "c1_minValue", "c2_maxValue",
+                                     "c2_minValue", "c3_maxValue", "c3_minValue", "c5_maxValue", "c5_minValue"))
 }

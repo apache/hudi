@@ -138,12 +138,6 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
     return activeTimeline;
   }
 
-  @Override
-  public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Set<String> includedExtensions,
-                                                              boolean applyLayoutVersionFilters) {
-    throw new HoodieException("Unsupport operation");
-  }
-
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Path timelinePath, Set<String> includedExtensions,
                                                               boolean applyLayoutVersionFilters) {
     throw new HoodieException("Unsupport operation");

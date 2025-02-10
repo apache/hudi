@@ -23,6 +23,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
 import org.apache.hadoop.hive.serde.serdeConstants;
+import org.apache.hadoop.hive.serde2.objectinspector.StructField;
 import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
@@ -82,7 +83,11 @@ public class ObjectInspectorCache {
 
   public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
     ArrayWritableObjectInspector objectInspector = getObjectInspector(schema);
-    return objectInspector.getStructFieldData(record, objectInspector.getStructFieldRef(fieldName));
+    StructField structFieldRef = objectInspector.getStructFieldRef(fieldName);
+    if (structFieldRef == null) {
+      return null;
+    }
+    return objectInspector.getStructFieldData(record, structFieldRef);
   }
 
   public ArrayWritableObjectInspector getObjectInspector(Schema schema) {

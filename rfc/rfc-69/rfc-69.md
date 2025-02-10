@@ -26,7 +26,7 @@
 
 ## Status
 
-Under Review
+Completed
 
 ## Abstract
 
@@ -164,7 +164,7 @@ JIRA Issues Filter for 1.0: [link](https://issues.apache.org/jira/issues/?filter
 | Presto/Trino queries                      | Change Presto/Trino connectors to work with new format, integrate fully with metadata                                                               |                | [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-4394), [HUDI-4394](https://issues.apache.org/jira/browse/HUDI-4394),[HUDI-4552](https://issues.apache.org/jira/browse/HUDI-4552) |
 
 
-## Follow-on/1.1 Release
+## Follow-on releases
 
 The RFC feedback process has generated some awesome new ideas, and we propose to have the following be taken up post 1.0 release, 
 for easy sequencing of these projects. However, contributors can feel free to drive these JIRAs/designs as they see fit.

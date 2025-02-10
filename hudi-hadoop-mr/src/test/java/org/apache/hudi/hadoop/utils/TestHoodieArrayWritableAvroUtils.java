@@ -22,15 +22,23 @@ package org.apache.hudi.hadoop.utils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.hadoop.HiveHoodieReaderContext;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.DoubleWritable;
+import org.apache.hadoop.io.FloatWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.Arrays;
 import java.util.List;
@@ -84,5 +92,24 @@ public class TestHoodieArrayWritableAvroUtils {
 
   private static ArrayWritable convertArrayWritable(GenericRecord record) {
     return  (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, record.getSchema(), false);
+  }
+
+  @Test
+  public void testCastOrderingField() {
+    HiveHoodieReaderContext readerContext = Mockito.mock(HiveHoodieReaderContext.class, Mockito.CALLS_REAL_METHODS);
+    assertEquals(new Text("ASDF"), readerContext.convertValueToEngineType(new Text("ASDF")));
+    assertEquals(new Text("ASDF"), readerContext.convertValueToEngineType("ASDF"));
+    assertEquals(new IntWritable(8), readerContext.convertValueToEngineType(new IntWritable(8)));
+    assertEquals(new IntWritable(8), readerContext.convertValueToEngineType(8));
+    assertEquals(new LongWritable(Long.MAX_VALUE / 2L), readerContext.convertValueToEngineType(new LongWritable(Long.MAX_VALUE / 2L)));
+    assertEquals(new LongWritable(Long.MAX_VALUE / 2L), readerContext.convertValueToEngineType(Long.MAX_VALUE / 2L));
+    assertEquals(new FloatWritable(20.24f), readerContext.convertValueToEngineType(new FloatWritable(20.24f)));
+    assertEquals(new FloatWritable(20.24f), readerContext.convertValueToEngineType(20.24f));
+    assertEquals(new DoubleWritable(21.12d), readerContext.convertValueToEngineType(new DoubleWritable(21.12d)));
+    assertEquals(new DoubleWritable(21.12d), readerContext.convertValueToEngineType(21.12d));
+
+    // make sure that if input is a writeable, then it still works
+    WritableComparable reflexive = new IntWritable(8675309);
+    assertEquals(reflexive, readerContext.convertValueToEngineType(reflexive));
   }
 }

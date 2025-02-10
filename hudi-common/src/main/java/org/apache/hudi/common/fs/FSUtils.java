@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -131,10 +130,6 @@ public class FSUtils {
         .defaultValue().getFileExtension());
   }
 
-  public static String getCommitFromCommitFile(String commitFileName) {
-    return HoodieInstant.extractTimestamp(commitFileName);
-  }
-
   public static String getCommitTime(String fullFileName) {
     try {
       if (isLogFile(fullFileName)) {
@@ -144,6 +139,16 @@ public class FSUtils {
     } catch (ArrayIndexOutOfBoundsException e) {
       throw new HoodieException("Failed to get commit time from filename: " + fullFileName, e);
     }
+  }
+
+  public static String getCommitTimeWithFullPath(String path) {
+    String fullFileName;
+    if (path.contains("/")) {
+      fullFileName = path.substring(path.lastIndexOf("/") + 1);
+    } else {
+      fullFileName = path;
+    }
+    return getCommitTime(fullFileName);
   }
 
   public static long getFileSize(HoodieStorage storage, StoragePath path) throws IOException {

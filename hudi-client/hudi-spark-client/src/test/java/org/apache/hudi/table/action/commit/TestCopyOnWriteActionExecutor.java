@@ -481,7 +481,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     WriteStatus writeStatus = ws.get(0).get(0);
     String fileId = writeStatus.getFileId();
     metaClient.getStorage().create(
-        new StoragePath(Paths.get(basePath, ".hoodie", "000.commit").toString())).close();
+        new StoragePath(Paths.get(basePath, ".hoodie/timeline", "000.commit").toString())).close();
     final List<HoodieRecord> updates =
         dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts);
 

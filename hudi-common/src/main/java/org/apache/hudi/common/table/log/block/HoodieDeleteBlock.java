@@ -56,7 +56,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
-import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far.
@@ -72,44 +71,20 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   private static final Lazy<HoodieDeleteRecord.Builder> HOODIE_DELETE_RECORD_BUILDER_STUB =
       Lazy.lazily(HoodieDeleteRecord::newBuilder);
 
-  private final boolean shouldWriteRecordPositions;
   // Records to delete, sorted based on the record position if writing record position to the log block header
   private DeleteRecord[] recordsToDelete;
 
   public HoodieDeleteBlock(List<Pair<DeleteRecord, Long>> recordsToDelete,
-                           boolean shouldWriteRecordPositions,
                            Map<HeaderMetadataType, String> header) {
-    this(Option.empty(), null, false, Option.empty(), header, new HashMap<>(), shouldWriteRecordPositions);
-    if (shouldWriteRecordPositions && !recordsToDelete.isEmpty()) {
-      recordsToDelete.sort((o1, o2) -> {
-        long v1 = o1.getRight();
-        long v2 = o2.getRight();
-        return Long.compare(v1, v2);
-      });
-      if (isPositionValid(recordsToDelete.get(0).getRight())) {
-        addRecordPositionsToHeader(
-            recordsToDelete.stream().map(Pair::getRight).collect(Collectors.toSet()),
-            recordsToDelete.size());
-      } else {
-        LOG.warn("There are delete records without valid positions. "
-            + "Skip writing record positions to the delete block header.");
-      }
-    }
+    this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
+    addRecordPositionsIfRequired(recordsToDelete, Pair::getRight);
     this.recordsToDelete = recordsToDelete.stream().map(Pair::getLeft).toArray(DeleteRecord[]::new);
   }
 
   public HoodieDeleteBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
                            Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
                            Map<FooterMetadataType, String> footer) {
-    // Setting `shouldWriteRecordPositions` to false as this constructor is only used by the reader
-    this(content, inputStreamSupplier, readBlockLazily, blockContentLocation, header, footer, false);
-  }
-
-  HoodieDeleteBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
-                    Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
-                    Map<FooterMetadataType, String> footer, boolean shouldWriteRecordPositions) {
     super(header, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
-    this.shouldWriteRecordPositions = shouldWriteRecordPositions;
   }
 
   @Override

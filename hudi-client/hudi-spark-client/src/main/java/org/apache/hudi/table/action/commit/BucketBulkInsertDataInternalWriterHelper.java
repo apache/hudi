@@ -50,6 +50,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
   private final Map<Pair<UTF8String, Integer>, HoodieRowCreateHandle> handles;
   protected final String indexKeyFields;
   protected final int bucketNum;
+  private final boolean isNonBlockingConcurrencyControl;
 
   public BucketBulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                                   String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
@@ -64,6 +65,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     this.indexKeyFields = writeConfig.getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     this.bucketNum = writeConfig.getInt(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
     this.handles = new HashMap<>();
+    this.isNonBlockingConcurrencyControl = writeConfig.isNonBlockingConcurrencyControl();
   }
 
   public void write(InternalRow row) throws IOException {
@@ -126,6 +128,6 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
   }
 
   protected String getNextBucketFileId(int bucketInt) {
-    return BucketIdentifier.newBucketFileIdPrefix(getNextFileId(), bucketInt);
+    return BucketIdentifier.newBucketFileIdPrefix(bucketInt, isNonBlockingConcurrencyControl);
   }
 }

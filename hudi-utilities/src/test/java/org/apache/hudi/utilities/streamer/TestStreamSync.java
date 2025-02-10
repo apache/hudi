@@ -25,14 +25,14 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -53,10 +53,14 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.CHECKPOINT_FORCE_SKIP;
 import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
@@ -74,7 +78,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-public class TestStreamSync {
+public class TestStreamSync extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @MethodSource("testCasesFetchNextBatchFromSource")
@@ -149,29 +153,6 @@ public class TestStreamSync {
     verify(propsSpy, shouldTryWriteToErrorTable ? times(1) : never())
         .getBoolean(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
             HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue());
-  }
-
-  @ParameterizedTest
-  @MethodSource("getCheckpointToResumeCases")
-  void testGetCheckpointToResume(HoodieStreamer.Config cfg, HoodieCommitMetadata commitMetadata, Option<String> expectedResumeCheckpoint) throws IOException {
-    HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
-    TypedProperties props = new TypedProperties();
-    SparkSession sparkSession = mock(SparkSession.class);
-    Configuration configuration = mock(Configuration.class);
-    HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
-    HoodieInstant hoodieInstant = mock(HoodieInstant.class);
-
-    when(commitsTimeline.filter(any())).thenReturn(commitsTimeline);
-    when(commitsTimeline.lastInstant()).thenReturn(Option.of(hoodieInstant));
-
-    StreamSync streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkEngineContext,
-        storage, configuration, client -> true, null, Option.empty(), null, Option.empty(), true);
-    StreamSync spy = spy(streamSync);
-    doReturn(Option.of(commitMetadata)).when(spy).getLatestCommitMetadataWithValidCheckpointInfo(any());
-
-    Option<String> resumeCheckpoint = spy.getCheckpointToResume(Option.of(commitsTimeline));
-    assertEquals(expectedResumeCheckpoint,resumeCheckpoint);
   }
 
   @ParameterizedTest
@@ -317,5 +298,95 @@ public class TestStreamSync {
 
     // then
     verify(tableBuilder, times(1)).setTableVersion(HoodieTableVersion.SIX);
+  }
+
+  private StreamSync setupStreamSync() {
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.checkpoint = "test-checkpoint";
+    cfg.ignoreCheckpoint = "test-ignore";
+    cfg.sourceClassName = "test-source";
+    
+    TypedProperties props = new TypedProperties();
+    SchemaProvider schemaProvider = mock(SchemaProvider.class);
+    
+    return new StreamSync(cfg, mock(SparkSession.class), props, 
+        mock(HoodieSparkEngineContext.class), mock(HoodieStorage.class), 
+        mock(Configuration.class), client -> true, schemaProvider, 
+        Option.empty(), mock(SourceFormatAdapter.class), Option.empty(), false);
+  }
+
+  @Test
+  public void testExtractCheckpointMetadata_WhenForceSkipIsTrue() {
+    StreamSync streamSync = setupStreamSync();
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    TypedProperties props = new TypedProperties();
+    props.put(CHECKPOINT_FORCE_SKIP.key(), "true");
+    
+    Map<String, String> result = streamSync.extractCheckpointMetadata(
+        mock(InputBatch.class), props, HoodieTableVersion.ZERO.versionCode(), cfg);
+        
+    assertTrue(result.isEmpty(), "Should return empty map when CHECKPOINT_FORCE_SKIP is true");
+  }
+
+  @Test
+  public void testExtractCheckpointMetadata_WhenCheckpointExists() {
+    StreamSync streamSync = setupStreamSync();
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    TypedProperties props = new TypedProperties();
+    props.put(CHECKPOINT_FORCE_SKIP.key(), "false");
+    
+    InputBatch inputBatch = mock(InputBatch.class);
+    Checkpoint checkpoint = mock(Checkpoint.class);
+    Map<String, String> expectedMetadata = new HashMap<>();
+    expectedMetadata.put("test", "value");
+    
+    when(inputBatch.getCheckpointForNextBatch()).thenReturn(checkpoint);
+    when(checkpoint.getCheckpointCommitMetadata(cfg.checkpoint, cfg.ignoreCheckpoint))
+        .thenReturn(expectedMetadata);
+    
+    Map<String, String> result = streamSync.extractCheckpointMetadata(
+        inputBatch, props, HoodieTableVersion.ZERO.versionCode(), cfg);
+        
+    assertEquals(expectedMetadata, result, "Should return checkpoint metadata when checkpoint exists");
+  }
+
+  @Test
+  public void testExtractCheckpointMetadata_WhenCheckpointIsNullV2() {
+    StreamSync streamSync = setupStreamSync();
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.checkpoint = "test-checkpoint";
+    cfg.ignoreCheckpoint = "test-ignore";
+    TypedProperties props = new TypedProperties();
+
+    InputBatch inputBatch = mock(InputBatch.class);
+    when(inputBatch.getCheckpointForNextBatch()).thenReturn(null);
+
+    Map<String, String> result = streamSync.extractCheckpointMetadata(
+        inputBatch, props, HoodieTableVersion.EIGHT.versionCode(), cfg);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put(CHECKPOINT_IGNORE_KEY, "test-ignore");
+    expected.put(STREAMER_CHECKPOINT_RESET_KEY_V2, "test-checkpoint");
+    assertEquals(expected, result, "Should return default metadata when checkpoint is null");
+  }
+
+  @Test
+  public void testExtractCheckpointMetadata_WhenCheckpointIsNullV1() {
+    StreamSync streamSync = setupStreamSync();
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.checkpoint = "test-checkpoint";
+    cfg.ignoreCheckpoint = "test-ignore";
+    TypedProperties props = new TypedProperties();
+
+    InputBatch inputBatch = mock(InputBatch.class);
+    when(inputBatch.getCheckpointForNextBatch()).thenReturn(null);
+
+    Map<String, String> result = streamSync.extractCheckpointMetadata(
+        inputBatch, props, HoodieTableVersion.SIX.versionCode(), cfg);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put(CHECKPOINT_IGNORE_KEY, "test-ignore");
+    expected.put(CHECKPOINT_RESET_KEY, "test-checkpoint");
+    assertEquals(expected, result, "Should return default metadata when checkpoint is null");
   }
 }

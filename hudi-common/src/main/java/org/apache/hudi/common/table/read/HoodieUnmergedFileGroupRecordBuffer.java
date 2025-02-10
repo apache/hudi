@@ -51,8 +51,9 @@ public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
       RecordMergeMode recordMergeMode,
       Option<String> partitionNameOverrideOpt,
       Option<String[]> partitionPathFieldOpt,
-      TypedProperties props) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props);
+      TypedProperties props,
+      HoodieReadStats readStats) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
   }
 
   @Override
@@ -126,7 +127,8 @@ public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) {
     // never used for now
     records.put(index, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-        deleteRecord.getRecordKey(), deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), orderingFieldTypeOpt)));
+        deleteRecord.getRecordKey(), deleteRecord.getPartitionPath(),
+        getOrderingValue(readerContext, deleteRecord))));
   }
 
   @Override

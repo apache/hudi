@@ -39,7 +39,7 @@ public class SecondaryIndexKeyUtils {
     return unescapeSpecialChars(key.substring(0, delimiterIndex));
   }
 
-  static String constructSecondaryIndexKey(String secondaryKey, String recordKey) {
+  public static String constructSecondaryIndexKey(String secondaryKey, String recordKey) {
     return escapeSpecialChars(secondaryKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(recordKey);
   }
 

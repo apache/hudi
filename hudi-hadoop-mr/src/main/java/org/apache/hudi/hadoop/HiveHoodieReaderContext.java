@@ -49,10 +49,17 @@ import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.FloatWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
@@ -171,11 +178,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   @Override
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     // TODO(HUDI-7843):
-    // get rid of event time and overwrite with latest. Just return Option.empty
+    // get rid of event time and commit time ordering. Just return Option.empty
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
         return Option.of(new DefaultHiveRecordMerger());
-      case OVERWRITE_WITH_LATEST:
+      case COMMIT_TIME_ORDERING:
         return Option.of(new OverwriteWithLatestHiveRecordMerger());
       case CUSTOM:
       default:
@@ -206,7 +213,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     if (!recordOption.isPresent()) {
       return new HoodieEmptyRecord<>(new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)), HoodieRecord.HoodieRecordType.HIVE);
     }
-    Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
+    Schema schema = getSchemaFromMetadata(metadataMap);
     ArrayWritable writable = recordOption.get();
     return new HoodieHiveRecord(new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)), writable, schema, objectInspectorCache);
   }
@@ -263,10 +270,25 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public Comparable castValue(Comparable value, Schema.Type newType) {
-    //TODO: [HUDI-8261] actually do casting here
-    if (newType == Schema.Type.STRING) {
-      return value.toString();
+  public Comparable convertValueToEngineType(Comparable value) {
+    if (value instanceof WritableComparable) {
+      return value;
+    }
+    //TODO: [HUDI-8261] cover more types
+    if (value == null) {
+      return null;
+    } else if (value instanceof String) {
+      return new Text((String) value);
+    } else if (value instanceof Integer) {
+      return new IntWritable((int) value);
+    } else if (value instanceof Long) {
+      return new LongWritable((long) value);
+    } else if (value instanceof Float) {
+      return new FloatWritable((float) value);
+    } else if (value instanceof Double) {
+      return new DoubleWritable((double) value);
+    } else if (value instanceof Boolean) {
+      return new BooleanWritable((boolean) value);
     }
     return value;
   }

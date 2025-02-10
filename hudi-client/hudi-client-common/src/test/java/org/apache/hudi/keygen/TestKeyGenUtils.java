@@ -124,7 +124,6 @@ public class TestKeyGenUtils {
     String[] s3 = KeyGenUtils.extractRecordKeys("id:1,id2:__null__,id3:__empty__");
     Assertions.assertArrayEquals(new String[] {"1", null, ""}, s3);
 
-    // keys with ':' are not supported
     String[] s4 = KeyGenUtils.extractRecordKeys("id:ab:cd,id2:ef");
     Assertions.assertArrayEquals(new String[] {"ab:cd", "ef"}, s4);
 

@@ -229,6 +229,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
                 + "'" + FlinkOptions.RECORD_KEY_FIELD.key() + "' does not exist in the table schema.");
           });
     }
+    if (schema.getPrimaryKey().isPresent() && conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key()))   {
+      LOG.warn("PRIMARY KEY syntax and option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' was used. Priority of the PRIMARY KEY is higher!");
+    }
   }
 
   /**

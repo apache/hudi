@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 
@@ -32,7 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileName;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableList;
 
 public class HoodieTestReplaceCommitMetadataGenerator extends HoodieTestCommitMetadataGenerator {
@@ -56,8 +56,8 @@ public class HoodieTestReplaceCommitMetadataGenerator extends HoodieTestCommitMe
 
   private static HoodieReplaceCommitMetadata generateReplaceCommitMetadata(String basePath, String commitTime, String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates)
       throws Exception {
-    FileCreateUtils.createBaseFile(basePath, DEFAULT_FIRST_PARTITION_PATH, commitTime, fileId1);
-    FileCreateUtils.createBaseFile(basePath, DEFAULT_SECOND_PARTITION_PATH, commitTime, fileId2);
+    FileCreateUtilsLegacy.createBaseFile(basePath, DEFAULT_FIRST_PARTITION_PATH, commitTime, fileId1);
+    FileCreateUtilsLegacy.createBaseFile(basePath, DEFAULT_SECOND_PARTITION_PATH, commitTime, fileId2);
     return generateReplaceCommitMetadata(new HashMap<String, List<String>>() {
       {
         put(DEFAULT_FIRST_PARTITION_PATH, createImmutableList(baseFileName(DEFAULT_FIRST_PARTITION_PATH, fileId1)));

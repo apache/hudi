@@ -18,13 +18,17 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;
@@ -33,8 +37,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -78,13 +87,13 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
     assertNotNull(deserializedMetaClient);
     HoodieActiveTimeline commitTimeline = deserializedMetaClient.getActiveTimeline();
-    HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createNewInstant(instant);
     commitTimeline.saveAsComplete(instant, Option.of(getUTF8Bytes("test-detail")));
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = commitTimeline.getInstantsAsStream().findFirst().get();
     assertTrue(completedInstant.isCompleted());
-    assertEquals(completedInstant.getTimestamp(), instant.getTimestamp());
+    assertEquals(completedInstant.requestedTime(), instant.requestedTime());
     assertArrayEquals(getUTF8Bytes("test-detail"), commitTimeline.getInstantDetails(completedInstant).get(),
         "Commit value should be \"test-detail\"");
   }
@@ -95,7 +104,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
-    HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1");
     activeTimeline.createNewInstant(instant);
     activeTimeline.saveAsComplete(instant, Option.of(getUTF8Bytes("test-detail")));
 
@@ -109,7 +118,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
     assertTrue(completedInstant.isCompleted());
-    assertTrue(completedInstant.getTimestamp().equals(instant.getTimestamp()));
+    assertTrue(completedInstant.requestedTime().equals(instant.requestedTime()));
     assertArrayEquals(getUTF8Bytes("test-detail"), activeCommitTimeline.getInstantDetails(completedInstant).get(),
         "Commit value should be \"test-detail\"");
   }
@@ -224,8 +233,51 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME));
     this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
     this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME));
-    this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue()));
+    this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue()));
     this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME
         + Path.SEPARATOR + "hoodie.properties"));
+  }
+
+  @Test
+  public void testGetIndexDefinitionPath() throws IOException {
+    final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t7";
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("table")
+        .initTable(this.metaClient.getStorageConf(), basePath);
+    assertEquals(metaClient.getMetaPath() + "/.index_defs/index.json", metaClient.getIndexDefinitionPath());
+
+    String randomDefinitionPath = "/a/b/c";
+    metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), "/a/b/c");
+    assertEquals(randomDefinitionPath, metaClient.getIndexDefinitionPath());
+  }
+
+  @Test
+  public void testDeleteDefinition() throws IOException {
+    final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t7";
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("table")
+        .initTable(this.metaClient.getStorageConf(), basePath);
+    Map<String, Map<String, String>> columnsMap = new HashMap<>();
+    columnsMap.put("c1", Collections.emptyMap());
+    String indexName = MetadataPartitionType.EXPRESSION_INDEX.getPartitionPath() + "idx";
+    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName(indexName)
+        .withIndexType("column_stats")
+        .withIndexFunction("identity")
+        .withSourceFields(new ArrayList<>(columnsMap.keySet()))
+        .withIndexOptions(Collections.emptyMap())
+        .build();
+    metaClient.buildIndexDefinition(indexDefinition);
+    assertTrue(metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexName));
+    assertTrue(metaClient.getStorage().exists(new StoragePath(metaClient.getIndexDefinitionPath())));
+    metaClient.deleteIndexDefinition(indexName);
+    assertTrue(metaClient.getIndexMetadata().isEmpty());
+    assertTrue(metaClient.getStorage().exists(new StoragePath(metaClient.getIndexDefinitionPath())));
+    // Read from storage
+    HoodieIndexMetadata indexMetadata = HoodieIndexMetadata.fromJson(
+        new String(FileIOUtils.readDataFromPath(metaClient.getStorage(), new StoragePath(metaClient.getIndexDefinitionPath())).get()));
+    assertTrue(indexMetadata.getIndexDefinitions().isEmpty());
   }
 }
