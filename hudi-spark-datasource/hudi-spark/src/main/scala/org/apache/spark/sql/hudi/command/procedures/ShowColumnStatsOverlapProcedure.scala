@@ -258,7 +258,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val basePath = getBasePath(table)
     val metaClient = createMetaClient(jsc, basePath)
     val storage = metaClient.getStorage
-    val globPath = s"$basePath/*/*/*"
+    val globPath = s"$basePath/**"
     val statuses = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(globPath))
 
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()

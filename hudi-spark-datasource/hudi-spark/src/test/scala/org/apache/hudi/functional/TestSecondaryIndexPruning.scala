@@ -1770,7 +1770,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   }
 
   private def getTableFileSystemView(opts: Map[String, String]): HoodieTableFileSystemView = {
-    new HoodieTableFileSystemView(metadataWriter(getWriteConfig(opts)).getTableMetadata, metaClient, metaClient.getActiveTimeline)
+    val metadataTable = new HoodieBackedTableMetadata(context(), metaClient.getStorage, getWriteConfig(opts).getMetadataConfig, metaClient.getBasePath.toString, true);
+    new HoodieTableFileSystemView(metadataTable, metaClient, metaClient.getActiveTimeline)
   }
 
   private def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
@@ -1780,9 +1781,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       .withPath(basePath)
       .build()
   }
-
-  private def metadataWriter(clientConfig: HoodieWriteConfig): HoodieBackedTableMetadataWriter[_] = SparkHoodieBackedTableMetadataWriter.create(
-    storageConf, clientConfig, new HoodieSparkEngineContext(jsc)).asInstanceOf[HoodieBackedTableMetadataWriter[_]]
 }
 
 object TestSecondaryIndexPruning {
