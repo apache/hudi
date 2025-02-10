@@ -35,6 +35,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -93,8 +94,10 @@ public class HoodieFlinkCopyOnWriteTable<T>
   }
 
   @Override
-  public void validateForLatestTimestamp(String instantTime) {
-    // no-op
+  public void validateForLatestTimestamp(String instantTime, String action) {
+    if (!action.equals(WriteOperationType.COMPACT.name())) { // compaction in flink is expected to have older timestamps compared to latest intant.
+      validateForLatestTimestampInternal(instantTime);
+    }
   }
 
   /**
