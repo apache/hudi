@@ -298,6 +298,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
             getActiveCommitInstants(Arrays.asList("00000003", "00000004", "00000005", "00000006")),
             commitsAfterArchival, false);
         if (enableMetadata) {
+          // disable metadata table in the write config but files metadata partition is still available
           disableMetadataTable(writeConfig);
         }
       } else if (i < 8) {
