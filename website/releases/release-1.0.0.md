@@ -1,6 +1,6 @@
 ---
 title: "Release 1.0.0"
-sidebar_position: 1
+sidebar_position: 2
 layout: releases
 toc: true
 ---
@@ -170,3 +170,11 @@ snapshot queries with **70x reduced write amplification**.
 
 The 1.0.0 GA release is the culmination of extensive development, testing, and feedback. We invite you to upgrade and
 experience the new features and enhancements.
+
+## Known Regressions
+We discovered a regression in Hudi 1.0.0 release for backwards compatible writer for MOR table.
+It can silently deletes committed data after upgrade when new data is ingested to the table.
+
+:::tip
+Avoid upgrading any existing table to 1.0.0 if you are using MOR table in 0.x. But you are good to upgrade to 1.0.1.
+:::
