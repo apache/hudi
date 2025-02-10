@@ -18,8 +18,6 @@
 
 package org.apache.hudi.metrics;
 
-import java.util.function.Supplier;
-
 /**
  * Used for testing.
  */
