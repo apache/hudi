@@ -1507,12 +1507,20 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       allTableServicesExecutedSuccessfullyOrSkipped = false;
       throw e;
     } finally {
+      String tableName = writeClient.getConfig().getTableName();
+      boolean tableNameExists = StringUtils.nonEmpty(tableName);
+      String executionDurationMetricName = tableNameExists
+              ? String.format("%s.%s", tableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION)
+              : HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION;
+      String executionStatusMetricName = tableNameExists
+              ? String.format("%s.%s", tableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS)
+              : HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS;
       long timeSpent = metadataTableServicesTimer.endTimer();
-      metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION, timeSpent));
+      metrics.ifPresent(m -> m.setMetric(executionDurationMetricName, timeSpent));
       if (allTableServicesExecutedSuccessfullyOrSkipped) {
-        metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS, 1));
+        metrics.ifPresent(m -> m.setMetric(executionStatusMetricName, 1));
       } else {
-        metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS, -1));
+        metrics.ifPresent(m -> m.setMetric(executionStatusMetricName, -1));
       }
     }
   }
