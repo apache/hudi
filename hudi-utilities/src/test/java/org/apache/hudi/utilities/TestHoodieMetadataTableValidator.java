@@ -559,7 +559,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       validator.setPartitionCreationTime(Option.of(partition3CreationTime));
       // validate that exception is thrown since MDT has one additional partition.
       assertThrows(HoodieValidationException.class, () -> {
-        validator.validatePartitions(engineContext, baseStoragePath);
+        validator.validatePartitions(engineContext, baseStoragePath, metaClient);
       });
     } else {
       // 3rd partition creation time is > last completed instant
@@ -570,7 +570,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       validator.setPartitionCreationTime(Option.of(TimelineUtils.generateInstantTime(true, timeGenerator)));
 
       // validate that all 3 partitions are returned
-      assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath));
+      assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath, metaClient));
     }
   }
 

@@ -601,7 +601,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     // compare partitions
 
-    List<String> allPartitions = validatePartitions(engineContext, basePath);
+    List<String> allPartitions = validatePartitions(engineContext, basePath, metaClient);
     if (allPartitions.isEmpty()) {
       LOG.warn("The result of getting all partitions is null or empty, skip current validation. {}", taskLabels);
       return true;
@@ -728,9 +728,8 @@ public class HoodieMetadataTableValidator implements Serializable {
    * Compare the listing partitions result between metadata table and fileSystem.
    */
   @VisibleForTesting
-  List<String> validatePartitions(HoodieSparkEngineContext engineContext, StoragePath basePath) {
+  List<String> validatePartitions(HoodieSparkEngineContext engineContext, StoragePath basePath, HoodieTableMetaClient metaClient) {
     // compare partitions
-    HoodieTableMetaClient metaClient = this.metaClientOpt.orElseThrow(() -> new HoodieValidationException("Data table metaClient is not available for: " + cfg.basePath));
     HoodieTimeline completedTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
     List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, basePath, metaClient.getStorage(),
         completedTimeline);
