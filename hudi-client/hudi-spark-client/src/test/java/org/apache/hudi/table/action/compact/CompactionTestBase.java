@@ -71,6 +71,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class CompactionTestBase extends HoodieClientTestBase {
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit) {
+    return getConfigBuilder(autoCommit, basePath);
+  }
+
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, String basePath) {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
