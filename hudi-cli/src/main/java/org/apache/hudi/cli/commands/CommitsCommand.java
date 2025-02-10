@@ -50,6 +50,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.getCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getTimeline;
 
 /**
@@ -72,9 +73,8 @@ public class CommitsCommand {
 
     for (final HoodieInstant commit : commits) {
       if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe().deserialize(
+        final HoodieCommitMetadata commitMetadata = getCommitMetadata(HoodieCLI.getTableMetaClient().getActiveTimeline(),
             commit,
-            timeline.getInstantDetails(commit).get(),
             HoodieCommitMetadata.class);
         rows.add(new Comparable[] {commit.requestedTime(),
             commitMetadata.fetchTotalBytesWritten(),
@@ -421,7 +421,7 @@ public class CommitsCommand {
 
   private Option<HoodieCommitMetadata> getHoodieCommitMetadata(HoodieTimeline timeline, Option<HoodieInstant> hoodieInstant) throws IOException {
     if (hoodieInstant.isPresent()) {
-      return Option.of(TimelineUtils.getCommitMetadata(hoodieInstant.get(), timeline));
+      return Option.of(getCommitMetadata(hoodieInstant.get(), timeline));
     }
     return Option.empty();
   }
