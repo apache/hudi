@@ -159,6 +159,24 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     throw new UnsupportedOperationException("Should not be invoked");
   }
 
+  /**
+   * Streaming deserialization of records.
+   *
+   * @param inputStream The input stream from which to read the records.
+   * @param contentLocation The location within the input stream where the content starts.
+   * @param bufferSize The size of the buffer to use for reading the records.
+   * @return A ClosableIterator over HoodieRecord<T>.
+   * @throws IOException If there is an error reading or deserializing the records.
+   */
+  protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(
+          SeekableDataInputStream inputStream,
+          HoodieLogBlockContentLocation contentLocation,
+          HoodieRecordType type,
+          int bufferSize
+  ) throws IOException {
+    throw new UnsupportedOperationException("Should not be invoked");
+  }
+
   @Override
   protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
     throw new UnsupportedOperationException("Should not be invoked");
