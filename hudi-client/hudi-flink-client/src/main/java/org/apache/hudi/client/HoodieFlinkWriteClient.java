@@ -125,7 +125,7 @@ public class HoodieFlinkWriteClient<T> extends
 
   @Override
   protected void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime) {
-    // no op
+    validateTimestampInternal(metaClient, instantTime);
   }
 
   @Override

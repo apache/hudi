@@ -93,7 +93,7 @@ public class HoodieJavaCopyOnWriteTable<T>
   }
 
   @Override
-  public void validateForLatestTimestamp(String instantTime) {
+  public void validateForLatestTimestamp(String instantTime, String action) {
     validateForLatestTimestampInternal(instantTime);
   }
 

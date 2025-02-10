@@ -900,8 +900,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   /**
    * Validates that the instantTime is latest in the write timeline.
    * @param instantTime instant time of interest.
+   * @param action
    */
-  public abstract void validateForLatestTimestamp(String instantTime);
+  public abstract void validateForLatestTimestamp(String instantTime, String action);
 
   protected void validateForLatestTimestampInternal(String instantTime) {
     if (this.config.shouldEnableTimestampOrderinValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
