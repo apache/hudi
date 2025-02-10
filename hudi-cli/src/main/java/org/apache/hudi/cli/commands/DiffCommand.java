@@ -120,7 +120,7 @@ public class DiffCommand {
     for (final HoodieInstant commit : commits) {
       Option<byte[]> instantDetails = timeline.getInstantDetails(commit);
       if (instantDetails.isPresent()) {
-        HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe().deserialize(commit, instantDetails.get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(commit, HoodieCommitMetadata.class);
         for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
             commitMetadata.getPartitionToWriteStats().entrySet()) {
           for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {

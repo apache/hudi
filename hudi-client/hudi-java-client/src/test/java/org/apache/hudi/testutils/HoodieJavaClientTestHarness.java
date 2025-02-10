@@ -949,7 +949,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     TimelineLayout layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion());
     for (HoodieInstant commit : commitsToReturn) {
       HoodieCommitMetadata metadata =
-          layout.getCommitMetadataSerDe().deserialize(commit, commitTimeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
+          commitTimeline.deserializeInstantContent(commit, HoodieCommitMetadata.class);
       fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new StoragePath(basePath)));
     }
     return fileIdToFullPath;

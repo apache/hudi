@@ -168,12 +168,13 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
         writeToTable(i, writeClient2);
       }
 
-      runAssertionsForBasePath(testCase.useExistingTimelineServer, basePathStr1, writeClient1);
-      runAssertionsForBasePath(testCase.useExistingTimelineServer, basePathStr2, writeClient2);
+      runAssertionsForBasePath(metaClient.getActiveTimeline(), testCase.useExistingTimelineServer, basePathStr1, writeClient1);
+      runAssertionsForBasePath(metaClient.getActiveTimeline(), testCase.useExistingTimelineServer, basePathStr2, writeClient2);
     }
   }
 
-  private void runAssertionsForBasePath(boolean useExistingTimelineServer, String basePathStr, SparkRDDWriteClient writeClient) throws IOException {
+  private void runAssertionsForBasePath(
+      HoodieActiveTimeline activeTimeline, boolean useExistingTimelineServer, String basePathStr, SparkRDDWriteClient writeClient) throws IOException {
     // At this point, there are three deltacommits and one compaction commit in the Hudi timeline,
     // and the file system view of timeline server is not yet synced
     HoodieTableMetaClient newMetaClient = createMetaClient(basePathStr);
@@ -184,8 +185,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
 
     // For all the file groups compacted by the compaction commit, the file system view
     // should return the latest file slices which is written by the latest commit
-    HoodieCommitMetadata commitMetadata = COMMIT_METADATA_SER_DE.deserialize(compactionCommit,
-        timeline.getInstantDetails(compactionCommit).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = activeTimeline.deserializeInstantContent(compactionCommit, HoodieCommitMetadata.class);
     List<Pair<String, String>> partitionFileIdPairList =
         commitMetadata.getPartitionToWriteStats().entrySet().stream().flatMap(
             entry -> {

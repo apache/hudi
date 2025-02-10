@@ -649,7 +649,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
 
     HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
-    assertEquals(commitMetadata, timelineAfterFirstInstant.deserializeJsonInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
+    assertEquals(commitMetadata, timelineAfterFirstInstant.deserializeInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
 
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan();
     cleanerPlan.setLastCompletedCommitTimestamp("1");
@@ -658,12 +658,12 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     cleanerPlan.setPartitionsToBeDeleted(Collections.singletonList("partition1"));
     timeline.saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
 
-    assertEquals(cleanerPlan, timeline.deserializeAvroInstantContent(cleanInstant, HoodieCleanerPlan.class));
+    assertEquals(cleanerPlan, timeline.deserializeInstantContent(cleanInstant, HoodieCleanerPlan.class));
 
     HoodieTimeline mergedTimeline = timelineAfterFirstInstant.mergeTimeline(timeline.reload());
-    assertEquals(commitMetadata, mergedTimeline.deserializeJsonInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
-    assertEquals(cleanerPlan, mergedTimeline.deserializeAvroInstantContent(cleanInstant, HoodieCleanerPlan.class));
-    assertEquals(commitMetadata, metaClient.getCommitMetadataSerDe().deserialize(completedCommitInstant, mergedTimeline.getInstantDetails(completedCommitInstant).get(), HoodieCommitMetadata.class));
+    assertEquals(commitMetadata, mergedTimeline.deserializeInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
+    assertEquals(cleanerPlan, mergedTimeline.deserializeInstantContent(cleanInstant, HoodieCleanerPlan.class));
+    assertEquals(commitMetadata, metaClient.getActiveTimeline().deserializeInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
   }
 
   @Test

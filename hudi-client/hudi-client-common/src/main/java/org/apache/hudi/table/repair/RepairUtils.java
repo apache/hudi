@@ -93,8 +93,7 @@ public final class RepairUtils {
       case DELTA_COMMIT_ACTION:
         TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
         final HoodieCommitMetadata commitMetadata =
-            layout.getCommitMetadataSerDe().deserialize(instant,
-                timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            timeline.deserializeInstantContent(instant, HoodieCommitMetadata.class);
         return Option.of(commitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
       case REPLACE_COMMIT_ACTION:

@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -55,8 +54,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Tools used for migrating to new LSM tree style archived timeline.
@@ -103,8 +100,8 @@ public class LegacyArchivedMetaEntryReader {
           // should be json bytes.
           try {
             HoodieInstant instant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, stateTransitionTime);
-            org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata = new CommitMetadataSerDeV1().deserialize(instant, getUTF8Bytes(actionData.toString()),
-                org.apache.hudi.common.model.HoodieCommitMetadata.class);
+            org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().deserializeInstantContent(
+                instant, org.apache.hudi.common.model.HoodieCommitMetadata.class);
             // convert to avro bytes.
             return metaClient.getCommitMetadataSerDe().serialize(commitMetadata).get();
           } catch (IOException e) {

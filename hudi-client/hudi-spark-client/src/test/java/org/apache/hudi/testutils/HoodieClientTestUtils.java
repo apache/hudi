@@ -142,7 +142,7 @@ public class HoodieClientTestUtils {
     TimelineLayout layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion());
     for (HoodieInstant commit : commitsToReturn) {
       HoodieCommitMetadata metadata =
-          layout.getCommitMetadataSerDe().deserialize(commit, commitTimeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
+          commitTimeline.deserializeInstantContent(commit, HoodieCommitMetadata.class);
       fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new StoragePath(basePath)));
     }
     return fileIdToFullPath;
@@ -329,7 +329,7 @@ public class HoodieClientTestUtils {
     try {
       HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
       byte[] data = timeline.getInstantDetails(instant).get();
-      return Option.of(metaClient.getCommitMetadataSerDe().deserialize(instant, data, HoodieCommitMetadata.class));
+      return Option.of(metaClient.getActiveTimeline().deserializeInstantContent(instant, HoodieCommitMetadata.class));
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema from commit metadata", e);
     }

@@ -160,8 +160,7 @@ public class TestHoodieCommitMetadata {
     // Case: Reading 1.x written commit metadata
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "1");
     org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata1 =
-        COMMIT_METADATA_SER_DE.deserialize(instant,
-            serializedCommitMetadata, org.apache.hudi.common.model.HoodieCommitMetadata.class);
+        COMMIT_METADATA_SER_DE.deserialize(instant, serializedCommitMetadata, org.apache.hudi.common.model.HoodieCommitMetadata.class);
     assertEquals(2, commitMetadata1.partitionToWriteStats.size());
     assertEquals(2, commitMetadata1.partitionToWriteStats.get("partition1").size());
     assertEquals(2, commitMetadata1.partitionToWriteStats.get("partition1").size());

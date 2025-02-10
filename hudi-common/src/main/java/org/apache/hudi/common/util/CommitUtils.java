@@ -128,9 +128,7 @@ public class CommitUtils {
   public static Option<HoodieCommitMetadata> buildMetadataFromInstant(HoodieTimeline timeline, HoodieInstant instant) {
     try {
       TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
-      HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe().deserialize(instant,
-          timeline.getInstantDetails(instant).get(),
-          HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(instant, HoodieCommitMetadata.class);
 
       return Option.of(commitMetadata);
     } catch (IOException e) {
@@ -185,8 +183,7 @@ public class CommitUtils {
     return (Option<String>) timeline.getWriteTimeline().filterCompletedInstants().getReverseOrderedInstants()
         .map(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
-                .deserialize(instant, timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(instant, HoodieCommitMetadata.class);
             // process commits only with checkpoint entries
             String checkpointValue = commitMetadata.getMetadata(checkpointKey);
             if (StringUtils.nonEmpty(checkpointValue)) {

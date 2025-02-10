@@ -25,11 +25,10 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparator;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -73,7 +72,7 @@ public class CommitsCommand {
 
     for (final HoodieInstant commit : commits) {
       if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = getCommitMetadata(HoodieCLI.getTableMetaClient().getActiveTimeline(),
+        final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getActiveTimeline().deserializeInstantContent(
             commit,
             HoodieCommitMetadata.class);
         rows.add(new Comparable[] {commit.requestedTime(),
@@ -112,9 +111,8 @@ public class CommitsCommand {
 
     for (final HoodieInstant commit : commits) {
       if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe().deserialize(
+        final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getActiveTimeline().deserializeInstantContent(
             commit,
-            timeline.getInstantDetails(commit).get(),
             HoodieCommitMetadata.class);
 
         for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :

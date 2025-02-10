@@ -153,8 +153,8 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
       }.toMap
 
       for (commit <- commitsToReturn) {
-        val metadata: HoodieCommitMetadata = metaClient.getCommitMetadataSerDe.deserialize(commit,
-          commitTimeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
+        val metadata: HoodieCommitMetadata = metaClient.getActiveTimeline.deserializeInstantContent(commit,
+          classOf[HoodieCommitMetadata])
 
         if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.requestedTime) {
           metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>
