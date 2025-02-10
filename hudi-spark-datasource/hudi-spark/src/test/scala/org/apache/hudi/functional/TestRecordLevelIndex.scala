@@ -320,8 +320,8 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     assertEquals(0, getFileGroupCountForRecordIndex(writeConfig))
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(0, metaClient.getTableConfig.getMetadataPartitionsInflight.size())
-    // only files, col stats partition should be present.
-    assertEquals(2, metaClient.getTableConfig.getMetadataPartitions.size())
+    // only files, col stats, partition stats partition should be present.
+    assertEquals(3, metaClient.getTableConfig.getMetadataPartitions.size())
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -537,7 +537,6 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     assertTrue(compactionBaseFile.isPresent)
   }
 
-  @Disabled("Would take a long time to run on regular basis")
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIWithMDTCleaning(tableType: HoodieTableType): Unit = {
@@ -548,11 +547,14 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
 
-    hudiOpts = hudiOpts + (HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "40")
+    hudiOpts = hudiOpts + (
+      HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED.key() -> "1",
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "4"
+    )
     val function = () => doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    executeFunctionNTimes(function, 20)
+    executeFunctionNTimes(function, 5)
 
     assertTrue(getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isPresent)
     rollbackLastInstant(hudiOpts)

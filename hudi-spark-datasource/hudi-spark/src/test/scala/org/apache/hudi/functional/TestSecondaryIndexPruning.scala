@@ -1134,7 +1134,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   /**
    * Test case to write with updates and validate secondary index with clustering.
    */
-  @Disabled("[HUDI-8549]")
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testSecondaryIndexWithClusteringAndCleaning(tableType: HoodieTableType): Unit = {

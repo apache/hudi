@@ -89,7 +89,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               String compressionCodec,
                               StoragePath pathForReader,
                               boolean useNativeHFileReader) {
-    super(records, false, header, new HashMap<>(), HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME);
+    super(records, header, new HashMap<>(), HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME);
     this.compressionCodec = Option.of(compressionCodec);
     this.pathForReader = pathForReader;
     this.hFileReaderConfig = getHFileReaderConfig(useNativeHFileReader);
@@ -123,6 +123,24 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
             inlineStorage, content, Option.of(getSchemaFromHeader()))) {
       return unsafeCast(reader.getRecordIterator(readerSchema));
     }
+  }
+
+  /**
+   * Streaming deserialization of records.
+   *
+   * @param inputStream The input stream from which to read the records.
+   * @param contentLocation The location within the input stream where the content starts.
+   * @param bufferSize The size of the buffer to use for reading the records.
+   * @return A ClosableIterator over HoodieRecord<T>.
+   * @throws IOException If there is an error reading or deserializing the records.
+   */
+  protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(
+      SeekableDataInputStream inputStream,
+      HoodieLogBlockContentLocation contentLocation,
+      HoodieRecordType type,
+      int bufferSize
+  ) throws IOException {
+    throw new UnsupportedOperationException("Streaming deserialization is not supported for HoodieHFileDataBlock");
   }
 
   @Override

@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
@@ -233,26 +234,22 @@ public abstract class HoodieReaderContext<T> implements Closeable {
    * @param metadataMap  A map containing the record metadata.
    * @param schema       The Avro schema of the record.
    * @param orderingFieldName name of the ordering field
-   * @param orderingFieldTypeOpt type of the ordering field
-   * @param orderingFieldDefault default value for ordering
    * @return The ordering value.
    */
   public Comparable getOrderingValue(Option<T> recordOption,
                                      Map<String, Object> metadataMap,
                                      Schema schema,
-                                     String orderingFieldName,
-                                     Option<Schema.Type> orderingFieldTypeOpt,
-                                     Comparable orderingFieldDefault) {
+                                     Option<String> orderingFieldName) {
     if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
       return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
     }
 
-    if (!recordOption.isPresent() || !orderingFieldTypeOpt.isPresent()) {
-      return orderingFieldDefault;
+    if (!recordOption.isPresent() || orderingFieldName.isEmpty()) {
+      return DEFAULT_ORDERING_VALUE;
     }
 
-    Object value = getValue(recordOption.get(), schema, orderingFieldName);
-    Comparable finalOrderingVal = value != null ? castValue((Comparable) value, orderingFieldTypeOpt.get()) : orderingFieldDefault;
+    Object value = getValue(recordOption.get(), schema, orderingFieldName.get());
+    Comparable finalOrderingVal = value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
     metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
     return finalOrderingVal;
   }
@@ -284,11 +281,11 @@ public abstract class HoodieReaderContext<T> implements Closeable {
    * @return A mapping containing the metadata.
    */
   public Map<String, Object> generateMetadataForRecord(
-      String recordKey, String partitionPath, Comparable orderingVal, Option<Schema.Type> orderingFieldType) {
+      String recordKey, String partitionPath, Comparable orderingVal) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, recordKey);
     meta.put(INTERNAL_META_PARTITION_PATH, partitionPath);
-    meta.put(INTERNAL_META_ORDERING_FIELD, orderingFieldType.map(type -> castValue(orderingVal, type)).orElse(orderingVal));
+    meta.put(INTERNAL_META_ORDERING_FIELD, orderingVal);
     return meta;
   }
 
@@ -359,7 +356,21 @@ public abstract class HoodieReaderContext<T> implements Closeable {
     return projectRecord(from, to, Collections.emptyMap());
   }
 
-  public abstract Comparable castValue(Comparable value, Schema.Type newType);
+  /**
+   * Returns the value to a type representation in a specific engine.
+   * <p>
+   * This can be overridden by the reader context implementation on a specific engine to handle
+   * engine-specific field type system.  For example, Spark uses {@code UTF8String} to represent
+   * {@link String} field values, so we need to convert the values to {@code UTF8String} type
+   * in Spark for proper value comparison.
+   *
+   * @param value {@link Comparable} value to be converted.
+   *
+   * @return the converted value in a type representation in a specific engine.
+   */
+  public Comparable convertValueToEngineType(Comparable value) {
+    return value;
+  }
 
   /**
    * Extracts the record position value from the record itself.

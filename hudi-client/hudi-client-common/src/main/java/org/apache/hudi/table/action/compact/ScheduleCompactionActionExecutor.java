@@ -19,9 +19,11 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -34,7 +36,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.BaseActionExecutor;
+import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator;
@@ -45,12 +47,17 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.CollectionUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
-public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
+public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServicePlanActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ScheduleCompactionActionExecutor.class);
   private WriteOperationType operationType;
@@ -73,9 +80,9 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
 
   private void initPlanGenerator(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     if (WriteOperationType.COMPACT.equals(operationType)) {
-      planGenerator = new HoodieCompactionPlanGenerator(table, context, config);
+      planGenerator = new HoodieCompactionPlanGenerator(table, context, config, this);
     } else {
-      planGenerator = new HoodieLogCompactionPlanGenerator(table, context, config);
+      planGenerator = new HoodieLogCompactionPlanGenerator(table, context, config, this);
     }
   }
 
@@ -84,6 +91,28 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
     ValidationUtils.checkArgument(this.table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
         "Can only compact table of type " + HoodieTableType.MERGE_ON_READ + " and not "
             + this.table.getMetaClient().getTableType().name());
+    if (!table.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
+        && !config.getWriteConcurrencyMode().supportsMultiWriter()
+        && !config.getFailedWritesCleanPolicy().isLazy()) {
+      // TODO(yihua): this validation is removed for Java client used by kafka-connect.  Need to revisit this.
+      if (config.getEngineType() == EngineType.SPARK) {
+        // if there are inflight writes, their instantTime must not be less than that of compaction instant time
+        Option<HoodieInstant> earliestInflightOpt = table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction().firstInstant();
+        if (earliestInflightOpt.isPresent() && !compareTimestamps(earliestInflightOpt.get().requestedTime(), GREATER_THAN, instantTime)) {
+          LOG.warn("Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflightOpt.get()
+              + ", Compaction scheduled at " + instantTime + ". Hence skipping to schedule compaction");
+          return Option.empty();
+        }
+      }
+      // Committed and pending compaction instants should have strictly lower timestamps
+      List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
+          .getWriteTimeline().filterCompletedAndCompactionInstants().getInstantsAsStream()
+          .filter(instant -> compareTimestamps(instant.requestedTime(), GREATER_THAN_OR_EQUALS, instantTime))
+          .collect(Collectors.toList());
+      ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
+          "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
+              + conflictingInstants);
+    }
 
     HoodieCompactionPlan plan = scheduleCompaction();
     Option<HoodieCompactionPlan> option = Option.empty();

@@ -2450,9 +2450,8 @@ public class ITTestHoodieDataSource {
   private static Stream<Arguments> parametersForMetaColumnsSkip() {
     Object[][] data =
         new Object[][] {
-            {HoodieTableType.COPY_ON_WRITE, WriteOperationType.INSERT}
-            // add MOR upsert check after fixing of HUDI-8785
-            // {HoodieTableType.MERGE_ON_READ, WriteOperationType.UPSERT}
+            {HoodieTableType.COPY_ON_WRITE, WriteOperationType.INSERT},
+            {HoodieTableType.MERGE_ON_READ, WriteOperationType.UPSERT}
         };
     return Stream.of(data).map(Arguments::of);
   }

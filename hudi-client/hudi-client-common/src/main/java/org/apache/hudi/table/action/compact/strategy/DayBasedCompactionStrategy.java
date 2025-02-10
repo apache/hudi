@@ -18,11 +18,13 @@
 
 package org.apache.hudi.table.action.compact.strategy;
 
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -60,11 +62,15 @@ public class DayBasedCompactionStrategy extends BoundedIOCompactionStrategy {
     return comparator;
   }
 
+  /**
+   * For DayBasedCompactionStrategy, we will not record rolled partitions as missing partitions.
+   */
   @Override
-  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
-    return allPartitionPaths.stream().sorted(comparator)
+  public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+    List<String> res = allPartitionPaths.stream().sorted(comparator)
         .collect(Collectors.toList()).subList(0, Math.min(allPartitionPaths.size(),
             writeConfig.getTargetPartitionsPerDayBasedCompaction()));
+    return Pair.of(res, Collections.emptyList());
   }
 
   /**

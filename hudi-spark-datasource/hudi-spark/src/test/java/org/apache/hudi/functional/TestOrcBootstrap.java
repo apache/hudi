@@ -36,7 +36,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -258,9 +258,9 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
 
     // Rollback Bootstrap
     if (deltaCommit) {
-      FileCreateUtils.deleteDeltaCommit(metaClient.getBasePath().toString(), bootstrapCommitInstantTs);
+      FileCreateUtilsLegacy.deleteDeltaCommit(metaClient.getBasePath().toString(), bootstrapCommitInstantTs);
     } else {
-      FileCreateUtils.deleteCommit(metaClient.getBasePath().toString(), bootstrapCommitInstantTs);
+      FileCreateUtilsLegacy.deleteCommit(metaClient.getBasePath().toString(), bootstrapCommitInstantTs);
     }
     client.getTableServiceClient().rollbackFailedBootstrap();
     metaClient.reloadActiveTimeline();

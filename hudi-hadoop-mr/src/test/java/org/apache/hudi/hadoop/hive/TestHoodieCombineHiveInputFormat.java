@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -134,14 +134,14 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // mock the latest schema to the commit metadata
     InternalSchema internalSchema = AvroInternalSchemaConverter.convert(schema);
     commitMetadataOne.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema));
-    FileCreateUtils.createCommit(COMMIT_METADATA_SER_DE, path1.toString(), commitTime, Option.of(commitMetadataOne));
+    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, path1.toString(), commitTime, Option.of(commitMetadataOne));
     // Create 3 parquet files with 10 records each for partition 2
     File partitionDirTwo = InputFormatTestUtil.prepareParquetTable(path2, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadataTwo = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
     // Mock the latest schema to the commit metadata
     commitMetadataTwo.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema));
-    FileCreateUtils.createCommit(COMMIT_METADATA_SER_DE, path2.toString(), commitTime, Option.of(commitMetadataTwo));
+    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, path2.toString(), commitTime, Option.of(commitMetadataTwo));
 
     // Enable schema evolution
     conf.set("hoodie.schema.on.read.enable", "true");
@@ -209,7 +209,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
         .prepareMultiPartitionedParquetTable(tempDir, schema, 3, numRecords, commitTime, HoodieTableType.MERGE_ON_READ);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    FileCreateUtils.createCommit(COMMIT_METADATA_SER_DE, tempDir.toString(), commitTime, Option.of(commitMetadata));
+    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     TableDesc tblDesc = Utilities.defaultTd;
     // Set the input format
@@ -291,7 +291,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    FileCreateUtils.createCommit(COMMIT_METADATA_SER_DE, tempDir.toString(), commitTime, Option.of(commitMetadata));
+    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     TableDesc tblDesc = Utilities.defaultTd;
     // Set the input format
@@ -374,7 +374,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    FileCreateUtils.createCommit(COMMIT_METADATA_SER_DE, tempDir.toString(), commitTime, Option.of(commitMetadata));
+    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     String newCommitTime = "101";
     // to trigger the bug of HUDI-1772, only update fileid2
@@ -445,7 +445,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    FileCreateUtils.createCommit(COMMIT_METADATA_SER_DE, tempDir.toString(), commitTime, Option.of(commitMetadata));
+    FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, tempDir.toString(), commitTime, Option.of(commitMetadata));
 
     // insert 1000 update records to log file 0
     String newCommitTime = "101";

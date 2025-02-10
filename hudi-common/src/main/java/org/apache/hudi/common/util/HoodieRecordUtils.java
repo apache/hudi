@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.OperationModeAwareness;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
+import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,6 +113,10 @@ public class HoodieRecordUtils {
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
       throw new HoodieException("Unable to instantiate payload class ", e);
     }
+  }
+
+  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, GenericRecord record, Comparable orderingValue) {
+    return HoodieRecordUtils.loadPayload(recordPayloadClass, new Object[] {record, orderingValue}, GenericRecord.class, Comparable.class);
   }
 
   public static boolean recordTypeCompatibleEngine(HoodieRecordType recordType, EngineType engineType) {

@@ -58,7 +58,7 @@ import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
@@ -208,6 +208,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   private Function<HoodieWriteConfig, BaseHoodieWriteClient> createBrokenClusteringClient(Throwable throwable) {
     return config -> new WriteClientBrokenClustering<>(context, config, throwable);
+  }
+
+  private Function<HoodieWriteConfig, BaseHoodieWriteClient> createBrokenCleaningClient(Throwable throwable) {
+    return config -> new WriteClientBrokenClean<>(context, config, throwable);
   }
 
   private final Function<HoodieWriteMetadata, HoodieWriteMetadata<List<WriteStatus>>> clusteringMetadataRdd2List =
@@ -1084,7 +1088,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // delete rollback.completed instant to mimic failed rollback of clustering. and then trigger rollback of clustering again. same rollback instant should be used.
     HoodieInstant rollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
-    FileCreateUtils.deleteRollbackCommit(metaClient.getBasePath().toString(), rollbackInstant.requestedTime());
+    FileCreateUtilsLegacy.deleteRollbackCommit(metaClient.getBasePath().toString(), rollbackInstant.requestedTime());
     metaClient.reloadActiveTimeline();
 
     // create replace commit requested meta file so that rollback will not throw FileNotFoundException
@@ -1094,7 +1098,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
 
-    FileCreateUtils.createRequestedClusterCommit(metaClient.getBasePath().toString(), pendingClusteringInstant.requestedTime(), requestedReplaceMetadata);
+    FileCreateUtilsLegacy.createRequestedClusterCommit(metaClient.getBasePath().toString(), pendingClusteringInstant.requestedTime(), requestedReplaceMetadata);
 
     // trigger clustering again. no new rollback instants should be generated.
     try {
@@ -1201,14 +1205,19 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testFailWritesOnInlineTableServiceExceptions(boolean shouldFail) throws IOException {
-    testFailWritesOnInlineTableServiceThrowable(shouldFail, shouldFail, 
-        createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)));
+    testFailWritesOnInlineTableServiceThrowable(shouldFail, shouldFail, createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)), CLUSTERING_FAILURE);
   }
 
   @Test
   public void testFailWritesOnInlineTableServiceErrors() throws IOException {
-    testFailWritesOnInlineTableServiceThrowable(false, true,
-        createBrokenClusteringClient(new OutOfMemoryError(CLUSTERING_FAILURE)));
+    testFailWritesOnInlineTableServiceThrowable(false, true, createBrokenClusteringClient(new OutOfMemoryError(CLUSTERING_FAILURE)), CLUSTERING_FAILURE);
+  }
+
+  @Test
+  public void testFailWritesOnInlineCleanExceptions() throws IOException {
+    testFailWritesOnInlineTableServiceThrowable(true, true, createBrokenCleaningClient(new HoodieException(CLEANING_FAILURE)), CLEANING_FAILURE);
+    testFailWritesOnInlineTableServiceThrowable(false, true, createBrokenCleaningClient(new HoodieException(CLEANING_FAILURE)), CLEANING_FAILURE);
+    testFailWritesOnInlineTableServiceThrowable(true, true, createBrokenCleaningClient(new OutOfMemoryError(CLEANING_FAILURE)), CLEANING_FAILURE);
   }
 
   /**
@@ -1668,12 +1677,18 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
-  public static class WriteClientBrokenClustering<T extends HoodieRecordPayload> extends org.apache.hudi.client.SparkRDDWriteClient<T> {
-    private final Throwable throwable;
+  public static class WriteClientBrokenBase<T extends HoodieRecordPayload> extends org.apache.hudi.client.SparkRDDWriteClient<T> {
+    protected final Throwable throwable;
 
-    public WriteClientBrokenClustering(HoodieEngineContext context, HoodieWriteConfig config, Throwable throwable) {
-      super(context, config);
+    public WriteClientBrokenBase(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
+      super(context, clientConfig);
       this.throwable = throwable;
+    }
+  }
+
+  public static class WriteClientBrokenClustering<T extends HoodieRecordPayload> extends WriteClientBrokenBase<T> {
+    public WriteClientBrokenClustering(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
+      super(context, clientConfig, throwable);
     }
 
     @Override
@@ -1684,6 +1699,20 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         }
         throw (HoodieException) throwable;
       }
+    }
+  }
+
+  public static class WriteClientBrokenClean<T extends HoodieRecordPayload> extends WriteClientBrokenBase<T> {
+    public WriteClientBrokenClean(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
+      super(context, clientConfig, throwable);
+    }
+
+    @Override
+    protected void autoCleanOnCommit() {
+      if (throwable instanceof Error) {
+        throw (Error) throwable;
+      }
+      throw (HoodieException) throwable;
     }
   }
 

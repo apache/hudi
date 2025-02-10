@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -153,7 +154,9 @@ public class HoodieStreamer implements Serializable {
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
     Triple<RecordMergeMode, String, String> mergingConfigs =
-        HoodieTableConfig.inferCorrectMergingBehavior(cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId);
+        HoodieTableConfig.inferCorrectMergingBehavior(
+            cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField,
+            HoodieTableVersion.current());
     cfg.recordMergeMode = mergingConfigs.getLeft();
     cfg.payloadClassName = mergingConfigs.getMiddle();
     cfg.recordMergeStrategyId = mergingConfigs.getRight();
@@ -267,8 +270,8 @@ public class HoodieStreamer implements Serializable {
     public String sourceClassName = JsonDFSSource.class.getName();
 
     @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
-        + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
-    public String sourceOrderingField = "ts";
+        + " to break ties between records with same key in input data.")
+    public String sourceOrderingField = null;
 
     @Parameter(names = {"--payload-class"}, description = "Deprecated. "
         + "Use --merge-mode for commit time or event time merging. "
@@ -391,7 +394,12 @@ public class HoodieStreamer implements Serializable {
     /**
      * Resume Hudi Streamer from this checkpoint.
      */
-    @Parameter(names = {"--checkpoint"}, description = "Resume Hudi Streamer from this checkpoint.")
+    @Parameter(names = {"--checkpoint"}, description = "Resume Hudi Streamer from this checkpoint. \nIf --source-class specifies a class "
+        + "that is a child class of org.apache.hudi.utilities.sources.HoodieIncrSource and the hoodie.table.version is 8 or higher, the "
+        + "format is expected to be either `resumeFromInstantRequestTime: <checkpoint>` or `resumeFromInstantCompletionTime: <checkpoint>`. "
+        + "In table version 8 and above internally we only support completion time based commit ordering. If we use resumeFromInstantCompletionTime "
+        + "mode, the checkpoint will be reset to the instant with the corresponding completion time and resume. If we use resumeFromInstantRequestTime "
+        + "hudi first finds the instant, fetch the completion time of it and resume from the completion time.")
     public String checkpoint = null;
 
     @Parameter(names = {"--initial-checkpoint-provider"}, description = "subclass of "

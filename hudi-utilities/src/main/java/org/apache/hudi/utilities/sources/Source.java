@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.shouldTargetCheckpointV2;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 
 /**
@@ -99,12 +100,22 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
         sourceLimit);
   }
 
+  /**
+   * The second phase of checkpoint resolution - Checkpoint version translation.
+   * After the checkpoint value is decided based on the existing configurations at
+   * org.apache.hudi.utilities.streamer.StreamerCheckpointUtils#resolveWhatCheckpointToResume,
+   *
+   * For most of the data sources the there is no difference between checkpoint V1 and V2, it's
+   * merely changing the wrapper class.
+   *
+   * Check child class method overrides to see special case handling.
+   * */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   protected Option<Checkpoint> translateCheckpoint(Option<Checkpoint> lastCheckpoint) {
     if (lastCheckpoint.isEmpty()) {
       return Option.empty();
     }
-    if (CheckpointUtils.targetCheckpointV2(writeTableVersion)) {
+    if (CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, getClass().getName())) {
       // V2 -> V2
       if (lastCheckpoint.get() instanceof StreamerCheckpointV2) {
         return lastCheckpoint;
@@ -128,6 +139,25 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     throw new UnsupportedOperationException("Unsupported checkpoint type: " + lastCheckpoint.get());
   }
 
+  public void assertCheckpointVersion(Option<Checkpoint> lastCheckpoint, Option<Checkpoint> lastCheckpointTranslated, Checkpoint checkpoint) {
+    if (checkpoint != null) {
+      boolean shouldBeV2Checkpoint = shouldTargetCheckpointV2(writeTableVersion, getClass().getName());
+      String errorMessage = String.format(
+          "Data source should return checkpoint version V%s. The checkpoint resumed in the iteration is %s, whose translated version is %s. "
+              + "The checkpoint returned after the iteration %s.",
+          shouldBeV2Checkpoint ? "2" : "1",
+          lastCheckpoint.isEmpty() ? "null" : lastCheckpointTranslated.get(),
+          lastCheckpointTranslated.isEmpty() ? "null" : lastCheckpointTranslated.get(),
+          checkpoint);
+      if (shouldBeV2Checkpoint && !(checkpoint instanceof StreamerCheckpointV2)) {
+        throw new IllegalStateException(errorMessage);
+      }
+      if (!shouldBeV2Checkpoint && !(checkpoint instanceof StreamerCheckpointV1)) {
+        throw new IllegalStateException(errorMessage);
+      }
+    }
+  }
+
   /**
    * Main API called by Hoodie Streamer to fetch records.
    *
@@ -136,7 +166,8 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
    * @return
    */
   public final InputBatch<T> fetchNext(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    InputBatch<T> batch = readFromCheckpoint(translateCheckpoint(lastCheckpoint), sourceLimit);
+    Option<Checkpoint> lastCheckpointTranslated = translateCheckpoint(lastCheckpoint);
+    InputBatch<T> batch = readFromCheckpoint(lastCheckpointTranslated, sourceLimit);
     // If overriddenSchemaProvider is passed in CLI, use it
     return overriddenSchemaProvider == null ? batch
         : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);

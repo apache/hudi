@@ -166,7 +166,10 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
   static void unsetRecordMergeMode(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
     Triple<RecordMergeMode, String, String> mergingConfigs =
-        HoodieTableConfig.inferCorrectMergingBehavior(tableConfig.getRecordMergeMode(), tableConfig.getPayloadClass(), tableConfig.getRecordMergeStrategyId());
+        HoodieTableConfig.inferCorrectMergingBehavior(
+            tableConfig.getRecordMergeMode(), tableConfig.getPayloadClass(),
+            tableConfig.getRecordMergeStrategyId(), tableConfig.getPreCombineField(),
+            tableConfig.getTableVersion());
     if (StringUtils.nonEmpty(mergingConfigs.getMiddle())) {
       tablePropsToAdd.put(HoodieTableConfig.PAYLOAD_CLASS_NAME, mergingConfigs.getMiddle());
     }

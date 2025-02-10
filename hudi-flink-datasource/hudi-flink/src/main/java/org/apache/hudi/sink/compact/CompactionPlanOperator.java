@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -29,6 +30,7 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkTables;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -70,6 +72,8 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
   private transient FlinkCompactionMetrics compactionMetrics;
 
+  private transient HoodieFlinkWriteClient writeClient;
+
   public CompactionPlanOperator(Configuration conf) {
     this.conf = conf;
   }
@@ -79,10 +83,11 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
     super.open();
     registerMetrics();
     this.table = FlinkTables.createTable(conf, getRuntimeContext());
+    this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     // when starting up, rolls back all the inflight compaction instants if there exists,
     // these instants are in priority for scheduling task because the compaction instants are
     // scheduled from earliest(FIFO sequence).
-    CompactionUtil.rollbackCompaction(table);
+    CompactionUtil.rollbackCompaction(table, this.writeClient);
   }
 
   @Override

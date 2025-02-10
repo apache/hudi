@@ -18,13 +18,14 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.HoodieSparkIndexClient;
+import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -75,14 +76,14 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
       String fieldName = fieldNamePrefix + "_" + i;
       HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName,
           i % 2 == 0 ? PARTITION_NAME_SECONDARY_INDEX : PARTITION_NAME_EXPRESSION_INDEX, fieldName);
-      sparkIndexClient.register(metaClient, indexDefinition);
+      HoodieIndexUtils.register(metaClient, indexDefinition);
       readAndValidateIndexDefn(indexDefinition);
     }
 
     // add col stats index.
     HoodieIndexDefinition colStatsIndexDefinition = getIndexDefinition(PARTITION_NAME_COLUMN_STATS,
         PARTITION_NAME_COLUMN_STATS, fieldNamePrefix + "_5");
-    sparkIndexClient.register(metaClient, colStatsIndexDefinition);
+    HoodieIndexUtils.register(metaClient, colStatsIndexDefinition);
     readAndValidateIndexDefn(colStatsIndexDefinition);
 
     // drop one among sec index and expression index.
@@ -104,7 +105,7 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
     List<String> colsToIndex = IntStream.range(0, 10).mapToObj(number -> fieldNamePrefix + "_" + number).collect(Collectors.toList());
     colStatsIndexDefinition = getIndexDefinition(PARTITION_NAME_COLUMN_STATS,
         PARTITION_NAME_COLUMN_STATS, PARTITION_NAME_COLUMN_STATS, colsToIndex, Collections.EMPTY_MAP);
-    sparkIndexClient.register(metaClient, colStatsIndexDefinition);
+    HoodieIndexUtils.register(metaClient, colStatsIndexDefinition);
     readAndValidateIndexDefn(colStatsIndexDefinition);
 
     // drop col stats
@@ -139,7 +140,13 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
   private HoodieIndexDefinition getIndexDefinition(String indexName, String indexType, String indexFunc, List<String> sourceFields,
                                                    Map<String, String> indexOptions) {
     String fullIndexName = getIndexFullName(indexName, indexType);
-    return new HoodieIndexDefinition(fullIndexName, indexType, indexFunc, sourceFields, indexOptions);
+    return HoodieIndexDefinition.newBuilder()
+        .withIndexName(fullIndexName)
+        .withIndexType(indexType)
+        .withIndexFunction(indexFunc)
+        .withSourceFields(sourceFields)
+        .withIndexOptions(indexOptions)
+        .build();
   }
 
   private String getIndexFullName(String indexName, String indexType) {

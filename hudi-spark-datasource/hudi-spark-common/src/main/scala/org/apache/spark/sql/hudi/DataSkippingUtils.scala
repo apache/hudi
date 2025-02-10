@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNullCountColumnNameFor, getValueCountColumnNameFor}
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.VisibleForTesting
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, HoodieCatalystExpressionUtils}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
@@ -28,7 +27,6 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, Attribu
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils._
-import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.concurrent.atomic.AtomicBoolean
@@ -410,6 +408,64 @@ object DataSkippingUtils extends Logging {
       case other =>
         throw new AnalysisException(s"convert reference to name failed,  Found unsupported expression ${other}")
     }
+  }
+
+  /**
+   * Deduces if filter contains Null count or value count based filters. Partitions filters for MOR table cannot be looked up in
+   * Partition Stats Index if they contain these filters.
+   *
+   * @param sourceFilterExpr source expr filter of interest.
+   * @param indexedCols      list of indexed cols
+   * @return {@code true} if source filters contains null or value count based filters. {@code false} otherwise.
+   */
+  def containsNullOrValueCountBasedFilters(sourceFilterExpr: Expression, indexedCols: Seq[String]): Boolean = {
+    // To handle Not(IsNull(...)) automatically as IsNotNull(...), or Not(IsNotNull(...)) as IsNull(...),
+    // we normalize the expression to push down the Not operator to transform once. Then, we
+    // only match on Or, And, IsNull, IsNotNull, etc. on the "not-pushed-down" expression.
+    val normalizedNotExpr = pushDownNot(sourceFilterExpr)
+
+    normalizedNotExpr match {
+      // If Expression is not resolved, we can't perform the analysis accurately, bailing
+      case expr if !expr.resolved => false
+
+      // Filter "colA = null"
+      // Translates to "colA_nullCount = null" for index lookup
+      case EqualNullSafe(attrRef: AttributeReference, litNull@Literal(null, _)) =>
+        getTargetIndexedColumnName(attrRef, indexedCols).isDefined
+
+      // Filter "colA is null"
+      // Translates to "colA_nullCount > 0" for index lookup
+      case IsNull(attribute: AttributeReference) =>
+        getTargetIndexedColumnName(attribute, indexedCols).isDefined
+
+      // Filter "colA is not null"
+      // Translates to "colA_nullCount = null or colA_valueCount = null or colA_nullCount < colA_valueCount" for index lookup
+      // "colA_nullCount = null or colA_valueCount = null" means we are not certain whether the column is null or not,
+      // hence we return True to ensure this does not affect the query.
+      case IsNotNull(attribute: AttributeReference) =>
+        getTargetIndexedColumnName(attribute, indexedCols).isDefined
+
+      case or: Or =>
+        val resLeft = containsNullOrValueCountBasedFilters(or.left, indexedCols = indexedCols)
+        val resRight = containsNullOrValueCountBasedFilters(or.right, indexedCols = indexedCols)
+        resLeft || resRight
+
+      case and: And =>
+        val resLeft = containsNullOrValueCountBasedFilters(and.left, indexedCols = indexedCols)
+        val resRight = containsNullOrValueCountBasedFilters(and.right, indexedCols = indexedCols)
+        resLeft || resRight
+
+      case _: Expression => false
+    }
+  }
+
+  private def pushDownNot(expr: Expression): Expression = expr match {
+    case Not(And(l, r)) => Or(pushDownNot(Not(l)), pushDownNot(Not(r)))
+    case Not(Or(l, r)) => And(pushDownNot(Not(l)), pushDownNot(Not(r)))
+    case Not(IsNull(a)) => IsNotNull(a)
+    case Not(IsNotNull(a)) => IsNull(a)
+    case Not(child) => pushDownNot(child)
+    case other => other
   }
 }
 
