@@ -24,12 +24,16 @@ import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -38,12 +42,15 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -54,6 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -280,11 +288,16 @@ public class TestAsyncCompaction extends CompactionTestBase {
     }, "Latest pending compaction instant time can be earlier than this instant time");
   }
 
-  @Test
-  public void testScheduleCompactionAfterPendingIngestion() throws Exception {
+  @ParameterizedTest
+  @ValueSource(ints = {6, 8})
+  public void testScheduleCompactionAfterPendingIngestion(int tableVersion) throws Exception {
     // Case: Failure case. Earliest ingestion inflight instant time must be later than compaction time
+    String localBasePath = basePath + "_" + tableVersion;
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(tableVersion));
+    metaClient = HoodieTestUtils.init(storageConf, localBasePath, HoodieTableType.MERGE_ON_READ, props);
 
-    HoodieWriteConfig cfg = getConfig(false);
+    HoodieWriteConfig cfg = getConfigBuilder(false, localBasePath).withWriteTableVersion(tableVersion).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     SparkRDDReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
@@ -306,10 +319,19 @@ public class TestAsyncCompaction extends CompactionTestBase {
         metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
     assertEquals(inflightInstantTime, inflightInstant.requestedTime(), "inflight instant has expected instant time");
 
-    assertDoesNotThrow(() -> {
-      // Schedule compaction but do not run them
-      scheduleCompaction(compactionInstantTime, client, cfg);
-    }, "Earliest ingestion inflight instant time can be smaller than the compaction time");
+    if (tableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
+      SparkRDDWriteClient finalClient = client;
+      assertDoesNotThrow(() -> {
+        // Schedule compaction but do not run them
+        scheduleCompaction(compactionInstantTime, finalClient, cfg);
+      }, "Earliest ingestion inflight instant time can be smaller than the compaction time");
+    } else {
+      // since there is a pending delta commit, compaction schedule should not generate any plan
+      client = getHoodieWriteClient(cfg);
+      client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+      metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf()).setBasePath(cfg.getBasePath()).build();
+      assertFalse(metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().isPresent());
+    }
   }
 
   @Test
