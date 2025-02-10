@@ -679,7 +679,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> WRITE_FAST_MODE = ConfigOptions
       .key("write.fast.mode")
       .booleanType()
-      .defaultValue(false)
+      .defaultValue(true)
       .withDescription("Optimized Flink write into Hudi table, which uses customized serialization/deserialization. "
           + "Note, that this parameters doesn't change behavior for bulk insert and append mode. "
           + "Also, consistent hashing index and bounded context are not supported for now.");
