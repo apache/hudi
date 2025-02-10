@@ -962,10 +962,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
-    startCommit(instantTime, actionType, metaClient);
-  }
 
-  private void startCommit(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
     LOG.info("Generate a new instant time: {} action: {}", instantTime, actionType);
     // check there are no inflight restore before starting a new commit.
     HoodieTimeline inflightRestoreTimeline = metaClient.getActiveTimeline().getRestoreTimeline().filterInflightsAndRequested();
