@@ -367,13 +367,6 @@ public class HoodieMetrics {
     }
   }
 
-  public void updatePreWriteMetrics(final String action, final long durationInMs) {
-    if (config.isMetricsOn()) {
-      LOG.info(String.format("Sending preWrite metrics (%s.duration, %d)", action, durationInMs));
-      metrics.registerGauge(getMetricsName("pre_write", String.format("%s.duration", action)), durationInMs);
-    }
-  }
-
   @VisibleForTesting
   public String getMetricsName(String action, String metric) {
     if (config == null) {
