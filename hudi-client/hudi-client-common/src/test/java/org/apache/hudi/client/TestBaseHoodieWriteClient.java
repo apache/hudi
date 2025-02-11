@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -72,6 +73,8 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     when(inflightRestoreTimeline.countInstants()).thenReturn(0);
     // mock no pending compaction
     when(mockMetaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant()).thenReturn(Option.empty());
+    // mock table version
+    when(mockMetaClient.getTableConfig().getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
 
     writeClient.startCommit(HoodieActiveTimeline.COMMIT_ACTION, mockMetaClient);
     verify(tableServiceClient).rollbackFailedWrites(mockMetaClient);
