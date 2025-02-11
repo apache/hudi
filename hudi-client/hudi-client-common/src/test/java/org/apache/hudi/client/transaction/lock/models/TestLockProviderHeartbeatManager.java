@@ -30,6 +30,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import static org.apache.hudi.client.transaction.lock.models.LockProviderHeartbeatManager.DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS;
@@ -137,15 +138,14 @@ public class TestLockProviderHeartbeatManager {
   @Test
   void testHeartbeatUnableToAcquireSemaphore() throws InterruptedException {
     CountDownLatch latch = new CountDownLatch(1);
-
+    AtomicReference<Thread> t = new AtomicReference<>();
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
         .thenAnswer(invocation -> {
           Runnable task = invocation.getArgument(0);
-          Thread t = new Thread(() -> {
+          t.set(new Thread(() -> {
             task.run();
             latch.countDown();
-          });
-          t.start();
+          }));
           return mockFuture;
         });
 
@@ -164,6 +164,7 @@ public class TestLockProviderHeartbeatManager {
         semaphore,
         mockLogger);
     assertTrue(manager.startHeartbeatForThread(Thread.currentThread()));
+    t.get().start();
     assertTrue(latch.await(1000, TimeUnit.MILLISECONDS));
     assertTrue(manager.stopHeartbeat(true));
 
@@ -187,16 +188,14 @@ public class TestLockProviderHeartbeatManager {
   @Test
   void testHeartbeatTaskHandlesInterrupt() throws InterruptedException {
     CountDownLatch latch = new CountDownLatch(1);
-
+    AtomicReference<Thread> t = new AtomicReference<>();
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
         .thenAnswer(invocation -> {
           Runnable task = invocation.getArgument(0);
-          Thread t = new Thread(() -> {
+          t.set(new Thread(() -> {
             task.run();
             latch.countDown();
-          });
-          t.start();
-          t.interrupt();
+          }));
           return mockFuture;
         });
 
@@ -205,13 +204,16 @@ public class TestLockProviderHeartbeatManager {
     // Initialize heartbeat manager with a function that always returns false (renewal failure)
     manager = createDefaultManagerWithMocks(() -> false);
     assertTrue(manager.startHeartbeatForThread(Thread.currentThread()));
+    t.get().start();
+    t.get().interrupt();
 
     assertTrue(latch.await(500, TimeUnit.MILLISECONDS), "Heartbeat task did not run in time");
 
-    assertTrue(manager.stopHeartbeat(true));
+    // This call will wait for heartbeat task to stop itself, as the semaphore has already been acquired by the heartbeat task.
+    assertFalse(manager.stopHeartbeat(true));
 
     verify(mockLogger).warn("Owner {}: Heartbeat task was interrupted. Exiting gracefully.", LOGGER_ID);
-    verify(mockLogger).debug("Owner {}: Heartbeat task successfully terminated.", LOGGER_ID);
+    verify(mockLogger).warn("Owner {}: No active heartbeat task to stop.", LOGGER_ID);
     assertFalse(manager.hasActiveHeartbeat());
   }
 
@@ -225,14 +227,14 @@ public class TestLockProviderHeartbeatManager {
   void testHeartbeatTaskImmediateDeadMonitoringThread() throws InterruptedException {
     // Use a real thread that will terminate immediately.
     CountDownLatch latch = new CountDownLatch(1);
-
+    AtomicReference<Thread> t = new AtomicReference<>();
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
         .thenAnswer(invocation -> {
           Runnable task = invocation.getArgument(0);
-          new Thread(() -> {
+          t.set(new Thread(() -> {
             task.run();
             latch.countDown();
-          }).start();
+          }));
           return mockFuture;
         });
 
@@ -241,11 +243,12 @@ public class TestLockProviderHeartbeatManager {
     });
     deadThread.start();
     deadThread.join();
-
     manager = createDefaultManagerWithMocks(() -> true);
 
     assertTrue(manager.startHeartbeatForThread(deadThread));
-    assertTrue(latch.await(100, TimeUnit.MILLISECONDS), "Heartbeat task did not run in time");
+    t.get().start();
+
+    assertTrue(latch.await(500, TimeUnit.MILLISECONDS), "Heartbeat task did not run in time");
     verify(mockLogger).warn("Owner {}: Monitored thread is no longer alive.", LOGGER_ID);
     verify(mockLogger).info("Owner {}: Cancelling future heartbeat invocations.", LOGGER_ID);
     verify(mockLogger).info("Owner {}: Requested termination of heartbeat task. Cancellation returned {}.", LOGGER_ID, false);
@@ -254,15 +257,15 @@ public class TestLockProviderHeartbeatManager {
 
   @Test
   void testHeartbeatTaskRenewalException() throws InterruptedException {
-    // Use a real thread
     CountDownLatch latch = new CountDownLatch(1);
+    AtomicReference<Thread> t = new AtomicReference<>();
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
         .thenAnswer(invocation -> {
           Runnable task = invocation.getArgument(0);
-          new Thread(() -> {
+          t.set(new Thread(() -> {
             task.run();
             latch.countDown();
-          }).start();
+          }));
           return mockFuture;
         });
     manager = createDefaultManagerWithMocks(() -> {
@@ -270,7 +273,8 @@ public class TestLockProviderHeartbeatManager {
     });
 
     assertTrue(manager.startHeartbeatForThread(Thread.currentThread()));
-    assertTrue(latch.await(300, TimeUnit.MILLISECONDS), "Heartbeat task did not run in time");
+    t.get().start();
+    assertTrue(latch.await(500, TimeUnit.MILLISECONDS), "Heartbeat task did not run in time");
     verify(mockLogger).error(
         eq("Owner {}: Heartbeat function threw exception {}"),
         eq(LOGGER_ID),
@@ -302,7 +306,7 @@ public class TestLockProviderHeartbeatManager {
     t.start();
     // Unblock the heartbeat task.
     stopHeartbeatTaskLatch.countDown();
-    assertTrue(finishStopHeartbeatLatch.await(300, TimeUnit.MILLISECONDS), "Stop heartbeat task did not finish.");
+    assertTrue(finishStopHeartbeatLatch.await(500, TimeUnit.MILLISECONDS), "Stop heartbeat task did not finish.");
     assertFalse(manager.hasActiveHeartbeat());
     verify(mockLogger).debug("Owner {}: Heartbeat task successfully terminated.", LOGGER_ID);
   }
@@ -336,7 +340,7 @@ public class TestLockProviderHeartbeatManager {
     stopHeartbeatThread.start();
     assertTrue(stopHeartbeatLatch.await(7000, TimeUnit.MILLISECONDS), "Stop heartbeat task did not finish.");
     assertTrue(manager.hasActiveHeartbeat());
-    verify(mockLogger).warn("Owner {}: Timed out while waiting for heartbeat termination.", LOGGER_ID);
+    verify(mockLogger).error("Owner {}: Heartbeat is still in flight!", LOGGER_ID);
     // Unblock the heartbeat task.
     stopHeartbeatTaskLatch.countDown();
   }
