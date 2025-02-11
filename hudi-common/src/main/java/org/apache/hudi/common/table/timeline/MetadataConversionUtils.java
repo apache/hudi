@@ -370,12 +370,29 @@ public class MetadataConversionUtils {
   }
 
   /**
+   * Convert commit metadata from json to avro.
+   */
+  public static HoodieCommitMetadata convertCommitMetadataAvroToPojo(org.apache.hudi.avro.model.HoodieCommitMetadata hoodieCommitMetadata) {
+    hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
+    return JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, HoodieCommitMetadata.class);
+  }
+
+  /**
    * Convert replacecommit metadata from json to avro.
    */
   private static org.apache.hudi.avro.model.HoodieReplaceCommitMetadata convertReplaceCommitMetadata(HoodieReplaceCommitMetadata replaceCommitMetadata) {
     replaceCommitMetadata.getPartitionToWriteStats().remove(null);
     replaceCommitMetadata.getPartitionToReplaceFileIds().remove(null);
     return JsonUtils.getObjectMapper().convertValue(replaceCommitMetadata, org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class);
+  }
+
+  /**
+   * Convert replacecommit metadata from json to avro.
+   */
+  public static HoodieReplaceCommitMetadata convertReplaceCommitMetadataAvroToPojo(org.apache.hudi.avro.model.HoodieReplaceCommitMetadata replaceCommitMetadata) {
+    replaceCommitMetadata.getPartitionToWriteStats().remove(null);
+    replaceCommitMetadata.getPartitionToReplaceFileIds().remove(null);
+    return JsonUtils.getObjectMapper().convertValue(replaceCommitMetadata, HoodieReplaceCommitMetadata.class);
   }
 
   /**
