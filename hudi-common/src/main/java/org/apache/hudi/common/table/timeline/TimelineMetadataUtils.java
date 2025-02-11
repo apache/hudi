@@ -204,7 +204,7 @@ public class TimelineMetadataUtils {
     return deserializeAvroMetadata(bytes, HoodieReplaceCommitMetadata.class);
   }
 
-  public static <T extends SpecificRecordBase> T deserializeAvroMetadata(byte[] bytes, Class<T> clazz)
+  public static <T> T deserializeAvroMetadata(byte[] bytes, Class<T> clazz)
       throws IOException {
     DatumReader<T> reader = new SpecificDatumReader<>(clazz);
     FileReader<T> fileReader = DataFileReader.openReader(new SeekableByteArrayInput(bytes), reader);
