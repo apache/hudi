@@ -52,6 +52,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,9 +60,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
-import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
-import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
@@ -81,21 +79,22 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
   }
 
   public static List<Arguments> tableTypeMetadataFSVTypeArgs() {
-    return asList(
-        Arguments.of(COPY_ON_WRITE, false, FileSystemViewStorageType.MEMORY),
-        Arguments.of(COPY_ON_WRITE, false, FileSystemViewStorageType.SPILLABLE_DISK),
-        Arguments.of(COPY_ON_WRITE, true, FileSystemViewStorageType.MEMORY),
-        Arguments.of(COPY_ON_WRITE, true, FileSystemViewStorageType.SPILLABLE_DISK),
-        Arguments.of(MERGE_ON_READ, false, FileSystemViewStorageType.MEMORY),
-        Arguments.of(MERGE_ON_READ, false, FileSystemViewStorageType.SPILLABLE_DISK),
-        Arguments.of(MERGE_ON_READ, true, FileSystemViewStorageType.MEMORY),
-        Arguments.of(MERGE_ON_READ, true, FileSystemViewStorageType.SPILLABLE_DISK)
-    );
+    List<Arguments> testCases = new ArrayList<>();
+    for (HoodieTableType tableType : HoodieTableType.values()) {
+      for (boolean enableMdt : Arrays.asList(true, false)) {
+        for (FileSystemViewStorageType viewStorageType : Arrays.asList(FileSystemViewStorageType.MEMORY, FileSystemViewStorageType.SPILLABLE_DISK)) {
+          for (int writerVersion : Arrays.asList(6, 8)) {
+            testCases.add(Arguments.of(tableType, enableMdt, viewStorageType, writerVersion));
+          }
+        }
+      }
+    }
+    return testCases;
   }
 
   @ParameterizedTest
   @MethodSource("tableTypeMetadataFSVTypeArgs")
-  public void testFileSystemViewConsistency(HoodieTableType tableType, boolean enableMdt, FileSystemViewStorageType storageType) throws IOException {
+  public void testFileSystemViewConsistency(HoodieTableType tableType, boolean enableMdt, FileSystemViewStorageType storageType, int writeVersion) throws IOException {
     this.tableType = tableType;
     HoodieWriteConfig.Builder configBuilder = getConfigBuilder();
     if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -108,7 +107,8 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
         .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClustering(true).withInlineClusteringNumCommits(5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(4).build())
         // set aggressive values so that within 20 batches few iterations of cleaner and archival will kick in
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(6, 8).build());
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(6, 8).build())
+        .withWriteTableVersion(writeVersion);
     HoodieWriteConfig config = configBuilder.build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       insertRecords(client, "001", 100, WriteOperationType.BULK_INSERT);
