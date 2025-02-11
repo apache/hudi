@@ -74,6 +74,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.sql.Date;
@@ -1154,6 +1155,17 @@ public class HoodieAvroUtils {
       default:
     }
     throw new HoodieAvroSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
+  }
+
+  /**
+   * Use this instead of DECIMAL_CONVERSION.fromBytes() because that method does not add in precision
+   *
+   * bytes is the result of BigDecimal.unscaledValue().toByteArray();
+   * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
+   */
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, LogicalTypes.Decimal decimal) {
+    return new BigDecimal(new BigInteger(value),
+        decimal.getScale(), new MathContext(decimal.getPrecision(), RoundingMode.HALF_UP));
   }
 
   /**

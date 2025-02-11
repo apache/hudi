@@ -27,9 +27,9 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -40,7 +40,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
@@ -64,7 +66,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     rec.put("favorite_number", number);
     rec.put("favorite_color", color);
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, simpleSchema));
+    assertEquals(rec, CONVERTER.convert(json, simpleSchema));
   }
 
   @ParameterizedTest
@@ -78,11 +80,11 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     rec.put("favorite_number", 1337);
     rec.put("favorite_color", "10");
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, simpleSchema));
+    assertEquals(rec, CONVERTER.convert(json, simpleSchema));
   }
 
   private static final String DECIMAL_AVRO_FILE_PATH = "/decimal-logical-type.avsc";
-  private static final String DECIMAL_FIXED_AVRO_FILE_PATH = "/decimal-logical-type-fixed-type.avsc";
+
   /**
    * Covered case:
    * Avro Logical Type: Decimal
@@ -122,7 +124,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
   @ParameterizedTest
   @MethodSource("decimalGoodCases")
   void decimalLogicalTypeTest(String avroFilePath, String groundTruth, String strInput,
-                              Double numInput, boolean testFixedByteArray) throws IOException {
+                              Number numInput, boolean testFixedByteArray) throws IOException {
     BigDecimal bigDecimal = new BigDecimal(groundTruth);
     Map<String, Object> data = new HashMap<>();
 
@@ -153,7 +155,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     }
 
     // Decide the decimal field expected output according to the test dimension.
-    if (avroFilePath.equals(DECIMAL_AVRO_FILE_PATH)) {
+    if (avroFilePath.equals(DECIMAL_AVRO_FILE_PATH) || avroFilePath.equals(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH)) {
       record.put("decimalField", conv.toBytes(bigDecimal, decimalFieldSchema, decimalFieldSchema.getLogicalType()));
     } else {
       record.put("decimalField", conv.toFixed(bigDecimal, decimalFieldSchema, decimalFieldSchema.getLogicalType()));
@@ -162,7 +164,58 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     String json = MAPPER.writeValueAsString(data);
 
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
+  }
+
+  // tests cases where decimals with fraction `.0` can be interpreted as having scale > 0
+  @ParameterizedTest
+  @MethodSource("zeroScaleDecimalCases")
+  void zeroScaleDecimalConversion(String inputValue, String expected, boolean shouldConvert) {
+    Schema schema = new Schema.Parser().parse("{\"namespace\": \"example.avro\",\"type\": \"record\",\"name\": \"decimalLogicalType\",\"fields\": [{\"name\": \"decimalField\", "
+        + "\"type\": {\"type\": \"bytes\", \"logicalType\": \"decimal\", \"precision\": 38, \"scale\": 0}}]}");
+    String json = String.format("{\"decimalField\":%s}", inputValue);
+
+    if (shouldConvert) {
+      GenericRecord record = new GenericData.Record(schema);
+      Conversions.DecimalConversion conv = new Conversions.DecimalConversion();
+      Schema decimalFieldSchema = schema.getField("decimalField").schema();
+      record.put("decimalField", conv.toBytes(new BigDecimal(expected), decimalFieldSchema, decimalFieldSchema.getLogicalType()));
+
+      GenericRecord real = CONVERTER.convert(json, schema);
+      assertEquals(record, real);
+    } else {
+      assertThrows(HoodieJsonToAvroConversionException.class, () -> CONVERTER.convert(json, schema));
+    }
+  }
+
+  static Stream<Object> zeroScaleDecimalCases() {
+    return Stream.of(
+        // Input value in JSON, expected decimal, whether conversion should be successful
+        // Values that can be converted
+        Arguments.of("0.0", "0", true),
+        Arguments.of("20.0", "20", true),
+        Arguments.of("320", "320", true),
+        Arguments.of("320.00", "320", true),
+        Arguments.of("-1320.00", "-1320", true),
+        Arguments.of("1520423524459", "1520423524459", true),
+        Arguments.of("1520423524459.0", "1520423524459", true),
+        Arguments.of("1000000000000000.0", "1000000000000000", true),
+        // Values that are big enough and out of range of int or long types
+        // Note that we can have at most 17 significant decimal digits in double values
+        Arguments.of("1.2684037455962608e+16", "12684037455962608", true),
+        Arguments.of("4.0100001e+16", "40100001000000000", true),
+        Arguments.of("3.52838e+17", "352838000000000000", true),
+        Arguments.of("9223372036853999600.0000", "9223372036853999600", true),
+        Arguments.of("999998887654321000000000000000.0000", "999998887654321000000000000000", true),
+        Arguments.of("-999998887654321000000000000000.0000", "-999998887654321000000000000000", true),
+        // Values covering high precision decimals that lose precision when converting to a double
+        Arguments.of("3.781239258857277e+16", "37812392588572770", true),
+        Arguments.of("1.6585135379127473e+18", "1658513537912747300", true),
+        // Values that should not be converted
+        Arguments.of("0.0001", null, false),
+        Arguments.of("300.9999", null, false),
+        Arguments.of("1928943043.0001", null, false)
+    );
   }
 
   private static final String DURATION_AVRO_FILE_PATH = "/duration-logical-type.avsc";
@@ -196,7 +249,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     durationRecord.put("duration", new GenericData.Fixed(schema.getField("duration").schema(), buffer.array()));
 
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(durationRecord, real);
+    assertEquals(durationRecord, real);
   }
 
   @ParameterizedTest
@@ -235,7 +288,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     data.put("dateField", dateInput);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   /**
@@ -285,7 +338,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     data.put("localTimestampMicrosField", timeMicro);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   private static final String LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH = "/local-timestamp-millis-logical-type.avsc";
@@ -332,7 +385,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     data.put("timestampMicrosField", timeMicro);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   @ParameterizedTest
@@ -386,7 +439,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     data.put("timeMillisField", timeMilli);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   @ParameterizedTest
@@ -434,7 +487,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     data.put("uuidField", uuid);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   @Test
@@ -456,7 +509,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     rec.put("favorite__number", number);
     rec.put("favorite__color__", color);
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
+    assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
   }
 
   @Test
@@ -479,6 +532,6 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     rec.put("favorite_number", number);
     rec.put("favorite_color", color);
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
+    assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
   }
 }

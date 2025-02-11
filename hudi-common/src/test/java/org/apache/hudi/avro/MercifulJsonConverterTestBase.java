@@ -29,6 +29,7 @@ public class MercifulJsonConverterTestBase {
   private static final String DECIMAL_AVRO_FILE_INVALID_PATH = "/decimal-logical-type-invalid.avsc";
   private static final String DECIMAL_AVRO_FILE_PATH = "/decimal-logical-type.avsc";
   private static final String DECIMAL_FIXED_AVRO_FILE_PATH = "/decimal-logical-type-fixed-type.avsc";
+  protected static final String DECIMAL_ZERO_SCALE_AVRO_FILE_PATH = "/decimal-logical-type-zero-scale.avsc";
   private static final String LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH = "/local-timestamp-micros-logical-type.avsc";
   private static final String LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH = "/local-timestamp-millis-logical-type.avsc";
   private static final String DURATION_AVRO_FILE_PATH_INVALID = "/duration-logical-type-invalid.avsc";
@@ -70,7 +71,7 @@ public class MercifulJsonConverterTestBase {
         Arguments.of(DECIMAL_AVRO_FILE_PATH, "123.45", null, 123.45, false),
         // Test MIN/MAX allowed by the schema.
         Arguments.of(DECIMAL_AVRO_FILE_PATH, "-999.99", "-999.99", null, false),
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "999.99",null, 999.99, false),
+        Arguments.of(DECIMAL_AVRO_FILE_PATH, "999.99", null, 999.99, false),
         // Test 0.
         Arguments.of(DECIMAL_AVRO_FILE_PATH, "0", null, 0D, false),
         Arguments.of(DECIMAL_AVRO_FILE_PATH, "0", "0", null, false),
@@ -79,15 +80,26 @@ public class MercifulJsonConverterTestBase {
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", "123.45", null, false),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", null, 123.45, false),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "-999.99", "-999.99", null, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999.99",null, 999.99, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999.99", null, 999.99, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999", null, 999, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999", null, 999L, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999", null, (short) 999, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "100", null, (byte) 100, false),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, 0D, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, 0, false),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", "0", null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", "000.00", null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", null, null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", null, 123.45, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "-999.99", null, null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999.99", null, 999.99, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true)
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true),
+        Arguments.of(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH, "12345", "12345.0", null, false),
+        Arguments.of(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH, "12345", null, 12345.0, false),
+        Arguments.of(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH, "12345", null, 12345, false),
+        Arguments.of(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH, "1230", null, 1.23e+3, false),
+        Arguments.of(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH, "1230", "1.23e+3", null, false)
     );
   }
 

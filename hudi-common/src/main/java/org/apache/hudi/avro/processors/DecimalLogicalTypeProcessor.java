@@ -18,12 +18,16 @@
 
 package org.apache.hudi.avro.processors;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
+import java.util.Base64;
 
 public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
 
@@ -51,17 +55,26 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
    */
   protected static Pair<Boolean, BigDecimal> parseObjectToBigDecimal(Object obj, Schema schema) {
     BigDecimal bigDecimal = null;
-    if (obj instanceof Number) {
-      bigDecimal = BigDecimal.valueOf(((Number) obj).doubleValue());
-    }
-
-    // Case 2: Object is a number in String format.
-    if (obj instanceof String) {
-      try {
-        bigDecimal = new BigDecimal(((String) obj));
-      } catch (java.lang.NumberFormatException ignored) {
-        /* ignore */
+    LogicalTypes.Decimal logicalType = (LogicalTypes.Decimal) schema.getLogicalType();
+    try {
+      if (obj instanceof BigDecimal) {
+        bigDecimal = ((BigDecimal) obj).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
+      } else if (obj instanceof String) {
+        // Case 2: Object is a number in String format.
+        try {
+          //encoded big decimal
+          bigDecimal = HoodieAvroUtils.convertBytesToBigDecimal(decodeStringToBigDecimalBytes(obj),
+              (LogicalTypes.Decimal) schema.getLogicalType());
+        } catch (IllegalArgumentException e) {
+          //no-op
+        }
       }
+      // None fixed byte or fixed byte conversion failure would end up here.
+      if (bigDecimal == null) {
+        bigDecimal = new BigDecimal(obj.toString(), new MathContext(logicalType.getPrecision(), RoundingMode.UNNECESSARY)).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
+      }
+    } catch (java.lang.NumberFormatException | ArithmeticException ignored) {
+      /* ignore */
     }
 
     if (bigDecimal == null) {
@@ -81,5 +94,9 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
       return Pair.of(false, null);
     }
     return Pair.of(true, bigDecimal);
+  }
+
+  protected static byte[] decodeStringToBigDecimalBytes(Object value) {
+    return Base64.getDecoder().decode(((String) value).getBytes());
   }
 }
