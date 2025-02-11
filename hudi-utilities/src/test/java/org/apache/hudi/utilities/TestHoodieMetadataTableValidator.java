@@ -133,6 +133,12 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   }
 
   @Test
+  public void testValidationWithoutDataTable() throws IOException {
+    storage.deleteDirectory(metaClient.getBasePath());
+    validateSecondaryIndex();
+  }
+
+  @Test
   public void testAggregateColumnStats() {
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range1 = HoodieColumnRangeMetadata.<Comparable>create(
         "path/to/file1", "col1", 1, 5, 0, 10, 100, 200);
