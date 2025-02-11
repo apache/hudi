@@ -36,7 +36,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -45,7 +44,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.util.FlinkClientUtil;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -188,7 +186,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
    */
   private HoodieBackedTableMetadataWriter initMetadataWriter(Option<String> latestPendingInstant) {
     return (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
-        HadoopFSUtils.getStorageConf(FlinkClientUtil.getHadoopConf()), this.config, HoodieFlinkEngineContext.DEFAULT, latestPendingInstant);
+        this.config, HoodieFlinkEngineContext.DEFAULT);
   }
 
   public void initMetadataTable() {

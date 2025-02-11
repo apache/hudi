@@ -2654,7 +2654,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Execute compaction on metadata table.
     try (JavaHoodieBackedTableMetadataWriter metadataWriter =
-             (JavaHoodieBackedTableMetadataWriter) JavaHoodieBackedTableMetadataWriter.create(storageConf, client.getConfig(), context, Option.empty())) {
+             (JavaHoodieBackedTableMetadataWriter) JavaHoodieBackedTableMetadataWriter.create(client.getConfig(), context)) {
       Properties metadataProps = metadataWriter.getWriteConfig().getProps();
       metadataProps.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3");
       HoodieWriteConfig metadataWriteConfig = HoodieWriteConfig.newBuilder()

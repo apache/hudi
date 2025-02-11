@@ -105,16 +105,13 @@ public abstract class HoodieSparkTable<T>
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
-      HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
-          getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
-          Option.of(triggeringInstantTimestamp));
-      try {
+      try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(config, getContext(), failedWritesCleaningPolicy)) {
         if (isMetadataTableExists || metaClient.getStorage().exists(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))) {
           isMetadataTableExists = true;
           return Option.of(metadataWriter);
         }
-      } catch (IOException e) {
+      } catch (Exception e) {
         throw new HoodieMetadataException("Checking existence of metadata table failed", e);
       }
     } else {

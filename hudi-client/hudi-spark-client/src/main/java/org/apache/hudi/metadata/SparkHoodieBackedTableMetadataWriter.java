@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -41,6 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -77,41 +77,20 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    * If the metadata table does not exist, an attempt is made to bootstrap it but there is no guaranteed that
    * table will end up bootstrapping at this time.
    *
-   * @param conf
-   * @param writeConfig
-   * @param context
-   * @param inflightInstantTimestamp Timestamp of an instant which is in-progress. This instant is ignored while
-   *                                 attempting to bootstrap the table.
+   * @param writeConfig write config
+   * @param context     engine context - {@link HoodieSparkEngineContext}
    * @return An instance of the {@code HoodieTableMetadataWriter}
    */
-  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
-                                                 HoodieWriteConfig writeConfig,
-                                                 HoodieEngineContext context,
-                                                 Option<String> inflightInstantTimestamp) {
-    return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, EAGER, context, inflightInstantTimestamp);
+  public static HoodieTableMetadataWriter create(HoodieWriteConfig writeConfig, HoodieEngineContext context) {
+    return new SparkHoodieBackedTableMetadataWriter(writeConfig, context, EAGER);
   }
 
-  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
-                                                 HoodieWriteConfig writeConfig,
-                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                 HoodieEngineContext context,
-                                                 Option<String> inflightInstantTimestamp) {
-    return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
+  public static HoodieTableMetadataWriter create(HoodieWriteConfig writeConfig, HoodieEngineContext context, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    return new SparkHoodieBackedTableMetadataWriter(writeConfig, context, failedWritesCleaningPolicy);
   }
 
-  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
-                                                 HoodieEngineContext context) {
-    return create(conf, writeConfig, context, Option.empty());
-  }
-
-  SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
-                                       HoodieWriteConfig writeConfig,
-                                       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                       HoodieEngineContext engineContext,
-                                       Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+  SparkHoodieBackedTableMetadataWriter(HoodieWriteConfig writeConfig, HoodieEngineContext engineContext, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    super(writeConfig, failedWritesCleaningPolicy, engineContext);
   }
 
   @Override

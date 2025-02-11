@@ -164,22 +164,18 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   /**
    * Hudi backed table metadata writer.
    *
-   * @param storageConf                Storage configuration to use for the metadata writer
    * @param writeConfig                Writer config
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
-   * @param inflightInstantTimestamp   Timestamp of any instant in progress
    */
-  protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
-                                            HoodieWriteConfig writeConfig,
+  protected HoodieBackedTableMetadataWriter(HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                            HoodieEngineContext engineContext,
-                                            Option<String> inflightInstantTimestamp) {
+                                            HoodieEngineContext engineContext) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
-    this.storageConf = storageConf;
+    this.storageConf = engineContext.getStorageConf();
     this.metrics = Option.empty();
-    this.dataMetaClient = HoodieTableMetaClient.builder().setConf(storageConf.newInstance())
+    this.dataMetaClient = HoodieTableMetaClient.builder().setConf(engineContext.getStorageConf().newInstance())
         .setBasePath(dataWriteConfig.getBasePath())
         .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
     this.enabledPartitionTypes = getEnabledPartitions(dataWriteConfig.getProps(), dataMetaClient);
@@ -187,7 +183,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
       try {
         initRegistry();
-        initialized = initializeIfNeeded(dataMetaClient, inflightInstantTimestamp);
+        initialized = initializeIfNeeded(dataMetaClient);
       } catch (IOException e) {
         LOG.error("Failed to initialize metadata table", e);
       }
@@ -243,11 +239,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * Initialize the metadata table if needed.
    *
    * @param dataMetaClient           - meta client for the data table
-   * @param inflightInstantTimestamp - timestamp of an instant in progress on the dataset
    * @throws IOException on errors
    */
-  protected boolean initializeIfNeeded(HoodieTableMetaClient dataMetaClient,
-                                       Option<String> inflightInstantTimestamp) throws IOException {
+  protected boolean initializeIfNeeded(HoodieTableMetaClient dataMetaClient) throws IOException {
     HoodieTimer timer = HoodieTimer.start();
     List<MetadataPartitionType> metadataPartitionsToInit = new ArrayList<>(MetadataPartitionType.getValidValues().length);
 

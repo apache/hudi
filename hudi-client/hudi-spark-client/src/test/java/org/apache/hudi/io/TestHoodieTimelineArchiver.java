@@ -152,7 +152,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
   private void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {
     if (enableMetadataTable) {
-      metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, writeConfig, context);
+      metadataWriter = SparkHoodieBackedTableMetadataWriter.create(writeConfig, context);
       // reload because table configs could have been updated
       metaClient = HoodieTableMetaClient.reload(metaClient);
       testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
@@ -396,7 +396,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     String file1P0C0 = UUID.randomUUID().toString();
     String file1P1C0 = UUID.randomUUID().toString();
     String commitTs = TimelineUtils.formatDate(Date.from(curDateTime.minusMinutes(minutesForCommit).toInstant()));
-    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context)) {
+    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(config, context)) {
       Map<String, List<String>> part1ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
         {
           put(p0, CollectionUtils.createImmutableList(file1P0C0));
