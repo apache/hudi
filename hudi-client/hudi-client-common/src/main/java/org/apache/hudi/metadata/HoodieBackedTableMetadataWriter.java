@@ -676,7 +676,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // Collect record keys from the files in parallel
       records = readRecordKeysFromBaseFiles(
           engineContext,
-          dataWriteConfig,
           partitionBaseFilePairs,
           false,
           dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
@@ -1666,7 +1665,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .collect(Collectors.toList());
     return readRecordKeysFromBaseFiles(
         engineContext,
-        dataWriteConfig,
         partitionBaseFilePairs,
         true,
         dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),

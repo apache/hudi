@@ -22,7 +22,6 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -102,15 +101,15 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
   @Test
   public void testReadRecordKeysFromBaseFilesWithEmptyPartitionBaseFilePairs() {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = Collections.emptyList();
-    HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.readRecordKeysFromFileSlices(
+    List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = Collections.emptyList();
+    HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.readRecordKeysFromBaseFiles(
         engineContext,
-        partitionFileSlicePairs,
+        partitionBaseFilePairs,
         false,
         1,
-        "activeModule",
-        metaClient,
-        EngineType.SPARK
+        metaClient.getBasePath(),
+        engineContext.getStorageConf(),
+        "activeModule"
     );
     assertTrue(result.isEmpty());
   }
@@ -180,7 +179,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     String instant = "20230918120000000";
     hoodieTestTable = hoodieTestTable.addCommit(instant);
     Set<String> recordKeys = new HashSet<>();
-    final List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+    final List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = new ArrayList<>();
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
       try {
@@ -195,7 +194,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             engineContext);
         HoodieBaseFile baseFile = new HoodieBaseFile(hoodieTestTable.getBaseFilePath(p, fileId).toString(), fileId, instant, null);
         fileSlice.setBaseFile(baseFile);
-        partitionFileSlicePairs.add(Pair.of(p, fileSlice));
+        partitionBaseFilePairs.add(Pair.of(p, baseFile));
         recordKeys.addAll(hoodieRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet()));
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -203,14 +202,14 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     });
 
     // Call the method readRecordKeysFromBaseFiles with the created partitionBaseFilePairs.
-    HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.readRecordKeysFromFileSlices(
+    HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.readRecordKeysFromBaseFiles(
         engineContext,
-        partitionFileSlicePairs,
+        partitionBaseFilePairs,
         false,
         1,
-        "activeModule",
-        metaClient,
-        EngineType.SPARK
+        metaClient.getBasePath(),
+        engineContext.getStorageConf(),
+        "activeModule"
     );
     // Validate the result.
     List<HoodieRecord> records = result.collectAsList();
