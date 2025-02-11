@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieJsonToAvroConversionException;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalType;
@@ -88,7 +89,7 @@ public class MercifulJsonConverter {
    * Allows enabling sanitization and allows choice of invalidCharMask for sanitization
    */
   public MercifulJsonConverter(boolean shouldSanitize, String invalidCharMask) {
-    this(new ObjectMapper(), shouldSanitize, invalidCharMask);
+    this(new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS), shouldSanitize, invalidCharMask);
   }
 
   /**
