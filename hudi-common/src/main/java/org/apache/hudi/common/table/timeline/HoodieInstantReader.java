@@ -31,10 +31,11 @@ import java.io.InputStream;
 public interface HoodieInstantReader {
   /**
    * Reads the provided instant's content into a stream for parsing.
+   *
    * @param instant the instant to read
    * @return an InputStream with the content
    */
-  default InputStream getContentStream(HoodieInstant instant) {
+  default Option<InputStream> getContentStream(HoodieInstant instant) {
     throw new RuntimeException("Not implemented");
   }
 
@@ -45,7 +46,7 @@ public interface HoodieInstantReader {
    */
   @Deprecated
   default Option<byte[]> getInstantDetails(HoodieInstant instant) {
-    try (InputStream inputStream = getContentStream(instant)) {
+    try (InputStream inputStream = getContentStream(instant).get()) {
       return Option.of(FileIOUtils.readAsByteArray(inputStream));
     } catch (IOException ex) {
       throw new HoodieIOException("Could not read commit details from stream", ex);

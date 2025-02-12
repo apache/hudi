@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
@@ -47,6 +48,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+
+import static org.apache.hudi.common.table.timeline.TimelineUtils.getInputStreamOptionLegacy;
 
 public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchivedTimeline, HoodieInstantReader {
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
@@ -111,8 +114,8 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   }
 
   @Override
-  public InputStream getContentStream(HoodieInstant instant) {
-    return new ByteArrayInputStream(getInstantDetails(instant).orElseGet(() -> new byte[0]));
+  public Option<InputStream> getContentStream(HoodieInstant instant) {
+    return getInputStreamOptionLegacy(this, instant);
   }
 
   public static StoragePath getArchiveLogPath(StoragePath archiveFolder) {
@@ -257,5 +260,10 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   @Override
   public HoodieArchivedTimeline reload(String startTs) {
     return new ArchivedTimelineV1(metaClient, startTs);
+  }
+
+  @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    return TimelineUtils.isEmpty(metaClient, instant);
   }
 }

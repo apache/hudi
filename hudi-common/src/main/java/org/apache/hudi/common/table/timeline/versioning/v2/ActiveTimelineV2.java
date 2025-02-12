@@ -264,9 +264,12 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public InputStream getContentStream(HoodieInstant instant) {
+  public Option<InputStream> getContentStream(HoodieInstant instant) {
+    if (isEmpty(instant)) {
+      return Option.empty();
+    }
     StoragePath filePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(instant));
-    return readDataStreamFromPath(filePath);
+    return Option.of(readDataStreamFromPath(filePath));
   }
 
   @Override
@@ -793,5 +796,10 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   @Override
   public Set<String> getValidExtensions() {
     return VALID_EXTENSIONS_IN_ACTIVE_TIMELINE;
+  }
+
+  @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    return TimelineUtils.isEmpty(metaClient, instant);
   }
 }

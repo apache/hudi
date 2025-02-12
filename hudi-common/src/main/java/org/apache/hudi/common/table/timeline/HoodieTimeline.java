@@ -453,11 +453,9 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   /**
    * Read the instant content to an input stream.
    * @param instant the instant to fetch
-   * @return stream with content for instant
+   * @return stream option with content for instant. If the instant file is empty, return empty option.
    */
-  InputStream getInstantContentStream(HoodieInstant instant);
-
-  <T> T deserializeInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException;
+  Option<InputStream> getInstantContentStream(HoodieInstant instant);
 
   boolean isEmpty(HoodieInstant instant);
 

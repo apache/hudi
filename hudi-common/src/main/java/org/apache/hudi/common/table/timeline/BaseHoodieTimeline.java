@@ -32,6 +32,7 @@ import org.apache.avro.file.DataFileStream;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificRecord;
+import org.apache.hudi.storage.StoragePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -563,29 +564,8 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   }
 
   @Override
-  public InputStream getInstantContentStream(HoodieInstant instant) {
+  public Option<InputStream> getInstantContentStream(HoodieInstant instant) {
     return getInstantReader().getContentStream(instant);
-  }
-
-  @Override
-  public <T> T deserializeInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException {
-    if (SpecificRecord.class.isAssignableFrom(clazz)) {
-      try (InputStream inputStream = getInstantContentStream(instant)) {
-        DatumReader<T> reader = new SpecificDatumReader<>(clazz);
-        DataFileStream<T> fileReader = new DataFileStream<>(inputStream, reader);
-        ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
-        return fileReader.next();
-      }
-    } else {
-      try (InputStream inputStream = getInstantContentStream(instant)) {
-        return JsonUtils.getObjectMapper().readValue(inputStream, clazz);
-      } catch (MismatchedInputException ex) {
-        if (ex.getMessage().startsWith("No content to map")) {
-          return ReflectionUtils.loadClass(clazz.getName());
-        }
-        throw ex;
-      }
-    }
   }
 
   @Override
@@ -693,7 +673,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
     }
 
     @Override
-    public InputStream getContentStream(HoodieInstant instant) {
+    public Option<InputStream> getContentStream(HoodieInstant instant) {
       if (timeline1.getInstantsAsStream().anyMatch(i -> i.equals(instant))) {
         return timeline1.getInstantContentStream(instant);
       } else {
