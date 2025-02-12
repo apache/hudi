@@ -27,7 +27,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.HoodieSpark4CatalogUtils.MatchBucketTransform
@@ -135,8 +135,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
           catalogTable = Some(catalogTable),
           tableIdentifier = Some(ident.toString))
 
-        val schemaEvolutionEnabled: Boolean = spark.sessionState.conf.getConfString(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
-          DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+        val schemaEvolutionEnabled = ProvidesHoodieConfig.isSchemaEvolutionEnabled(spark)
 
         // NOTE: PLEASE READ CAREFULLY
         //
@@ -333,12 +332,8 @@ class HoodieCatalog extends DelegatingCatalogExtension
 
   private def isPathIdentifier(ident: Identifier) = new Path(ident.name()).isAbsolute
 
-  protected def isPathIdentifier(table: CatalogTable): Boolean = {
-    isPathIdentifier(table.identifier)
-  }
-
   protected def isPathIdentifier(tableIdentifier: TableIdentifier): Boolean = {
-    isPathIdentifier(HoodieIdentifier(tableIdentifier.database.toArray, tableIdentifier.table))
+    isPathIdentifier(Identifier.of(tableIdentifier.database.toArray, tableIdentifier.table))
   }
 
   private def getExistingTableIfExists(table: TableIdentifier): Option[CatalogTable] = {
