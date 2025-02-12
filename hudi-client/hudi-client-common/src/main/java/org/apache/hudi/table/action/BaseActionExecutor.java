@@ -74,7 +74,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
     // Recreate MDT for insert_overwrite_table operation.
     if (table.getConfig().isMetadataTableEnabled()
         && WriteOperationType.INSERT_OVERWRITE_TABLE == metadata.getOperationType()) {
-      HoodieTableMetadataUtil.deleteMetadataTable(table.getMetaClient(), table.getContext(), false);
+      HoodieTableMetadataUtil.deleteMetadataTable(table.getMetaClient(), false);
     }
 
     // MDT should be recreated if it has been deleted for insert_overwrite_table operation.
@@ -157,7 +157,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
     for (String partitionPath : table.getMetaClient().getTableConfig().getMetadataPartitions()) {
       if (MetadataPartitionType.shouldDeletePartitionOnRestore(partitionPath)) {
         // setting backup to true as this delete is part of restore operation
-        HoodieTableMetadataUtil.deleteMetadataTablePartition(table.getMetaClient(), context, partitionPath, true);
+        HoodieTableMetadataUtil.deleteMetadataTablePartition(table.getMetaClient(), partitionPath, true);
       }
     }
   }

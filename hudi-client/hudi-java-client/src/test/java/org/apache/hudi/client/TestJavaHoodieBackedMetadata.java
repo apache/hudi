@@ -2270,7 +2270,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         new StoragePath(getMetadataTableBasePath(writeConfig.getBasePath()));
     assertTrue(storage.exists(metadataTablePath), "metadata table should exist.");
 
-    deleteMetadataTable(metaClient, context, false);
+    deleteMetadataTable(metaClient, false);
     assertFalse(storage.exists(metadataTablePath),
         "metadata table should not exist after being deleted.");
 
