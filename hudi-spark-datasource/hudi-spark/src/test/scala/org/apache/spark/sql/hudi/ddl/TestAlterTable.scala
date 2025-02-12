@@ -333,7 +333,8 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         val newTableName = s"${tableName}_1"
         val oldLocation = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName)).properties.get("path")
         spark.sql(s"alter table $tableName rename to $newTableName")
-        val newLocation = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName)).properties.get("path")
+        val newTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName))
+        val newLocation = newTable.properties.get("path")
         // only hoodieCatalog will set path to tblp
         if (oldLocation.nonEmpty) {
           assertResult(false)(
@@ -342,6 +343,9 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         } else {
           assertResult(None) (newLocation)
         }
+        assert(newTable.location.toString.equals(newLocation.get))
+        // newTable.storage.locationUri.get.getPath should remove the scheme of path, thus won't match the location
+        assertResult(false)(newTable.storage.locationUri.get.getPath.equals(newLocation.get))
 
 
         // Create table with location
