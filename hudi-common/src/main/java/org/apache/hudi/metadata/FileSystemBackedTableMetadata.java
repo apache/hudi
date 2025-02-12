@@ -48,6 +48,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -325,5 +326,25 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   @Override
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
     throw new HoodieMetadataException("Unsupported operation: getNumFileGroupsForPartition");
+  }
+
+  @Override
+  public Map<Pair<String, StoragePath>, List<StoragePathInfo>> listPartitions(List<Pair<String, StoragePath>> partitionPathList) throws IOException {
+    Map<Pair<String, StoragePath>, List<StoragePathInfo>> pathInfoMap = new HashMap<>();
+
+    for (Pair<String, StoragePath> partitionPair : partitionPathList) {
+      StoragePath absolutePartitionPath = partitionPair.getRight();
+      try {
+        pathInfoMap.put(partitionPair, getStorage().listDirectEntries(absolutePartitionPath));
+      } catch (IOException e) {
+        if (!getStorage().exists(absolutePartitionPath)) {
+          pathInfoMap.put(partitionPair, Collections.emptyList());
+        } else {
+          // in case the partition path was created by another caller
+          pathInfoMap.put(partitionPair, getStorage().listDirectEntries(absolutePartitionPath));
+        }
+      }
+    }
+    return pathInfoMap;
   }
 }

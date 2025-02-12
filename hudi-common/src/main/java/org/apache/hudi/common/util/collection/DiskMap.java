@@ -37,7 +37,7 @@ import java.util.stream.Stream;
  * @param <T> The generic type of the keys
  * @param <R> The generic type of the values
  */
-public abstract class DiskMap<T extends Serializable, R extends Serializable> implements Map<T, R>, KeyFilteringIterable<T, R> {
+public abstract class DiskMap<T extends Serializable, R> implements Map<T, R>, KeyFilteringIterable<T, R>, AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(DiskMap.class);
   private static final String SUBFOLDER_PREFIX = "hudi";

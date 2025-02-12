@@ -169,7 +169,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getMetadataTable());
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getMetadataTable());
     }
     return viewManager;
   }
@@ -340,7 +340,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Get the view of the file system for this table.
    */
   public TableFileSystemView getFileSystemView() {
-    return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
+    return HoodieTableFileSystemView.fileListingBasedFileSystemView(getContext(), metaClient, getCompletedCommitsTimeline());
   }
 
   /**

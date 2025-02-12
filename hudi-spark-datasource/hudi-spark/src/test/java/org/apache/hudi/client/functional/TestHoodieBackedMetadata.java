@@ -95,7 +95,6 @@ import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieMetadataLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
@@ -796,7 +795,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
         final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
         metadataWriter.getEnabledPartitionTypes().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
-        HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
+        HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metadataMetaClient, metadataMetaClient.getActiveTimeline());
         metadataTablePartitions.forEach(partition -> {
           List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
           if (COLUMN_STATS.getPartitionPath().equals(partition)) {
@@ -3375,9 +3374,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTableMetadata tableMetadata = metadata(client);
-    HoodieMetadataFileSystemView metadataFileSystemView = new HoodieMetadataFileSystemView(
-        metaClient, metaClient.reloadActiveTimeline(), tableMetadata);
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
+    HoodieTableFileSystemView metadataFileSystemView = new HoodieTableFileSystemView(tableMetadata,
+        metaClient, metaClient.reloadActiveTimeline());
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(getEngineContext(), metaClient, metaClient.getActiveTimeline());
     tableMetadata.getAllPartitionPaths().forEach(partition -> {
       List<String> fileNamesFromMetadataFileListing = metadataFileSystemView.getLatestBaseFiles(partition)
           .map(baseFile -> baseFile.getFileName())
@@ -3721,7 +3720,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Metadata table should automatically compact and clean
       // versions are +1 as autoclean / compaction happens end of commits
       int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
-      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
+      HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metadataMetaClient, metadataMetaClient.getActiveTimeline());
       metadataTablePartitions.forEach(partition -> {
         List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
         assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).count() <= latestSlices.size(), "Should have a single latest base file per file group");

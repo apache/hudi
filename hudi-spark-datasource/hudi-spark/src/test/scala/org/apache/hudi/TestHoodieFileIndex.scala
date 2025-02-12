@@ -41,6 +41,7 @@ import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql._
@@ -831,7 +832,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
   private def getFileCountInPartitionPath(partitionPath: String): Int = {
     metaClient.reloadActiveTimeline()
     val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
-    val fileSystemView = new HoodieTableFileSystemView(metaClient, activeInstants)
+    val fileSystemView = HoodieTableFileSystemView.fileListingBasedFileSystemView(
+      new HoodieJavaEngineContext(new HadoopStorageConfiguration(false)), metaClient, activeInstants)
     fileSystemView.getAllBaseFiles(partitionPath).iterator().asScala.toSeq.length
   }
 
