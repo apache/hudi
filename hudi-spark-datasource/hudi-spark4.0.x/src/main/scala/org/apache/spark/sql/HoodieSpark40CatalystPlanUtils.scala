@@ -74,10 +74,10 @@ object HoodieSpark40CatalystPlanUtils extends HoodieSpark4CatalystPlanUtils {
 
   override def failAnalysisForMIT(a: Attribute, cols: String): Unit = {
     a.failAnalysis(
-      errorClass = "_LEGACY_ERROR_TEMP_2309",
+      errorClass = "UNRESOLVED_COLUMN.WITH_SUGGESTION",
       messageParameters = Map(
-        "sqlExpr" -> a.sql,
-        "cols" -> cols))
+        "objectName" -> a.sql,
+        "proposal" -> cols))
   }
 
   override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = {

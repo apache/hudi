@@ -19,8 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -34,9 +33,9 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager
 import org.apache.hudi.internal.schema.utils.{SchemaChangeUtils, SerDeHelper}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.{DataSourceUtils, HoodieWriterUtils}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
@@ -253,10 +252,18 @@ object AlterTableCommand extends Logging {
     val schema = AvroInternalSchemaConverter.convert(internalSchema, getAvroRecordQualifiedName(table.identifier.table))
     val path = getTableLocation(table, sparkSession)
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
-    val client = DataSourceUtils.createHoodieClient(jsc, schema.toString,
-      path, table.identifier.table, HoodieWriterUtils.parametersWithWriteDefaults(
+    val client = DataSourceUtils.createHoodieClient(
+      jsc,
+      schema.toString,
+      path,
+      table.identifier.table,
+      HoodieWriterUtils.parametersWithWriteDefaults(
         HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(table.storage.properties ++ table.properties) ++
-          sparkSession.sqlContext.conf.getAllConfs).asJava)
+        sparkSession.sqlContext.conf.getAllConfs ++ Map(
+        HoodieCleanConfig.AUTO_CLEAN.key -> "false",
+        HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.NEVER.name,
+        HoodieArchivalConfig.AUTO_ARCHIVE.key -> "false"
+        )).asJava)
 
     val metaClient = HoodieTableMetaClient.builder()
       .setBasePath(path)
