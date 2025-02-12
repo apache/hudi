@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.common.util.collection.{FlatLists, Spark4FlatLists}
 import org.apache.hudi.spark4.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, HoodieSpark4CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
@@ -113,6 +114,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
                                                  name: Option[String])(body: => T): T = {
       SQLExecution.withNewExecutionId(queryExecution, name)(body)
   }
+
+  def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 
   override def compareUTF8String(a: UTF8String, b: UTF8String): Int = a.binaryCompare(b)
 
