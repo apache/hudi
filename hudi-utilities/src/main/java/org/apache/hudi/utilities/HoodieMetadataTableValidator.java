@@ -208,7 +208,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   // Properties with source, hoodie client, key generator etc.
   private TypedProperties props;
 
-  private final HoodieTableMetaClient metaClient;
+  private Option<HoodieTableMetaClient> metaClientOpt = Option.empty();
 
   protected transient Option<AsyncMetadataTableValidateService> asyncMetadataTableValidateService;
 
@@ -224,11 +224,16 @@ public class HoodieMetadataTableValidator implements Serializable {
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
 
-    this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
-        .setBasePath(cfg.basePath)
-        .setLoadActiveTimelineOnLoad(true)
-        .build();
+    try {
+      this.metaClientOpt = Option.of(HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+          .setBasePath(cfg.basePath)
+          .setLoadActiveTimelineOnLoad(true)
+          .build());
+    } catch (TableNotFoundException tbe) {
+      // Suppress the TableNotFound exception, table not yet created for a new stream
+      LOG.warn("Data table is not found. Skip current validation for: " + cfg.basePath);
+    }
 
     this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
     this.taskLabels = generateValidationTaskLabels();
@@ -333,13 +338,13 @@ public class HoodieMetadataTableValidator implements Serializable {
         description = "Validate the number of entries in the record index, which should be equal "
             + "to the number of record keys in the latest snapshot of the table",
         required = false)
-    public boolean validateRecordIndexCount = false;
+    public boolean validateRecordIndexCount = true;
 
     @Parameter(names = {"--validate-record-index-content"},
         description = "Validate the content of the record index so that each record key should "
             + "have the correct location, and there is no additional or missing entry",
         required = false)
-    public boolean validateRecordIndexContent = false;
+    public boolean validateRecordIndexContent = true;
 
     @Parameter(names = {"--validate-secondary-index"},
         description = "Validate the entries in secondary index match the primary key for the records",
@@ -491,9 +496,6 @@ public class HoodieMetadataTableValidator implements Serializable {
     try {
       HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, cfg);
       validator.run();
-    } catch (TableNotFoundException e) {
-      LOG.warn("The Hudi data table is not found: [{}]. "
-          + "Skipping the validation of the metadata table.", cfg.basePath, e);
     } catch (Throwable throwable) {
       LOG.error("Fail to do hoodie metadata table validation for {}", cfg, throwable);
     } finally {
@@ -502,6 +504,10 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   public boolean run() {
+    if (!metaClientOpt.isPresent()) {
+      LOG.warn("Data table is not available to read for now, skip current validation for: " + cfg.basePath);
+      return true;
+    }
     boolean result = false;
     try {
       LOG.info(cfg.toString());
@@ -520,7 +526,6 @@ public class HoodieMetadataTableValidator implements Serializable {
     } catch (Exception e) {
       throw new HoodieException("Unable to do hoodie metadata table validation in " + cfg.basePath, e);
     } finally {
-
       if (asyncMetadataTableValidateService.isPresent()) {
         asyncMetadataTableValidateService.get().shutdown(true);
       }
@@ -554,6 +559,11 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   public boolean doMetadataTableValidation() {
     boolean finalResult = true;
+    if (!metaClientOpt.isPresent()) {
+      LOG.warn("Data table is not available to read for now, skip current validation.");
+      return true;
+    }
+    HoodieTableMetaClient metaClient = this.metaClientOpt.get();
     metaClient.reloadActiveTimeline();
     StoragePath basePath = metaClient.getBasePath();
     Set<String> baseFilesForCleaning = Collections.emptySet();
@@ -695,7 +705,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           .build();
       int finishedInstants = mdtMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
       if (finishedInstants == 0) {
-        if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+        if (metaClientOpt.get().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
           LOG.info("There is no completed commit in both metadata table and corresponding data table: {}", taskLabels);
           return false;
         } else {
@@ -995,7 +1005,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
         AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()), metadataTableBasedContext.getMetadataConfig(),
-        metaClient, false);
+        metaClientOpt.get(), false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
         partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(
             metadataTableBasedContext.allColumnNameList).asScala().toSeq(), scala.Option.empty(), false)
