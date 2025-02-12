@@ -688,14 +688,19 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param inflightInstant               Inflight instant
    * @param getPendingRollbackInstantFunc Function to get rollback instant
    */
-  private void rollbackInflightInstant(HoodieInstant inflightInstant,
-                                       Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
-    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
-        -> entry.getRollbackInstant().requestedTime())
-        .orElseGet(() -> getMetaClient().createNewInstantTime());
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-        false);
-    rollback(context, commitTime, inflightInstant, false, false);
+  void rollbackInflightInstant(HoodieInstant inflightInstant,
+                               Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+    // Retrieve the rollback information using the provided function.
+    final Pair<String, Boolean> rollbackInfo = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime())
+        .map(entry -> Pair.of(entry.getRollbackInstant().requestedTime(), false))
+        .orElseGet(() -> Pair.of(getMetaClient().createNewInstantTime(), true));
+    // If a rollback has not scheduled (rollbackInfo.getRight() is true), schedule it.
+    if (rollbackInfo.getRight()) {
+      scheduleRollback(context, rollbackInfo.getLeft(), inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
+    }
+    // Perform the rollback.
+    rollback(context, rollbackInfo.getLeft(), inflightInstant, false, false);
+    // Revert the inflight instant to requested state in the timeline.
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
   }
 
