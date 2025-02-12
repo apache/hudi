@@ -116,7 +116,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
   public abstract HoodieWriteMetadata<O> execute(I inputRecords);
 
-  public HoodieWriteMetadata<O> execute(I inputRecords, Option<HoodieTimer> preWriteTimer) {
+  public HoodieWriteMetadata<O> execute(I inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     return this.execute(inputRecords);
   }
 
