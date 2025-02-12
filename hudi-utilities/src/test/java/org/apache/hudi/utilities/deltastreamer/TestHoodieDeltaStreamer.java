@@ -1894,7 +1894,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Ensure it is empty
     HoodieCommitMetadata commitMetadata = new DefaultCommitMetadataSerDe()
         .deserialize(newLastFinished, mClient.getActiveTimeline().getInstantDetails(newLastFinished).get(), HoodieCommitMetadata.class);
-    System.out.println("New Commit Metadata=" + commitMetadata);
+    LOG.info("New Commit Metadata={}", commitMetadata);
     assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
 
     // Try UPSERT with filterDupes true. Expect exception
