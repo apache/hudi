@@ -1386,7 +1386,7 @@ public class HoodieTableMetadataUtil {
    * @param metaClient - Metadata table meta client
    * @return Filesystem view for the metadata table
    */
-  public static HoodieTableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) {
+  public static HoodieTableFileSystemView getFileSystemViewForMetadataTable(HoodieTableMetaClient metaClient) {
     // If there are no commits on the metadata table then the table's
     // default FileSystemView will not return any file slices even
     // though we may have initialized them.
@@ -1418,7 +1418,7 @@ public class HoodieTableMetadataUtil {
                                                         boolean mergeFileSlices) {
     HoodieTableFileSystemView fsView = null;
     try {
-      fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
+      fsView = fileSystemView.orElseGet(() -> getFileSystemViewForMetadataTable(metaClient));
       Stream<FileSlice> fileSliceStream;
       if (mergeFileSlices) {
         if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
@@ -1453,7 +1453,7 @@ public class HoodieTableMetadataUtil {
                                                                               String partition) {
     HoodieTableFileSystemView fsView = null;
     try {
-      fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
+      fsView = fileSystemView.orElseGet(() -> getFileSystemViewForMetadataTable(metaClient));
       Stream<FileSlice> fileSliceStream = fsView.getLatestFileSlicesIncludingInflight(partition);
       return fileSliceStream
           .sorted(Comparator.comparing(FileSlice::getFileId))

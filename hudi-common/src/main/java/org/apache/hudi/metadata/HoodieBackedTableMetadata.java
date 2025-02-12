@@ -83,7 +83,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
 
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table.
@@ -746,7 +746,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   public HoodieTableFileSystemView getMetadataFileSystemView() {
     if (metadataFileSystemView == null) {
-      metadataFileSystemView = getFileSystemView(metadataMetaClient);
+      metadataFileSystemView = getFileSystemViewForMetadataTable(metadataMetaClient);
     }
     return metadataFileSystemView;
   }
