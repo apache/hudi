@@ -299,6 +299,17 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    */
   protected HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
     HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf());
+    return compact(table, compactionInstantTime, shouldComplete);
+  }
+
+  /**
+   * Ensures compaction instant is in expected state and performs Compaction for the workload stored in instant-time.
+   *
+   * @param table existing table instance
+   * @param compactionInstantTime Compaction Instant Time
+   * @return Collection of Write Status
+   */
+  protected HoodieWriteMetadata<O> compact(HoodieTable<?, I, ?, T> table, String compactionInstantTime, boolean shouldComplete) {
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
     HoodieInstant inflightInstant = instantGenerator.getCompactionInflightInstant(compactionInstantTime);
@@ -786,12 +797,13 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites());
 
     HoodieTable table = createTable(config, storageConf);
-    if (config.allowMultipleCleans() || !table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
+    boolean hasInflightClean = table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent();
+    boolean scheduledClean = false;
+    if (config.allowMultipleCleans() || !hasInflightClean) {
       LOG.info("Cleaner started for table {}", config.getBasePath());
       // proceed only if multiple clean schedules are enabled or if there are no pending cleans.
       if (scheduleInline) {
-        scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
-        table.getMetaClient().reloadActiveTimeline();
+        scheduledClean = scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN).isPresent();
       }
 
       if (shouldDelegateToTableServiceManager(config, ActionType.clean)) {
@@ -800,16 +812,20 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
     }
 
-    // Proceeds to execute any requested or inflight clean instances in the timeline
-    HoodieCleanMetadata metadata = table.clean(context, cleanInstantTime);
-    if (timerContext != null && metadata != null) {
-      long durationMs = metrics.getDurationInMs(timerContext.stop());
-      metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
-      LOG.info("Cleaned {} files Earliest Retained Instant : {} cleanerElapsedMs {} for table {}",
-          metadata.getTotalFilesDeleted(), metadata.getEarliestCommitToRetain(), durationMs, config.getBasePath());
+    if (hasInflightClean || scheduledClean) {
+      table.getMetaClient().reloadActiveTimeline();
+      // Proceeds to execute any requested or inflight clean instances in the timeline
+      HoodieCleanMetadata metadata = table.clean(context, cleanInstantTime);
+      if (timerContext != null && metadata != null) {
+        long durationMs = metrics.getDurationInMs(timerContext.stop());
+        metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
+        LOG.info("Cleaned {} files Earliest Retained Instant :{} cleanerElapsedMs: {}",
+            metadata.getTotalFilesDeleted(), metadata.getEarliestCommitToRetain(), durationMs);
+      }
+      releaseResources(cleanInstantTime);
+      return metadata;
     }
-    releaseResources(cleanInstantTime);
-    return metadata;
+    return null;
   }
 
   /**
