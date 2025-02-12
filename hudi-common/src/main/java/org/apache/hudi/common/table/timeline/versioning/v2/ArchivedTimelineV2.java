@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -48,6 +49,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.getInputStreamOptionLegacy;
 
 public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchivedTimeline, HoodieInstantReader {
   public static final String INSTANT_TIME_ARCHIVED_META_FIELD = "instantTime";
@@ -155,8 +157,8 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   }
 
   @Override
-  public InputStream getContentStream(HoodieInstant instant) {
-    return new ByteArrayInputStream(getInstantDetails(instant).orElseGet(() -> new byte[0]));
+  public Option<InputStream> getContentStream(HoodieInstant instant) {
+    return getInputStreamOptionLegacy(this, instant);
   }
 
   @Override
@@ -248,5 +250,10 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     return new BaseTimelineV2(getInstantsAsStream().filter(i ->
             readCommits.containsKey(i.requestedTime()))
         .filter(s -> validActions.contains(s.getAction())), instantReader);
+  }
+
+  @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    return TimelineUtils.isEmpty(metaClient, instant);
   }
 }

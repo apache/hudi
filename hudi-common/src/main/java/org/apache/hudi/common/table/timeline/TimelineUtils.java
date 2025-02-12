@@ -42,7 +42,9 @@ import org.apache.hudi.storage.StoragePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.ParseException;
 import java.util.AbstractMap;
 import java.util.Collection;
@@ -603,5 +605,23 @@ public class TimelineUtils {
     return operation == WriteOperationType.DELETE_PARTITION
         || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
         || operation == WriteOperationType.INSERT_OVERWRITE;
+  }
+
+  public static boolean isEmpty(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+    try {
+      return metaClient.getStorage()
+          .getPathInfo(new StoragePath(metaClient.getTimelinePath(), metaClient.getInstantFileNameGenerator().getFileName(instant)))
+          .getLength() == 0;
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to check emptiness of instant " + instant, e);
+    }
+  }
+
+  public static Option<InputStream> getInputStreamOptionLegacy(HoodieTimeline timeline, HoodieInstant instant) {
+    Option<byte[]> bytes = timeline.getInstantDetails(instant);
+    if (bytes.isEmpty() || bytes.get().length == 0) {
+      return Option.empty();
+    }
+    return Option.of(new ByteArrayInputStream(bytes.get()));
   }
 }
