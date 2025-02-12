@@ -327,11 +327,8 @@ public class TestHoodieAvroDataBlock {
    * @return A list of randomly selected HoodieRecord objects.
    */
   private static List<HoodieRecord> selectRandomRecords(List<HoodieRecord> records, boolean fullKey) {
-    // number of sampled records
-    int count = new Random().nextInt(records.size());
-    // set of record keys of the sampled records
     Set<String> keys = new Random()
-        .ints(count, 0, records.size())
+        .ints(records.size() / 4, 0, records.size())
         .mapToObj(records::get)
         .map(r -> r.getRecordKey(SCHEMA, RECORD_KEY_FIELD))
         .collect(Collectors.toSet());
