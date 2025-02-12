@@ -95,14 +95,18 @@ public class HoodieLockMetrics {
     }
   }
 
+  private static void updateMetric(HoodieTimer timer, Timer metric, String lockName) {
+    Option<Long> durationMs = timer.tryEndTimer();
+    if (durationMs.isPresent()) {
+      metric.update(durationMs.get(), TimeUnit.MILLISECONDS);
+    } else {
+      LOG.info("Unable to get lock {} duration", lockName);
+    }
+  }
+
   public void updateLockAcquiredMetric() {
     if (isMetricsEnabled) {
-      Option<Long> durationMs = lockApiRequestDurationTimer.tryEndTimer();
-      if (durationMs.isPresent()) {
-        lockApiRequestDuration.update(durationMs.get(), TimeUnit.MILLISECONDS);
-      } else {
-        LOG.info("Unable to get lock request duration");
-      }
+      updateMetric(lockApiRequestDurationTimer, lockApiRequestDuration, "acquired");
       lockAttempts.inc();
       successfulLockAttempts.inc();
       lockDurationTimer.startTimer();
@@ -111,24 +115,14 @@ public class HoodieLockMetrics {
 
   public void updateLockNotAcquiredMetric() {
     if (isMetricsEnabled) {
-      Option<Long> durationMs = lockApiRequestDurationTimer.tryEndTimer();
-      if (durationMs.isPresent()) {
-        lockApiRequestDuration.update(durationMs.get(), TimeUnit.MILLISECONDS);
-      } else {
-        LOG.info("Unable to get lock request duration");
-      }
+      updateMetric(lockApiRequestDurationTimer, lockApiRequestDuration, "acquired");
       failedLockAttempts.inc();
     }
   }
 
   public void updateLockHeldTimerMetrics() {
     if (isMetricsEnabled && lockDurationTimer != null) {
-      Option<Long> lockDurationInMs = lockDurationTimer.tryEndTimer();
-      if (lockDurationInMs.isPresent()) {
-        lockDuration.update(lockDurationInMs.get(), TimeUnit.MILLISECONDS);
-      } else {
-        LOG.info("Unable to get lock duration");
-      }
+      updateMetric(lockDurationTimer, lockDuration, "held");
     }
   }
 }
