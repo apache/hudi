@@ -183,16 +183,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     if (config.incrementalCleanerModeEnabled()) {
       Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
       if (lastClean.isPresent()) {
-        if (hoodieTable.getActiveTimeline().isEmpty(lastClean.get())) {
-          hoodieTable.getActiveTimeline().deleteEmptyInstantIfExists(lastClean.get());
-        } else {
-          HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-                  .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
-          if ((cleanMetadata.getEarliestCommitToRetain() != null)
-                  && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()
-                  && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
-            return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
-          }
+        HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
+                .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
+        if ((cleanMetadata.getEarliestCommitToRetain() != null)
+                && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()
+                && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
+          return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
         }
       }
     }
@@ -463,7 +459,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private boolean hasPendingFiles(String partitionPath) {
     try {
-      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
+      HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
       StoragePath fullPartitionPath = new StoragePath(hoodieTable.getMetaClient().getBasePath(), partitionPath);
       fsView.addFilesToView(partitionPath, FSUtils.getAllDataFilesInPartition(
           hoodieTable.getStorage(), fullPartitionPath));

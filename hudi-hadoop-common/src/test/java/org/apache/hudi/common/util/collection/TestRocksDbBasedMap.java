@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.SpillableMapTestUtils;
@@ -49,20 +50,21 @@ public class TestRocksDbBasedMap extends HoodieCommonTestHarness {
 
   @Test
   public void testSimple() throws IOException, URISyntaxException {
-    RocksDbDiskMap records = new RocksDbDiskMap(basePath);
-    SchemaTestUtil testUtil = new SchemaTestUtil();
-    List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
-    ((GenericRecord) iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
-    List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
+    try (RocksDbDiskMap records = new RocksDbDiskMap(basePath, new DefaultSerializer<>())) {
+      SchemaTestUtil testUtil = new SchemaTestUtil();
+      List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
+      ((GenericRecord) iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+      List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
 
-    // make sure records have spilled to disk
-    Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
-    List<HoodieRecord> oRecords = new ArrayList<>();
-    while (itr.hasNext()) {
-      HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
-      oRecords.add(rec);
-      assert recordKeys.contains(rec.getRecordKey());
+      // make sure records have spilled to disk
+      Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
+      List<HoodieRecord> oRecords = new ArrayList<>();
+      while (itr.hasNext()) {
+        HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
+        oRecords.add(rec);
+        assert recordKeys.contains(rec.getRecordKey());
+      }
+      assertEquals(recordKeys.size(), oRecords.size());
     }
-    assertEquals(recordKeys.size(), oRecords.size());
   }
 }

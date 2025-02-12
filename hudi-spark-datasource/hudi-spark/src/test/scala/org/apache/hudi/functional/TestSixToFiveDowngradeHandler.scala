@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.config.HoodieCompactionConfig
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.spark.sql.SaveMode
@@ -131,9 +130,9 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
 
   private def getTableFileSystemView(opts: Map[String, String]): HoodieTableFileSystemView = {
     if (metaClient.getTableConfig.isMetadataTableAvailable) {
-      new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline, metadataWriter(getWriteConfig(opts)).getTableMetadata)
+      new HoodieTableFileSystemView(metadataWriter(getWriteConfig(opts)).getTableMetadata, metaClient, metaClient.getActiveTimeline)
     } else {
-      new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline)
+      HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getActiveTimeline)
     }
   }
 
