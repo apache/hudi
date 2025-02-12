@@ -247,12 +247,12 @@ public abstract class AbstractHoodieLogRecordScanner {
       if (enableOptimizedLogBlocksScan) {
         scanInternalV2(keySpecOpt, skipProcessingBlocks);
       } else {
-        scanInternalV1(keySpecOpt);
+        scanInternalV1(keySpecOpt, skipProcessingBlocks);
       }
     }
   }
 
-  private void scanInternalV1(Option<KeySpec> keySpecOpt) {
+  private void scanInternalV1(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks) {
     currentInstantLogBlocks = new ArrayDeque<>();
 
     progress = 0.0f;
@@ -372,7 +372,7 @@ public abstract class AbstractHoodieLogRecordScanner {
         }
       }
       // merge the last read block when all the blocks are done reading
-      if (!currentInstantLogBlocks.isEmpty()) {
+      if (!currentInstantLogBlocks.isEmpty() && !skipProcessingBlocks) {
         // if there are no dups, we can take currentInstantLogBlocks as is.
         LOG.info("Merging the final data blocks");
         processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
@@ -631,18 +631,25 @@ public abstract class AbstractHoodieLogRecordScanner {
 
     try (ClosableIterator<HoodieRecord> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
-        HoodieRecord completedRecord = recordIterator.next()
-            .wrapIntoHoodieRecordPayloadWithParams(recordsIteratorSchemaPair.getRight(),
-                hoodieTableMetaClient.getTableConfig().getProps(),
-                recordKeyPartitionPathFieldPair,
-                this.withOperationField,
-                this.partitionNameOverrideOpt,
-                populateMetaFields,
-                Option.empty());
+        HoodieRecord completedRecord = getWrapIntoHoodieRecordPayloadWithParams(recordIterator, recordsIteratorSchemaPair, recordKeyPartitionPathFieldPair);
         processNextRecord(completedRecord);
         totalLogRecords.incrementAndGet();
       }
     }
+  }
+
+  protected HoodieRecord getWrapIntoHoodieRecordPayloadWithParams(ClosableIterator<HoodieRecord> recordIterator,
+                                                                Pair<ClosableIterator<HoodieRecord>, Schema> recordsIteratorSchemaPair,
+                                                                Option<Pair<String, String>> recordKeyPartitionPathFieldPair) throws IOException {
+    return recordIterator
+        .next()
+            .wrapIntoHoodieRecordPayloadWithParams(recordsIteratorSchemaPair.getRight(),
+            hoodieTableMetaClient.getTableConfig().getProps(),
+            recordKeyPartitionPathFieldPair,
+            this.withOperationField,
+            this.partitionNameOverrideOpt,
+            populateMetaFields,
+            Option.empty());
   }
 
   /**
@@ -797,7 +804,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     return validBlockInstants;
   }
 
-  private Pair<ClosableIterator<HoodieRecord>, Schema> getRecordsIterator(
+  protected Pair<ClosableIterator<HoodieRecord>, Schema> getRecordsIterator(
       HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
     ClosableIterator<HoodieRecord> blockRecordsIterator;
     if (keySpecOpt.isPresent()) {

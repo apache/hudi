@@ -229,13 +229,12 @@ public class SparkMetadataWriterUtils {
   public static List<Row> readRecordsAsRows(StoragePath[] paths, SQLContext sqlContext,
                                             HoodieTableMetaClient metaClient, Schema schema,
                                             HoodieWriteConfig dataWriteConfig, boolean isBaseFile) {
-    List<HoodieRecord> records = isBaseFile ? getBaseFileRecords(new HoodieBaseFile(paths[0].toString()), metaClient, schema)
+    Iterator<? extends HoodieRecord> records = isBaseFile ? getBaseFileRecords(new HoodieBaseFile(paths[0].toString()), metaClient, schema)
         : getUnmergedLogFileRecords(Arrays.stream(paths).map(StoragePath::toString).collect(Collectors.toList()), metaClient, schema);
     return toRows(records, schema, dataWriteConfig, sqlContext, paths[0].toString());
   }
 
-  private static List<HoodieRecord> getUnmergedLogFileRecords(List<String> logFilePaths, HoodieTableMetaClient metaClient, Schema readerSchema) {
-    List<HoodieRecord> records = new ArrayList<>();
+  private static Iterator<HoodieRecord<?>> getUnmergedLogFileRecords(List<String> logFilePaths, HoodieTableMetaClient metaClient, Schema readerSchema) {
     HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
         .withStorage(metaClient.getStorage())
         .withBasePath(metaClient.getBasePath())
@@ -244,40 +243,37 @@ public class SparkMetadataWriterUtils {
         .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
         .withReaderSchema(readerSchema)
         .withTableMetaClient(metaClient)
-        .withLogRecordScannerCallback(records::add)
         .build();
     scanner.scan(false);
-    return records;
+    return scanner.iterator();
   }
 
-  private static List<HoodieRecord> getBaseFileRecords(HoodieBaseFile baseFile, HoodieTableMetaClient metaClient, Schema readerSchema) {
-    List<HoodieRecord> records = new ArrayList<>();
+  private static Iterator<HoodieRecord> getBaseFileRecords(HoodieBaseFile baseFile, HoodieTableMetaClient metaClient, Schema readerSchema) {
     HoodieRecordMerger recordMerger =
         HoodieRecordUtils.createRecordMerger(metaClient.getBasePath().toString(), EngineType.SPARK, Collections.emptyList(),
             metaClient.getTableConfig().getRecordMergeStrategyId());
-    try (HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType())
-        .getFileReader(getReaderConfigs(metaClient.getStorageConf()), baseFile.getStoragePath())) {
-      baseFileReader.getRecordIterator(readerSchema).forEachRemaining((record) -> records.add((HoodieRecord) record));
-      return records;
+    try {
+      HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType())
+          .getFileReader(getReaderConfigs(metaClient.getStorageConf()), baseFile.getStoragePath());
+      return baseFileReader.getRecordIterator(readerSchema);
     } catch (IOException e) {
       throw new HoodieIOException("Error reading base file " + baseFile.getFileName(), e);
     }
   }
 
-  private static List<Row> toRows(List<HoodieRecord> records, Schema schema, HoodieWriteConfig dataWriteConfig, SQLContext sqlContext, String path) {
+  private static List<Row> toRows(Iterator<? extends HoodieRecord> records, Schema schema, HoodieWriteConfig dataWriteConfig, SQLContext sqlContext, String path) {
     StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
     Function1<GenericRecord, Row> converterToRow = AvroConversionUtils.createConverterToRow(schema, structType);
-    List<Row> avroRecords = records.stream()
-        .map(r -> {
-          try {
-            return (GenericRecord) (r.getData() instanceof GenericRecord ? r.getData()
-                : ((HoodieRecordPayload) r.getData()).getInsertValue(schema, dataWriteConfig.getProps()).get());
-          } catch (IOException e) {
-            throw new HoodieIOException("Could not fetch record payload");
-          }
-        })
-        .map(converterToRow::apply)
-        .collect(Collectors.toList());
+    List<Row> avroRecords = new ArrayList<>();
+    records.forEachRemaining(record -> {
+      try {
+        GenericRecord genericRecord = (GenericRecord) (record.getData() instanceof GenericRecord ? record.getData()
+            : ((HoodieRecordPayload) record.getData()).getInsertValue(schema, dataWriteConfig.getProps()).get());
+        avroRecords.add(converterToRow.apply(genericRecord));
+      } catch (IOException e) {
+        throw new HoodieIOException("Could not fetch record payload", e);
+      }
+    });
     return avroRecords;
   }
 

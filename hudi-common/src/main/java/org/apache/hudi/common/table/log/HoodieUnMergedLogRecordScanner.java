@@ -25,14 +25,22 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
+
+import java.io.IOException;
+import java.util.Iterator;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -109,6 +117,52 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   @FunctionalInterface
   public interface RecordDeletionCallback {
     void apply(HoodieKey deletedKey);
+  }
+
+  /**
+   * Returns a nested iterator over the log records.
+   */
+  public ClosableIterator<HoodieRecord<?>> iterator() {
+    scan(true);
+    return new ClosableIterator<HoodieRecord<?>>() {
+      private final Iterator<HoodieLogBlock> logBlockIterator = getCurrentInstantLogBlocks().iterator();
+      Pair<ClosableIterator<HoodieRecord>, Schema> recordsIteratorSchemaPair = null;
+      private ClosableIterator<HoodieRecord> recordIterator = null;
+
+      @Override
+      public boolean hasNext() {
+        try {
+          while ((recordIterator == null || !recordIterator.hasNext()) && logBlockIterator.hasNext()) {
+            HoodieLogBlock logBlock = logBlockIterator.next();
+            if (logBlock instanceof HoodieDataBlock) {
+              HoodieDataBlock dataBlock = (HoodieDataBlock) logBlock;
+              recordsIteratorSchemaPair = getRecordsIterator(dataBlock, Option.empty());
+              recordIterator = recordsIteratorSchemaPair.getLeft();
+            }
+          }
+          return recordIterator != null && recordIterator.hasNext();
+        } catch (Exception e) {
+          throw new HoodieException("Error while iterating over log records", e);
+        }
+      }
+
+      @Override
+      public HoodieRecord<?> next() {
+        try {
+          // fetch next record and wrap into hoodie record
+          return getWrapIntoHoodieRecordPayloadWithParams(recordIterator, recordsIteratorSchemaPair, Option.empty());
+        } catch (IOException e) {
+          throw new HoodieException("Error while wrapping into hoodie record", e);
+        }
+      }
+
+      @Override
+      public void close() {
+        if (recordIterator != null) {
+          recordIterator.close();
+        }
+      }
+    };
   }
 
   /**
