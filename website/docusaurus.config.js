@@ -209,6 +209,10 @@ module.exports = {
           position: "left",
           items: [
             {
+              label: "Developer Sync Call",
+              to: "/contribute/developer-sync-call",
+            },
+            {
               label: "How to Contribute",
               to: "/contribute/how-to-contribute",
             },

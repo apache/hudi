@@ -1,6 +1,6 @@
 ---
 title: Developer Setup
-sidebar_position: 4
+sidebar_position: 3
 keywords: [ hudi, ide, developer, setup]
 toc: true
 last_modified_at: 2024-08-12T10:47:57-07:00
