@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -65,145 +66,151 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
 
   @Test
   public void testSimpleInsertSequential() throws IOException, URISyntaxException {
-    RocksDbDiskMap<String, HoodieRecord<? extends HoodieRecordPayload>> rocksDBBasedMap = new RocksDbDiskMap<>(basePath);
-    List<String> recordKeys = setupMapWithRecords(rocksDBBasedMap, 100);
+    try (RocksDbDiskMap<String, HoodieRecord<? extends HoodieRecordPayload>> rocksDBBasedMap = new RocksDbDiskMap<>(basePath, new DefaultSerializer<>())) {
+      List<String> recordKeys = setupMapWithRecords(rocksDBBasedMap, 100);
 
-    Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = rocksDBBasedMap.iterator();
-    int cntSize = 0;
-    while (itr.hasNext()) {
-      HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
-      cntSize++;
-      assert recordKeys.contains(rec.getRecordKey());
-    }
-    assertEquals(recordKeys.size(), cntSize);
+      Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = rocksDBBasedMap.iterator();
+      int cntSize = 0;
+      while (itr.hasNext()) {
+        HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
+        cntSize++;
+        assert recordKeys.contains(rec.getRecordKey());
+      }
+      assertEquals(recordKeys.size(), cntSize);
 
-    // Test value stream
-    long currentTimeMs = System.currentTimeMillis();
-    List<HoodieRecord<? extends HoodieRecordPayload>> values =
-        rocksDBBasedMap.valueStream().collect(Collectors.toList());
-    cntSize = 0;
-    for (HoodieRecord value : values) {
-      assert recordKeys.contains(value.getRecordKey());
-      cntSize++;
+      // Test value stream
+      long currentTimeMs = System.currentTimeMillis();
+      List<HoodieRecord<? extends HoodieRecordPayload>> values =
+          rocksDBBasedMap.valueStream().collect(Collectors.toList());
+      cntSize = 0;
+      for (HoodieRecord value : values) {
+        assert recordKeys.contains(value.getRecordKey());
+        cntSize++;
+      }
+      assertEquals(recordKeys.size(), cntSize);
     }
-    assertEquals(recordKeys.size(), cntSize);
   }
 
   @Test
   public void testSimpleInsertRandomAccess() throws IOException, URISyntaxException {
-    RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath);
-    List<String> recordKeys = setupMapWithRecords(rocksDBBasedMap, 100);
+    try (RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath, new DefaultSerializer<>())) {
+      List<String> recordKeys = setupMapWithRecords(rocksDBBasedMap, 100);
 
-    Random random = new Random();
-    for (int i = 0; i < recordKeys.size(); i++) {
-      String key = recordKeys.get(random.nextInt(recordKeys.size()));
-      assert rocksDBBasedMap.get(key) != null;
+      Random random = new Random();
+      for (int i = 0; i < recordKeys.size(); i++) {
+        String key = recordKeys.get(random.nextInt(recordKeys.size()));
+        assert rocksDBBasedMap.get(key) != null;
+      }
     }
   }
 
   @Test
   public void testSimpleInsertWithoutHoodieMetadata() throws IOException, URISyntaxException {
-    RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath);
-    SchemaTestUtil testUtil = new SchemaTestUtil();
-    List<HoodieRecord> hoodieRecords = testUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 1000);
-    Set<String> recordKeys = new HashSet<>();
-    // insert generated records into the map
-    hoodieRecords.forEach(r -> {
-      rocksDBBasedMap.put(r.getRecordKey(), r);
-      recordKeys.add(r.getRecordKey());
-    });
-    // make sure records have spilled to disk
-    assertTrue(rocksDBBasedMap.sizeOfFileOnDiskInBytes() > 0);
-    Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = rocksDBBasedMap.iterator();
-    int cntSize = 0;
-    while (itr.hasNext()) {
-      HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
-      cntSize++;
-      assert recordKeys.contains(rec.getRecordKey());
-    }
-    assertEquals(recordKeys.size(), cntSize);
+    try (RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath, new DefaultSerializer<>())) {
+      SchemaTestUtil testUtil = new SchemaTestUtil();
+      List<HoodieRecord> hoodieRecords = testUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 1000);
+      Set<String> recordKeys = new HashSet<>();
+      // insert generated records into the map
+      hoodieRecords.forEach(r -> {
+        rocksDBBasedMap.put(r.getRecordKey(), r);
+        recordKeys.add(r.getRecordKey());
+      });
+      // make sure records have spilled to disk
+      assertTrue(rocksDBBasedMap.sizeOfFileOnDiskInBytes() > 0);
+      Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = rocksDBBasedMap.iterator();
+      int cntSize = 0;
+      while (itr.hasNext()) {
+        HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
+        cntSize++;
+        assert recordKeys.contains(rec.getRecordKey());
+      }
+      assertEquals(recordKeys.size(), cntSize);
 
-    // test iterator with predicate
-    String firstKey = recordKeys.stream().findFirst().get();
-    recordKeys.remove(firstKey);
-    itr = rocksDBBasedMap.iterator(key -> !key.equals(firstKey));
-    cntSize = 0;
-    while (itr.hasNext()) {
-      HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
-      cntSize++;
-      assert recordKeys.contains(rec.getRecordKey());
+      // test iterator with predicate
+      String firstKey = recordKeys.stream().findFirst().get();
+      recordKeys.remove(firstKey);
+      itr = rocksDBBasedMap.iterator(key -> !key.equals(firstKey));
+      cntSize = 0;
+      while (itr.hasNext()) {
+        HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
+        cntSize++;
+        assert recordKeys.contains(rec.getRecordKey());
+      }
+      assertEquals(recordKeys.size(), cntSize);
     }
-    assertEquals(recordKeys.size(), cntSize);
   }
 
   @Test
   public void testSimpleUpsert() throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
 
-    RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath);
-    SchemaTestUtil testUtil = new SchemaTestUtil();
-    List<IndexedRecord> insertedRecords = testUtil.generateHoodieTestRecords(0, 100);
-    List<String> recordKeys = SpillableMapTestUtils.upsertRecords(insertedRecords, rocksDBBasedMap);
-    String oldCommitTime =
-        ((GenericRecord) insertedRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+    try (RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath, new DefaultSerializer<>())) {
+      SchemaTestUtil testUtil = new SchemaTestUtil();
+      List<IndexedRecord> insertedRecords = testUtil.generateHoodieTestRecords(0, 100);
+      List<String> recordKeys = SpillableMapTestUtils.upsertRecords(insertedRecords, rocksDBBasedMap);
+      String oldCommitTime =
+          ((GenericRecord) insertedRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
 
-    // generate updates from inserts for first 50 keys / subset of keys
-    List<IndexedRecord> updatedRecords = SchemaTestUtil.updateHoodieTestRecords(recordKeys.subList(0, 50),
-        testUtil.generateHoodieTestRecords(0, 50), InProcessTimeGenerator.createNewInstantTime());
-    String newCommitTime =
-        ((GenericRecord) updatedRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+      // generate updates from inserts for first 50 keys / subset of keys
+      List<IndexedRecord> updatedRecords = SchemaTestUtil.updateHoodieTestRecords(recordKeys.subList(0, 50),
+          testUtil.generateHoodieTestRecords(0, 50), InProcessTimeGenerator.createNewInstantTime());
+      String newCommitTime =
+          ((GenericRecord) updatedRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
 
-    // perform upserts
-    List<String> updatedRecordKeys = SpillableMapTestUtils.upsertRecords(updatedRecords, rocksDBBasedMap);
+      // perform upserts
+      List<String> updatedRecordKeys = SpillableMapTestUtils.upsertRecords(updatedRecords, rocksDBBasedMap);
 
-    // Upserted records (on disk) should have the latest commit time
-    Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = rocksDBBasedMap.iterator();
-    while (itr.hasNext()) {
-      HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
-      try {
-        IndexedRecord indexedRecord = (IndexedRecord) rec.getData().getInsertValue(schema).get();
-        String latestCommitTime =
-            ((GenericRecord) indexedRecord).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
-        assert recordKeys.contains(rec.getRecordKey()) || updatedRecordKeys.contains(rec.getRecordKey());
-        assertEquals(latestCommitTime, updatedRecordKeys.contains(rec.getRecordKey()) ? newCommitTime : oldCommitTime);
-      } catch (IOException io) {
-        throw new UncheckedIOException(io);
+      // Upserted records (on disk) should have the latest commit time
+      Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = rocksDBBasedMap.iterator();
+      while (itr.hasNext()) {
+        HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
+        try {
+          IndexedRecord indexedRecord = (IndexedRecord) rec.getData().getInsertValue(schema).get();
+          String latestCommitTime =
+              ((GenericRecord) indexedRecord).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+          assert recordKeys.contains(rec.getRecordKey()) || updatedRecordKeys.contains(rec.getRecordKey());
+          assertEquals(latestCommitTime, updatedRecordKeys.contains(rec.getRecordKey()) ? newCommitTime : oldCommitTime);
+        } catch (IOException io) {
+          throw new UncheckedIOException(io);
+        }
       }
     }
   }
 
   @Test
   public void testPutAll() throws IOException, URISyntaxException {
-    RocksDbDiskMap<String, HoodieRecord> rocksDBBasedMap = new RocksDbDiskMap<>(basePath);
-    SchemaTestUtil testUtil = new SchemaTestUtil();
-    List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
-    Map<String, HoodieRecord> recordMap = new HashMap<>();
-    iRecords.forEach(r -> {
-      String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-      String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-      HoodieRecord value = new HoodieAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
-      recordMap.put(key, value);
-    });
+    try (RocksDbDiskMap<String, HoodieRecord> rocksDBBasedMap = new RocksDbDiskMap<>(basePath, new DefaultSerializer<>())) {
+      SchemaTestUtil testUtil = new SchemaTestUtil();
+      List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
+      Map<String, HoodieRecord> recordMap = new HashMap<>();
+      iRecords.forEach(r -> {
+        String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+        String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+        HoodieRecord value = new HoodieAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
+        recordMap.put(key, value);
+      });
 
-    rocksDBBasedMap.putAll(recordMap);
-    // make sure records have spilled to disk
-    assertTrue(rocksDBBasedMap.sizeOfFileOnDiskInBytes() > 0);
+      rocksDBBasedMap.putAll(recordMap);
+      // make sure records have spilled to disk
+      assertTrue(rocksDBBasedMap.sizeOfFileOnDiskInBytes() > 0);
 
-    // make sure all added records are present
-    for (Map.Entry<String, HoodieRecord> entry : rocksDBBasedMap.entrySet()) {
-      assertTrue(recordMap.containsKey(entry.getKey()));
+      // make sure all added records are present
+      for (Map.Entry<String, HoodieRecord> entry : rocksDBBasedMap.entrySet()) {
+        assertTrue(recordMap.containsKey(entry.getKey()));
+      }
     }
   }
 
   @Test
   public void testSimpleRemove() throws IOException, URISyntaxException {
-    RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath);
-    List<String> recordKeys = setupMapWithRecords(rocksDBBasedMap, 100);
+    try (RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath, new DefaultSerializer<>())) {
+      List<String> recordKeys = setupMapWithRecords(rocksDBBasedMap, 100);
 
-    List<String> deleteKeys = recordKeys.subList(0, 10);
-    for (String deleteKey : deleteKeys) {
-      assert rocksDBBasedMap.remove(deleteKey) != null;
-      assert rocksDBBasedMap.get(deleteKey) == null;
+      List<String> deleteKeys = recordKeys.subList(0, 10);
+      for (String deleteKey : deleteKeys) {
+        assert rocksDBBasedMap.remove(deleteKey) != null;
+        assert rocksDBBasedMap.get(deleteKey) == null;
+      }
     }
   }
 

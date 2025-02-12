@@ -80,7 +80,6 @@ import org.apache.hudi.io.hadoop.HoodieAvroParquetReader;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -2816,7 +2815,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
     } else if (operationType == WriteOperationType.INSERT_OVERWRITE_TABLE) {
       HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
-      final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+      final HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getCommitsAndCompactionTimeline());
       assertEquals(0, fsView.getLatestFileSlices("").count());
       TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
 
@@ -3111,9 +3110,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getStorage(), metaClient.getBasePath(), false);
     StorageConfiguration hadoopConf = metaClient.getStorageConf();
     HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
-    HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
-        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-        HoodieMetadataConfig.newBuilder().enable(false).build());
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engContext, metaClient,
+        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
     List<String> baseFiles = partitions.parallelStream().flatMap(partition -> fsView.getLatestBaseFiles(partition).map(HoodieBaseFile::getPath)).collect(Collectors.toList());
     // Verify each partition has one base file because parallelism is 1.
     assertEquals(baseFiles.size(), partitions.size());
@@ -3177,7 +3175,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private Set<String> getAllFileIDsInTable(String tableBasePath, Option<String> partition) {
     HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
-    final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+    final HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getCommitsAndCompactionTimeline());
     Stream<HoodieBaseFile> baseFileStream = partition.isPresent() ? fsView.getLatestBaseFiles(partition.get()) : fsView.getLatestBaseFiles();
     return baseFileStream.map(HoodieBaseFile::getFileId).collect(Collectors.toSet());
   }

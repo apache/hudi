@@ -18,7 +18,8 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hudi.common.function.SerializableSupplier;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -51,16 +52,19 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   private static final Logger LOG = LoggerFactory.getLogger(PriorityBasedFileSystemView.class);
 
+  private final transient HoodieEngineContext engineContext;
   private final SyncableFileSystemView preferredView;
-  private final SerializableSupplier<SyncableFileSystemView> secondaryViewSupplier;
+  private final SerializableFunctionUnchecked<HoodieEngineContext, SyncableFileSystemView> secondaryViewCreator;
   private SyncableFileSystemView secondaryView;
   private boolean errorOnPreferredView;
 
-  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, SerializableSupplier<SyncableFileSystemView> secondaryViewSupplier) {
+  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, SerializableFunctionUnchecked<HoodieEngineContext, SyncableFileSystemView> secondaryViewCreator,
+                                     HoodieEngineContext engineContext) {
     this.preferredView = preferredView;
-    this.secondaryViewSupplier = secondaryViewSupplier;
+    this.secondaryViewCreator = secondaryViewCreator;
     this.secondaryView = null; // only initialize secondary view when required
     this.errorOnPreferredView = false;
+    this.engineContext = engineContext;
   }
 
   private <R> R execute(Function0<R> preferredFunction, Function0<R> secondaryFunction) {
@@ -343,7 +347,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   synchronized SyncableFileSystemView getSecondaryView() {
     if (secondaryView == null) {
-      secondaryView = secondaryViewSupplier.get();
+      secondaryView = secondaryViewCreator.apply(engineContext);
     }
     return secondaryView;
   }

@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -139,6 +140,7 @@ public class FormatUtils {
           new DefaultSizeEstimator<>(),
           new DefaultSizeEstimator<>(),
           writeConfig.getCommonConfig().getSpillableDiskMapType(),
+          new DefaultSerializer<>(),
           writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
     } catch (IOException e) {
       throw new HoodieIOException(

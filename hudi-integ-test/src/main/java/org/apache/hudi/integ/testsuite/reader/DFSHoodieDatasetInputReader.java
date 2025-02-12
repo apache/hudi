@@ -113,8 +113,8 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
   private JavaPairRDD<String, Iterator<FileSlice>> getPartitionToFileSlice(HoodieTableMetaClient metaClient,
       List<String> partitionPaths) {
-    TableFileSystemView.SliceView fileSystemView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants());
+    TableFileSystemView.SliceView fileSystemView = HoodieTableFileSystemView.fileListingBasedFileSystemView(new HoodieSparkEngineContext(jsc),
+        metaClient, metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants());
     // pass num partitions to another method
     JavaPairRDD<String, Iterator<FileSlice>> partitionToFileSliceList = jsc.parallelize(partitionPaths).mapToPair(p -> {
       return new Tuple2<>(p, fileSystemView.getLatestFileSlices(p).iterator());

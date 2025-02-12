@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -99,7 +100,7 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                   String instantTime,
                                                                                   HoodieIndexDefinition indexDefinition,
                                                                                   HoodieMetadataConfig metadataConfig,
-                                                                                  HoodieMetadataFileSystemView fsView,
+                                                                                  HoodieTableFileSystemView fsView,
                                                                                   HoodieTableMetaClient dataMetaClient,
                                                                                   HoodieEngineContext engineContext,
                                                                                   EngineType engineType) {

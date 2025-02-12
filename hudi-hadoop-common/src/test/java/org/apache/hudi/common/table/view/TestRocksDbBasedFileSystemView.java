@@ -19,6 +19,8 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -31,7 +33,9 @@ public class TestRocksDbBasedFileSystemView extends TestHoodieTableFileSystemVie
   @Override
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) throws IOException {
     String subdirPath = Files.createTempDirectory(tempDir, null).toAbsolutePath().toString();
-    return new RocksDbBasedFileSystemView(metaClient, timeline,
+    HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(getEngineContext(), metaClient.getTableConfig(), metaClient.getStorage(),
+        metaClient.getBasePath().toString());
+    return new RocksDbBasedFileSystemView(tableMetadata, metaClient, timeline,
         FileSystemViewStorageConfig.newBuilder().withRocksDBPath(subdirPath).build());
   }
 }

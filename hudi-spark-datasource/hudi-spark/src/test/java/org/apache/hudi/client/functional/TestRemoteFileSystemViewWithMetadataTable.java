@@ -43,7 +43,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.timeline.service.TimelineService;
@@ -78,7 +77,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests the {@link RemoteHoodieTableFileSystemView} with metadata table enabled, using
- * {@link HoodieMetadataFileSystemView} on the timeline server.
+ * {@link org.apache.hudi.common.table.view.HoodieTableFileSystemView} on the timeline server.
  */
 public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClientTestHarness {
   private static final Logger LOG = LoggerFactory.getLogger(TestRemoteFileSystemViewWithMetadataTable.class);
@@ -118,7 +117,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           HoodieStorageUtils.getStorage(getDefaultStorageConf()),
           FileSystemViewManager.createViewManager(
-              context, config.getViewStorageConfig(),
+              context, config.getMetadataConfig(), config.getViewStorageConfig(),
               config.getCommonConfig(),
               metaClient -> new HoodieBackedTestDelayedTableMetadata(
                   context, metaClient.getStorage(), config.getMetadataConfig(), metaClient.getBasePath().toString(), true)));

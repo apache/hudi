@@ -108,7 +108,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.createBloomFilterMe
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createColumnStatsRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
 /**
@@ -403,7 +403,7 @@ public class SparkMetadataWriterUtils {
       // Step 2: Compute expression index records for the modified partitions
       LOG.debug("Indexing following columns for partition stats index: {}", validColumnsToIndex);
       List<String> partitionPaths = new ArrayList<>(commitMetadata.getWritePartitionPaths());
-      HoodieTableFileSystemView fileSystemView = getFileSystemView(dataMetaClient);
+      HoodieTableFileSystemView fileSystemView = getFileSystemViewForMetadataTable(dataMetaClient);
       int parallelism = Math.max(Math.min(partitionPaths.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
       return engineContext.parallelize(partitionPaths, parallelism).mapToPair(partitionName -> {
         checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");

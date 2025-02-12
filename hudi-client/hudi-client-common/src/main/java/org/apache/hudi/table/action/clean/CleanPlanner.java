@@ -463,7 +463,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private boolean hasPendingFiles(String partitionPath) {
     try {
-      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
+      HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
       StoragePath fullPartitionPath = new StoragePath(hoodieTable.getMetaClient().getBasePath(), partitionPath);
       fsView.addFilesToView(partitionPath, FSUtils.getAllDataFilesInPartition(
           hoodieTable.getStorage(), fullPartitionPath));

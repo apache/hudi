@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap;
 import org.apache.hudi.common.util.collection.RocksDbDiskMap;
@@ -54,18 +55,20 @@ public class TestCustomSerDe extends HoodieCommonTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   public void testBitCaskDiskMapPutDecimal(boolean isCompressionEnabled) throws IOException {
-    BitCaskDiskMap<String, HoodieRecord> bitCaskDiskMap = new BitCaskDiskMap<>(basePath, isCompressionEnabled);
-    HoodieRecord avroRecord = createAvroRecordWithDecimalOrderingField();
-    bitCaskDiskMap.put(avroRecord.getRecordKey(), avroRecord);
-    assertDoesNotThrow(() -> bitCaskDiskMap.get(avroRecord.getRecordKey()));
+    try (BitCaskDiskMap<String, HoodieRecord> bitCaskDiskMap = new BitCaskDiskMap<>(basePath, new DefaultSerializer<>(), isCompressionEnabled)) {
+      HoodieRecord avroRecord = createAvroRecordWithDecimalOrderingField();
+      bitCaskDiskMap.put(avroRecord.getRecordKey(), avroRecord);
+      assertDoesNotThrow(() -> bitCaskDiskMap.get(avroRecord.getRecordKey()));
+    }
   }
 
   @Test
   public void testRocksDbDiskMapPutDecimal() throws IOException {
-    RocksDbDiskMap<String, HoodieRecord> rocksDbBasedMap = new RocksDbDiskMap<>(basePath);
-    HoodieRecord avroRecord = createAvroRecordWithDecimalOrderingField();
-    rocksDbBasedMap.put(avroRecord.getRecordKey(), avroRecord);
-    assertDoesNotThrow(() -> rocksDbBasedMap.get(avroRecord.getRecordKey()));
+    try (RocksDbDiskMap<String, HoodieRecord> rocksDbBasedMap = new RocksDbDiskMap<>(basePath, new DefaultSerializer<>())) {
+      HoodieRecord avroRecord = createAvroRecordWithDecimalOrderingField();
+      rocksDbBasedMap.put(avroRecord.getRecordKey(), avroRecord);
+      assertDoesNotThrow(() -> rocksDbBasedMap.get(avroRecord.getRecordKey()));
+    }
   }
 
   private static HoodieRecord createAvroRecordWithDecimalOrderingField() {
