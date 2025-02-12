@@ -34,5 +34,4 @@ public class InMemoryMetricsReporter extends MetricsReporter {
   @Override
   public void stop() {
   }
-
 }
