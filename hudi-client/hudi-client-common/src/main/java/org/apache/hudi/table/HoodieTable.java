@@ -71,6 +71,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -168,7 +169,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getMetadataTable());
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getMetadataTable());
     }
     return viewManager;
   }
@@ -339,7 +340,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Get the view of the file system for this table.
    */
   public TableFileSystemView getFileSystemView() {
-    return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
+    return HoodieTableFileSystemView.fileListingBasedFileSystemView(getContext(), metaClient, getCompletedCommitsTimeline());
   }
 
   /**
@@ -687,14 +688,19 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param inflightInstant               Inflight instant
    * @param getPendingRollbackInstantFunc Function to get rollback instant
    */
-  private void rollbackInflightInstant(HoodieInstant inflightInstant,
-                                       Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
-    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
-        -> entry.getRollbackInstant().requestedTime())
-        .orElseGet(() -> getMetaClient().createNewInstantTime());
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-        false);
-    rollback(context, commitTime, inflightInstant, false, false);
+  void rollbackInflightInstant(HoodieInstant inflightInstant,
+                               Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+    // Retrieve the rollback information using the provided function.
+    final Pair<String, Boolean> rollbackInfo = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime())
+        .map(entry -> Pair.of(entry.getRollbackInstant().requestedTime(), false))
+        .orElseGet(() -> Pair.of(getMetaClient().createNewInstantTime(), true));
+    // If a rollback has not scheduled (rollbackInfo.getRight() is true), schedule it.
+    if (rollbackInfo.getRight()) {
+      scheduleRollback(context, rollbackInfo.getLeft(), inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
+    }
+    // Perform the rollback.
+    rollback(context, rollbackInfo.getLeft(), inflightInstant, false, false);
+    // Revert the inflight instant to requested state in the timeline.
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
   }
 
@@ -721,7 +727,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
   public void finalizeWrite(HoodieEngineContext context, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {
-    reconcileAgainstMarkers(context, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled());
+    reconcileAgainstMarkers(context, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled(), config.shouldFailOnDuplicateDataFileDetection());
   }
 
   private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
@@ -763,7 +769,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected void reconcileAgainstMarkers(HoodieEngineContext context,
                                          String instantTs,
                                          List<HoodieWriteStat> stats,
-                                         boolean consistencyCheckEnabled) throws HoodieIOException {
+                                         boolean consistencyCheckEnabled,
+                                         boolean shouldFailOnDuplicateDataFileDetection) throws HoodieIOException {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
@@ -790,7 +797,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       // Contains list of partially created files. These needs to be cleaned up.
       invalidDataPaths.removeAll(validDataPaths);
       invalidDataPaths.removeAll(validCdcDataPaths);
+
       if (!invalidDataPaths.isEmpty()) {
+        if (shouldFailOnDuplicateDataFileDetection) {
+          throw new HoodieDuplicateDataFileDetectedException("Duplicate data files detected " + invalidDataPaths);
+        }
+
         LOG.info("Removing duplicate files created due to task retries before committing. Paths=" + invalidDataPaths);
         Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
             .map(dp ->

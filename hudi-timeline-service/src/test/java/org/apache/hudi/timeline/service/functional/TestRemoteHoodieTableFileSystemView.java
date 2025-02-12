@@ -19,6 +19,7 @@
 package org.apache.hudi.timeline.service.functional;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -74,7 +75,7 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
       server = new TimelineService(localEngineContext, HadoopFSUtils.getStorageConf(),
           TimelineService.Config.builder().serverPort(0).build(),
           HoodieStorageUtils.getStorage(getDefaultStorageConf()),
-          FileSystemViewManager.createViewManager(localEngineContext, sConf, commonConfig));
+          FileSystemViewManager.createViewManager(localEngineContext, HoodieMetadataConfig.newBuilder().build(), sConf, commonConfig));
       server.startService();
     } catch (Exception ex) {
       throw new RuntimeException(ex);

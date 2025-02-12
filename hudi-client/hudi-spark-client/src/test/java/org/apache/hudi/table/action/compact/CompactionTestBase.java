@@ -71,6 +71,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class CompactionTestBase extends HoodieClientTestBase {
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit) {
+    return getConfigBuilder(autoCommit, basePath);
+  }
+
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, String basePath) {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
@@ -287,7 +291,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
   }
 
   protected List<FileSlice> getCurrentLatestFileSlices(HoodieTable table) {
-    HoodieTableFileSystemView view = new HoodieTableFileSystemView(table.getMetaClient(),
+    HoodieTableFileSystemView view = HoodieTableFileSystemView.fileListingBasedFileSystemView(getEngineContext(), table.getMetaClient(),
         table.getMetaClient().reloadActiveTimeline().getWriteTimeline());
     return Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS)
         .flatMap(view::getLatestFileSlices).collect(Collectors.toList());

@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieWriterUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.async.AsyncClusteringService;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.async.SparkAsyncClusteringService;
@@ -642,10 +643,14 @@ public class HoodieStreamer implements Serializable {
       LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
 
+    int exitCode = 0;
     try {
       new HoodieStreamer(cfg, jssc).sync();
+    } catch (Throwable throwable) {
+      exitCode = 1;
+      throw new HoodieException("Failed to run HoodieStreamer ", throwable);
     } finally {
-      jssc.stop();
+      SparkAdapterSupport$.MODULE$.sparkAdapter().stopSparkContext(jssc, exitCode);
     }
   }
 

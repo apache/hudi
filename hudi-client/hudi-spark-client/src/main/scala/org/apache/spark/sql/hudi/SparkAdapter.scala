@@ -24,6 +24,7 @@ import org.apache.hudi.storage.StoragePath
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -239,4 +240,14 @@ trait SparkAdapter extends Serializable {
   def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
                                         queryExecution: QueryExecution,
                                         name: Option[String] = None)(body: => T): T
+
+
+  /**
+   * Stop spark context with exit code
+   *
+   * @param jssc JavaSparkContext object to shutdown the spark context
+   * @param exitCode passed as a param to shutdown spark context with provided exit code
+   * @return
+   */
+  def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 }

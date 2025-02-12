@@ -197,7 +197,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   }
 
   public HoodieTableFileSystemView getFileSystemView() {
-    return new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
+    return HoodieTableFileSystemView.fileListingBasedFileSystemView(context(), metaClient, metaClient.getActiveTimeline());
   }
 
   public List<FileSlice> getLatestFileSlices(String partitionPath) {
