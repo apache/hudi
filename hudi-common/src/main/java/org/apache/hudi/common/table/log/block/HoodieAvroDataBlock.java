@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.SeekableDataInputStream;
@@ -52,6 +53,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -146,6 +148,26 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
   }
 
+  /**
+   * Streaming deserialization of records.
+   *
+   * @param inputStream The input stream from which to read the records.
+   * @param contentLocation The location within the input stream where the content starts.
+   * @param bufferSize The size of the buffer to use for reading the records.
+   * @return A ClosableIterator over HoodieRecord<T>.
+   * @throws IOException If there is an error reading or deserializing the records.
+   */
+  @Override
+  protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(
+          SeekableDataInputStream inputStream,
+          HoodieLogBlockContentLocation contentLocation,
+          HoodieRecordType type,
+          int bufferSize
+  ) throws IOException {
+    StreamingRecordIterator iterator = StreamingRecordIterator.getInstance(this, inputStream, contentLocation, bufferSize);
+    return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
+  }
+
   @Override
   protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
@@ -218,6 +240,159 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       } catch (IOException e) {
         throw new HoodieIOException("Unable to convert bytes to record.", e);
       }
+    }
+  }
+
+  /**
+   * {@code StreamingRecordIterator} is an iterator for reading records from a Hoodie log block in streaming manner.
+   * It decodes the given input stream into Avro records with optional schema promotion.
+   *
+   * <p>This iterator ensures that the buffer has enough data for each record and handles buffer setup,
+   * including compaction and resizing when necessary.
+   */
+  private static class StreamingRecordIterator implements ClosableIterator<IndexedRecord> {
+    private static final int RECORD_LENGTH_BYTES = 4;
+    // The minimum buffer size in bytes
+    private static final int MIN_BUFFER_SIZE = RECORD_LENGTH_BYTES;
+    private final SeekableDataInputStream inputStream;
+    private final GenericDatumReader<IndexedRecord> reader;
+    private final ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
+    private Option<Schema> promotedSchema = Option.empty();
+    private int totalRecords = 0;
+    private int readRecords = 0;
+    private ByteBuffer buffer;
+
+    private StreamingRecordIterator(Schema readerSchema, Schema writerSchema, SeekableDataInputStream inputStream,
+        HoodieLogBlockContentLocation contentLocation, int bufferSize) throws IOException {
+      // Negative values should not be used because they are generally considered to indicate the operation of closing stream reading,
+      // in order to avoid confusing users into thinking that stream reading can be closed.
+      checkArgument(bufferSize > 0, "Buffer size must be greater than zero");
+      bufferSize = Math.max(bufferSize, MIN_BUFFER_SIZE);
+
+      this.inputStream = inputStream;
+
+      // Seek to the start of the block
+      this.inputStream.seek(contentLocation.getContentPositionInLogFile());
+
+      // Read version for this data block
+      int version = this.inputStream.readInt();
+      if (new HoodieAvroDataBlockVersion(version).hasRecordCount()) {
+        this.totalRecords = this.inputStream.readInt();
+      }
+
+      if (recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema, readerSchema)) {
+        this.reader = new GenericDatumReader<>(writerSchema, writerSchema);
+        this.promotedSchema = Option.of(readerSchema);
+      } else {
+        this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
+      }
+
+      this.buffer = ByteBuffer.allocate(Math.min(bufferSize, Math.toIntExact(contentLocation.getBlockSize())));
+      // The buffer defaults to read mode
+      this.buffer.flip();
+    }
+
+    public static StreamingRecordIterator getInstance(HoodieAvroDataBlock dataBlock, SeekableDataInputStream inputStream,
+        HoodieLogBlockContentLocation contentLocation, int bufferSize) throws IOException {
+      return new StreamingRecordIterator(dataBlock.readerSchema, dataBlock.getSchemaFromHeader(), inputStream, contentLocation, bufferSize);
+    }
+
+    @Override
+    public void close() {
+      this.decoderCache.remove();
+      this.buffer = null;
+      try {
+        this.inputStream.close();
+      } catch (IOException ex) {
+        throw new HoodieIOException("Failed to close input stream", ex);
+      }
+    }
+
+    @Override
+    public boolean hasNext() {
+      return readRecords < totalRecords;
+    }
+
+    @Override
+    public IndexedRecord next() {
+      try {
+        ensureBufferHasData(RECORD_LENGTH_BYTES);
+
+        // Read the record length
+        int recordLength = buffer.getInt();
+
+        // Ensure buffer is large enough and has enough data
+        ensureBufferHasData(recordLength);
+
+        // Decode the record
+        BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(buffer.array(), buffer.position(), recordLength, this.decoderCache.get());
+        this.decoderCache.set(decoder);
+        IndexedRecord record = this.reader.read(null, decoder);
+        buffer.position(buffer.position() + recordLength);
+        this.readRecords++;
+        if (this.promotedSchema.isPresent()) {
+          return HoodieAvroUtils.rewriteRecordWithNewSchema(record, this.promotedSchema.get());
+        }
+        return record;
+      } catch (IOException e) {
+        throw new HoodieIOException("Unable to convert bytes to record", e);
+      }
+    }
+
+    /**
+     * Ensures that the buffer contains at least the specified amount of data.
+     *
+     * <p>This method checks if the buffer has the required amount of data. If not, it attempts to fill the buffer
+     * by reading more data from the input stream. If the buffer's capacity is insufficient, it allocates a larger buffer.
+     * If the end of the input stream is reached before the required amount of data is available, an exception is thrown.
+     *
+     * @param dataLength the amount of data (in bytes) that must be available in the buffer.
+     * @throws IOException if an I/O error occurs while reading from the input stream.
+     * @throws HoodieException if the end of the input stream is reached before the required amount of data is available.
+     */
+    private void ensureBufferHasData(int dataLength) throws IOException {
+      // Check if the current buffer has enough space to read the required data length
+      if (buffer.capacity() - buffer.position() < dataLength) {
+        buffer.compact();
+        // Reset the buffer to read mode
+        buffer.flip();
+      }
+
+      // Check again if the buffer still doesn't have enough space after compaction
+      if (buffer.capacity() - buffer.position() < dataLength) {
+        ByteBuffer newBuffer = ByteBuffer.allocate(buffer.position() + dataLength);
+        newBuffer.put(buffer);
+        // Reset the new buffer to read mode
+        newBuffer.flip();
+        buffer = newBuffer;
+      }
+
+      while (buffer.remaining() < dataLength) {
+        boolean hasMoreData = fillBuffer();
+        if (!hasMoreData && buffer.remaining() < dataLength) {
+          throw new HoodieException("Unable to read enough data from the input stream to fill the buffer");
+        }
+      }
+    }
+
+    /**
+     * Attempts to fill the buffer with more data from the input stream.
+     *
+     * <p>This method reads data from the input stream into the buffer, starting at the current limit
+     * and reading up to the capacity of the buffer. If the end of the input stream is reached,
+     * it returns false. Otherwise, it updates the buffer's limit to reflect the new data and returns true.
+     *
+     * @return true if data was successfully read into the buffer; false if the end of the input stream was reached.
+     * @throws IOException if an I/O error occurs while reading from the input stream.
+     */
+    private boolean fillBuffer() throws IOException {
+      int bytesRead = inputStream.read(buffer.array(), buffer.limit(), buffer.capacity() - buffer.limit());
+      if (bytesRead == -1) {
+        return false;
+      }
+
+      buffer.limit(buffer.limit() + bytesRead);
+      return true;
     }
   }
 

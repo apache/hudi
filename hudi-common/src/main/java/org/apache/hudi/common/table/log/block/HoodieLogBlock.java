@@ -345,6 +345,10 @@ public abstract class HoodieLogBlock {
     return Option.of(content);
   }
 
+  protected Supplier<SeekableDataInputStream> getInputStreamSupplier() {
+    return inputStreamSupplier;
+  }
+
   /**
    * Adds the record positions if the base file instant time of the positions exists
    * in the log header and the record positions are all valid.
