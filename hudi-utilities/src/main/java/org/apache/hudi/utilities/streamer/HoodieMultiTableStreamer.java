@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -279,10 +280,14 @@ public class HoodieMultiTableStreamer {
     }
 
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-streamer", Constants.LOCAL_SPARK_MASTER);
+    int exitCode = 0;
     try {
       new HoodieMultiTableStreamer(config, jssc).sync();
+    } catch (Throwable throwable) {
+      exitCode = 1;
+      throw new HoodieException("Failed to run HoodieMultiTableStreamer ", throwable);
     } finally {
-      jssc.stop();
+      SparkAdapterSupport$.MODULE$.sparkAdapter().stopSparkContext(jssc, exitCode);
     }
   }
 

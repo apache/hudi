@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
@@ -98,10 +100,14 @@ public class HDFSParquetImporter implements Serializable {
     HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
     JavaSparkContext jssc =
         UtilHelpers.buildSparkContext("data-importer-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+    int exitCode = 0;
     try {
       dataImporter.dataImport(jssc, cfg.retry);
+    } catch (Throwable throwable) {
+      exitCode = 1;
+      throw new HoodieException("Failed to run HoodieStreamer ", throwable);
     } finally {
-      jssc.stop();
+      SparkAdapterSupport$.MODULE$.sparkAdapter().stopSparkContext(jssc, exitCode);
     }
 
   }
