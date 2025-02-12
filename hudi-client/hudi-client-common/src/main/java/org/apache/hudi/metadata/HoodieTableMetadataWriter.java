@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -101,6 +102,18 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    *
    * @param inFlightInstantTimestamp Timestamp of an instant which is in-progress. This instant is ignored while
    *                                 deciding if optimizations can be performed.
+   * @param requiresTimelineRefresh set to true only if timeline requires reload, mainly used for testing
    */
-  void performTableServices(Option<String> inFlightInstantTimestamp);
+  @VisibleForTesting
+  void performTableServices(Option<String> inFlightInstantTimestamp, boolean requiresTimelineRefresh);
+
+  /**
+   * Perform various table services like compaction, cleaning, archiving on the MDT if required.
+   *
+   * @param inFlightInstantTimestamp Timestamp of an instant which is in-progress. This instant is ignored while
+   *                                 deciding if optimizations can be performed.
+   */
+  default void performTableServices(Option<String> inFlightInstantTimestamp) {
+    performTableServices(inFlightInstantTimestamp, false);
+  }
 }

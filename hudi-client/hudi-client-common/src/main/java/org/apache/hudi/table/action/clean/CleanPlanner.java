@@ -183,16 +183,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     if (config.incrementalCleanerModeEnabled()) {
       Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
       if (lastClean.isPresent()) {
-        if (hoodieTable.getActiveTimeline().isEmpty(lastClean.get())) {
-          hoodieTable.getActiveTimeline().deleteEmptyInstantIfExists(lastClean.get());
-        } else {
-          HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-                  .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
-          if ((cleanMetadata.getEarliestCommitToRetain() != null)
-                  && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()
-                  && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
-            return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
-          }
+        HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
+                .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
+        if ((cleanMetadata.getEarliestCommitToRetain() != null)
+                && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()
+                && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
+          return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
         }
       }
     }
