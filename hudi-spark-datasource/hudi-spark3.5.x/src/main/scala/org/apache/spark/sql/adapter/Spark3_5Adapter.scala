@@ -32,7 +32,8 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark35LegacyHoodieParquetFileFormat, Spark35ParquetReader, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.Spark35OrcReader
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark35LegacyHoodieParquetFileFormat, Spark35ParquetReader, SparkFileReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.SQLConf
@@ -145,7 +146,23 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
   override def createParquetFileReader(vectorized: Boolean,
                                        sqlConf: SQLConf,
                                        options: Map[String, String],
-                                       hadoopConf: Configuration): SparkParquetReader = {
+                                       hadoopConf: Configuration): SparkFileReader = {
     Spark35ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+  }
+
+  /**
+   * Get orc file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return parquet file reader
+   */
+  override def createOrcFileReader(vectorized: Boolean,
+                                   sqlConf: SQLConf,
+                                   options: Map[String, String],
+                                   hadoopConf: Configuration): SparkFileReader = {
+    Spark35OrcReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 }

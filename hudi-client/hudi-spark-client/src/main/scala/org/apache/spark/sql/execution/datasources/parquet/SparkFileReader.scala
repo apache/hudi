@@ -29,7 +29,7 @@ import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-trait SparkParquetReader extends Serializable {
+trait SparkFileReader extends Serializable {
   /**
    * Read an individual parquet file
    *
