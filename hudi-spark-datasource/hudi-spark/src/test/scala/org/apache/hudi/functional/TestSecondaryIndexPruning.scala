@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode, Typ
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config._
 import org.apache.hudi.exception.{HoodieMetadataIndexException, HoodieWriteConflictException}
@@ -1754,7 +1755,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
-    val fsView: HoodieMetadataFileSystemView = getTableFileSystemView(opts)
+    val fsView: HoodieTableFileSystemView = getTableFileSystemView(opts)
     try {
       fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().requestedTime)
         .values()
@@ -1768,9 +1769,9 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     totalLatestDataFiles
   }
 
-  private def getTableFileSystemView(opts: Map[String, String]): HoodieMetadataFileSystemView = {
-    new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline,
-      new HoodieBackedTableMetadata(context(), metaClient.getStorage, getWriteConfig(opts).getMetadataConfig, metaClient.getBasePath.toString, true))
+  private def getTableFileSystemView(opts: Map[String, String]): HoodieTableFileSystemView = {
+    val metadataTable = new HoodieBackedTableMetadata(context(), metaClient.getStorage, getWriteConfig(opts).getMetadataConfig, metaClient.getBasePath.toString, true);
+    new HoodieTableFileSystemView(metadataTable, metaClient, metaClient.getActiveTimeline)
   }
 
   private def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {

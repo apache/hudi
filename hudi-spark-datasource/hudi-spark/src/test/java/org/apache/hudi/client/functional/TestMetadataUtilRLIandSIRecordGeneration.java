@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
@@ -46,8 +47,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -326,10 +327,11 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
           .withIndexOptions(Collections.emptyMap())
           .build();
       HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withSecondaryIndexParallelism(2).build();
-      HoodieMetadataFileSystemView metadataView = new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline(), metadataConfig);
+      HoodieTableMetadata metadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig, metaClient.getBasePath().toString());
+      HoodieTableFileSystemView metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       metadataView.loadAllPartitions();
       List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-      HoodieMetadataFileSystemView finalMetadataView = metadataView;
+      HoodieTableFileSystemView finalMetadataView = metadataView;
       Arrays.asList(dataGen.getPartitionPaths()).forEach(partition -> finalMetadataView.getLatestMergedFileSlicesBeforeOrOn(partition, firstCommitTime)
           .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
       List<HoodieRecord> secondaryIndexRecords = readSecondaryKeysFromFileSlices(
@@ -352,7 +354,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // assert SI
       String secondCommitTime = commitTime;
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      metadataView = new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline(), metadataConfig);
+      metadata.reset();
+      metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       List<HoodieWriteStat> allWriteStats = writeStatuses2.collect().stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
           convertWriteStatsToSecondaryIndexRecords(allWriteStats, secondCommitTime, indexDefinition, metadataConfig, metadataView, metaClient, engineContext, EngineType.SPARK).collectAsList();
@@ -386,7 +389,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // assert SI
       String thirdCommitTime = commitTime;
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      metadataView = new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline(), metadataConfig);
+      metadata.reset();
+      metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       allWriteStats = writeStatuses3.collect().stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
           convertWriteStatsToSecondaryIndexRecords(allWriteStats, thirdCommitTime, indexDefinition, metadataConfig, metadataView, metaClient, engineContext, EngineType.SPARK).collectAsList();
@@ -417,7 +421,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // assert SI
       String fourthCommitTime = commitTime;
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      metadataView = new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline(), metadataConfig);
+      metadata.reset();
+      metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       allWriteStats = writeStatuses4.collect().stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
           convertWriteStatsToSecondaryIndexRecords(allWriteStats, fourthCommitTime, indexDefinition, metadataConfig, metadataView, metaClient, engineContext, EngineType.SPARK).collectAsList();
@@ -440,7 +445,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // assert SI
       String fifthCommitTime = commitTime;
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      metadataView = new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline(), metadataConfig);
+      metadata.reset();
+      metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       allWriteStats = writeStatuses5.collect().stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
           convertWriteStatsToSecondaryIndexRecords(allWriteStats, fifthCommitTime, indexDefinition, metadataConfig, metadataView, metaClient, engineContext, EngineType.SPARK).collectAsList();
@@ -456,7 +462,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       HoodieCommitMetadata compactionCommitMetadata = (HoodieCommitMetadata) compactionWriteMetadata.getCommitMetadata().get();
       // assert SI records
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      metadataView = new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline(), metadataConfig);
+      metadata.reset();
+      metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       allWriteStats = compactionCommitMetadata.getWriteStats();
       secondaryIndexRecords = convertWriteStatsToSecondaryIndexRecords(
           allWriteStats, compactionInstantOpt.get(), indexDefinition, metadataConfig, metadataView, metaClient, engineContext, EngineType.SPARK).collectAsList();
