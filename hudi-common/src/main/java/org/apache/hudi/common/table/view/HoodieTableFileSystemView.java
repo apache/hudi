@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -28,6 +29,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.slf4j.Logger;
@@ -88,23 +91,34 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    */
   private boolean closed = false;
 
-  HoodieTableFileSystemView(boolean enableIncrementalTimelineSync) {
-    super(enableIncrementalTimelineSync);
+  HoodieTableFileSystemView(HoodieTableMetadata tableMetadata, boolean enableIncrementalTimelineSync) {
+    super(tableMetadata, enableIncrementalTimelineSync);
   }
 
   /**
    * Create a file system view, as of the given timeline.
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
-    this(metaClient, visibleActiveTimeline, false);
+  public HoodieTableFileSystemView(HoodieTableMetadata tableMetadata, HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+    this(tableMetadata, metaClient, visibleActiveTimeline, false);
+  }
+
+  public static HoodieTableFileSystemView fileListingBasedFileSystemView(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+    return fileListingBasedFileSystemView(engineContext, metaClient, visibleActiveTimeline, false);
+  }
+
+  public static HoodieTableFileSystemView fileListingBasedFileSystemView(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+                                                                         boolean enableIncrementalSync) {
+    HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(), metaClient.getStorage(),
+        metaClient.getBasePath().toString());
+    return new HoodieTableFileSystemView(tableMetadata, metaClient, visibleActiveTimeline, enableIncrementalSync);
   }
 
   /**
    * Create a file system view, as of the given timeline.
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public HoodieTableFileSystemView(HoodieTableMetadata tableMetadata, HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       boolean enableIncrementalTimelineSync) {
-    super(enableIncrementalTimelineSync);
+    super(tableMetadata, enableIncrementalTimelineSync);
     init(metaClient, visibleActiveTimeline);
   }
 
@@ -175,7 +189,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    */
   public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
                                    List<StoragePathInfo> pathInfoList) {
-    this(metaClient, visibleActiveTimeline);
+    this(new NoOpTableMetadata(), metaClient, visibleActiveTimeline);
     addFilesToView(pathInfoList);
   }
 

@@ -60,7 +60,6 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.table.view.SpillableMapBasedFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
@@ -838,11 +837,11 @@ public class HoodieMetadataTableValidator implements Serializable {
   /**
    * Compare the file listing and index data between metadata table and fileSystem.
    * For now, validate five kinds of apis:
-   * 1. HoodieMetadataFileSystemView::getLatestFileSlices
-   * 2. HoodieMetadataFileSystemView::getLatestBaseFiles
-   * 3. HoodieMetadataFileSystemView::getAllFileGroups and HoodieMetadataFileSystemView::getAllFileSlices
-   * 4. HoodieBackedTableMetadata::getColumnStats
-   * 5. HoodieBackedTableMetadata::getBloomFilters
+   * 1. HoodieTableFileSystemView::getLatestFileSlices
+   * 2. HoodieTableFileSystemView::getLatestBaseFiles
+   * 3. HoodieTableFileSystemView::getAllFileGroups and HoodieTableFileSystemView::getAllFileSlices
+   * 4. HoodieTableFileSystemView::getColumnStats
+   * 5. HoodieTableFileSystemView::getBloomFilters
    *
    * @param metadataTableBasedContext Validation context containing information based on metadata table
    * @param fsBasedContext            Validation context containing information based on the file system
@@ -1760,10 +1759,10 @@ public class HoodieMetadataTableValidator implements Serializable {
         FileSystemViewStorageConfig viewConf = FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();
         ValidationUtils.checkArgument(viewConf.getStorageType().name().equals(viewStorageType), "View storage type not reflected");
         HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
-        this.fileSystemView = getFileSystemView(engineContext,
-            metaClient, metadataConfig, viewConf, commonConfig);
         this.tableMetadata = HoodieTableMetadata.create(
             engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
+        this.fileSystemView = getFileSystemView(engineContext,
+            metaClient, metadataConfig, viewConf, commonConfig);
         if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
           this.allColumnNameList = getAllColumnNames();
         }
@@ -1775,18 +1774,17 @@ public class HoodieMetadataTableValidator implements Serializable {
     private HoodieTableFileSystemView getFileSystemView(HoodieEngineContext context,
                                                         HoodieTableMetaClient metaClient, HoodieMetadataConfig metadataConfig,
                                                         FileSystemViewStorageConfig viewConf, HoodieCommonConfig commonConfig) {
-      HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
       switch (viewConf.getStorageType()) {
         case SPILLABLE_DISK:
           LOG.debug("Creating Spillable Disk based Table View");
-          return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf, commonConfig);
+          break;
         case MEMORY:
           LOG.debug("Creating in-memory based Table View");
-          return FileSystemViewManager.createInMemoryFileSystemView(context,
-              metaClient, metadataConfig);
+          break;
         default:
           throw new HoodieException("Unsupported storage type " + viewConf.getStorageType() + ", used with HoodieMetadataTableValidator");
       }
+      return (HoodieTableFileSystemView) FileSystemViewManager.createViewManager(context, metadataConfig, viewConf, commonConfig, unused -> tableMetadata).getFileSystemView(metaClient);
     }
 
     public HoodieTableMetaClient getMetaClient() {
