@@ -36,7 +36,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -121,31 +120,28 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .build())
         .build();
-    HoodieTable<String, String, String, String> tableForRollback = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     HoodieTable<String, String, String, String> firstTable = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
-    when(tableForRollback.getMetaClient()).thenReturn(mockMetaClient);
+    when(firstTable.getMetaClient()).thenReturn(mockMetaClient);
     Map<String, Option<HoodiePendingRollbackInfo>> expectedRollbackInfo;
 
     HoodieTimeline pendingTimeline = new MockHoodieTimeline(Stream.empty(), Stream.empty());
     when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompaction()).thenReturn(pendingTimeline);
     when(mockMetaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants()).thenReturn(Collections.emptyList());
     expectedRollbackInfo = Collections.emptyMap();
-    when(tableForRollback.getActiveTimeline()).thenReturn(timeline);
+    when(firstTable.getActiveTimeline()).thenReturn(timeline);
 
     // mock inflight cleaning
-    HoodieTableMetaClient firstTableMetaClient = mock(HoodieTableMetaClient.class);
-    when(firstTable.getMetaClient()).thenReturn(firstTableMetaClient);
     when(firstTable.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()).thenReturn(true);
 
     // create default clean metadata
     HoodieCleanMetadata metadata = new HoodieCleanMetadata();
     when(firstTable.clean(any(), eq(cleanInstantTime))).thenReturn(metadata);
 
-    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(tableForRollback, firstTable).iterator(), Option.empty(), expectedRollbackInfo);
+    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(firstTable).iterator(), Option.empty(), expectedRollbackInfo);
     assertSame(metadata, tableServiceClient.clean(cleanInstantTime, true));
-    verify(firstTableMetaClient).reloadActiveTimeline();
+    verify(mockMetaClient).reloadActiveTimeline();
   }
 
   @ParameterizedTest
@@ -159,23 +155,20 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .build())
         .build();
-    HoodieTable<String, String, String, String> tableForRollback = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     HoodieTable<String, String, String, String> firstTable = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     HoodieTable<String, String, String, String> secondTable = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
-    when(tableForRollback.getMetaClient()).thenReturn(mockMetaClient);
+    when(firstTable.getMetaClient()).thenReturn(mockMetaClient);
     Map<String, Option<HoodiePendingRollbackInfo>> expectedRollbackInfo;
 
     HoodieTimeline pendingTimeline = new MockHoodieTimeline(Stream.empty(), Stream.empty());
     when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompaction()).thenReturn(pendingTimeline);
     when(mockMetaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants()).thenReturn(Collections.emptyList());
     expectedRollbackInfo = Collections.emptyMap();
-    when(tableForRollback.getActiveTimeline()).thenReturn(timeline);
+    when(firstTable.getActiveTimeline()).thenReturn(timeline);
 
     // mock no inflight cleaning
-    HoodieTableMetaClient firstTableMetaClient = mock(HoodieTableMetaClient.class);
-    when(firstTable.getMetaClient()).thenReturn(firstTableMetaClient);
     when(firstTable.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()).thenReturn(false);
     // mock planning
     HoodieCleanMetadata metadata;
@@ -190,12 +183,12 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
       metadata = null;
     }
 
-    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(tableForRollback, firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo);
+    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo);
     assertEquals(metadata, tableServiceClient.clean(cleanInstantTime, true));
     if (generatesPlan) {
-      verify(firstTableMetaClient).reloadActiveTimeline();
+      verify(mockMetaClient).reloadActiveTimeline();
     } else {
-      verify(firstTableMetaClient, never()).reloadActiveTimeline();
+      verify(mockMetaClient, never()).reloadActiveTimeline();
       verify(firstTable, never()).clean(any(), any());
     }
   }
@@ -215,23 +208,20 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
             .allowMultipleCleans(true)
             .build())
         .build();
-    HoodieTable<String, String, String, String> tableForRollback = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     HoodieTable<String, String, String, String> firstTable = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     HoodieTable<String, String, String, String> secondTable = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
-    when(tableForRollback.getMetaClient()).thenReturn(mockMetaClient);
+    when(firstTable.getMetaClient()).thenReturn(mockMetaClient);
     Map<String, Option<HoodiePendingRollbackInfo>> expectedRollbackInfo;
 
     HoodieTimeline pendingTimeline = new MockHoodieTimeline(Stream.empty(), Stream.empty());
     when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompaction()).thenReturn(pendingTimeline);
     when(mockMetaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants()).thenReturn(Collections.emptyList());
     expectedRollbackInfo = Collections.emptyMap();
-    when(tableForRollback.getActiveTimeline()).thenReturn(timeline);
+    when(firstTable.getActiveTimeline()).thenReturn(timeline);
 
     // mock inflight cleaning
-    HoodieTableMetaClient firstTableMetaClient = mock(HoodieTableMetaClient.class);
-    when(firstTable.getMetaClient()).thenReturn(firstTableMetaClient);
     when(firstTable.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()).thenReturn(true);
     // mock planning
     HoodieCleanerPlan plan = new HoodieCleanerPlan();
@@ -240,9 +230,9 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     HoodieCleanMetadata metadata = new HoodieCleanMetadata();
     when(firstTable.clean(any(), eq(cleanInstantTime))).thenReturn(metadata);
 
-    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(tableForRollback, firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo);
+    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo);
     assertEquals(metadata, tableServiceClient.clean(cleanInstantTime, true));
-    verify(firstTableMetaClient).reloadActiveTimeline();
+    verify(mockMetaClient).reloadActiveTimeline();
   }
 
   private static class TestTableServiceClient extends BaseHoodieTableServiceClient<String, String, String> {
