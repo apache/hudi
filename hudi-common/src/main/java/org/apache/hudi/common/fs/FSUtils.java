@@ -481,13 +481,9 @@ public class FSUtils {
         String extension = FSUtils.getFileExtension(path.getName());
         return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
       }).stream().filter(StoragePathInfo::isFile).collect(Collectors.toList());
-    } catch (IOException e) {
+    } catch (FileNotFoundException ex) {
       // return empty FileStatus if partition does not exist already
-      if (!storage.exists(partitionPath)) {
-        return Collections.emptyList();
-      } else {
-        throw e;
-      }
+      return Collections.emptyList();
     }
   }
 
