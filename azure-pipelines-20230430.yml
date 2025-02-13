@@ -409,11 +409,12 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL) -Pcopy-files-for-jacoco -pl !hudi-flink-datasource/hudi-flink1.15.x,!hudi-flink-datasource/hudi-flink1.16.x,!hudi-flink-datasource/hudi-flink1.17.x,!hudi-flink-datasource/hudi-flink1.18.x,!hudi-flink-datasource/hudi-flink1.19.x,!hudi-flink-datasource/hudi-flink1.20.x
+              options: $(MVN_OPTS_INSTALL) -Pcopy-files-for-jacoco -pl !hudi-flink-datasource/hudi-flink1.14.x,!hudi-flink-datasource/hudi-flink1.15.x,!hudi-flink-datasource/hudi-flink1.16.x,!hudi-flink-datasource/hudi-flink1.17.x,!hudi-flink-datasource/hudi-flink1.19.x,!hudi-flink-datasource/hudi-flink1.20.x
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - script: |
               ./scripts/jacoco/generate_jacoco_coverage_report.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Generate JaCoCo Code Coverage Report'
           - task: PublishCodeCoverageResults@1
             displayName: 'Publish JaCoCo Code Coverage'
             inputs:
