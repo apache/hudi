@@ -401,7 +401,7 @@ stages:
               wget https://repo1.maven.org/maven2/org/jacoco/jacoco/0.8.12/jacoco-0.8.12.zip
               unzip jacoco-0.8.12.zip -d jacoco-lib
               ls -l jacoco-lib/lib/jacococli.jar
-              ./scripts/jacoco/merge_jacoco_job_files.sh jacoco-lib/lib/jacococli.jar $(System.ArtifactsDirectory)/**/*.exec $(Build.SourcesDirectory)
+              ./scripts/jacoco/merge_jacoco_job_files.sh jacoco-lib/lib/jacococli.jar $(System.ArtifactsDirectory) $(Build.SourcesDirectory)
             displayName: 'Merge JaCoCo Execution Data Files'
           - task: PublishBuildArtifacts@1
             displayName: 'Publish Merged JaCoCo Execution Data File'
