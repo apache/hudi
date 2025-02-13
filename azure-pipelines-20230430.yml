@@ -200,7 +200,6 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
-        condition: false
         displayName: FT common & spark-client & hudi-spark
         timeoutInMinutes: '120'
         steps:
@@ -383,7 +382,7 @@ stages:
         displayName: 'Merge and Publish JaCoCo Code Coverage'
         dependsOn:
           - UT_FT_1
-          # - UT_FT_2
+          - UT_FT_2
         steps:
           - task: DownloadBuildArtifacts@0
             displayName: 'Download JaCoCo Execution Data Files'
@@ -404,6 +403,12 @@ stages:
               ls -l jacoco-lib/lib/jacococli.jar
               ./scripts/jacoco/merge_jacoco_job_files.sh jacoco-lib/lib/jacococli.jar $(System.ArtifactsDirectory)/**/*.exec $(Build.SourcesDirectory)
             displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-final'
+              publishLocation: 'Container'
           - task: Maven@4
             displayName: 'Aggregate Source and Class Files for JaCoCo'
             inputs:
