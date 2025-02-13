@@ -19,6 +19,7 @@
 package org.apache.hudi.client.transaction.lock.metrics;
 
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.storage.HoodieStorage;
@@ -27,10 +28,13 @@ import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SlidingWindowReservoir;
 import com.codahale.metrics.Timer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
 
 public class HoodieLockMetrics {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLockMetrics.class);
 
   public static final String LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME = "lock.acquire.attempts";
   public static final String LOCK_ACQUIRE_SUCCESS_COUNTER_NAME = "lock.acquire.success";
@@ -91,10 +95,18 @@ public class HoodieLockMetrics {
     }
   }
 
+  private static void updateMetric(HoodieTimer timer, Timer metric, String lockName) {
+    Option<Long> durationMs = timer.tryEndTimer();
+    if (durationMs.isPresent()) {
+      metric.update(durationMs.get(), TimeUnit.MILLISECONDS);
+    } else {
+      LOG.info("Unable to get lock {} duration", lockName);
+    }
+  }
+
   public void updateLockAcquiredMetric() {
     if (isMetricsEnabled) {
-      long durationMs = lockApiRequestDurationTimer.endTimer();
-      lockApiRequestDuration.update(durationMs, TimeUnit.MILLISECONDS);
+      updateMetric(lockApiRequestDurationTimer, lockApiRequestDuration, "acquired");
       lockAttempts.inc();
       successfulLockAttempts.inc();
       lockDurationTimer.startTimer();
@@ -103,16 +115,14 @@ public class HoodieLockMetrics {
 
   public void updateLockNotAcquiredMetric() {
     if (isMetricsEnabled) {
-      long durationMs = lockApiRequestDurationTimer.endTimer();
-      lockApiRequestDuration.update(durationMs, TimeUnit.MILLISECONDS);
+      updateMetric(lockApiRequestDurationTimer, lockApiRequestDuration, "acquired");
       failedLockAttempts.inc();
     }
   }
 
   public void updateLockHeldTimerMetrics() {
     if (isMetricsEnabled && lockDurationTimer != null) {
-      long lockDurationInMs = lockDurationTimer.endTimer();
-      lockDuration.update(lockDurationInMs, TimeUnit.MILLISECONDS);
+      updateMetric(lockDurationTimer, lockDuration, "held");
     }
   }
 }
