@@ -19,16 +19,13 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 public abstract class TimelineFactory implements Serializable {
 
-  public abstract HoodieTimeline createDefaultTimeline(Stream<HoodieInstant> instants,
-                                                       Function<HoodieInstant, Option<byte[]>> details);
+  public abstract HoodieTimeline createDefaultTimeline(Stream<HoodieInstant> instants, HoodieInstantReader instantReader);
 
   public abstract HoodieActiveTimeline createActiveTimeline();
 
