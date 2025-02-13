@@ -202,6 +202,31 @@
                            ]
                         }],
                         "default": null
+                     },
+                     {
+                        "name":"totalLogFilesCompacted",
+                        "type":["null","long"],
+                        "default" : null
+                     },
+                     {
+                        "name":"totalLogReadTimeMs",
+                        "type":["null","long"],
+                        "default" : null
+                     },
+                     {
+                        "name":"totalLogSizeCompacted",
+                        "type":["null","long"],
+                        "default" : null
+                     },
+                     {
+                        "name":"tempPath",
+                        "type":["null","string"],
+                        "default" : null
+                     },
+                     {
+                        "name":"numUpdates",
+                        "type":["null","long"],
+                        "default" : null
                      }
                   ]
                }
