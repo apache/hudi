@@ -203,7 +203,7 @@
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix/>
     <argLine>-Xmx2g -Xms128m</argLine>
-    <jacoco.version>0.8.8</jacoco.version>
+    <jacoco.version>0.8.12</jacoco.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
     <trino.bundle.bootstrap.scope>compile</trino.bundle.bootstrap.scope>
@@ -228,6 +228,10 @@
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.10.7</snappy.version>
+    <!-- The following properties are only used for Jacoco coverage report aggregation -->
+    <copy.files>false</copy.files>
+    <copy.files.target.dir>${maven.multiModuleProjectDirectory}</copy.files.target.dir>
+    <jacoco.agent.dest.filename>jacoco.exec</jacoco.agent.dest.filename>
   </properties>
 
   <scm>
@@ -1953,6 +1957,9 @@
                 <goals>
                   <goal>prepare-agent</goal>
                 </goals>
+                <configuration>
+                  <destFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</destFile>
+                </configuration>
               </execution>
               <execution>
                 <id>post-unit-tests</id>
@@ -2006,6 +2013,9 @@
                 <goals>
                   <goal>prepare-agent</goal>
                 </goals>
+                <configuration>
+                  <destFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</destFile>
+                </configuration>
               </execution>
               <execution>
                 <id>post-functional-tests</id>
@@ -2640,6 +2650,75 @@
       </activation>
     </profile>
 
+    <!-- This profile is only used to copy all Java class files into one directory
+    for Jacoco to report test coverage across multiple source modules.
+    The class files are copied to ${copy.classes.target.dir}/aggregate-target
+    -->
+    <profile>
+      <id>copy-files-for-jacoco</id>
+      <activation>
+        <property>
+          <name>copy.files</name>
+          <value>true</value>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-resources-plugin</artifactId>
+            <version>3.3.1</version>
+            <executions>
+              <!-- Copy source files for Jacoco report aggregation -->
+              <execution>
+                <id>copy-source-files</id>
+                <phase>process-sources</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${copy.files.target.dir}/aggregate-sources</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>${project.basedir}/src/main/java</directory>
+                      <filtering>false</filtering>
+                      <includes>
+                        <include>**/*.java</include>
+                      </includes>
+                    </resource>
+                    <resource>
+                      <directory>${project.basedir}/src/main/scala</directory>
+                      <filtering>false</filtering>
+                      <includes>
+                        <include>**/*.scala</include>
+                      </includes>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+              <!-- Copy class files for Jacoco report aggregation -->
+              <execution>
+                <id>copy-class-files</id>
+                <phase>process-classes</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${copy.files.target.dir}/aggregate-classes</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>${project.basedir}/target/classes</directory>
+                      <includes>
+                        <include>**/*.class</include>
+                      </includes>
+                    </resource>
+                  </resources>
+                  <useDefaultDelimiters>false</useDefaultDelimiters>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
-
 </project>
