@@ -22,9 +22,11 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -58,6 +60,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -73,6 +76,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 /**
  * The common hoodie test harness to provide the basic infrastructure.
@@ -398,5 +402,26 @@ public class HoodieCommonTestHarness {
       default:
         throw new RuntimeException("Unknown data block type " + dataBlockType);
     }
+  }
+
+  public byte[] getCommitMetadata(String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
+      throws IOException {
+    return getCommitMetadata(metaClient, basePath, partition, commitTs, count, extraMetadata);
+  }
+
+  public static byte[] getCommitMetadata(HoodieTableMetaClient metaClient, String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
+      throws IOException {
+    HoodieCommitMetadata commit = new HoodieCommitMetadata();
+    for (int i = 1; i <= count; i++) {
+      HoodieWriteStat stat = new HoodieWriteStat();
+      stat.setFileId(i + "");
+      stat.setPartitionPath(Paths.get(basePath, partition).toString());
+      stat.setPath(commitTs + "." + i + metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
+      commit.addWriteStat(partition, stat);
+    }
+    for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
+      commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
+    }
+    return serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commit).get();
   }
 }

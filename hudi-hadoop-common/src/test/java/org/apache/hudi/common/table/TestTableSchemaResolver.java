@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -53,7 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests {@link TableSchemaResolver}.
  */
-public class TestTableSchemaResolver {
+public class TestTableSchemaResolver extends HoodieCommonTestHarness {
 
   @TempDir
   public java.nio.file.Path tempDir;
@@ -99,244 +100,10 @@ public class TestTableSchemaResolver {
         logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults()), logFilePath));
   }
 
-  @Test
-  public void testGetTableSchemaFromLatestCommitMetadataV2() throws Exception {
-    Schema originalSchema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    String commitTime1 = "001";
-    HoodieInstant instant1 = new HoodieInstant(INFLIGHT, COMMIT_ACTION, commitTime1, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
-    activeTimeline.createNewInstant(instant1);
-
-    Map<String, String> extraMetadata = new HashMap<>();
-    extraMetadata.put(HoodieCommitMetadata.SCHEMA_KEY, originalSchema.toString());
-
-    activeTimeline.saveAsComplete(instant1,
-        Option.of(getCommitMetadata(basePath, "partition1", commitTime1, 2, extraMetadata)));
-    metaClient.reloadActiveTimeline();
-
-    TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaForClustering(false);
-    assertTrue(schemaOption.isPresent());
-    assertEquals(originalSchema, schemaOption.get());
-  }
-
-  @Test
-  public void testGetTableCreateSchemaWithMetadata() throws IOException {
-    Schema originalSchema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-
-    // Set table create schema in table config
-    // Create commit metadata without schema information, which should be ignored.
-    Map<String, String> emptyMetadata = new HashMap<>();
-
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    String commitTime1 = "001";
-    HoodieInstant instant1 = new HoodieInstant(INFLIGHT, COMMIT_ACTION, commitTime1, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
-    activeTimeline.createNewInstant(instant1);
-    activeTimeline.saveAsComplete(instant1, Option.of(getCommitMetadata(basePath, "partition1", commitTime1, 2, emptyMetadata)));
-    metaClient.reloadActiveTimeline();
-    metaClient.getTableConfig().setValue(HoodieTableConfig.CREATE_SCHEMA, originalSchema.toString());
-
-    TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaForClustering(false);
-    assertTrue(schemaOption.isPresent());
-    assertEquals(originalSchema, schemaOption.get());
-  }
-
-  @Test
-  public void testHandlePartitionColumnsIfNeeded() {
-    Schema originalSchema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-
-    String[] partitionFields = new String[] {"partition_path"};
-    metaClient.getTableConfig().setValue(PARTITION_FIELDS, String.join(",", partitionFields));
-    metaClient.getTableConfig().setValue(HoodieTableConfig.DROP_PARTITION_COLUMNS, "true");
-    metaClient.getTableConfig().setValue(HoodieTableConfig.CREATE_SCHEMA, originalSchema.toString());
-
-    TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaForClustering(false);
-    assertTrue(schemaOption.isPresent());
-
-    Schema resultSchema = schemaOption.get();
-    assertTrue(resultSchema.getFields().stream()
-        .anyMatch(f -> f.name().equals("partition_path")));
-  }
-
-  static class SchemaEvolutionTestCase {
-    private final String name;
-    private final HoodieTableType tableType;
-    private final List<HoodieInstant> inputInstants;
-    private final List<HoodieInstant> expectedInstants;
-    private final Option<HoodieInstant> clusteringInstants;
-
-    public SchemaEvolutionTestCase(
-        String name,
-        HoodieTableType tableType,
-        List<HoodieInstant> inputInstants,
-        List<HoodieInstant> expectedInstants) {
-      this.name = name;
-      this.tableType = tableType;
-      this.inputInstants = inputInstants;
-      this.expectedInstants = expectedInstants;
-      this.clusteringInstants = Option.empty();
-    }
-
-    public SchemaEvolutionTestCase(
-        String name,
-        HoodieTableType tableType,
-        List<HoodieInstant> inputInstants,
-        List<HoodieInstant> expectedInstants,
-        HoodieInstant clusteringInstants
-    ) {
-      this.name = name;
-      this.tableType = tableType;
-      this.inputInstants = inputInstants;
-      this.expectedInstants = expectedInstants;
-      this.clusteringInstants = Option.of(clusteringInstants);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%s (%s)", name, tableType);
-    }
-  }
-
-  static Stream<SchemaEvolutionTestCase> schemaEvolutionTestCases() {
-    return Stream.of(
-        // Empty timeline case
-        new SchemaEvolutionTestCase(
-            "Empty Timeline",
-            HoodieTableType.COPY_ON_WRITE,
-            new ArrayList<>(),
-            new ArrayList<>()
-        ),
-
-        // Empty timeline case
-        new SchemaEvolutionTestCase(
-            "Empty Timeline",
-            HoodieTableType.MERGE_ON_READ,
-            new ArrayList<>(),
-            new ArrayList<>()
-        ),
-
-        // Mixed actions case
-        new SchemaEvolutionTestCase(
-            "Mixed Actions",
-            HoodieTableType.COPY_ON_WRITE,
-            Arrays.asList(
-                new HoodieInstant(COMPLETED, COMMIT_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                // Table service actions that should be filtered out
-                new HoodieInstant(REQUESTED, CLEAN_ACTION, "004", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(REQUESTED, ROLLBACK_ACTION, "005", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(REQUESTED, CLUSTERING_ACTION, "006", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(INFLIGHT, CLEAN_ACTION, "004", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(INFLIGHT, ROLLBACK_ACTION, "005", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(INFLIGHT, CLUSTERING_ACTION, "006", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, CLEAN_ACTION, "004", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "005", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, CLUSTERING_ACTION, "006", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR) // clustering commits
-
-            ),
-            Arrays.asList(
-                new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, COMMIT_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)
-            ),
-            new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)
-        ),
-
-        // Case 3: Comprehensive Mixed Timeline
-        new SchemaEvolutionTestCase(
-            "Comprehensive Mixed Timeline",
-            HoodieTableType.COPY_ON_WRITE,
-            Arrays.asList(
-                // Valid instants
-                new HoodieInstant(COMPLETED, COMMIT_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-
-                // Invalid states
-                new HoodieInstant(REQUESTED, COMMIT_ACTION, "004", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(INFLIGHT, COMMIT_ACTION, "005", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                // Invalid actions
-                new HoodieInstant(COMPLETED, CLEAN_ACTION, "006", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, CLUSTERING_ACTION, "007", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR) // clustering commits
-            ),
-            Arrays.asList(
-                new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, COMMIT_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)
-            ),
-            new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)
-        )
-    );
-  }
-
-  private HoodieTableMetaClient prepareMetaClient(List<HoodieInstant> instants, HoodieTableType tableType, Option<HoodieInstant> clusteringInstant) throws IOException {
-    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
-    HoodieTableConfig mockTableConfig = mock(HoodieTableConfig.class);
-    TimelineLayout timelineLayout = TimelineLayout.TIMELINE_LAYOUT_V2;
-    HoodieActiveTimeline mockActiveTimeline = mock(HoodieActiveTimeline.class);
-
-    when(mockMetaClient.getTableType()).thenReturn(tableType);
-    when(mockMetaClient.getTimelineLayout()).thenReturn(timelineLayout);
-    when(mockMetaClient.getActiveTimeline()).thenReturn(mockActiveTimeline);
-    when(mockActiveTimeline.getInstantsAsStream()).thenReturn(instants.stream());
-    when(mockActiveTimeline.getInstantDetails(any()))
-        .thenReturn(Option.of(new byte[0]));
-    when(mockMetaClient.getBasePath()).thenReturn(new StoragePath("file://dummy/path"));
-    when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), any(), eq(true)))
-        .thenReturn(instants);
-    when(mockMetaClient.getMetaPath()).thenReturn(new StoragePath("file://dummy/path/.hoodie"));
-    when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
-    when(mockMetaClient.getTableConfig().getTimelinePath()).thenReturn("timeline");
-    when(mockMetaClient.getInstantGenerator()).thenReturn(INSTANT_GENERATOR);
-
-    if (clusteringInstant.isPresent()) {
-      // Create clustering plan metadata
-      HoodieRequestedReplaceMetadata requestedReplaceMetadata =
-          HoodieRequestedReplaceMetadata.newBuilder()
-              .setOperationType("CLUSTER")
-              .setClusteringPlan(HoodieClusteringPlan.newBuilder()
-                  .setVersion(1)
-                  .setStrategy(HoodieClusteringStrategy.newBuilder()
-                      .setStrategyClassName("org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortStrategy")
-                      .build())
-                  .build())
-              .build();
-      // Get the corresponding requested instant for the inflight instant
-      HoodieInstant requestedInstant = new HoodieInstant(
-          HoodieInstant.State.REQUESTED, CLUSTERING_ACTION, clusteringInstant.get().requestedTime(), InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
-      when(mockActiveTimeline.getInstantDetails(requestedInstant)).thenReturn(serializeRequestedReplaceMetadata(requestedReplaceMetadata));
-    }
-    return mockMetaClient;
-  }
-
-  @ParameterizedTest
-  @MethodSource("schemaEvolutionTestCases")
-  public void testGetSchemaEvolutionTimelineInReverseOrder(SchemaEvolutionTestCase testCase) throws IOException {
-    HoodieTableMetaClient mockMetaClient = prepareMetaClient(testCase.inputInstants, testCase.tableType, testCase.clusteringInstants);
-    TableSchemaResolver resolver = new TableSchemaResolver(mockMetaClient);
-    HoodieTimeline timeline = resolver.getSchemaEvolutionTimelineInReverseOrder();
-
-    verifyTimelineInstants(testCase.expectedInstants, timeline);
-  }
-
-  private void verifyTimelineInstants(List<HoodieInstant> expectedInstants, HoodieTimeline timeline) {
-    // Verify the timeline contains exactly the expected instants in reverse order
-    List<HoodieInstant> actualInstants = timeline.getInstantsAsStream().collect(Collectors.toList());
-    assertEquals(expectedInstants.size(), actualInstants.size());
-
-    for (int i = 0; i < expectedInstants.size(); i++) {
-      HoodieInstant expected = expectedInstants.get(i);
-      HoodieInstant actual = actualInstants.get(i);
-      assertEquals(expected.getAction(), actual.getAction());
-      assertEquals(expected.getCompletionTime(), actual.getCompletionTime());
-      assertEquals(expected.getState(), actual.getState());
-    }
+  private String initTestDir(String folderName) throws IOException {
+    java.nio.file.Path basePath = tempDir.resolve(folderName);
+    java.nio.file.Files.createDirectories(basePath);
+    return basePath.toString();
   }
 
   private StoragePath writeLogFile(StoragePath partitionPath, Schema schema) throws IOException, URISyntaxException, InterruptedException {

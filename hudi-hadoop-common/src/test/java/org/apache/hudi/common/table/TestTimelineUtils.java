@@ -533,22 +533,6 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     return TimelineMetadataUtils.convertRollbackMetadata(commitTs, Option.empty(), rollbacks, rollbackStats);
   }
 
-  private byte[] getCommitMetadata(String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
-      throws IOException {
-    HoodieCommitMetadata commit = new HoodieCommitMetadata();
-    for (int i = 1; i <= count; i++) {
-      HoodieWriteStat stat = new HoodieWriteStat();
-      stat.setFileId(i + "");
-      stat.setPartitionPath(Paths.get(basePath, partition).toString());
-      stat.setPath(commitTs + "." + i + metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
-      commit.addWriteStat(partition, stat);
-    }
-    for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
-      commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
-    }
-    return serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commit).get();
-  }
-
   private byte[] getReplaceCommitMetadata(String basePath, String commitTs, String replacePartition, int replaceCount,
                                           String newFilePartition, int newFileCount, Map<String, String> extraMetadata,
                                           WriteOperationType operationType)
