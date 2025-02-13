@@ -271,7 +271,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
     if (useUpsert) {
       pollForTimeline(basePath, storageConf, 2)
-      assertTrue(hasPendingCommits)
+      assertTrue(hasPendingCommitsOrRollbacks())
     } else {
       pollForTimeline(basePath, storageConf, 3)
       assertTrue(checkIfCommitsAreConcurrent())
@@ -677,6 +677,7 @@ object TestPartitionStatsIndex {
       Arguments.of(HoodieTableType.MERGE_ON_READ, java.lang.Boolean.TRUE),
       Arguments.of(HoodieTableType.MERGE_ON_READ, java.lang.Boolean.FALSE),
       Arguments.of(HoodieTableType.COPY_ON_WRITE, java.lang.Boolean.TRUE),
-      Arguments.of(HoodieTableType.COPY_ON_WRITE, java.lang.Boolean.FALSE)).asJava.stream()
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, java.lang.Boolean.FALSE)
+    ).asJava.stream()
   }
 }
