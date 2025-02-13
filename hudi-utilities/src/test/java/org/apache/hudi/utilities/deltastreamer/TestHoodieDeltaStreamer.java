@@ -514,7 +514,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Perform bootstrap with tableBasePath as source
     String bootstrapSourcePath = basePath + "/src_bootstrapped";
     Dataset<Row> sourceDf = sqlContext.read()
-        .format("hudi")
+        .format("org.apache.hudi")
         .load(tableBasePath);
     // TODO(HUDI-4944): fix the test to use a partition column with slashes (`/`) included
     //  in the value.  Currently it fails the tests due to slash encoding.
@@ -530,7 +530,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("%s=false", HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
     cfg.targetBasePath = newDatasetBasePath;
     new HoodieDeltaStreamer(cfg, jsc).sync();
-    Dataset<Row> res = sqlContext.read().format("hudi").load(newDatasetBasePath);
+    Dataset<Row> res = sqlContext.read().format("org.apache.hudi").load(newDatasetBasePath);
     LOG.info("Schema :");
     res.printSchema();
 
@@ -626,7 +626,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     List<Row> counts = countsPerCommit(tableBasePath, sqlContext);
     assertEquals(1450, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
-    sqlContext.read().format("hudi").load(tableBasePath).createOrReplaceTempView("tmp_trips");
+    sqlContext.read().format("org.apache.hudi").load(tableBasePath).createOrReplaceTempView("tmp_trips");
     long recordCount =
         sqlContext.sparkSession().sql("select * from tmp_trips where evoluted_optional_union_field is not NULL").count();
     assertEquals(950, recordCount);
@@ -2256,7 +2256,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             true, 100000, false, null, null, "timestamp", null), jsc);
     deltaStreamer.sync();
     sqlContext.clearCache();
-    Dataset<Row> ds = sqlContext.read().format("hudi").load(tableBasePath);
+    Dataset<Row> ds = sqlContext.read().format("org.apache.hudi").load(tableBasePath);
     assertEquals(numRecords, ds.count());
     //ensure that kafka partition column exists and is populated correctly
     for (int i = 0; i < numPartitions; i++) {
@@ -2270,7 +2270,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
 
     //ensure that kafka offset column exists and is populated correctly
-    sqlContext.read().format("hudi").load(tableBasePath).col(KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN);
+    sqlContext.read().format("org.apache.hudi").load(tableBasePath).col(KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN);
     for (int i = 0; i < recsPerPartition; i++) {
       for (int j = 0; j < numPartitions; j++) {
         //each offset partition pair should be unique
@@ -2799,8 +2799,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
 
-    long baseTableRecords = sqlContext.read().format("hudi").load(tableBasePath).count();
-    long downStreamTableRecords = sqlContext.read().format("hudi").load(downstreamTableBasePath).count();
+    long baseTableRecords = sqlContext.read().format("org.apache.hudi").load(tableBasePath).count();
+    long downStreamTableRecords = sqlContext.read().format("org.apache.hudi").load(downstreamTableBasePath).count();
     assertEquals(baseTableRecords, downStreamTableRecords);
   }
 

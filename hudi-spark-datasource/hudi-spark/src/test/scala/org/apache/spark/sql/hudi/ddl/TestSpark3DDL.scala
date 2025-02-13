@@ -755,7 +755,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
         val (writeOpt, readOpt) = getWriterReaderOpts(HoodieRecordType.SPARK, hudiOptions)
         orgStringDf.write
-          .format("hudi")
+          .format("org.apache.hudi")
           .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
           .options(writeOpt)
           .mode(SaveMode.Overwrite)
@@ -772,7 +772,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val checkRowKey = inputD2.select("_row_key").collectAsList().asScala.map(_.getString(0)).head
 
         updatedStringDf.write
-          .format("hudi")
+          .format("org.apache.hudi")
           .options(writeOpt)
           .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
           .option("hoodie.datasource.write.reconcile.schema", "true")
