@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline.versioning.v2;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -28,14 +29,9 @@ import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-
-import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
-
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -187,7 +183,6 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     return instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime);
   }
 
-  @Nullable
   private BiConsumer<String, GenericRecord> getInstantDetailsFunc(HoodieArchivedTimeline.LoadMode loadMode) {
     switch (loadMode) {
       case METADATA:
@@ -230,7 +225,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
    * If commitsFilter is specified, only the filtered records are loaded.
    */
   private List<HoodieInstant> loadInstants(
-      @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+      HoodieArchivedTimeline.TimeRangeFilter filter,
       HoodieArchivedTimeline.LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter) {
     Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();

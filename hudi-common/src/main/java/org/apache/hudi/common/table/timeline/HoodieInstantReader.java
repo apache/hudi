@@ -40,6 +40,7 @@ public interface HoodieInstantReader {
   }
 
   /**
+   * dd
    * Reads the provided instant's content into a byte array for parsing.
    * @param instant the instant to read
    * @return an InputStream with the details

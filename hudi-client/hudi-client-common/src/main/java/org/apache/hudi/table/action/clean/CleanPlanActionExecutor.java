@@ -75,7 +75,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     if (lastCleanInstant.isPresent() && !table.getActiveTimeline().isEmpty(lastCleanInstant.get())) {
       try {
         HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-            .deserializeHoodieCleanMetadata(table.getActiveTimeline().getInstantDetails(lastCleanInstant.get()).get());
+            .deserializeHoodieCleanMetadata(table.getActiveTimeline().getInstantContentStream(lastCleanInstant.get()));
         String lastCompletedCommitTimestamp = cleanMetadata.getLastCompletedCommitTimestamp();
         numCommits = commitTimeline.findInstantsAfter(lastCompletedCommitTimestamp).countInstants();
       } catch (IOException e) {

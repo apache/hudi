@@ -90,20 +90,23 @@ public final class RepairUtils {
 
     switch (instant.getAction()) {
       case COMMIT_ACTION:
-      case DELTA_COMMIT_ACTION:
+      case DELTA_COMMIT_ACTION: {
         TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
         final HoodieCommitMetadata commitMetadata =
             layout.getCommitMetadataSerDe().deserialize(instant,
-                timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+                timeline.getInstantContentStream(instant), HoodieCommitMetadata.class);
         return Option.of(commitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
+      }
       case REPLACE_COMMIT_ACTION:
-      case CLUSTERING_ACTION:
+      case CLUSTERING_ACTION: {
+        TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
         final HoodieReplaceCommitMetadata replaceCommitMetadata =
-            HoodieReplaceCommitMetadata.fromBytes(
-                timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+            layout.getCommitMetadataSerDe().deserialize(instant,
+                timeline.getInstantContentStream(instant), HoodieReplaceCommitMetadata.class);
         return Option.of(replaceCommitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
+      }
       default:
         return Option.empty();
     }

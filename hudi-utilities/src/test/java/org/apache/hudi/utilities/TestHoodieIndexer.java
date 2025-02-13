@@ -293,7 +293,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         .filter(i -> HoodieTimeline.INDEXING_ACTION.equals(i.getAction()))
         .getInstants().get(0);
     HoodieIndexPlan indexPlan = TimelineMetadataUtils.deserializeIndexPlan(
-        metaClient.getActiveTimeline().readIndexPlanAsBytes(indexingInstant).get());
+        metaClient.getActiveTimeline().getContentStream(indexingInstant));
     String indexUptoInstantTime = indexPlan.getIndexPartitionInfos().get(0).getIndexUptoInstant();
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
         context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
@@ -336,7 +336,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieInstant rollbackInstant = metadataMetaClient.getActiveTimeline()
         .getRollbackTimeline().firstInstant().get();
     HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-        metadataMetaClient.getActiveTimeline().readRollbackInfoAsBytes(rollbackInstant).get());
+        metadataMetaClient.getActiveTimeline().getInstantContentStream(rollbackInstant));
     assertEquals(mdtCommitTime, rollbackMetadata.getInstantsRollback()
         .stream().findFirst().get().getCommitTime());
   }

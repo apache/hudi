@@ -25,8 +25,8 @@ import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -36,7 +36,6 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.table.HoodieSparkTable
-
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.GlobPattern
 import org.apache.spark.api.java.JavaSparkContext
@@ -157,9 +156,10 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
 
       // create Replaced file group
       val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
+      val layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion)
       val replacedFile = replacedTimeline.getInstants.asScala.flatMap { instant =>
-        val replaceMetadata = HoodieReplaceCommitMetadata.
-          fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
+        val replaceMetadata = layout.getCommitMetadataSerDe.deserialize(
+          instant, metaClient.getActiveTimeline.getInstantContentStream(instant), classOf[HoodieReplaceCommitMetadata])
         replaceMetadata.getPartitionToReplaceFileIds.entrySet().asScala.flatMap { entry =>
           entry.getValue.asScala.map { e =>
             val fullPath = FSUtils.constructAbsolutePath(basePath, entry.getKey).toString
@@ -170,7 +170,7 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
 
       for (commit <- commitsToReturn) {
         val metadata: HoodieCommitMetadata = metaClient.getCommitMetadataSerDe.deserialize(
-          commit, commitTimeline.getInstantDetails(commit).get(), classOf[HoodieCommitMetadata])
+          commit, commitTimeline.getInstantContentStream(commit), classOf[HoodieCommitMetadata])
 
         if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.requestedTime) {
           metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>

@@ -52,6 +52,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.TimelineUtils.getInstantFromTimeline;
+
 public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTimeline {
 
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
@@ -250,10 +252,12 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public Option<InputStream> getContentStream(HoodieInstant instant) {
-    if (isEmpty(instant)) {
+    Option<HoodieInstant> actualInstant = Option.of(instant);
+    actualInstant = getInstantFromTimeline(instant, this, actualInstant);
+    if (actualInstant.isEmpty() || isEmpty(actualInstant.get())) {
       return Option.empty();
     }
-    StoragePath filePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(instant));
+    StoragePath filePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(actualInstant.get()));
     return Option.of(readDataStreamFromPath(filePath));
   }
 
@@ -291,7 +295,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
         .map(instant -> {
           try {
             HoodieCommitMetadata commitMetadata =
-                metaClient.getCommitMetadataSerDe().deserialize(instant, getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+                metaClient.getCommitMetadataSerDe().deserialize(instant, getInstantContentStream(instant), HoodieCommitMetadata.class);
             return Pair.of(instant, commitMetadata);
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);

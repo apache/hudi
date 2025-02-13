@@ -25,20 +25,22 @@ import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
-
-import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import java.io.InputStream;
 
 public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
 
   @Override
-  public <T> T deserialize(HoodieInstant instant, byte[] bytes, Class<T> clazz) throws IOException {
+  public <T> T deserialize(HoodieInstant instant, Option<InputStream> inputStream, Class<T> clazz) throws IOException {
     try {
-      if (bytes.length == 0) {
+      if (inputStream.isEmpty()) {
         return clazz.newInstance();
       }
-      return fromJsonString(fromUTF8Bytes(bytes), clazz);
+
+      // Use ObjectMapper to directly read from InputStream
+      // This avoids loading entire content into memory at once
+      return JsonUtils.getObjectMapper().readValue(inputStream.get(), clazz);
     } catch (Exception e) {
-      throw new IOException("unable to read commit metadata for instant " + instant + " bytes length: " + bytes.length, e);
+      throw new IOException("Unable to read commit metadata for instant " + instant, e);
     }
   }
 

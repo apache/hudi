@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -138,9 +139,10 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
     HoodieTimeline timeline = writeClient.getHoodieTable().getActiveTimeline().getCompletedReplaceTimeline().findInstantsAfter(lastRefreshInstant);
     if (!timeline.empty()) {
+      TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
       for (HoodieInstant instant : timeline.getInstants()) {
-        HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-            timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        HoodieReplaceCommitMetadata commitMetadata = layout.getCommitMetadataSerDe().deserialize(
+            instant, timeline.getInstantContentStream(instant), HoodieReplaceCommitMetadata.class);
         Set<String> affectedPartitions = commitMetadata.getPartitionToReplaceFileIds().keySet();
         LOG.info("Clear up cached hashing metadata because find a new replace commit.\n Instant: {}.\n Effected Partitions: {}.",  lastRefreshInstant, affectedPartitions);
         affectedPartitions.forEach(this.partitionToIdentifier::remove);

@@ -18,7 +18,10 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -38,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -64,6 +68,8 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_PARSER;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
+import static org.apache.hudi.common.util.CleanerUtils.getCleanerMetadata;
+import static org.apache.hudi.common.util.CleanerUtils.getCleanerPlan;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -626,10 +632,50 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testParsingCommitDetails() throws IOException {
+    HoodieInstant commitInstant = metaClient.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant cleanInstant = metaClient.createNewInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "2");
+
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    HoodieWriteStat hoodieWriteStat = new HoodieWriteStat();
+    hoodieWriteStat.setFileId("file_id1");
+    hoodieWriteStat.setPath("path1");
+    hoodieWriteStat.setPrevCommit("1");
+    commitMetadata.addWriteStat("partition1", hoodieWriteStat);
+    timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
+    timeline.createNewInstant(commitInstant);
+    timeline.transitionRequestedToInflight(commitInstant, Option.empty());
+    HoodieInstant completeCommitInstant = metaClient.createNewInstant(State.INFLIGHT, commitInstant.getAction(), commitInstant.requestedTime());
+    timeline.saveAsComplete(completeCommitInstant,
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
+
+    HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
+    assertEquals(commitMetadata, metaClient.getCommitMetadataSerDe().deserialize(
+        completedCommitInstant, timelineAfterFirstInstant.getInstantContentStream(completedCommitInstant), HoodieCommitMetadata.class));
+
+    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan();
+    cleanerPlan.setLastCompletedCommitTimestamp("1");
+    cleanerPlan.setPolicy("policy");
+    cleanerPlan.setVersion(1);
+    cleanerPlan.setPartitionsToBeDeleted(Collections.singletonList("partition1"));
+    timeline.saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+
+    assertEquals(cleanerPlan, getCleanerMetadata(metaClient, cleanInstant));
+
+    HoodieTimeline mergedTimeline = timelineAfterFirstInstant.mergeTimeline(timeline.reload());
+    assertEquals(commitMetadata, metaClient.getCommitMetadataSerDe().deserialize(
+        completedCommitInstant, mergedTimeline.getInstantContentStream(completedCommitInstant), HoodieCommitMetadata.class));
+    assertEquals(cleanerPlan,getCleanerPlan(metaClient, cleanInstant));
+    assertEquals(commitMetadata, metaClient.getCommitMetadataSerDe().deserialize(
+        completedCommitInstant, mergedTimeline.getInstantContentStream(completedCommitInstant), HoodieCommitMetadata.class));
+  }
+
+  @Test
   void missingInstantCausesError() {
     timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
     HoodieInstant commitInstant = metaClient.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
-    assertThrows(HoodieIOException.class, () -> timeline.getInstantDetails(commitInstant));
+    assertThrows(HoodieIOException.class, () -> timeline.getInstantContentStream(commitInstant));
   }
 
   @Test

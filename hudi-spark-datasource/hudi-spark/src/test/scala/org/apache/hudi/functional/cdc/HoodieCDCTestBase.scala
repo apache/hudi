@@ -95,7 +95,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
    */
   protected def hasCDCLogFile(instant: HoodieInstant): Boolean = {
     val commitMetadata = metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant,
-      metaClient.reloadActiveTimeline().getInstantDetails(instant).get(),
+      metaClient.reloadActiveTimeline().getInstantContentStream(instant),
       classOf[HoodieCommitMetadata]
     )
     val hoodieWriteStats = commitMetadata.getWriteStats.asScala
@@ -111,7 +111,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
    */
   protected def getCDCLogFile(instant: HoodieInstant): List[String] = {
     val commitMetadata = metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant,
-      metaClient.reloadActiveTimeline().getInstantDetails(instant).get(),
+      metaClient.reloadActiveTimeline().getInstantContentStream(instant),
       classOf[HoodieCommitMetadata]
     )
     commitMetadata.getWriteStats.asScala.flatMap(_.getCdcStats.asScala.keys).toList

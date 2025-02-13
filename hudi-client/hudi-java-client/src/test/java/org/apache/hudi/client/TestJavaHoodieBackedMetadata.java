@@ -1440,7 +1440,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       metaClient.getActiveTimeline().getInstants().forEach(entry -> {
         try {
           HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe()
-              .deserialize(entry, metaClient.getActiveTimeline().getInstantDetails(entry).get(), HoodieCommitMetadata.class);
+              .deserialize(entry, metaClient.getActiveTimeline().getInstantContentStream(entry), HoodieCommitMetadata.class);
           String commitTime = entry.requestedTime();
           if (!commitToPartitionsToFiles.containsKey(commitTime)) {
             commitToPartitionsToFiles.put(commitTime, new HashMap<>());

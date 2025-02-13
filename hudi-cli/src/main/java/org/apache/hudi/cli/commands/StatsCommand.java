@@ -77,7 +77,7 @@ public class StatsCommand {
     TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
     for (HoodieInstant instantTime : timeline.getInstants()) {
       String waf = "0";
-      HoodieCommitMetadata commit = layout.getCommitMetadataSerDe().deserialize(instantTime, activeTimeline.getInstantDetails(instantTime).get(),
+      HoodieCommitMetadata commit = layout.getCommitMetadataSerDe().deserialize(instantTime, activeTimeline.getInstantContentStream(instantTime),
           HoodieCommitMetadata.class);
       if (commit.fetchTotalUpdateRecordsWritten() > 0) {
         waf = df.format((float) commit.fetchTotalRecordsWritten() / commit.fetchTotalUpdateRecordsWritten());

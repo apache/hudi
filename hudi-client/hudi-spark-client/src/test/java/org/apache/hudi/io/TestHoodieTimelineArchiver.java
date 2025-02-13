@@ -70,7 +70,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -81,6 +80,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -736,7 +736,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     assertTrue(planDetailsList.stream().allMatch(Option::isPresent), "All the compaction instants should have plan details.");
     // parse the compaction plan for each instant
     for (Option<byte[]> planDetails : planDetailsList) {
-      assertDoesNotThrow(() -> TimelineMetadataUtils.deserializeCompactionPlan(planDetails.get()));
+      assertDoesNotThrow(() -> TimelineMetadataUtils.deserializeCompactionPlan(Option.of(new ByteArrayInputStream(planDetails.get()))));
     }
   }
 
@@ -855,7 +855,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   }
 
   private static Stream<Arguments> archiveCommitSavepointNoHoleParams() {
-    return Arrays.stream(new Boolean[][] {
+    return Arrays.stream(new Boolean[][]{
         {true, true},
         {false, true},
         {true, false},
@@ -1360,7 +1360,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     metaClient.getArchivedTimeline().loadCompletedInstantDetailsInMemory();
     HoodieInstant firstInstant = metaClient.reloadActiveTimeline().firstInstant().get();
     expectedArchivedInstants = expectedArchivedInstants.stream()
-        .filter(entry ->  compareTimestamps(entry.requestedTime(), LESSER_THAN, firstInstant.requestedTime()
+        .filter(entry -> compareTimestamps(entry.requestedTime(), LESSER_THAN, firstInstant.requestedTime()
         )).collect(Collectors.toList());
     expectedArchivedInstants.forEach(entry -> assertTrue(metaClient.getArchivedTimeline().containsInstant(entry)));
   }

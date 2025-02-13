@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.util.List;

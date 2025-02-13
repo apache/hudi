@@ -30,7 +30,6 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
-
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.specific.SpecificData
 import org.apache.hadoop.fs.{FileStatus, Path}
@@ -38,11 +37,10 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.io.File
+import java.io.{File, InputStream}
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.break
 
@@ -184,7 +182,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
         val localPath = localFolder + StoragePath.SEPARATOR + instantFileNameGenerator.getFileName(instant)
         val data: Array[Byte] = instant.getAction match {
           case HoodieTimeline.CLEAN_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantContentStream(instant))
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.DELTA_COMMIT_ACTION =>
@@ -200,11 +198,11 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
             timeline.getInstantDetails(instant).get
 
           case HoodieTimeline.ROLLBACK_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(timeline.getInstantContentStream(instant))
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.SAVEPOINT_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(timeline.getInstantContentStream(instant))
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case _ => null

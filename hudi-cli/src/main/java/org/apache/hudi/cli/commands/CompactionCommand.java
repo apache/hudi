@@ -126,8 +126,8 @@ public class CompactionCommand {
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
     InstantGenerator instantGenerator = client.getInstantGenerator();
     HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
-        activeTimeline.readCompactionPlanAsBytes(
-            instantGenerator.getCompactionRequestedInstant(compactionInstantTime)).get());
+        activeTimeline.getInstantContentStream(
+            instantGenerator.getCompactionRequestedInstant(compactionInstantTime)));
 
     return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly, partition);
   }
@@ -181,7 +181,7 @@ public class CompactionCommand {
     try {
       archivedTimeline.loadCompactionDetailsInMemory(compactionInstantTime);
       HoodieCompactionPlan compactionPlan =
-              TimelineMetadataUtils.deserializeCompactionPlan(archivedTimeline.getInstantDetails(instant).get());
+              TimelineMetadataUtils.deserializeCompactionPlan(archivedTimeline.getInstantContentStream(instant));
       return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly, partition);
     } finally {
       archivedTimeline.clearInstantDetailsFromMemory(compactionInstantTime);
@@ -371,7 +371,7 @@ public class CompactionCommand {
   private HoodieCompactionPlan readCompactionPlanForArchivedTimeline(HoodieArchivedTimeline archivedTimeline,
                                                                      HoodieInstant instant) {
     try {
-      return TimelineMetadataUtils.deserializeCompactionPlan(archivedTimeline.getInstantDetails(instant).get());
+      return TimelineMetadataUtils.deserializeCompactionPlan(archivedTimeline.getInstantContentStream(instant));
     } catch (Exception e) {
       throw new HoodieException(e.getMessage(), e);
     }
@@ -388,15 +388,15 @@ public class CompactionCommand {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
           return TimelineMetadataUtils.deserializeCompactionPlan(
-              activeTimeline.readCompactionPlanAsBytes(
-                  instantGenerator.getCompactionRequestedInstant(instant.requestedTime())).get());
+              activeTimeline.getInstantContentStream(
+                  instantGenerator.getCompactionRequestedInstant(instant.requestedTime())));
         } catch (HoodieIOException ioe) {
           // SKIP
           return null;
         }
       } else {
-        return TimelineMetadataUtils.deserializeCompactionPlan(activeTimeline.readCompactionPlanAsBytes(
-            instantGenerator.getCompactionRequestedInstant(instant.requestedTime())).get());
+        return TimelineMetadataUtils.deserializeCompactionPlan(activeTimeline.getInstantContentStream(
+            instantGenerator.getCompactionRequestedInstant(instant.requestedTime())));
       }
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);

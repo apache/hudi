@@ -786,7 +786,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
         List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(
             engineContext, metadataMetaClient.getStorage(), metadataMetaClient.getBasePath(), false);
-        // partition should be physically deleted
+        // partition should be physically deleted - all files inside the partition folder is gone but the folder itself is not.
         assertFalse(metadataTablePartitions.contains(COLUMN_STATS.getPartitionPath()));
 
         Option<HoodieInstant> completedReplaceInstant = metadataMetaClient.reloadActiveTimeline().getCompletedReplaceTimeline().lastInstant();
@@ -1941,7 +1941,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       metaClient.getActiveTimeline().getInstants().forEach(entry -> {
         try {
           HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe()
-              .deserialize(entry, metaClient.getActiveTimeline().getInstantDetails(entry).get(), HoodieCommitMetadata.class);
+              .deserialize(entry, metaClient.getActiveTimeline().getInstantContentStream(entry), HoodieCommitMetadata.class);
           String commitTime = entry.requestedTime();
           if (!commitToPartitionsToFiles.containsKey(commitTime)) {
             commitToPartitionsToFiles.put(commitTime, new HashMap<>());

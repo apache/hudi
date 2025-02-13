@@ -18,29 +18,23 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.JsonUtils;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.apache.hudi.common.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToJsonBytes;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeReplaceCommitMetadata;
-import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * All the metadata that gets stored along with a commit.
  * ******** IMPORTANT ********
  * For any newly added/removed data fields, make sure we have the same definition in
  * src/main/avro/HoodieReplaceCommitMetadata.avsc file!!!!!
- *
+ * <p>
  * For any newly added subclass, make sure we add corresponding handler in
  * org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2#deserialize method.
  * ***************************
@@ -117,23 +111,6 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
     int result = partitionToWriteStats.hashCode();
     result = 31 * result + compacted.hashCode();
     return result;
-  }
-
-  public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
-    try {
-      if (bytes.length == 0) {
-        return clazz.newInstance();
-      }
-      try {
-        return fromJsonString(fromUTF8Bytes(convertCommitMetadataToJsonBytes(deserializeReplaceCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class)), clazz);
-      } catch (Exception e) {
-        // fall back to the alternative method (0.x)
-        LOG.warn("Primary method failed; trying alternative deserialization method.", e);
-        return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
-      }
-    } catch (Exception e) {
-      throw new IOException("unable to read commit metadata for bytes length: " + bytes.length, e);
-    }
   }
 
   @Override

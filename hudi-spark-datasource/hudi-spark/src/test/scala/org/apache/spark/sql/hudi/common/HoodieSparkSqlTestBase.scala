@@ -383,7 +383,7 @@ object HoodieSparkSqlTestBase {
 
     val cleanInstant = metaClient.reloadActiveTimeline().getCleanerTimeline.filterCompletedInstants().lastInstant().get()
     TimelineMetadataUtils.deserializeHoodieCleanMetadata(metaClient
-      .getActiveTimeline.getInstantDetails(cleanInstant).get)
+      .getActiveTimeline.getInstantContentStream(cleanInstant))
   }
 
   def validateTableConfig(storage: HoodieStorage,

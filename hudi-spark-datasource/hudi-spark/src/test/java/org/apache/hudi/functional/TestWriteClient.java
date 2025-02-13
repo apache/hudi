@@ -75,7 +75,7 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
       HoodieTableMetaClient metaClient = createMetaClient(jsc, basePath);
       HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
       HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(timeline.lastInstant().get(),
-          timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
+          timeline.getInstantContentStream(timeline.lastInstant().get()), HoodieCommitMetadata.class);
       assertTrue(metadata.getExtraMetadata().get("schema").isEmpty());
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
       assertEquals(Schema.parse(TRIP_EXAMPLE_SCHEMA), tableSchemaResolver.getTableAvroSchema(false));

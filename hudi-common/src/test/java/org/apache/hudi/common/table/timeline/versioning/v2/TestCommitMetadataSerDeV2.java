@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -68,8 +69,8 @@ public class TestCommitMetadataSerDeV2 {
     assertTrue(serialized.isPresent());
 
     // Deserialize
-    HoodieCommitMetadata deserialized = serDe.deserialize(instant, serialized.get(), HoodieCommitMetadata.class);
-
+    HoodieCommitMetadata deserialized = serDe.deserialize(instant, Option.of(new ByteArrayInputStream(serialized.get())), HoodieCommitMetadata.class);
+    
     // Verify
     assertNotNull(deserialized);
     assertEquals(0, deserialized.getPartitionToWriteStats().size());
@@ -136,8 +137,8 @@ public class TestCommitMetadataSerDeV2 {
     assertTrue(serialized.isPresent());
 
     // Deserialize
-    HoodieCommitMetadata deserialized = serDe.deserialize(instant, serialized.get(), HoodieCommitMetadata.class);
-
+    HoodieCommitMetadata deserialized = serDe.deserialize(instant, Option.of(new ByteArrayInputStream(serialized.get())), HoodieCommitMetadata.class);
+    
     // Verify all fields
     assertNotNull(deserialized);
     assertEquals(1, deserialized.getPartitionToWriteStats().size());
@@ -239,8 +240,8 @@ public class TestCommitMetadataSerDeV2 {
     assertTrue(serialized.isPresent());
 
     // Deserialize
-    HoodieReplaceCommitMetadata deserialized = serDe.deserialize(instant, serialized.get(), HoodieReplaceCommitMetadata.class);
-
+    HoodieReplaceCommitMetadata deserialized = serDe.deserialize(instant, Option.of(new ByteArrayInputStream(serialized.get())), HoodieReplaceCommitMetadata.class);
+    
     // Verify basic fields
     assertNotNull(deserialized);
     assertEquals(true, deserialized.getCompacted());

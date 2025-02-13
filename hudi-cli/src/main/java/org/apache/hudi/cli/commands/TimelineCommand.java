@@ -310,11 +310,11 @@ public class TimelineCommand {
         HoodieInstant instantToUse = HoodieCLI.getTableMetaClient().createNewInstant(
             HoodieInstant.State.REQUESTED, instant.getAction(), instant.requestedTime());
         HoodieRollbackPlan metadata = TimelineMetadataUtils
-            .deserializeAvroMetadata(timeline.getInstantDetails(instantToUse).get(), HoodieRollbackPlan.class);
+            .deserializeAvroMetadata(timeline.getInstantContentStream(instantToUse), HoodieRollbackPlan.class);
         return metadata.getInstantToRollback().getCommitTime();
       } else {
         HoodieRollbackMetadata metadata = TimelineMetadataUtils
-            .deserializeAvroMetadata(timeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+            .deserializeAvroMetadata(timeline.getInstantContentStream(instant), HoodieRollbackMetadata.class);
         return String.join(",", metadata.getCommitsRollback());
       }
     } catch (IOException e) {
@@ -335,12 +335,12 @@ public class TimelineCommand {
           HoodieInstant instantToUse = HoodieCLI.getTableMetaClient().createNewInstant(
               HoodieInstant.State.REQUESTED, rollbackInstant.getAction(), rollbackInstant.requestedTime());
           HoodieRollbackPlan metadata = TimelineMetadataUtils
-              .deserializeAvroMetadata(timeline.getInstantDetails(instantToUse).get(), HoodieRollbackPlan.class);
+              .deserializeAvroMetadata(timeline.getInstantContentStream(instantToUse), HoodieRollbackPlan.class);
           rollbackInfoMap.computeIfAbsent(metadata.getInstantToRollback().getCommitTime(), k -> new ArrayList<>())
               .add(rollbackInstant.requestedTime());
         } else {
           HoodieRollbackMetadata metadata = TimelineMetadataUtils
-              .deserializeAvroMetadata(timeline.getInstantDetails(rollbackInstant).get(), HoodieRollbackMetadata.class);
+              .deserializeAvroMetadata(timeline.getInstantContentStream(rollbackInstant), HoodieRollbackMetadata.class);
           metadata.getCommitsRollback().forEach(instant -> {
             rollbackInfoMap.computeIfAbsent(instant, k -> new ArrayList<>())
                 .add(rollbackInstant.requestedTime());

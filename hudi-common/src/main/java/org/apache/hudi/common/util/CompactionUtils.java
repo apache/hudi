@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -186,16 +187,36 @@ public class CompactionUtils {
    * Util method to fetch both compaction and log compaction plan from requestedInstant.
    */
   private static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, HoodieInstant requestedInstant) {
-    return getCompactionPlan(metaClient, metaClient.getActiveTimeline().readCompactionPlanAsBytes(requestedInstant));
+    return getCompactionPlan(metaClient, metaClient.getActiveTimeline().getInstantContentStream(requestedInstant));
   }
 
   /**
    * Util method to fetch both compaction and log compaction plan from requestedInstant.
    */
-  public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, Option<byte[]> planContent) {
+  public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, Option<InputStream> planContent) {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
     try {
-      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(planContent.get());
+      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(planContent);
+      return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
+    } catch (IOException e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  public static HoodieCompactionPlan getCompactionPlanLegacy(HoodieTableMetaClient metaClient, byte[] bytes) {
+    CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
+    try {
+      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlanLegacy(bytes);
+      return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
+    } catch (IOException e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  public static HoodieCompactionPlan getCompactionPlanFromInputStream(HoodieTableMetaClient metaClient, Option<InputStream> in) {
+    CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
+    try {
+      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(in);
       return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
     } catch (IOException e) {
       throw new HoodieException(e);

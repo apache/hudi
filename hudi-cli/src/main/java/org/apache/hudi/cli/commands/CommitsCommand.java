@@ -25,11 +25,11 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparator;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -72,19 +72,18 @@ public class CommitsCommand {
         .getInstantsAsStream().sorted(instantComparator.requestedTimeOrderedComparator().reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = getCommitMetadata(HoodieCLI.getTableMetaClient().getActiveTimeline(),
-            commit,
-            HoodieCommitMetadata.class);
-        rows.add(new Comparable[] {commit.requestedTime(),
-            commitMetadata.fetchTotalBytesWritten(),
-            commitMetadata.fetchTotalFilesInsert(),
-            commitMetadata.fetchTotalFilesUpdated(),
-            commitMetadata.fetchTotalPartitionsWritten(),
-            commitMetadata.fetchTotalRecordsWritten(),
-            commitMetadata.fetchTotalUpdateRecordsWritten(),
-            commitMetadata.fetchTotalWriteErrors()});
-      }
+      CommitMetadataSerDe serDe = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe();
+      final HoodieCommitMetadata commitMetadata = serDe.deserialize(
+          commit, timeline.getInstantContentStream(commit),
+          HoodieCommitMetadata.class);
+      rows.add(new Comparable[] {commit.requestedTime(),
+          commitMetadata.fetchTotalBytesWritten(),
+          commitMetadata.fetchTotalFilesInsert(),
+          commitMetadata.fetchTotalFilesUpdated(),
+          commitMetadata.fetchTotalPartitionsWritten(),
+          commitMetadata.fetchTotalRecordsWritten(),
+          commitMetadata.fetchTotalUpdateRecordsWritten(),
+          commitMetadata.fetchTotalWriteErrors()});
     }
 
     final Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
@@ -111,25 +110,23 @@ public class CommitsCommand {
         .getInstantsAsStream().sorted(instantComparator.requestedTimeOrderedComparator().reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe().deserialize(
-            commit,
-            timeline.getInstantDetails(commit).get(),
-            HoodieCommitMetadata.class);
+      final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe().deserialize(
+          commit,
+          timeline.getInstantContentStream(commit),
+          HoodieCommitMetadata.class);
 
-        for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
-            commitMetadata.getPartitionToWriteStats().entrySet()) {
-          for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
-            if (StringUtils.isNullOrEmpty(partition) || partition.equals(hoodieWriteStat.getPartitionPath())) {
-              rows.add(new Comparable[] {commit.getAction(), commit.requestedTime(), hoodieWriteStat.getPartitionPath(),
-                  hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
-                  hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
-                  hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
-                  hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
-                  hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
-                  hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
-              });
-            }
+      for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
+          commitMetadata.getPartitionToWriteStats().entrySet()) {
+        for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
+          if (StringUtils.isNullOrEmpty(partition) || partition.equals(hoodieWriteStat.getPartitionPath())) {
+            rows.add(new Comparable[] {commit.getAction(), commit.requestedTime(), hoodieWriteStat.getPartitionPath(),
+                hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
+                hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
+                hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
+                hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
+                hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
+                hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
+            });
           }
         }
       }

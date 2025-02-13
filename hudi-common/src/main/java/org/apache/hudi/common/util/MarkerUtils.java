@@ -279,7 +279,7 @@ public class MarkerUtils {
     Set<String> missingFileIDs = currentInstants.stream().flatMap(instant -> {
       try {
         TimelineLayout layout = TimelineLayout.fromVersion(activeTimeline.getTimelineLayoutVersion());
-        return layout.getCommitMetadataSerDe().deserialize(instant, activeTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class)
+        return layout.getCommitMetadataSerDe().deserialize(instant, activeTimeline.getInstantContentStream(instant), HoodieCommitMetadata.class)
             .getFileIdAndRelativePaths().keySet().stream();
       } catch (Exception e) {
         return Stream.empty();

@@ -143,7 +143,7 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     restores.sorted().forEach(instant -> {
       try {
         HoodieRestoreMetadata metadata = TimelineMetadataUtils
-                .deserializeAvroMetadata(activeTimeline.getInstantDetails(instant).get(), HoodieRestoreMetadata.class);
+                .deserializeAvroMetadata(activeTimeline.getInstantContentStream(instant), HoodieRestoreMetadata.class);
         metadata.getInstantsToRollback().forEach(c -> {
           Comparable[] row = new Comparable[4];
           row[0] = metadata.getStartRestoreTime();
@@ -182,7 +182,7 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
 
     // get metadata of instant
     HoodieRestoreMetadata instantMetadata = TimelineMetadataUtils.deserializeAvroMetadata(
-            activeTimeline.getInstantDetails(instant).get(), HoodieRestoreMetadata.class);
+            activeTimeline.getInstantContentStream(instant), HoodieRestoreMetadata.class);
 
     // generate expected result
     TableHeader header = new TableHeader()
