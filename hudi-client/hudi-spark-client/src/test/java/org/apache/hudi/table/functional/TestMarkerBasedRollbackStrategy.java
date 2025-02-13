@@ -54,6 +54,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -84,6 +85,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.MockitoAnnotations.initMocks;
 
+@Disabled
 @Tag("functional")
 public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 

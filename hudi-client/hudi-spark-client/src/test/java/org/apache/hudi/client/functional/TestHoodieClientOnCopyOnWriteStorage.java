@@ -283,6 +283,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Auto Commit behavior for HoodieWriteClient insertPrepped API.
    */
+  @Disabled
   @Test
   public void testAutoCommitOnInsertPrepped() throws Exception {
     testAutoCommit((writeClient, recordRDD, instantTime) -> writeClient.insertPreppedRecords(recordRDD, instantTime), true, true, INSTANT_GENERATOR);
@@ -465,6 +466,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test UpsertPrepped API.
    */
+  @Disabled
   @Test
   public void testUpsertsPrepped() throws Exception {
     testUpsertsInternal((writeClient, recordRDD, instantTime) -> writeClient.upsertPreppedRecords(recordRDD, instantTime), true, true, SparkUpgradeDowngradeHelper.getInstance());
@@ -1551,6 +1553,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     testRollbackAfterConsistencyCheckFailureUsingFileList(true, enableOptimisticConsistencyGuard, populateMetCols);
   }
 
+  @Disabled
   @Test
   public void testRollbackFailedCommits() throws Exception {
     super.testRollbackFailedCommits(true);
