@@ -100,7 +100,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -132,8 +131,8 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_F
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 import static org.apache.hudi.common.testutils.Transformations.recordsToRecordKeySet;
@@ -273,7 +272,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Auto Commit behavior for HoodieWriteClient insert API.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testAutoCommitOnInsert(boolean populateMetaFields) throws Exception {
@@ -283,7 +281,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Auto Commit behavior for HoodieWriteClient insertPrepped API.
    */
-  @Disabled
   @Test
   public void testAutoCommitOnInsertPrepped() throws Exception {
     testAutoCommit((writeClient, recordRDD, instantTime) -> writeClient.insertPreppedRecords(recordRDD, instantTime), true, true, INSTANT_GENERATOR);
@@ -292,7 +289,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Auto Commit behavior for HoodieWriteClient upsert API.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testAutoCommitOnUpsert(boolean populateMetaFields) throws Exception {
@@ -302,7 +298,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Auto Commit behavior for HoodieWriteClient upsert Prepped API.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testAutoCommitOnUpsertPrepped(boolean populateMetaFields) throws Exception {
@@ -312,7 +307,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Auto Commit behavior for HoodieWriteClient bulk-insert API.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testAutoCommitOnBulkInsert(boolean populateMetaFields) throws Exception {
@@ -322,14 +316,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Auto Commit behavior for HoodieWriteClient bulk-insert prepped API.
    */
-  @Disabled
   @Test
   public void testAutoCommitOnBulkInsertPrepped() throws Exception {
     testAutoCommit((writeClient, recordRDD, instantTime) -> writeClient.bulkInsertPreppedRecords(recordRDD, instantTime,
         Option.empty()), true, true, INSTANT_GENERATOR);
   }
 
-  @Disabled
   @Test
   public void testPreCommitValidatorsOnInsert() throws Exception {
     int numRecords = 200;
@@ -345,7 +337,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
-  @Disabled
   @Test
   public void testPreCommitValidationFailureOnInsert() throws Exception {
     int numRecords = 200;
@@ -369,7 +360,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertFalse(testTable.commitExists(newCommitTime));
   }
 
-  @Disabled
   @Test
   public void testPreCommitValidationWithMultipleInflights() throws Exception {
     int numRecords = 200;
@@ -418,7 +408,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test De-duplication behavior for HoodieWriteClient insert API.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testDeduplicationOnInsert(boolean populateMetaFields) throws Exception {
@@ -428,7 +417,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test De-duplication behavior for HoodieWriteClient insert API.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testDeduplicationKeepOperationFieldOnInsert(boolean populateMetaFields) throws Exception {
@@ -438,7 +426,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test De-duplication behavior for HoodieWriteClient bulk-insert API.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testDeduplicationOnBulkInsert(boolean populateMetaFields) throws Exception {
@@ -456,7 +443,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Upsert API.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testUpserts(boolean populateMetaFields) throws Exception {
@@ -466,7 +452,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test UpsertPrepped API.
    */
-  @Disabled
   @Test
   public void testUpsertsPrepped() throws Exception {
     testUpsertsInternal((writeClient, recordRDD, instantTime) -> writeClient.upsertPreppedRecords(recordRDD, instantTime), true, true, SparkUpgradeDowngradeHelper.getInstance());
@@ -531,7 +516,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }).collect();
   }
 
-  @Disabled
   @Test
   public void testRestoreWithSavepointBeyondArchival() throws Exception {
     HoodieWriteConfig config = getConfigBuilder().withRollbackUsingMarkers(true).build();
@@ -588,7 +572,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Insert API for HoodieConcatHandle.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testInsertsWithHoodieConcatHandle(boolean populateMetaFields) throws Exception {
@@ -598,7 +581,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test InsertPrepped API for HoodieConcatHandle.
    */
-  @Disabled
   @Test
   public void testInsertsPreppedWithHoodieConcatHandle() throws Exception {
     testHoodieConcatHandle(true, true, INSTANT_GENERATOR);
@@ -607,7 +589,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Insert API for HoodieConcatHandle when incoming entries contain duplicate keys.
    */
-  @Disabled
   @Test
   public void testInsertsWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {
     testHoodieConcatHandleOnDupInserts(false, INSTANT_GENERATOR);
@@ -616,13 +597,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test InsertPrepped API for HoodieConcatHandle when incoming entries contain duplicate keys.
    */
-  @Disabled
   @Test
   public void testInsertsPreppedWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {
     testHoodieConcatHandleOnDupInserts(true, INSTANT_GENERATOR);
   }
 
-  @Disabled
   @Test
   public void testBulkInsertWithCustomPartitioner() {
     HoodieWriteConfig config = getConfigBuilder().withRollbackUsingMarkers(true).build();
@@ -637,7 +616,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
-  @Disabled
   @Test
   public void testPendingRestore() throws IOException {
     HoodieWriteConfig config = getConfigBuilder().withMetadataConfig(
@@ -681,7 +659,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Tests deletion of records.
    */
-  @Disabled
   @Test
   public void testDeletes() throws Exception {
     Function3<Function2<List<HoodieRecord>, String, Integer>, String, Integer, List<HoodieRecord>> secondBatchGenFn =
@@ -704,7 +681,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
    *
    * @throws Exception
    */
-  @Disabled
   @Test
   public void testDeletesForInsertsInSameBatch() throws Exception {
     super.testDeletesForInsertsInSameBatch(INSTANT_GENERATOR);
@@ -722,7 +698,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     return Pair.of(statuses, inserts);
   }
 
-  @Disabled
   @Test
   public void testUpdateRejectForClustering() throws IOException {
     final String testPartitionPath = "2016/09/26";
@@ -777,7 +752,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test scenario of new file-group getting added during upsert().
    */
-  @Disabled
   @Test
   public void testSmallInsertHandlingForUpserts() throws Exception {
     final String testPartitionPath = "2016/09/26";
@@ -892,7 +866,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test scenario of new file-group getting added during insert().
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("smallInsertHandlingParams")
   public void testSmallInsertHandlingForInserts(boolean mergeAllowDuplicateInserts) throws Exception {
@@ -963,7 +936,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test delete with delete api.
    */
-  @Disabled
   @Test
   public void testDeletesWithDeleteApi() throws Exception {
     final String testPartitionPath = "2016/09/26";
@@ -1024,7 +996,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     testDeletes(client, updateBatch3.getRight(), 10, file1, "007", 140, keysSoFar);
   }
 
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testSimpleClustering(boolean populateMetaFields) throws Exception {
@@ -1032,13 +1003,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
 
-  @Disabled
   @Test
   public void testAndValidateClusteringOutputFiles() throws IOException {
     testAndValidateClusteringOutputFiles(createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)), createClusteringBuilder(true, 2).build(), list2Rdd, rdd2List);
   }
 
-  @Disabled
   @Test
   public void testRollbackOfRegularCommitWithPendingReplaceCommitInTimeline() throws Exception {
     // trigger clustering, but do not complete
@@ -1063,7 +1032,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().countInstants());
   }
 
-  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testInlineScheduleClustering(boolean scheduleInlineClustering) throws IOException {
@@ -1072,7 +1040,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     testInlineScheduleClustering(createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)), clusteringConfig, list2Rdd, rdd2List);
   }
 
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testClusteringWithSortColumns(boolean populateMetaFields) throws Exception {
@@ -1082,7 +1049,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     testInsertAndClustering(clusteringConfig, populateMetaFields, true, false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
 
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testClusteringWithSortOneFilePerGroup(boolean populateMetaFields) throws Exception {
@@ -1096,7 +1062,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     testInsertAndClustering(clusteringConfig, populateMetaFields, true, true, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
 
-  @Disabled
   @Test
   public void testPendingClusteringRollback() throws Exception {
     boolean populateMetaFields = true;
@@ -1149,7 +1114,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(rollbackInstant.requestedTime(), newRollbackInstant.requestedTime());
   }
 
-  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testInflightClusteringRollbackWhenUpdatesAllowed(boolean rollbackPendingClustering) throws Exception {
@@ -1182,7 +1146,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(config.isRollbackPendingClustering() ? 0 : 1, pendingClusteringPlans.size());
   }
 
-  @Disabled
   @Test
   public void testClusteringWithFailingValidator() throws Exception {
     HoodieClusteringConfig clusteringConfig = createClusteringBuilder(true, 1)
@@ -1195,7 +1158,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
-  @Disabled
   @Test
   public void testClusteringInvalidConfigForSqlQueryValidator() throws Exception {
     try {
@@ -1207,7 +1169,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
-  @Disabled
   @Test
   public void testClusteringInvalidConfigForSqlQuerySingleResultValidator() throws Exception {
     testInsertAndClustering(createClusteringBuilder(true, 1).build(), false, true,
@@ -1215,7 +1176,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         "", COUNT_SQL_QUERY_FOR_VALIDATION + "#400");
   }
 
-  @Disabled
   @Test
   public void testClusteringInvalidConfigForSqlQuerySingleResultValidatorFailure() throws Exception {
     try {
@@ -1242,20 +1202,17 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     return allRecords.getLeft().getLeft();
   }
 
-  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testFailWritesOnInlineTableServiceExceptions(boolean shouldFail) throws IOException {
     testFailWritesOnInlineTableServiceThrowable(shouldFail, shouldFail, createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)), CLUSTERING_FAILURE);
   }
 
-  @Disabled
   @Test
   public void testFailWritesOnInlineTableServiceErrors() throws IOException {
     testFailWritesOnInlineTableServiceThrowable(false, true, createBrokenClusteringClient(new OutOfMemoryError(CLUSTERING_FAILURE)), CLUSTERING_FAILURE);
   }
 
-  @Disabled
   @Test
   public void testFailWritesOnInlineCleanExceptions() throws IOException {
     testFailWritesOnInlineTableServiceThrowable(true, true, createBrokenCleaningClient(new HoodieException(CLEANING_FAILURE)), CLEANING_FAILURE);
@@ -1266,7 +1223,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test scenario of writing more file groups than existing number of file groups in partition.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testInsertOverwritePartitionHandlingWithMoreRecords(boolean populateMetaFields) throws Exception {
@@ -1276,7 +1232,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test scenario of writing fewer file groups than existing number of file groups in partition.
    */
-  @Disabled
   @Test
   public void testInsertOverwritePartitionHandlingWithFewerRecords() throws Exception {
     verifyInsertOverwritePartitionHandling(3000, 1000, true);
@@ -1285,7 +1240,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test scenario of writing similar number file groups in partition.
    */
-  @Disabled
   @Test
   public void testInsertOverwritePartitionHandlingWithSimilarNumberOfRecords() throws Exception {
     verifyInsertOverwritePartitionHandling(3000, 3000, true);
@@ -1331,7 +1285,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test scenario of writing fewer file groups for first partition than second and third partition.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void verifyDeletePartitionsHandlingWithFewerRecordsFirstPartition(boolean populateMetaFields) throws Exception {
@@ -1341,7 +1294,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test scenario of writing similar number file groups in partition.
    */
-  @Disabled
   @Test
   public void verifyDeletePartitionsHandlingWithSimilarNumberOfRecords() throws Exception {
     verifyDeletePartitionsHandling(3000, 3000, 3000, true);
@@ -1350,7 +1302,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test scenario of writing more file groups for first partition than second and third partition.
    */
-  @Disabled
   @Test
   public void verifyDeletePartitionsHandlingHandlingWithFewerRecordsSecondThirdPartition() throws Exception {
     verifyDeletePartitionsHandling(3000, 1000, 1000, true);
@@ -1497,7 +1448,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test delete with delete api.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testDeletesWithoutInserts(boolean populateMetaFields) {
@@ -1507,7 +1457,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test to ensure commit metadata points to valid files.
    */
-  @Disabled
   @Test
   public void testCommitWritesRelativePaths() throws Exception {
     testCommitWritesRelativePaths(list2Rdd);
@@ -1516,7 +1465,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test to ensure commit metadata points to valid files.10.
    */
-  @Disabled
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testMetadataStatsOnCommit(boolean populateMetaFields) throws Exception {
@@ -1526,7 +1474,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Tests behavior of committing only when consistency is verified.
    */
-  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testConsistencyCheckDuringFinalize(boolean enableOptimisticConsistencyGuard) throws Exception {
@@ -1539,39 +1486,33 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             populateMetaFields, getHoodieTable, list2Rdd, rdd2List);
   }
 
-  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testRollbackAfterConsistencyCheckFailureUsingFileList(boolean enableOptimisticConsistencyGuard) throws Exception {
     testRollbackAfterConsistencyCheckFailureUsingFileList(false, enableOptimisticConsistencyGuard, true);
   }
 
-  @Disabled
   @ParameterizedTest
   @MethodSource("rollbackAfterConsistencyCheckFailureParams")
   public void testRollbackAfterConsistencyCheckFailureUsingMarkers(boolean enableOptimisticConsistencyGuard, boolean populateMetCols) throws Exception {
     testRollbackAfterConsistencyCheckFailureUsingFileList(true, enableOptimisticConsistencyGuard, populateMetCols);
   }
 
-  @Disabled
   @Test
   public void testRollbackFailedCommits() throws Exception {
     super.testRollbackFailedCommits(true);
   }
 
-  @Disabled
   @Test
   public void testRollbackFailedCommitsToggleCleaningPolicy() throws Exception {
     super.testRollbackFailedCommitsToggleCleaningPolicy(true);
   }
 
-  @Disabled
   @Test
   public void testParallelInsertAndCleanPreviousFailedCommits() throws Exception {
     super.testParallelInsertAndCleanPreviousFailedCommits(true);
   }
 
-  @Disabled
   @Test
   public void testMultiOperationsPerCommit() throws IOException {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false)
@@ -1602,7 +1543,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         HoodieClientTestUtils.read(jsc, basePath, sqlContext, storage, fullPartitionPaths).count(), "Must contain " + totalRecords + " records");
   }
 
-  @Disabled
   @Test
   public void testClusteringCommitInPresenceOfInflightCommit() throws Exception {
     Properties properties = getDisabledRowWriterProperties();
@@ -1660,7 +1600,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieActiveTimeline.COMMIT_ACTION, inflightCommit), instants.get(1));
   }
 
-  @Disabled
   @Test
   public void testIngestionCommitInPresenceOfCompletedClusteringCommit() throws Exception {
     Properties properties = getDisabledRowWriterProperties();

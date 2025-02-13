@@ -28,10 +28,12 @@ pool:
 parameters:
   - name: job1UTModules
     type: object
-    # TODO: change back the modules after testing
     default:
       - 'hudi-common'
+      - 'hudi-hadoop-common'
+      - 'hudi-client/hudi-spark-client'
       - 'hudi-flink-datasource'
+      - 'hudi-flink-datasource/hudi-flink'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
       - 'hudi-flink-datasource/hudi-flink1.15.x'
       - 'hudi-flink-datasource/hudi-flink1.16.x'
@@ -41,9 +43,9 @@ parameters:
       - 'hudi-flink-datasource/hudi-flink1.20.x'
   - name: job1FTModules
     type: object
-    # TODO: change back the modules after testing
     default:
       - 'hudi-flink-datasource'
+      - 'hudi-flink-datasource/hudi-flink'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
       - 'hudi-flink-datasource/hudi-flink1.15.x'
       - 'hudi-flink-datasource/hudi-flink1.16.x'
@@ -53,11 +55,11 @@ parameters:
       - 'hudi-flink-datasource/hudi-flink1.20.x'
   - name: job2FTModules
     type: object
-    # TODO: change back the modules after testing
     default:
       - 'hudi-common'
       - 'hudi-hadoop-common'
       - 'hudi-client/hudi-spark-client'
+      - 'hudi-spark-datasource/hudi-spark'
   - name: job34UTModules
     type: object
     default:
@@ -415,10 +417,10 @@ stages:
         dependsOn:
           - UT_FT_1
           - UT_FT_2
-          #- UT_FT_3
-          #- UT_FT_4
-          #- UT_FT_5
-          #- UT_FT_6
+          - UT_FT_3
+          - UT_FT_4
+          - UT_FT_5
+          - UT_FT_6
         steps:
           - task: DownloadBuildArtifacts@0
             displayName: 'Download JaCoCo Execution Data Files'
