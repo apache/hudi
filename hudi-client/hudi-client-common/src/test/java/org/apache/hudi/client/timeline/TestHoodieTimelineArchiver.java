@@ -20,6 +20,7 @@
 package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.client.timeline.versioning.v1.TimelineArchiverV1;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
@@ -56,14 +57,16 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
 
   @Test
   void archiveIfRequired_instantsAreArchived() throws Exception {
+    TypedProperties advanceProperties = new TypedProperties();
+    advanceProperties.put(TimelineArchiverV1.ARCHIVE_LIMIT_INSTANTS, 1L);
     HoodieWriteConfig writeConfig = HoodieWriteConfig
         .newBuilder()
         .withPath(tempDir.toString())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .archiveCommitsWith(2, 3)
-            .withArchiveLimitInstants(1)
             .build())
         .withMarkersType("DIRECT")
+        .withProperties(advanceProperties)
         .build();
     HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
     HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, metaClient.getStorageConf());
