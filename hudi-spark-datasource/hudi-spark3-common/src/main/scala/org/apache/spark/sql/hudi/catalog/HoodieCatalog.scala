@@ -358,7 +358,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
   private def saveSourceDF(sourceQuery: Option[Dataset[_]],
                            properties: Map[String, String]): Unit = {
     sourceQuery.map(df => {
-      df.write.format("hudi")
+      df.write.format("org.apache.hudi")
         .options(properties)
         .mode(SaveMode.Append)
         .save()
