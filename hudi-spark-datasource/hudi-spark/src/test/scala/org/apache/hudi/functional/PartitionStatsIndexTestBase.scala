@@ -88,7 +88,7 @@ class PartitionStatsIndexTestBase extends HoodieStatsIndexTestBase {
     val latestBatch: mutable.Buffer[String] = records
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()
-    latestBatchDf.write.format("hudi")
+    latestBatchDf.write.format("org.apache.hudi")
       .options(hudiOpts)
       .option(OPERATION.key, operation)
       .mode(saveMode)

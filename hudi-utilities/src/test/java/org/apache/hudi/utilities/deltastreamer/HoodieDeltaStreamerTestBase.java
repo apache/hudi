@@ -535,19 +535,19 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   void assertRecordCount(long expected, String tablePath, SQLContext sqlContext) {
     sqlContext.clearCache();
-    long recordCount = sqlContext.read().options(hudiOpts).format("hudi").load(tablePath).count();
+    long recordCount = sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tablePath).count();
     assertEquals(expected, recordCount);
   }
 
   void assertDistinctRecordCount(long expected, String tablePath, SQLContext sqlContext) {
     sqlContext.clearCache();
-    long recordCount = sqlContext.read().options(hudiOpts).format("hudi").load(tablePath).select("_hoodie_record_key").distinct().count();
+    long recordCount = sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tablePath).select("_hoodie_record_key").distinct().count();
     assertEquals(expected, recordCount);
   }
 
   List<Row> countsPerCommit(String tablePath, SQLContext sqlContext) {
     sqlContext.clearCache();
-    List<Row> rows = sqlContext.read().options(hudiOpts).format("hudi").load(tablePath)
+    List<Row> rows = sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tablePath)
         .groupBy("_hoodie_commit_time").count()
         .sort("_hoodie_commit_time").collectAsList();
     return rows;
@@ -555,7 +555,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   void assertDistanceCount(long expected, String tablePath, SQLContext sqlContext) {
     sqlContext.clearCache();
-    sqlContext.read().options(hudiOpts).format("hudi").load(tablePath).registerTempTable("tmp_trips");
+    sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tablePath).registerTempTable("tmp_trips");
     long recordCount =
         sqlContext.sql("select * from tmp_trips where haversine_distance is not NULL").count();
     assertEquals(expected, recordCount);
@@ -563,7 +563,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   void assertDistanceCountWithExactValue(long expected, String tablePath, SQLContext sqlContext) {
     sqlContext.clearCache();
-    sqlContext.read().options(hudiOpts).format("hudi").load(tablePath).registerTempTable("tmp_trips");
+    sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tablePath).registerTempTable("tmp_trips");
     long recordCount =
         sqlContext.sql("select * from tmp_trips where haversine_distance = 1.0").count();
     assertEquals(expected, recordCount);
@@ -571,7 +571,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   Map<String, Long> getPartitionRecordCount(String basePath, SQLContext sqlContext) {
     sqlContext.clearCache();
-    List<Row> rows = sqlContext.read().options(hudiOpts).format("hudi")
+    List<Row> rows = sqlContext.read().options(hudiOpts).format("org.apache.hudi")
         .load(basePath)
         .groupBy(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
         .count()
@@ -583,7 +583,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   void assertNoPartitionMatch(String basePath, SQLContext sqlContext, String partitionToValidate) {
     sqlContext.clearCache();
-    assertEquals(0, sqlContext.read().options(hudiOpts).format("hudi").load(basePath)
+    assertEquals(0, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(basePath)
         .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " = " + partitionToValidate)
         .count());
   }
