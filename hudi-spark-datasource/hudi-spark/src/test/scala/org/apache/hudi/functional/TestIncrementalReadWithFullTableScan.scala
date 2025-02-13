@@ -76,7 +76,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     for (i <- 1 to 10) {
       val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), perBatchSize)).asScala.toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-      inputDF.write.format("hudi")
+      inputDF.write.format("org.apache.hudi")
         .options(commonOpts)
         .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
         .option("hoodie.clean.commits.retained", "3")
@@ -158,7 +158,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
       endTs: String,
       batchNum: Int,
       fallBackFullTableScan: Boolean): Unit = {
-    val hoodieIncViewDF = spark.read.format("hudi")
+    val hoodieIncViewDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key(), startTs)
       .option(DataSourceReadOptions.END_COMMIT.key(), endTs)

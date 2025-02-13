@@ -373,7 +373,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true)
     val lastDf = dfList.last
 
-    lastDf.write.format("hudi")
+    lastDf.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DELETE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -552,7 +552,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     filteredPartitionDirectories = fileIndex.listFiles(Seq.empty, Seq(dataFilter))
     filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
     assertEquals(0, filteredFilesCount)
-    val df = spark.read.format("hudi")
+    val df = spark.read.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath)
