@@ -131,6 +131,29 @@ parameters:
       - 'org.apache.spark.sql.hudi.command'
       - 'org.apache.spark.sql.hudi.common'
       - 'org.apache.spark.sql.hudi.dml'
+  - name: jacocoModules
+    type: object
+    default:
+      - '!hudi-flink-datasource/hudi-flink1.14.x'
+      - '!hudi-flink-datasource/hudi-flink1.15.x'
+      - '!hudi-flink-datasource/hudi-flink1.16.x'
+      - '!hudi-flink-datasource/hudi-flink1.17.x'
+      - '!hudi-flink-datasource/hudi-flink1.19.x'
+      - '!hudi-flink-datasource/hudi-flink1.20.x'
+      - '!packaging/hudi-aws-bundle'
+      - '!packaging/hudi-cli-bundle'
+      - '!packaging/hudi-datahub-sync-bundle'
+      - '!packaging/hudi-flink-bundle'
+      - '!packaging/hudi-gcp-bundle'
+      - '!packaging/hudi-hadoop-mr-bundle'
+      - '!packaging/hudi-hive-sync-bundle'
+      - '!packaging/hudi-kafka-connect-bundle'
+      - '!packaging/hudi-presto-bundle'
+      - '!packaging/hudi-spark-bundle'
+      - '!packaging/hudi-timeline-server-bundle'
+      - '!packaging/hudi-trino-bundle'
+      - '!packaging/hudi-utilities-bundle'
+      - '!packaging/hudi-utilities-slim-bundle'
 
 variables:
   BUILD_PROFILES: '-Dscala-2.12 -Dspark3.5 -Dflink1.18'
@@ -148,6 +171,7 @@ variables:
   JOB4_SPARK_DML_OTHERS_WILDCARD_SUITES: ${{ join(',',parameters.job4HudiSparkDmlOthersWildcardSuites) }}
   JOB6_UT_MODULES: ${{ join(',',parameters.job6UTModules) }}
   JOB6_FT_MODULES: ${{ join(',',parameters.job6FTModules) }}
+  JACOCO_MODULES: ${{ join(',',parameters.jacocoModules) }}
 
 stages:
   - stage: test
@@ -450,7 +474,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean package'
-              options: $(MVN_OPTS_INSTALL) -Pcopy-files-for-jacoco -pl !hudi-flink-datasource/hudi-flink1.14.x,!hudi-flink-datasource/hudi-flink1.15.x,!hudi-flink-datasource/hudi-flink1.16.x,!hudi-flink-datasource/hudi-flink1.17.x,!hudi-flink-datasource/hudi-flink1.19.x,!hudi-flink-datasource/hudi-flink1.20.x
+              options: $(MVN_OPTS_INSTALL) -Pcopy-files-for-jacoco -pl $(JACOCO_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - script: |
