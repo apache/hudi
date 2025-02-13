@@ -84,6 +84,17 @@ public class HoodieTimer {
   }
 
   /**
+   * tries to end the timer but will not cause a runtime failure like endTimer will if the queue is empty
+   * @return option of the timer duration, empty option if the queue is empty
+   */
+  public Option<Long> tryEndTimer() {
+    if (timeInfoDeque.isEmpty()) {
+      return Option.empty();
+    }
+    return Option.of(timeInfoDeque.pop().stop());
+  }
+
+  /**
    * Creates an instance of {@link HoodieTimer} already started
    */
   public static HoodieTimer start() {
