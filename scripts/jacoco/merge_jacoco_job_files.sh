@@ -18,6 +18,8 @@
 # under the License.
 #
 /bin/bash --version
+shopt -s globstar
 echo "Jacoco CLI jar: $1"
-echo "Hudi source directory: $2"
-java -jar $1 report $2/jacoco.exec --sourcefiles $2/aggregate-sources --classfiles $2/aggregate-classes --html $2/jacoco-html-report --xml $2/jacoco-report.xml
+echo "JaCoCo execution file directory: $2"
+echo "Hudi source directory: $3"
+java -jar $1 merge $2/**/merged-jacoco-*.exec --destfile $3/jacoco.exec

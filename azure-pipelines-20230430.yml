@@ -374,3 +374,37 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+      - job: MergeAndPublishCoverage
+        displayName: 'Merge and Publish JaCoCo Code Coverage'
+        dependsOn:
+          - UT_FT_1
+          - UT_FT_2
+        steps:
+          - task: DownloadBuildArtifacts@0
+            displayName: 'Download JaCoCo Execution Data Files'
+            inputs:
+              buildType: 'current'
+              downloadType: 'specific'
+              downloadPath: '$(System.ArtifactsDirectory)'
+              itemPattern: |
+                **/merged-jacoco-$(Build.BuildId)-*.exec
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '8'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+          - script: |
+              wget https://repo1.maven.org/maven2/org/jacoco/jacoco/0.8.12/jacoco-0.8.12.zip
+              unzip jacoco-0.8.12.zip -d jacoco-lib
+              ls -l jacoco-lib/lib/jacococli.jar
+              ./scripts/jacoco/merge_jacoco_job_files.sh jacoco-lib/lib/jacococli.jar $(System.ArtifactsDirectory) $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - script: |
+              ./scripts/jacoco/generate_jacoco_coverage_report.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+          - task: PublishCodeCoverageResults@1
+            displayName: 'Publish JaCoCo Code Coverage'
+            inputs:
+              codeCoverageTool: 'JaCoCo'
+              summaryFileLocation: '$(Build.SourcesDirectory)/jacoco-report.xml'
+              reportDirectory: '$(Build.SourcesDirectory)/jacoco-html-report'
+              failIfCoverageEmpty: true
