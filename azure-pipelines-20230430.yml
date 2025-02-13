@@ -382,7 +382,7 @@ stages:
         displayName: 'Merge and Publish JaCoCo Code Coverage'
         dependsOn:
           - UT_FT_1
-          - UT_FT_2
+          # - UT_FT_2
         steps:
           - task: DownloadBuildArtifacts@0
             displayName: 'Download JaCoCo Execution Data Files'
