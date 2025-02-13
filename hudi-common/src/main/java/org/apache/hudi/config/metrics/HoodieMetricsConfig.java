@@ -388,6 +388,11 @@ public class HoodieMetricsConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withMetricsReporterMetricNamePrefix(String metricNamePrefix) {
+      hoodieMetricsConfig.setValue(METRICS_REPORTER_PREFIX, metricNamePrefix);
+      return this;
+    }
+
     public Builder withReporterClass(String className) {
       hoodieMetricsConfig.setValue(METRICS_REPORTER_CLASS_NAME, className);
       return this;
