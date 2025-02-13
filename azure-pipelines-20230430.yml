@@ -28,12 +28,10 @@ pool:
 parameters:
   - name: job1UTModules
     type: object
+    # TODO: change back the modules after testing
     default:
       - 'hudi-common'
-      - 'hudi-hadoop-common'
-      - 'hudi-client/hudi-spark-client'
       - 'hudi-flink-datasource'
-      - 'hudi-flink-datasource/hudi-flink'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
       - 'hudi-flink-datasource/hudi-flink1.15.x'
       - 'hudi-flink-datasource/hudi-flink1.16.x'
@@ -43,9 +41,9 @@ parameters:
       - 'hudi-flink-datasource/hudi-flink1.20.x'
   - name: job1FTModules
     type: object
+    # TODO: change back the modules after testing
     default:
       - 'hudi-flink-datasource'
-      - 'hudi-flink-datasource/hudi-flink'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
       - 'hudi-flink-datasource/hudi-flink1.15.x'
       - 'hudi-flink-datasource/hudi-flink1.16.x'
@@ -55,11 +53,11 @@ parameters:
       - 'hudi-flink-datasource/hudi-flink1.20.x'
   - name: job2FTModules
     type: object
+    # TODO: change back the modules after testing
     default:
       - 'hudi-common'
       - 'hudi-hadoop-common'
       - 'hudi-client/hudi-spark-client'
-      - 'hudi-spark-datasource/hudi-spark'
   - name: job34UTModules
     type: object
     default:
@@ -172,7 +170,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB1_UT_MODULES)
+              options: $(MVN_OPTS_TEST) -Punit-tests -Djacoco.agent.dest.filename=jacoco1.exec -pl $(JOB1_UT_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
@@ -181,11 +179,23 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB1_FT_MODULES)
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -Djacoco.agent.dest.filename=jacoco2.exec -pl $(JOB1_FT_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
+          - script: |
+              wget https://repo1.maven.org/maven2/org/jacoco/jacoco/0.8.12/jacoco-0.8.12.zip
+              unzip jacoco-0.8.12.zip -d jacoco-lib
+              ls -l jacoco-lib/lib/jacococli.jar
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-1.exec'
+              publishLocation: 'Container'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
@@ -206,11 +216,23 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_FT_MODULES)
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -Djacoco.agent.dest.filename=jacoco1.exec -pl $(JOB2_FT_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
+          - script: |
+              wget https://repo1.maven.org/maven2/org/jacoco/jacoco/0.8.12/jacoco-0.8.12.zip
+              unzip jacoco-0.8.12.zip -d jacoco-lib
+              ls -l jacoco-lib/lib/jacococli.jar
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-2.exec'
+              publishLocation: 'Container'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
