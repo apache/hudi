@@ -791,85 +791,93 @@ public class StreamSync implements Serializable, Closeable {
                                                                               boolean useRowWriter,
                                                                               HoodieIngestionMetrics metrics,
                                                                               Timer.Context overallTimerContext) {
-    Option<String> scheduledCompactionInstant = Option.empty();
-    // write to hudi and fetch result
-    WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
-    JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
-    Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
+    boolean releaseResourcesInvoked = false;
+    try {
+      Option<String> scheduledCompactionInstant = Option.empty();
+      // write to hudi and fetch result
+      WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
+      JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
+      Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
 
-    // process write status
-    long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
-    long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
-    long totalSuccessfulRecords = totalRecords - totalErrorRecords;
-    LOG.info(String.format("instantTime=%s, totalRecords=%d, totalErrorRecords=%d, totalSuccessfulRecords=%d",
-        instantTime, totalRecords, totalErrorRecords, totalSuccessfulRecords));
-    if (totalRecords == 0) {
-      LOG.info("No new data, perform empty commit.");
-    }
-    boolean hasErrors = totalErrorRecords > 0;
-    if (!hasErrors || cfg.commitOnErrors) {
-      Map<String, String> checkpointCommitMetadata = extractCheckpointMetadata(inputBatch, props, writeClient.getConfig().getWriteVersion().versionCode(), cfg);
-
-      if (hasErrors) {
-        LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
-            + totalErrorRecords + "/" + totalRecords);
+      // process write status
+      long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
+      long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
+      long totalSuccessfulRecords = totalRecords - totalErrorRecords;
+      LOG.info(String.format("instantTime=%s, totalRecords=%d, totalErrorRecords=%d, totalSuccessfulRecords=%d",
+          instantTime, totalRecords, totalErrorRecords, totalSuccessfulRecords));
+      if (totalRecords == 0) {
+        LOG.info("No new data, perform empty commit.");
       }
-      String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-      if (errorTableWriter.isPresent()) {
-        // Commit the error events triggered so far to the error table
-        Option<String> commitedInstantTime = StreamerCheckpointUtils.getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
-        boolean errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
-        if (!errorTableSuccess) {
-          switch (errorWriteFailureStrategy) {
-            case ROLLBACK_COMMIT:
-              LOG.info("Commit " + instantTime + " failed!");
-              writeClient.rollback(instantTime);
-              throw new HoodieStreamerWriteException("Error table commit failed");
-            case LOG_ERROR:
-              LOG.error("Error Table write failed for instant " + instantTime);
-              break;
-            default:
-              throw new HoodieStreamerWriteException("Write failure strategy not implemented for " + errorWriteFailureStrategy);
+      boolean hasErrors = totalErrorRecords > 0;
+      if (!hasErrors || cfg.commitOnErrors) {
+        Map<String, String> checkpointCommitMetadata = extractCheckpointMetadata(inputBatch, props, writeClient.getConfig().getWriteVersion().versionCode(), cfg);
+
+        if (hasErrors) {
+          LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
+              + totalErrorRecords + "/" + totalRecords);
+        }
+        String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
+        if (errorTableWriter.isPresent()) {
+          // Commit the error events triggered so far to the error table
+          Option<String> commitedInstantTime = StreamerCheckpointUtils.getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
+          boolean errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
+          if (!errorTableSuccess) {
+            switch (errorWriteFailureStrategy) {
+              case ROLLBACK_COMMIT:
+                LOG.info("Commit " + instantTime + " failed!");
+                writeClient.rollback(instantTime);
+                throw new HoodieStreamerWriteException("Error table commit failed");
+              case LOG_ERROR:
+                LOG.error("Error Table write failed for instant " + instantTime);
+                break;
+              default:
+                throw new HoodieStreamerWriteException("Write failure strategy not implemented for " + errorWriteFailureStrategy);
+            }
           }
         }
-      }
-      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
-      if (success) {
-        LOG.info("Commit " + instantTime + " successful!");
-        this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch() != null
-            ? inputBatch.getCheckpointForNextBatch().getCheckpointKey() : null);
-        // Schedule compaction if needed
-        if (cfg.isAsyncCompactionEnabled()) {
-          scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());
-        }
+        boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
+        releaseResourcesInvoked = true;
+        if (success) {
+          LOG.info("Commit " + instantTime + " successful!");
+          this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch() != null
+              ? inputBatch.getCheckpointForNextBatch().getCheckpointKey() : null);
+          // Schedule compaction if needed
+          if (cfg.isAsyncCompactionEnabled()) {
+            scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());
+          }
 
-        if ((totalSuccessfulRecords > 0) || cfg.forceEmptyMetaSync) {
-          runMetaSync();
+          if ((totalSuccessfulRecords > 0) || cfg.forceEmptyMetaSync) {
+            runMetaSync();
+          } else {
+            LOG.info(String.format("Not running metaSync totalSuccessfulRecords=%d", totalSuccessfulRecords));
+          }
         } else {
-          LOG.info(String.format("Not running metaSync totalSuccessfulRecords=%d", totalSuccessfulRecords));
+          LOG.info("Commit " + instantTime + " failed!");
+          throw new HoodieStreamerWriteException("Commit " + instantTime + " failed!");
         }
       } else {
-        LOG.info("Commit " + instantTime + " failed!");
-        throw new HoodieStreamerWriteException("Commit " + instantTime + " failed!");
+        LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
+        LOG.error("Printing out the top 100 errors");
+        writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
+          LOG.error("Global error :", ws.getGlobalError());
+          if (ws.getErrors().size() > 0) {
+            ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
+          }
+        });
+        // Rolling back instant
+        writeClient.rollback(instantTime);
+        throw new HoodieStreamerWriteException("Commit " + instantTime + " failed and rolled-back !");
       }
-    } else {
-      LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
-      LOG.error("Printing out the top 100 errors");
-      writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
-        LOG.error("Global error :", ws.getGlobalError());
-        if (ws.getErrors().size() > 0) {
-          ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
-        }
-      });
-      // Rolling back instant
-      writeClient.rollback(instantTime);
-      throw new HoodieStreamerWriteException("Commit " + instantTime + " failed and rolled-back !");
-    }
-    long overallTimeNanos = overallTimerContext != null ? overallTimerContext.stop() : 0;
+      long overallTimeNanos = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
-    // Send DeltaStreamer Metrics
-    metrics.updateStreamerMetrics(overallTimeNanos);
-    return Pair.of(scheduledCompactionInstant, writeStatusRDD);
+      // Send DeltaStreamer Metrics
+      metrics.updateStreamerMetrics(overallTimeNanos);
+      return Pair.of(scheduledCompactionInstant, writeStatusRDD);
+    } finally {
+      if (!releaseResourcesInvoked) {
+        releaseResources(instantTime);
+      }
+    }
   }
 
   Map<String, String> extractCheckpointMetadata(InputBatch inputBatch, TypedProperties props, int versionCode, HoodieStreamer.Config cfg) {
@@ -1082,6 +1090,11 @@ public class StreamSync implements Serializable, Closeable {
     }
     writeClient = new SparkRDDWriteClient<>(hoodieSparkContext, writeConfig, embeddedTimelineService);
     onInitializingHoodieWriteClient.apply(writeClient);
+  }
+
+  protected void releaseResources(String instantTime) {
+    // if commitStats is not invoked, lets release resources from StreamSync layer so that we close all corresponding resources like stopping heart beats for failed writes.
+    writeClient.releaseResources(instantTime);
   }
 
   /**
