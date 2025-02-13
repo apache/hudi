@@ -97,7 +97,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     // Insert Operation
     val records0 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF0 = spark.read.json(spark.sparkContext.parallelize(records0, 2))
-    inputDF0.write.format("hudi")
+    inputDF0.write.format("org.apache.hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
@@ -107,7 +107,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
     // Snapshot query
-    val snapshotDF1 = spark.read.format("hudi")
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath)
     assertEquals(100, snapshotDF1.count())
@@ -129,7 +129,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       updateDf = snapshotDF1.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
     }
 
-    updateDf.write.format("hudi")
+    updateDf.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -163,7 +163,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     val uniqueKeyCnt = inputDF2.select("_row_key").distinct().count()
 
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -173,7 +173,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
 
     // Snapshot Query
-    val snapshotDF3 = spark.read.format("hudi")
+    val snapshotDF3 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath)
     assertEquals(100, snapshotDF3.count()) // still 100, since we only updated
@@ -183,7 +183,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0)
     // Setting HoodieROTablePathFilter here to test whether pathFilter can filter out correctly for IncrementalRelation
     spark.sparkContext.hadoopConfiguration.set("mapreduce.input.pathFilter.class", "org.apache.hudi.hadoop.HoodieROTablePathFilter")
-    val hoodieIncViewDF1 = spark.read.format("hudi")
+    val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, completionTime1)
       .option(DataSourceReadOptions.END_COMMIT.key, completionTime1)
@@ -195,7 +195,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     assertEquals(firstCommit, countsPerCommit(0).get(0))
 
     // Test incremental query has no instant in range
-    val emptyIncDF = spark.read.format("hudi")
+    val emptyIncDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .option(DataSourceReadOptions.END_COMMIT.key, "002")
@@ -205,13 +205,13 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     // Upsert an empty dataFrame
     val emptyRecords = recordsToStrings(dataGen.generateUpdates("003", 0)).asScala.toList
     val emptyDF = spark.read.json(spark.sparkContext.parallelize(emptyRecords, 1))
-    emptyDF.write.format("hudi")
+    emptyDF.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
 
     // pull the latest commit
-    val hoodieIncViewDF2 = spark.read.format("hudi")
+    val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, completionTime3)
       .load(basePath)
@@ -222,7 +222,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     assertEquals(commitInstantTime3, countsPerCommit(0).get(0))
 
     // pull the latest commit within certain partitions
-    val hoodieIncViewDF3 = spark.read.format("hudi")
+    val hoodieIncViewDF3 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, completionTime3)
       .option(DataSourceReadOptions.INCR_PATH_GLOB.key, if (isTimestampBasedKeyGen) "/2016*/*" else "/2016/*/*/*")
@@ -230,7 +230,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     assertEquals(hoodieIncViewDF2
       .filter(col("_hoodie_partition_path").startsWith("2016")).count(), hoodieIncViewDF3.count())
 
-    val timeTravelDF = spark.read.format("hudi")
+    val timeTravelDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, completionTime1)
       .option(DataSourceReadOptions.END_COMMIT.key, completionTime1)
@@ -399,7 +399,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
   }
 
   def assertRecordCount(basePath: String, expectedRecordCount: Long): Unit = {
-    val snapshotDF = spark.read.format("hudi").load(basePath)
+    val snapshotDF = spark.read.format("org.apache.hudi").load(basePath)
     assertEquals(expectedRecordCount, snapshotDF.count())
   }
 }

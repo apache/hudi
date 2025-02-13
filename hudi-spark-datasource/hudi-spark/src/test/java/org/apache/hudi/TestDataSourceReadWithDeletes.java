@@ -107,7 +107,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
     List<WriteStatus> writeStatuses2 = writeData(client, insertTime2, dataset2);
     client.commit(insertTime2, jsc().parallelize(writeStatuses2));
 
-    List<Row> rows = spark().read().format("hudi")
+    List<Row> rows = spark().read().format("org.apache.hudi")
         .option("hoodie.datasource.query.type", "snapshot")
         .load(config.getBasePath())
         .select("id", "name", "age", "ts", "part")

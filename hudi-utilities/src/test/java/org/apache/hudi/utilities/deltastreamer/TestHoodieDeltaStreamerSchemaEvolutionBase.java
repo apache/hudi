@@ -293,7 +293,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected void assertRecordCount(int expected) {
     sqlContext.clearCache();
-    long recordCount = sqlContext.read().format("hudi").load(tableBasePath).count();
+    long recordCount = sqlContext.read().format("org.apache.hudi").load(tableBasePath).count();
     assertEquals(expected, recordCount);
   }
 

@@ -188,7 +188,7 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()
-    latestBatchDf.write.format("hudi")
+    latestBatchDf.write.format("org.apache.hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(saveMode)

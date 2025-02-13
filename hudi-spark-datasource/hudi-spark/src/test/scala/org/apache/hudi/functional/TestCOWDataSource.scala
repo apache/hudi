@@ -139,7 +139,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    spark.read.format("hudi").options(readOpts).load(basePath).count()
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
   }
 
   @Test
@@ -162,7 +162,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val snapshot0 = spark.read.format("hudi").options(readOpts).load(basePath)
+    val snapshot0 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     snapshot0.cache()
     assertEquals(100, snapshot0.count())
 
@@ -198,7 +198,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val snapshot1 = spark.read.format("hudi").options(readOpts).load(basePath)
+    val snapshot1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     snapshot1.cache()
     assertEquals(300, snapshot1.count())
 
@@ -257,7 +257,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     ) ++ writeOpts
 
     writeToHudi(commonOptsNoPreCombine, inputDF)
-    spark.read.format("hudi").options(readOpts).load(basePath).count()
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
 
     val optsWithNoRepeatedTableConfig = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
@@ -266,7 +266,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     ) ++ writeOpts
     // this write should succeed even w/o setting any param for record key, partition path since table config will be re-used.
     writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
-    spark.read.format("hudi").options(readOpts).load(basePath).count()
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
     assertLastCommitIsUpsert()
   }
 
@@ -295,7 +295,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     ) ++ writeOpts
 
     writeToHudi(commonOptsNoPreCombine, inputDF)
-    spark.read.format("hudi").options(readOpts).load(basePath).count()
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
 
     val optsWithNoRepeatedTableConfig = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
@@ -304,7 +304,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     )
     // this write should succeed even w/o though we don't set key gen explicitly.
     writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
-    spark.read.format("hudi").options(readOpts).load(basePath).count()
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
     assertLastCommitIsUpsert()
   }
 
@@ -332,7 +332,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     ) ++ writeOpts
 
     writeToHudi(commonOptsNoPreCombine, inputDF)
-    spark.read.format("hudi").options(readOpts).load(basePath).count()
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
 
     val optsWithNoRepeatedTableConfig = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
@@ -341,7 +341,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     )
     // this write should succeed even w/o though we set key gen explicitly, its the default
     writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
-    spark.read.format("hudi").options(readOpts).load(basePath).count()
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
     assertLastCommitIsUpsert()
   }
 
@@ -381,7 +381,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     ) ++ writeOpts
     writeToHudi(commonOptsNoPreCombine, inputDF)
 
-    spark.read.format("hudi").options(readOpts).load(basePath).count()
+    spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
 
     val optsForBatch2 = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
@@ -424,14 +424,14 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.withColumn("batchId", lit("batch1")).write.format("hudi")
+    inputDF1.withColumn("batchId", lit("batch1")).write.format("org.apache.hudi")
       .options(writeOpts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
 
-    val snapshotDF1 = spark.read.format("hudi")
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath)
     assertEquals(10, snapshotDF1.count())
@@ -443,14 +443,14 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val inputDF4 = inputDF2.withColumn("batchId", lit("batch2"))
       .union(inputDF3.withColumn("batchId", lit("batch3")))
 
-    inputDF4.write.format("hudi")
+    inputDF4.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.INSERT_DROP_DUPS.key(), "true")
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val snapshotDF2 = spark.read.format("hudi")
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath)
     assertEquals(snapshotDF2.count(), 8)
@@ -462,7 +462,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.withColumn("batchId", lit("batch1")).write.format("hudi")
+    inputDF1.withColumn("batchId", lit("batch1")).write.format("org.apache.hudi")
       .options(writeOpts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -470,7 +470,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
 
-    val snapshotDF1 = spark.read.format("hudi")
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath)
     assertEquals(100, snapshotDF1.count())
@@ -481,14 +481,14 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     inputDF4.cache()
     val validRecordsFromBatch2 = inputDF4.count()
 
-    inputDF4.write.format("hudi")
+    inputDF4.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.INSERT_DROP_DUPS.key(), "true")
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val snapshotDF2 = spark.read.format("hudi")
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath)
     assertEquals(snapshotDF2.count(), (validRecordsFromBatch1 + validRecordsFromBatch2))
@@ -512,7 +512,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         .mode(SaveMode.Overwrite)
         .save(basePath)
 
-    assertEquals(200, spark.read.format("hudi").options(readOpts).load(basePath).count())
+    assertEquals(200, spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count())
   }
 
   /**
@@ -541,7 +541,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val dataGen1 = new HoodieTestDataGenerator(Array("2022-01-01"))
     val records1 = recordsToStrings(dataGen1.generateInserts("001", 20)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -550,7 +550,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
     val records2 = recordsToStrings(dataGen2.generateInserts("002", 30)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -622,26 +622,26 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
 
-    val snapshotDF1 = spark.read.format("hudi").options(readOpts).load(basePath)
+    val snapshotDF1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertEquals(100, snapshotDF1.count())
 
     val records2 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val snapshotDF2 = spark.read.format("hudi").options(readOpts).load(basePath)
+    val snapshotDF2 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertEquals(snapshotDF2.count(), 80)
   }
 
@@ -654,7 +654,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     initTestDataGenerator()
     val records1 = recordsToStrings(dataGen.generateInserts("000", 1000)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(CommonOptionUtils.commonOpts)
       .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
       .option("hoodie.clean.failed.writes.policy", "LAZY")
@@ -662,7 +662,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val snapshotDF1 = spark.read.format("hudi").load(basePath)
+    val snapshotDF1 = spark.read.format("org.apache.hudi").load(basePath)
     assertEquals(1000, snapshotDF1.count())
 
     val countDownLatch = new CountDownLatch(2)
@@ -676,7 +676,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
     countDownLatch.await(1, TimeUnit.MINUTES)
 
-    val snapshotDF2 = spark.read.format("hudi").load(basePath)
+    val snapshotDF2 = spark.read.format("org.apache.hudi").load(basePath)
     if (numRetries > 0) {
       assertEquals(snapshotDF2.count(), 3000)
       assertEquals(HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size(), 3)
@@ -700,7 +700,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       val updateDf = spark.read.json(spark.sparkContext.parallelize(sharedUpdates, 2))
       val insertDf = spark.read.json(spark.sparkContext.parallelize(insertRecs, 2))
       try {
-        updateDf.union(insertDf).write.format("hudi")
+        updateDf.union(insertDf).write.format("org.apache.hudi")
           .options(commonOpts)
           .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
           .option("hoodie.clean.failed.writes.policy", "LAZY")
@@ -756,7 +756,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val (writeOpts, readOpts) = getWriterReaderOpts()
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -764,7 +764,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val records2 = recordsToStrings(dataGen.generateInserts("002", 5)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -785,7 +785,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val records1 = dataGen.generateInsertsContainsAllPartitions("001", 20)
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala.toSeq, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -803,21 +803,21 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val records2 = dataGen.generateInsertsContainsAllPartitions("002", 20)
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala.toSeq, 2))
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
     val inputDF3 = spark.read.options(readOpts).json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala.toSeq, 2))
-    inputDF3.write.format("hudi")
+    inputDF3.write.format("org.apache.hudi")
       .options(writeOpts)
       // Use bulk insert here to make sure the files have different file groups.
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val hudiReadPathDF = spark.read.format("hudi")
+    val hudiReadPathDF = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), instantTime)
       .option(DataSourceReadOptions.READ_PATHS.key, record1FilePaths)
@@ -833,7 +833,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -841,7 +841,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val records2 = recordsToStrings(dataGen.generateInserts("002", 5)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
@@ -862,7 +862,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // step1: Write 5 records to hoodie table for partition1 DEFAULT_FIRST_PARTITION_PATH
     val records1 = recordsToStrings(dataGen.generateInsertsForPartition("001", 5, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -871,7 +871,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // step2: Write 7 records to hoodie table for partition2 DEFAULT_SECOND_PARTITION_PATH
     val records2 = recordsToStrings(dataGen.generateInsertsForPartition("002", 7, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -880,13 +880,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // step3: Write 6 records to hoodie table for partition1 DEFAULT_FIRST_PARTITION_PATH using INSERT_OVERWRITE_OPERATION_OPT_VAL
     val records3 = recordsToStrings(dataGen.generateInsertsForPartition("001", 6, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).asScala.toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
-    inputDF3.write.format("hudi")
+    inputDF3.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val allRecords = spark.read.format("hudi").options(readOpts).load(basePath)
+    val allRecords = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     allRecords.registerTempTable("tmpTable")
 
     spark.sql(String.format("select count(*) from tmpTable")).show()
@@ -920,7 +920,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // step1: Write 5 records to hoodie table for partition1 DEFAULT_FIRST_PARTITION_PATH
     val records1 = recordsToStrings(dataGen.generateInsertsForPartition("001", 5, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -929,13 +929,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // step2: Write 7 more records using SaveMode.Overwrite for partition2 DEFAULT_SECOND_PARTITION_PATH
     val records2 = recordsToStrings(dataGen.generateInsertsForPartition("002", 7, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val allRecords = spark.read.format("hudi").options(readOpts).load(basePath)
+    val allRecords = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     allRecords.registerTempTable("tmpTable")
 
     spark.sql(String.format("select count(*) from tmpTable")).show()
@@ -983,12 +983,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val records1 = recordsToStrings(inserts1).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    val hoodieROViewDF1 = spark.read.format("hudi").options(readOpts).load(basePath)
+    val hoodieROViewDF1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertEquals(insert1Cnt, hoodieROViewDF1.count())
 
     val inserts2 = new java.util.ArrayList[HoodieRecord[_]]
@@ -996,16 +996,16 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     inserts2.addAll(inserts2New)
     val records2 = recordsToStrings(inserts2).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "true")
       .mode(SaveMode.Append)
       .save(basePath)
     val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
-    val hoodieROViewDF2 = spark.read.format("hudi").options(readOpts).load(basePath)
+    val hoodieROViewDF2 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertEquals(hoodieROViewDF2.count(), totalUniqueKeyToGenerate)
 
-    val hoodieIncViewDF2 = spark.read.format("hudi")
+    val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime2)
@@ -1028,12 +1028,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       Row("33", "zhangsan", Timestamp.valueOf("1970-01-03 13:31:24"), Date.valueOf("1991-11-09"), BigDecimal.valueOf(3.0), 11, 1))
     val rdd = jsc.parallelize(records)
     val recordsDF = spark.createDataFrame(rdd, schema)
-    recordsDF.write.format("hudi")
+    recordsDF.write.format("org.apache.hudi")
       .options(writeOpts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val recordsReadDF = spark.read.format("hudi").options(readOpts).load(basePath)
+    val recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     recordsReadDF.printSchema()
     recordsReadDF.schema.foreach(f => {
       f.name match {
@@ -1054,7 +1054,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key, "true")
@@ -1083,7 +1083,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     writer.partitionBy("current_ts")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    var recordsReadDF = spark.read.format("hudi").options(readOpts).load(basePath)
+    var recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
 
     assertEquals(0L, recordsReadDF.filter(col("_hoodie_partition_path") =!= col("current_ts").cast("string")).count())
 
@@ -1094,7 +1094,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyyMMdd")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    recordsReadDF = spark.read.format("hudi").options(readOpts).load(basePath)
+    recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
 
     assertEquals(0L, recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count())
@@ -1106,7 +1106,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyyMMdd")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    recordsReadDF = spark.read.format("hudi").options(readOpts).load(basePath)
+    recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!=
       concat(col("driver"), lit("/"), col("rider"), lit("/"), udf_date_format(col("current_ts")))).count() == 0)
 
@@ -1199,7 +1199,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     writer.partitionBy("driver")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    var recordsReadDF = spark.read.format("hudi")
+    var recordsReadDF = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("driver")).count() == 0)
@@ -1224,7 +1224,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     writer.partitionBy("driver")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    var recordsReadDF = spark.read.format("hudi")
+    var recordsReadDF = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("driver")).count() == 0)
@@ -1233,7 +1233,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     writer = getDataFrameWriter(classOf[ComplexKeyGenerator].getName, writeOpts)
     writer.partitionBy("driver", "rider")
       .save(basePath)
-    recordsReadDF = spark.read.format("hudi")
+    recordsReadDF = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= concat(col("driver"), lit("/"), col("rider"))).count() == 0)
@@ -1251,7 +1251,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val recordsReadDF = spark.read.format("hudi").options(readOpts).load(basePath)
+    val recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
   }
@@ -1265,7 +1265,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val recordsReadDF = spark.read.format("hudi")
+    val recordsReadDF = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
@@ -1280,7 +1280,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     writer.partitionBy("")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    var recordsReadDF = spark.read.format("hudi")
+    var recordsReadDF = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
@@ -1290,7 +1290,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     writer.partitionBy("abc")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    recordsReadDF = spark.read.format("hudi")
+    recordsReadDF = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
@@ -1347,7 +1347,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
 
     // Incremental query without "*" in path
-    val hoodieIncViewDF1 = spark.read.format("hudi")
+    val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime2)
@@ -1385,11 +1385,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val records = Array("{\"_row_key\":\"1\",\"name\":\"lisi\",\"timestamp\":1,\"partition\":1}",
       "{\"_row_key\":\"1\",\"name\":\"lisi\",\"timestamp\":1,\"partition\":1}")
     val inputDF = spark.read.schema(schema1.toDDL).json(spark.sparkContext.parallelize(records, 2))
-    inputDF.write.format("hudi")
+    inputDF.write.format("org.apache.hudi")
       .options(opts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    val recordsReadDF = spark.read.format("hudi")
+    val recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath)
     val resultSchema = new StructType(recordsReadDF.schema.filter(p => !p.name.startsWith("_hoodie")).toArray)
     assertEquals(resultSchema, schema1)
@@ -1402,7 +1402,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     val records1 = recordsToStrings(dataGen.generateInsertsContainsAllPartitions("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key, enableDropPartitionColumns)
@@ -1420,7 +1420,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
       .withColumn("shortDecimal", lit(new java.math.BigDecimal(s"2090.0000"))) // create decimalType(8, 4)
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
@@ -1428,7 +1428,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     // update the value of shortDecimal
     val inputDF2 = inputDF1.withColumn("shortDecimal", lit(new java.math.BigDecimal(s"3090.0000")))
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -1524,7 +1524,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // first use the Overwrite mode
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .partitionBy("partition")
       .options(writeOpts)
       .mode(SaveMode.Append)
@@ -1537,7 +1537,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // use the Append mode
     val records2 = recordsToStrings(dataGen.generateInserts("002", 6)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .partitionBy("partition")
       .options(writeOpts)
       .mode(SaveMode.Append)
@@ -1547,7 +1547,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // use the Ignore mode
     val records3 = recordsToStrings(dataGen.generateInserts("003", 7)).asScala.toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
-    inputDF3.write.format("hudi")
+    inputDF3.write.format("org.apache.hudi")
       .partitionBy("partition")
       .options(writeOpts)
       .mode(SaveMode.Ignore)
@@ -1559,7 +1559,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val records4 = recordsToStrings(dataGen.generateInserts("004", 8)).asScala.toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     try {
-      inputDF4.write.format("hudi")
+      inputDF4.write.format("org.apache.hudi")
         .partitionBy("partition")
         .options(writeOpts)
         .mode(SaveMode.ErrorIfExists)
@@ -1571,7 +1571,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // use the Overwrite mode
     val records5 = recordsToStrings(dataGen.generateInserts("005", 9)).asScala.toList
     val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
-    inputDF5.write.format("hudi")
+    inputDF5.write.format("org.apache.hudi")
       .partitionBy("partition")
       .options(writeOpts)
       .mode(SaveMode.Overwrite)
@@ -1619,7 +1619,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
               StructField("partition", LongType, nullable = true) :: Nil)
           val records = List(Row("1", null, 1L, 1L))
           val inputDF = spark.createDataFrame(spark.sparkContext.parallelize(records, 2), schema1)
-          inputDF.write.format("hudi")
+          inputDF.write.format("org.apache.hudi")
             .options(CommonOptionUtils.commonOpts ++ writeOpts)
             .mode(SaveMode.Overwrite)
             .save(basePath)
@@ -1631,7 +1631,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             StructField("partition", LongType, nullable = true) :: Nil)
           val records2 = List(Row("1", null, 1L, 1L))
           val inputDF2 = spark.createDataFrame(spark.sparkContext.parallelize(records2, 2), schema2)
-          inputDF2.write.format("hudi")
+          inputDF2.write.format("org.apache.hudi")
             .options(CommonOptionUtils.commonOpts ++ writeOpts)
             .mode(SaveMode.Append)
             .save(basePath)
@@ -1655,7 +1655,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
               StructField("partition", LongType, nullable = true) :: Nil)
           val records = List(Row("1", Map("foo"-> "bar"), Array(1L), 1L, 1L))
           val inputDF = spark.createDataFrame(spark.sparkContext.parallelize(records, 2), schema1)
-          inputDF.write.format("hudi")
+          inputDF.write.format("org.apache.hudi")
             .options(CommonOptionUtils.commonOpts ++ writeOpts)
             .mode(SaveMode.Overwrite)
             .save(basePath)
@@ -1667,7 +1667,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             StructField("partition", LongType, nullable = true) :: Nil)
           val records2 = List(Row("2", Map.empty, Array.empty, 1L, 1L))
           val inputDF2 = spark.createDataFrame(spark.sparkContext.parallelize(records2, 2), schema2)
-          inputDF2.write.format("hudi")
+          inputDF2.write.format("org.apache.hudi")
             .options(CommonOptionUtils.commonOpts ++ writeOpts)
             .mode(SaveMode.Append)
             .save(basePath)
@@ -1724,7 +1724,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key() -> "true"
     )
 
-    df.write.format("hudi").options(hudiOptions).mode(SaveMode.Overwrite).save(basePath)
+    df.write.format("org.apache.hudi").options(hudiOptions).mode(SaveMode.Overwrite).save(basePath)
 
     hudiOptions = Map[String, String](
       HoodieWriteConfig.TBL_NAME.key() -> "tbl",
@@ -1736,7 +1736,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     )
 
     df.filter(df("id") === 1).
-      write.format("hudi").options(hudiOptions).
+      write.format("org.apache.hudi").options(hudiOptions).
       mode(SaveMode.Append).save(basePath)
     val result = spark.read.format("hudi").load(basePath)
     assertEquals(2, result.count())
