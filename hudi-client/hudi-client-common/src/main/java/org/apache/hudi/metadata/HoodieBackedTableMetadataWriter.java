@@ -48,6 +48,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -158,7 +159,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected final List<MetadataPartitionType> enabledPartitionTypes;
   // Is the MDT bootstrapped and ready to be read from
   private boolean initialized = false;
-  private HoodieMetadataFileSystemView metadataView;
+  private HoodieTableFileSystemView metadataView;
 
   /**
    * Hudi backed table metadata writer.
@@ -215,11 +216,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
   }
 
-  private HoodieMetadataFileSystemView getMetadataView() {
+  private HoodieTableFileSystemView getMetadataView() {
     if (metadataView == null || !metadataView.equals(metadata.getMetadataFileSystemView())) {
       ValidationUtils.checkState(metadata != null, "Metadata table not initialized");
       ValidationUtils.checkState(dataMetaClient != null, "Data table meta client not initialized");
-      metadataView = new HoodieMetadataFileSystemView(dataMetaClient, dataMetaClient.getActiveTimeline(), metadata);
+      metadataView = new HoodieTableFileSystemView(metadata, dataMetaClient, dataMetaClient.getActiveTimeline());
     }
     return metadataView;
   }
@@ -487,7 +488,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // Perform the commit using bulkCommit
       HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
       bulkCommit(instantTimeForPartition, partitionName, records, fileGroupCount);
-      metadataMetaClient.reloadActiveTimeline();
       if (partitionType == COLUMN_STATS) {
         // initialize Col Stats index definition
         updateColumnsToIndexWithColStats(columnsToIndex);
@@ -649,7 +649,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   private List<Pair<String, FileSlice>> getPartitionFileSlicePairs() throws IOException {
     String latestInstant = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
         .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-    try (HoodieMetadataFileSystemView fsView = getMetadataView()) {
+    try (HoodieTableFileSystemView fsView = getMetadataView()) {
       // Collect the list of latest file slices present in each partition
       List<String> partitions = metadata.getAllPartitionPaths();
       fsView.loadAllPartitions();
@@ -661,7 +661,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeRecordIndexPartition() throws IOException {
-    final HoodieMetadataFileSystemView fsView = getMetadataView();
+    final HoodieTableFileSystemView fsView = getMetadataView();
     final HoodieTable hoodieTable = getTable(dataWriteConfig, dataMetaClient);
 
     // Collect the list of latest base files present in each partition
@@ -1174,7 +1174,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
     // Load file system view for only the affected partitions on the driver.
     // By loading on the driver one time, we avoid loading the same metadata multiple times on the executors.
-    HoodieMetadataFileSystemView fsView = getMetadataView();
+    HoodieTableFileSystemView fsView = getMetadataView();
     fsView.loadPartitions(new ArrayList<>(commitMetadata.getWritePartitionPaths()));
     return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition, dataWriteConfig.getMetadataConfig(), fsView, dataMetaClient, engineContext, getEngineType());
   }
@@ -1323,6 +1323,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       writeClient = null;
     }
     if (metadataView != null) {
+      metadataView.close();
       metadataView = null;
     }
   }
@@ -1427,7 +1428,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected HoodieData<HoodieRecord> prepRecords(Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
-    try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(metadataMetaClient)) {
+    try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemViewForMetadataTable(metadataMetaClient)) {
       for (Map.Entry<String, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
         final String partitionName = entry.getKey();
         HoodieData<HoodieRecord> records = entry.getValue();
@@ -1469,15 +1470,15 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * optimizations. We will relax this after MDT code has been hardened.
    */
   @Override
-  public void performTableServices(Option<String> inFlightInstantTimestamp) {
+  public void performTableServices(Option<String> inFlightInstantTimestamp, boolean requiresTimelineRefresh) {
     HoodieTimer metadataTableServicesTimer = HoodieTimer.start();
     boolean allTableServicesExecutedSuccessfullyOrSkipped = true;
     BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient();
     try {
-      // Run any pending table services operations.
-      runPendingTableServicesOperations(writeClient);
+      // Run any pending table services operations and return the active timeline
+      HoodieActiveTimeline activeTimeline = runPendingTableServicesOperationsAndRefreshTimeline(metadataMetaClient, writeClient, requiresTimelineRefresh);
 
-      Option<HoodieInstant> lastInstant = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline()
+      Option<HoodieInstant> lastInstant = activeTimeline.getDeltaCommitTimeline()
           .filterCompletedInstants()
           .lastInstant();
       if (!lastInstant.isPresent()) {
@@ -1508,10 +1509,21 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
   }
 
-  private void runPendingTableServicesOperations(BaseHoodieWriteClient writeClient) {
+  static HoodieActiveTimeline runPendingTableServicesOperationsAndRefreshTimeline(HoodieTableMetaClient metadataMetaClient,
+                                                                                  BaseHoodieWriteClient<?, ?, ?, ?> writeClient,
+                                                                                  boolean initialTimelineRequiresRefresh) {
+    HoodieActiveTimeline activeTimeline = initialTimelineRequiresRefresh ? metadataMetaClient.reloadActiveTimeline() : metadataMetaClient.getActiveTimeline();
     // finish off any pending log compaction or compactions operations if any from previous attempt.
-    writeClient.runAnyPendingCompactions();
-    writeClient.runAnyPendingLogCompactions();
+    boolean ranServices = false;
+    if (activeTimeline.filterPendingCompactionTimeline().countInstants() > 0) {
+      writeClient.runAnyPendingCompactions();
+      ranServices = true;
+    }
+    if (activeTimeline.filterPendingLogCompactionTimeline().countInstants() > 0) {
+      writeClient.runAnyPendingLogCompactions();
+      ranServices = true;
+    }
+    return ranServices ? metadataMetaClient.reloadActiveTimeline() : activeTimeline;
   }
 
   /**
@@ -1559,7 +1571,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   protected void cleanIfNecessary(BaseHoodieWriteClient writeClient) {
-    Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.reloadActiveTimeline()
+    Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.getActiveTimeline()
         .getCommitAndReplaceTimeline().filterCompletedInstants().lastInstant();
     if (lastCompletedCompactionInstant.isPresent()
         && metadataMetaClient.getActiveTimeline().filterCompletedInstants()
@@ -1641,7 +1653,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private HoodieData<HoodieRecord> getRecordIndexReplacedRecords(HoodieReplaceCommitMetadata replaceCommitMetadata) {
-    HoodieMetadataFileSystemView fsView = getMetadataView();
+    HoodieTableFileSystemView fsView = getMetadataView();
     List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = replaceCommitMetadata
         .getPartitionToReplaceFileIds()
         .keySet().stream()

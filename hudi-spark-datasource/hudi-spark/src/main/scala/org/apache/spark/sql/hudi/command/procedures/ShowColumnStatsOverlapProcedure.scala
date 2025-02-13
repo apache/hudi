@@ -258,7 +258,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val basePath = getBasePath(table)
     val metaClient = createMetaClient(jsc, basePath)
     val storage = metaClient.getStorage
-    val globPath = s"$basePath/*/*/*"
+    val globPath = s"$basePath/**"
     val statuses = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(globPath))
 
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
@@ -266,15 +266,9 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val maxInstant = metaClient.createNewInstantTime()
     val instants = timeline.getInstants.iterator().asScala.filter(_.requestedTime < maxInstant)
 
-    val details = new Function[HoodieInstant, org.apache.hudi.common.util.Option[Array[Byte]]]
-      with java.io.Serializable {
-      override def apply(instant: HoodieInstant): HOption[Array[Byte]] = {
-        metaClient.getActiveTimeline.getInstantDetails(instant)
-      }
-    }
-
     val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
+      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(),
+      metaClient.getActiveTimeline.getInstantReader)
 
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
   }

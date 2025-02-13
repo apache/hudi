@@ -60,7 +60,6 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.table.view.SpillableMapBasedFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
@@ -209,7 +208,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   // Properties with source, hoodie client, key generator etc.
   private TypedProperties props;
 
-  private final HoodieTableMetaClient metaClient;
+  private Option<HoodieTableMetaClient> metaClientOpt = Option.empty();
 
   protected transient Option<AsyncMetadataTableValidateService> asyncMetadataTableValidateService;
 
@@ -225,11 +224,16 @@ public class HoodieMetadataTableValidator implements Serializable {
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
 
-    this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
-        .setBasePath(cfg.basePath)
-        .setLoadActiveTimelineOnLoad(true)
-        .build();
+    try {
+      this.metaClientOpt = Option.of(HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+          .setBasePath(cfg.basePath)
+          .setLoadActiveTimelineOnLoad(true)
+          .build());
+    } catch (TableNotFoundException tbe) {
+      // Suppress the TableNotFound exception, table not yet created for a new stream
+      LOG.warn("Data table is not found. Skip current validation for: " + cfg.basePath);
+    }
 
     this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
     this.taskLabels = generateValidationTaskLabels();
@@ -492,9 +496,6 @@ public class HoodieMetadataTableValidator implements Serializable {
     try {
       HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, cfg);
       validator.run();
-    } catch (TableNotFoundException e) {
-      LOG.warn("The Hudi data table is not found: [{}]. "
-          + "Skipping the validation of the metadata table.", cfg.basePath, e);
     } catch (Throwable throwable) {
       LOG.error("Fail to do hoodie metadata table validation for {}", cfg, throwable);
     } finally {
@@ -503,6 +504,10 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   public boolean run() {
+    if (!metaClientOpt.isPresent()) {
+      LOG.warn("Data table is not available to read for now, skip current validation for: " + cfg.basePath);
+      return true;
+    }
     boolean result = false;
     try {
       LOG.info(cfg.toString());
@@ -521,7 +526,6 @@ public class HoodieMetadataTableValidator implements Serializable {
     } catch (Exception e) {
       throw new HoodieException("Unable to do hoodie metadata table validation in " + cfg.basePath, e);
     } finally {
-
       if (asyncMetadataTableValidateService.isPresent()) {
         asyncMetadataTableValidateService.get().shutdown(true);
       }
@@ -555,6 +559,11 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   public boolean doMetadataTableValidation() {
     boolean finalResult = true;
+    if (!metaClientOpt.isPresent()) {
+      LOG.warn("Data table is not available to read for now, skip current validation.");
+      return true;
+    }
+    HoodieTableMetaClient metaClient = this.metaClientOpt.get();
     metaClient.reloadActiveTimeline();
     StoragePath basePath = metaClient.getBasePath();
     Set<String> baseFilesForCleaning = Collections.emptySet();
@@ -696,7 +705,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           .build();
       int finishedInstants = mdtMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
       if (finishedInstants == 0) {
-        if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+        if (metaClientOpt.get().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
           LOG.info("There is no completed commit in both metadata table and corresponding data table: {}", taskLabels);
           return false;
         } else {
@@ -828,11 +837,11 @@ public class HoodieMetadataTableValidator implements Serializable {
   /**
    * Compare the file listing and index data between metadata table and fileSystem.
    * For now, validate five kinds of apis:
-   * 1. HoodieMetadataFileSystemView::getLatestFileSlices
-   * 2. HoodieMetadataFileSystemView::getLatestBaseFiles
-   * 3. HoodieMetadataFileSystemView::getAllFileGroups and HoodieMetadataFileSystemView::getAllFileSlices
-   * 4. HoodieBackedTableMetadata::getColumnStats
-   * 5. HoodieBackedTableMetadata::getBloomFilters
+   * 1. HoodieTableFileSystemView::getLatestFileSlices
+   * 2. HoodieTableFileSystemView::getLatestBaseFiles
+   * 3. HoodieTableFileSystemView::getAllFileGroups and HoodieTableFileSystemView::getAllFileSlices
+   * 4. HoodieTableFileSystemView::getColumnStats
+   * 5. HoodieTableFileSystemView::getBloomFilters
    *
    * @param metadataTableBasedContext Validation context containing information based on metadata table
    * @param fsBasedContext            Validation context containing information based on the file system
@@ -996,7 +1005,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
         AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()), metadataTableBasedContext.getMetadataConfig(),
-        metaClient, false);
+        metaClientOpt.get(), false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
         partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(
             metadataTableBasedContext.allColumnNameList).asScala().toSeq(), scala.Option.empty(), false)
@@ -1750,10 +1759,10 @@ public class HoodieMetadataTableValidator implements Serializable {
         FileSystemViewStorageConfig viewConf = FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();
         ValidationUtils.checkArgument(viewConf.getStorageType().name().equals(viewStorageType), "View storage type not reflected");
         HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
-        this.fileSystemView = getFileSystemView(engineContext,
-            metaClient, metadataConfig, viewConf, commonConfig);
         this.tableMetadata = HoodieTableMetadata.create(
             engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
+        this.fileSystemView = getFileSystemView(engineContext,
+            metaClient, metadataConfig, viewConf, commonConfig);
         if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
           this.allColumnNameList = getAllColumnNames();
         }
@@ -1765,18 +1774,17 @@ public class HoodieMetadataTableValidator implements Serializable {
     private HoodieTableFileSystemView getFileSystemView(HoodieEngineContext context,
                                                         HoodieTableMetaClient metaClient, HoodieMetadataConfig metadataConfig,
                                                         FileSystemViewStorageConfig viewConf, HoodieCommonConfig commonConfig) {
-      HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
       switch (viewConf.getStorageType()) {
         case SPILLABLE_DISK:
           LOG.debug("Creating Spillable Disk based Table View");
-          return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf, commonConfig);
+          break;
         case MEMORY:
           LOG.debug("Creating in-memory based Table View");
-          return FileSystemViewManager.createInMemoryFileSystemView(context,
-              metaClient, metadataConfig);
+          break;
         default:
           throw new HoodieException("Unsupported storage type " + viewConf.getStorageType() + ", used with HoodieMetadataTableValidator");
       }
+      return (HoodieTableFileSystemView) FileSystemViewManager.createViewManager(context, metadataConfig, viewConf, commonConfig, unused -> tableMetadata).getFileSystemView(metaClient);
     }
 
     public HoodieTableMetaClient getMetaClient() {

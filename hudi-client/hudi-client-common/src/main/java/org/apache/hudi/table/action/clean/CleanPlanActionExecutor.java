@@ -25,9 +25,11 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -48,9 +50,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
-import static org.apache.hudi.common.util.MapUtils.nonEmpty;
 import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
+import static org.apache.hudi.common.util.MapUtils.nonEmpty;
 
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
 
@@ -129,7 +130,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
 
       Map<String, List<HoodieCleanFileInfo>> cleanOps = new HashMap<>();
       List<String> partitionsToDelete = new ArrayList<>();
-      boolean shouldUseBatchLookup = shouldUseBatchLookup(table.getMetaClient().getTableConfig(), config);
+      boolean shouldUseBatchLookup = table.getMetaClient().getTableConfig().isMetadataTableAvailable();
       for (int i = 0; i < partitionsToClean.size(); i += cleanerParallelism) {
         // Handles at most 'cleanerParallelism' number of partitions once at a time to avoid overlarge memory pressure to the timeline server
         // (remote or local embedded), thus to reduce the risk of an OOM exception.
@@ -183,6 +184,27 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
    * @return Cleaner Plan if generated
    */
   protected Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
+    // Check if the last clean completed successfully and wrote out its metadata. If not, it should be retried.
+    Option<HoodieInstant> lastClean = table.getCleanTimeline().filterCompletedInstants().lastInstant();
+    if (lastClean.isPresent()) {
+      HoodieInstant cleanInstant = lastClean.get();
+      HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+      if (activeTimeline.isEmpty(cleanInstant)) {
+        activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
+        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+        try {
+          Option<byte[]> content = activeTimeline.getInstantDetails(cleanPlanInstant);
+          // Deserialize plan if it is non-empty
+          if (content.map(bytes -> bytes.length > 0).orElse(false)) {
+            return Option.of(TimelineMetadataUtils.deserializeCleanerPlan(content.get()));
+          } else {
+            return Option.of(new HoodieCleanerPlan());
+          }
+        } catch (IOException ex) {
+          throw new HoodieIOException("Failed to parse cleaner plan", ex);
+        }
+      }
+    }
     final HoodieCleanerPlan cleanerPlan = requestClean(context);
     Option<HoodieCleanerPlan> option = Option.empty();
     if (nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())

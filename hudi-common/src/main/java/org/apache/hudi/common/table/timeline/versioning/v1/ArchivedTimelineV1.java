@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
@@ -34,8 +35,9 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.Serializable;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,7 +48,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchivedTimeline {
+public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchivedTimeline, HoodieInstantReader {
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
   private static final String ACTION_TYPE_KEY = "actionType";
   private static final String ACTION_STATE = "actionState";
@@ -67,7 +69,6 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
     setInstants(this.loadInstants(false));
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
   }
 
   /**
@@ -80,7 +81,6 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
         record -> HoodieInstant.State.COMPLETED.toString().equals(record.get(ACTION_STATE).toString())));
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
   }
 
   /**
@@ -89,6 +89,11 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
    * @deprecated
    */
   public ArchivedTimelineV1() {
+  }
+
+  @Override
+  public HoodieInstantReader getInstantReader() {
+    return this;
   }
 
   /**
@@ -103,6 +108,11 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return Option.ofNullable(readCommits.get(instant.requestedTime()));
+  }
+
+  @Override
+  public InputStream getContentStream(HoodieInstant instant) {
+    return new ByteArrayInputStream(getInstantDetails(instant).orElseGet(() -> new byte[0]));
   }
 
   public static StoragePath getArchiveLogPath(StoragePath archiveFolder) {

@@ -20,6 +20,7 @@ package org.apache.hudi.table.marker;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -69,7 +70,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
       timelineService = new TimelineService(localEngineContext, HadoopFSUtils.getStorageConf(),
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
           storage,
-          FileSystemViewManager.createViewManager(localEngineContext, storageConf, HoodieCommonConfig.newBuilder().build()));
+          FileSystemViewManager.createViewManager(localEngineContext, HoodieMetadataConfig.newBuilder().build(), storageConf, HoodieCommonConfig.newBuilder().build()));
       timelineService.startService();
     } catch (Exception ex) {
       throw new RuntimeException(ex);

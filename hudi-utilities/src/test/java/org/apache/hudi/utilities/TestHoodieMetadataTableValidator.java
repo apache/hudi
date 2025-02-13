@@ -133,6 +133,12 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   }
 
   @Test
+  public void testValidationWithoutDataTable() throws IOException {
+    storage.deleteDirectory(metaClient.getBasePath());
+    validateSecondaryIndex();
+  }
+
+  @Test
   public void testAggregateColumnStats() {
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range1 = HoodieColumnRangeMetadata.<Comparable>create(
         "path/to/file1", "col1", 1, 5, 0, 10, 100, 200);
@@ -607,8 +613,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     Path tempFolderPath = new Path(tempFolder);
 
     // lets move one of the log files from latest file slice to the temp dir. so validation w/ latest file slice should fail.
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
-        metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
     FileSlice latestFileSlice = fsView.getLatestFileSlices(StringUtils.EMPTY_STRING).filter(fileSlice -> {
       return fileSlice.getLogFiles().count() > 0;
     }).collect(Collectors.toList()).get(0);
@@ -642,8 +647,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     // no exception should be thrown
 
     // let's delete one of the log files from 1st commit and so FS based listing and MDT based listing diverges when all file slices are validated.
-    fsView = new HoodieTableFileSystemView(
-        metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
+    fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
     HoodieFileGroup fileGroup = fsView.getAllFileGroups(StringUtils.EMPTY_STRING).collect(Collectors.toList()).get(0);
     List<FileSlice> allFileSlices = fileGroup.getAllFileSlices().collect(Collectors.toList());
     FileSlice earliestFileSlice = allFileSlices.get(allFileSlices.size() - 1);
@@ -1177,7 +1181,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertFalse(validator.hasValidationFailure());
 
     // lets override one of the latest base file w/ another. so that file slice validation succeeds, but record index comparison fails.
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext,
         metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
     List<HoodieBaseFile> allBaseFiles = fsView.getLatestBaseFiles(StringUtils.EMPTY_STRING).collect(Collectors.toList());
 

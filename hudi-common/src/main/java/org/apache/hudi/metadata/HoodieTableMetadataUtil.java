@@ -45,6 +45,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
@@ -1385,7 +1386,7 @@ public class HoodieTableMetadataUtil {
    * @param metaClient - Metadata table meta client
    * @return Filesystem view for the metadata table
    */
-  public static HoodieTableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) {
+  public static HoodieTableFileSystemView getFileSystemViewForMetadataTable(HoodieTableMetaClient metaClient) {
     // If there are no commits on the metadata table then the table's
     // default FileSystemView will not return any file slices even
     // though we may have initialized them.
@@ -1394,9 +1395,10 @@ public class HoodieTableMetadataUtil {
     if (timeline.empty()) {
       final HoodieInstant instant = metaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
           metaClient.createNewInstantTime(false));
-      timeline = factory.createDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline()::getInstantDetails);
+      timeline = factory.createDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline());
     }
-    return new HoodieTableFileSystemView(metaClient, timeline);
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    return HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metaClient, timeline);
   }
 
   /**
@@ -1416,7 +1418,7 @@ public class HoodieTableMetadataUtil {
                                                         boolean mergeFileSlices) {
     HoodieTableFileSystemView fsView = null;
     try {
-      fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
+      fsView = fileSystemView.orElseGet(() -> getFileSystemViewForMetadataTable(metaClient));
       Stream<FileSlice> fileSliceStream;
       if (mergeFileSlices) {
         if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
@@ -1451,7 +1453,7 @@ public class HoodieTableMetadataUtil {
                                                                               String partition) {
     HoodieTableFileSystemView fsView = null;
     try {
-      fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
+      fsView = fileSystemView.orElseGet(() -> getFileSystemViewForMetadataTable(metaClient));
       Stream<FileSlice> fileSliceStream = fsView.getLatestFileSlicesIncludingInflight(partition);
       return fileSliceStream
           .sorted(Comparator.comparing(FileSlice::getFileId))
