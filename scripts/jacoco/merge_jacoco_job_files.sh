@@ -20,6 +20,6 @@
 /bin/bash --version
 shopt -s globstar
 echo "Jacoco CLI jar: $1"
-echo "JaCoCo execution file directory: $2"
+echo "JaCoCo execution file pattern: $2"
 echo "Hudi source directory: $3"
-java -jar $1 merge $2/**/merged-jacoco-*.exec --destfile $3/jacoco.exec
+java -jar $1 merge $2 --destfile $3/jacoco.exec

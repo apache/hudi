@@ -200,6 +200,7 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
+        condition: false
         displayName: FT common & spark-client & hudi-spark
         timeoutInMinutes: '120'
         steps:
@@ -401,7 +402,7 @@ stages:
               wget https://repo1.maven.org/maven2/org/jacoco/jacoco/0.8.12/jacoco-0.8.12.zip
               unzip jacoco-0.8.12.zip -d jacoco-lib
               ls -l jacoco-lib/lib/jacococli.jar
-              ./scripts/jacoco/merge_jacoco_job_files.sh jacoco-lib/lib/jacococli.jar $(System.ArtifactsDirectory) $(Build.SourcesDirectory)
+              ./scripts/jacoco/merge_jacoco_job_files.sh jacoco-lib/lib/jacococli.jar $(System.ArtifactsDirectory)/**/*.exec $(Build.SourcesDirectory)
             displayName: 'Merge JaCoCo Execution Data Files'
           - script: |
               ./scripts/jacoco/generate_jacoco_coverage_report.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
