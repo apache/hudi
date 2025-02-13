@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, H
 import org.apache.hudi.config.HoodieLockConfig
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
+
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest

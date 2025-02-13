@@ -28,6 +28,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.index.bucket.BucketIdentifier
 import org.apache.hudi.keygen.KeyGenerator
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions
@@ -36,7 +37,7 @@ import org.apache.spark.sql.types.{DoubleType, FloatType}
 import org.apache.spark.util.collection.BitSet
 import org.slf4j.LoggerFactory
 
-import scala.collection.{JavaConverters, mutable}
+import scala.collection.{mutable, JavaConverters}
 
 class BucketIndexSupport(spark: SparkSession,
                          metadataConfig: HoodieMetadataConfig,

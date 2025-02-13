@@ -20,8 +20,9 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparison}
+import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -30,6 +31,7 @@ import org.joda.time.DateTime
 import java.io.IOException
 import java.sql.{Connection, DriverManager, ResultSet, SQLException}
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder with Logging {

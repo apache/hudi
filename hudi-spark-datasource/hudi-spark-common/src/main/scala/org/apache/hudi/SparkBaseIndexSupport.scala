@@ -23,17 +23,16 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
-import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, In, Literal}
-import org.apache.spark.sql.hudi.DataSkippingUtils.{LITERAL_TRUE_EXPR, translateIntoColumnStatsIndexFilterExpr}
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 
-import java.util.concurrent.atomic.AtomicBoolean
+import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression}
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
+
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.{break, breakable}
 import scala.util.control.NonFatal

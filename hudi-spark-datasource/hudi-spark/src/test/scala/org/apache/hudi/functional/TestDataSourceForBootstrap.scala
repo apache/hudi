@@ -29,6 +29,7 @@ import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
+
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SparkSession}
@@ -41,6 +42,7 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.time.Instant
 import java.util.Collections
+
 import scala.collection.JavaConverters._
 
 class TestDataSourceForBootstrap {

@@ -23,11 +23,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.util.ClusteringUtils
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBuilder {

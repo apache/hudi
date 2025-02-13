@@ -20,7 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.SparkFilterHelper.convertFilter
-import org.apache.hudi.expression.{Expression, NameReference, Predicates, Literal => HLiteral}
+import org.apache.hudi.expression.{Expression, Literal => HLiteral, NameReference, Predicates}
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute

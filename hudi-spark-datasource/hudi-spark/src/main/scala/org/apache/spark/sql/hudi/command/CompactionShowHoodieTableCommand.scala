@@ -19,11 +19,11 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.SparkAdapterSupport
 
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
 import org.apache.spark.sql.hudi.command.procedures.ShowCompactionProcedure
-import org.apache.spark.sql.{Row, SparkSession}
 
 @Deprecated
 case class CompactionShowHoodieTableCommand(table: CatalogTable, limit: Int)

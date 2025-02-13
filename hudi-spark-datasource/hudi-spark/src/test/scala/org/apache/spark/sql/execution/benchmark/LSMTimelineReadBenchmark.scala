@@ -20,18 +20,18 @@ package org.apache.spark.sql.execution.benchmark
 
 import org.apache.hudi.DummyActiveAction
 import org.apache.hudi.client.common.HoodieJavaEngineContext
+import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{ActiveAction, HoodieInstant, LSMTimeline}
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
-import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_GENERATOR, TIMELINE_FACTORY}
+import org.apache.hudi.common.table.timeline.versioning.v2.CompletionTimeQueryViewV2
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
+import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_GENERATOR, TIMELINE_FACTORY}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.table.HoodieJavaTable
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter
-import org.apache.hudi.common.table.timeline.versioning.v2.CompletionTimeQueryViewV2
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
 
 import java.util

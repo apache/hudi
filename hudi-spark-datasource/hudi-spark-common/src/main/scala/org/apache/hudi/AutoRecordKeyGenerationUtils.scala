@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieKeyGeneratorException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+
 import org.slf4j.LoggerFactory
 
 object AutoRecordKeyGenerationUtils {

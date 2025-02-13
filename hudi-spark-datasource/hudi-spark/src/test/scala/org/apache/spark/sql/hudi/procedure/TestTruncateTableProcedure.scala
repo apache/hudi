@@ -17,10 +17,11 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
+import org.apache.hadoop.fs.Path
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import scala.collection.JavaConverters._

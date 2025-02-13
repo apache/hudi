@@ -18,36 +18,32 @@
 
 package org.apache.hudi.functional
 
-
-import org.apache.avro.{JsonProperties, Schema}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, PartitionStatsIndexSupport}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogFile, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
-import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.spark.sql._
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, PartitionStatsIndexSupport}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
-import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
-import org.apache.hudi.util.JavaScalaConverters.convertScalaListToJavaList
-import org.apache.hudi.util.Lazy
-import org.apache.spark.sql.functions.typedLit
-import org.apache.spark.sql.functions.{lit, struct, typedLit}
-import org.apache.spark.sql.types._
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.testutils.LogFileColStatsTestUtil
+
+import org.apache.avro.Schema
+import org.apache.spark.sql._
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.catalyst.dsl.expressions.StringToAttributeConversionHelper
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.apache.spark.sql.functions.lit
+import org.apache.spark.sql.functions.typedLit
+import org.apache.spark.sql.types._
 import org.junit.jupiter.api._
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.provider.Arguments
 
 import java.math.BigInteger
@@ -55,6 +51,7 @@ import java.sql.{Date, Timestamp}
 import java.util
 import java.util.List
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.util.Random

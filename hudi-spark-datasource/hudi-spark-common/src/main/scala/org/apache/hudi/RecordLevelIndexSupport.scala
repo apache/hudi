@@ -30,12 +30,13 @@ import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Cast, EqualTo, Expression, In, Literal}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
+import scala.collection.{mutable, JavaConverters}
 import scala.collection.JavaConverters._
-import scala.collection.{JavaConverters, mutable}
 
 class RecordLevelIndexSupport(spark: SparkSession,
                               metadataConfig: HoodieMetadataConfig,

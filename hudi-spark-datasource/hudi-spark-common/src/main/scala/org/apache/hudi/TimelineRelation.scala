@@ -17,15 +17,14 @@
 
 package org.apache.hudi
 
-
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, TimelineUtils}
 import org.apache.hudi.common.util.CommitUtils
 
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
-import org.apache.spark.sql.{Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer

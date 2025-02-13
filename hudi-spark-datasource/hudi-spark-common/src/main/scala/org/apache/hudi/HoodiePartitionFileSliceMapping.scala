@@ -20,6 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.model.FileSlice
+
 import org.apache.spark.sql.catalyst.InternalRow
 
 class HoodiePartitionFileSliceMapping(values: InternalRow,

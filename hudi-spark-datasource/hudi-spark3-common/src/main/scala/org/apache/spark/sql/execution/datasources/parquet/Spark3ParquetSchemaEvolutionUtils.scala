@@ -20,6 +20,8 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.table.timeline.TimelineLayout
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.common.util
 import org.apache.hudi.common.util.InternalSchemaCache
 import org.apache.hudi.common.util.collection.Pair
@@ -27,19 +29,18 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.table.timeline.TimelineLayout
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.spark.sql.HoodieSchemaUtils
-import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Cast, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.parquet.Spark3ParquetSchemaEvolutionUtils.pruneInternalSchema
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
+import org.apache.spark.sql.types.{AtomicType, DataType, StructType}
 
 import java.time.ZoneId
+
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
