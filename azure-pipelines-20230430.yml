@@ -404,6 +404,14 @@ stages:
               ls -l jacoco-lib/lib/jacococli.jar
               ./scripts/jacoco/merge_jacoco_job_files.sh jacoco-lib/lib/jacococli.jar $(System.ArtifactsDirectory)/**/*.exec $(Build.SourcesDirectory)
             displayName: 'Merge JaCoCo Execution Data Files'
+          - task: Maven@4
+            displayName: 'Aggregate Source and Class Files for JaCoCo'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -Pcopy-files-for-jacoco -pl !hudi-flink-datasource/hudi-flink1.15.x,!hudi-flink-datasource/hudi-flink1.16.x,!hudi-flink-datasource/hudi-flink1.17.x,!hudi-flink-datasource/hudi-flink1.18.x,!hudi-flink-datasource/hudi-flink1.19.x,!hudi-flink-datasource/hudi-flink1.20.x
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
           - script: |
               ./scripts/jacoco/generate_jacoco_coverage_report.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
           - task: PublishCodeCoverageResults@1
