@@ -73,9 +73,7 @@ object ShowIndexes {
   def getOutputAttrs: Seq[Attribute] = Seq(
     AttributeReference("index_name", StringType, nullable = false)(),
     AttributeReference("col_name", StringType, nullable = false)(),
-    AttributeReference("index_type", StringType, nullable = false)(),
-    AttributeReference("col_options", StringType, nullable = true)(),
-    AttributeReference("options", StringType, nullable = true)()
+    AttributeReference("index_type", StringType, nullable = false)()
   )
 }
 
