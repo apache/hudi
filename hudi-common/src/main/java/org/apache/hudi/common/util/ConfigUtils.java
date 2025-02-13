@@ -318,6 +318,17 @@ public class ConfigUtils {
     return Option.empty();
   }
 
+  public static <T> T getRawValueWithAltKeys(TypedProperties props, ConfigProperty<T> configProperty, boolean useDefaultValue) {
+    Option<T> rawValue = (Option<T>) getRawValueWithAltKeys(props, configProperty);
+    if (rawValue.isPresent()) {
+      return rawValue.get();
+    }
+    if (useDefaultValue) {
+      return configProperty.defaultValue();
+    }
+    throw new IllegalArgumentException("Property " + configProperty.key() + " not found");
+  }
+
   /**
    * Gets the String value for a {@link ConfigProperty} config from properties. The key and
    * alternative keys are used to fetch the config. If the config is not found, an
