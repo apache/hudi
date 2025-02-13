@@ -96,7 +96,7 @@ public class HoodieCompactor {
     public int retry = 0;
     @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after compaction", required = false)
     public Boolean skipClean = true;
-    @Parameter(names = {"--schedule", "-sc"}, description = "Schedule compaction", required = false)
+    @Parameter(names = {"--schedule", "-sch"}, description = "Schedule compaction", required = false)
     public Boolean runSchedule = false;
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" means make a compact plan; "
         + "Set \"execute\" means execute a compact plan at given instant which means --instant-time is needed here; "
