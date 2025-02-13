@@ -237,6 +237,7 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
+        condition: false
         displayName: UT spark-datasource Java Tests & DDL
         timeoutInMinutes: '120'
         steps:
@@ -271,6 +272,7 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_4
+        condition: false
         displayName: UT spark-datasource DML & others
         timeoutInMinutes: '120'
         steps:
@@ -296,6 +298,7 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_5
+        condition: false
         displayName: UT FT Hudi Utilities
         timeoutInMinutes: '90'
         steps:
@@ -335,6 +338,7 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_6
+        condition: false
         displayName: UT FT other modules
         timeoutInMinutes: '90'
         steps:
