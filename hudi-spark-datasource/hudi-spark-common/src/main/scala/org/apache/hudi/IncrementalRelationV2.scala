@@ -25,14 +25,13 @@ import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, Hoo
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
-
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.GlobPattern
 import org.apache.spark.rdd.RDD
@@ -141,9 +140,11 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
 
       // create Replaced file group
       val replacedInstants = commitsToReturn.filter(_.getAction.equals(HoodieTimeline.REPLACE_COMMIT_ACTION))
+      val layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion)
+
       val replacedFile = replacedInstants.flatMap { instant =>
-        val replaceMetadata = HoodieReplaceCommitMetadata.
-          fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
+        val replaceMetadata = layout.getCommitMetadataSerDe.deserialize(
+          instant, metaClient.getActiveTimeline.getInstantContentStream(instant), classOf[HoodieReplaceCommitMetadata])
         replaceMetadata.getPartitionToReplaceFileIds.entrySet().asScala.flatMap { entry =>
           entry.getValue.asScala.map { e =>
             val fullPath = FSUtils.constructAbsolutePath(basePath, entry.getKey).toString
@@ -154,7 +155,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
 
       for (commit <- commitsToReturn) {
         val metadata: HoodieCommitMetadata = metaClient.getCommitMetadataSerDe.deserialize(commit,
-          commitTimeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
+          commitTimeline.getInstantContentStream(commit), classOf[HoodieCommitMetadata])
 
         if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.requestedTime) {
           metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>

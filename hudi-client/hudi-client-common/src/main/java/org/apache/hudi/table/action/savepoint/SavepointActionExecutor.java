@@ -80,12 +80,12 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         try {
           if (instant.isCompleted()) {
             return deserializeHoodieCleanMetadata(
-                table.getActiveTimeline().getInstantDetails(instant).get())
+                table.getActiveTimeline().getInstantContentStream(instant))
                 .getEarliestCommitToRetain();
           } else {
             // clean is pending or inflight
             return deserializeCleanerPlan(
-                table.getActiveTimeline().getInstantDetails(instantGenerator.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime())).get())
+                table.getActiveTimeline().getInstantContentStream(instantGenerator.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime())))
                 .getEarliestInstantToRetain().getTimestamp();
           }
         } catch (IOException e) {

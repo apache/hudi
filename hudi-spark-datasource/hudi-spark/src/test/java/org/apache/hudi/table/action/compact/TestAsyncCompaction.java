@@ -248,8 +248,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
 
       // validate the compaction plan does not include pending log files.
       HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
-          metaClient.reloadActiveTimeline()
-              .readCompactionPlanAsBytes(INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime)).get());
+          metaClient.reloadActiveTimeline().getInstantContentStream(INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime)));
       assertTrue(compactionPlan.getOperations().stream()
               .noneMatch(op -> op.getDeltaFilePaths().stream().anyMatch(deltaFile -> getCommitTime(deltaFile).equals(pendingInstantTime))),
           "compaction plan should not include pending log files. Data file paths " + new HashSet<>(compactionPlan.getOperations()));

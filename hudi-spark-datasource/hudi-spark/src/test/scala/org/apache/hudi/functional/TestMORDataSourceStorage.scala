@@ -335,7 +335,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
                                         shouldBaseFileInstantTimeMatch: Boolean = true): List[HoodieLogFile] = {
     val instant = metaClient.getActiveTimeline.getDeltaCommitTimeline.lastInstant().get()
     val commitMetadata = metaClient.getCommitMetadataSerDe.deserialize(
-      instant, metaClient.getActiveTimeline.getInstantDetails(instant).get,
+      instant, metaClient.getActiveTimeline.getInstantContentStream(instant),
       classOf[HoodieCommitMetadata])
     val logFileList: List[HoodieLogFile] = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath)
       .asScala.values

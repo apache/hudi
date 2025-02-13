@@ -78,7 +78,7 @@ public class CleansCommand {
     List<Comparable[]> rows = new ArrayList<>();
     for (HoodieInstant clean : cleans) {
       HoodieCleanMetadata cleanMetadata =
-          TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
+          TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantContentStream(clean));
       rows.add(new Comparable[] {clean.requestedTime(), cleanMetadata.getEarliestCommitToRetain(),
           cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
     }
@@ -110,7 +110,7 @@ public class CleansCommand {
     }
 
     HoodieCleanMetadata cleanMetadata =
-        TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(cleanInstant).get());
+        TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantContentStream(cleanInstant));
     List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, HoodieCleanPartitionMetadata> entry : cleanMetadata.getPartitionMetadata().entrySet()) {
       String path = entry.getKey();

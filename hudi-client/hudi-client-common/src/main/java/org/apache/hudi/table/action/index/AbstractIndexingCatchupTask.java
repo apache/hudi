@@ -122,12 +122,12 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
               break;
             case RESTORE_ACTION:
               HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
-                  metaClient.getActiveTimeline().getInstantDetails(instant).get());
+                  metaClient.getActiveTimeline().getInstantContentStream(instant));
               metadataWriter.update(restoreMetadata, instant.requestedTime());
               break;
             case ROLLBACK_ACTION:
               HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-                  metaClient.getActiveTimeline().getInstantDetails(instant).get());
+                  metaClient.getActiveTimeline().getInstantContentStream(instant));
               metadataWriter.update(rollbackMetadata, instant.requestedTime());
               break;
             default:

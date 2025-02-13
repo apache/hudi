@@ -1589,7 +1589,7 @@ public class HoodieMetadataTableValidator implements Serializable {
               HoodieInstant instant =  completedInstantsTimeline.filter(i -> i.requestedTime().equals(instantTime))
                   .firstInstant().get();
               HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
-                  instant, completedInstantsTimeline.getInstantDetails(instant).get(),
+                  instant, completedInstantsTimeline.getInstantContentStream(instant),
                   HoodieCommitMetadata.class
               );
               committedFilesMap.put(

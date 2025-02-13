@@ -248,9 +248,9 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
       .save(basePath)
     val metaClient: HoodieTableMetaClient = createMetaClient(basePath)
     val activeTimeline = metaClient.getActiveTimeline
-    assertNotNull(activeTimeline.getInstantDetails(activeTimeline.lastInstant().get()))
+    assertNotNull(activeTimeline.getInstantContentStream(activeTimeline.lastInstant().get()))
     try {
-      activeTimeline.getInstantDetails(HoodieTestUtils.INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT,
+      activeTimeline.getInstantContentStream(HoodieTestUtils.INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT,
         HoodieTimeline.CLUSTERING_ACTION, metaClient.createNewInstantTime()))
     } catch {
       // org.apache.hudi.common.util.ClusteringUtils.getRequestedReplaceMetadata depends upon this behaviour

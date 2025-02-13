@@ -50,6 +50,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collections;
@@ -137,7 +138,7 @@ public class TestCleanActionExecutor {
     HoodieActiveTimeline cleanTimeline = mock(HoodieActiveTimeline.class);
     when(activeTimeline.getCleanerTimeline()).thenReturn(cleanTimeline);
     when(cleanTimeline.getInstants()).thenReturn(Collections.singletonList(cleanInstant));
-    when(activeTimeline.getInstantDetails(cleanInstant)).thenReturn(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+    when(activeTimeline.getInstantContentStream(cleanInstant)).thenReturn(Option.of(new ByteArrayInputStream(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan).get())));
     when(activeTimeline.readCleanerInfoAsBytes(cleanInstant)).thenReturn(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
 
     when(mockHoodieTable.getCleanTimeline()).thenReturn(cleanTimeline);

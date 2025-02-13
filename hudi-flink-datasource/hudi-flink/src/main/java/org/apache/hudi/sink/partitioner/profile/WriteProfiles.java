@@ -173,9 +173,8 @@ public class WriteProfiles {
       HoodieInstant instant,
       HoodieTimeline timeline) {
     try {
-      byte[] data = timeline.getInstantDetails(instant).get();
       TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
-      return Option.of(layout.getCommitMetadataSerDe().deserialize(instant, data, HoodieCommitMetadata.class));
+      return Option.of(layout.getCommitMetadataSerDe().deserialize(instant, timeline.getInstantContentStream(instant), HoodieCommitMetadata.class));
     } catch (FileNotFoundException fe) {
       // make this fail safe.
       LOG.warn("Instant {} was deleted by the cleaner, ignore", instant.requestedTime());

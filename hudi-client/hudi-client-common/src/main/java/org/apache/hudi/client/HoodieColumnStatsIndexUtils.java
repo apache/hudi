@@ -63,7 +63,7 @@ public class HoodieColumnStatsIndexUtils {
           HoodieInstant latestInstant = mdtMetaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant().get();
           final HoodieCommitMetadata mdtCommitMetadata = mdtMetaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(
               latestInstant,
-              mdtMetaClient.getActiveTimeline().getInstantDetails(latestInstant).get(),
+              mdtMetaClient.getActiveTimeline().getInstantContentStream(latestInstant),
               HoodieCommitMetadata.class);
           if (mdtCommitMetadata.getPartitionToWriteStats().containsKey(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
             // update data table's table config for list of columns indexed.

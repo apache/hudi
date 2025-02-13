@@ -64,7 +64,7 @@ public class RollbacksCommand {
     rollback.getInstants().forEach(instant -> {
       try {
         HoodieRollbackMetadata metadata = TimelineMetadataUtils
-            .deserializeAvroMetadata(activeTimeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+            .deserializeAvroMetadata(activeTimeline.getInstantContentStream(instant), HoodieRollbackMetadata.class);
         metadata.getCommitsRollback().forEach(c -> {
           Comparable[] row = new Comparable[5];
           row[0] = metadata.getStartRollbackTime();
@@ -98,7 +98,7 @@ public class RollbacksCommand {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     final List<Comparable[]> rows = new ArrayList<>();
     HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
-        activeTimeline.getInstantDetails(HoodieCLI.getTableMetaClient().createNewInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
+        activeTimeline.getInstantContentStream(HoodieCLI.getTableMetaClient().createNewInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)),
         HoodieRollbackMetadata.class);
     metadata.getPartitionMetadata().forEach((key, value) -> Stream
         .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),

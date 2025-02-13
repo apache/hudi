@@ -43,7 +43,7 @@ public class RestoreUtils {
       throws IOException {
     final HoodieInstant requested = metaClient.getInstantGenerator().getRollbackRequestedInstant(restoreInstant);
     return TimelineMetadataUtils.deserializeAvroMetadata(
-        metaClient.getActiveTimeline().readRestoreInfoAsBytes(requested).get(), HoodieRestorePlan.class);
+        metaClient.getActiveTimeline().getInstantContentStream(requested), HoodieRestorePlan.class);
   }
 
   public static String getSavepointToRestoreTimestampV1Schema(HoodieTable table, HoodieRestorePlan plan) {

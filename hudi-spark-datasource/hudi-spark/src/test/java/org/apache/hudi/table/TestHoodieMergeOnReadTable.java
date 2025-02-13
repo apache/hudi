@@ -578,7 +578,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       table = HoodieSparkTable.create(cfg, context());
       HoodieInstant instantOne = table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get();
       HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(instantOne,
-          table.getActiveTimeline().getInstantDetails(instantOne).get(), HoodieCommitMetadata.class);
+          table.getActiveTimeline().getInstantContentStream(instantOne), HoodieCommitMetadata.class);
       int inserts = 0;
       for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
         for (HoodieWriteStat stat : pstat.getValue()) {
@@ -611,7 +611,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       table = HoodieSparkTable.create(cfg, context());
       HoodieInstant instant3 = table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get();
       metadata = metaClient.getCommitMetadataSerDe().deserialize(instant3,
-          table.getActiveTimeline().getInstantDetails(instant3).get(), HoodieCommitMetadata.class);
+          table.getActiveTimeline().getInstantContentStream(instant3), HoodieCommitMetadata.class);
       inserts = 0;
       upserts = 0;
       for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
@@ -651,7 +651,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       HoodieTable table = HoodieSparkTable.create(cfg, context());
       HoodieInstant instantOne = table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get();
       HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(instantOne,
-          table.getActiveTimeline().getInstantDetails(instantOne).get(),
+          table.getActiveTimeline().getInstantContentStream(instantOne),
           HoodieCommitMetadata.class);
       int inserts = 0;
       for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
@@ -676,7 +676,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       table = HoodieSparkTable.create(cfg, context());
       HoodieInstant instantTwo = table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get();
       metadata = metaClient.getCommitMetadataSerDe().deserialize(instantTwo,
-          table.getActiveTimeline().getInstantDetails(instantTwo).get(),
+          table.getActiveTimeline().getInstantContentStream(instantTwo),
           HoodieCommitMetadata.class);
       inserts = 0;
       int upserts = 0;
@@ -703,7 +703,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       table = HoodieSparkTable.create(cfg, context());
       HoodieInstant instantThree = table.getActiveTimeline().getCommitsTimeline().lastInstant().get();
       HoodieCommitMetadata metadata1 = metaClient.getCommitMetadataSerDe().deserialize(instantThree,
-          table.getActiveTimeline().getInstantDetails(instantThree).get(),
+          table.getActiveTimeline().getInstantContentStream(instantThree),
           HoodieCommitMetadata.class);
 
       // Ensure that the metadata stats from the extra metadata of delta commits is copied over to the compaction commit
@@ -727,7 +727,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       table = HoodieSparkTable.create(cfg, context());
       HoodieInstant instant = table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get();
       metadata = metaClient.getCommitMetadataSerDe().deserialize(instant,
-          table.getActiveTimeline().getInstantDetails(instant).get(),
+          table.getActiveTimeline().getInstantContentStream(instant),
           HoodieCommitMetadata.class);
       inserts = 0;
       upserts = 0;

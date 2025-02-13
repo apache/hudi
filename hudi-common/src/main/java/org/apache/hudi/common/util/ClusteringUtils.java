@@ -190,22 +190,21 @@ public class ClusteringUtils {
       String action = factory instanceof InstantGeneratorV2 ? HoodieTimeline.CLUSTERING_ACTION : HoodieTimeline.REPLACE_COMMIT_ACTION;
       requestedInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, action, pendingReplaceOrClusterInstant.requestedTime());
     }
-    Option<byte[]> content = Option.empty();
+    if (timeline.isEmpty(requestedInstant)) {
+      // few operations create requested file without any content. Assume these are not clustering
+      return Option.empty();
+    }
     try {
-      content = timeline.getInstantDetails(requestedInstant);
+      return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(timeline.getInstantContentStream(requestedInstant)));
     } catch (HoodieIOException e) {
       if (e.getCause() instanceof FileNotFoundException && pendingReplaceOrClusterInstant.isCompleted()) {
         // For clustering instants, completed instant is also a replace commit instant. For input replace commit instant,
         // it is not known whether requested instant is CLUSTER or REPLACE_COMMIT_ACTION. So we need to query both.
         requestedInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, pendingReplaceOrClusterInstant.requestedTime());
-        content = timeline.getInstantDetails(requestedInstant);
+        return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(timeline.getInstantContentStream(requestedInstant)));
       }
+      throw e;
     }
-    if (!content.isPresent() || content.get().length == 0) {
-      // few operations create requested file without any content. Assume these are not clustering
-      return Option.empty();
-    }
-    return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(content.get()));
   }
 
   /**

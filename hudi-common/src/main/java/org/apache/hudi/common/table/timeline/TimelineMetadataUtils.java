@@ -37,9 +37,11 @@ import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.file.DataFileReader;
+import org.apache.avro.file.DataFileStream;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.file.FileReader;
 import org.apache.avro.file.SeekableByteArrayInput;
@@ -51,6 +53,7 @@ import org.apache.avro.specific.SpecificRecordBase;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -156,59 +159,88 @@ public class TimelineMetadataUtils {
   public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)
       throws IOException {
     DatumWriter<T> datumWriter = new SpecificDatumWriter<>(clazz);
-    DataFileWriter<T> fileWriter = new DataFileWriter<>(datumWriter);
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    fileWriter.create(metadata.getSchema(), baos);
-    fileWriter.append(metadata);
-    fileWriter.flush();
-    return Option.of(baos.toByteArray());
+    try (DataFileWriter<T> fileWriter = new DataFileWriter<>(datumWriter)) {
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      fileWriter.create(metadata.getSchema(), baos);
+      fileWriter.append(metadata);
+      fileWriter.flush();
+      return Option.of(baos.toByteArray());
+    }
   }
 
-  public static HoodieCleanerPlan deserializeCleanerPlan(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieCleanerPlan.class);
+  public static HoodieCleanerPlan deserializeCleanerPlan(Option<InputStream> in) throws IOException {
+    return deserializeAvroMetadata(in, HoodieCleanerPlan.class);
   }
 
-  public static HoodieCompactionPlan deserializeCompactionPlan(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieCompactionPlan.class);
+  public static HoodieCompactionPlan deserializeCompactionPlan(Option<InputStream> in) throws IOException {
+    return deserializeAvroMetadata(in, HoodieCompactionPlan.class);
+  }
+
+  public static HoodieCompactionPlan deserializeCompactionPlanLegacy(byte[] bytes) throws IOException {
+    return deserializeAvroMetadataLegacy(bytes, HoodieCompactionPlan.class);
+  }
+
+  public static HoodieCleanMetadata deserializeHoodieCleanMetadataLegacy(byte[] bytes) throws IOException {
+    return deserializeAvroMetadataLegacy(bytes, HoodieCleanMetadata.class);
+  }
+
+  public static HoodieCleanMetadata deserializeHoodieCleanMetadata(Option<InputStream> inputStream) throws IOException {
+    return deserializeAvroMetadata(inputStream, HoodieCleanMetadata.class);
   }
 
   public static HoodieCleanMetadata deserializeHoodieCleanMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieCleanMetadata.class);
+    return deserializeAvroMetadataLegacy(bytes, HoodieCleanMetadata.class);
   }
 
-  public static HoodieRollbackMetadata deserializeHoodieRollbackMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieRollbackMetadata.class);
+  public static HoodieRollbackMetadata deserializeHoodieRollbackMetadata(Option<InputStream> in) throws IOException {
+    return deserializeAvroMetadata(in, HoodieRollbackMetadata.class);
   }
 
-  public static HoodieRestoreMetadata deserializeHoodieRestoreMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieRestoreMetadata.class);
+  public static HoodieRestoreMetadata deserializeHoodieRestoreMetadata(Option<InputStream> in) throws IOException {
+    return deserializeAvroMetadata(in, HoodieRestoreMetadata.class);
   }
 
-  public static HoodieSavepointMetadata deserializeHoodieSavepointMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieSavepointMetadata.class);
+  public static HoodieSavepointMetadata deserializeHoodieSavepointMetadata(Option<InputStream> instantStream) throws IOException {
+    return deserializeAvroMetadata(instantStream, HoodieSavepointMetadata.class);
   }
 
-  public static HoodieRequestedReplaceMetadata deserializeRequestedReplaceMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieRequestedReplaceMetadata.class);
+  public static HoodieRequestedReplaceMetadata deserializeRequestedReplaceMetadata(Option<InputStream> in) throws IOException {
+    return deserializeAvroMetadata(in, HoodieRequestedReplaceMetadata.class);
   }
 
-  public static HoodieIndexPlan deserializeIndexPlan(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieIndexPlan.class);
+  public static HoodieIndexPlan deserializeIndexPlan(Option<InputStream> in) throws IOException {
+    return deserializeAvroMetadata(in, HoodieIndexPlan.class);
   }
 
-  public static HoodieCommitMetadata deserializeCommitMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieCommitMetadata.class);
+  public static HoodieCommitMetadata deserializeCommitMetadata(Option<InputStream> instantStream) throws IOException {
+    return deserializeAvroMetadata(instantStream, HoodieCommitMetadata.class);
   }
 
-  public static HoodieReplaceCommitMetadata deserializeReplaceCommitMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieReplaceCommitMetadata.class);
+  public static HoodieReplaceCommitMetadata deserializeReplaceCommitMetadata(Option<InputStream> instantStream) throws IOException {
+    return deserializeAvroMetadata(instantStream, HoodieReplaceCommitMetadata.class);
   }
 
-  public static <T extends SpecificRecordBase> T deserializeAvroMetadata(byte[] bytes, Class<T> clazz)
+  public static <T extends SpecificRecordBase> T deserializeAvroMetadataLegacy(byte[] bytes, Class<T> clazz)
       throws IOException {
     DatumReader<T> reader = new SpecificDatumReader<>(clazz);
     FileReader<T> fileReader = DataFileReader.openReader(new SeekableByteArrayInput(bytes), reader);
     ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
     return fileReader.next();
+  }
+
+  public static <T extends SpecificRecordBase> T deserializeAvroMetadata(Option<InputStream> instantStream, Class<T> clazz)
+      throws IOException {
+    if (instantStream.isEmpty()) {
+      try {
+        return clazz.newInstance();
+      } catch (Exception ex) {
+        throw new HoodieException(ex);
+      }
+    }
+    DatumReader<T> reader = new SpecificDatumReader<>(clazz);
+    try (DataFileStream<T> fileReader = new DataFileStream<>(instantStream.get(), reader)) {
+      ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
+      return fileReader.next();
+    }
   }
 }

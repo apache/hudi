@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
+import org.apache.hudi.common.table.timeline.{CommitMetadataSerDe, HoodieInstant, HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.util.ClusteringUtils
 import org.apache.hudi.exception.HoodieException
 
@@ -63,7 +63,7 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
     val activeTimeline = metaClient.getActiveTimeline
     val timeline = activeTimeline.getCommitsTimeline.filterCompletedInstants
     val hoodieInstantOption = getCommitForInstant(metaClient, timeline, instantTime)
-    val commitMetadataOptional = getHoodieCommitMetadata(timeline, hoodieInstantOption)
+    val commitMetadataOptional = getHoodieCommitMetadata(metaClient.getCommitMetadataSerDe, timeline, hoodieInstantOption)
 
     if (commitMetadataOptional.isEmpty) {
       throw new HoodieException(s"Commit $instantTime not found in Commits $timeline.")
@@ -95,14 +95,15 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
     hoodieInstant
   }
 
-  private def getHoodieCommitMetadata(timeline: HoodieTimeline, hoodieInstant: Option[HoodieInstant]): Option[HoodieCommitMetadata] = {
+  private def getHoodieCommitMetadata(serDe: CommitMetadataSerDe, timeline: HoodieTimeline, hoodieInstant: Option[HoodieInstant]): Option[HoodieCommitMetadata] = {
     if (hoodieInstant.isDefined) {
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
-        Option(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
+        Option(serDe.deserialize(hoodieInstant.get,
+          timeline.getInstantContentStream(hoodieInstant.get),
           classOf[HoodieReplaceCommitMetadata]))
       } else {
         val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
-        Option(layout.getCommitMetadataSerDe.deserialize(hoodieInstant.get, timeline.getInstantDetails(hoodieInstant.get).get,
+        Option(layout.getCommitMetadataSerDe.deserialize(hoodieInstant.get, timeline.getInstantContentStream(hoodieInstant.get),
           classOf[HoodieCommitMetadata]))
       }
     } else {
