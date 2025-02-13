@@ -271,7 +271,7 @@ public class FileSystemViewCommand {
       instantsStream = instantsStream.filter(is -> predicate.test(maxInstant, is.requestedTime()));
     }
     TimelineFactory timelineFactory = metaClient.getTimelineLayout().getTimelineFactory();
-    HoodieTimeline filteredTimeline = timelineFactory.createDefaultTimeline(instantsStream, metaClient.getActiveTimeline()::getInstantDetails);
+    HoodieTimeline filteredTimeline = timelineFactory.createDefaultTimeline(instantsStream, metaClient.getActiveTimeline());
     return new HoodieTableFileSystemView(metaClient, filteredTimeline, pathInfoList);
   }
 }

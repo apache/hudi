@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -112,8 +113,8 @@ public class HoodiePartitionMetadata {
               // Backwards compatible properties file format
               try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
                 props.store(os, "partition metadata");
-                Option content = Option.of(os.toByteArray());
-                storage.createImmutableFileInPath(metaPath, content);
+                Option<byte []> content = Option.of(os.toByteArray());
+                storage.createImmutableFileInPath(metaPath, content.map(HoodieInstantWriter::convertByteArrayToWriter));
               }
             }
           }

@@ -41,9 +41,11 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
  * Test cases for {@link HoodieArchivedTimeline}.
@@ -74,6 +76,11 @@ public class TestHoodieArchivedTimeline extends HoodieCommonTestHarness {
     assertThat(archivedTimeline.firstInstant().map(HoodieInstant::requestedTime).orElse(""), is("10000011"));
   }
 
+  @Test
+  void getInstantReaderReferencesSelf() {
+    HoodieArchivedTimeline timeline = TIMELINE_FACTORY.createArchivedTimeline(metaClient);
+    assertSame(timeline, timeline.getInstantReader());
+  }
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

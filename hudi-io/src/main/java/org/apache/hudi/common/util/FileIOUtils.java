@@ -20,6 +20,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -166,7 +167,7 @@ public class FileIOUtils {
 
   public static void createFileInPath(HoodieStorage storage,
                                       StoragePath fullPath,
-                                      Option<byte[]> content, boolean ignoreIOE) {
+                                      Option<HoodieInstantWriter> contentWriter, boolean ignoreIOE) {
     try {
       // If the path does not exist, create it first
       if (!storage.exists(fullPath)) {
@@ -177,9 +178,9 @@ public class FileIOUtils {
         }
       }
 
-      if (content.isPresent()) {
+      if (contentWriter.isPresent()) {
         try (OutputStream out = storage.create(fullPath, true)) {
-          out.write(content.get());
+          contentWriter.get().writeToStream(out);
         }
       }
     } catch (IOException e) {
@@ -191,7 +192,7 @@ public class FileIOUtils {
   }
 
   public static void createFileInPath(HoodieStorage storage, StoragePath fullPath, Option<byte[]> content) {
-    createFileInPath(storage, fullPath, content, false);
+    createFileInPath(storage, fullPath, content.map(bytes -> (outputStream) -> outputStream.write(bytes)), false);
   }
 
   public static boolean copy(HoodieStorage srcStorage, StoragePath src,

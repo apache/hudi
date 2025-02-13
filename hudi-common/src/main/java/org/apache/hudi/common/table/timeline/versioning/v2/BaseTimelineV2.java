@@ -18,29 +18,29 @@
 
 package org.apache.hudi.common.table.timeline.versioning.v2;
 
-import org.apache.hudi.common.table.timeline.TimelineLayout;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.timeline.BaseHoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
 import java.util.List;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class BaseTimelineV2 extends BaseHoodieTimeline {
 
-  public BaseTimelineV2(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details) {
-    this(instants, details, TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_2));
+  public BaseTimelineV2(Stream<HoodieInstant> instants, HoodieInstantReader instantReader) {
+    this(instants, instantReader, TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_2));
   }
 
-  public BaseTimelineV2(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details, TimelineLayout layout) {
-    super(instants, details, layout.getTimelineFactory(), layout.getInstantComparator(), layout.getInstantGenerator());
+  public BaseTimelineV2(Stream<HoodieInstant> instants, HoodieInstantReader instantReader, TimelineLayout layout) {
+    super(instants, instantReader, layout.getTimelineFactory(), layout.getInstantComparator(), layout.getInstantGenerator());
   }
 
   /**
@@ -50,13 +50,13 @@ public class BaseTimelineV2 extends BaseHoodieTimeline {
    */
   @Deprecated
   public BaseTimelineV2() {
-    super(TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_2));
+    super(TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_2), null);
   }
 
   @Override
   public HoodieTimeline getWriteTimeline() {
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION);
-    return factory.createDefaultTimeline(getInstantsAsStream().filter(s -> validActions.contains(s.getAction())), details);
+    return factory.createDefaultTimeline(getInstantsAsStream().filter(s -> validActions.contains(s.getAction())), getInstantReader());
   }
 
   @Override
@@ -67,14 +67,14 @@ public class BaseTimelineV2 extends BaseHoodieTimeline {
   @Override
   public HoodieTimeline filterPendingClusteringTimeline() {
     return factory.createDefaultTimeline(getInstantsAsStream().filter(
-        s -> s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION) && !s.isCompleted()), details);
+        s -> s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION) && !s.isCompleted()), getInstantReader());
   }
 
   @Override
   public HoodieTimeline filterPendingReplaceOrClusteringTimeline() {
     return factory.createDefaultTimeline(getInstantsAsStream().filter(
         s -> (s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION) || s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION))
-            && !s.isCompleted()), details);
+            && !s.isCompleted()), getInstantReader());
   }
 
   @Override
@@ -82,7 +82,7 @@ public class BaseTimelineV2 extends BaseHoodieTimeline {
     return factory.createDefaultTimeline(getInstantsAsStream().filter(
         s -> !s.isCompleted() && (s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)
             || s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
-            || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))), details);
+            || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))), getInstantReader());
   }
 
   @Override

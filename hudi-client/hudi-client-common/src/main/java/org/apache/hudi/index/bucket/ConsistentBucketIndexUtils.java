@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -200,7 +201,7 @@ public class ConsistentBucketIndexUtils {
         // the file has been created by other tasks
         return true;
       }
-      storage.createImmutableFileInPath(fullPath, Option.of(metadata.toBytes()), true);
+      storage.createImmutableFileInPath(fullPath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(metadata.toBytes())), true);
       return true;
     } catch (IOException e1) {
       // ignore the exception and check the file existence

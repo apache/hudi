@@ -18,29 +18,29 @@
 
 package org.apache.hudi.common.table.timeline.versioning.v1;
 
-import org.apache.hudi.common.table.timeline.TimelineLayout;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.timeline.BaseHoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
 import java.util.List;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class BaseTimelineV1 extends BaseHoodieTimeline {
 
-  public BaseTimelineV1(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details) {
-    this(instants, details, TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_1));
+  public BaseTimelineV1(Stream<HoodieInstant> instants, HoodieInstantReader instantReader) {
+    this(instants, instantReader, TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_1));
   }
 
-  private BaseTimelineV1(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details, TimelineLayout layout) {
-    super(instants, details, layout.getTimelineFactory(), layout.getInstantComparator(), layout.getInstantGenerator());
+  private BaseTimelineV1(Stream<HoodieInstant> instants, HoodieInstantReader instantReader, TimelineLayout layout) {
+    super(instants, instantReader, layout.getTimelineFactory(), layout.getInstantComparator(), layout.getInstantGenerator());
   }
 
   /**
@@ -50,34 +50,34 @@ public class BaseTimelineV1 extends BaseHoodieTimeline {
    */
   @Deprecated
   public BaseTimelineV1() {
-    super(TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_1));
+    super(TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_1), null);
   }
 
   @Override
   public HoodieTimeline getWriteTimeline() {
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
-    return factory.createDefaultTimeline(getInstantsAsStream().filter(s -> validActions.contains(s.getAction())), details);
+    return factory.createDefaultTimeline(getInstantsAsStream().filter(s -> validActions.contains(s.getAction())), getInstantReader());
   }
 
   @Override
   public HoodieTimeline filterPendingClusteringTimeline() {
     return factory.createDefaultTimeline(getInstantsAsStream().filter(
         s -> s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) && !s.isCompleted())
-        .filter(i -> ClusteringUtils.isClusteringInstant(this, i, instantGenerator)), details);
+        .filter(i -> ClusteringUtils.isClusteringInstant(this, i, instantGenerator)), getInstantReader());
   }
 
   @Override
   public HoodieTimeline filterPendingReplaceOrClusteringTimeline() {
     return factory.createDefaultTimeline(getInstantsAsStream().filter(
         s -> (s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION))
-            && !s.isCompleted()), details);
+            && !s.isCompleted()), getInstantReader());
   }
 
   @Override
   public HoodieTimeline filterPendingReplaceClusteringAndCompactionTimeline() {
     return factory.createDefaultTimeline(getInstantsAsStream().filter(
         s -> !s.isCompleted() && (s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
-            || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))), details);
+            || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))), getInstantReader());
   }
 
   @Override

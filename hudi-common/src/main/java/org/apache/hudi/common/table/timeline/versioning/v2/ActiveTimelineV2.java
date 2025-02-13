@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -45,7 +47,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -53,10 +54,9 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
-public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTimeline  {
+public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTimeline {
 
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION,
@@ -89,7 +89,6 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     this.metaClient = metaClient;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
     LOG.info("Loaded instants upto : " + lastInstant());
   }
 
@@ -262,6 +261,17 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     StoragePath detailPath = getInstantFileNamePath(getInstantFileName(instant));
     return readDataFromPath(detailPath);
+  }
+
+  @Override
+  public InputStream getContentStream(HoodieInstant instant) {
+    StoragePath filePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(instant));
+    return readDataStreamFromPath(filePath);
+  }
+
+  @Override
+  public HoodieInstantReader getInstantReader() {
+    return this;
   }
 
   @Override
@@ -557,7 +567,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         if (allowRedundantTransitions) {
           FileIOUtils.createFileInPath(storage, getInstantFileNamePath(toInstantFileName), data);
         } else {
-          storage.createImmutableFileInPath(getInstantFileNamePath(toInstantFileName), data);
+          storage.createImmutableFileInPath(getInstantFileNamePath(toInstantFileName), data.map(HoodieInstantWriter::convertByteArrayToWriter));
         }
         LOG.info("Create new file for toInstant ?" + getInstantFileNamePath(toInstantFileName));
       }
@@ -728,7 +738,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
       FileIOUtils.createFileInPath(metaClient.getStorage(metaClient.getTimelinePath()), fullPath, content);
     } else {
-      metaClient.getStorage(metaClient.getTimelinePath()).createImmutableFileInPath(fullPath, content);
+      metaClient.getStorage(metaClient.getTimelinePath()).createImmutableFileInPath(fullPath, content.map(HoodieInstantWriter::convertByteArrayToWriter));
     }
   }
 
@@ -742,7 +752,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
         FileIOUtils.createFileInPath(metaClient.getStorage(), fullPath, content);
       } else {
-        metaClient.getStorage().createImmutableFileInPath(fullPath, content);
+        metaClient.getStorage().createImmutableFileInPath(fullPath, content.map(HoodieInstantWriter::convertByteArrayToWriter));
       }
       LOG.info("Created new file for toInstant ?" + fullPath);
     });
@@ -753,6 +763,14 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
       return Option.of(FileIOUtils.readAsByteArray(is));
     } catch (IOException e) {
       throw new HoodieIOException("Could not read commit details from " + detailPath, e);
+    }
+  }
+
+  protected InputStream readDataStreamFromPath(StoragePath filePath) {
+    try {
+      return metaClient.getStorage().open(filePath);
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not read commit details from " + filePath, e);
     }
   }
 
