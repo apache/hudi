@@ -80,7 +80,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     // Insert Operation
     val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
     val inputDf0 = spark.read.json(spark.sparkContext.parallelize(records0, parallelism)).cache
-    inputDf0.write.format("hudi")
+    inputDf0.write.format("org.apache.hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
@@ -89,7 +89,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
     // Snapshot query
-    val snapshotDf1 = spark.read.format("hudi")
+    val snapshotDf1 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
       .load(basePath).cache
     assertEquals(10, snapshotDf1.count())
@@ -99,13 +99,13 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
 
     val records1 = recordsToStrings(dataGen.generateUniqueUpdates("001", 5)).asScala.toList
     val updateDf = spark.read.json(spark.sparkContext.parallelize(records1, parallelism)).cache
-    updateDf.write.format("hudi")
+    updateDf.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
     val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
 
-    val snapshotDf2 = spark.read.format("hudi")
+    val snapshotDf2 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
       .load(basePath).cache
     assertEquals(10, snapshotDf2.count())
@@ -116,7 +116,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 6)).asScala.toList
     val inputDf2 = spark.read.json(spark.sparkContext.parallelize(records2, parallelism)).cache
     val uniqueKeyCnt2 = inputDf2.select("_row_key").distinct().count()
-    inputDf2.write.format("hudi")
+    inputDf2.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -126,7 +126,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
 
     // Snapshot Query
-    val snapshotDf3 = spark.read.format("hudi")
+    val snapshotDf3 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
       .load(basePath).cache
     assertEquals(10, snapshotDf3.count(), "should still be 10, since we only updated")
@@ -136,7 +136,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     // Read Incremental Query
     // we have 2 commits, try pulling the first commit (which is not the latest)
     val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0)
-    val hoodieIncViewDf1 = spark.read.format("hudi")
+    val hoodieIncViewDf1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime1)
       .option(DataSourceReadOptions.END_COMMIT.key, commitCompletionTime1)
@@ -149,13 +149,13 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
 
     val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 8)).asScala.toList
     val inputDf3 = spark.read.json(spark.sparkContext.parallelize(records3, parallelism)).cache
-    inputDf3.write.format("hudi")
+    inputDf3.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
 
     // another incremental query with commit2 and commit3
-    val hoodieIncViewDf2 = spark.read.format("hudi")
+    val hoodieIncViewDf2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime3)
       .option(DataSourceReadOptions.END_COMMIT.key(), commitCompletionTime3)
@@ -168,7 +168,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     assertEquals(commitInstantTime3, countsPerCommit(0).get(0))
 
     // time travel query.
-    val timeTravelDf = spark.read.format("hudi")
+    val timeTravelDf = spark.read.format("org.apache.hudi")
       .option("as.of.instant", commitInstantTime2)
       .load(basePath).cache
     assertEquals(10, timeTravelDf.count())
@@ -178,7 +178,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     if (tableType.equals("MERGE_ON_READ")) {
       doMORReadOptimizedQuery(inputDf0, colsToSelect, isMetadataEnabledOnRead)
 
-      val snapshotRows4 = spark.read.format("hudi")
+      val snapshotRows4 = spark.read.format("org.apache.hudi")
         .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
         .load(basePath).collect.toList
       assertEquals(10, snapshotRows4.length)
@@ -186,14 +186,14 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       // trigger compaction and try out Read optimized query.
       val records4 = recordsToStrings(dataGen.generateUniqueUpdates("004", 4)).asScala.toList
       val inputDf4 = spark.read.json(spark.sparkContext.parallelize(records4, parallelism)).cache
-      inputDf4.write.format("hudi")
+      inputDf4.write.format("org.apache.hudi")
         .options(options)
         .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true")
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3")
         .mode(SaveMode.Append)
         .save(basePath)
 
-      val snapshotDf5 = spark.read.format("hudi")
+      val snapshotDf5 = spark.read.format("org.apache.hudi")
         .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
         .load(basePath).cache
 
@@ -242,7 +242,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     // Insert Operation
     val records0 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
     val inputDf0 = spark.read.json(spark.sparkContext.parallelize(records0, parallelism)).cache
-    inputDf0.write.format("hudi")
+    inputDf0.write.format("org.apache.hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(SaveMode.Overwrite)
@@ -251,14 +251,14 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
     // Snapshot query
-    val snapshotDf1 = spark.read.format("hudi")
+    val snapshotDf1 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
       .load(basePath)
     assertEquals(10, snapshotDf1.count())
 
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).asScala.toList
     val inputDf1 = spark.read.json(spark.sparkContext.parallelize(records1, parallelism)).cache
-    inputDf1.write.format("hudi")
+    inputDf1.write.format("org.apache.hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(SaveMode.Append)
@@ -273,7 +273,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
 
     val records2 = recordsToStrings(dataGen.generateInserts("002", 6)).asScala.toList
     val inputDf2 = spark.read.json(spark.sparkContext.parallelize(records2, parallelism)).cache
-    inputDf2.write.format("hudi")
+    inputDf2.write.format("org.apache.hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(SaveMode.Append)
@@ -282,7 +282,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
 
     // Snapshot Query
-    val snapshotDf3 = spark.read.format("hudi")
+    val snapshotDf3 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
       .load(basePath).cache
     assertEquals(21, snapshotDf3.count())
@@ -326,7 +326,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
 
   def doMORReadOptimizedQuery(inputDf: Dataset[Row], colsToSelect: String, isMetadataEnabledOnRead: Boolean): Unit = {
     // read optimized query.
-    val readOptDf = spark.read.format("hudi")
+    val readOptDf = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .option(HoodieMetadataConfig.ENABLE.key(), isMetadataEnabledOnRead)
       .load(basePath)
@@ -334,10 +334,10 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
   }
 
   def compareROAndRT(basePath: String, colsToCompare: String, isMetadataEnabledOnRead: Boolean): Unit = {
-    val roDf = spark.read.format("hudi")
+    val roDf = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key(), isMetadataEnabledOnRead)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL).load(basePath)
-    val rtDf = spark.read.format("hudi")
+    val rtDf = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key(), isMetadataEnabledOnRead)
       .load(basePath)
 
