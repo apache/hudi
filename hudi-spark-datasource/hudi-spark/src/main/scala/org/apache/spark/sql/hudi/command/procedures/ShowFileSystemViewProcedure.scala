@@ -114,15 +114,8 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       instants = instants.filter(instant => predicate.test(maxInstant, instant.requestedTime))
     }
 
-    val details = new Function[HoodieInstant, org.apache.hudi.common.util.Option[Array[Byte]]]
-      with java.io.Serializable {
-      override def apply(instant: HoodieInstant): util.Option[Array[Byte]] = {
-        metaClient.getActiveTimeline.getInstantDetails(instant)
-      }
-    }
-
     val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(
-      new JArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
+      new JArrayList[HoodieInstant](instants.toList.asJava).stream(), metaClient.getActiveTimeline.getInstantReader)
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
   }
 

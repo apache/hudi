@@ -624,6 +624,6 @@ public class TableSchemaResolver {
         .sorted(reversedComparator);
     return timelineLayout.getTimelineFactory().createDefaultTimeline(
         reversedTimelineWithTableSchema,
-        metaClient.getActiveTimeline()::getInstantDetails);
+        metaClient.getActiveTimeline());
   }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -33,8 +34,9 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.Serializable;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,7 +49,7 @@ import java.util.function.Function;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 
-public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchivedTimeline {
+public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchivedTimeline, HoodieInstantReader {
   public static final String INSTANT_TIME_ARCHIVED_META_FIELD = "instantTime";
   public static final String COMPLETION_TIME_ARCHIVED_META_FIELD = "completionTime";
   public static final String ACTION_ARCHIVED_META_FIELD = "action";
@@ -77,7 +79,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     this.cursorInstant = firstInstant().map(HoodieInstant::requestedTime).orElse(null);
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
+    this.instantReader = this;
   }
 
   /**
@@ -90,7 +92,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     this.cursorInstant = startTs;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
+    this.instantReader = this;
   }
 
   /**
@@ -99,6 +101,12 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
    * @deprecated
    */
   public ArchivedTimelineV2() {
+    this.instantReader = this;
+  }
+
+  @Override
+  public HoodieInstantReader getInstantReader() {
+    return this;
   }
 
   /**
@@ -144,6 +152,11 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return Option.ofNullable(readCommits.get(instant.requestedTime()));
+  }
+
+  @Override
+  public InputStream getContentStream(HoodieInstant instant) {
+    return new ByteArrayInputStream(getInstantDetails(instant).orElseGet(() -> new byte[0]));
   }
 
   @Override
@@ -234,6 +247,6 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
         LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION);
     return new BaseTimelineV2(getInstantsAsStream().filter(i ->
             readCommits.containsKey(i.requestedTime()))
-        .filter(s -> validActions.contains(s.getAction())), details);
+        .filter(s -> validActions.contains(s.getAction())), instantReader);
   }
 }

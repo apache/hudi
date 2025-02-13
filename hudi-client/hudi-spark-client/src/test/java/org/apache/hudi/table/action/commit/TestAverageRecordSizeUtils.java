@@ -22,10 +22,12 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.BaseTimelineV2;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
@@ -62,9 +64,10 @@ public class TestAverageRecordSizeUtils {
 
   @ParameterizedTest
   @MethodSource("testCases")
-  public void testAverageRecordSize(List<Pair<HoodieInstant, List<HWriteStat>>> instantSizePairs, long expectedSize) {
+  public void testAverageRecordSize(List<Pair<HoodieInstant, List<HWriteStat>>> instantSizePairs, long expectedSize) throws IOException {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
         .build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init("/tmp");
     HoodieTimeline commitsTimeline = new BaseTimelineV2();
     List<HoodieInstant> instants = new ArrayList<>();
     instantSizePairs.forEach(entry -> {
@@ -95,7 +98,7 @@ public class TestAverageRecordSizeUtils {
   }
 
   @Test
-  public void testErrorHandling() {
+  public void testErrorHandling() throws IOException {
     int recordSize = 10000;
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withProps(Collections.singletonMap(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(recordSize)))

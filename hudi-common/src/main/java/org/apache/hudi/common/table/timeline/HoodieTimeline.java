@@ -23,6 +23,8 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
@@ -40,7 +42,7 @@ import java.util.stream.Stream;
  * @see HoodieInstant
  * @since 0.3.0
  */
-public interface HoodieTimeline extends Serializable {
+public interface HoodieTimeline extends HoodieInstantReader, Serializable {
 
   String COMMIT_ACTION = "commit";
   String DELTA_COMMIT_ACTION = "deltacommit";
@@ -449,9 +451,15 @@ public interface HoodieTimeline extends Serializable {
   boolean isPendingClusteringInstant(String instantTime);
 
   /**
-   * Read the completed instant details.
+   * Read the instant content to an input stream.
+   * @param instant the instant to fetch
+   * @return stream with content for instant
    */
-  Option<byte[]> getInstantDetails(HoodieInstant instant);
+  InputStream getInstantContentStream(HoodieInstant instant);
+
+  <T> T deserializeAvroInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException;
+
+  <T> T deserializeJsonInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException;
 
   boolean isEmpty(HoodieInstant instant);
 
@@ -533,4 +541,9 @@ public interface HoodieTimeline extends Serializable {
    * @return
    */
   TimelineLayoutVersion getTimelineLayoutVersion();
+
+  /**
+   * Get instant reader
+   * */
+  HoodieInstantReader getInstantReader();
 }

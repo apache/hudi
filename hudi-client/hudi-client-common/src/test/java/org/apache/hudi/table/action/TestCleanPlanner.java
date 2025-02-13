@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -169,7 +170,9 @@ public class TestCleanPlanner {
                                      Map<String, List<String>> activeInstantsPartitions, List<String> replaceCommits, List<String> expectedPartitions, boolean areCommitsForSavepointsRemoved,
                                      Map<String, List<String>> savepoints) throws IOException, IllegalAccessException {
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
+    HoodieInstantReader instantReader = mock(HoodieInstantReader.class);
     when(mockHoodieTable.getActiveTimeline()).thenReturn(activeTimeline);
+    when(activeTimeline.getInstantReader()).thenReturn(instantReader);
     // setup savepoint mocks
     Set<String> savepointTimestamps = savepoints.keySet().stream().collect(Collectors.toSet());
     when(mockHoodieTable.getSavepointTimestamps()).thenReturn(savepointTimestamps);
