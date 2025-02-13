@@ -100,7 +100,7 @@ class TestLayoutOptimization extends HoodieSparkClientTestBase {
     // If there are any failures in the Data Skipping flow, test should fail
     spark.sqlContext.setConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Strict.value);
 
-    writeDf.write.format("hudi")
+    writeDf.write.format("org.apache.hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false")
       .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
