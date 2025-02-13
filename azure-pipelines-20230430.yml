@@ -194,7 +194,7 @@ stages:
             displayName: 'Publish Merged JaCoCo Execution Data File'
             inputs:
               PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
-              ArtifactName: 'merged-jacoco-$(Build.BuildId)-1.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-1'
               publishLocation: 'Container'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
@@ -231,7 +231,7 @@ stages:
             displayName: 'Publish Merged JaCoCo Execution Data File'
             inputs:
               PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
-              ArtifactName: 'merged-jacoco-$(Build.BuildId)-2.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-2'
               publishLocation: 'Container'
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
@@ -391,7 +391,7 @@ stages:
               downloadType: 'specific'
               downloadPath: '$(System.ArtifactsDirectory)'
               itemPattern: |
-                **/merged-jacoco-$(Build.BuildId)-*.exec
+                **/merged-jacoco-$(Build.BuildId)-*/*.exec
           - task: JavaToolInstaller@0
             inputs:
               versionSpec: '8'
