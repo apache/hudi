@@ -73,27 +73,27 @@ class CopyToTableProcedure extends BaseProcedure with ProcedureBuilder with Logg
     val sourceDataFrame = queryType match {
       case DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL => if (asOfInstant.nonEmpty) {
         sparkSession.read
-          .format("hudi")
+          .format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
           .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, asOfInstant)
           .load(tablePath)
       } else {
         sparkSession.read
-          .format("hudi")
+          .format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
           .load(tablePath)
       }
       case DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL =>
         assert(startInstance.nonEmpty && endInstance.nonEmpty, "when the query_type is incremental, begin_instance_time and end_instance_time can not be null.")
         sparkSession.read
-          .format("hudi")
+          .format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
           .option(DataSourceReadOptions.START_COMMIT.key, startInstance)
           .option(DataSourceReadOptions.END_COMMIT.key, endInstance)
           .load(tablePath)
       case DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL =>
         sparkSession.read
-          .format("hudi")
+          .format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
           .load(tablePath)
     }
