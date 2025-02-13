@@ -2708,7 +2708,7 @@
                     <resource>
                       <directory>${project.basedir}/target/classes</directory>
                       <includes>
-                        <include>**/hudi/**/*.class</include>
+                        <include>**/*.class</include>
                       </includes>
                     </resource>
                   </resources>

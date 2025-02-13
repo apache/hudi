@@ -447,7 +447,7 @@ stages:
             displayName: 'Aggregate Source and Class Files for JaCoCo'
             inputs:
               mavenPomFile: 'pom.xml'
-              goals: 'clean install'
+              goals: 'clean package'
               options: $(MVN_OPTS_INSTALL) -Pcopy-files-for-jacoco -pl !hudi-flink-datasource/hudi-flink1.14.x,!hudi-flink-datasource/hudi-flink1.15.x,!hudi-flink-datasource/hudi-flink1.16.x,!hudi-flink-datasource/hudi-flink1.17.x,!hudi-flink-datasource/hudi-flink1.19.x,!hudi-flink-datasource/hudi-flink1.20.x
               publishJUnitResults: false
               jdkVersionOption: '1.8'
