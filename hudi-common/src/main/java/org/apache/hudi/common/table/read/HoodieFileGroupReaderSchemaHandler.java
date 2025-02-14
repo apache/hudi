@@ -242,7 +242,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
   static Pair<List<Schema.Field>, List<Schema.Field>> getDataAndMetaCols(Schema schema) {
     Map<Boolean, List<Schema.Field>> fieldsByMeta = schema.getFields().stream()
         //if there are no data fields, then we don't want to think the temp col is a data col
-        .filter(f -> !Objects.equals(f.name(), HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME))
+        .filter(f -> !Objects.equals(f.name(), PositionBasedHoodieFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME))
         .collect(Collectors.partitioningBy(f -> HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name())));
     return Pair.of(fieldsByMeta.getOrDefault(true, Collections.emptyList()),
         fieldsByMeta.getOrDefault(false, Collections.emptyList()));

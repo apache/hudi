@@ -26,11 +26,16 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -39,16 +44,55 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
-import static org.apache.hudi.common.table.read.HoodieBaseFileGroupRecordBuffer.getOrderingValue;
+import static org.apache.hudi.common.table.read.BaseHoodieFileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests {@link HoodieBaseFileGroupRecordBuffer}
+ * Tests {@link BaseHoodieFileGroupRecordBuffer}
  */
 public class TestHoodieFileGroupRecordBuffer {
+  private String schemaString = "{"
+      + "\"type\": \"record\","
+      + "\"name\": \"EventRecord\","
+      + "\"namespace\": \"com.example.avro\","
+      + "\"fields\": ["
+      + "{\"name\": \"id\", \"type\": \"string\"},"
+      + "{\"name\": \"ts\", \"type\": \"long\"},"
+      + "{\"name\": \"op\", \"type\": \"string\"}"
+      + "]"
+      + "}";
+  private Schema schema = new Schema.Parser().parse(schemaString);
+  private HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
+  private HoodieTableMetaClient hoodieTableMetaClient = mock(HoodieTableMetaClient.class);
+  private Option<String> partitionNameOverrideOpt = Option.empty();
+  private Option<String[]> partitionPathFieldOpt = Option.empty();
+  private TypedProperties props = new TypedProperties();
+  private HoodieReadStats readStats = mock(HoodieReadStats.class);
+
+  @BeforeEach
+  void setUp() {
+    HoodieFileGroupReaderSchemaHandler schemaHandler =
+        mock(HoodieFileGroupReaderSchemaHandler.class);
+    when(readerContext.getSchemaHandler()).thenReturn(schemaHandler);
+    when(schemaHandler.getRequiredSchema()).thenReturn(schema);
+    when(readerContext.getRecordMerger()).thenReturn(Option.empty());
+  }
+
   @Test
   void testGetOrderingValueFromDeleteRecord() {
     HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
@@ -137,5 +181,90 @@ public class TestHoodieFileGroupRecordBuffer {
   private void mockDeleteRecord(DeleteRecord deleteRecord,
                                 Comparable orderingValue) {
     when(deleteRecord.getOrderingValue()).thenReturn(orderingValue);
+  }
+
+  @Test
+  void testHasCustomDeleteConfigs() {
+    KeyBasedHoodieFileGroupRecordBuffer keyBasedBuffer =
+        new KeyBasedHoodieFileGroupRecordBuffer(
+            readerContext,
+            hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
+            partitionNameOverrideOpt,
+            partitionPathFieldOpt,
+            props,
+            readStats);
+
+    assertFalse(keyBasedBuffer.hasCustomDeleteConfigs(props, schema));
+    props.setProperty(DELETE_KEY, "op");
+    assertFalse(keyBasedBuffer.hasCustomDeleteConfigs(props, schema));
+    props.setProperty(DELETE_MARKER, "d");
+    assertThrows(
+        NullPointerException.class,
+        () -> keyBasedBuffer.hasCustomDeleteConfigs(props, null));
+    assertTrue(keyBasedBuffer.hasCustomDeleteConfigs(props, schema));
+  }
+
+  @Test
+  void testIsCustomDeleteRecord() {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "12345");
+    record.put("ts", System.currentTimeMillis());
+    record.put("op", "d");
+
+    KeyBasedHoodieFileGroupRecordBuffer keyBasedBuffer =
+        new KeyBasedHoodieFileGroupRecordBuffer(
+            readerContext,
+            hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
+            partitionNameOverrideOpt,
+            partitionPathFieldOpt,
+            props,
+            readStats);
+    when(readerContext.getValue(any(), any(), any())).thenReturn(null);
+    assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
+
+    props.setProperty(DELETE_KEY, "op");
+    props.setProperty(DELETE_MARKER, "d");
+    keyBasedBuffer = new KeyBasedHoodieFileGroupRecordBuffer(
+            readerContext,
+            hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
+            partitionNameOverrideOpt,
+            partitionPathFieldOpt,
+            props,
+            readStats);
+    when(readerContext.getValue(any(), any(), any())).thenReturn("i");
+    assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
+    when(readerContext.getValue(any(), any(), any())).thenReturn("d");
+    assertTrue(keyBasedBuffer.isCustomDeleteRecord(record));
+  }
+
+  @Test
+  void testProcessCustomDeleteRecord() {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "12345");
+    record.put("ts", System.currentTimeMillis());
+    record.put("op", "d");
+
+    KeyBasedHoodieFileGroupRecordBuffer keyBasedBuffer =
+        new KeyBasedHoodieFileGroupRecordBuffer(
+            readerContext,
+            hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
+            partitionNameOverrideOpt,
+            partitionPathFieldOpt,
+            props,
+            readStats);
+
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put(INTERNAL_META_RECORD_KEY, "12345");
+    metadata.put(INTERNAL_META_PARTITION_PATH, "partition1");
+    when(readerContext.getOrderingValue(any(), any(), any(), any())).thenReturn(1);
+    keyBasedBuffer.processCustomDeleteRecord(record, metadata);
+    Map<Serializable, Pair<Option<GenericRecord>, Map<String, Object>>> records =
+        keyBasedBuffer.getLogRecords();
+    assertEquals(1, records.size());
+    assertTrue(records.containsKey("12345"));
   }
 }
