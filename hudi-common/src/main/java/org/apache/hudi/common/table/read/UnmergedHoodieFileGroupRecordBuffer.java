@@ -41,12 +41,12 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.Map;
 
-public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
+public class UnmergedHoodieFileGroupRecordBuffer<T> extends BaseHoodieFileGroupRecordBuffer<T> {
   // Used to order the records in the record map.
   private Long putIndex = 0L;
   private Long getIndex = 0L;
 
-  public HoodieUnmergedFileGroupRecordBuffer(
+  public UnmergedHoodieFileGroupRecordBuffer(
       HoodieReaderContext<T> readerContext,
       HoodieTableMetaClient hoodieTableMetaClient,
       RecordMergeMode recordMergeMode,
