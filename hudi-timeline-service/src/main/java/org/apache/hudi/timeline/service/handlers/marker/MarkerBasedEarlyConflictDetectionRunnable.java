@@ -118,7 +118,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
             + "Table markers: " + tableMarkers);
         hasConflict.compareAndSet(false, true);
       }
-      LOG.info("Finish batching marker-based conflict detection in " + timer.endTimer() + " ms");
+      LOG.info("Finish batching marker-based conflict detection in {} ms", timer.endTimer());
 
     } catch (IOException e) {
       throw new HoodieIOException("IOException occurs during checking marker conflict");

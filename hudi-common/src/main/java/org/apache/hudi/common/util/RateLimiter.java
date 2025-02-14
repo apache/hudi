@@ -74,7 +74,7 @@ public class RateLimiter {
       while (!semaphore.tryAcquire(numOps)) {
         Thread.sleep(WAIT_BEFORE_NEXT_ACQUIRE_PERMIT_IN_MS);
       }
-      LOG.debug(String.format("acquire permits: %s, maxPermits: %s", numOps, maxPermits));
+      LOG.debug("acquire permits: {}, maxPermits: {}", numOps, maxPermits);
     } catch (InterruptedException e) {
       throw new RuntimeException("Unable to acquire permits", e);
     }
@@ -88,8 +88,7 @@ public class RateLimiter {
   public void releasePermitsPeriodically() {
     scheduler = Executors.newScheduledThreadPool(SCHEDULER_CORE_THREAD_POOL_SIZE);
     scheduler.scheduleAtFixedRate(() -> {
-      LOG.debug(String.format("Release permits: maxPermits: %s, available: %s", maxPermits,
-          semaphore.availablePermits()));
+      LOG.debug("Release permits: maxPermits: {}, available: {}", maxPermits, semaphore.availablePermits());
       semaphore.release(maxPermits - semaphore.availablePermits());
     }, RELEASE_PERMITS_PERIOD_IN_SECONDS, RELEASE_PERMITS_PERIOD_IN_SECONDS, timePeriod);
 

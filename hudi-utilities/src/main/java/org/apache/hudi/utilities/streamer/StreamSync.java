@@ -544,7 +544,7 @@ public class StreamSync implements Serializable, Closeable {
   public Pair<InputBatch, Boolean> readFromSource(String instantTime, HoodieTableMetaClient metaClient) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<Checkpoint> checkpointToResume = StreamerCheckpointUtils.resolveCheckpointToResumeFrom(commitsTimelineOpt, cfg, props, metaClient);
-    LOG.info("Checkpoint to resume from : " + checkpointToResume);
+    LOG.info("Checkpoint to resume from : {}", checkpointToResume);
 
     int maxRetryCount = cfg.retryOnSourceFailures ? cfg.maxRetryCount : 1;
     int curRetryCount = 0;
@@ -1233,9 +1233,7 @@ public class StreamSync implements Serializable, Closeable {
       schemas.add(targetSchema);
     }
     if (!schemas.isEmpty()) {
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Registering Schema: " + schemas);
-      }
+      LOG.debug("Registering Schema: {}", schemas);
       // Use the underlying spark context in case the java context is changed during runtime
       hoodieSparkContext.getJavaSparkContext().sc().getConf().registerAvroSchemas(JavaScalaConverters.convertJavaListToScalaList(schemas).toList());
     }

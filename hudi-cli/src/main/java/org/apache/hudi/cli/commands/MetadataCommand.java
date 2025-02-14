@@ -224,7 +224,7 @@ public class MetadataCommand {
 
       HoodieTimer timer = HoodieTimer.start();
       List<String> partitions = metadata.getAllPartitionPaths();
-      LOG.debug("Metadata Partition listing took " + timer.endTimer() + " ms");
+      LOG.debug("Metadata Partition listing took {} ms", timer.endTimer());
 
       final List<Comparable[]> rows = new ArrayList<>();
       partitions.stream().sorted(Comparator.reverseOrder()).forEach(p -> {
@@ -257,7 +257,7 @@ public class MetadataCommand {
 
       HoodieTimer timer = HoodieTimer.start();
       List<StoragePathInfo> pathInfoList = metaReader.getAllFilesInPartition(partitionPath);
-      LOG.debug("Took " + timer.endTimer() + " ms");
+      LOG.debug("Took {} ms", timer.endTimer());
 
       final List<Comparable[]> rows = new ArrayList<>();
       pathInfoList.stream()
@@ -293,7 +293,7 @@ public class MetadataCommand {
 
     HoodieTimer timer = HoodieTimer.start();
     List<String> metadataPartitions = metadataReader.getAllPartitionPaths();
-    LOG.debug("Metadata Listing partitions Took " + timer.endTimer() + " ms");
+    LOG.debug("Metadata Listing partitions Took {} ms", timer.endTimer());
     List<String> fsPartitions = fsMetaReader.getAllPartitionPaths();
     Collections.sort(fsPartitions);
     Collections.sort(metadataPartitions);

@@ -112,7 +112,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
   private List<WriteStatus> performBucketMergeForGroup(ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams, boolean preserveHoodieMetadata, SerializableSchema schema,
                                                        TaskContextSupplier taskContextSupplier, String instantTime) {
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), writeConfig);
-    LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
+    LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
     Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
     ValidationUtils.checkArgument(extraMetadata.isPresent(), "Extra metadata should be present for consistent hashing operations");
     String partition = extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);

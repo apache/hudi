@@ -106,9 +106,9 @@ public class MarkerHandler extends Handler {
                        HoodieEngineContext hoodieEngineContext, HoodieStorage storage,
                        FileSystemViewManager viewManager, Registry metricsRegistry) throws IOException {
     super(conf, timelineServiceConfig, storage, viewManager);
-    LOG.debug("MarkerHandler FileSystem: " + this.storage.getScheme());
-    LOG.debug("MarkerHandler batching params: batchNumThreads=" + timelineServiceConfig.markerBatchNumThreads
-        + " batchIntervalMs=" + timelineServiceConfig.markerBatchIntervalMs + "ms");
+    LOG.debug("MarkerHandler FileSystem: {}", this.storage.getScheme());
+    LOG.debug("MarkerHandler batching params: batchNumThreads={} batchIntervalMs={}ms",
+        timelineServiceConfig.markerBatchNumThreads, timelineServiceConfig.markerBatchIntervalMs);
     this.hoodieEngineContext = hoodieEngineContext;
     this.metricsRegistry = metricsRegistry;
     this.parallelism = timelineServiceConfig.markerParallelism;

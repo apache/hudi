@@ -171,7 +171,6 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     GenericRecord newRecord;
     int index = 0;
     for (GenericRecord record : fileRecords) {
-      //System.out.println("Got :" + record.get("_row_key").toString() + ", Exp :" + records.get(index).getRecordKey());
       assertEquals(records.get(index).getRecordKey(), record.get("_row_key").toString());
       index++;
     }

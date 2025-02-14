@@ -47,7 +47,7 @@ public class DeleteInputDatasetNode extends DagNode<Boolean> {
       FileStatus[] fileStatuses = fs.listStatus(new Path(inputPathStr));
       for (FileStatus fileStatus : fileStatuses) {
         if (!fileStatus.getPath().getName().equals(latestBatch)) {
-          log.debug("Micro batch to be deleted " + fileStatus.getPath().toString());
+          log.debug("Micro batch to be deleted {}", fileStatus.getPath());
           fs.delete(fileStatus.getPath(), true);
         }
       }

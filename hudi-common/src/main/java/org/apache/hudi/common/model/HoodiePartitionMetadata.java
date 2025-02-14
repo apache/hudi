@@ -181,7 +181,7 @@ public class HoodiePartitionMetadata {
       format = Option.empty();
       return true;
     } catch (Throwable t) {
-      LOG.debug("Unable to read partition meta properties file for partition " + partitionPath);
+      LOG.debug("Unable to read partition meta properties file for partition {}", partitionPath);
       return false;
     }
   }
@@ -199,7 +199,7 @@ public class HoodiePartitionMetadata {
         format = Option.of(reader.getFormat());
         return true;
       } catch (Throwable t) {
-        LOG.debug("Unable to read partition metadata " + metafilePath.getName() + " for partition " + partitionPath);
+        LOG.debug("Unable to read partition metadata {} for partition {}", metafilePath.getName(), partitionPath);
       }
     }
     return false;

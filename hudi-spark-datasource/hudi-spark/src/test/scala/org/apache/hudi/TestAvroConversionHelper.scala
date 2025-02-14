@@ -49,8 +49,6 @@ class TestAvroConversionHelper extends FunSuite with Matchers {
       convertor(record).asInstanceOf[GenericRow].get(0)
     })
 
-    println(s"trans data from int [ ${dateInputData.mkString(", ")} ] to date [ ${dateOutputData.mkString(", ")} ]")
-
     assert(dateOutputData(0).toString === LocalDate.ofEpochDay(dateInputData(0)).toString)
     assert(dateOutputData(1).toString === LocalDate.ofEpochDay(dateInputData(1)).toString)
     assert(dateOutputData(2).toString === LocalDate.ofEpochDay(dateInputData(2)).toString)

@@ -66,7 +66,7 @@ public class FlinkConcatAndReplaceHandle<T, I, K, O>
       String errMsg = String.format(
           "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
           key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
-      LOG.debug("Old record is " + oldRecord);
+      LOG.debug("Old record is {}", oldRecord);
       throw new HoodieUpsertException(errMsg, e);
     }
     recordsWritten++;

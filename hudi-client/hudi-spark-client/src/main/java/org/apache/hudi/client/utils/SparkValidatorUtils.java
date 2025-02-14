@@ -106,10 +106,10 @@ public class SparkValidatorUtils {
     return CompletableFuture.supplyAsync(() -> {
       try {
         validator.validate(instantTime, writeMetadata, beforeState, afterState);
-        LOG.info("validation complete for " + validator.getClass().getName());
+        LOG.info("validation complete for {}", validator.getClass().getName());
         return true;
       } catch (HoodieValidationException e) {
-        LOG.error("validation failed for " + validator.getClass().getName(), e);
+        LOG.error("validation failed for {}", validator.getClass().getName(), e);
         return false;
       }
     });

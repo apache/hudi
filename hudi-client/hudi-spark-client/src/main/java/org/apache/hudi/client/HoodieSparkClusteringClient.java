@@ -47,7 +47,7 @@ public class HoodieSparkClusteringClient<T> extends
 
   @Override
   public void cluster(String instantTime) throws IOException {
-    LOG.info("Executing clustering instance " + instantTime);
+    LOG.info("Executing clustering instance {}", instantTime);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) clusteringClient;
     Option<HoodieCommitMetadata> commitMetadata = writeClient.cluster(instantTime).getCommitMetadata();
     Stream<HoodieWriteStat> hoodieWriteStatStream = commitMetadata.get().getPartitionToWriteStats().entrySet().stream().flatMap(e ->
@@ -55,7 +55,7 @@ public class HoodieSparkClusteringClient<T> extends
     long errorsCount = hoodieWriteStatStream.mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (errorsCount > 0) {
       // TODO: Should we treat this fatal and throw exception?
-      LOG.error("Clustering for instant (" + instantTime + ") failed with write errors");
+      LOG.error("Clustering for instant ({}) failed with write errors", instantTime);
     }
   }
 }

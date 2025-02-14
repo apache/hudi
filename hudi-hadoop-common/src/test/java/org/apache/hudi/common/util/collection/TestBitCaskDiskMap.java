@@ -265,8 +265,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     long startTime = System.currentTimeMillis();
     SpillableMapUtils.computePayloadSize(record, sizeEstimator);
     long timeTaken = System.currentTimeMillis() - startTime;
-    System.out.println("Time taken :" + timeTaken);
-    assertTrue(timeTaken < 100);
+    assertTrue(timeTaken < 100, "Expected execution time under 100ms but was " + timeTaken);
   }
 
   private void verifyCleanup(BitCaskDiskMap<String, HoodieRecord> records) {

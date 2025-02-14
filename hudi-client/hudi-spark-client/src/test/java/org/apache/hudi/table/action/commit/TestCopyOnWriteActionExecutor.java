@@ -447,7 +447,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     int counts = 0;
     for (File file : Paths.get(basePath, "2016/01/31").toFile().listFiles()) {
       if (file.getName().endsWith(table.getBaseFileExtension()) && FSUtils.getCommitTime(file.getName()).equals(instantTime)) {
-        LOG.info(file.getName() + "-" + file.length());
+        LOG.info("{}-{}", file.getName(), file.length());
         counts++;
       }
     }

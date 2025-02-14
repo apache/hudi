@@ -149,7 +149,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
         getStringWithAltKeys(streamer.getTableExecutionContexts().get(0).getProperties(),
             HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
   }
-  
+
   @Test //0 corresponds to fg
   public void testMultiTableExecutionWithKafkaSource() throws IOException {
     //create topics for each table

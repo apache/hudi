@@ -204,13 +204,13 @@ public class HDFSParquetImporterUtils implements Serializable {
             throw new HoodieIOException("row field is missing. :" + this.rowKey);
           }
           String partitionPath = partitionField.toString();
-          LOG.debug("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
+          LOG.debug("Row Key : {}, Partition Path is ({}})", rowField, partitionPath);
           if (partitionField instanceof Number) {
             try {
               long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
               partitionPath = PARTITION_FORMATTER.format(Instant.ofEpochMilli(ts));
             } catch (NumberFormatException nfe) {
-              LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
+              LOG.warn("Unable to parse date from partition field. Assuming partition as ({})", partitionField);
             }
           }
           return new HoodieAvroRecord<>(new HoodieKey(rowField.toString(), partitionPath),
