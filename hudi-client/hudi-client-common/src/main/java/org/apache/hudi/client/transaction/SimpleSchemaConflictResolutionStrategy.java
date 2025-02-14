@@ -19,7 +19,7 @@
 package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.avro.AvroSchemaComparatorForSchemaEvolution;
-import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.client.utils.TableSchemaGetter;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
@@ -73,11 +73,11 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
     Schema writerSchemaOfTxn = new Schema.Parser().parse(config.getWriteSchema());
     // If a writer does not come with a meaningful schema, skip the schema resolution.
     if (isSchemaNull(writerSchemaOfTxn)) {
-      return getTableSchemaAtInstant(new TableSchemaResolver(table.getMetaClient()), currTxnOwnerInstant.get());
+      return getTableSchemaAtInstant(new TableSchemaGetter(table.getMetaClient()), currTxnOwnerInstant.get());
     }
 
     // Fast path: We can tell there is no schema conflict by just comparing the instants without involving table/writer schema comparison.
-    TableSchemaResolver schemaResolver = new TableSchemaResolver(table.getMetaClient());
+    TableSchemaGetter schemaResolver = new TableSchemaGetter(table.getMetaClient());
 
     // schema and writer schema.
     HoodieInstant lastCompletedInstantAtTxnStart = lastCompletedTxnOwnerInstant.isPresent()
@@ -102,7 +102,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
       return Option.of(writerSchemaOfTxn);
     }
 
-    TableSchemaResolver resolver = new TableSchemaResolver(table.getMetaClient());
+    TableSchemaGetter resolver = new TableSchemaGetter(table.getMetaClient());
     Option<Schema> tableSchemaAtTxnValidation = getTableSchemaAtInstant(resolver, lastCompletedInstantAtTxnValidation);
     // If table schema is not defined, it's still case 1. There can be cases where there are commits but they didn't
     // write any data.
@@ -169,7 +169,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
         .findFirst());
   }
 
-  private static Option<Schema> getTableSchemaAtInstant(TableSchemaResolver schemaResolver, HoodieInstant instant) {
+  private static Option<Schema> getTableSchemaAtInstant(TableSchemaGetter schemaResolver, HoodieInstant instant) {
     try {
       return schemaResolver.getTableAvroSchemaIfPresent(false, Option.of(instant));
     } catch (Exception ex) {
