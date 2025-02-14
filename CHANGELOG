@@ -607,3 +607,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-02-13 16:03:49] [release-v1.89.0] ---
 [ENG-22091][INTERNAL] Heartbeat Manager Followups (#1180)
 [AUDIT-1166]: Changelog for release-v1.87.0 (#1178)
+
+--- [2025-02-14 16:03:53] [release-v1.90.0] ---
+[ENG-18993][INTERNAL] Move successful jobs to self hosted runner  (#1168)
+[AUDIT-1071]: Changelog for release-v1.89.0 (#1195)
