@@ -846,10 +846,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // List all directories in parallel
       engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing " + numDirsToList + " partitions from filesystem");
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToProcess, path -> {
-        try (HoodieStorage storage = new HoodieHadoopStorage(path, storageConf)) {
-          String relativeDirPath = FSUtils.getRelativePartitionPath(storageBasePath, path);
-          return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime, pendingDataInstants);
-        }
+        HoodieStorage storage = new HoodieHadoopStorage(path, storageConf);
+        String relativeDirPath = FSUtils.getRelativePartitionPath(storageBasePath, path);
+        return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime, pendingDataInstants);
       }, numDirsToList);
 
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
