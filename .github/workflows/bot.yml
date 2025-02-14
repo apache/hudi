@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   skip-check:
-    runs-on: arc-4-cores-ondemand-staging
+    runs-on: ubuntu-latest
     outputs:
       skip: ${{ steps.determine-skip.outputs.skip }}
     steps:
@@ -66,7 +66,7 @@ jobs:
 
   utilities:
     needs: skip-check
-    runs-on: arc-8-cores-ondemand-staging
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
       matrix:
@@ -85,11 +85,6 @@ jobs:
             8
           distribution: 'adopt'
           architecture: x64
-      - name: Setup Maven Action
-        uses: s4u/setup-maven-action@v1.18.0
-        with:
-          maven-version: 3.9.9
-          java-version: 8
       - name: Build
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -209,7 +204,7 @@ jobs:
           fi
   hudi-client-and-common:
     needs: skip-check
-    runs-on: arc-8-cores-ondemand-staging
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
@@ -227,13 +222,6 @@ jobs:
             8
           distribution: 'adopt'
           architecture: x64
-
-      - name: Setup Maven Action
-        uses: s4u/setup-maven-action@v1.18.0
-        with:
-          maven-version: 3.9.9
-          java-version: 8
-
       - name: Build
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
