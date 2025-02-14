@@ -14,8 +14,10 @@
 # limitations under the License.
 
 # NOTE:
-# This config file defines how Azure CI runs tests with Spark 2.4 and Flink 1.18 profiles.
+# This config file defines how Azure CI runs tests with Spark 3.5 and Flink 1.18 profiles.
 # PRs will need to keep in sync with master's version to trigger the CI runs.
+# See scripts/jacoco/README.md for how aggregated code coverage report works
+# across multiple modules.
 
 trigger:
   branches:
