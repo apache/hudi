@@ -221,7 +221,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "`org.apache.hudi.estimator.RecordSizeEstimator`. Default implementation is `org.apache.hudi.estimator.AverageRecordSizeEstimator`");
 
   public static final ConfigProperty<Integer> RECORD_SIZE_ESTIMATOR_MAX_COMMITS = ConfigProperty
-      .key("hoodie.record.size.estimator.max.commits")
+      .key("_hoodie.record.size.estimator.max.commits")
       .defaultValue(5)
       .markAdvanced()
       .sinceVersion("1.0.0")
