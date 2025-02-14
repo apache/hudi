@@ -73,7 +73,7 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
  * </ul>
  *
  */
-public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
+public class HoodieSparkRecord extends HoodieRecord<InternalRow> implements EngineSpecificRecord<StructType> {
 
   /**
    * Record copy operation to avoid double copying. InternalRow do not need to copy twice.
@@ -467,5 +467,36 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     } else {
       throw new HoodieException(String.format("Field at %s is not present in %s", fieldName, structType));
     }
+  }
+
+  @Override
+  public HoodieRecord prependMetaFields(EngineSpecificRecordSchema<StructType> recordSchema, EngineSpecificRecordSchema<StructType> targetSchema, MetadataValues metadataValues, Properties props) {
+    HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(this.data, recordSchema.getSchema());
+    updateMetadataValuesInternal(updatableRow, metadataValues);
+
+    return new HoodieSparkRecord(getKey(), updatableRow, targetSchema.getSchema(), getOperation(), this.currentLocation, this.newLocation, false);
+  }
+
+  @Override
+  public Comparable<?> getOrderingValue(EngineSpecificRecordSchema<StructType> recordSchema, Properties props) {
+    String orderingField = ConfigUtils.getOrderingField(props);
+    scala.Option<NestedFieldPath> cachedNestedFieldPath =
+        HoodieInternalRowUtils.getCachedPosList(recordSchema.getSchema(), orderingField);
+    if (cachedNestedFieldPath.isDefined()) {
+      NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+      return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
+    } else {
+      return 0;
+    }
+  }
+
+  @Override
+  public EngineSpecificRecordSchema<StructType> getEngineSpecificSchema(Schema schema) {
+    return new EngineSpecificRecordSchema<StructType>(schema) {
+      @Override
+      StructType parseSchemaFromAvro(Schema avroSchema) {
+        return HoodieInternalRowUtils.getCachedSchema(avroSchema);
+      }
+    };
   }
 }

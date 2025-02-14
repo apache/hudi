@@ -829,6 +829,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
 
+  public static final ConfigProperty<Boolean> ENGINE_SPECIFIC_SCHEMA_OPTIMIZED_ENABLE = ConfigProperty
+      .key("hoodie.write.schema.engine.specific.optimized.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Whether to prepend meta fields with engine specific schema");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -2882,6 +2889,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getSecondaryIndexParallelism() {
     return metadataConfig.getSecondaryIndexParallelism();
+  }
+
+  public boolean isEngineSpecificSchemaOptimizedEnable() {
+    return getBoolean(ENGINE_SPECIFIC_SCHEMA_OPTIMIZED_ENABLE);
   }
 
   public static class Builder {

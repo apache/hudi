@@ -26,6 +26,8 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.EngineSpecificRecord;
+import org.apache.hudi.common.model.EngineSpecificRecordSchema;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -133,6 +135,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private boolean useWriterSchema = false;
 
   private final Properties recordProperties = new Properties();
+
+  private EngineSpecificRecordSchema engineSpecificWriterSchema;
+  private EngineSpecificRecordSchema engineSpecificWriterSchemaWithMetaFields;
 
   /**
    * This is used by log compaction only.
@@ -246,6 +251,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       String instantTime = config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
           ? getInstantTimeForLogFile(record) : deltaWriteStat.getPrevCommit();
       this.writer = createLogWriter(instantTime, fileSliceOpt);
+      if (record instanceof EngineSpecificRecord) {
+        EngineSpecificRecord engineSpecificRecord = (EngineSpecificRecord) record;
+        engineSpecificWriterSchema = engineSpecificRecord.getEngineSpecificSchema(writeSchema);
+        engineSpecificWriterSchemaWithMetaFields = engineSpecificRecord.getEngineSpecificSchema(writeSchemaWithMetaFields);
+      }
     } catch (Exception e) {
       LOG.error("Error in update task at commit " + instantTime, e);
       writeStatus.setGlobalError(e);
@@ -283,6 +293,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private Option<HoodieRecord> prepareRecord(HoodieRecord<T> hoodieRecord) {
     Option<Map<String, String>> recordMetadata = hoodieRecord.getMetadata();
     Schema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
+    EngineSpecificRecordSchema engineSpecificRecordSchema = useWriterSchema ? engineSpecificWriterSchemaWithMetaFields : engineSpecificWriterSchema;
     try {
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
       // Whether it is an update or insert record.
@@ -302,8 +313,12 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
         // Prepend meta-fields into the record
         MetadataValues metadataValues = populateMetadataFields(finalRecord);
-        HoodieRecord populatedRecord =
-            finalRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+        HoodieRecord populatedRecord;
+        if (engineSpecificRecordSchema != null && config.isEngineSpecificSchemaOptimizedEnable()) {
+          populatedRecord = ((EngineSpecificRecord) finalRecord).prependMetaFields(engineSpecificRecordSchema, engineSpecificWriterSchemaWithMetaFields, metadataValues, recordProperties);
+        } else {
+          populatedRecord = finalRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+        }
 
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
         //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
@@ -620,7 +635,12 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       record.seal();
     }
     // fetch the ordering val first in case the record was deflated.
-    final Comparable<?> orderingVal = record.getOrderingValue(writeSchema, recordProperties);
+    Comparable<?> orderingVal;
+    if (engineSpecificWriterSchema != null && config.isEngineSpecificSchemaOptimizedEnable()) {
+      orderingVal = ((EngineSpecificRecord) record).getOrderingValue(engineSpecificWriterSchema, recordProperties);
+    } else {
+      orderingVal = record.getOrderingValue(writeSchema, recordProperties);
+    }
     Option<HoodieRecord> indexedRecord = prepareRecord(record);
     if (indexedRecord.isPresent()) {
       // Skip the ignored record.
