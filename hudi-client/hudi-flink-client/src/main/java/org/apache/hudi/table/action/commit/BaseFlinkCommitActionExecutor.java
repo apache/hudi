@@ -105,7 +105,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
     Long sourceReadAndIndexDurationMs = null;
     if (sourceReadAndIndexTimer.isPresent()) {
       sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
-      LOG.info("Source read and index timer " + sourceReadAndIndexDurationMs);
+      LOG.info("Source read and index timer {} ", sourceReadAndIndexDurationMs);
     }
     final BucketType bucketType = record.getCurrentLocation().getInstantTime().equals("I")
         ? BucketType.INSERT

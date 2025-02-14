@@ -159,7 +159,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       HoodieJavaRDD.of(inputRDD).persist(config.getTaggedRecordStorageLevel(),
           context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     } else {
-      LOG.info("RDD PreppedRecords was persisted at: " + inputRDD.getStorageLevel());
+      LOG.info("RDD PreppedRecords was persisted at: {}", inputRDD.getStorageLevel());
     }
 
     // Handle records update with clustering
@@ -168,11 +168,11 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
-    LOG.debug("Input workload profile :" + workloadProfile);
+    LOG.debug("Input workload profile :{}", workloadProfile);
     Long sourceReadAndIndexDurationMs = null;
     if (sourceReadAndIndexTimer.isPresent()) {
       sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
-      LOG.info("Source read and index timer " + sourceReadAndIndexDurationMs);
+      LOG.info("Source read and index timer {}", sourceReadAndIndexDurationMs);
     }
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);

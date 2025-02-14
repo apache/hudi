@@ -100,7 +100,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     Long sourceReadAndIndexDurationMs = null;
     if (sourceReadAndIndexTimer.isPresent()) {
       sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
-      LOG.info("Source read and index timer " + sourceReadAndIndexDurationMs);
+      LOG.info("Source read and index timer {}", sourceReadAndIndexDurationMs);
     }
     final Partitioner partitioner = getPartitioner(workloadProfile);
     try {
