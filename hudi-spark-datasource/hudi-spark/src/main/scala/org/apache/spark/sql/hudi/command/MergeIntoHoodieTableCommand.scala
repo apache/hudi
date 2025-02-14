@@ -33,6 +33,7 @@ import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
+
 import org.apache.avro.Schema
 import org.apache.spark.sql._
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, MatchCast}
@@ -54,6 +55,7 @@ import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util
 import java.util.Base64
+
 import scala.collection.JavaConverters._
 
 /**
