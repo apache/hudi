@@ -35,6 +35,8 @@ public class ClusteringPlanEvent implements Serializable {
 
   private Map<String, String> strategyParams;
 
+  private int index;
+
   public ClusteringPlanEvent() {
   }
 
@@ -45,6 +47,17 @@ public class ClusteringPlanEvent implements Serializable {
     this.clusteringInstantTime = instantTime;
     this.clusteringGroupInfo = clusteringGroupInfo;
     this.strategyParams = strategyParams;
+  }
+
+  public ClusteringPlanEvent(
+      String instantTime,
+      ClusteringGroupInfo clusteringGroupInfo,
+      Map<String, String> strategyParams,
+      int index) {
+    this.clusteringInstantTime = instantTime;
+    this.clusteringGroupInfo = clusteringGroupInfo;
+    this.strategyParams = strategyParams;
+    this.index = index;
   }
 
   public void setClusteringInstantTime(String clusteringInstantTime) {
@@ -69,5 +82,9 @@ public class ClusteringPlanEvent implements Serializable {
 
   public Map<String, String> getStrategyParams() {
     return strategyParams;
+  }
+
+  public int getIndex() {
+    return index;
   }
 }

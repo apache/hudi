@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.StringUtils;
@@ -72,7 +71,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -448,11 +446,7 @@ public class Pipelines {
             new ClusteringPlanOperator(conf))
         .setParallelism(1) // plan generate must be singleton
         .setMaxParallelism(1) // plan generate must be singleton
-        .keyBy(plan ->
-            // make the distribution strategy deterministic to avoid concurrent modifications
-            // on the same bucket files
-            plan.getClusteringGroupInfo().getOperations()
-                .stream().map(ClusteringOperation::getFileId).collect(Collectors.joining()))
+        .partitionCustom(new IndexPartitioner(), ClusteringPlanEvent::getIndex)
         .transform("clustering_task",
             TypeInformation.of(ClusteringCommitEvent.class),
             new ClusteringOperator(conf, rowType))
