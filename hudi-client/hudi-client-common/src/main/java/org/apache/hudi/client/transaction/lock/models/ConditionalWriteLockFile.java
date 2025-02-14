@@ -20,6 +20,7 @@ package org.apache.hudi.client.transaction.lock.models;
 
 import org.apache.hudi.exception.HoodieIOException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -64,7 +65,7 @@ public class ConditionalWriteLockFile {
    * @param inputStream The input stream of the JSON content.
    * @param versionId   The unique version identifier for the lock file.
    * @return A new instance of ConditionalWriteLockFile.
-   * @throws RuntimeException If deserialization fails.
+   * @throws HoodieIOException If deserialization fails.
    */
   public static ConditionalWriteLockFile createFromStream(InputStream inputStream, String versionId) {
     try {
@@ -79,13 +80,26 @@ public class ConditionalWriteLockFile {
    * Writes the serialized JSON representation of this object to an output stream.
    *
    * @param outputStream The output stream to write the JSON to.
-   * @throws RuntimeException If serialization fails.
+   * @throws HoodieIOException If serialization fails.
    */
   public void writeToStream(OutputStream outputStream) {
     try {
       OBJECT_MAPPER.writeValue(outputStream, this.data);
     } catch (IOException e) {
       throw new HoodieIOException("Error writing object to JSON output stream", e);
+    }
+  }
+
+  /**
+   * Converts the data to a bytearray. Since we know the payloads will be small this is fine.
+   * @return A byte array.
+   * @throws HoodieIOException If serialization fails.
+   */
+  public byte[] toByteArray() {
+    try {
+      return OBJECT_MAPPER.writeValueAsBytes(this.data);
+    } catch (JsonProcessingException e) {
+      throw new HoodieIOException("Error writing object to byte array", e);
     }
   }
 

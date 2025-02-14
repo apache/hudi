@@ -276,7 +276,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
       // Semaphore successfully acquired here excludes the heart execution task. tryAcquire with timeout
       // means we wait any inflight task execution to finish synchronously.
       heartbeatStillInflight = !heartbeatSemaphore.tryAcquire(stopHeartbeatTimeoutMs, TimeUnit.MILLISECONDS);
-      if (!heartbeatStillInflight) {
+      if (heartbeatStillInflight) {
         logger.warn("Owner {}: Timed out while waiting for heartbeat termination.", ownerId);
       }
     } catch (InterruptedException e) {
@@ -295,7 +295,9 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
 
   @Override
   public synchronized void close() throws Exception {
-    stopHeartbeat(true);
+    if (hasActiveHeartbeat()) {
+      stopHeartbeat(true);
+    }
     scheduler.shutdown();
 
     try {
