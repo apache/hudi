@@ -18,11 +18,13 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.utils.TableSchemaGetter;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -252,17 +254,15 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
   /**
    * Updates the list of columns indexed with col stats index in Metadata table.
-   *
-   * @param metaClient     instance of {@link HoodieTableMetaClient} of interest.
+   * @param metaClient instance of {@link HoodieTableMetaClient} of interest.
    * @param columnsToIndex list of columns to index.
    */
   protected abstract void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
 
   /**
    * Finalize Write operation.
-   *
    * @param instantTime Instant Time
-   * @param stats       Hoodie Write Stat
+   * @param stats Hoodie Write Stat
    */
   protected void finalizeWrite(String instantTime, List<HoodieWriteStat> stats, HoodieWriteMetadata<O> result) {
     try {
@@ -298,12 +298,17 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     // Disable auto commit. Strategy is only expected to write data in new files.
     config.setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE, Boolean.FALSE.toString());
 
-    final Schema schema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchemaForClustering(false).get();
+    Option<Schema> schema;
+    try {
+      schema = new TableSchemaGetter(table.getMetaClient()).getTableAvroSchemaIfPresent(false);
+    } catch (Exception ex) {
+      throw new RuntimeException(ex);
+    }
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = (
         (ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>)
             ReflectionUtils.loadClass(config.getClusteringExecutionStrategyClass(),
                 new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config))
-        .performClustering(clusteringPlan, schema, instantTime);
+        .performClustering(clusteringPlan, schema.get(), instantTime);
     HoodieData<WriteStatus> writeStatusList = writeMetadata.getWriteStatuses();
     HoodieData<WriteStatus> statuses = updateIndex(writeStatusList, writeMetadata);
     statuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
@@ -314,7 +319,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       LOG.info("Found empty commit metadata for clustering with instant time " + instantTime);
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
-          extraMetadata, operationType, schema.toString(), getCommitActionType());
+          extraMetadata, operationType, schema.get().toString(), getCommitActionType());
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));
     }
     return writeMetadata;

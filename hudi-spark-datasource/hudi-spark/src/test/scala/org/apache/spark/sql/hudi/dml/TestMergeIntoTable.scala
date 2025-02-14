@@ -1295,64 +1295,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     })
   }
 
-  test("Test partial insert with inline clustering") {
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val basePath = s"${tmp.getCanonicalPath}/$tableName"
-      val tableType = "mor"
-      val logDataBlockFormat = "parquet"
-      withSparkSqlSessionConfig(
-          HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
-          DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "true",
-          HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logDataBlockFormat,
-          HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> "true",
-          HoodieClusteringConfig.INLINE_CLUSTERING.key -> "true",
-          HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "2",
-          HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key -> "id,price") {
-        spark.sql(
-          s"""
-             | create table $tableName (
-             |   id int,
-             |   name string,
-             |   price long,
-             |   ts long,
-             |   description string
-             | ) using hudi
-             | tblproperties(
-             |   type ='$tableType',
-             |   primaryKey = 'id',
-             |   preCombineField = 'ts'
-             | )
-             | location '$basePath'
-            """.stripMargin)
-        spark.sql(s"insert into $tableName values " +
-          "(1, 'a1', 10, 1000, 'a1: desc1')," +
-          "(2, 'a2', 20, 1200, 'a2: desc2'), " +
-          "(3, 'a3', 30.0, 1250, 'a3: desc3')")
-
-        // Partial updates using MERGE INTO statement with changed fields: "price" and "ts"
-        spark.sql(
-          s"""
-             | merge into $tableName t0
-             | using (
-             |   select 1 as id, 'a1' as name1, 12 as price, 1001 as _ts
-             | union
-             |   select 3 as id, 'a3' as name1, 25 as price, 1260 as _ts
-             |   ) s0
-             | on t0.id = s0.id
-             | when matched then update set price = s0.price, ts = s0._ts
-          """.stripMargin)
-        checkAnswer(s"select id, name, price, ts, description from $tableName order by id")(
-          Seq(1, "a1", 12, 1001, "a1: desc1"),
-          Seq(2, "a2", 20, 1200, "a2: desc2"),
-          Seq(3, "a3", 25, 1260, "a3: desc3")
-        )
-        assert(createMetaClient(spark, basePath).getActiveTimeline.lastInstant().get().getAction.equals(
-          HoodieTimeline.REPLACE_COMMIT_ACTION))
-      }
-    })
-  }
-
   test("Test Merge Into with target matched columns cast-ed") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
@@ -1490,47 +1432,48 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     testConfigs.foreach { case (tableType, sparkSqlOptimizedWrites) =>
       log.info(s"=== Testing MergeInto with partial insert: tableType=$tableType, sparkSqlOptimizedWrites=$sparkSqlOptimizedWrites ===")
       withRecordType()(withTempDir { tmp =>
-        withSparkSqlSessionConfig("hoodie.payload.combined.schema.validate" -> "true",
-          SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
-          // Create a partitioned table
-          val tableName = generateTableName
-          spark.sql(
-            s"""
-               | create table $tableName (
-               |  id bigint,
-               |  name string,
-               |  price double,
-               |  ts bigint,
-               |  dt string
-               | ) using hudi
-               | tblproperties (
-               |  type = '$tableType',
-               |  primaryKey = 'id'
-               | )
-               | partitioned by(dt)
-               | location '${tmp.getCanonicalPath}'
-           """.stripMargin)
+        spark.sql("set hoodie.payload.combined.schema.validate = true")
+        // Create a partitioned table
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id bigint,
+             |  name string,
+             |  price double,
+             |  ts bigint,
+             |  dt string
+             | ) using hudi
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id'
+             | )
+             | partitioned by(dt)
+             | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
 
-          spark.sql(s"insert into $tableName select 1, 'a1', 10, 1L, '2021-03-21'")
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1L, '2021-03-21'")
 
-          spark.sql(
-            s"""
-               | merge into $tableName as t0
-               | using (
-               |  select 2 as id, 'a2' as name, 10 as price, 2L as ts, '2021-03-20' as dt
-               |  union
-               |  select 1 as id, 'a1_updated' as name, 11 as price, 3L as ts, '2021-03-21' as dt
-               | ) s0
-               | on s0.id = t0.id
-               | when matched then update set t0.id = s0.id, t0.name = s0.name
-               | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
-               | values(s0.id, s0.name, s0.dt)
-           """.stripMargin)
-          checkAnswer(s"select id, name, price, dt from $tableName order by id")(
-            Seq(1, "a1_updated", 10, "2021-03-21"),
-            Seq(2, "a2", null, "2021-03-20")
-          )
-        }
+        // Set optimized sql merge setting
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+
+        spark.sql(
+          s"""
+             | merge into $tableName as t0
+             | using (
+             |  select 2 as id, 'a2' as name, 10 as price, 2L as ts, '2021-03-20' as dt
+             |  union
+             |  select 1 as id, 'a1_updated' as name, 11 as price, 3L as ts, '2021-03-21' as dt
+             | ) s0
+             | on s0.id = t0.id
+             | when matched then update set t0.id = s0.id, t0.name = s0.name
+             | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
+             | values(s0.id, s0.name, s0.dt)
+         """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+          Seq(1, "a1_updated", 10, "2021-03-21"),
+          Seq(2, "a2", null, "2021-03-20")
+        )
       })
     }
   }

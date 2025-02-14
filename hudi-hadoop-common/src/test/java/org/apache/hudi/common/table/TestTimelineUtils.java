@@ -25,13 +25,14 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
@@ -372,7 +373,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   private HoodieTableMetaClient prepareMetaClient(
       List<HoodieInstant> activeInstants,
       List<HoodieInstant> archivedInstants,
-      String startTs) throws IOException {
+      String startTs
+  ) throws IOException {
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     HoodieArchivedTimeline mockArchivedTimeline = mock(HoodieArchivedTimeline.class);
     HoodieTableConfig mockTableConfig = mock(HoodieTableConfig.class);
@@ -529,6 +531,22 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     List<HoodieRollbackStat> rollbackStats = new ArrayList<>();
     rollbackStats.add(rollbackStat);
     return TimelineMetadataUtils.convertRollbackMetadata(commitTs, Option.empty(), rollbacks, rollbackStats);
+  }
+
+  private byte[] getCommitMetadata(String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
+      throws IOException {
+    HoodieCommitMetadata commit = new HoodieCommitMetadata();
+    for (int i = 1; i <= count; i++) {
+      HoodieWriteStat stat = new HoodieWriteStat();
+      stat.setFileId(i + "");
+      stat.setPartitionPath(Paths.get(basePath, partition).toString());
+      stat.setPath(commitTs + "." + i + metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
+      commit.addWriteStat(partition, stat);
+    }
+    for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
+      commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
+    }
+    return serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commit).get();
   }
 
   private byte[] getReplaceCommitMetadata(String basePath, String commitTs, String replacePartition, int replaceCount,
