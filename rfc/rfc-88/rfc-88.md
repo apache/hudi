@@ -101,7 +101,7 @@ and Spark FileIndex, which introduces difficulties both for the development and 
 
 ## Goals
 To make the scope of the RFC more clear, we emphasize the goals here:
-* Unify the avro schema and internal schema into one and clean the codes.
+* Propose a native schema as the authoritative schema for Hudi, making the type system more extensible and the semantic of data type clear and unified.
 * Abstract out the basic functionality for writers/readers based on data type abstraction, then each engine just implements the getter/setter logic, and eliminate the unnecessary Ser/De cost for the avro writer/read path.
 * Improve the expression abstractions and the integration with the Hudi file index and MDT indices, so that all these optimization can be shared between engines. Specifically, this should be used for expression indexes.
 
@@ -212,7 +212,7 @@ For the first stated goal, the following changes are proposed:
 
 ### Abstraction of Writers/Readers
 In the lake architecture, abstracting low-level file readers and writers is a crucial design choice. With a well defined 
-reader/writer abstraction, we can make the system more flexible, extendible, and reduce the efforts required for development 
+reader/writer abstraction, we can make the system more flexible, extensible, and reduce the efforts required for development
 and maintenance. Furthermore, the reading/writing behaviors among different engines can be unified, as well as sharing the performance optimization.
 #### Writer Abstraction
 ![writer_abstract](writer_abstract.png)
@@ -480,16 +480,11 @@ these into consideration, the following changes should be made:
     intermediate representation for Hudi's record payload, it naturally calls for a new abstract of the key generator, 
     and then each engine integration can customize their own implementations for different scenarios.
     ```java
-    public interface KeyGenerator<R> {
+    public interface KeyGenerator<R> extends Serializable {
         /**
-        * Extract record key from the given engine specific row.
+        * Extract HoodieKey from the given engine specific row.
         */
-        String getRecordKey(R row);
-    
-        /**
-        * Extract partition path from the given engine specific row.
-        */
-        String getPartitionPath(R row)
+        HoodieKey getRecordKey(R row);
     }
     ```
 
