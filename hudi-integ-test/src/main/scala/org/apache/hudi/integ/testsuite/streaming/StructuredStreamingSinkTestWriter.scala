@@ -21,10 +21,11 @@ package org.apache.hudi.integ.testsuite.streaming
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig.FAIL_ON_TIMELINE_ARCHIVING_ENABLE
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.streaming.StreamingQueryListener.{QueryProgressEvent, QueryStartedEvent, QueryTerminatedEvent}
-import org.apache.spark.sql.streaming.{OutputMode, StreamingQueryListener, Trigger}
+
 import org.apache.log4j.LogManager
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.streaming.{OutputMode, StreamingQueryListener, Trigger}
+import org.apache.spark.sql.streaming.StreamingQueryListener.{QueryProgressEvent, QueryStartedEvent, QueryTerminatedEvent}
 
 object StructuredStreamingSinkTestWriter {
 
