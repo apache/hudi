@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.{DataSourceWriteOptions, ScalaAssertionSupport}
+
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.ErrorMessageChecker.isIncompatibleDataException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
