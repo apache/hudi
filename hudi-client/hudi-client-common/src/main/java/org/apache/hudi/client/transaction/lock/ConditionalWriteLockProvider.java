@@ -67,6 +67,8 @@ public class ConditionalWriteLockProvider
   // When we retry lock upserts, do so 5 times
   private static final long LOCK_UPSERT_RETRY_COUNT = 5;
 
+  private static final String GCS_LOCK_SERVICE_CLASS_NAME = "org.apache.hudi.gcp.transaction.lock.GCSConditionalWriteLockService";
+
   // The static logger to be shared across contexts
   private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(ConditionalWriteLockProvider.class);
   private static final String LOCK_STATE_LOGGER_MSG = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}";
@@ -128,11 +130,17 @@ public class ConditionalWriteLockProvider
         this::renewLock
     );
 
+    String lockServiceClassName;
+    if (config.getLocksLocation().startsWith("gs://") || config.getLocksLocation().startsWith("https://storage.googleapis.com")) {
+      // Create GCS service
+      lockServiceClassName = GCS_LOCK_SERVICE_CLASS_NAME;
+    } else {
+      throw new HoodieLockException("No implementation of ConditionalWriteLockService supports this lock storage location");
+    }
+
     try {
-      // All ConditionalWriteLockService implementations need to have the same constructor args/types.
-      // OwnerId, BucketName, LockFilePath in that order.
       this.lockService = ReflectionUtils.loadClass(
-          config.getWriteServiceClassName(),
+          lockServiceClassName,
           new Class<?>[] {String.class, String.class, String.class},
           new Object[] {ownerId, bucketName, lockFilePath});
     } catch (Throwable e) {
@@ -306,13 +314,16 @@ public class ConditionalWriteLockProvider
       // The goal is to setLock(null)
       // This indicates to future callers that we do not have the lock and our heartbeat task is expired.
       // If either of our actions to perform this work fail, then we cannot setLock to null.
-      boolean canSetCurrentLockNull = tryExpireCurrentLock();
+      boolean canSetCurrentLockNull = true;
 
+      // Try to stop the heartbeat first
       if (heartbeatManager != null && heartbeatManager.hasActiveHeartbeat()) {
         logger.info("Owner {}: Gracefully shutting down heartbeat.", this.ownerId);
         canSetCurrentLockNull &= heartbeatManager.stopHeartbeat(true);
       }
 
+      // Then expire the current lock.
+      canSetCurrentLockNull &= tryExpireCurrentLock();
       if (canSetCurrentLockNull) {
         this.setLock(null);
       } else {
@@ -340,9 +351,16 @@ public class ConditionalWriteLockProvider
           this.getLock(),
           // Keep retrying for the normal validity time.
           LOCK_UPSERT_RETRY_COUNT);
-      if (result == null || !result.isPresent()) {
-        // This can happen in an edge case when we unlock after the heartbeat fails.
-        // The heartbeat should be the one to trigger an alarm in this case.
+      if (result == null) {
+        // Precondition failure, this can happen if our lock expires and someone else acquires the lock.
+        logger.warn(
+            LOCK_STATE_LOGGER_MSG,
+            ownerId,
+            lockFilePath,
+            Thread.currentThread(),
+            FAILED_TO_RELEASE);
+      } else if (!result.isPresent()) {
+        // Here we do not know the state of the lock.
         logger.error(
             LOCK_STATE_LOGGER_MSG,
             ownerId,

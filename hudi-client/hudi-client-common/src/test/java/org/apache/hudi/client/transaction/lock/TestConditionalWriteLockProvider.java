@@ -24,7 +24,6 @@ import org.apache.hudi.client.transaction.lock.models.HeartbeatManager;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -33,8 +32,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 
-import java.lang.reflect.Field;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -48,7 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -83,7 +79,7 @@ class TestConditionalWriteLockProvider {
         1000,
         DEFAULT_LOCK_VALIDITY_MS,
         "my-bucket",
-        "s3a://bucket/lake/db/tbl-default",
+        "gs://bucket/lake/db/tbl-default",
         ownerId,
         mockHeartbeatManager,
         mockLockService,
@@ -97,72 +93,26 @@ class TestConditionalWriteLockProvider {
   }
 
   @Test
-  void testValidDefaultConstructor() {
-
+  void testUnsupportedLockStorageLocation() {
     TypedProperties props = new TypedProperties();
     props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3a://test-bucket/locks");
-    props.put(ConditionalWriteLockConfig.WRITE_SERVICE_CLASS_NAME.key(), StubConditionalWriteLockService.class.getName());
-    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "s3a://bucket/lake/db/tbl-default");
+    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "gs://bucket/lake/db/tbl-default");
     props.put(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
     props.put(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "1000");
 
     LockConfiguration lockConf = new LockConfiguration(props);
     Configuration conf = new Configuration();
 
-    ConditionalWriteLockProvider provider = new ConditionalWriteLockProvider(lockConf, conf);
-    assertNull(provider.getLock());
-    provider.close();
-  }
-
-  @Test
-  void testValidDefaultConstructorWithWeirdBasePath() {
-
-    TypedProperties props = new TypedProperties();
-    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3a://test-bucket/locks");
-    props.put(ConditionalWriteLockConfig.WRITE_SERVICE_CLASS_NAME.key(), StubConditionalWriteLockService.class.getName());
-    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "//中文/路径//测试/emoji-u83DuDE0E-text//\\\\invalid*chars%$#end\n");
-    props.put(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
-    props.put(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "1000");
-
-    LockConfiguration lockConf = new LockConfiguration(props);
-    Configuration conf = new Configuration();
-
-    ConditionalWriteLockProvider provider = new ConditionalWriteLockProvider(lockConf, conf);
-    try {
-      Field field = provider.getClass().getDeclaredField("lockFilePath");
-      field.setAccessible(true);
-      String lockFilePath = (String) field.get(provider);
-      new URI(lockFilePath);
-    } catch (URISyntaxException | NoSuchFieldException | IllegalAccessException e) {
-      fail("Should not throw exception!");
-    }
-  }
-
-  @Test
-  void testInvalidWriteService() {
-    TypedProperties props = new TypedProperties();
-    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3a://test-bucket/locks");
-    props.put(ConditionalWriteLockConfig.WRITE_SERVICE_CLASS_NAME.key(), String.class.getName());
-    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "s3a://bucket/lake/db/tbl-default");
-    props.put(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
-    props.put(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "1000");
-
-    LockConfiguration lockConf = new LockConfiguration(props);
-    Configuration conf = new Configuration();
-
-    RuntimeException ex = assertThrows(RuntimeException.class,
+    HoodieLockException ex = assertThrows(HoodieLockException.class,
         () -> new ConditionalWriteLockProvider(lockConf, conf));
-    Throwable cause = ex.getCause();
-    assertNotNull(cause);
-    assertTrue(cause instanceof HoodieException);
+    assertTrue(ex.getMessage().contains("No implementation of ConditionalWriteLockService supports this lock storage location"));
   }
 
   @Test
   void testNonExistentWriteService() {
     TypedProperties props = new TypedProperties();
-    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3a://test-bucket/locks");
-    props.put(ConditionalWriteLockConfig.WRITE_SERVICE_CLASS_NAME.key(), "com.nonexistent.ClassName");
-    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "s3a://bucket/lake/db/tbl-default");
+    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "gs://test-bucket/locks");
+    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "gs://bucket/lake/db/tbl-default");
     props.put(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
     props.put(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "1000");
 
@@ -175,12 +125,10 @@ class TestConditionalWriteLockProvider {
   }
 
   @Test
-  void testInvalidLocksLocation() {
-    ConditionalWriteLockService lockService = mock(ConditionalWriteLockService.class);
+  void testInvalidLocksLocationForWriteService() {
     TypedProperties props = new TypedProperties();
     props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "not a uri");
-    props.put(ConditionalWriteLockConfig.WRITE_SERVICE_CLASS_NAME.key(), lockService.getClass().getName());
-    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "s3a://bucket/lake/db/tbl-default");
+    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "gs://bucket/lake/db/tbl-default");
     props.put(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
     props.put(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "1000");
 
@@ -193,6 +141,22 @@ class TestConditionalWriteLockProvider {
     assertNotNull(cause);
     assertTrue(cause instanceof URISyntaxException);
     assertTrue(ex.getMessage().contains("Unable to parse locks location as a URI"));
+  }
+
+  @Test
+  void testValidLocksLocationForWriteService() {
+    TypedProperties props = new TypedProperties();
+    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "https://storage.googleapis.com/bucket/locks");
+    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "gs://bucket/lake/db/tbl-default");
+    props.put(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
+    props.put(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "1000");
+
+    LockConfiguration lockConf = new LockConfiguration(props);
+    Configuration conf = new Configuration();
+
+    HoodieLockException ex = assertThrows(HoodieLockException.class,
+        () -> new ConditionalWriteLockProvider(lockConf, conf));
+    assertTrue(ex.getMessage().contains("Failed to load and initialize ConditionalWriteLockService"));
   }
 
   @Test
@@ -493,7 +457,7 @@ class TestConditionalWriteLockProvider {
     when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong())).thenReturn(Option.of(successLockFile));
     assertTrue(lockProvider.renewLock());
 
-    verify(mockLogger).info(eq("Owner {}: renewal succeeded for lock: {} with {} ms left until expiration."), eq(this.ownerId), eq("s3a://bucket/lake/db/tbl-default"), anyLong());
+    verify(mockLogger).info(eq("Owner {}: renewal succeeded for lock: {} with {} ms left until expiration."), eq(this.ownerId), eq("gs://bucket/lake/db/tbl-default"), anyLong());
   }
 
   @Test

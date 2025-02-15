@@ -142,8 +142,8 @@ public class ConditionalWriteLockFileTest {
 
   @Test
   void testToByteArrayValidData() {
-    ConditionalWriteLockFile file = ConditionalWriteLockFile.createFromStream(validJsonStream, VERSION_ID);
-    String outputJson = new String(file.toByteArray());
+    ConditionalWriteLockData data = new ConditionalWriteLockData(false, 1700000000000L, "testOwner");
+    String outputJson = new String(ConditionalWriteLockFile.toByteArray(data));
     assertTrue(outputJson.contains("\"expired\":false"));
     assertTrue(outputJson.contains("\"validUntil\":1700000000000"));
     assertTrue(outputJson.contains("\"owner\":\"testOwner\""));

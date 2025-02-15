@@ -95,9 +95,9 @@ public class ConditionalWriteLockFile {
    * @return A byte array.
    * @throws HoodieIOException If serialization fails.
    */
-  public byte[] toByteArray() {
+  public static byte[] toByteArray(ConditionalWriteLockData data) {
     try {
-      return OBJECT_MAPPER.writeValueAsBytes(this.data);
+      return OBJECT_MAPPER.writeValueAsBytes(data);
     } catch (JsonProcessingException e) {
       throw new HoodieIOException("Error writing object to byte array", e);
     }

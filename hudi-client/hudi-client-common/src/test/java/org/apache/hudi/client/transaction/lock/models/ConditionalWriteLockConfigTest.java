@@ -35,7 +35,6 @@ class ConditionalWriteLockConfigTest {
     TypedProperties props = new TypedProperties();
     props.setProperty(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/path/locks");
     props.setProperty(BASE_PATH_KEY, "s3://hudi-bucket/table/basepath");
-    props.setProperty(ConditionalWriteLockConfig.WRITE_SERVICE_CLASS_NAME.key(), "com.class.service");
 
     ConditionalWriteLockConfig.Builder builder = new ConditionalWriteLockConfig.Builder();
     ConditionalWriteLockConfig config = builder
@@ -53,7 +52,6 @@ class ConditionalWriteLockConfigTest {
     props.setProperty(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/path/locks");
     props.setProperty(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "120000");
     props.setProperty(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "10000");
-    props.setProperty(ConditionalWriteLockConfig.WRITE_SERVICE_CLASS_NAME.key(), "com.class.service");
     props.setProperty(BASE_PATH_KEY, "/hudi/table/basepath");
 
     ConditionalWriteLockConfig config = new ConditionalWriteLockConfig.Builder()
@@ -70,7 +68,6 @@ class ConditionalWriteLockConfigTest {
   void testMissingRequiredProperties() {
     TypedProperties props = new TypedProperties();
     props.setProperty(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "120000");
-    props.setProperty(ConditionalWriteLockConfig.WRITE_SERVICE_CLASS_NAME.key(), "com.class.service");
     ConditionalWriteLockConfig.Builder propsBuilder = new ConditionalWriteLockConfig.Builder();
 
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
@@ -88,7 +85,6 @@ class ConditionalWriteLockConfigTest {
     props.setProperty(BASE_PATH_KEY, "/hudi/table/basepath");
     props.setProperty(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
     props.setProperty(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "3000");
-    props.setProperty(ConditionalWriteLockConfig.WRITE_SERVICE_CLASS_NAME.key(), "com.class.service");
     ConditionalWriteLockConfig.Builder propsBuilder = new ConditionalWriteLockConfig.Builder();
 
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
@@ -107,7 +103,6 @@ class ConditionalWriteLockConfigTest {
   void testBucketPathValidation() {
     TypedProperties props = new TypedProperties();
     props.setProperty(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "invalid/path");
-    props.setProperty(ConditionalWriteLockConfig.WRITE_SERVICE_CLASS_NAME.key(), "com.class.service");
     props.setProperty(BASE_PATH_KEY, "/hudi/table/basepath");
 
     ConditionalWriteLockConfig config = new ConditionalWriteLockConfig.Builder()

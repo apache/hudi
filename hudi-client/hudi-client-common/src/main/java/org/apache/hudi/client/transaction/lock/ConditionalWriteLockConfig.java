@@ -37,14 +37,6 @@ public class ConditionalWriteLockConfig extends HoodieConfig {
                           "For conditional write based lock provider, the valid URI where lock files are written."
                               + "Must be a filesystem which supports conditional writes.");
 
-  public static final ConfigProperty<String> WRITE_SERVICE_CLASS_NAME =
-      ConfigProperty.key(CONDITIONAL_WRITE_LOCK_PROPERTY_PREFIX + "write_service")
-          .noDefaultValue()
-          .markAdvanced()
-          .sinceVersion(SINCE_VERSION_0_15_0)
-          .withDocumentation(
-              "For conditional write based lock provider, class name of the implementation of ConditionalWriteLockService.");
-
   public static final ConfigProperty<Long> LOCK_VALIDITY_TIMEOUT_MS =
           ConfigProperty.key(CONDITIONAL_WRITE_LOCK_PROPERTY_PREFIX + "lock_validity_timeout_ms")
                   .defaultValue(TimeUnit.MINUTES.toMillis(5))
@@ -67,11 +59,6 @@ public class ConditionalWriteLockConfig extends HoodieConfig {
 
   public long getHeartbeatPollMs() {
     return getLong(HEARTBEAT_POLL_MS);
-  }
-
-  public String getWriteServiceClassName() {
-    // Required !!
-    return getString(WRITE_SERVICE_CLASS_NAME);
   }
 
   public String getHudiTableBasePath() {
@@ -102,9 +89,6 @@ public class ConditionalWriteLockConfig extends HoodieConfig {
       String notExistsMsg = " does not exist!";
       if (Boolean.FALSE.equals(lockConfig.contains(BASE_PATH_KEY))) {
         throw new IllegalArgumentException(BASE_PATH_KEY + notExistsMsg);
-      }
-      if (Boolean.FALSE.equals(lockConfig.contains(WRITE_SERVICE_CLASS_NAME))) {
-        throw new IllegalArgumentException(WRITE_SERVICE_CLASS_NAME + notExistsMsg);
       }
       if (Boolean.FALSE.equals(lockConfig.contains(LOCK_INTERNAL_STORAGE_LOCATION.key()))) {
         throw new IllegalArgumentException(LOCK_INTERNAL_STORAGE_LOCATION.key() + notExistsMsg);
