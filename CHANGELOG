@@ -611,3 +611,9 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-02-14 16:03:53] [release-v1.90.0] ---
 [ENG-18993][INTERNAL] Move successful jobs to self hosted runner  (#1168)
 [AUDIT-1071]: Changelog for release-v1.89.0 (#1195)
+
+--- [2025-02-15 06:50:31] [release-v1.91.0] ---
+[ENG-21393][INTERNAL] GCP implementation of managed lock provider (#1161)
+[ENG-19872][INTERNAL] Managed Lock Provider with Conditional Writes (#1127)
+[ENG-18993][INTERNAL] reverted self hosted runner (#1200)
+[AUDIT-1071]: Changelog for release-v1.90.0 (#1199)
