@@ -130,9 +130,9 @@ variables:
   JOB1_UT_MODULES: ${{ join(',',parameters.job1UTModules) }}
   JOB2_FT_MODULES: ${{ join(',',parameters.job2FTModules) }}
   JOB3456_MODULES: ${{ join(',',parameters.job3456UTModules) }}
-  JOB6_JAVA_TEST_FILTER: '**/org/apache/hudi/functional/**/*'
-  JOB6_MVN_ARG_TEST: "-Dtest=\"$(JOB6_JAVA_TEST_FILTER)\""
-  JOB3_MVN_ARG_TEST: "-Dtest=\"!$(JOB6_JAVA_TEST_FILTER)\""
+  JOB4_JAVA_TEST_FILTER: '**/org/apache/hudi/functional/**/*'
+  JOB4_MVN_ARG_TEST: "-Dtest=\"$(JOB4_JAVA_TEST_FILTER)\""
+  JOB3_MVN_ARG_TEST: "-Dtest=\"!$(JOB4_JAVA_TEST_FILTER)\""
   JOB5_SPARK_DML_WILDCARD_SUITES: 'org.apache.spark.sql.hudi.dml'
   JOB6_SPARK_DDL_OTHERS_WILDCARD_SUITES: ${{ join(',',parameters.job6HudiSparkDdlOthersWildcardSuites) }}
   JOB8_UT_MODULES: ${{ join(',',parameters.job8UTModules) }}
@@ -270,7 +270,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(JOB5_MVN_ARG_TEST) $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
+              options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(JOB4_MVN_ARG_TEST) $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
