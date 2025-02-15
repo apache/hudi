@@ -128,7 +128,6 @@ variables:
   JAVA_MVN_TEST_FILTER: '-DwildcardSuites=skipScalaTests -DfailIfNoTests=false'
   SCALA_MVN_TEST_FILTER: '-Dtest=skipJavaTests -DfailIfNoTests=false'
   JOB1_UT_MODULES: ${{ join(',',parameters.job1UTModules) }}
-  JOB1_FT_MODULES: ${{ join(',',parameters.job1FTModules) }}
   JOB2_FT_MODULES: ${{ join(',',parameters.job2FTModules) }}
   JOB3456_MODULES: ${{ join(',',parameters.job3456UTModules) }}
   JOB6_JAVA_TEST_FILTER: '**/org/apache/hudi/functional/**/*'
