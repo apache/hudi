@@ -29,9 +29,9 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 
 /**
- * Hive merger that always chooses the newer record
+ * Hive merger that always chooses the newer record based on the commit time
  */
-public class OverwriteWithLatestHiveRecordMerger extends HoodieHiveRecordMerger {
+public class CommitTimeBasedHiveRecordMerger extends HoodieHiveRecordMerger {
   @Override
   public String getMergingStrategy() {
     return COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;

@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, ScalaAssertionSupport}
+import org.apache.hudi.{DataSourceWriteOptions, EventTimeBasedSparkRecordMerger, ScalaAssertionSupport}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -58,7 +58,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.ENABLE.key -> "false"
   )
-  val sparkOpts = Map(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName)
+  val sparkOpts = Map(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[EventTimeBasedSparkRecordMerger].getName)
 
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"

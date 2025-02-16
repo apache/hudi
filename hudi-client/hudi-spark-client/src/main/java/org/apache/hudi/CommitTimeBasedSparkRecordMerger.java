@@ -29,9 +29,9 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 
 /**
- * Spark merger that always chooses the newer record
+ * Spark merger that always chooses the newer record based on the commit time
  */
-public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerger {
+public class CommitTimeBasedSparkRecordMerger extends HoodieSparkRecordMerger {
 
   @Override
   public String getMergingStrategy() {

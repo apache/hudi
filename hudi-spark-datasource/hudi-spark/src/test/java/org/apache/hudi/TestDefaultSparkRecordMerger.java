@@ -75,7 +75,7 @@ class TestDefaultSparkRecordMerger {
   void testMergerWithAvroRecord() {
     try (HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(0L)) {
       List<HoodieRecord> records = dataGenerator.generateInserts("001", 2);
-      DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
+      EventTimeBasedSparkRecordMerger merger = new EventTimeBasedSparkRecordMerger();
       TypedProperties props = new TypedProperties();
       Schema recordSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
       assertThrows(
@@ -98,7 +98,7 @@ class TestDefaultSparkRecordMerger {
     HoodieRecord<InternalRow> newRecord =
         new HoodieSparkRecord(InternalRow.apply(newValue.toSeq()), SPARK_SCHEMA);
 
-    DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
+    EventTimeBasedSparkRecordMerger merger = new EventTimeBasedSparkRecordMerger();
     TypedProperties props = new TypedProperties();
     props.setProperty(PRECOMBINE_FIELD.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
@@ -125,7 +125,7 @@ class TestDefaultSparkRecordMerger {
     HoodieRecord<InternalRow> newRecord =
         new HoodieSparkRecord(InternalRow.apply(newValue.toSeq()), SPARK_SCHEMA);
 
-    DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
+    EventTimeBasedSparkRecordMerger merger = new EventTimeBasedSparkRecordMerger();
     TypedProperties props = new TypedProperties();
     props.setProperty(PRECOMBINE_FIELD.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
@@ -149,7 +149,7 @@ class TestDefaultSparkRecordMerger {
         new HoodieSparkRecord(InternalRow.apply(oldValue.toSeq()), SPARK_SCHEMA);
     HoodieRecord<InternalRow> newRecord = new HoodieEmptyRecord<>(key, SPARK);
 
-    DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
+    EventTimeBasedSparkRecordMerger merger = new EventTimeBasedSparkRecordMerger();
     TypedProperties props = new TypedProperties();
     props.setProperty(PRECOMBINE_FIELD.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
@@ -170,7 +170,7 @@ class TestDefaultSparkRecordMerger {
     HoodieRecord<InternalRow> newRecord =
         new HoodieSparkRecord(InternalRow.apply(newValue.toSeq()), SPARK_SCHEMA);
 
-    DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
+    EventTimeBasedSparkRecordMerger merger = new EventTimeBasedSparkRecordMerger();
     TypedProperties props = new TypedProperties();
     props.setProperty(PRECOMBINE_FIELD.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(

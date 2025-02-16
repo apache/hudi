@@ -181,9 +181,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // get rid of event time and commit time ordering. Just return Option.empty
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
-        return Option.of(new DefaultHiveRecordMerger());
+        return Option.of(new EventTimeBasedHiveRecordMerger());
       case COMMIT_TIME_ORDERING:
-        return Option.of(new OverwriteWithLatestHiveRecordMerger());
+        return Option.of(new CommitTimeBasedHiveRecordMerger());
       case CUSTOM:
       default:
         if (mergeStrategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {

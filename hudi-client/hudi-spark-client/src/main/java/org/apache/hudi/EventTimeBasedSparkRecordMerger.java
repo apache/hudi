@@ -34,9 +34,9 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 
 /**
- * Record merger for spark that implements the default merger strategy
+ * Record merger for spark that implements the event-time based merging strategy
  */
-public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
+public class EventTimeBasedSparkRecordMerger extends HoodieSparkRecordMerger {
 
   @Override
   public String getMergingStrategy() {

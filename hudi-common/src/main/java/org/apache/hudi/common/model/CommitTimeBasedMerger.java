@@ -28,9 +28,9 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 
 /**
- * Avro Merger that always chooses the newer record
+ * Avro Merger that always chooses the newer record based on the commit time
  */
-public class OverwriteWithLatestMerger implements HoodieRecordMerger {
+public class CommitTimeBasedMerger implements HoodieRecordMerger {
 
   @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {

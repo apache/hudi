@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.ddl
 
-import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, QuickstartUtils}
+import org.apache.hudi.{DataSourceWriteOptions, EventTimeBasedSparkRecordMerger, QuickstartUtils}
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -802,7 +802,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   val sparkOpts = Map(
-    HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
+    HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[EventTimeBasedSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 

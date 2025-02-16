@@ -18,10 +18,10 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hudi.DefaultSparkRecordMerger
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.EventTimeBasedSparkRecordMerger
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
@@ -118,7 +118,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
   private def overwriteBenchmark(): Unit = {
     val df = createComplexDataFrame(1000000)
     val benchmark = new HoodieBenchmark("pref insert overwrite", 1000000, 3)
-    Seq(classOf[HoodieAvroRecordMerger].getName, classOf[DefaultSparkRecordMerger].getName).zip(Seq(avroTable, sparkTable)).foreach {
+    Seq(classOf[HoodieAvroRecordMerger].getName, classOf[EventTimeBasedSparkRecordMerger].getName).zip(Seq(avroTable, sparkTable)).foreach {
       case (merger, tableName) => benchmark.addCase(merger) { _ =>
         withTempDir { f =>
           prepareHoodieTable(tableName, new Path(f.getCanonicalPath, tableName).toUri.toString, "mor", merger, df)
@@ -145,7 +145,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
    */
   private def upsertThenReadBenchmark(): Unit = {
     val avroMergerImpl = classOf[HoodieAvroRecordMerger].getName
-    val sparkMergerImpl = classOf[DefaultSparkRecordMerger].getName
+    val sparkMergerImpl = classOf[EventTimeBasedSparkRecordMerger].getName
     val df = createComplexDataFrame(10000)
     withTempDir { avroPath =>
       withTempDir { sparkPath =>
