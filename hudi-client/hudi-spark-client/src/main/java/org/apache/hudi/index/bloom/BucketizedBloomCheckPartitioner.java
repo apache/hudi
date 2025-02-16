@@ -90,7 +90,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     // of buckets and assigns buckets in the same order as file groups. If we were to simply round robin, then buckets
     // for a file group is more or less guaranteed to be placed on different partitions all the time.
     int minBucketsPerPartition = Math.max((int) Math.floor((1.0 * totalBuckets) / partitions), 1);
-    LOG.info(String.format("TotalBuckets %d, min_buckets/partition %d", totalBuckets, minBucketsPerPartition));
+    LOG.info("TotalBuckets {}, min_buckets/partition {}, partitions {}", totalBuckets, minBucketsPerPartition, partitions);
     int[] bucketsFilled = new int[partitions];
     Map<HoodieFileGroupId, AtomicInteger> bucketsFilledPerFileGroup = new HashMap<>();
     int partitionIndex = 0;
