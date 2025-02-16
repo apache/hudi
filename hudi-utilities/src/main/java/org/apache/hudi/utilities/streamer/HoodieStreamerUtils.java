@@ -56,6 +56,8 @@ import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.avro.HoodieAvroDeserializer;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Iterator;
@@ -69,6 +71,8 @@ import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_VALIDAT
  * Util class for HoodieStreamer.
  */
 public class HoodieStreamerUtils {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieStreamerUtils.class);
 
   /**
    * Generates HoodieRecords for the avro data read from source.
@@ -94,6 +98,10 @@ public class HoodieStreamerUtils {
       if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
         records = avroRDD.mapPartitions(
             (FlatMapFunction<Iterator<GenericRecord>, Either<HoodieRecord,String>>) genericRecordIterator -> {
+              TaskContext taskContext = TaskContext.get();
+              LOG.info("Creating HoodieRecords with stageId : {}, stage attempt no: {}, taskId : {}, task attempt no : {}, task attempt id : {} ",
+                  taskContext.stageId(), taskContext.stageAttemptNumber(), taskContext.partitionId(), taskContext.attemptNumber(),
+                  taskContext.taskAttemptId());
               if (autoGenerateRecordKeys) {
                 props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
                 props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
