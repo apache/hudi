@@ -19,10 +19,10 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals}
-import org.apache.hudi.common.table.HoodieTableConfig.VERSION
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.junit.jupiter.api.Assertions.assertEquals
 
 class TestWriteTableVersionConfig extends HoodieSparkSqlTestBase {
 

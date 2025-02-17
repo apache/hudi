@@ -22,15 +22,16 @@ import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparison}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.util
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.util.function.{Function, Supplier}
-import java.util.stream.{Collectors, Stream => JStream}
 import java.util.{ArrayList => JArrayList, List => JList}
+import java.util.function.Supplier
+import java.util.stream.{Collectors, Stream => JStream}
+
 import scala.collection.JavaConverters._
 
 class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure with ProcedureBuilder {

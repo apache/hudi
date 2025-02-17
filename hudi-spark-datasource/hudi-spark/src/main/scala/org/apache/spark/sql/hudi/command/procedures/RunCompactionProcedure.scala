@@ -17,13 +17,13 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{CompactionUtils, HoodieTimer, Option => HOption}
 import org.apache.hudi.config.HoodieLockConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row

@@ -20,6 +20,7 @@
 package org.apache.hudi.schema
 
 import org.apache.hudi.HoodieSchemaUtils
+
 import org.apache.spark.sql.types.{DataType, IntegerType, LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test

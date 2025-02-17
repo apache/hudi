@@ -18,7 +18,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, projectReader}
+import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, projectReader, BaseFileReader}
 import org.apache.hudi.HoodieBootstrapRelation.{createPartitionedFile, validate}
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient

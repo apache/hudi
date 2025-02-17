@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 

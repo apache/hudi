@@ -21,6 +21,7 @@ import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout, TimelineUtils}
 import org.apache.hudi.common.util.StringUtils
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -28,6 +29,7 @@ import java.time.ZonedDateTime
 import java.util
 import java.util.{Collections, Date}
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure with ProcedureBuilder {

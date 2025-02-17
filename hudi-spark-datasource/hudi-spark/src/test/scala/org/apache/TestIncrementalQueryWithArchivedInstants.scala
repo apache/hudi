@@ -19,19 +19,19 @@
 
 package org.apache
 
-import org.apache.hudi.DataSourceWriteOptions.{RECORD_MERGE_MODE, RECORD_MERGE_STRATEGY_ID}
+import org.apache.hudi.DataSourceWriteOptions.RECORD_MERGE_MODE
 import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.model.HoodieRecordMerger
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.storage.HoodieStorageUtils
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-import org.apache.hudi.storage.{HoodieStorageUtils, StorageConfiguration}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
-import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertFalse, assertTrue}
+import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertFalse}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.function.Executable
-import org.junit.{After, Before, Test}
 
 import java.nio.file.{Files, Path}
 
