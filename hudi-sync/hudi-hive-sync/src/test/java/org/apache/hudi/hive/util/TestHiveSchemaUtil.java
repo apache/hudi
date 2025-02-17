@@ -149,4 +149,11 @@ public class TestHiveSchemaUtil {
         schemaDifference.getAddColumnTypes(), Collections.emptyList(), true);
     assertTrue(schemaDifference.isEmpty());
   }
+
+  @Test
+  public void testGenerateCreateDataBaseDDL() {
+    String expectedCreateDataBaseSQL = "CREATE DATABASE IF NOT EXISTS `test_database`";
+    String testDataBase = HiveSchemaUtil.generateCreateDataBaseDDL("test_database");
+    assertEquals(expectedCreateDataBaseSQL, testDataBase);
+  }
 }
