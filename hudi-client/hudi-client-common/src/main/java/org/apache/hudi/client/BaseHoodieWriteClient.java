@@ -1299,6 +1299,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       ownerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, CommitUtils.getCommitActionType(operationType,
           metaClient.getTableType()), instantTime.get()));
     }
+    boolean requiresInitTable = needsUpgradeOrDowngrade(metaClient) || config.isMetadataTableEnabled();
+    if (!requiresInitTable) {
+      return;
+    }
     executeUsingTxnManager(ownerInstant, () -> {
       tryUpgrade(metaClient, instantTime);
       // TODO: this also does MT table management..
