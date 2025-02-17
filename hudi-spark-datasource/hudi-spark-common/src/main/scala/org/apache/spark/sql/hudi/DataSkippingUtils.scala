@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNullCountColumnNameFor, getValueCountColumnNameFor}
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util.ValidationUtils.checkState
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, HoodieCatalystExpressionUtils}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute

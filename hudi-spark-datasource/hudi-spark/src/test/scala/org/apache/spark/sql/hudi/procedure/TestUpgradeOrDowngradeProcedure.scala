@@ -19,16 +19,17 @@ package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils}
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.NAME_FORMAT_0_X
 
 import java.io.IOException
 import java.time.Instant
-import scala.collection.JavaConverters._
 
+import scala.collection.JavaConverters._
 
 class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
 

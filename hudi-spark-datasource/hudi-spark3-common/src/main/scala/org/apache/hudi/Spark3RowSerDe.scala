@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.client.utils.SparkRowSerDe
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder

@@ -18,23 +18,23 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.BucketIndexSupport
-import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieIndexConfig
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.bucket.BucketIdentifier
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator}
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SparkSession}
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 
 @Tag("functional")

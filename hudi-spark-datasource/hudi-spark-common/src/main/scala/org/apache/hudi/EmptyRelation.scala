@@ -20,9 +20,9 @@
 package org.apache.hudi
 
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SQLContext}
 
 /**
  * BaseRelation representing empty RDD.
