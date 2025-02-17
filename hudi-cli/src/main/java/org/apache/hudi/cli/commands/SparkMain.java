@@ -40,6 +40,7 @@ import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
@@ -50,8 +51,6 @@ import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
-import org.apache.hudi.cli.utils.HDFSParquetImporter;
-import org.apache.hudi.cli.utils.HDFSParquetImporter.Config;
 import org.apache.hudi.utilities.HoodieCleaner;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
@@ -171,9 +170,7 @@ public class SparkMain {
           break;
         case IMPORT:
         case UPSERT:
-          returnCode = dataLoad(jsc, commandString, args[3], args[4], args[5], args[6], args[7], args[8],
-              Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
-          break;
+          throw new HoodieNotSupportedException("This command is no longer supported. Use HoodieStreamer utility instead.");
         case COMPACT_RUN:
           returnCode = compact(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[7],
               Integer.parseInt(args[8]), HoodieCompactor.EXECUTE, propsFilePath, configs);
@@ -288,24 +285,6 @@ public class SparkMain {
       LOG.warn(String.format("Failed: Could not clean marker instantTime: \"%s\".", instantTime), e);
       return -1;
     }
-  }
-
-  private static int dataLoad(JavaSparkContext jsc, String command, String srcPath, String targetPath, String tableName,
-                              String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile,
-                              int retry, String propsFilePath, List<String> configs) {
-    Config cfg = new Config();
-    cfg.command = command;
-    cfg.srcPath = srcPath;
-    cfg.targetPath = targetPath;
-    cfg.tableName = tableName;
-    cfg.tableType = tableType;
-    cfg.rowKey = rowKey;
-    cfg.partitionKey = partitionKey;
-    cfg.parallelism = parallelism;
-    cfg.schemaFile = schemaFile;
-    cfg.propsFilePath = propsFilePath;
-    cfg.configs = configs;
-    return new HDFSParquetImporter(cfg).dataImport(jsc, retry);
   }
 
   private static void doCompactValidate(JavaSparkContext jsc, String basePath, String compactionInstant,
