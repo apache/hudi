@@ -20,6 +20,7 @@
 package org.apache.spark.sql.execution.datasources
 
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.hadoop.fs.FileStatus
 import org.apache.spark.paths.SparkPath
 import org.apache.spark.sql.catalyst.InternalRow

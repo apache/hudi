@@ -23,8 +23,8 @@ import org.apache.hudi.internal.schema.InternalSchema
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
-import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
+import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.hadoop.{ParquetInputFormat, ParquetRecordReader}
