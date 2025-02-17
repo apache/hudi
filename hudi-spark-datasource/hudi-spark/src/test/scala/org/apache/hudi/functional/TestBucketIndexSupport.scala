@@ -28,6 +28,7 @@ import org.apache.hudi.index.bucket.BucketIdentifier
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SparkSession}
