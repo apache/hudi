@@ -19,6 +19,7 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport
+
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, Cast}
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, LogicalPlan, Project}
