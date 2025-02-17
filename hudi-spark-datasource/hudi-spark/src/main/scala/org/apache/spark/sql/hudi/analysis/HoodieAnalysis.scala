@@ -21,7 +21,7 @@ import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport
 import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
 
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, HoodieCatalogTable}
@@ -38,8 +38,6 @@ import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFiel
 import org.apache.spark.sql.hudi.command.InsertIntoHoodieTableCommand.alignQueryOutput
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
-import org.apache.spark.sql.sources.BaseRelation
-import org.apache.spark.sql.SparkSession
 
 import java.util
 

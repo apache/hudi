@@ -18,6 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression}
+
 abstract class HoodieSpark4CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
 
   /**
