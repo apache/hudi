@@ -54,6 +54,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL;
@@ -77,12 +79,14 @@ public class HoodieMultiTableStreamer {
   private transient JavaSparkContext jssc;
   private Set<String> successTables;
   private Set<String> failedTables;
-
+  private boolean failFastOnContinuousMode;
+  
   public HoodieMultiTableStreamer(Config config, JavaSparkContext jssc) throws IOException {
     this.tableExecutionContexts = new ArrayList<>();
     this.successTables = new HashSet<>();
     this.failedTables = new HashSet<>();
     this.jssc = jssc;
+    this.failFastOnContinuousMode = config.failFastOnContinuousMode;
     String commonPropsFile = config.propsFilePath;
     String configFolder = config.configFolder;
     ValidationUtils.checkArgument(!config.filterDupes || config.operation != WriteOperationType.UPSERT,
@@ -384,6 +388,10 @@ public class HoodieMultiTableStreamer {
         + " source-fetch -> Transform -> Hudi Write in loop")
     public Boolean continuousMode = false;
 
+    @Parameter(names = {"--fail-fast-on-continuous"},
+        description = "Fails the complete job for any failure during continuous mode sync for multiple tables")
+    public Boolean failFastOnContinuousMode = false;
+
     @Parameter(names = {"--min-sync-interval-seconds"},
         description = "the min sync interval of each sync in continuous mode")
     public Integer minSyncIntervalSeconds = 0;
@@ -458,20 +466,52 @@ public class HoodieMultiTableStreamer {
    * Creates actual HoodieDeltaStreamer objects for every table/topic and does incremental sync.
    */
   public void sync() {
-    for (TableExecutionContext context : tableExecutionContexts) {
-      try {
-        new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
-        successTables.add(Helpers.getTableWithDatabase(context));
-      } catch (Exception e) {
-        logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
-        failedTables.add(Helpers.getTableWithDatabase(context));
-      }
-    }
+    final List<HoodieStreamer> streamerInstances = new ArrayList<>();
+    final CompletableFuture<?>[] tableFutures = this.tableExecutionContexts.stream()
+        .map(executionContext -> CompletableFuture.runAsync(() -> {
+          try {
+            final HoodieStreamer streamerInstance = new HoodieStreamer(executionContext.getConfig(), this.jssc,
+                Option.ofNullable(executionContext.getProperties()));
+            streamerInstances.add(streamerInstance);
+            streamerInstance.sync();
+            successTables.add(Helpers.getTableWithDatabase(executionContext));
+          } catch (Exception e) {
+            logger.error("error while running MultiTableDeltaStreamer for table: " + executionContext.getTableName(), e);
+            failedTables.add(Helpers.getTableWithDatabase(executionContext));
+            if (failFastOnContinuousMode) {
+              throw new CompletionException(e);
+            }
+          }
+        })).toArray(CompletableFuture[]::new);
 
+    getConditionalFuture(tableFutures).whenComplete((unused, throwable) -> {
+      logger.info(String.format("Successful tables: %s, Failed tables: %s", successTables, failedTables));
+      if (throwable != null) {
+        logger.error("MultiTableDeltaStreamer failed with an exception!", throwable);
+        if (failFastOnContinuousMode) {
+          logger.info("Shutting down other sources as fail fast is enabled!");
+          for (HoodieStreamer streamerInstance : streamerInstances) {
+            if (!streamerInstance.getIngestionService().isShutdown()) {
+              streamerInstance.getIngestionService().shutdown(true);
+            }
+          }
+        }
+        // Mark the job as failed by exiting with error.
+        System.exit(1);
+      }
+    }).exceptionally(throwable -> null).join();
     logger.info("Ingestion was successful for topics: " + successTables);
     if (!failedTables.isEmpty()) {
       logger.info("Ingestion failed for topics: " + failedTables);
     }
+  }
+
+  private CompletableFuture<?> getConditionalFuture(final CompletableFuture<?>[] tableFutures) {
+    if (this.failFastOnContinuousMode) {
+      logger.info("Fail fast enabled in continuous mode. Whole job fails for any single failure");
+      return CompletableFuture.anyOf(tableFutures);
+    }
+    return CompletableFuture.allOf(tableFutures);
   }
 
   public static class Constants {

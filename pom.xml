@@ -1855,6 +1855,10 @@
       <id>confluent</id>
       <url>https://packages.confluent.io/maven/</url>
     </repository>
+    <repository>
+      <id>conjars</id>
+      <url>https://conjars.wensel.net/repo/</url>
+    </repository>
   </repositories>
 
   <profiles>
