@@ -21,6 +21,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.common.table.HoodieTableConfig
+
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 

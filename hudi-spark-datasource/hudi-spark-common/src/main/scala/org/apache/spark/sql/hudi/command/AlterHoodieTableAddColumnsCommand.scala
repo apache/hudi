@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.avro.Schema
 import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteOperationType}
@@ -26,6 +25,8 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeComm
 import org.apache.hudi.common.util.CommitUtils
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
 import org.apache.hudi.table.HoodieSparkTable
+
+import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}

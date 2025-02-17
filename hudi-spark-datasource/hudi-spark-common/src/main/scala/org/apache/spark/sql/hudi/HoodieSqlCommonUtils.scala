@@ -17,21 +17,21 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.timeline.TimelineUtils.parseDateFromInstantTime
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieInstantTimeGenerator, HoodieTimeline, TimelineUtils}
+import org.apache.hudi.common.table.timeline.TimelineUtils.parseDateFromInstantTime
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath, StoragePathInfo}
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -44,6 +44,7 @@ import org.apache.spark.sql.types._
 import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 import scala.util.Try
 

@@ -20,18 +20,19 @@ package org.apache.spark.sql.hudi.streaming
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV2}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, SQLContext}
 
 /**
   * The Struct Stream Source for Hudi to consume the data by streaming job.

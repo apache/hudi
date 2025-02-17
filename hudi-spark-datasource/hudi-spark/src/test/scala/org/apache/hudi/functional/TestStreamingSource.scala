@@ -27,8 +27,9 @@ import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE, WRITE_TABLE_VERSION}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.util.JavaConversions
-import org.apache.spark.sql.streaming.StreamTest
+
 import org.apache.spark.sql.{Row, SaveMode}
+import org.apache.spark.sql.streaming.StreamTest
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 class TestStreamingSource extends StreamTest {

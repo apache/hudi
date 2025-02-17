@@ -18,14 +18,15 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes
 
-import org.apache.avro.Schema
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkUtils}
+
+import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SaveMode

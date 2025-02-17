@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.functional.PartitionStatsIndexTestBase.checkIfOverlapped
+
 import org.apache.spark.sql.{Column, DataFrame, SaveMode}
 import org.junit.jupiter.api.Assertions.assertEquals
 

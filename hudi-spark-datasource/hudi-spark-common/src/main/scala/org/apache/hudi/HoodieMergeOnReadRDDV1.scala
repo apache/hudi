@@ -19,13 +19,13 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
-import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.HoodieBaseRelation.{projectReader, BaseFileReader}
+import org.apache.hudi.HoodieMergeOnReadRDDV1.CONFIG_INSTANTIATION_LOCK
+import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-import org.apache.hudi.HoodieMergeOnReadRDDV1.CONFIG_INSTANTIATION_LOCK
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf

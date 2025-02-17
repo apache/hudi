@@ -20,10 +20,9 @@ package org.apache.spark.sql.execution.benchmark
 
 import org.apache.hudi.{AvroConversionUtils, HoodieSparkUtils}
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
-import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.functions.lit
 
 /**
  * Benchmark to measure Avro SerDer performance.

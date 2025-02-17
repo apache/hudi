@@ -19,9 +19,6 @@
 
 package org.apache.hudi.integ.testsuite.utils
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
-
 import org.apache.hudi.{AvroConversionUtils, HoodieSparkUtils}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.Option
@@ -29,11 +26,12 @@ import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.generator.GenericRecordFullPayloadGenerator
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider
 
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.api.java.JavaRDD
-import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.storage.StorageLevel
-
 import org.slf4j.Logger
 
 import scala.math.BigDecimal.RoundingMode.RoundingMode

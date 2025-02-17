@@ -19,13 +19,14 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes.spark.sql
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode
 import org.apache.hudi.integ.testsuite.utils.SparkSqlUtils
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.rdd.RDD
 import org.slf4j.{Logger, LoggerFactory}
 

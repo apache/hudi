@@ -20,10 +20,11 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieUpsertException
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue

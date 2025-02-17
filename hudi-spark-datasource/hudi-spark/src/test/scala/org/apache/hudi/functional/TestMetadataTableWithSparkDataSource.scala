@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
+import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.ParquetUtils
@@ -41,8 +41,8 @@ import org.apache.hudi.util.JavaScalaConverters.convertJavaListToScalaSeq
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.functions.{col, explode}
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 

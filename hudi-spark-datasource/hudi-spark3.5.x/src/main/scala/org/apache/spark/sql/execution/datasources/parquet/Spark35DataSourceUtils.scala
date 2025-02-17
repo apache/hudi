@@ -18,7 +18,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.spark.sql.SPARK_VERSION_METADATA_KEY
-import org.apache.spark.sql.internal.{SQLConf, LegacyBehaviorPolicy}
+import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.util.Utils
 
 object Spark35DataSourceUtils {

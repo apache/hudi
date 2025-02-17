@@ -31,8 +31,8 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
 
+import scala.collection.{mutable, JavaConverters}
 import scala.collection.JavaConverters._
-import scala.collection.{JavaConverters, mutable}
 
 class SecondaryIndexSupport(spark: SparkSession,
                             metadataConfig: HoodieMetadataConfig,

@@ -17,11 +17,12 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.avro.Schema
 import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
+
+import org.apache.avro.Schema
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable

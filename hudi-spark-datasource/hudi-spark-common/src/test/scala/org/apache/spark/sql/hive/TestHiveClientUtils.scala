@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hive
 
 import org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hive.client.HiveClient
 import org.apache.spark.sql.hive.test.{TestHive, TestHiveContext}

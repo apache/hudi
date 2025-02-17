@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.hudi.catalog
 
+import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -28,27 +29,28 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
+
 import org.apache.hadoop.fs.Path
+import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 import org.apache.spark.sql.HoodieSpark3CatalogUtils.MatchBucketTransform
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
+import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, UpdateColumnComment, UpdateColumnType}
-import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
+import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis.HoodieV1OrV2Table
 import org.apache.spark.sql.hudi.catalog.HoodieCatalog.{buildPartitionTransforms, isTablePartitioned}
 import org.apache.spark.sql.hudi.command._
-import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 
 import java.net.URI
 import java.util
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 

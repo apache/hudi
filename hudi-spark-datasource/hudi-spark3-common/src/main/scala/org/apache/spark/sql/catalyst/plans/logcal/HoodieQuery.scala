@@ -18,6 +18,7 @@
 package org.apache.spark.sql.catalyst.plans.logcal
 
 import org.apache.hudi.common.util.ValidationUtils.checkState
+
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LeafNode

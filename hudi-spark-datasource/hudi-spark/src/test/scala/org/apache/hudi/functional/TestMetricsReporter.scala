@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceWriteOptions, SparkDatasetMixin}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -25,12 +26,11 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.{HoodieMetricsConfig, HoodieMetricsDatadogConfig}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceWriteOptions, SparkDatasetMixin}
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Test}
+import org.junit.jupiter.api.function.Executable
 import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer

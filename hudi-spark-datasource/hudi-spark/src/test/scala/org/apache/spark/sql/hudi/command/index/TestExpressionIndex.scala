@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.hudi.command.index
 
+import org.apache.hudi.{DataSourceReadOptions, ExpressionIndexSupport, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -32,18 +33,19 @@ import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFile
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
+import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.expression.HoodieExpressionIndex
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, ExpressionIndexSupport, HoodieFileIndex, HoodieSparkUtils}
+
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.{functions, Column, SaveMode}
 import org.apache.spark.sql.Column.unapply
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, UnresolvedAttribute}
@@ -54,11 +56,11 @@ import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, SaveMode, functions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters
 
 class TestExpressionIndex extends HoodieSparkSqlTestBase {

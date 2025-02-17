@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils
+
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.avro.AvroParquetWriter
@@ -37,6 +38,7 @@ import java.io.IOException
 import java.util
 import java.util.Objects
 import java.util.concurrent.TimeUnit
+
 import scala.collection.JavaConverters._
 
 class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {

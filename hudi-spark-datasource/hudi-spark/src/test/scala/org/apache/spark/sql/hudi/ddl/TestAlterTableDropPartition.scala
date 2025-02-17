@@ -17,15 +17,16 @@
 
 package org.apache.spark.sql.hudi.ddl
 
-import org.apache.avro.Schema
+import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
+import org.apache.hudi.common.util.{Option => HOption, PartitionPathEncodeUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
+
+import org.apache.avro.Schema
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCleanMetadata
