@@ -18,6 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport
+
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
