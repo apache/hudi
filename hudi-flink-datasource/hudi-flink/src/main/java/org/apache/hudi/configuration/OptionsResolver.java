@@ -71,6 +71,16 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether is insert cluster mode
+   * (whether the table type is cow
+   * && whether the operation is insert
+   * && whether the conf write.insert.cluster is true)
+   */
+  public static boolean isInsertClusterMode(Configuration conf) {
+    return isCowTable(conf) && isInsertOperation(conf) && conf.getBoolean(FlinkOptions.INSERT_CLUSTER);
+  }
+
+  /**
    * Returns whether the table operation is 'insert'.
    */
   public static boolean isInsertOperation(Configuration conf) {
