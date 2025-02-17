@@ -17,10 +17,11 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord.{PARTITION_PATH_META_FIELD_ORD, RECORD_KEY_META_FIELD_ORD}
 import org.apache.hudi.common.util.StringUtils
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType

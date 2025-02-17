@@ -17,8 +17,7 @@
 
 package org.apache.spark.sql.hudi.ddl
 
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
@@ -26,7 +25,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
+
+import org.apache.hadoop.fs.Path
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase

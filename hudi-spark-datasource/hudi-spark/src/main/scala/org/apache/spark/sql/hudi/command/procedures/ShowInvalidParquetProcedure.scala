@@ -18,22 +18,22 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+
+import collection.JavaConverters._
+import org.apache.hadoop.fs.Path
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.hudi.command.procedures
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
-import collection.JavaConverters._
 
 class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](

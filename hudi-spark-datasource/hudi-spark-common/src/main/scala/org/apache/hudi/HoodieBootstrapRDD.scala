@@ -21,6 +21,7 @@ package org.apache.hudi
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.common.util.ValidationUtils.checkState
 
+import org.apache.spark.{Partition, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -28,7 +29,6 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.{Partition, TaskContext}
 
 class HoodieBootstrapRDD(@transient spark: SparkSession,
                          bootstrapDataFileReader: BaseFileReader,
