@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.spark.sql.hudi.command.index
+package org.apache.spark.sql.hudi.feature.index
 
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
