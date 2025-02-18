@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.spark.sql.hudi.dml
+package org.apache.spark.sql.hudi.feature
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
