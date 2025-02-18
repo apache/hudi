@@ -52,7 +52,7 @@ public class HoodieFileGroupSerializer implements CustomSerializer<List<HoodieFi
         throw new IllegalStateException("Timeline is null for FileGroup: '" + fileGroup.getFileGroupId().toString() + "'. All filegroup states: ["
             + input.stream().map(fg -> fg.getFileGroupId().toString() + ":" + ((fg.getTimeline() == null) ? "NULL" : "OK")).collect(Collectors.joining(",")) + "]");
       }
-      fileGroupIdHoodieTimelineMap.putIfAbsent(fileGroup.getFileGroupId(), fileGroup.getTimeline());
+      fileGroupIdHoodieTimelineMap.put(fileGroup.getFileGroupId(), fileGroup.getTimeline());
       return new HoodieFileGroupLite(fileGroup.getAllRawFileSlices().collect(Collectors.toList()), fileGroup.getFileGroupId());
     }).collect(Collectors.toList());
     return SerializationUtils.serialize(fileGroupLites);
