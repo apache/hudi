@@ -171,8 +171,11 @@ public class KafkaSourceConfig extends HoodieConfig {
       .key(PREFIX + "offset.skip.buffer.minutes")
       .defaultValue(-1L)
       .markAdvanced()
-      .withDocumentation("Time in minutes to move forward from retention time for reading offsets")
-      .sinceVersion("1.1.0");
+      .sinceVersion("1.1.0")
+      .withDocumentation("Time in minutes to move forward from retention time for reading offsets "
+          + "when the checkpoints are not available or out-of-bound to avoid potential "
+          + "OffsetOutOfRange exception, as it is possible that the earliest Kafka offsets may "
+          + "expire soon while the job is progressing.");
 
   /**
    * Kafka reset offset strategies.
