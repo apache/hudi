@@ -19,7 +19,6 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -396,7 +395,7 @@ public class HoodieMetrics {
     reportMetrics(HoodieTimeline.CLUSTERING_ACTION, "fileCreationTime", durationInMs);
   }
 
-  public void updateTimelineInstantMetrics(final HoodieActiveTimeline activeTimeline) {
+  public void updateTableServiceInstantMetrics(final HoodieActiveTimeline activeTimeline) {
     updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_CLUSTERING_INSTANT_STR, HoodieTimeline.CLUSTERING_ACTION);
     updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_COMPACTION_INSTANT_STR, HoodieTimeline.COMPACTION_ACTION);
     updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_CLEAN_INSTANT_STR, HoodieTimeline.CLEAN_ACTION);
@@ -413,6 +412,13 @@ public class HoodieMetrics {
     updatePendingInstantCount(activeTimeline, PENDING_ROLLBACK_INSTANT_COUNT_STR, HoodieTimeline.ROLLBACK_ACTION);
   }
 
+  /**
+   * Use EarliestPendingInstant to judge which instant execution plan is the current table service blocked in.
+   *
+   * @param activeTimeline
+   * @param metricName
+   * @param action
+   */
   private void updateEarliestPendingInstant(final HoodieActiveTimeline activeTimeline,
                                             final String metricName,
                                             final String action) {
@@ -424,17 +430,25 @@ public class HoodieMetrics {
     }
   }
 
+  /**
+   * Use LatestCompletedInstant to observe the latest execution progress of the table service.
+   *
+   * @param activeTimeline
+   * @param metricName
+   * @param action
+   */
   private void updateLatestCompletedInstant(final HoodieActiveTimeline activeTimeline,
                                             final String metricName,
                                             String action) {
-    String tableType = config.getTableType().name();
-    if (HoodieTableType.MERGE_ON_READ.name().equalsIgnoreCase(tableType)
-        && LATEST_COMPLETED_COMPACTION_INSTANT_STR.equalsIgnoreCase(metricName)) {
-      action = HoodieActiveTimeline.COMMIT_ACTION;
-    }
-    if (HoodieTableType.COPY_ON_WRITE.name().equalsIgnoreCase(tableType)
-        && LATEST_COMPLETED_CLUSTERING_INSTANT_STR.equalsIgnoreCase(metricName)) {
-      action = HoodieActiveTimeline.REPLACE_COMMIT_ACTION;
+    switch (metricName) {
+      case LATEST_COMPLETED_COMPACTION_INSTANT_STR:
+        action = HoodieActiveTimeline.COMMIT_ACTION;
+        break;
+      case LATEST_COMPLETED_CLUSTERING_INSTANT_STR:
+        action = HoodieActiveTimeline.REPLACE_COMMIT_ACTION;
+        break;
+      default:
+        // do nothing
     }
     Set<String> validActions = CollectionUtils.createSet(action);
     HoodieTimeline filteredInstants = activeTimeline.filterCompletedInstants().filter(instant -> validActions.contains(instant.getAction()));
@@ -444,6 +458,13 @@ public class HoodieMetrics {
     }
   }
 
+  /**
+   * Use PendingInstantCount to judge how many execution plans are waiting to be executed.
+   *
+   * @param activeTimeline
+   * @param metricName
+   * @param action
+   */
   private void updatePendingInstantCount(final HoodieActiveTimeline activeTimeline,
                                          final String metricName,
                                          final String action) {

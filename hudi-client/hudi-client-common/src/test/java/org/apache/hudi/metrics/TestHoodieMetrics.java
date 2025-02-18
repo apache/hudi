@@ -19,7 +19,6 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -235,8 +234,6 @@ public class TestHoodieMetrics {
     });
 
     // MOCK Timeline Instant Metrics for Clean & Rollback
-    when(writeConfig.getTableType()).thenReturn(HoodieTableType.COPY_ON_WRITE);
-
     HoodieInstant instant004 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "1004");
     HoodieInstant instant007 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "1007");
     HoodieInstant instant009 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, "1009");
@@ -247,7 +244,7 @@ public class TestHoodieMetrics {
     HoodieInstant instant0017 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "10017");
 
     HoodieActiveTimeline activeTimeline1 = new MockHoodieActiveTimeline(instant004, instant007, instant009, instant0010, instant0013, instant0015, instant0016, instant0017);
-    hoodieMetrics.updateTimelineInstantMetrics(activeTimeline1);
+    hoodieMetrics.updateTableServiceInstantMetrics(activeTimeline1);
 
     metricName = hoodieMetrics.getMetricsName(HoodieTimeline.CLEAN_ACTION, HoodieMetrics.EARLIEST_PENDING_CLEAN_INSTANT_STR);
     assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), Long.valueOf("1004"));
@@ -271,7 +268,7 @@ public class TestHoodieMetrics {
     HoodieInstant instant0018 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, "10018");
 
     HoodieActiveTimeline activeTimeline2 = new MockHoodieActiveTimeline(instant001, instant005, instant0011, instant0018);
-    hoodieMetrics.updateTimelineInstantMetrics(activeTimeline2);
+    hoodieMetrics.updateTableServiceInstantMetrics(activeTimeline2);
 
     metricName = hoodieMetrics.getMetricsName(HoodieTimeline.CLUSTERING_ACTION, HoodieMetrics.EARLIEST_PENDING_CLUSTERING_INSTANT_STR);
     assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), Long.valueOf("10018"));
@@ -283,8 +280,6 @@ public class TestHoodieMetrics {
     assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), 1L);
 
     // MOCK Timeline Instant Metrics for Compaction
-    when(writeConfig.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
-
     HoodieInstant instant002 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "1002");
     HoodieInstant instant003 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "1003");
     HoodieInstant instant006 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1006");
@@ -293,7 +288,7 @@ public class TestHoodieMetrics {
     HoodieInstant instant0014 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "10014");
 
     HoodieActiveTimeline activeTimeline3 = new MockHoodieActiveTimeline(instant002, instant003, instant006, instant008, instant0012, instant0014);
-    hoodieMetrics.updateTimelineInstantMetrics(activeTimeline3);
+    hoodieMetrics.updateTableServiceInstantMetrics(activeTimeline3);
 
     metricName = hoodieMetrics.getMetricsName(HoodieTimeline.COMPACTION_ACTION, HoodieMetrics.EARLIEST_PENDING_COMPACTION_INSTANT_STR);
     assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), Long.valueOf("1002"));
