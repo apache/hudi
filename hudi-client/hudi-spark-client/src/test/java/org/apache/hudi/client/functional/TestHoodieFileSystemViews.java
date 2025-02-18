@@ -113,12 +113,30 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       insertRecords(client, "001", 100, WriteOperationType.BULK_INSERT);
       insertRecords(client, "002", 100, WriteOperationType.INSERT);
-      assertFileSystemViews(config, enableMdt, storageType);
-      for (int i = 3; i < 10; i++) {
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // base line file system view is in-memory for any combination.
+      HoodieTableFileSystemView expectedFileSystemView = FileSystemViewManager.createInMemoryFileSystemView(context, metaClient,
+          HoodieMetadataConfig.newBuilder().enable(false).build());
+
+      // to be compared against.
+      // if no mdt enabled, compare w/ spillable.
+      // if mdt is enabled, depending on storage type, either it will be mdt fsv or spillable fsv w/ mdt enabled.
+      FileSystemViewStorageConfig viewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(config.getProps())
+          .withStorageType(storageType).build();
+      HoodieTableFileSystemView actualFileSystemView = (HoodieTableFileSystemView) FileSystemViewManager
+          .createViewManager(context, config.getMetadataConfig(), viewStorageConfig, config.getCommonConfig(),
+              (SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata>) v1 ->
+                  HoodieTableMetadata.create(context, metaClient.getStorage(), config.getMetadataConfig(), config.getBasePath()))
+          .getFileSystemView(basePath);
+
+      assertFileSystemViews(config, enableMdt, storageType);      for (int i = 3; i < 10; i++) {
         String commitTime = String.format("%10d", i);
         upsertRecords(client, commitTime, 50);
       }
-      assertFileSystemViews(config, enableMdt, storageType);
+      expectedFileSystemView.sync();
+      actualFileSystemView.sync();
+      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt);
       for (int i = 10; i < 20; i++) {
         String commitTime = String.format("%10d", i);
         upsertRecords(client, commitTime, 50);
@@ -132,12 +150,17 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
               lastInstant.requestedTime(), lastInstant.getAction());
       metaClient.getStorage().deleteFile(instantPath);
 
-      assertFileSystemViews(config, enableMdt, storageType);
+      expectedFileSystemView.sync();
+      actualFileSystemView.sync();
+      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt);
+
       // add few more updates
       for (int i = 21; i < 23; i++) {
         String commitTime = String.format("%10d", i);
         upsertRecords(client, commitTime, 50);
       }
+      actualFileSystemView.close();
+      expectedFileSystemView.close();
     }
     assertFileSystemViews(config, enableMdt, storageType);
   }

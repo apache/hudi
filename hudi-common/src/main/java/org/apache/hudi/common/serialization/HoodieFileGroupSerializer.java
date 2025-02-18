@@ -26,9 +26,9 @@ import org.apache.hudi.common.util.SerializationUtils;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -42,7 +42,7 @@ public class HoodieFileGroupSerializer implements CustomSerializer<List<HoodieFi
   private final Map<HoodieFileGroupId, HoodieTimeline> fileGroupIdHoodieTimelineMap;
 
   public HoodieFileGroupSerializer() {
-    this.fileGroupIdHoodieTimelineMap = new HashMap<>();
+    this.fileGroupIdHoodieTimelineMap = new ConcurrentHashMap<>();
   }
 
   @Override
@@ -52,7 +52,7 @@ public class HoodieFileGroupSerializer implements CustomSerializer<List<HoodieFi
         throw new IllegalStateException("Timeline is null for FileGroup: '" + fileGroup.getFileGroupId().toString() + "'. All filegroup states: ["
             + input.stream().map(fg -> fg.getFileGroupId().toString() + ":" + ((fg.getTimeline() == null) ? "NULL" : "OK")).collect(Collectors.joining(",")) + "]");
       }
-      fileGroupIdHoodieTimelineMap.put(fileGroup.getFileGroupId(), fileGroup.getTimeline());
+      fileGroupIdHoodieTimelineMap.putIfAbsent(fileGroup.getFileGroupId(), fileGroup.getTimeline());
       return new HoodieFileGroupLite(fileGroup.getAllRawFileSlices().collect(Collectors.toList()), fileGroup.getFileGroupId());
     }).collect(Collectors.toList());
     return SerializationUtils.serialize(fileGroupLites);
