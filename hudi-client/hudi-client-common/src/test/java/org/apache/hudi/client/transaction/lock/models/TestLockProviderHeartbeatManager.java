@@ -212,8 +212,13 @@ public class TestLockProviderHeartbeatManager {
     // This call will wait for heartbeat task to stop itself, as the semaphore has already been acquired by the heartbeat task.
     assertFalse(manager.stopHeartbeat(true));
 
-    verify(mockLogger).warn("Owner {}: Heartbeat task was interrupted. Exiting gracefully.", LOGGER_ID);
     verify(mockLogger).warn("Owner {}: No active heartbeat task to stop.", LOGGER_ID);
+    verify(mockLogger).debug(
+        "Owner {}: Heartbeat started with interval: {} ms",
+        "test-owner",
+        100L
+    );
+    verify(mockLogger).info("Owner {}: Requested termination of heartbeat task. Cancellation returned {}.", LOGGER_ID, true);
     assertFalse(manager.hasActiveHeartbeat());
   }
 
@@ -250,7 +255,6 @@ public class TestLockProviderHeartbeatManager {
 
     assertTrue(latch.await(500, TimeUnit.MILLISECONDS), "Heartbeat task did not run in time");
     verify(mockLogger).warn("Owner {}: Monitored thread is no longer alive.", LOGGER_ID);
-    verify(mockLogger).info("Owner {}: Cancelling future heartbeat invocations.", LOGGER_ID);
     verify(mockLogger).info("Owner {}: Requested termination of heartbeat task. Cancellation returned {}.", LOGGER_ID, false);
     assertFalse(manager.hasActiveHeartbeat());
   }
@@ -279,7 +283,6 @@ public class TestLockProviderHeartbeatManager {
         eq("Owner {}: Heartbeat function threw exception {}"),
         eq(LOGGER_ID),
         any(RuntimeException.class));
-    verify(mockLogger).info("Owner {}: Cancelling future heartbeat invocations.", LOGGER_ID);
     assertFalse(manager.hasActiveHeartbeat());
   }
 

@@ -19,9 +19,11 @@
 
 package org.apache.hudi.gcp.transaction.lock;
 
+import org.apache.hudi.client.transaction.lock.LockGetResult;
+import org.apache.hudi.client.transaction.lock.LockUpdateResult;
 import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockData;
 import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockFile;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.ReadChannel;
@@ -45,7 +47,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -122,10 +123,9 @@ public class TestGCSConditionalWriteLockService {
 
     mockBlobReaderWithLockData(mockBlob, lockData);
 
-    ConditionalWriteLockFile result =
-        lockService.tryCreateOrUpdateLockFile(lockData, null);
+    Pair<LockUpdateResult, ConditionalWriteLockFile> result = lockService.tryCreateOrUpdateLockFile(lockData, null);
 
-    assertNotNull(result, "Expected a valid ConditionalWriteLockFile on success");
+    assertNotNull(result.getRight(), "Expected a valid ConditionalWriteLockFile on success");
     verify(mockStorage).create(
         any(BlobInfo.class),
         any(byte[].class),
@@ -147,7 +147,7 @@ public class TestGCSConditionalWriteLockService {
 
     mockBlobReaderWithLockData(mockBlob, lockData);
 
-    ConditionalWriteLockFile result =
+    Pair<LockUpdateResult, ConditionalWriteLockFile> result =
         lockService.tryCreateOrUpdateLockFile(lockData, previousLockFile);
 
     assertNotNull(result, "Expected a valid ConditionalWriteLockFile on success");
@@ -167,9 +167,10 @@ public class TestGCSConditionalWriteLockService {
     when(mockStorage.create(any(BlobInfo.class), any(byte[].class), any(Storage.BlobTargetOption.class)))
         .thenThrow(exception);
 
-    ConditionalWriteLockFile result = lockService.tryCreateOrUpdateLockFile(lockData, previousLockFile);
+    Pair<LockUpdateResult, ConditionalWriteLockFile> result = lockService.tryCreateOrUpdateLockFile(lockData, previousLockFile);
 
-    assertNull(result, "Should return null when a 412 occurs");
+    assertEquals(LockUpdateResult.ACQUIRED_BY_OTHERS, result.getLeft());
+    assertNull(result.getRight(), "Should return null when a 412 occurs");
     verify(mockLogger).info(contains("Unable to write new lock file. Another process has modified this lockfile"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
@@ -180,9 +181,10 @@ public class TestGCSConditionalWriteLockService {
     when(mockStorage.create(any(BlobInfo.class), any(byte[].class), any(Storage.BlobTargetOption.class)))
         .thenThrow(exception);
 
-    ConditionalWriteLockFile result = lockService.tryCreateOrUpdateLockFile(lockData, null);
+    Pair<LockUpdateResult, ConditionalWriteLockFile> result = lockService.tryCreateOrUpdateLockFile(lockData, null);
 
-    assertNull(result, "Should return null when a 429 occurs");
+    assertEquals(LockUpdateResult.UNKNOWN_ERROR, result.getLeft());
+    assertNull(result.getRight(), "Should return null when a 429 occurs");
     verify(mockLogger).warn(contains("Rate limit exceeded"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
@@ -193,9 +195,10 @@ public class TestGCSConditionalWriteLockService {
     when(mockStorage.create(any(BlobInfo.class), any(byte[].class), any(Storage.BlobTargetOption.class)))
         .thenThrow(exception);
 
-    ConditionalWriteLockFile result = lockService.tryCreateOrUpdateLockFile(lockData, null);
+    Pair<LockUpdateResult, ConditionalWriteLockFile> result = lockService.tryCreateOrUpdateLockFile(lockData, null);
 
-    assertNull(result, "Should return null when a 5xx error occurs");
+    assertEquals(LockUpdateResult.UNKNOWN_ERROR, result.getLeft());
+    assertNull(result.getRight(), "Should return null when a 5xx error occurs");
     verify(mockLogger).warn(contains("GCS returned internal server error code"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(exception));
   }
 
@@ -223,7 +226,7 @@ public class TestGCSConditionalWriteLockService {
         .thenReturn(mockBlob);
 
     mockBlobReaderWithLockData(mockBlob, data);
-    ConditionalWriteLockFile result = lockService.tryCreateOrUpdateLockFileWithRetry(supplier, null, 5).get();
+    ConditionalWriteLockFile result = lockService.tryCreateOrUpdateLockFileWithRetry(supplier, null, 5).getRight();
 
     assertNotNull(result, "Should eventually succeed and return a valid file");
     verify(mockStorage, times(3)).create(any(BlobInfo.class), any(byte[].class), any(Storage.BlobTargetOption.class));
@@ -236,9 +239,10 @@ public class TestGCSConditionalWriteLockService {
 
     when(mockStorage.create(any(BlobInfo.class), any(byte[].class), any(Storage.BlobTargetOption.class)))
         .thenThrow(exception412);
-    Option<ConditionalWriteLockFile> result = lockService.tryCreateOrUpdateLockFileWithRetry(supplier, null, 5);
+    Pair<LockUpdateResult, ConditionalWriteLockFile> result = lockService.tryCreateOrUpdateLockFileWithRetry(supplier, null, 5);
 
-    assertNull(result, "Should return null and stop retrying immediately on 412");
+    assertEquals(LockUpdateResult.ACQUIRED_BY_OTHERS, result.getLeft());
+    assertNull(result.getRight(), "Should return null and stop retrying immediately on 412");
     verify(mockStorage, times(1)).create(any(BlobInfo.class), any(byte[].class), any(Storage.BlobTargetOption.class));
   }
 
@@ -250,8 +254,9 @@ public class TestGCSConditionalWriteLockService {
     when(mockStorage.create(any(BlobInfo.class), any(byte[].class), any(Storage.BlobTargetOption.class)))
         .thenThrow(exception403);
 
-    Option<ConditionalWriteLockFile> result = lockService.tryCreateOrUpdateLockFileWithRetry(supplier, null, 3);
-    assertFalse(result.isPresent(), "Should return empty after failing to update before expiration");
+    Pair<LockUpdateResult, ConditionalWriteLockFile> result = lockService.tryCreateOrUpdateLockFileWithRetry(supplier, null, 3);
+    assertEquals(LockUpdateResult.UNKNOWN_ERROR, result.getLeft());
+    assertNull(result.getRight(), "Should return empty after failing to update before expiration");
   }
 
   @Test
@@ -272,8 +277,9 @@ public class TestGCSConditionalWriteLockService {
     }).thenReturn(mockBlob);
 
     Thread t = new Thread(() -> {
-      Option<ConditionalWriteLockFile> result = lockService.tryCreateOrUpdateLockFileWithRetry(supplier, null, 3);
-      assertFalse(result.isPresent(), "Should return empty after failing to update before expiration");
+      Pair<LockUpdateResult, ConditionalWriteLockFile> result = lockService.tryCreateOrUpdateLockFileWithRetry(supplier, null, 3);
+      assertEquals(LockUpdateResult.UNKNOWN_ERROR, result.getLeft());
+      assertNull(result.getRight(), "Should return empty after failing to update before expiration");
       threadLatch.countDown();
     });
     t.start();
@@ -296,10 +302,11 @@ public class TestGCSConditionalWriteLockService {
 
     mockBlobReaderWithLockData(mockBlob, lockData);
 
-    Option<ConditionalWriteLockFile> result =
+    Pair<LockUpdateResult, ConditionalWriteLockFile> result =
         lockService.tryCreateOrUpdateLockFileWithRetry(() -> lockData, previousLockFile, 3);
 
-    assertNotNull(result.get(), "Expected a valid ConditionalWriteLockFile on success");
+    assertEquals(LockUpdateResult.SUCCESS, result.getLeft());
+    assertNotNull(result.getRight(), "Expected a valid ConditionalWriteLockFile on success");
     verify(mockStorage).create(
         any(BlobInfo.class),
         any(byte[].class),
@@ -311,9 +318,10 @@ public class TestGCSConditionalWriteLockService {
   void testGetCurrentLockFile_blobNotFound() {
     when(mockStorage.get(BlobId.of(BUCKET_NAME, LOCK_FILE_PATH))).thenReturn(null);
 
-    Option<ConditionalWriteLockFile> result = lockService.getCurrentLockFile();
+    Pair<LockGetResult, ConditionalWriteLockFile> result = lockService.getCurrentLockFile();
 
-    assertFalse(result.isPresent(), "Expected empty when no blob is found");
+    assertEquals(LockGetResult.NOT_EXISTS, result.getLeft());
+    assertNull(result.getRight(), "Expected empty when no blob is found");
   }
 
   @Test
@@ -322,10 +330,11 @@ public class TestGCSConditionalWriteLockService {
     mockBlobReaderWithLockData(mockBlob, new ConditionalWriteLockData(false, 123L, "owner"));
     when(mockBlob.getGeneration()).thenReturn(123L);
 
-    Option<ConditionalWriteLockFile> result = lockService.getCurrentLockFile();
+    Pair<LockGetResult, ConditionalWriteLockFile> result = lockService.getCurrentLockFile();
 
-    assertNotNull(result.get(), "Should return a ConditionalWriteLockFile if blob is found");
-    assertEquals("123", result.get().getVersionId(), "Version ID should match blob generation");
+    assertEquals(LockGetResult.SUCCESS, result.getLeft());
+    assertNotNull(result.getRight(), "Should return a ConditionalWriteLockFile if blob is found");
+    assertEquals("123", result.getRight().getVersionId(), "Version ID should match blob generation");
   }
 
   @Test
@@ -333,9 +342,10 @@ public class TestGCSConditionalWriteLockService {
     StorageException exception404 = new StorageException(404, "Not Found");
     when(mockStorage.get(BlobId.of(BUCKET_NAME, LOCK_FILE_PATH))).thenThrow(exception404);
 
-    Option<ConditionalWriteLockFile> result = lockService.getCurrentLockFile();
+    Pair<LockGetResult, ConditionalWriteLockFile> result = lockService.getCurrentLockFile();
 
-    assertFalse(result.isPresent(), "Should return empty on 404 error");
+    assertEquals(LockGetResult.NOT_EXISTS, result.getLeft());
+    assertNull(result.getRight(), "Should return null on 404 error");
     verify(mockLogger).info(contains("Object not found"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
@@ -344,9 +354,10 @@ public class TestGCSConditionalWriteLockService {
     StorageException exception429 = new StorageException(429, "Rate Limit Exceeded");
     when(mockStorage.get(BlobId.of(BUCKET_NAME, LOCK_FILE_PATH))).thenThrow(exception429);
 
-    Option<ConditionalWriteLockFile> result = lockService.getCurrentLockFile();
+    Pair<LockGetResult, ConditionalWriteLockFile> result = lockService.getCurrentLockFile();
 
-    assertNull(result, "Should return null on 429 error");
+    assertEquals(LockGetResult.UNKNOWN_ERROR, result.getLeft());
+    assertNull(result.getRight(), "Should return null on 429 error");
     verify(mockLogger).warn(contains("Rate limit exceeded"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
@@ -355,9 +366,10 @@ public class TestGCSConditionalWriteLockService {
     StorageException exception500 = new StorageException(503, "Service Unavailable");
     when(mockStorage.get(BlobId.of(BUCKET_NAME, LOCK_FILE_PATH))).thenThrow(exception500);
 
-    Option<ConditionalWriteLockFile> result = lockService.getCurrentLockFile();
+    Pair<LockGetResult, ConditionalWriteLockFile> result = lockService.getCurrentLockFile();
 
-    assertNull(result, "Should return null on 5xx error");
+    assertEquals(LockGetResult.UNKNOWN_ERROR, result.getLeft());
+    assertNull(result.getRight(), "Should return null on 5xx error");
     verify(mockLogger).warn(contains("GCS returned internal server error code"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(exception500));
   }
 

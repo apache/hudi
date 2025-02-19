@@ -23,7 +23,7 @@ import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockFile;
 import org.apache.hudi.client.transaction.lock.models.HeartbeatManager;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -204,10 +204,10 @@ class TestConditionalWriteLockProvider {
 
   @Test
   void testTryLockSuccess() {
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.empty());
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     ConditionalWriteLockData data = new ConditionalWriteLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile realLockFile = new ConditionalWriteLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(realLockFile);
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
 
     boolean acquired = lockProvider.tryLock();
@@ -218,11 +218,12 @@ class TestConditionalWriteLockProvider {
 
   @Test
   void testTryLockSuccessButFailureToStartHeartbeat() {
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.empty());
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     ConditionalWriteLockData data = new ConditionalWriteLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile realLockFile = new ConditionalWriteLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(realLockFile);
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(false);
+    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(realLockFile), anyLong())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
 
     boolean acquired = lockProvider.tryLock();
     assertFalse(acquired);
@@ -230,9 +231,9 @@ class TestConditionalWriteLockProvider {
 
   @Test
   void testTryLockFailsFromOwnerMismatch() {
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.empty());
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     ConditionalWriteLockFile returnedLockFile = new ConditionalWriteLockFile(new ConditionalWriteLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, "different-owner"), "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(returnedLockFile);
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, returnedLockFile));
 
     HoodieLockException ex = assertThrows(HoodieLockException.class, () -> lockProvider.tryLock());
     assertTrue(ex.getMessage().contains("Owners do not match!"));
@@ -242,7 +243,7 @@ class TestConditionalWriteLockProvider {
   void testTryLockFailsDueToExistingLock() {
     ConditionalWriteLockData data = new ConditionalWriteLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, "other-owner");
     ConditionalWriteLockFile existingLock = new ConditionalWriteLockFile(data, "v2");
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.of(existingLock));
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.SUCCESS, existingLock));
 
     boolean acquired = lockProvider.tryLock();
     assertFalse(acquired);
@@ -250,14 +251,14 @@ class TestConditionalWriteLockProvider {
 
   @Test
   void testTryLockFailsToUpdateFile() {
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.empty());
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(null);
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(Pair.of(LockUpdateResult.ACQUIRED_BY_OTHERS, null));
     assertFalse(lockProvider.tryLock());
   }
 
   @Test
   void testTryLockFailsDueToUnknownState() {
-    when(mockLockService.getCurrentLockFile()).thenReturn(null);
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.UNKNOWN_ERROR, null));
     assertFalse(lockProvider.tryLock());
   }
 
@@ -267,8 +268,8 @@ class TestConditionalWriteLockProvider {
     ConditionalWriteLockFile existingLock = new ConditionalWriteLockFile(data, "v2");
     ConditionalWriteLockData newData = new ConditionalWriteLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile realLockFile = new ConditionalWriteLockFile(newData, "v1");
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.of(existingLock));
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), eq(existingLock))).thenReturn(realLockFile);
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.SUCCESS, existingLock));
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), eq(existingLock))).thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
     boolean acquired = lockProvider.tryLock();
     assertTrue(acquired);
@@ -276,10 +277,10 @@ class TestConditionalWriteLockProvider {
 
   @Test
   void testTryLockReentrancySucceeds() {
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.empty());
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     ConditionalWriteLockData data = new ConditionalWriteLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile realLockFile = new ConditionalWriteLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(realLockFile);
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
 
     boolean acquired = lockProvider.tryLock();
@@ -299,10 +300,10 @@ class TestConditionalWriteLockProvider {
     ConditionalWriteLockData data = new ConditionalWriteLockData(false, System.currentTimeMillis() - DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile expiredLock = new ConditionalWriteLockFile(data, "v1");
     doReturn(expiredLock).when(lockProvider).getLock();
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.empty());
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     ConditionalWriteLockData validData = new ConditionalWriteLockData(false, System.currentTimeMillis() - DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile validLock = new ConditionalWriteLockFile(validData, "v2");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(validLock);
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, validLock));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
 
     assertTrue(lockProvider.tryLock());
@@ -319,10 +320,10 @@ class TestConditionalWriteLockProvider {
     ConditionalWriteLockData data = new ConditionalWriteLockData(true, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile expiredLock = new ConditionalWriteLockFile(data, "v1");
     doReturn(expiredLock).when(lockProvider).getLock();
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.empty());
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     ConditionalWriteLockData validData = new ConditionalWriteLockData(false, System.currentTimeMillis() - DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile validLock = new ConditionalWriteLockFile(validData, "v2");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(validLock);
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, validLock));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
 
     assertTrue(lockProvider.tryLock());
@@ -339,23 +340,26 @@ class TestConditionalWriteLockProvider {
     ConditionalWriteLockData data = new ConditionalWriteLockData(true, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile expiredLock = new ConditionalWriteLockFile(data, "v1");
     doReturn(expiredLock).when(lockProvider).getLock();
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.empty());
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true);
     assertThrows(HoodieLockException.class, () -> lockProvider.tryLock());
   }
 
   @Test
   void testUnlockSucceedsAndReentrancy() {
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.empty());
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     ConditionalWriteLockData data = new ConditionalWriteLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile realLockFile = new ConditionalWriteLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(realLockFile);
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
     when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(realLockFile), anyLong()))
-        .thenReturn(Option.of(new ConditionalWriteLockFile(new ConditionalWriteLockData(true, data.getValidUntil(), ownerId), "v2")));
+        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, new ConditionalWriteLockFile(new ConditionalWriteLockData(true, data.getValidUntil(), ownerId), "v2")));
     assertTrue(lockProvider.tryLock());
-    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat())
+        .thenReturn(true) // when we try to stop the heartbeat we will check if heartbeat is active, return true.
+        .thenReturn(false); // when try to set lock to expire we will assert no active heartbeat as a precondition.
     lockProvider.unlock();
     assertNull(lockProvider.getLock());
     lockProvider.unlock();
@@ -363,10 +367,10 @@ class TestConditionalWriteLockProvider {
 
   @Test
   void testUnlockFailsToStopHeartbeat() {
-    when(mockLockService.getCurrentLockFile()).thenReturn(Option.empty());
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     ConditionalWriteLockData data = new ConditionalWriteLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile realLockFile = new ConditionalWriteLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(realLockFile);
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
     assertTrue(lockProvider.tryLock());
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(false);
@@ -384,20 +388,11 @@ class TestConditionalWriteLockProvider {
   }
 
   @Test
-  void testRenewLockWithoutActiveHeartbeat() {
+  void testRenewLockWithoutHoldingLock() {
     doReturn(null).when(lockProvider).getLock();
     assertFalse(lockProvider.renewLock());
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
-    verify(mockLogger).warn("Owner {}: Another process has already shutdown the heartbeat after this task fired.", this.ownerId);
-  }
-
-  @Test
-  void testRenewLockWithNearlyExpiredLock() {
-    ConditionalWriteLockData data = new ConditionalWriteLockData(false, System.currentTimeMillis(), ownerId);
-    ConditionalWriteLockFile nearExpiredLockFile = new ConditionalWriteLockFile(data, "v1");
-    doReturn(nearExpiredLockFile).when(lockProvider).getLock();
-    assertFalse(lockProvider.renewLock());
-    verify(mockLogger).error("Owner {}: Cannot renew unexpired lock which is within clock drift of expiration!", this.ownerId);
+    verify(mockLogger).warn("Owner {}: Cannot renew, no lock held by this process", this.ownerId);
   }
 
   @Test
@@ -405,8 +400,9 @@ class TestConditionalWriteLockProvider {
     ConditionalWriteLockData data = new ConditionalWriteLockData(false, System.currentTimeMillis() - DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile nearExpiredLockFile = new ConditionalWriteLockFile(data, "v1");
     doReturn(nearExpiredLockFile).when(lockProvider).getLock();
+    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(nearExpiredLockFile), anyLong())).thenReturn(Pair.of(LockUpdateResult.ACQUIRED_BY_OTHERS, null));
     assertFalse(lockProvider.renewLock());
-    verify(mockLogger).error("Owner {}: Cannot renew unexpired lock which is within clock drift of expiration!", this.ownerId);
+    verify(mockLogger).error("Owner {}: Unable to renew lock as it is acquired by others.", this.ownerId);
   }
 
   @Test
@@ -415,7 +411,7 @@ class TestConditionalWriteLockProvider {
     ConditionalWriteLockFile lockFile = new ConditionalWriteLockFile(data, "v1");
     doReturn(lockFile).when(lockProvider).getLock();
     // Signal the upsert attempt failed, but may be transient. See interface for more details.
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong())).thenReturn(Option.empty());
+    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong())).thenReturn(Pair.of(LockUpdateResult.UNKNOWN_ERROR, null));
     assertTrue(lockProvider.renewLock());
   }
 
@@ -425,10 +421,11 @@ class TestConditionalWriteLockProvider {
     ConditionalWriteLockFile lockFile = new ConditionalWriteLockFile(data, "v1");
     doReturn(lockFile).when(lockProvider).getLock();
     // Signal the upsert attempt failed, but may be transient. See interface for more details.
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong())).thenReturn(null);
-    assertFalse(lockProvider.renewLock());
+    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong())).thenReturn(Pair.of(LockUpdateResult.UNKNOWN_ERROR, null));
+    // renewLock return true so it will be retried.
+    assertTrue(lockProvider.renewLock());
 
-    verify(mockLogger).error("Owner {}: Unable to upload metadata to renew lock due to fatal error.", this.ownerId);
+    verify(mockLogger).warn("Owner {}: Unable to renew lock due to unknown error, could be transient.", this.ownerId);
   }
 
   @Test
@@ -439,7 +436,7 @@ class TestConditionalWriteLockProvider {
 
     ConditionalWriteLockData nearExpirationData = new ConditionalWriteLockData(false, System.currentTimeMillis(), ownerId);
     ConditionalWriteLockFile lockFileNearExpiration = new ConditionalWriteLockFile(nearExpirationData, "v2");
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong())).thenReturn(Option.of(lockFileNearExpiration));
+    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, lockFileNearExpiration));
 
     // We used to fail in this case before, but since we are only modifying a single lock file, this is ok now.
     // Therefore, this can be a happy path variation.
@@ -454,10 +451,10 @@ class TestConditionalWriteLockProvider {
 
     ConditionalWriteLockData successData = new ConditionalWriteLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     ConditionalWriteLockFile successLockFile = new ConditionalWriteLockFile(successData, "v2");
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong())).thenReturn(Option.of(successLockFile));
+    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, successLockFile));
     assertTrue(lockProvider.renewLock());
 
-    verify(mockLogger).info(eq("Owner {}: renewal succeeded for lock: {} with {} ms left until expiration."), eq(this.ownerId), eq("gs://bucket/lake/db/tbl-default"), anyLong());
+    verify(mockLogger).info(eq("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}."), eq(this.ownerId), anyLong(), eq("gs://bucket/lake/db/tbl-default"));
   }
 
   @Test
@@ -502,12 +499,12 @@ class TestConditionalWriteLockProvider {
     }
 
     @Override
-    public ConditionalWriteLockFile tryCreateOrUpdateLockFile(ConditionalWriteLockData newLockData, ConditionalWriteLockFile previousLockFile) {
+    public Pair<LockUpdateResult, ConditionalWriteLockFile> tryCreateOrUpdateLockFile(ConditionalWriteLockData newLockData, ConditionalWriteLockFile previousLockFile) {
       return null;
     }
 
     @Override
-    public Option<ConditionalWriteLockFile> tryCreateOrUpdateLockFileWithRetry(
+    public Pair<LockUpdateResult, ConditionalWriteLockFile> tryCreateOrUpdateLockFileWithRetry(
         Supplier<ConditionalWriteLockData> newLockDataSupplier,
         ConditionalWriteLockFile previousLockFile,
         long retryExpiration) {
@@ -515,7 +512,7 @@ class TestConditionalWriteLockProvider {
     }
 
     @Override
-    public Option<ConditionalWriteLockFile> getCurrentLockFile() {
+    public Pair<LockGetResult, ConditionalWriteLockFile> getCurrentLockFile() {
       return null;
     }
 

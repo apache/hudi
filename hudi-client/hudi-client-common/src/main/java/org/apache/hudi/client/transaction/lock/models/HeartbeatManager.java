@@ -27,18 +27,17 @@ public interface HeartbeatManager extends AutoCloseable {
   /**
    * Starts the heartbeat for the given thread and does not stop until stopHeartbeat is called or the thread has died.
    * @param threadToMonitor The thread to pass to/monitor when running the heartbeat task.
-   * @return Whether we successfully started the heartbeat.
+   * @return @return True when there is no previously active heartbeat and the heartbeat is successfully started. False
+   * otherwise.
    */
   boolean startHeartbeatForThread(Thread threadToMonitor);
 
   /**
    * Stops the heartbeat, if one is active.
-   * This is a blocking call.
-   * One should assume that the heartbeat task can still be triggered
-   * until we return true from this method.
-   * @param mayInterruptIfRunning Whether we may interrupt the heartbeat if it is still running.
-   * @return Whether the heartbeat task was successfully stopped.
-   * Note: this should return true if the heartbeat task was already stopped.
+   * This is a blocking call, which drains any inflight heart beat task execution before return.
+   * @param mayInterruptIfRunning Whether we may interrupt the underlying heartbeat task if it is inflight.
+   * @return true: no heartbeat task is inflight or to be executed.
+   *         false: failed to stop the heartbeat, there can still be recurring execution of heartbeat tasks.
    */
   boolean stopHeartbeat(boolean mayInterruptIfRunning);
 

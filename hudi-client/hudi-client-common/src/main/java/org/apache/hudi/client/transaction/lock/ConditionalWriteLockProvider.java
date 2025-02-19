@@ -25,9 +25,9 @@ import org.apache.hudi.client.transaction.lock.models.LockProviderHeartbeatManag
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.exception.HoodieLockException;
 
@@ -52,8 +52,7 @@ import static org.apache.hudi.common.lock.LockState.RELEASED;
 import static org.apache.hudi.common.lock.LockState.RELEASING;
 
 @ThreadSafe
-public class ConditionalWriteLockProvider
-        implements LockProvider<ConditionalWriteLockFile> {
+public class ConditionalWriteLockProvider implements LockProvider<ConditionalWriteLockFile> {
 
   // How long to wait before retrying lock acquisition in blocking calls.
   private static final long DEFAULT_LOCK_ACQUISITION_BUFFER = 1000;
@@ -77,9 +76,6 @@ public class ConditionalWriteLockProvider
   @VisibleForTesting
   Logger logger;
 
-  // Concurrency safety, currently locking all the important parts.
-  private final Object localMutex = new Object();
-
   // The lock service implementation which interacts with cloud storage.
   private final ConditionalWriteLockService lockService;
 
@@ -91,11 +87,11 @@ public class ConditionalWriteLockProvider
   private final String bucketName;
   private final HeartbeatManager heartbeatManager;
 
-  // Provide a place to store the "current lock object"
-  @GuardedBy("localMutex")
+  // Provide a place to store the "current lock object".
+  @GuardedBy("this")
   private ConditionalWriteLockFile currentLockObj = null;
 
-  private void setLock(ConditionalWriteLockFile lockObj) {
+  private synchronized void setLock(ConditionalWriteLockFile lockObj) {
     if (lockObj != null && !Objects.equals(lockObj.getOwner(), this.ownerId)) {
       throw new HoodieLockException("Owners do not match! Current LP owner: " + this.ownerId + " lock path: " + this.lockFilePath + " owner: " + lockObj.getOwner());
     }
@@ -176,7 +172,7 @@ public class ConditionalWriteLockProvider
   // -----------------------------------------
 
   @Override
-  public ConditionalWriteLockFile getLock() {
+  public synchronized ConditionalWriteLockFile getLock() {
     return currentLockObj;
   }
 
@@ -209,19 +205,21 @@ public class ConditionalWriteLockProvider
   }
 
   @Override
-  public void close() {
-    synchronized (localMutex) {
-      try {
-        this.lockService.close();
-      } catch (Exception e) {
-        logger.error("Owner {}: Lock service failed to close.", this.ownerId, e);
-      }
-      try {
-        this.heartbeatManager.close();
-      } catch (Exception e) {
-        logger.error("Owner {}: Heartbeat manager failed to close.", this.ownerId, e);
-      }
+  public synchronized void close() {
+    try {
+      this.lockService.close();
+    } catch (Exception e) {
+      logger.error("Owner {}: Lock service failed to close.", ownerId, e);
     }
+    try {
+      this.heartbeatManager.close();
+    } catch (Exception e) {
+      logger.error("Owner {}: Heartbeat manager failed to close.", ownerId, e);
+    }
+  }
+
+  private synchronized boolean isLockStillValid(ConditionalWriteLockFile lock) {
+    return !lock.isExpired() && !isCurrentTimeCertainlyOlderThanDistributedTime(lock.getValidUntil());
   }
 
   /**
@@ -229,106 +227,145 @@ public class ConditionalWriteLockProvider
    * @return true if lock acquired, false otherwise
    */
   @Override
-  public boolean tryLock() {
-    synchronized (localMutex) {
-      logger.debug(
-          LOCK_STATE_LOGGER_MSG,
+  public synchronized boolean tryLock() {
+    assertHeartBeatManagerExists();
+    logger.debug(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), ACQUIRING);
+    if (actuallyHoldsLock()) {
+      // Supports reentrant locks
+      return true;
+    }
+
+    if (this.heartbeatManager.hasActiveHeartbeat()) {
+      logger.error("Detected broken invariant: there is an active heartbeat without a lock being held.");
+      // Breach of object invariant - we should never have an active heartbeat without holding a lock.
+      throw new HoodieLockException(generateLockStateMessage(FAILED_TO_ACQUIRE));
+    }
+
+    Pair<LockGetResult, ConditionalWriteLockFile> latestLock = this.lockService.getCurrentLockFile();
+    if (latestLock.getLeft() == LockGetResult.UNKNOWN_ERROR) {
+      logger.info(
+          LOCK_STATE_LOGGER_MSG_WITH_INFO,
           ownerId,
           lockFilePath,
           Thread.currentThread(),
-          ACQUIRING);
-      if (this.getLock() != null && !this.getLock().isExpired() && !isCurrentTimeCertainlyOlderThanDistributedTime(this.getLock().getValidUntil())) {
-        // Supports reentrant locks
-        return true;
-      }
+          FAILED_TO_ACQUIRE,
+          "Failed to get the latest lock status");
+      // We were not able to determine whether a lock was present.
+      return false;
+    }
 
-      if (this.heartbeatManager != null && this.heartbeatManager.hasActiveHeartbeat()) {
-        throw new HoodieLockException(generateLockStateMessage(FAILED_TO_ACQUIRE));
-      }
+    if (latestLock.getLeft() == LockGetResult.SUCCESS && isLockStillValid(latestLock.getRight())) {
+      String msg = String.format("Lock already held by %s", latestLock.getRight().getOwner());
+      // Lock held by others.
+      logger.info(
+          LOCK_STATE_LOGGER_MSG_WITH_INFO,
+          ownerId,
+          lockFilePath,
+          Thread.currentThread(),
+          FAILED_TO_ACQUIRE,
+          msg);
+      return false;
+    }
 
-      Option<ConditionalWriteLockFile> latestLock = this.lockService.getCurrentLockFile();
-      if (latestLock == null) {
-        // We were not able to determine whether a lock was present.
-        return false;
-      }
-
-      if (latestLock.isPresent() && !latestLock.get().isExpired() && !isCurrentTimeCertainlyOlderThanDistributedTime(latestLock.get().getValidUntil())) {
-        // An unexpired lock file exists, we can't acquire
-        logger.info(
-            LOCK_STATE_LOGGER_MSG_WITH_INFO,
-            ownerId,
-            lockFilePath,
-            Thread.currentThread(),
-            FAILED_TO_ACQUIRE,
-            String.format("Lock already held by %s", latestLock.get().getOwner()));
-        return false;
-      }
-
-      // This request should have preconditions that ensure the request fails if the lock file
-      // already exists. If we get null, then someone beat us to the lock
-      ConditionalWriteLockData newLockData = new ConditionalWriteLockData(false, System.currentTimeMillis() + lockValidityMs, ownerId);
-      ConditionalWriteLockFile lockObject = this.lockService.tryCreateOrUpdateLockFile(newLockData, latestLock.orElse(null));
-      if (lockObject == null) {
-        // failed to acquire the lock, indicates concurrent contention
-        logger.info(
-            LOCK_STATE_LOGGER_MSG,
-            ownerId,
-            lockFilePath,
-            Thread.currentThread(),
-            FAILED_TO_ACQUIRE);
-        return false;
-      }
-      this.setLock(lockObject);
-
-      if (this.heartbeatManager == null || !this.heartbeatManager.startHeartbeatForThread(Thread.currentThread())) {
-        logger.error(
-            LOCK_STATE_LOGGER_MSG_WITH_INFO,
-            ownerId,
-            lockFilePath,
-            Thread.currentThread(),
-            RELEASING,
-            "We were unable to start the heartbeat!");
-        tryExpireCurrentLock();
-        return false;
-      }
-
+    // Try to acquire the lock
+    ConditionalWriteLockData newLockData = new ConditionalWriteLockData(false, System.currentTimeMillis() + lockValidityMs, ownerId);
+    Pair<LockUpdateResult, ConditionalWriteLockFile> lockUpdateStatus = this.lockService.tryCreateOrUpdateLockFile(
+        newLockData, latestLock.getLeft() == LockGetResult.NOT_EXISTS ? null : latestLock.getRight());
+    if (lockUpdateStatus.getLeft() != LockUpdateResult.SUCCESS) {
+      // failed to acquire the lock, indicates concurrent contention
       logger.info(
           LOCK_STATE_LOGGER_MSG,
           ownerId,
           lockFilePath,
           Thread.currentThread(),
-          ACQUIRED);
-      return true;
+          FAILED_TO_ACQUIRE);
+      return false;
     }
+    this.setLock(lockUpdateStatus.getRight());
+
+    // There is a remote chance that
+    // - after lock is acquired but before heartbeat starts the lock is expired.
+    // - lock is acquired and heartbeat is up yet it does not run timely before the lock is expired
+    // It is mitigated by setting the lock validity period to a reasonably long period to survive until heartbeat comes, plus
+    // set the heartbeat interval relatively small enough.
+    if (!this.heartbeatManager.startHeartbeatForThread(Thread.currentThread())) {
+      // Precondition "no active heartbeat" is checked previously, so when startHeartbeatForThread returns false,
+      // we are confident no heartbeat thread is running.
+      logger.error(
+          LOCK_STATE_LOGGER_MSG_WITH_INFO,
+          ownerId,
+          lockFilePath,
+          Thread.currentThread(),
+          RELEASING,
+          "We were unable to start the heartbeat!");
+      tryExpireCurrentLock();
+      return false;
+    }
+
+    logger.info(
+        LOCK_STATE_LOGGER_MSG,
+        ownerId,
+        lockFilePath,
+        Thread.currentThread(),
+        ACQUIRED);
+    return true;
+  }
+
+  /**
+   * Determines whether this provider currently holds a valid lock.
+   *
+   * <p>This method checks both the existence of a lock object and its validity. A lock is considered
+   * valid only if it exists and has not expired according to its timestamp.
+   *
+   * @return {@code true} if this provider holds a valid lock, {@code false} otherwise
+   */
+  private boolean actuallyHoldsLock() {
+    return believesLockMightBeHeld() && isLockStillValid(getLock());
+  }
+
+  /**
+   * Checks if this provider has a non-null lock object reference.
+   *
+   * <p>A non-null lock object indicates that this provider has previously **successfully** acquired a lock via
+   * ConditionalWriteLockProvider##lock and has not yet **successfully** released it via ConditionalWriteLockProvider#unlock().
+   * It is merely an indicator that the lock might be held by this provider. To truly certify we are the owner of the lock,
+   * ConditionalWriteLockProvider#actuallyHoldsLock should be used.
+   *
+   * @return {@code true} if this provider has a non-null lock object, {@code false} otherwise
+   * @see ConditionalWriteLockProvider#actuallyHoldsLock()
+   */
+  private boolean believesLockMightBeHeld() {
+    return this.getLock() != null;
   }
 
   /**
    * Unlock by marking our current lock file "expired": true.
    */
   @Override
-  public void unlock() {
-    synchronized (localMutex) {
-      if (this.getLock() == null) {
-        return;
-      }
-      // The goal is to setLock(null)
-      // This indicates to future callers that we do not have the lock and our heartbeat task is expired.
-      // If either of our actions to perform this work fail, then we cannot setLock to null.
-      boolean canSetCurrentLockNull = true;
+  public synchronized void unlock() {
+    assertHeartBeatManagerExists();
+    if (!believesLockMightBeHeld()) {
+      return;
+    }
+    boolean believesNoLongerHoldsLock = true;
 
-      // Try to stop the heartbeat first
-      if (heartbeatManager != null && heartbeatManager.hasActiveHeartbeat()) {
-        logger.info("Owner {}: Gracefully shutting down heartbeat.", this.ownerId);
-        canSetCurrentLockNull &= heartbeatManager.stopHeartbeat(true);
-      }
+    // Try to stop the heartbeat first
+    if (heartbeatManager.hasActiveHeartbeat()) {
+      logger.info("Owner {}: Gracefully shutting down heartbeat.", ownerId);
+      believesNoLongerHoldsLock &= heartbeatManager.stopHeartbeat(true);
+    }
 
-      // Then expire the current lock.
-      canSetCurrentLockNull &= tryExpireCurrentLock();
-      if (canSetCurrentLockNull) {
-        this.setLock(null);
-      } else {
-        throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE));
-      }
+    // Then expire the current lock.
+    believesNoLongerHoldsLock &= tryExpireCurrentLock();
+    if (!believesNoLongerHoldsLock) {
+      throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE));
+    }
+  }
+
+  private void assertHeartBeatManagerExists() {
+    if (heartbeatManager == null) {
+      // broken function precondition.
+      throw new HoodieLockException("Unexpected null heartbeatManager");
     }
   }
 
@@ -336,106 +373,86 @@ public class ConditionalWriteLockProvider
    * Tries to expire the currently held lock.
    * @return True if we were successfully able to upload an expired lock.
    */
-  private boolean tryExpireCurrentLock() {
-    synchronized (localMutex) {
-      logger.debug(
-          LOCK_STATE_LOGGER_MSG,
-          ownerId,
-          lockFilePath,
-          Thread.currentThread(),
-          RELEASING);
-
-      // Upload metadata that will unlock this lock.
-      Option<ConditionalWriteLockFile> result = this.lockService.tryCreateOrUpdateLockFileWithRetry(
-          () -> new ConditionalWriteLockData(true, this.getLock().getValidUntil(), ownerId),
-          this.getLock(),
-          // Keep retrying for the normal validity time.
-          LOCK_UPSERT_RETRY_COUNT);
-      if (result == null) {
-        // Precondition failure, this can happen if our lock expires and someone else acquires the lock.
-        logger.warn(
-            LOCK_STATE_LOGGER_MSG,
-            ownerId,
-            lockFilePath,
-            Thread.currentThread(),
-            FAILED_TO_RELEASE);
-      } else if (!result.isPresent()) {
+  private synchronized boolean tryExpireCurrentLock() {
+    // It does not make sense to have heartbeat alive extending the lock lease while here we are trying
+    // to expire the lock.
+    if (heartbeatManager.hasActiveHeartbeat()) {
+      // broken function precondition.
+      throw new HoodieLockException("Must stop heartbeat before expire lock file");
+    }
+    logger.debug(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), RELEASING);
+    // Upload metadata that will unlock this lock.
+    Pair<LockUpdateResult, ConditionalWriteLockFile> result = this.lockService.tryCreateOrUpdateLockFileWithRetry(
+        () -> new ConditionalWriteLockData(true, this.getLock().getValidUntil(), ownerId),
+        this.getLock(),
+        // Keep retrying for the normal validity time.
+        LOCK_UPSERT_RETRY_COUNT);
+    switch (result.getLeft()) {
+      case UNKNOWN_ERROR:
         // Here we do not know the state of the lock.
         logger.error(
-            LOCK_STATE_LOGGER_MSG,
-            ownerId,
-            lockFilePath,
-            Thread.currentThread(),
-            FAILED_TO_RELEASE);
-      } else {
-        logger.debug(
-            LOCK_STATE_LOGGER_MSG,
-            ownerId,
-            lockFilePath,
-            Thread.currentThread(),
-            RELEASED);
-        this.setLock(result.get());
+            LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), FAILED_TO_RELEASE);
+        return false;
+      case SUCCESS:
+      case ACQUIRED_BY_OTHERS:
+        logger.debug(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), RELEASED);
+        // As we are confident no lock is held by itself, clean up the cached lock object.
+        setLock(null);
         return true;
-      }
-
-      return false;
+      default:
+        throw new HoodieLockException("Unexpected lock update result: " + result.getLeft());
     }
   }
 
   /**
-   * Renews (heartbeats) the current lock if we are the holder,
-   * extending its last modified time in cloud storage so it won't be considered expired.
-   * Called by the HeartbeatManager
-   *
-   * @return whether we were able to renew the lock.
-   * If false, the caller of this (the heartbeat manager) will end the heartbeat task.
+   * Renews (heartbeats) the current lock if we are the holder, it forcefully set the expiration flag
+   * to false and the lock expiration time to a later time in the future.
    */
   @VisibleForTesting
-  protected boolean renewLock() {
-    synchronized (localMutex) {
-      try {
-        // Note: we do not need to compare to the current latest lockfile, as long as our clock drift buffer
-        // is accurate. We can guarantee that we are last process to modify this lockfile as long as the generation
-        // stored here matches the previous.
-        if (this.getLock() == null) {
-          logger.warn("Owner {}: Cannot renew, no lock held by this process", this.ownerId);
-          if (this.heartbeatManager == null || !this.heartbeatManager.hasActiveHeartbeat()) {
-            logger.warn("Owner {}: Another process has already shutdown the heartbeat after this task fired.", this.ownerId);
-          }
-          return false;
-        }
-
-        long oldExpirationMs = this.getLock().getValidUntil();
-        if (isCurrentTimePossiblyOlderThanDistributedTime(oldExpirationMs) && !this.getLock().isExpired()) {
-          logger.error("Owner {}: Cannot renew unexpired lock which is within clock drift of expiration!", this.ownerId);
-        } else {
-          // Attempt conditional update, extend lock.
-          ConditionalWriteLockData extendedExpirationLockData = new ConditionalWriteLockData(
-              false, System.currentTimeMillis() + lockValidityMs, ownerId);
-          Option<ConditionalWriteLockFile> currentLock = this.lockService.tryCreateOrUpdateLockFileWithRetry(
-              () -> extendedExpirationLockData,
-              this.getLock(),
-              // Keep retrying lock renewal until we are 1 heartbeat interval away from expiration.
-              LOCK_UPSERT_RETRY_COUNT);
-          if (currentLock == null) {
-            logger.error("Owner {}: Unable to upload metadata to renew lock due to fatal error.", this.ownerId);
-          } else if (!currentLock.isPresent()) {
-            // This could be transient, but unclear, we will let the heartbeat continue normally.
-            // If the next heartbeat run identifies our lock has expired we will error out.
-            logger.warn("Owner {}: Unable to upload metadata to renew lock due to unknown issue, could be transient.", this.ownerId);
-            return true;
-          } else {
-            // Only positive outcome
-            this.setLock(currentLock.get());
-            logger.info("Owner {}: renewal succeeded for lock: {} with {} ms left until expiration.", this.ownerId, this.lockFilePath, oldExpirationMs - System.currentTimeMillis());
-            return true;
-          }
-        }
-      } catch (Exception e) {
-        logger.error("Owner {}: Exception occurred while renewing lock", this.ownerId, e);
+  protected synchronized boolean renewLock() {
+    try {
+      // If we don't hold the lock, no-op.
+      if (!believesLockMightBeHeld()) {
+        logger.warn("Owner {}: Cannot renew, no lock held by this process", ownerId);
+        // No need to extend lock lease.
+        return false;
       }
 
-      // Any code path which returns false will trigger heartbeat to stop.
+      long oldExpirationMs = getLock().getValidUntil();
+      // Attempt conditional update, extend lock. There are 3 cases:
+      // 1. Happy case: lock has not expired yet, we extend the lease to a longer period.
+      // 2. Corner case 1: lock is expired and is acquired by others, lock renewal failed with ACQUIRED_BY_OTHERS.
+      // 3. Corner case 2: lock is expired but no one has acquired it yet, lock renewal "revived" the expired lock.
+      // Please note we expect the corner cases almost never happens.
+      // Action taken for corner case 2 is just a best effort mitigation. At least it prevents further data corruption by
+      // letting someone else acquire the lock.
+      Pair<LockUpdateResult, ConditionalWriteLockFile> currentLock = this.lockService.tryCreateOrUpdateLockFileWithRetry(
+          () -> new ConditionalWriteLockData(false, System.currentTimeMillis() + lockValidityMs, ownerId),
+          getLock(),
+          LOCK_UPSERT_RETRY_COUNT);
+      switch (currentLock.getLeft()) {
+        case ACQUIRED_BY_OTHERS:
+          logger.error("Owner {}: Unable to renew lock as it is acquired by others.", ownerId);
+          // No need to extend lock lease anymore.
+          return false;
+        case UNKNOWN_ERROR:
+          // This could be transient, but unclear, we will let the heartbeat continue normally.
+          // If the next heartbeat run identifies our lock has expired we will error out.
+          logger.warn("Owner {}: Unable to renew lock due to unknown error, could be transient.", ownerId);
+          // Let heartbeat retry later.
+          return true;
+        case SUCCESS:
+          // Only positive outcome
+          this.setLock(currentLock.getRight());
+          logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
+              ownerId, oldExpirationMs - System.currentTimeMillis(), lockFilePath);
+          // Let heartbeat continue to renew lock lease again later.
+          return true;
+        default:
+          throw new HoodieLockException("Unexpected lock update result: " + currentLock.getLeft());
+      }
+    } catch (Exception e) {
+      logger.error("Owner {}: Exception occurred while renewing lock", ownerId, e);
       return false;
     }
   }
@@ -451,13 +468,6 @@ public class ConditionalWriteLockProvider
     return System.currentTimeMillis() > epochMs + CLOCK_DRIFT_BUFFER_MS;
   }
 
-  /**
-   * Method to calculate whether a timestamp from a distributed source has potentially occurred yet.
-   */
-  protected boolean isCurrentTimePossiblyOlderThanDistributedTime(long epochMs) {
-    return System.currentTimeMillis() + CLOCK_DRIFT_BUFFER_MS > epochMs;
-  }
-
   private String buildLockObjectPath(String lockFolderName, String lockTableFileName) {
     // Normalize inputs by removing trailing slashes
     // We know lockTableFileName has already been parsed.
@@ -465,7 +475,7 @@ public class ConditionalWriteLockProvider
       lockFolderName = lockFolderName.substring(1);
     }
 
-    // Append a slash only if one isn’t already present.
+    // Append a slash only if one isn't already present.
     return lockFolderName + (lockFolderName.endsWith("/") ? "" : "/") + lockTableFileName + ".json";
   }
 
@@ -484,6 +494,6 @@ public class ConditionalWriteLockProvider
 
   private String generateLockStateMessage(LockState state) {
     String threadName = Thread.currentThread().getName();
-    return String.format("Owner %s: Lock file path %s, Thread %s, Conditional Write lock state %s", this.ownerId, this.lockFilePath, threadName, state.toString());
+    return String.format("Owner %s: Lock file path %s, Thread %s, Conditional Write lock state %s", ownerId, lockFilePath, threadName, state.toString());
   }
 }

@@ -50,14 +50,51 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
   private final String ownerId;
   private final Logger logger;
   private final long heartbeatTimeMs;
-  // The function passed to the heartbeat manager should exhaust all options before returning false.
-  // In the case of the lock provider, this means retrying transient errors and only returning false
-  // on truly fatal cases. Consider returning true if expiration is far out, which will give the
-  // heartbeat task another opportunity to renew the lock.
-  // Returning false will result in immediate termination of the heartbeat
-  // and may negatively impact the original caller thread which started the heartbeat.
-  // IE: if the caller thread is a writer which assumes it has a lock
-  // using this heartbeat manager, then it may proceed to write without the lock, which is very bad!
+
+  /**
+   * Contract for the heartbeat function execution.
+   * 
+   * <p>Behavior of the heartbeat manager (consumer):
+   * <ul>
+   *   <li>Executes heartBeatFuncToExec every heartbeatTimeMs when:
+   *     <ul>
+   *       <li>heartBeatFuncToExec returns true</li>
+   *     </ul>
+   *   </li>
+   *   <li>Stops executing heartBeatFuncToExec when:
+   *     <ul>
+   *       <li>heartBeatFuncToExec returns false</li>
+   *       <li>heartBeatFuncToExec throws an exception</li>
+   *       <li>heart beat manager calls stopHeartbeat, which will interrupt any inflight execution 
+   *           and prevent further recurring executions</li>
+   *     </ul>
+   *   </li>
+   * </ul>
+   *
+   * <p>Requirements for heartBeatFuncToExec implementation:
+   * <ul>
+   *   <li>Should perform the logic of renewing lock lease</li>
+   *   <li>Should be super light-weight, typically runs within 1 second</li>
+   *   <li>Should handle thread interruptions so that the stopHeartbeat function will not wait long for any
+   *       inflight execution to complete</li>
+   *   <li>Should almost always return true in cases like:
+   *     <ul>
+   *       <li>Successfully extending the lock lease</li>
+   *       <li>Transient failures (network partition, remote service errors) to allow automatic retry</li>
+   *     </ul>
+   *   </li>
+   *   <li>Should return false only in specific cases:
+   *     <ul>
+   *       <li>When the lock is already expired (no point in extending an expired lock)</li>
+   *       <li>When the writer thread does not hold any lock</li>
+   *     </ul>
+   *   </li>
+   * </ul>
+   * 
+   * <p>Warning: Returning false stops all future lock renewal attempts. If the writer thread
+   * is still running, it will execute with a lock that can expire at any time, potentially
+   * leading to corrupted data.
+   */
   private final Supplier<Boolean> heartbeatFuncToExec;
   private final long stopHeartbeatTimeoutMs;
 
@@ -65,14 +102,25 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
   @GuardedBy("this")
   private ScheduledFuture<?> scheduledFuture;
 
-  // !!!!!!! Important !!!!!!!
-  // We use this variable with a try finally to track whether the heartbeat task is executing.
-  // Since we only have one thread in our executor service, even if the heartbeat
-  // task runs way longer than the heartbeat time, it will block the next execution
-  // and if we run scheduledFuture.cancel(), then those blocked executions will be cancelled.
-  // Only the current task will continue to run.
-  // This is mutually exclusive to synchronize(this). Never sync on "this" while the thread is holding a heartbeatSemaphore
-  // !!!!!!! Important !!!!!!!
+  /**
+   * Semaphore for managing heartbeat task execution synchronization.
+   *
+   * <p><strong>IMPORTANT: Thread Safety Warning</strong>
+   * This semaphore is mutually exclusive with {@code synchronized(this)}. Never synchronize
+   * on {@code this} while the thread is holding the heartbeatSemaphore.
+   *
+   * <p>Execution flow:
+   * <ul>
+   *   <li>Heartbeat task always attempts to acquire the semaphore before proceeding and
+   *       releases it before finishing the current round of execution</li>
+   *   <li>The heartbeat manager acquires the semaphore when it needs to:
+   *     <ul>
+   *       <li>Drain any inflight execution</li>
+   *       <li>Prevent further execution of the heartbeat task</li>
+   *     </ul>
+   *   </li>
+   * </ul>
+   */
   private final Semaphore heartbeatSemaphore;
 
   private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(LockProviderHeartbeatManager.class);
@@ -169,6 +217,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
 
     // Call synchronized method after releasing the semaphore
     if (!heartbeatExecutionSuccessful) {
+      logger.warn("Owner {}: Heartbeat function did not succeed.", ownerId);
       // Unschedule self from further execution if heartbeat was unsuccessful.
       heartbeatTaskUnscheduleItself();
     }
@@ -189,24 +238,9 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
 
     // Execute heartbeat function
     try {
-      if (heartbeatFuncToExec.get()) {
-        return true;
-      }
-      logger.warn("Owner {}: Heartbeat function did not succeed.", ownerId);
+      return heartbeatFuncToExec.get();
     } catch (Exception e) {
       logger.error("Owner {}: Heartbeat function threw exception {}", ownerId, e);
-    }
-
-    // Check for interruption after failed heartbeat
-    if (Thread.currentThread().isInterrupted()) {
-      logger.warn("Owner {}: Heartbeat task was interrupted. Exiting gracefully.", ownerId);
-      return false;
-    }
-
-    // Final check if monitored thread is still alive after failed heartbeat.
-    if (threadToMonitor.isAlive()) {
-      // This will trigger an alert
-      logger.error("Owner {}: Monitored thread is still alive!", this.ownerId);
     }
     return false;
   }
@@ -218,8 +252,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     // Do not interrupt this current task.
     // This will cancel all future invocations.
     if (scheduledFuture != null) {
-      logger.info("Owner {}: Cancelling future heartbeat invocations.", this.ownerId);
-      boolean cancellationSuccessful = scheduledFuture.cancel(false);
+      boolean cancellationSuccessful = scheduledFuture.cancel(true);
       logger.info("Owner {}: Requested termination of heartbeat task. Cancellation returned {}.", this.ownerId, cancellationSuccessful);
       scheduledFuture = null;
     }
