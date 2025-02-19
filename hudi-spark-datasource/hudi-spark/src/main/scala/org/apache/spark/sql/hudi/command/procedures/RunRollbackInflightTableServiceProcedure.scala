@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{ClusteringUtils, Option}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.table.HoodieSparkTable
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper

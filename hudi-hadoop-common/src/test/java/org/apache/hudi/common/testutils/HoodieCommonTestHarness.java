@@ -269,20 +269,23 @@ public class HoodieCommonTestHarness {
     return metaClient.getActiveTimeline();
   }
 
-  protected Boolean hasPendingCommits() {
+  protected Boolean hasPendingCommitsOrRollbacks() {
     HoodieActiveTimeline timeline = getActiveTimeline();
-    HoodieTimeline completedTimeline = timeline.filterCompletedInstants();
-    Set<String> completedInstants = completedTimeline
-        .getInstants()
-        .stream()
-        .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
-    List<String> pendingInstants = timeline
-        .getInstants()
-        .stream()
-        .map(HoodieInstant::requestedTime)
-        .filter(t -> !completedInstants.contains(t))
-        .collect(Collectors.toList());
-    return !pendingInstants.isEmpty();
+    if (timeline.getRollbackTimeline().empty()) {
+      HoodieTimeline completedTimeline = timeline.filterCompletedInstants();
+      Set<String> completedInstants = completedTimeline
+          .getInstants()
+          .stream()
+          .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
+      List<String> pendingInstants = timeline
+          .getInstants()
+          .stream()
+          .map(HoodieInstant::requestedTime)
+          .filter(t -> !completedInstants.contains(t))
+          .collect(Collectors.toList());
+      return !pendingInstants.isEmpty();
+    }
+    return true;
   }
 
   protected HoodieEngineContext getEngineContext() {

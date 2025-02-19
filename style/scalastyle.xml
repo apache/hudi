@@ -120,13 +120,13 @@
  <check level="error" class="org.scalastyle.file.NewLineAtEofChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.file.NoNewLineAtEofChecker" enabled="false"/>
  <check level="error" class="org.scalastyle.scalariform.BlockImportChecker" enabled="false"/>
- <check level="error" class="org.scalastyle.scalariform.ImportOrderChecker" enabled="false">
+ <check level="error" class="org.scalastyle.scalariform.ImportOrderChecker" enabled="true">
   <parameters>
    <parameter name="groups">hudi,3rdParty,javax,java,scala</parameter>
    <parameter name="group.hudi">org\.apache\.hudi\..*</parameter>
-   <parameter name="group.3rdParty">(?!org\.apache\.hudi\.).*</parameter>
-   <parameter name="group.javax">java?\..*</parameter>
-   <parameter name="group.java">javax?\..*</parameter>
+   <parameter name="group.3rdParty">(?!org\.apache\.hudi\.|javax\.|java\.|scala\.).*</parameter>
+   <parameter name="group.javax">javax\..*</parameter>
+   <parameter name="group.java">java\..*</parameter>
    <parameter name="group.scala">scala\..*</parameter>
   </parameters>
  </check>

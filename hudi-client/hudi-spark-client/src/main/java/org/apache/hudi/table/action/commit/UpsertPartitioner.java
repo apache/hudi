@@ -33,6 +33,8 @@ import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.estimator.RecordSizeEstimator;
+import org.apache.hudi.estimator.RecordSizeEstimatorFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -85,6 +87,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
   protected final HoodieWriteConfig config;
   private final WriteOperationType operationType;
+  private final RecordSizeEstimator recordSizeEstimator;
 
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
                            HoodieWriteConfig config, WriteOperationType operationType) {
@@ -94,6 +97,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
     bucketInfoMap = new HashMap<>();
     this.config = config;
     this.operationType = operationType;
+    this.recordSizeEstimator = RecordSizeEstimatorFactory.createRecordSizeEstimator(config);
     assignUpdates(profile);
     long totalInserts = profile.getInputPartitionPathStatMap().values().stream().mapToLong(stat -> stat.getNumInserts()).sum();
     if (!WriteOperationType.isPreppedWriteOperation(operationType) || totalInserts > 0) { // skip if its prepped write operation. or if totalInserts = 0.
@@ -174,9 +178,9 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
      * may result in OOM by making spark underestimate the actual input record sizes.
      */
     TimelineLayout layout = TimelineLayout.fromVersion(table.getActiveTimeline().getTimelineLayoutVersion());
-    long averageRecordSize = AverageRecordSizeUtils.averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
+    long averageRecordSize = recordSizeEstimator.averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
         .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION))
-        .filterCompletedInstants(), config,  layout.getCommitMetadataSerDe());
+        .filterCompletedInstants(),  layout.getCommitMetadataSerDe());
     LOG.info("AvgRecordSize => " + averageRecordSize);
 
     Map<String, List<SmallFile>> partitionSmallFilesMap =
