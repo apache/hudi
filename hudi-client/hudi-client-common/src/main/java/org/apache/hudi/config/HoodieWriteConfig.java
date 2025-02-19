@@ -113,6 +113,7 @@ import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREA
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
 /**
@@ -1342,6 +1343,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getTaggedRecordStorageLevel() {
     return getString(TAGGED_RECORD_STORAGE_LEVEL_VALUE);
+  }
+
+  public Boolean isSourceRddPersisted() {
+    return getBoolean(ERROR_TABLE_PERSIST_SOURCE_RDD);
   }
 
   public String getInternalSchema() {

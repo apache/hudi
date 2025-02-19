@@ -305,6 +305,7 @@ public class SourceFormatAdapter implements Closeable {
 
   @Override
   public void close() {
+    source.releaseResources();
     if (source instanceof Closeable) {
       try {
         ((Closeable) source).close();
