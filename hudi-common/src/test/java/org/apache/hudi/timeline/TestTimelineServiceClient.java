@@ -18,7 +18,6 @@
 
 package org.apache.hudi.timeline;
 
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 
@@ -51,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * Tests {@link public class TestTimelineServiceClient}.
  */
-public class TestTimelineServiceClient {
+class TestTimelineServiceClient {
 
   private static final String TEST_ENDPOINT = "/test-endpoint";
   private static final int DEFAULT_READ_TIMEOUT_SECS = 5;
@@ -149,11 +148,11 @@ public class TestTimelineServiceClient {
     private final Option<InducedFailuresInfo> inducedFailuresInfo;
     private int currentInducedFailures;
 
-    public MockTimelineServiceNetworkClient(HoodieConfig config) {
+    public MockTimelineServiceNetworkClient(FileSystemViewStorageConfig config) {
       this(config, Option.empty());
     }
 
-    public MockTimelineServiceNetworkClient(HoodieConfig config, Option<InducedFailuresInfo> inducedFailuresInfo) {
+    public MockTimelineServiceNetworkClient(FileSystemViewStorageConfig config, Option<InducedFailuresInfo> inducedFailuresInfo) {
       super(config);
       this.inducedFailuresInfo = inducedFailuresInfo;
       currentInducedFailures = 0;

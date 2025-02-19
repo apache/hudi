@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.timeline.TimelineServiceClient;
+import org.apache.hudi.timeline.TimelineServiceClientBase;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -139,7 +140,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private final String basePath;
   private final HoodieTableMetaClient metaClient;
   private HoodieTimeline timeline;
-  private final TimelineServiceClient timelineServiceClient;
+  private final TimelineServiceClientBase timelineServiceClient;
 
   private boolean closed = false;
 

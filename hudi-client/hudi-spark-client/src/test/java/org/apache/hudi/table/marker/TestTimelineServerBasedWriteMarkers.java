@@ -30,8 +30,8 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.MarkerUtils;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.exception.HoodieRemoteException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.TimelineServiceTestHarness;
@@ -41,8 +41,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +54,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.view.FileSystemViewStorageType.SPILLABLE_DISK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -112,12 +114,15 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     closeQuietly(inputStream);
   }
 
-  @Test
-  public void testCreationWithTimelineServiceRetries() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = FileSystemViewStorageType.class)
+  public void testCreationWithTimelineServiceRetries(FileSystemViewStorageType storageType) throws Exception {
+    restartServerAndClient(0, storageType);
+    LOG.info("Connecting to Timeline Server :" + timelineService.getServerPort());
     // Validate marker creation/ deletion work without any failures in the timeline service.
     createSomeMarkers(true);
     assertTrue(storage.exists(markerFolderPath));
-    writeMarkers.doesMarkerDirExist();
+    assertTrue(writeMarkers.doesMarkerDirExist());
 
     // Simulate only a single failure and ensure the request fails.
     restartServerAndClient(1);
@@ -132,17 +137,22 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
         markerFolderPath.toString(),
         timelineService.getServerPort(),
         true);
-    writeMarkersWithRetries.doesMarkerDirExist();
+    assertTrue(writeMarkersWithRetries.doesMarkerDirExist());
   }
 
   private void restartServerAndClient(int numberOfSimulatedConnectionFailures) {
+    restartServerAndClient(numberOfSimulatedConnectionFailures, SPILLABLE_DISK);
+  }
+
+  private void restartServerAndClient(int numberOfSimulatedConnectionFailures,
+                                      FileSystemViewStorageType storageType) {
     if (timelineService != null) {
       timelineService.close();
     }
     try {
       HoodieEngineContext hoodieEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
       FileSystemViewStorageConfig storageConf =
-          FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
+          FileSystemViewStorageConfig.newBuilder().withStorageType(storageType).build();
       HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
       TimelineServiceTestHarness.Builder builder = TimelineServiceTestHarness.newBuilder();
       builder.withNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures);

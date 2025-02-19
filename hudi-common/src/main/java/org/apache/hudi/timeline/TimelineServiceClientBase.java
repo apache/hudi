@@ -18,7 +18,6 @@
 
 package org.apache.hudi.timeline;
 
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RetryHelper;
@@ -45,13 +44,13 @@ public abstract class TimelineServiceClientBase implements Serializable {
 
   private RetryHelper<Response, IOException> retryHelper;
 
-  public TimelineServiceClientBase(HoodieConfig config) {
+  protected TimelineServiceClientBase(FileSystemViewStorageConfig config) {
     if (config.getBooleanOrDefault(FileSystemViewStorageConfig.REMOTE_RETRY_ENABLE)) {
       retryHelper = new RetryHelper<>(
-          config.getLongOrDefault(FileSystemViewStorageConfig.REMOTE_MAX_RETRY_INTERVAL_MS),
-          config.getIntOrDefault(FileSystemViewStorageConfig.REMOTE_MAX_RETRY_NUMBERS),
-          config.getLongOrDefault(FileSystemViewStorageConfig.REMOTE_INITIAL_RETRY_INTERVAL_MS),
-          config.getStringOrDefault(FileSystemViewStorageConfig.RETRY_EXCEPTIONS),
+          config.getRemoteTimelineClientMaxRetryIntervalMs(),
+          config.getRemoteTimelineClientMaxRetryNumbers(),
+          config.getRemoteTimelineInitialRetryIntervalMs(),
+          config.getRemoteTimelineClientRetryExceptions(),
           "Sending request to timeline server");
     }
   }
@@ -67,7 +66,7 @@ public abstract class TimelineServiceClientBase implements Serializable {
     private final String path;
     private final Option<Map<String, String>> queryParameters;
 
-    public Request(TimelineServiceClient.RequestMethod method, String path, Option<Map<String, String>> queryParameters) {
+    private Request(TimelineServiceClient.RequestMethod method, String path, Option<Map<String, String>> queryParameters) {
       this.method = method;
       this.path = path;
       this.queryParameters = queryParameters;

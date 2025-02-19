@@ -18,7 +18,6 @@
 
 package org.apache.hudi.timeline;
 
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 
 import org.apache.http.client.utils.URIBuilder;
@@ -43,11 +42,11 @@ public class TimelineServiceClient extends TimelineServiceClientBase {
   protected final int timelineServerPort;
   protected final int timeoutMs;
 
-  public TimelineServiceClient(HoodieConfig config) {
+  public TimelineServiceClient(FileSystemViewStorageConfig config) {
     super(config);
-    this.timelineServerHost = config.getStringOrDefault(FileSystemViewStorageConfig.REMOTE_HOST_NAME);
-    this.timelineServerPort = config.getIntOrDefault(FileSystemViewStorageConfig.REMOTE_PORT_NUM);
-    this.timeoutMs = (int) TimeUnit.SECONDS.toMillis(config.getIntOrDefault(FileSystemViewStorageConfig.REMOTE_TIMEOUT_SECS));
+    this.timelineServerHost = config.getRemoteViewServerHost();
+    this.timelineServerPort = config.getRemoteViewServerPort();
+    this.timeoutMs = (int) TimeUnit.SECONDS.toMillis(config.getRemoteTimelineClientTimeoutSecs());
   }
 
   @Override
