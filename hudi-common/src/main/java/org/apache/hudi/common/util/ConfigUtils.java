@@ -89,6 +89,10 @@ public class ConfigUtils {
     return orderField;
   }
 
+  public static String getOrderingField(String fieldName) {
+    return "";
+  }
+
   /**
    * Get payload class.
    */
