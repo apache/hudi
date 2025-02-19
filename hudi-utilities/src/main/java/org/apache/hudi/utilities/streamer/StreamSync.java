@@ -457,66 +457,72 @@ public class StreamSync implements Serializable, Closeable {
     Pair<Option<String>, JavaRDD<WriteStatus>> result = null;
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
 
-    // Refresh Timeline
-    HoodieTableMetaClient metaClient = initializeMetaClientAndRefreshTimeline();
-    String instantTime = metaClient.createNewInstantTime();
+    try {
+      // Refresh Timeline
+      HoodieTableMetaClient metaClient = initializeMetaClientAndRefreshTimeline();
+      String instantTime = metaClient.createNewInstantTime();
 
-    Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(instantTime, metaClient);
+      Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(instantTime, metaClient);
 
-    if (inputBatchAndUseRowWriter != null) {
-      InputBatch inputBatch = inputBatchAndUseRowWriter.getLeft();
-      boolean useRowWriter = inputBatchAndUseRowWriter.getRight();
+      if (inputBatchAndUseRowWriter != null) {
+        InputBatch inputBatch = inputBatchAndUseRowWriter.getLeft();
+        boolean useRowWriter = inputBatchAndUseRowWriter.getRight();
+        initializeWriteClientAndRetryTableServices(inputBatch, metaClient);
+        result = writeToSinkAndDoMetaSync(instantTime, inputBatch, useRowWriter, metrics, overallTimerContext);
+      }
+      // refresh schemas if need be before next batch
+      if (schemaProvider != null) {
+        schemaProvider.refresh();
+      }
+      metrics.updateStreamerSyncMetrics(System.currentTimeMillis());
+      return result;
+    } finally {
+      this.formatAdapter.getSource().releaseResources();
+    }
+  }
 
-      // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
-      // compactor
-      if (writeClient == null) {
-        this.schemaProvider = inputBatch.getSchemaProvider();
-        // Setup HoodieWriteClient and compaction now that we decided on schema
-        setupWriteClient(inputBatch.getBatch(), metaClient);
-      } else {
-        Schema newSourceSchema = inputBatch.getSchemaProvider().getSourceSchema();
-        Schema newTargetSchema = inputBatch.getSchemaProvider().getTargetSchema();
-        if ((newSourceSchema != null && !processedSchema.isSchemaPresent(newSourceSchema))
-            || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
-          String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
-          String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
-          LOG.info("Seeing new schema. Source: {}, Target: {}", sourceStr, targetStr);
-          // We need to recreate write client with new schema and register them.
-          reInitWriteClient(newSourceSchema, newTargetSchema, inputBatch.getBatch(), metaClient);
-          if (newSourceSchema != null) {
-            processedSchema.addSchema(newSourceSchema);
-          }
-          if (newTargetSchema != null) {
-            processedSchema.addSchema(newTargetSchema);
-          }
+  private void initializeWriteClientAndRetryTableServices(InputBatch inputBatch, HoodieTableMetaClient metaClient) throws IOException {
+    // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
+    // compactor
+    if (writeClient == null) {
+      this.schemaProvider = inputBatch.getSchemaProvider();
+      // Setup HoodieWriteClient and compaction now that we decided on schema
+      setupWriteClient(inputBatch.getBatch(), metaClient);
+    } else {
+      Schema newSourceSchema = inputBatch.getSchemaProvider().getSourceSchema();
+      Schema newTargetSchema = inputBatch.getSchemaProvider().getTargetSchema();
+      if ((newSourceSchema != null && !processedSchema.isSchemaPresent(newSourceSchema))
+          || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
+        String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
+        String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
+        LOG.info("Seeing new schema. Source: {}, Target: {}", sourceStr, targetStr);
+        // We need to recreate write client with new schema and register them.
+        reInitWriteClient(newSourceSchema, newTargetSchema, inputBatch.getBatch(), metaClient);
+        if (newSourceSchema != null) {
+          processedSchema.addSchema(newSourceSchema);
+        }
+        if (newTargetSchema != null) {
+          processedSchema.addSchema(newTargetSchema);
         }
       }
+    }
 
-      // complete the pending compaction before writing to sink
-      if (cfg.retryLastPendingInlineCompactionJob && writeClient.getConfig().inlineCompactionEnabled()) {
-        Option<String> pendingCompactionInstant = getLastPendingCompactionInstant(allCommitsTimelineOpt);
-        if (pendingCompactionInstant.isPresent()) {
-          HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
-          writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
-          initializeMetaClientAndRefreshTimeline();
-          reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null, metaClient);
-        }
-      } else if (cfg.retryLastPendingInlineClusteringJob && writeClient.getConfig().inlineClusteringEnabled()) {
-        // complete the pending clustering before writing to sink
-        Option<String> pendingClusteringInstant = getLastPendingClusteringInstant(allCommitsTimelineOpt);
-        if (pendingClusteringInstant.isPresent()) {
-          writeClient.cluster(pendingClusteringInstant.get());
-        }
+    // complete the pending compaction before writing to sink
+    if (cfg.retryLastPendingInlineCompactionJob && writeClient.getConfig().inlineCompactionEnabled()) {
+      Option<String> pendingCompactionInstant = getLastPendingCompactionInstant(allCommitsTimelineOpt);
+      if (pendingCompactionInstant.isPresent()) {
+        HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
+        writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
+        initializeMetaClientAndRefreshTimeline();
+        reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null, metaClient);
       }
-
-      result = writeToSinkAndDoMetaSync(instantTime, inputBatch, useRowWriter, metrics, overallTimerContext);
+    } else if (cfg.retryLastPendingInlineClusteringJob && writeClient.getConfig().inlineClusteringEnabled()) {
+      // complete the pending clustering before writing to sink
+      Option<String> pendingClusteringInstant = getLastPendingClusteringInstant(allCommitsTimelineOpt);
+      if (pendingClusteringInstant.isPresent()) {
+        writeClient.cluster(pendingClusteringInstant.get());
+      }
     }
-    // refresh schemas if need be before next batch
-    if (schemaProvider != null) {
-      schemaProvider.refresh();
-    }
-    metrics.updateStreamerSyncMetrics(System.currentTimeMillis());
-    return result;
   }
 
   private Option<String> getLastPendingClusteringInstant(Option<HoodieTimeline> commitTimelineOpt) {
