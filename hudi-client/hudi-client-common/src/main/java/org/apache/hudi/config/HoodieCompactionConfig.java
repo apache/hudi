@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
+import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -198,9 +199,14 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value. "
           + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
 
-  /**
-   * @deprecated Use {@link #INLINE_COMPACT} and its methods instead
-   */
+  public static final ConfigProperty<String> COMPACTION_PLAN_GENERATOR = ConfigProperty
+      .key("hoodie.compaction.plan.generator")
+      .defaultValue(HoodieCompactionPlanGenerator.class.getName())
+      .markAdvanced()
+      .withDocumentation("Compaction plan generator for data files. Override with a custom plan generator "
+          + "if there's a need to use extraMetadata in the compaction plan for optimizations, ignore otherwise");
+
+  /** @deprecated Use {@link #INLINE_COMPACT} and its methods instead */
   @Deprecated
   public static final String INLINE_COMPACT_PROP = INLINE_COMPACT.key();
   /**

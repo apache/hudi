@@ -29,16 +29,18 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
-import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator;
 
 import org.slf4j.Logger;
@@ -80,7 +82,8 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
 
   private void initPlanGenerator(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     if (WriteOperationType.COMPACT.equals(operationType)) {
-      planGenerator = new HoodieCompactionPlanGenerator(table, context, config, this);
+      String planGeneratorClass = ConfigUtils.getStringWithAltKeys(config.getProps(), HoodieCompactionConfig.COMPACTION_PLAN_GENERATOR, true);
+      planGenerator = createCompactionPlanGenerator(planGeneratorClass, table, context, config);
     } else {
       planGenerator = new HoodieLogCompactionPlanGenerator(table, context, config, this);
     }
@@ -241,5 +244,10 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
   private Long parsedToSeconds(String time) {
     return TimelineUtils.parseDateFromInstantTimeSafely(time).orElseThrow(() -> new HoodieCompactionException("Failed to parse timestamp " + time))
             .getTime() / 1000;
+  }
+
+  private BaseHoodieCompactionPlanGenerator createCompactionPlanGenerator(String planGeneratorClass, HoodieTable table, HoodieEngineContext context, HoodieWriteConfig config) {
+    return (BaseHoodieCompactionPlanGenerator) ReflectionUtils.loadClass(planGeneratorClass,
+        new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class, BaseTableServicePlanActionExecutor.class}, table, context, config, this);
   }
 }
