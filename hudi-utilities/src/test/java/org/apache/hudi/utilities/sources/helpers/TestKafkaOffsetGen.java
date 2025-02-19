@@ -116,7 +116,7 @@ public class TestKafkaOffsetGen {
 
   private TypedProperties getConsumerConfigs(String topicName, String autoOffsetReset, String kafkaCheckpointType) {
     TypedProperties props = getConsumerConfigs(autoOffsetReset, kafkaCheckpointType);
-    props.put("hoodie.deltastreamer.source.kafka.topic", topicName);
+    props.put("hoodie.streamer.source.kafka.topic", topicName);
     return props;
   }
 

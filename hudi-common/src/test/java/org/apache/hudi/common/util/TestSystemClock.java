@@ -18,16 +18,33 @@
 
 package org.apache.hudi.common.util;
 
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+
 import java.time.Instant;
 
-/**
- * An implementation of {@link LogicalClock} that returns the current
- * time using {@link Instant#now()}.
- */
-public class SystemClock implements LogicalClock {
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-  @Override
-  public Instant now() {
-    return Instant.now();
+class TestSystemClock {
+
+  @Test
+  void testNow() {
+    Instant instant = Instant.now();
+    try (MockedStatic<Instant> instantMock = Mockito.mockStatic(Instant.class)) {
+      instantMock.when(Instant::now).thenReturn(instant);
+      SystemClock clock = new SystemClock();
+      assertEquals(instant, clock.now());
+    }
+  }
+
+  @Test
+  void testCurrentEpoch() {
+    Instant instant = Instant.now();
+    try (MockedStatic<Instant> instantMock = Mockito.mockStatic(Instant.class)) {
+      instantMock.when(Instant::now).thenReturn(instant);
+      SystemClock clock = new SystemClock();
+      assertEquals(instant.toEpochMilli(), clock.currentEpoch());
+    }
   }
 }

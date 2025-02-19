@@ -398,7 +398,7 @@ public class KafkaOffsetGen {
       }
     }
 
-    // If checkpoint offsets has expired (isCheckpointOutOfBounds = true) and ENABLE_FAIL_ON_DATA_LOSS is set,
+    // If checkpoint offsets has expired (isCheckpointOutOfBounds = true) and ENABLE_FAIL_ON_DATA_LOSS is false,
     // instead of reading from "earliest" offsets, adjust them with retention to avoid OffsetOutOfRange exception
     // as it is possible that "earliest" offsets may expire soon while the job is progressing. This won't affect
     // the offsets if they are already much after the retention or OFFSET_SKIP_BUFFER_MINUTES is not set
