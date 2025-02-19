@@ -46,7 +46,7 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
-  void refresh(boolean useSpillableMap) throws IOException {
+  void testGetFileSlicesCount(boolean useSpillableMap) throws IOException {
     initMetaClient();
     TypedProperties properties = new TypedProperties();
     if (useSpillableMap) {

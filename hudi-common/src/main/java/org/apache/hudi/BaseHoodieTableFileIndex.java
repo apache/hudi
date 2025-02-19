@@ -459,7 +459,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to refresh file index", e);
     }
-    this.cachedAllInputFileSlices = new HashMap<>();
     if (!shouldListLazily) {
       ensurePreloadedPartitions(getAllQueryPartitionPaths());
     }

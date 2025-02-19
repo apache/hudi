@@ -318,6 +318,16 @@ public class ConfigUtils {
     return Option.empty();
   }
 
+  /**
+   * Gets the raw value for a {@link ConfigProperty<T>} config from properties with the option
+   * of using default value.
+   *
+   * @param props           Configs in {@link Properties}.
+   * @param configProperty  {@link ConfigProperty} config to fetch.
+   * @param useDefaultValue If enabled, uses default value for configProperty.
+   * @param <T>             Raw value of the config.
+   * @return
+   */
   public static <T> T getRawValueWithAltKeys(TypedProperties props, ConfigProperty<T> configProperty, boolean useDefaultValue) {
     Option<T> rawValue = (Option<T>) getRawValueWithAltKeys(props, configProperty);
     if (rawValue.isPresent()) {

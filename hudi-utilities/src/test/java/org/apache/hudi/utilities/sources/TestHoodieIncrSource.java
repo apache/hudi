@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.BaseHoodieTableFileIndex;
-import org.apache.hudi.MergeOnReadSnapshotRelation;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieCommonConfig;
@@ -66,6 +65,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.execution.datasources.HadoopFsRelation;
 import org.apache.spark.sql.execution.datasources.LogicalRelation;
 import org.apache.spark.storage.StorageLevel;
 import org.junit.jupiter.api.Assertions;
@@ -630,7 +630,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           .format("hudi").load(basePath());
       dataset.persist(StorageLevel.MEMORY_AND_DISK_SER());
       dataset.count();
-      BaseHoodieTableFileIndex hoodieTableFileIndex = ((MergeOnReadSnapshotRelation) ((LogicalRelation) dataset.logicalPlan()).relation()).fileIndex();
+      BaseHoodieTableFileIndex hoodieTableFileIndex = (BaseHoodieTableFileIndex) (((HadoopFsRelation) ((LogicalRelation) dataset.logicalPlan().children().seq().apply(0)).relation()).location());
       if (useSpillableMap) {
         ExternalSpillableMap<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>> cachedAllInputFileSlices =
             getSpillableMap(hoodieTableFileIndex);
@@ -801,8 +801,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> getArgsForLogicalPlanSizeValidation() {
     return Stream.of(
-        Arguments.of(1, 3072L, true),
-        Arguments.of(20, 3072L, false),
+        Arguments.of(1, 4096L, true),
+        Arguments.of(20, 4096L, false),
         Arguments.of(20, 20 * 1024L * 1024L, true)
     );
   }

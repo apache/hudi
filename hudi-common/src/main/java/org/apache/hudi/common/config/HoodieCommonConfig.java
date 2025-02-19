@@ -139,6 +139,7 @@ public class HoodieCommonConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> HOODIE_FILE_INDEX_USE_SPILLABLE_MAP = ConfigProperty
       .key("hoodie.file.index.cache.use.spillable.map")
       .defaultValue(false)
+      .sinceVersion("1.1.0")
       .markAdvanced()
       .withDocumentation("Property to enable spillable map for caching input file slices in org.apache.hudi.BaseHoodieTableFileIndex");
 
@@ -146,7 +147,7 @@ public class HoodieCommonConfig extends HoodieConfig {
       .key("hoodie.file.index.cache.spillable.mem")
       .defaultValue(500 * 1024L * 1024L) // 500 MB
       .markAdvanced()
-      .sinceVersion("0.16.0")
+      .sinceVersion("1.1.0")
       .withDocumentation("Amount of memory to be used in bytes for holding cachedAllInputFileSlices in org.apache.hudi.BaseHoodieTableFileIndex.");
   
   public static final long DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 1024 * 1024 * 1024L;
