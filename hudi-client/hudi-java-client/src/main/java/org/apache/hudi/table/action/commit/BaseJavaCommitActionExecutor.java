@@ -97,11 +97,6 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecords), table.getIndex().canIndexLogFiles());
     LOG.info("Input workload profile :" + workloadProfile);
-    Long sourceReadAndIndexDurationMs = null;
-    if (sourceReadAndIndexTimer.isPresent()) {
-      sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
-      LOG.info("Source read and index timer {}", sourceReadAndIndexDurationMs);
-    }
     final Partitioner partitioner = getPartitioner(workloadProfile);
     try {
       saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
@@ -130,9 +125,6 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     });
     updateIndex(writeStatuses, result);
     updateIndexAndCommitIfNeeded(writeStatuses, result);
-    if (sourceReadAndIndexTimer.isPresent()) {
-      result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
-    }
     return result;
   }
 

@@ -102,11 +102,6 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
     final HoodieRecord<?> record = inputRecords.get(0);
     final String partitionPath = record.getPartitionPath();
     final String fileId = record.getCurrentLocation().getFileId();
-    Long sourceReadAndIndexDurationMs = null;
-    if (sourceReadAndIndexTimer.isPresent()) {
-      sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
-      LOG.info("Source read and index timer {} ", sourceReadAndIndexDurationMs);
-    }
     final BucketType bucketType = record.getCurrentLocation().getInstantTime().equals("I")
         ? BucketType.INSERT
         : BucketType.UPDATE;
@@ -117,9 +112,6 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         inputRecords.iterator())
         .forEachRemaining(writeStatuses::addAll);
     setUpWriteMetadata(writeStatuses, result);
-    if (sourceReadAndIndexTimer.isPresent()) {
-      result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
-    }
     return result;
   }
 

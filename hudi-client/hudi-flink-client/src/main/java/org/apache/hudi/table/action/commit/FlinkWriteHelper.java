@@ -27,8 +27,6 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
@@ -74,11 +72,10 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, List<HoodieRecord
                                                       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table, boolean shouldCombine, int configuredShuffleParallelism,
                                                       BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor, WriteOperationType operationType) {
     try {
-      HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start();
       Instant lookupBegin = Instant.now();
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
 
-      HoodieWriteMetadata<List<WriteStatus>> result = executor.execute(inputRecords, Option.of(sourceReadAndIndexTimer));
+      HoodieWriteMetadata<List<WriteStatus>> result = executor.execute(inputRecords);
       result.setIndexLookupDuration(indexLookupDuration);
       return result;
     } catch (Throwable e) {
