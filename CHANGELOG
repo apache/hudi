@@ -617,3 +617,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-19872][INTERNAL] Managed Lock Provider with Conditional Writes (#1127)
 [ENG-18993][INTERNAL] reverted self hosted runner (#1200)
 [AUDIT-1071]: Changelog for release-v1.90.0 (#1199)
+
+--- [2025-02-19 16:04:06] [release-v1.92.0] ---
+[ENG-16319][HUDI-8955] Resolve Kafka beginning offsets with retention to prevent OffsetOutOfRange exception (#1159)
+[ENG-11493][INTERNAL] code clean up for managed lock provider (#1210)
+[AUDIT-1176]: Changelog for release-v1.91.0 (#1202)
