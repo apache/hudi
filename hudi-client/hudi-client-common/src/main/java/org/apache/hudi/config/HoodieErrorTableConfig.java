@@ -84,6 +84,10 @@ public class HoodieErrorTableConfig extends HoodieConfig {
       .defaultValue(ErrorWriteFailureStrategy.ROLLBACK_COMMIT.name())
       .withDocumentation("The config specifies the failure strategy if error table write fails. "
           + "Use one of - " + Arrays.toString(ErrorWriteFailureStrategy.values()));
+  public static final ConfigProperty<Boolean> ERROR_TABLE_PERSIST_SOURCE_RDD = ConfigProperty
+      .key("hoodie.errortable.source.rdd.persist")
+      .defaultValue(false)
+      .withDocumentation("Enabling this config, persists the sourceRDD to disk which helps in faster processing of data table + error table write DAG");
 
   public enum ErrorWriteFailureStrategy {
     ROLLBACK_COMMIT("Rollback the corresponding base table write commit for which the error events were triggered"),
