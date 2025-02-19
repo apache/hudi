@@ -130,7 +130,8 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
                   HoodieTableMetadata.create(context, metaClient.getStorage(), config.getMetadataConfig(), config.getBasePath()))
           .getFileSystemView(basePath);
 
-      assertFileSystemViews(config, enableMdt, storageType);      for (int i = 3; i < 10; i++) {
+      assertFileSystemViews(config, enableMdt, storageType);
+      for (int i = 3; i < 10; i++) {
         String commitTime = String.format("%10d", i);
         upsertRecords(client, commitTime, 50);
       }
