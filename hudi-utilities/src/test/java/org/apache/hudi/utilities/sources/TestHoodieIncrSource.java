@@ -65,6 +65,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan;
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation;
 import org.apache.spark.sql.execution.datasources.LogicalRelation;
 import org.apache.spark.storage.StorageLevel;
@@ -83,6 +84,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 import java.util.stream.Stream;
+
+import scala.collection.JavaConverters;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
@@ -630,7 +633,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           .format("hudi").load(basePath());
       dataset.persist(StorageLevel.MEMORY_AND_DISK_SER());
       dataset.count();
-      BaseHoodieTableFileIndex hoodieTableFileIndex = (BaseHoodieTableFileIndex) (((HadoopFsRelation) ((LogicalRelation) dataset.logicalPlan().children().seq().apply(0)).relation()).location());
+      List<LogicalPlan> logicalPlanChildren = JavaConverters.seqAsJavaList(dataset.logicalPlan().children().seq());
+      BaseHoodieTableFileIndex hoodieTableFileIndex = (BaseHoodieTableFileIndex) (((HadoopFsRelation) ((LogicalRelation) logicalPlanChildren.get(0)).relation()).location());
       if (useSpillableMap) {
         ExternalSpillableMap<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>> cachedAllInputFileSlices =
             getSpillableMap(hoodieTableFileIndex);
