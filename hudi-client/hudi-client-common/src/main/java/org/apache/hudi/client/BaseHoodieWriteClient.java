@@ -564,7 +564,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-      metrics.updateClusteringTimeLineInstantMetrics(table.getActiveTimeline());
+      metrics.updateTableServiceInstantMetrics(table.getActiveTimeline());
     } finally {
       this.heartbeatClient.stop(instantTime);
     }
