@@ -24,6 +24,8 @@ import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -44,6 +46,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       WriteOperationType operationType) {
     try {
+      HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start();
       // De-dupe/merge if needed
       I dedupedRecords =
           combineOnCondition(shouldCombine, inputRecords, configuredShuffleParallelism, table);
@@ -55,7 +58,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         taggedRecords = tag(dedupedRecords, context, table);
       }
 
-      HoodieWriteMetadata<O> result = executor.execute(taggedRecords);
+      HoodieWriteMetadata<O> result = executor.execute(taggedRecords, Option.of(sourceReadAndIndexTimer));
       return result;
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {
