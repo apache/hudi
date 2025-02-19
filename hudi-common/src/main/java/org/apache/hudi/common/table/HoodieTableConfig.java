@@ -576,7 +576,7 @@ public class HoodieTableConfig extends HoodieConfig {
       hoodieConfig.setDefaultValue(TIMELINE_PATH);
       if (!hoodieConfig.contains(TIMELINE_LAYOUT_VERSION)) {
         // Use latest Version as default unless forced by client
-        hoodieConfig.setValue(TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.CURR_VERSION.toString());
+        hoodieConfig.setValue(TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.LAYOUT_VERSION_1.toString());
       }
       if (hoodieConfig.contains(BOOTSTRAP_BASE_PATH)) {
         if (tableVersion.greaterThan(HoodieTableVersion.SEVEN)) {
