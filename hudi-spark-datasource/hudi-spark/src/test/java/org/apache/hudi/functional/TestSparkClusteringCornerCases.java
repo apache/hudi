@@ -24,6 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -55,8 +56,9 @@ public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
       String clusteringInstantTime = (String) client.scheduleClustering(Option.empty()).get();
       client.cluster(clusteringInstantTime);
       metaClient.reloadActiveTimeline();
-      HoodieReplaceCommitMetadata replaceCommitMetadata = metaClient.getActiveTimeline().deserializeAvroInstantContent(
-          metaClient.getActiveTimeline().getLastClusteringInstant().get(),
+      HoodieInstant lastClusteringInstant = metaClient.getActiveTimeline().getLastClusteringInstant().get();
+      HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+          metaClient.getActiveTimeline().getInstantDetails(lastClusteringInstant).get(),
           HoodieReplaceCommitMetadata.class
       );
       Assertions.assertTrue(replaceCommitMetadata.getPartitionToWriteStats().isEmpty());

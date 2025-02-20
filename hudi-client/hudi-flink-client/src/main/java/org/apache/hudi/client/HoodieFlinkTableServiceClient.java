@@ -167,7 +167,6 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     return null;
   }
 
-
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> convertToOutputMetadata(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
     return writeMetadata;
