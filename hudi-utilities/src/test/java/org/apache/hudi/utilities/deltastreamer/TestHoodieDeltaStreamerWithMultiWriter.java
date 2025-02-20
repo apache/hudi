@@ -149,7 +149,8 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     HoodieTimeline timeline = meta.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
     HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
-        .deserialize(timeline.firstInstant().get(), timeline.getInstantContentStream(timeline.firstInstant().get()), HoodieCommitMetadata.class);
+        .deserialize(timeline.firstInstant().get(), timeline.getInstantContentStream(timeline.firstInstant().get()),
+            () -> true, HoodieCommitMetadata.class);
     cfgBackfillJob.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob.configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
     cfgBackfillJob.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
@@ -217,7 +218,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     HoodieTableMetaClient meta = createMetaClient(new HadoopStorageConfiguration(hadoopConf), tableBasePath);
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieCommitMetadata commitMetadata = meta.getCommitMetadataSerDe().deserialize(
-        timeline.firstInstant().get(), timeline.getInstantContentStream(timeline.firstInstant().get()), HoodieCommitMetadata.class);
+        timeline.firstInstant().get(), timeline.getInstantContentStream(timeline.firstInstant().get()), () -> true, HoodieCommitMetadata.class);
     cfgBackfillJob2.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob2.configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
     cfgBackfillJob2.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
@@ -328,7 +329,8 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     HoodieTimeline timeline =
         meta.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
     return meta.getCommitMetadataSerDe().deserialize(
-        timeline.firstInstant().get(), timeline.getInstantContentStream(timeline.lastInstant().get()), HoodieCommitMetadata.class);
+        timeline.firstInstant().get(), timeline.getInstantContentStream(timeline.lastInstant().get()),
+        () -> true, HoodieCommitMetadata.class);
   }
 
   private static TypedProperties prepareMultiWriterProps(HoodieStorage storage, String basePath,

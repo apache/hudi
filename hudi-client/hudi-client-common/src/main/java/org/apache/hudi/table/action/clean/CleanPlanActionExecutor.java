@@ -189,17 +189,17 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     if (lastClean.isPresent()) {
       HoodieInstant cleanInstant = lastClean.get();
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+      HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
       if (activeTimeline.isEmpty(cleanInstant)) {
         activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
-        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
         try {
-          // Deserialize plan if it is non-empty
-          if (!activeTimeline.isEmpty(cleanPlanInstant)) {
-            return Option.of(TimelineMetadataUtils.deserializeCleanerPlan(activeTimeline.getContentStream(cleanPlanInstant)));
-          } else {
+          // Deserialize plan.
+          return Option.of(TimelineMetadataUtils.deserializeCleanerPlan(activeTimeline.getContentStream(cleanPlanInstant)));
+        } catch (IOException ex) {
+          // If it is empty we catch error and repair.
+          if (activeTimeline.isEmpty(cleanPlanInstant)) {
             return Option.of(new HoodieCleanerPlan());
           }
-        } catch (IOException ex) {
           throw new HoodieIOException("Failed to parse cleaner plan", ex);
         }
       }

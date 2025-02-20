@@ -114,6 +114,7 @@ public class TestSavepoint extends HoodieClientTestBase {
       Map<String, List<HoodieWriteStat>> partitionToWriteStats = metaClient.getCommitMetadataSerDe().deserialize(
               commitsTimeline.lastInstant().get(),
               commitsTimeline.getInstantContentStream(commitsTimeline.lastInstant().get()),
+              () -> true,
               HoodieCommitMetadata.class)
           .getPartitionToWriteStats();
 

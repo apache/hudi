@@ -52,8 +52,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.TimelineUtils.getInstantFromTimeline;
-
 public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTimeline {
 
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
@@ -252,15 +250,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public Option<InputStream> getContentStream(HoodieInstant instant) {
-    Option<HoodieInstant> actualInstant = Option.of(instant);
-    // [HUDI-9063] to remove this logic
-    if (instant.getCompletionTime().isEmpty() && instant.getState().equals(HoodieInstant.State.COMPLETED)) {
-      actualInstant = getInstantFromTimeline(instant, this, actualInstant);
-      if (actualInstant.isEmpty()) {
-        throw new HoodieIOException("Could not read commit details from " + instant + " as it does not exists in the active timeline");
-      }
-    }
-    StoragePath filePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(actualInstant.get()));
+    StoragePath filePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(instant));
     return Option.of(readDataStreamFromPath(filePath));
   }
 

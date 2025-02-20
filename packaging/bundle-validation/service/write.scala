@@ -41,8 +41,6 @@ df.write.format("hudi").
   option("hoodie.datasource.meta.sync.enable", "false").
   option("hoodie.datasource.hive_sync.enable", "false").
   option("hoodie.metadata.enable", "false").
-  option("hoodie.metaserver.enabled", "true").
-  option("hoodie.metaserver.uris", "thrift://localhost:9090").
   mode(Overwrite).
   save(basePath)
 

@@ -371,7 +371,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
           try {
             return s.getAction().equals(HoodieTimeline.COMMIT_ACTION)
                 && metaClient.getCommitMetadataSerDe().deserialize(s,
-                    timeline.getInstantContentStream(s), HoodieCommitMetadata.class)
+                    timeline.getInstantContentStream(s), () -> true, HoodieCommitMetadata.class)
                 .getOperationType().equals(COMPACT);
           } catch (IOException e) {
             throw new RuntimeException(e);
