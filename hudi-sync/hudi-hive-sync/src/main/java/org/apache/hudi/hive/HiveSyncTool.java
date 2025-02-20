@@ -113,7 +113,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       hadoopConfForSync = hadoopConf;
     }
 
-    this.config = new HiveSyncConfig(props, hadoopConfForSync);
+    this.config = new HiveSyncConfig(this.props, hadoopConfForSync);
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.tableName = config.getStringOrDefault(META_SYNC_TABLE_NAME);
     initSyncClient(config);
