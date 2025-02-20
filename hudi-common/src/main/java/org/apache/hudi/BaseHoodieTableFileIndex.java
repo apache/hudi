@@ -452,7 +452,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         boolean isBitCaskCompressionEnabled = ConfigUtils.getBooleanWithAltKeys(configProperties, DISK_MAP_BITCASK_COMPRESSION_ENABLED);
         this.cachedAllInputFileSlices = new ExternalSpillableMap<>(
             spillableMemory, spillablePath, new DefaultSizeEstimator<>(), new DefaultSizeEstimator<>(), diskMapType,
-            new HoodieFileSliceSerializer(), isBitCaskCompressionEnabled);
+            new HoodieFileSliceSerializer(), isBitCaskCompressionEnabled, this.getClass().getName());
       } else {
         this.cachedAllInputFileSlices = new HashMap<>();
       }
