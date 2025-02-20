@@ -109,7 +109,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
@@ -930,15 +929,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
    */
   public String startCommit(String actionType, HoodieTableMetaClient metaClient) {
-    if (needsUpgradeOrDowngrade(metaClient)) {
-      executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
-    }
-
-    CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
-        HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites());
-
     String instantTime = createNewInstantTime();
-    startCommit(instantTime, actionType, metaClient);
+    startCommitWithTime(instantTime, actionType, metaClient);
     return instantTime;
   }
 
@@ -968,18 +960,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
-        HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites());
-    startCommit(instantTime, actionType, metaClient);
-  }
+        HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
 
-  private void startCommit(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
     LOG.info("Generate a new instant time: {} action: {}", instantTime, actionType);
     // check there are no inflight restore before starting a new commit.
     HoodieTimeline inflightRestoreTimeline = metaClient.getActiveTimeline().getRestoreTimeline().filterInflightsAndRequested();
     ValidationUtils.checkArgument(inflightRestoreTimeline.countInstants() == 0,
-        "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, "
-            + "table could be in an inconsistent state. Pending restores: " + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream()
-            .map(HoodieInstant::requestedTime).collect(Collectors.toList()).toArray()));
+        () -> "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, "
+            + "table could be in an inconsistent state. Pending restores: "
+            + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream().map(HoodieInstant::requestedTime).toArray()));
 
     if (config.getFailedWritesCleanPolicy().isLazy()) {
       this.heartbeatClient.start(instantTime);
@@ -1521,8 +1510,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *
    * @return true if rollback happened. false otherwise.
    */
-  public boolean rollbackFailedWrites() {
-    return tableServiceClient.rollbackFailedWrites();
+  public boolean rollbackFailedWrites(HoodieTableMetaClient metaClient) {
+    return tableServiceClient.rollbackFailedWrites(metaClient);
   }
 
   /**

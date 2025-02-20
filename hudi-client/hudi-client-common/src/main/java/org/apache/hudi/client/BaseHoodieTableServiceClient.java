@@ -793,10 +793,15 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       return null;
     }
     final Timer.Context timerContext = metrics.getCleanCtx();
-    CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
-        HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites());
-
-    HoodieTable table = createTable(config, storageConf);
+    HoodieTable initialTable = createTable(config, storageConf);
+    HoodieTable table;
+    if (CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
+        HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites(initialTable.getMetaClient()))) {
+      // if rollback occurred, reload the table
+      table = createTable(config, storageConf);
+    } else {
+      table = initialTable;
+    }
     boolean hasInflightClean = table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent();
     boolean scheduledClean = false;
     if (config.allowMultipleCleans() || !hasInflightClean) {
@@ -973,10 +978,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    *
    * @return true if rollback was triggered. false otherwise.
    */
-  protected Boolean rollbackFailedWrites() {
-    HoodieTable table = createTable(config, storageConf);
-    List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), config.getFailedWritesCleanPolicy(), Option.empty());
-    Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
+  protected boolean rollbackFailedWrites(HoodieTableMetaClient metaClient) {
+    List<String> instantsToRollback = getInstantsToRollback(metaClient, config.getFailedWritesCleanPolicy(), Option.empty());
+    Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(metaClient);
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
     rollbackFailedWrites(pendingRollbacks);
     return !pendingRollbacks.isEmpty();

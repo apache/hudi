@@ -199,7 +199,7 @@ public class UpgradeDowngradeUtils {
       rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE.key(), "false");
 
       try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(rollbackWriteConfig, context)) {
-        writeClient.rollbackFailedWrites();
+        writeClient.rollbackFailedWrites(table.getMetaClient());
         if (shouldCompact) {
           Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
           if (compactionInstantOpt.isPresent()) {

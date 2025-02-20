@@ -202,19 +202,19 @@ public class CleanerUtils {
    * @param cleaningPolicy
    * @param actionType
    * @param rollbackFailedWritesFunc
+   * @return true if timeline state was updated, false otherwise
    */
-  public static void rollbackFailedWrites(HoodieFailedWritesCleaningPolicy cleaningPolicy, String actionType,
-                                          Functions.Function0<Boolean> rollbackFailedWritesFunc) {
+  public static boolean rollbackFailedWrites(HoodieFailedWritesCleaningPolicy cleaningPolicy, String actionType,
+                                             Functions.Function0<Boolean> rollbackFailedWritesFunc) {
     switch (actionType) {
       case HoodieTimeline.CLEAN_ACTION:
         if (cleaningPolicy.isEager()) {
           // No need to do any special cleanup for failed operations during clean
-          return;
+          return false;
         } else if (cleaningPolicy.isLazy()) {
           LOG.info("Cleaned failed attempts if any");
           // Perform rollback of failed operations for all types of actions during clean
-          rollbackFailedWritesFunc.apply();
-          return;
+          return rollbackFailedWritesFunc.apply();
         }
         // No action needed for cleaning policy NEVER
         break;
@@ -222,12 +222,12 @@ public class CleanerUtils {
         // For any other actions, perform rollback of failed writes
         if (cleaningPolicy.isEager()) {
           LOG.info("Cleaned failed attempts if any");
-          rollbackFailedWritesFunc.apply();
-          return;
+          return rollbackFailedWritesFunc.apply();
         }
         break;
       default:
         throw new IllegalArgumentException("Unsupported action type " + actionType);
     }
+    return false;
   }
 }
