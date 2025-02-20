@@ -1352,9 +1352,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient();
     // rollback partially failed writes if any.
-    if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites()) {
-      metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
-    }
+    metadataMetaClient = rollbackFailedWrites(dataWriteConfig, writeClient, metadataMetaClient);
 
     if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
       // if this is a new commit being applied to metadata for the first time
@@ -1394,6 +1392,19 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions()));
+  }
+
+  /**
+   * Rolls back any failed writes if cleanup policy is EAGER. If any writes were cleaned up, the meta client is reloaded.
+   * @param dataWriteConfig write config for the data table
+   * @param writeClient write client for the metadata table
+   * @param metadataMetaClient meta client for the metadata table
+   */
+  static <I> HoodieTableMetaClient rollbackFailedWrites(HoodieWriteConfig dataWriteConfig, BaseHoodieWriteClient<?, I, ?, ?> writeClient, HoodieTableMetaClient metadataMetaClient) {
+    if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites(metadataMetaClient)) {
+      metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
+    }
+    return metadataMetaClient;
   }
 
   /**

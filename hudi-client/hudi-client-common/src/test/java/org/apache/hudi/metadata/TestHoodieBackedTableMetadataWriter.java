@@ -19,15 +19,21 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.MockedStatic;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -70,5 +76,36 @@ class TestHoodieBackedTableMetadataWriter {
     verify(writeClient, times(hasPendingLogCompaction ? 1 : 0)).runAnyPendingLogCompactions();
     int expectedTimelineReloads = (requiresRefresh ? 1 : 0) + (ranService ? 1 : 0);
     verify(metaClient, times(expectedTimelineReloads)).reloadActiveTimeline();
+  }
+
+  @Test
+  void rollbackFailedWrites_reloadsTimelineOnWritesRolledBack() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("file://tmp/")
+        .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER).build())
+        .build();
+    BaseHoodieWriteClient mockWriteClient = mock(BaseHoodieWriteClient.class);
+    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
+    when(mockWriteClient.rollbackFailedWrites(mockMetaClient)).thenReturn(true);
+    try (MockedStatic<HoodieTableMetaClient> mockedStatic = mockStatic(HoodieTableMetaClient.class)) {
+      HoodieTableMetaClient reloadedClient = mock(HoodieTableMetaClient.class);
+      mockedStatic.when(() -> HoodieTableMetaClient.reload(mockMetaClient)).thenReturn(reloadedClient);
+      assertSame(reloadedClient, HoodieBackedTableMetadataWriter.rollbackFailedWrites(writeConfig, mockWriteClient, mockMetaClient));
+    }
+  }
+
+  @Test
+  void rollbackFailedWrites_avoidsTimelineReload() {
+    HoodieWriteConfig eagerWriteConfig = HoodieWriteConfig.newBuilder().withPath("file://tmp/")
+        .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER).build())
+        .build();
+    BaseHoodieWriteClient mockWriteClient = mock(BaseHoodieWriteClient.class);
+    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
+    when(mockWriteClient.rollbackFailedWrites(mockMetaClient)).thenReturn(false);
+    assertSame(mockMetaClient, HoodieBackedTableMetadataWriter.rollbackFailedWrites(eagerWriteConfig, mockWriteClient, mockMetaClient));
+
+    HoodieWriteConfig lazyWriteConfig = HoodieWriteConfig.newBuilder().withPath("file://tmp/")
+        .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER).build())
+        .build();
+    assertSame(mockMetaClient, HoodieBackedTableMetadataWriter.rollbackFailedWrites(lazyWriteConfig, mockWriteClient, mockMetaClient));
   }
 }
