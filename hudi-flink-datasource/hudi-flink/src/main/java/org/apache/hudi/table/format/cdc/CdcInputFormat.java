@@ -384,7 +384,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
             maxCompactionMemoryInBytes, fileSplit.getBeforeFileSlice().get());
       } else {
         // still initializes an empty map
-        this.beforeImages = FormatUtils.spillableMap(this.imageManager.writeConfig, maxCompactionMemoryInBytes);
+        this.beforeImages = FormatUtils.spillableMap(this.imageManager.writeConfig, maxCompactionMemoryInBytes, getClass().getSimpleName());
       }
     }
 
@@ -796,7 +796,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       ClosableIterator<RowData> itr = splitIteratorFunc.apply(inputSplit);
       // initialize the image records map
       ExternalSpillableMap<String, byte[]> imageRecordsMap =
-          FormatUtils.spillableMap(writeConfig, maxCompactionMemoryInBytes);
+          FormatUtils.spillableMap(writeConfig, maxCompactionMemoryInBytes, getClass().getSimpleName());
       while (itr.hasNext()) {
         RowData row = itr.next();
         String recordKey = row.getString(HOODIE_RECORD_KEY_COL_POS).toString();
