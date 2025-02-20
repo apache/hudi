@@ -323,7 +323,8 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
           HoodieInstant instant = instants.next();
           TimelineLayout layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion());
           HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
-              .deserialize(instant, commitTimeline.getInstantContentStream(instant), HoodieCommitMetadata.class);
+              .deserialize(instant, commitTimeline.getInstantContentStream(instant),
+                  () -> commitTimeline.isEmpty(instant), HoodieCommitMetadata.class);
           long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
           long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
           if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {

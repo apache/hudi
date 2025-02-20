@@ -58,7 +58,8 @@ class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuild
     timeline.getInstants.iterator.asScala.foreach(
       instantTime => {
         var waf = "0"
-        val commit = layout.getCommitMetadataSerDe.deserialize(instantTime, activeTimeline.getInstantContentStream(instantTime), classOf[HoodieCommitMetadata])
+        val commit = layout.getCommitMetadataSerDe.deserialize(
+          instantTime, activeTimeline.getInstantContentStream(instantTime), () => activeTimeline.isEmpty(instantTime), classOf[HoodieCommitMetadata])
         if (commit.fetchTotalUpdateRecordsWritten() > 0) {
           waf = df.format(commit.fetchTotalRecordsWritten().toFloat / commit.fetchTotalUpdateRecordsWritten())
         }

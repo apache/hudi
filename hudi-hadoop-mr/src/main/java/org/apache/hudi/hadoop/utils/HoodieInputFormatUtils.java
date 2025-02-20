@@ -252,7 +252,7 @@ public class HoodieInputFormatUtils {
     Set<String> partitionsToList = new HashSet<>();
     for (HoodieInstant commit : commitsToCheck) {
       HoodieCommitMetadata commitMetadata = tableMetaClient.getCommitMetadataSerDe().deserialize(commit,
-          timeline.getInstantContentStream(commit), HoodieCommitMetadata.class);
+          timeline.getInstantContentStream(commit), () -> timeline.isEmpty(commit), HoodieCommitMetadata.class);
       partitionsToList.addAll(commitMetadata.getPartitionToWriteStats().keySet());
     }
     if (partitionsToList.isEmpty()) {

@@ -121,7 +121,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
     cowCommitTimeline.getInstants().forEach(instant -> {
       try {
         HoodieCommitMetadata metadata = hoodieTable.getMetaClient().getCommitMetadataSerDe().deserialize(instant,
-            cowCommitTimeline.getInstantContentStream(instant), HoodieCommitMetadata.class);
+            cowCommitTimeline.getInstantContentStream(instant), () -> cowCommitTimeline.isEmpty(instant), HoodieCommitMetadata.class);
         partitions.addAll(metadata.getWritePartitionPaths());
       } catch (IOException e) {
         // ignore Exception here

@@ -270,6 +270,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         HoodieReplaceCommitMetadata replaceMetadata = metaClient.getCommitMetadataSerDe().deserialize(
             instant,
             metaClient.getActiveTimeline().getInstantContentStream(instant),
+            () -> metaClient.getActiveTimeline().isEmpty(instant),
             HoodieReplaceCommitMetadata.class);
 
         // get replace instant mapping for each partition, fileId

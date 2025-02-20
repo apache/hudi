@@ -261,7 +261,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   private void addCommitInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing committed instant (" + instant + ")");
     HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
-        instant, timeline.getInstantContentStream(instant), HoodieCommitMetadata.class);
+        instant, timeline.getInstantContentStream(instant), () -> timeline.isEmpty(instant), HoodieCommitMetadata.class);
     updatePartitionWriteFileGroups(commitMetadata.getPartitionToWriteStats(), timeline, instant);
     LOG.info("Done Syncing committed instant (" + instant + ")");
   }
@@ -346,7 +346,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     LOG.info("Syncing replace instant (" + instant + ")");
     TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
     HoodieReplaceCommitMetadata replaceMetadata = layout.getCommitMetadataSerDe().deserialize(
-        instant, timeline.getInstantContentStream(instant), HoodieReplaceCommitMetadata.class);
+        instant, timeline.getInstantContentStream(instant), () -> timeline.isEmpty(instant), HoodieReplaceCommitMetadata.class);
     updatePartitionWriteFileGroups(replaceMetadata.getPartitionToWriteStats(), timeline, instant);
     replaceMetadata.getPartitionToReplaceFileIds().entrySet().stream().forEach(entry -> {
       String partition = entry.getKey();

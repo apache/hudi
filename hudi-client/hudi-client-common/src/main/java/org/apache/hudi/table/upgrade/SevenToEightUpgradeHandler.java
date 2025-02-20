@@ -289,7 +289,8 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     boolean success = true;
     if (instant.getAction().equals(COMMIT_ACTION) || instant.getAction().equals(DELTA_COMMIT_ACTION) || (instant.getAction().equals(REPLACE_COMMIT_ACTION) && instant.isCompleted())) {
       Class<? extends HoodieCommitMetadata> clazz = instant.getAction().equals(REPLACE_COMMIT_ACTION) ? HoodieReplaceCommitMetadata.class : HoodieCommitMetadata.class;
-      HoodieCommitMetadata commitMetadata = commitMetadataSerDeV1.deserialize(instant, metaClient.getActiveTimeline().getInstantContentStream(instant), clazz);
+      HoodieCommitMetadata commitMetadata = commitMetadataSerDeV1.deserialize(instant, metaClient.getActiveTimeline().getInstantContentStream(instant),
+          () -> metaClient.getActiveTimeline().isEmpty(instant),clazz);
       Option<byte[]> data = commitMetadataSerDeV2.serialize(commitMetadata);
       String toPathStr = toPath.toUri().toString();
       activeTimelineV2.createFileInMetaPath(toPathStr, data, true);

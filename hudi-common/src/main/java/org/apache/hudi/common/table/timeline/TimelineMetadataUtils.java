@@ -37,7 +37,6 @@ import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.file.DataFileReader;
@@ -226,17 +225,11 @@ public class TimelineMetadataUtils {
 
   public static <T extends SpecificRecordBase> T deserializeAvroMetadata(Option<InputStream> instantStream, Class<T> clazz)
       throws IOException {
-    if (instantStream.isEmpty()) {
-      try {
-        return clazz.newInstance();
-      } catch (Exception ex) {
-        throw new HoodieException(ex);
-      }
-    }
     DatumReader<T> reader = new SpecificDatumReader<>(clazz);
     try (DataFileStream<T> fileReader = new DataFileStream<>(instantStream.get(), reader)) {
       ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
       return fileReader.next();
     }
+    /// todo: do we need boolean supplier
   }
 }

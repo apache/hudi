@@ -123,11 +123,11 @@ class ShowCommitPartitionsProcedure() extends BaseProcedure with ProcedureBuilde
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
         val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
         Option(layout.getCommitMetadataSerDe().deserialize(hoodieInstant.get, timeline.getInstantContentStream(hoodieInstant.get),
-          classOf[HoodieReplaceCommitMetadata]))
+          () => timeline.isEmpty(hoodieInstant.get), classOf[HoodieReplaceCommitMetadata]))
       } else {
         val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
         Option(layout.getCommitMetadataSerDe.deserialize(hoodieInstant.get, timeline.getInstantContentStream(hoodieInstant.get),
-          classOf[HoodieCommitMetadata]))
+          () => timeline.isEmpty(hoodieInstant.get), classOf[HoodieCommitMetadata]))
       }
     } else {
       Option.empty

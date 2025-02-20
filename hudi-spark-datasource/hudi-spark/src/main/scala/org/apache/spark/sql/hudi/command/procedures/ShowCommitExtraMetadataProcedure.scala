@@ -126,9 +126,11 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
         Option(layout.getCommitMetadataSerDe.deserialize(
           hoodieInstant.get,
           timeline.getInstantContentStream(hoodieInstant.get),
+          () => timeline.isEmpty(hoodieInstant.get),
           classOf[HoodieReplaceCommitMetadata]))
       } else {
         Option(layout.getCommitMetadataSerDe.deserialize(hoodieInstant.get, timeline.getInstantContentStream(hoodieInstant.get),
+          () => timeline.isEmpty(hoodieInstant.get),
           classOf[HoodieCommitMetadata]))
       }
     } else {
