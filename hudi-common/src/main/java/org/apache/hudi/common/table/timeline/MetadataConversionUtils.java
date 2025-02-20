@@ -338,7 +338,8 @@ public class MetadataConversionUtils {
   }
 
   private static <T extends HoodieCommitMetadata> Option<T> getCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant, Class<T> clazz) throws IOException {
-    T commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(instant, metaClient.getActiveTimeline().getInstantReader().getContentStream(instant), clazz);
+    T commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
+        instant, metaClient.getActiveTimeline().getInstantReader().getContentStream(instant), () -> metaClient.getActiveTimeline().isEmpty(instant), clazz);
     // an empty file will return the default instance with an UNKNOWN operation type and in that case we return an empty option
     if (commitMetadata.getOperationType() == WriteOperationType.UNKNOWN) {
       return Option.empty();

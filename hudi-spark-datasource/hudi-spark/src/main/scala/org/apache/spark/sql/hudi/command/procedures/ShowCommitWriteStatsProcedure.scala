@@ -100,10 +100,12 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
         Option(serDe.deserialize(hoodieInstant.get,
           timeline.getInstantContentStream(hoodieInstant.get),
+          () => timeline.isEmpty(hoodieInstant.get),
           classOf[HoodieReplaceCommitMetadata]))
       } else {
         val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
         Option(layout.getCommitMetadataSerDe.deserialize(hoodieInstant.get, timeline.getInstantContentStream(hoodieInstant.get),
+          () => timeline.isEmpty(hoodieInstant.get),
           classOf[HoodieCommitMetadata]))
       }
     } else {

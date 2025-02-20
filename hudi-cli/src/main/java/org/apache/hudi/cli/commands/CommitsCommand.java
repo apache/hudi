@@ -75,6 +75,7 @@ public class CommitsCommand {
       CommitMetadataSerDe serDe = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe();
       final HoodieCommitMetadata commitMetadata = serDe.deserialize(
           commit, timeline.getInstantContentStream(commit),
+          () -> timeline.isEmpty(commit),
           HoodieCommitMetadata.class);
       rows.add(new Comparable[] {commit.requestedTime(),
           commitMetadata.fetchTotalBytesWritten(),
@@ -113,6 +114,7 @@ public class CommitsCommand {
       final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe().deserialize(
           commit,
           timeline.getInstantContentStream(commit),
+          () -> timeline.isEmpty(commit),
           HoodieCommitMetadata.class);
 
       for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :

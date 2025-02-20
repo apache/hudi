@@ -42,6 +42,7 @@ public class CommitUtil {
       HoodieCommitMetadata c = metaClient.getCommitMetadataSerDe().deserialize(
           instant,
           timeline.getInstantContentStream(instant),
+          () -> timeline.isEmpty(instant),
           HoodieCommitMetadata.class);
       totalNew += c.fetchTotalRecordsWritten() - c.fetchTotalUpdateRecordsWritten();
     }

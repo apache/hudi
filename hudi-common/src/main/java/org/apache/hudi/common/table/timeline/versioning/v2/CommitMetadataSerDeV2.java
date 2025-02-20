@@ -35,6 +35,7 @@ import org.apache.avro.specific.SpecificRecordBase;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.function.BooleanSupplier;
 
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataAvroToPojo;
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertReplaceCommitMetadataAvroToPojo;
@@ -44,12 +45,12 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
 public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
 
   @Override
-  public <T> T deserialize(HoodieInstant instant, Option<InputStream> inputStream, Class<T> clazz) throws IOException {
+  public <T> T deserialize(HoodieInstant instant, Option<InputStream> inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {
     try {
       if (instant.isLegacy()) {
         // For legacy instant, delegate to legacy SerDe.
         try {
-          return new CommitMetadataSerDeV1().deserialize(instant, inputStream, clazz);
+          return new CommitMetadataSerDeV1().deserialize(instant, inputStream, isEmptyInstant, clazz);
         } catch (Exception e) {
           throw new IOException("unable to read legacy commit metadata for instant " + instant, e);
         }
@@ -60,6 +61,14 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
       }
       return (T) convertCommitMetadataAvroToPojo(deserializeCommitMetadata(inputStream));
     } catch (Exception e) {
+      // Empty file does not conform to avro format, in that case we return newInstance.
+      if (isEmptyInstant.getAsBoolean()) {
+        try {
+          return clazz.newInstance();
+        } catch (Exception ex) {
+          throw new IOException("unable to read commit metadata for instant " + instant, ex);
+        }
+      }
       throw new IOException("unable to read commit metadata for instant " + instant, e);
     }
   }

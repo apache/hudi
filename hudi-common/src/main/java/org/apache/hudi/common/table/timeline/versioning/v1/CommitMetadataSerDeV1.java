@@ -26,21 +26,25 @@ import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.function.Supplier;
+import java.util.function.BooleanSupplier;
 
 public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
 
   @Override
-  public <T> T deserialize(HoodieInstant instant, Option<InputStream> inputStream, Class<T> clazz) throws IOException {
+  public <T> T deserialize(HoodieInstant instant, Option<InputStream> inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {
     try {
-      if (inputStream.isEmpty()) {
-        return clazz.newInstance();
-      }
-
       // Use ObjectMapper to directly read from InputStream
       // This avoids loading entire content into memory at once
       return JsonUtils.getObjectMapper().readValue(inputStream.get(), clazz);
     } catch (Exception e) {
+      // Empty file does not conform to avro format, in that case we return newInstance.
+      if (isEmptyInstant.getAsBoolean()) {
+        try {
+          return clazz.newInstance();
+        } catch (Exception ex) {
+          throw new IOException("unable to read commit metadata for instant " + instant, ex);
+        }
+      }
       throw new IOException("Unable to read commit metadata for instant " + instant, e);
     }
   }

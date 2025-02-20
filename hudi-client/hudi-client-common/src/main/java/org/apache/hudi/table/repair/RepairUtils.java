@@ -94,7 +94,9 @@ public final class RepairUtils {
         TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
         final HoodieCommitMetadata commitMetadata =
             layout.getCommitMetadataSerDe().deserialize(instant,
-                timeline.getInstantContentStream(instant), HoodieCommitMetadata.class);
+                timeline.getInstantContentStream(instant),
+                () -> timeline.isEmpty(instant),
+                HoodieCommitMetadata.class);
         return Option.of(commitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
       }
@@ -103,7 +105,9 @@ public final class RepairUtils {
         TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
         final HoodieReplaceCommitMetadata replaceCommitMetadata =
             layout.getCommitMetadataSerDe().deserialize(instant,
-                timeline.getInstantContentStream(instant), HoodieReplaceCommitMetadata.class);
+                timeline.getInstantContentStream(instant),
+                () -> timeline.isEmpty(instant),
+                HoodieReplaceCommitMetadata.class);
         return Option.of(replaceCommitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
       }

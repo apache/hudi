@@ -104,8 +104,11 @@ public class LegacyArchivedMetaEntryReader {
           // should be json bytes.
           try {
             HoodieInstant instant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, stateTransitionTime);
+            byte[] instantBytes = getUTF8Bytes(actionData.toString());
             org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata = new CommitMetadataSerDeV1().deserialize(
-                instant, Option.of(new ByteArrayInputStream(getUTF8Bytes(actionData.toString()))), org.apache.hudi.common.model.HoodieCommitMetadata.class);
+                instant, Option.of(new ByteArrayInputStream(instantBytes)),
+                () -> instantBytes.length == 0,
+                org.apache.hudi.common.model.HoodieCommitMetadata.class);
             // convert to avro bytes.
             return metaClient.getCommitMetadataSerDe().serialize(commitMetadata).get();
           } catch (IOException e) {

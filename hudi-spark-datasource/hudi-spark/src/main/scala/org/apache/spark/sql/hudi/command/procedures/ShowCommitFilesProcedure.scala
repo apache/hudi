@@ -110,10 +110,11 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
 
         Option(layout.getCommitMetadataSerDe.deserialize(
           hoodieInstant.get, timeline.getInstantContentStream(hoodieInstant.get),
+          () => timeline.isEmpty(hoodieInstant.get),
           classOf[HoodieReplaceCommitMetadata]))
       } else {
         Option(layout.getCommitMetadataSerDe.deserialize(hoodieInstant.get, timeline.getInstantContentStream(hoodieInstant.get),
-          classOf[HoodieCommitMetadata]))
+          () => timeline.isEmpty(hoodieInstant.get), classOf[HoodieCommitMetadata]))
       }
     } else {
       Option.empty
