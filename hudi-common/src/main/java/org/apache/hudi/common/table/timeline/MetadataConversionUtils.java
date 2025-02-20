@@ -364,7 +364,6 @@ public class MetadataConversionUtils {
     if (hoodieCommitMetadata instanceof HoodieReplaceCommitMetadata) {
       return (T) convertReplaceCommitMetadata((HoodieReplaceCommitMetadata) hoodieCommitMetadata);
     }
-    hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
     org.apache.hudi.avro.model.HoodieCommitMetadata avroMetaData = JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
     return (T) avroMetaData;
   }
@@ -381,8 +380,6 @@ public class MetadataConversionUtils {
    * Convert replacecommit metadata from json to avro.
    */
   private static org.apache.hudi.avro.model.HoodieReplaceCommitMetadata convertReplaceCommitMetadata(HoodieReplaceCommitMetadata replaceCommitMetadata) {
-    replaceCommitMetadata.getPartitionToWriteStats().remove(null);
-    replaceCommitMetadata.getPartitionToReplaceFileIds().remove(null);
     return JsonUtils.getObjectMapper().convertValue(replaceCommitMetadata, org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class);
   }
 
