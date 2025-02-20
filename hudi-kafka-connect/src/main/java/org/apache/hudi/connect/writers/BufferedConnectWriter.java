@@ -82,7 +82,8 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
           new HoodieRecordSizeEstimator(new Schema.Parser().parse(config.getSchema())),
           config.getCommonConfig().getSpillableDiskMapType(),
           new DefaultSerializer<>(),
-          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
+          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
+          getClass().getSimpleName());
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }

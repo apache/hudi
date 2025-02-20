@@ -212,7 +212,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue().toString)
       .toUpperCase(Locale.ROOT)),
     new DefaultSerializer[InternalRow],
-    props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
+    props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()),
+    getClass.getSimpleName)
 
   private var internalRowToJsonStringConverter = new InternalRowToJsonStringConverter(originTableSchema)
 

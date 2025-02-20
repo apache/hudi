@@ -123,7 +123,8 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
         new HoodieRecordSizeEstimator(readerSchema),
         jobConf.getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()),
         new DefaultSerializer<>(),
-        jobConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()));
+        jobConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()),
+        getClass().getSimpleName());
     try (ClosableIterator<String> baseFileIterator = baseFileReader.getRecordKeyIterator()) {
       timer.startTimer();
       while (baseFileIterator.hasNext()) {
