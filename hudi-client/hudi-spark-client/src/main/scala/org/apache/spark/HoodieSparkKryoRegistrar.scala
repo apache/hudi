@@ -18,11 +18,6 @@
 
 package org.apache.spark
 
-import com.esotericsoftware.kryo.io.{Input, Output}
-import com.esotericsoftware.kryo.serializers.JavaSerializer
-import com.esotericsoftware.kryo.{Kryo, Serializer}
-import com.google.protobuf.Message
-import com.twitter.chill.protobuf.ProtobufSerializer
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.{HoodieKey, HoodieSparkRecord}
 import org.apache.hudi.common.util.HoodieCommonKryoRegistrar
@@ -30,6 +25,12 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.HoodieKeyLookupResult
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.table.{HoodieSparkCopyOnWriteTable, HoodieSparkMergeOnReadTable}
+
+import com.esotericsoftware.kryo.{Kryo, Serializer}
+import com.esotericsoftware.kryo.io.{Input, Output}
+import com.esotericsoftware.kryo.serializers.JavaSerializer
+import com.google.protobuf.Message
+import com.twitter.chill.protobuf.ProtobufSerializer
 import org.apache.spark.serializer.KryoRegistrator
 
 /**
