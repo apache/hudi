@@ -358,7 +358,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_7
         displayName: UT FT Hudi Utilities
-        timeoutInMinutes: '75'
+        timeoutInMinutes: '120'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
