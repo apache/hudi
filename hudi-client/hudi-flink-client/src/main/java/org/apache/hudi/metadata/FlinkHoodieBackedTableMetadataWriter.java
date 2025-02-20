@@ -129,7 +129,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient = (BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>>) getWriteClient();
     // rollback partially failed writes if any.
-    if (writeClient.rollbackFailedWrites()) {
+    if (writeClient.rollbackFailedWrites(metadataMetaClient)) {
       metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
     }
 
