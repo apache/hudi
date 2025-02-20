@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.avro.JsonEncoder;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
@@ -40,16 +39,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.DatumWriter;
-import org.apache.avro.specific.SpecificDatumWriter;
-import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.specific.SpecificRecordBase;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -69,7 +62,7 @@ public class MetadataConversionUtils {
       switch (hoodieInstant.getAction()) {
         case HoodieTimeline.CLEAN_ACTION: {
           if (hoodieInstant.isCompleted()) {
-            archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadataFromInputStream(
+            archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(
                 metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant)));
           } else {
             archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlan(
@@ -131,7 +124,7 @@ public class MetadataConversionUtils {
         }
         case HoodieTimeline.COMPACTION_ACTION: {
           if (hoodieInstant.isRequested()) {
-            HoodieCompactionPlan plan = CompactionUtils.getCompactionPlanFromInputStream(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
+            HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
             archivedMetaWrapper.setHoodieCompactionPlan(plan);
           }
           archivedMetaWrapper.setActionType(ActionType.compaction.name());
@@ -139,7 +132,7 @@ public class MetadataConversionUtils {
         }
         case HoodieTimeline.LOG_COMPACTION_ACTION: {
           if (hoodieInstant.isRequested()) {
-            HoodieCompactionPlan plan = CompactionUtils.getCompactionPlanFromInputStream(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
+            HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
             archivedMetaWrapper.setHoodieCompactionPlan(plan);
           }
           archivedMetaWrapper.setActionType(ActionType.logcompaction.name());
@@ -185,8 +178,8 @@ public class MetadataConversionUtils {
     HoodieInstant hoodieInstant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, actionType, instantTime, completionTime);
     switch (actionType) {
       case HoodieTimeline.CLEAN_ACTION: {
-        archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(metaClient, instantDetails.get()));
-        archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlanLegacy(metaClient, planBytes.get()));
+        archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(metaClient, Option.of(new ByteArrayInputStream(instantDetails.get()))));
+        archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlan(metaClient, Option.of(new ByteArrayInputStream(planBytes.get()))));
         archivedMetaWrapper.setActionType(ActionType.clean.name());
         break;
       }
@@ -244,13 +237,13 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.COMPACTION_ACTION: {
         // should be handled by commit_action branch though, this logic is redundant.
-        HoodieCompactionPlan plan = CompactionUtils.getCompactionPlanFromInputStream(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
+        HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
         archivedMetaWrapper.setHoodieCompactionPlan(plan);
         archivedMetaWrapper.setActionType(ActionType.compaction.name());
         break;
       }
       case HoodieTimeline.LOG_COMPACTION_ACTION: {
-        HoodieCompactionPlan plan = CompactionUtils.getCompactionPlanFromInputStream(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
+        HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
         archivedMetaWrapper.setHoodieCompactionPlan(plan);
         archivedMetaWrapper.setActionType(ActionType.logcompaction.name());
         break;
@@ -402,30 +395,5 @@ public class MetadataConversionUtils {
       replaceCommitMetadata.getPartitionToReplaceFileIds().remove(null);
     }
     return JsonUtils.getObjectMapper().convertValue(replaceCommitMetadata, HoodieReplaceCommitMetadata.class);
-  }
-
-  /**
-   * Convert commit metadata from avro to json.
-   */
-  public static <T extends SpecificRecordBase> byte[] convertCommitMetadataToJsonBytes(T avroMetaData, Class<T> clazz) {
-    Schema avroSchema = clazz == org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class ? org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.getClassSchema() :
-        org.apache.hudi.avro.model.HoodieCommitMetadata.getClassSchema();
-    try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-      JsonEncoder jsonEncoder = new JsonEncoder(avroSchema, outputStream);
-      DatumWriter<GenericRecord> writer = avroMetaData instanceof SpecificRecord ? new SpecificDatumWriter<>(avroSchema) : new GenericDatumWriter<>(avroSchema);
-      writer.write(avroMetaData, jsonEncoder);
-      jsonEncoder.flush();
-      return outputStream.toByteArray();
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to convert to JSON.", e);
-    }
-  }
-
-  public static boolean isEmptyStream(InputStream inputStream) throws IOException {
-    BufferedInputStream bis = new BufferedInputStream(inputStream);
-    bis.mark(1);
-    boolean isEmpty = (bis.read() == -1);
-    bis.reset();
-    return isEmpty;
   }
 }

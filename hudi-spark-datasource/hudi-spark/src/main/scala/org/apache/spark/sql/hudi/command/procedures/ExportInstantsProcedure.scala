@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
+
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.specific.SpecificData
 import org.apache.hadoop.fs.{FileStatus, Path}
@@ -41,6 +42,7 @@ import java.io.{File, InputStream}
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.break
 

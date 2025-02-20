@@ -133,13 +133,6 @@ public class CleanerUtils {
     return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
   }
 
-  public static HoodieCleanMetadata getCleanerMetadataFromInputStream(HoodieTableMetaClient metaClient, Option<InputStream> in)
-      throws IOException {
-    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(in);
-    return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
-  }
-
   public static Option<HoodieInstant> getEarliestCommitToRetain(
       HoodieTimeline commitsTimeline, HoodieCleaningPolicy cleaningPolicy, int commitsRetained,
       Instant latestInstant, int hoursRetained, HoodieTimelineTimeZone timeZone) {
@@ -186,20 +179,6 @@ public class CleanerUtils {
     CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
     HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(
         metaClient.getActiveTimeline().getInstantContentStream(cleanInstant), HoodieCleanerPlan.class);
-    return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
-  }
-
-  /**
-   * Get Latest version of cleaner plan corresponding to a clean instant.
-   *
-   * @param metaClient   Hoodie Table Meta Client
-   * @return Cleaner plan corresponding to clean instant
-   * @throws IOException
-   */
-  public static HoodieCleanerPlan getCleanerPlanLegacy(HoodieTableMetaClient metaClient, byte[] details)
-      throws IOException {
-    CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
-    HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadataLegacy(details, HoodieCleanerPlan.class);
     return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
   }
 

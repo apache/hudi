@@ -124,7 +124,7 @@ public class TestAverageRecordSizeEstimator {
       try {
         when(mockTimeline.getInstantDetails(hoodieInstant))
             .thenReturn(org.apache.hudi.common.util.Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-        when(mockCommitMetadataSerDe.deserialize(hoodieInstant, mockTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class))
+        when(mockCommitMetadataSerDe.deserialize(hoodieInstant, mockTimeline.getInstantContentStream(hoodieInstant), HoodieCommitMetadata.class))
             .thenReturn(commitMetadata);
       } catch (IOException e) {
         throw new RuntimeException("Should not have failed", e);

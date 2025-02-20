@@ -180,10 +180,6 @@ public class TimelineMetadataUtils {
     return deserializeAvroMetadataLegacy(bytes, HoodieCompactionPlan.class);
   }
 
-  public static HoodieCleanMetadata deserializeHoodieCleanMetadataLegacy(byte[] bytes) throws IOException {
-    return deserializeAvroMetadataLegacy(bytes, HoodieCleanMetadata.class);
-  }
-
   public static HoodieCleanMetadata deserializeHoodieCleanMetadata(Option<InputStream> inputStream) throws IOException {
     return deserializeAvroMetadata(inputStream, HoodieCleanMetadata.class);
   }

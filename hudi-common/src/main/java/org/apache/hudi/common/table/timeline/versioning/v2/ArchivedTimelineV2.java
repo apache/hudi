@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.timeline.versioning.v2;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -26,9 +25,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -249,6 +249,6 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
 
   @Override
   public boolean isEmpty(HoodieInstant instant) {
-    return TimelineUtils.isEmpty(metaClient, instant);
+    return getInstantDetails(instant).isEmpty();
   }
 }

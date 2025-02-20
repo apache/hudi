@@ -203,8 +203,8 @@ public class ExportCommand {
       byte[] data = null;
       switch (instant.getAction()) {
         case HoodieTimeline.CLEAN_ACTION: {
-          HoodieCleanMetadata metadata = TimelineMetadataUtils.deserializeHoodieCleanMetadataLegacy(
-              timeline.getInstantDetails(instant).get());
+          HoodieCleanMetadata metadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
+              timeline.getInstantContentStream(instant));
           data = HoodieAvroUtils.avroToJson(metadata, true);
           break;
         }
