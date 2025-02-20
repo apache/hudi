@@ -202,8 +202,6 @@ public abstract class AbstractStreamWriteFunction<I>
       if (pendingTimeline.containsInstant(event.getInstantTime())) {
         // Reset taskID for event
         event.setTaskID(taskID);
-        // set restored true
-        event.setRestored(true);
         // The checkpoint succeed but the meta does not commit,
         // re-commit the inflight instant
         this.eventGateway.sendEventToCoordinator(event);

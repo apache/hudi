@@ -449,10 +449,9 @@ public class StreamWriteOperatorCoordinator
         LOG.warn("Reuse current pending Instant {} with {} operationType, "
                 + "ignoring empty bootstrap event.", this.instant, WriteOperationType.INSERT.value());
         reset();
-        if (event.isRestored()) {
-          // if event restored from checkpoint, send commit act event to unblock write tasks
-          sendCommitAckEvents(-1L);
-        }
+
+        // send commit act event to unblock write tasks
+        sendCommitAckEvents(-1L);
         return;
       }
 

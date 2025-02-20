@@ -55,11 +55,6 @@ public class WriteMetadataEvent implements OperatorEvent {
   private boolean bootstrap;
 
   /**
-   * Flag saying whether the event restored from checkpoint.
-   */
-  private boolean restored;
-
-  /**
    * Creates an event.
    *
    * @param taskID        The task ID
@@ -143,14 +138,6 @@ public class WriteMetadataEvent implements OperatorEvent {
 
   public void setLastBatch(boolean lastBatch) {
     this.lastBatch = lastBatch;
-  }
-
-  public boolean isRestored() {
-    return restored;
-  }
-
-  public void setRestored(boolean restored) {
-    this.restored = restored;
   }
 
   /**
