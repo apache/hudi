@@ -70,6 +70,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 @TestMethodOrder(Alphanumeric.class)
 public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
+  private static final String TEST_LOGGING_CONTEXT = "test_logging_context";
   private static String failureOutputPath;
 
   @BeforeEach
@@ -85,7 +86,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled)) { // 16B
+            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
@@ -120,7 +121,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled)) { // 16B
+            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
@@ -162,7 +163,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled)) { // 16B
+            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
@@ -220,7 +221,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records = new ExternalSpillableMap<>(16L,
         failureOutputPath, new DefaultSizeEstimator(),
-        new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled)) { // 16B
+        new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
@@ -245,7 +246,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled)) { // 16B
+            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       List<String> recordKeys = new ArrayList<>();
       // Ensure we spill to disk
@@ -302,7 +303,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled)) { // 16B
+            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) { // 16B
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<String> recordKeys = new ArrayList<>();
@@ -370,7 +371,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled)) {
+            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) {
 
       List<String> recordKeys = new ArrayList<>();
       SchemaTestUtil testUtil = new SchemaTestUtil();
@@ -419,7 +420,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     long totalEstimatedSizeWith100Records = (long) ((estimatedPayloadSize * 100) / 0.8);
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(totalEstimatedSizeWith100Records, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled)) {
+            new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, TEST_LOGGING_CONTEXT)) {
 
       // Insert 100 records and then in-memory map will contain 100 records.
       SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -448,7 +449,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     // validate that operations on an empty map work as expected
     try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
              new ExternalSpillableMap<>(10, basePath, new DefaultSizeEstimator(),
-                 new DefaultSizeEstimator<>(), diskMapType, new DefaultSerializer<>(),false)) {
+                 new DefaultSizeEstimator<>(), diskMapType, new DefaultSerializer<>(),false, TEST_LOGGING_CONTEXT)) {
       assertTrue(records.isEmpty());
       assertFalse(records.containsKey("key"));
       assertFalse(records.containsValue("value"));

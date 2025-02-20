@@ -106,7 +106,8 @@ public class TestLogFileIterator {
             new HoodieRecordSizeEstimator(HoodieTestDataGenerator.AVRO_SCHEMA),
             ExternalSpillableMap.DiskMapType.BITCASK,
             new DefaultSerializer<>(),
-            false
+            false,
+            TestLogFileIterator.class.getSimpleName()
         );
 
     // 2) Put some records in the spillable map

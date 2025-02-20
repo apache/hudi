@@ -87,9 +87,11 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
   private final String baseFilePath;
   // Serializer for the values
   private final CustomSerializer<R> valueSerializer;
+  private final String loggingContext;
 
   public ExternalSpillableMap(long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
-                              SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType, CustomSerializer<R> valueSerializer, boolean isCompressionEnabled) throws IOException {
+                              SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType, CustomSerializer<R> valueSerializer,
+                              boolean isCompressionEnabled, String loggingContext) throws IOException {
     this.inMemoryMap = new HashMap<>();
     this.baseFilePath = baseFilePath;
     this.maxInMemorySizeInBytes = (long) Math.floor(maxInMemorySizeInBytes * SIZING_FACTOR_FOR_IN_MEMORY_MAP);
@@ -99,6 +101,7 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
     this.diskMapType = diskMapType;
     this.isCompressionEnabled = isCompressionEnabled;
     this.valueSerializer = valueSerializer;
+    this.loggingContext = loggingContext;
   }
 
   private void initDiskBasedMap() {
@@ -220,6 +223,9 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
     } else if (this.inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
       this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
       this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
+      if (this.inMemoryMap.size() / NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 1) {
+        LOG.info("{} : Updated Estimated Payload size {}", loggingContext, this.estimatedPayloadSize);
+      }
     }
 
     if (this.inMemoryMap.containsKey(key)) {
@@ -269,6 +275,12 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
   }
 
   public void close() {
+    if (!inMemoryMap.isEmpty()) {
+      String diskBasedMapLog = diskBasedMap == null ? "No entries were spilled to disk. " : String.format("Total entries in diskBasedMap %s and rough size spilled to disk %s",
+          diskBasedMap.size(), (estimatedPayloadSize * diskBasedMap.size()));
+      LOG.info("{} : Total entries in InMemory map {}, with average record size as {}, currentInMemoryMapSize {}. {}", loggingContext,
+          inMemoryMap.size(), estimatedPayloadSize, currentInMemoryMapSize, diskBasedMapLog);
+    }
     inMemoryMap.clear();
     if (diskBasedMap != null) {
       diskBasedMap.close();
