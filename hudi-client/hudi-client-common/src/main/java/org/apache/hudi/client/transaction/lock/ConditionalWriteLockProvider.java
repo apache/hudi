@@ -143,7 +143,7 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
       throw new HoodieLockException("Failed to load and initialize ConditionalWriteLockService", e);
     }
 
-    logger.info("Instantiated new Conditional Write LP, owner: {}", ownerId);
+    logger.debug("Instantiated new Conditional Write LP, owner: {}", ownerId);
   }
 
   @VisibleForTesting
@@ -164,7 +164,7 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
     this.lockService = lockService;
     this.ownerId = ownerId;
     this.logger = logger;
-    logger.info("Instantiating new Conditional Write LP, owner: {}", ownerId);
+    logger.debug("Instantiating new Conditional Write LP, owner: {}", ownerId);
   }
 
   // -----------------------------------------
@@ -243,7 +243,7 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
 
     Pair<LockGetResult, ConditionalWriteLockFile> latestLock = this.lockService.getCurrentLockFile();
     if (latestLock.getLeft() == LockGetResult.UNKNOWN_ERROR) {
-      logger.info(
+      logger.warn(
           LOCK_STATE_LOGGER_MSG_WITH_INFO,
           ownerId,
           lockFilePath,
@@ -351,7 +351,7 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
 
     // Try to stop the heartbeat first
     if (heartbeatManager.hasActiveHeartbeat()) {
-      logger.info("Owner {}: Gracefully shutting down heartbeat.", ownerId);
+      logger.debug("Owner {}: Gracefully shutting down heartbeat.", ownerId);
       believesNoLongerHoldsLock &= heartbeatManager.stopHeartbeat(true);
     }
 
@@ -390,13 +390,15 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
     switch (result.getLeft()) {
       case UNKNOWN_ERROR:
         // Here we do not know the state of the lock.
-        logger.error(
-            LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), FAILED_TO_RELEASE);
+        logger.error(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), FAILED_TO_RELEASE);
         return false;
       case SUCCESS:
+        logger.info(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), RELEASED);
+        setLock(null);
+        return true;
       case ACQUIRED_BY_OTHERS:
-        logger.debug(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), RELEASED);
         // As we are confident no lock is held by itself, clean up the cached lock object.
+        logger.warn(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), RELEASED);
         setLock(null);
         return true;
       default:
