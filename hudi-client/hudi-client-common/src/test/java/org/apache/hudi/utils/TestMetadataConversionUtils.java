@@ -224,7 +224,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, archived.getAction());
     assertDoesNotThrow(() -> metaClient.getCommitMetadataSerDe().deserialize(
         INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime),
-        Option.of(new ByteArrayInputStream(archived.getPlan().array())), HoodieCommitMetadata.class), "Insert overwrite without clustering should have a plan");
+        Option.of(new ByteArrayInputStream(archived.getPlan().array())), () -> true, HoodieCommitMetadata.class), "Insert overwrite without clustering should have a plan");
 
     String newCommitTime2 = HoodieTestTable.makeNewCommitTime();
     createReplace(newCommitTime2, WriteOperationType.INSERT_OVERWRITE_TABLE, false);
@@ -234,7 +234,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, archived2.getAction());
     assertDoesNotThrow(() -> metaClient.getCommitMetadataSerDe().deserialize(
         INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime2),
-        Option.of(new ByteArrayInputStream(archived2.getPlan().array())), HoodieCommitMetadata.class),
+        Option.of(new ByteArrayInputStream(archived2.getPlan().array())), () -> true, HoodieCommitMetadata.class),
         "Insert overwrite table without clustering should have a plan");
   }
 
@@ -266,7 +266,8 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     assertEquals(HoodieTimeline.COMMIT_ACTION, archived.getAction());
     assertDoesNotThrow(() -> metaClient.getCommitMetadataSerDe().deserialize(
         INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime),
-        Option.of(new ByteArrayInputStream(archived.getMetadata().array())), HoodieCommitMetadata.class));
+        Option.of(new ByteArrayInputStream(archived.getMetadata().array())),
+        () -> true, HoodieCommitMetadata.class));
   }
 
   @Test
@@ -299,7 +300,8 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     assertEquals(HoodieTimeline.COMMIT_ACTION, archived.getAction());
     assertDoesNotThrow(() -> metaClient.getCommitMetadataSerDe().deserialize(
         INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime),
-        Option.of(new ByteArrayInputStream(archived.getMetadata().array())), HoodieCommitMetadata.class));
+        Option.of(new ByteArrayInputStream(archived.getMetadata().array())),
+        () -> true, HoodieCommitMetadata.class));
     assertDoesNotThrow(() -> CompactionUtils.getCompactionPlan(metaClient, Option.of(new ByteArrayInputStream(archived.getPlan().array()))));
   }
 

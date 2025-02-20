@@ -105,7 +105,7 @@ public class ITTestBucketStreamWrite {
     String filename = INSTANT_FILE_NAME_GENERATOR.getFileName(activeCompletedTimeline.getInstants().get(0));
 
     HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe()
-        .deserialize(instant, metaClient.getActiveTimeline().getInstantContentStream(instant),
+        .deserialize(instant, metaClient.getActiveTimeline().getInstantContentStream(instant), () -> true,
             HoodieCommitMetadata.class);
 
     // delete successful commit to simulate an unsuccessful write

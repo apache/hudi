@@ -57,10 +57,11 @@ public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
       client.cluster(clusteringInstantTime);
       metaClient.reloadActiveTimeline();
       HoodieInstant lastClusteringInstant = metaClient.getActiveTimeline().getLastClusteringInstant().get();
-      HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-          metaClient.getActiveTimeline().getInstantDetails(lastClusteringInstant).get(),
-          HoodieReplaceCommitMetadata.class
-      );
+      HoodieReplaceCommitMetadata replaceCommitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
+          lastClusteringInstant,
+          metaClient.getActiveTimeline().getInstantContentStream(lastClusteringInstant),
+          () -> metaClient.getActiveTimeline().isEmpty(lastClusteringInstant),
+          HoodieReplaceCommitMetadata.class);
       Assertions.assertTrue(replaceCommitMetadata.getPartitionToWriteStats().isEmpty());
       Assertions.assertEquals(3, replaceCommitMetadata.getPartitionToReplaceFileIds().size());
     }

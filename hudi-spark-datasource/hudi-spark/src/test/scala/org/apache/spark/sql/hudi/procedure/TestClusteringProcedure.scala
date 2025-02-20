@@ -835,7 +835,8 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
     val layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion)
     commitTimeline.getReverseOrderedInstants.toArray.foreach(instant => {
       val commitMetadata = layout.getCommitMetadataSerDe.deserialize(instant.asInstanceOf[HoodieInstant],
-        commitTimeline.getInstantContentStream(instant.asInstanceOf[HoodieInstant]), classOf[HoodieCommitMetadata])
+        commitTimeline.getInstantContentStream(instant.asInstanceOf[HoodieInstant]), () =>commitTimeline.isEmpty(instant.asInstanceOf[HoodieInstant]),
+        classOf[HoodieCommitMetadata])
       totalByteSize = totalByteSize + commitMetadata.fetchTotalBytesWritten()
       totalRecordsCount = totalRecordsCount + commitMetadata.fetchTotalRecordsWritten()
     })

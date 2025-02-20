@@ -157,6 +157,7 @@ public class HoodieTestSuiteJob {
       HoodieCommitMetadata commit = metaClient.getCommitMetadataSerDe().deserialize(
           prevInstant,
           timeline.getInstantContentStream(prevInstant),
+          () -> timeline.isEmpty(prevInstant),
           HoodieCommitMetadata.class);
       Map<String, String> extraMetadata = commit.getExtraMetadata();
       String avroSchemaStr = extraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY);

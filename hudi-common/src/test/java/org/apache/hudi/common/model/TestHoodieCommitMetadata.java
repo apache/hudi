@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.avro.Schema;
-import org.apache.avro.reflect.ReflectData;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -30,6 +28,9 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.avro.Schema;
+import org.apache.avro.reflect.ReflectData;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -168,7 +169,7 @@ public class TestHoodieCommitMetadata {
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "1");
     org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata1 =
         COMMIT_METADATA_SER_DE.deserialize(instant,
-            Option.of(new ByteArrayInputStream(serializedCommitMetadata)), org.apache.hudi.common.model.HoodieCommitMetadata.class);
+            Option.of(new ByteArrayInputStream(serializedCommitMetadata)), () -> true, org.apache.hudi.common.model.HoodieCommitMetadata.class);
     assertEquals(2, commitMetadata1.partitionToWriteStats.size());
     assertEquals(2, commitMetadata1.partitionToWriteStats.get("partition1").size());
     assertEquals(2, commitMetadata1.partitionToWriteStats.get("partition1").size());
@@ -182,7 +183,7 @@ public class TestHoodieCommitMetadata {
     byte[] v1Bytes = v1SerDe.serialize(commitMetadata1).get();
     System.out.println(new String(v1Bytes));
     org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata2 =
-        COMMIT_METADATA_SER_DE.deserialize(legacyInstant, Option.of(new ByteArrayInputStream(v1Bytes)), org.apache.hudi.common.model.HoodieCommitMetadata.class);
+        COMMIT_METADATA_SER_DE.deserialize(legacyInstant, Option.of(new ByteArrayInputStream(v1Bytes)), () -> true, org.apache.hudi.common.model.HoodieCommitMetadata.class);
     assertEquals(2, commitMetadata2.partitionToWriteStats.size());
     assertEquals(2, commitMetadata2.partitionToWriteStats.get("partition1").size());
     assertEquals(2, commitMetadata2.partitionToWriteStats.get("partition1").size());

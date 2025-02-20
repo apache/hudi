@@ -160,7 +160,8 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
       val layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion)
       val replacedFile = replacedTimeline.getInstants.asScala.flatMap { instant =>
         val replaceMetadata = layout.getCommitMetadataSerDe.deserialize(
-          instant, metaClient.getActiveTimeline.getInstantContentStream(instant), classOf[HoodieReplaceCommitMetadata])
+          instant, metaClient.getActiveTimeline.getInstantContentStream(instant),
+          () => metaClient.getActiveTimeline.isEmpty(instant), classOf[HoodieReplaceCommitMetadata])
         replaceMetadata.getPartitionToReplaceFileIds.entrySet().asScala.flatMap { entry =>
           entry.getValue.asScala.map { e =>
             val fullPath = FSUtils.constructAbsolutePath(basePath, entry.getKey).toString
@@ -171,7 +172,9 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
 
       for (commit <- commitsToReturn) {
         val metadata: HoodieCommitMetadata = metaClient.getCommitMetadataSerDe.deserialize(
-          commit, commitTimeline.getInstantContentStream(commit), classOf[HoodieCommitMetadata])
+          commit, commitTimeline.getInstantContentStream(commit),
+          () => commitTimeline.isEmpty(commit),
+          classOf[HoodieCommitMetadata])
 
         if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.requestedTime) {
           metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>

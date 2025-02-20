@@ -652,7 +652,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
     HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
     assertEquals(commitMetadata, metaClient.getCommitMetadataSerDe().deserialize(
-        completedCommitInstant, timelineAfterFirstInstant.getInstantContentStream(completedCommitInstant), HoodieCommitMetadata.class));
+        completedCommitInstant, timelineAfterFirstInstant.getInstantContentStream(completedCommitInstant),
+        () -> timeline.isEmpty(completeCommitInstant), HoodieCommitMetadata.class));
 
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan();
     cleanerPlan.setLastCompletedCommitTimestamp("1");
@@ -665,10 +666,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
     HoodieTimeline mergedTimeline = timelineAfterFirstInstant.mergeTimeline(timeline.reload());
     assertEquals(commitMetadata, metaClient.getCommitMetadataSerDe().deserialize(
-        completedCommitInstant, mergedTimeline.getInstantContentStream(completedCommitInstant), HoodieCommitMetadata.class));
+        completedCommitInstant, mergedTimeline.getInstantContentStream(completedCommitInstant), () -> timeline.isEmpty(completeCommitInstant), HoodieCommitMetadata.class));
     assertEquals(cleanerPlan,getCleanerPlan(metaClient, cleanInstant));
     assertEquals(commitMetadata, metaClient.getCommitMetadataSerDe().deserialize(
-        completedCommitInstant, mergedTimeline.getInstantContentStream(completedCommitInstant), HoodieCommitMetadata.class));
+        completedCommitInstant, mergedTimeline.getInstantContentStream(completedCommitInstant), () -> timeline.isEmpty(completeCommitInstant), HoodieCommitMetadata.class));
   }
 
   @Test

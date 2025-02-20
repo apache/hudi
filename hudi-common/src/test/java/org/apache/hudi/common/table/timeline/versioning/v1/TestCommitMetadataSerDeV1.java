@@ -69,7 +69,7 @@ public class TestCommitMetadataSerDeV1 {
     assertTrue(serialized.isPresent());
 
     // Deserialize
-    HoodieCommitMetadata deserialized = serDe.deserialize(instant, Option.of(new ByteArrayInputStream(serialized.get())), HoodieCommitMetadata.class);
+    HoodieCommitMetadata deserialized = serDe.deserialize(instant, Option.of(new ByteArrayInputStream(serialized.get())), () -> true, HoodieCommitMetadata.class);
     // Verify
     assertNotNull(deserialized);
     assertEquals(0, deserialized.getPartitionToWriteStats().size());
@@ -135,7 +135,7 @@ public class TestCommitMetadataSerDeV1 {
 
     // Deserialize
     HoodieCommitMetadata deserialized = serDe.deserialize(
-        instant, Option.of(new ByteArrayInputStream(serialized.get())), HoodieCommitMetadata.class);
+        instant, Option.of(new ByteArrayInputStream(serialized.get())), () -> true, HoodieCommitMetadata.class);
 
     // Verify all fields
     assertNotNull(deserialized);
@@ -225,7 +225,7 @@ public class TestCommitMetadataSerDeV1 {
     assertTrue(serialized.isPresent());
 
     // Deserialize
-    HoodieReplaceCommitMetadata deserialized = serDe.deserialize(instant, Option.of(new ByteArrayInputStream(serialized.get())), HoodieReplaceCommitMetadata.class);
+    HoodieReplaceCommitMetadata deserialized = serDe.deserialize(instant, Option.of(new ByteArrayInputStream(serialized.get())), () -> true, HoodieReplaceCommitMetadata.class);
 
     // Verify basic fields
     assertNotNull(deserialized);

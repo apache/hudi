@@ -50,6 +50,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_COMPARATO
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -124,7 +125,8 @@ public class TestAverageRecordSizeEstimator {
       try {
         when(mockTimeline.getInstantDetails(hoodieInstant))
             .thenReturn(org.apache.hudi.common.util.Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-        when(mockCommitMetadataSerDe.deserialize(hoodieInstant, mockTimeline.getInstantContentStream(hoodieInstant), HoodieCommitMetadata.class))
+        when(mockCommitMetadataSerDe.deserialize(
+            hoodieInstant, mockTimeline.getInstantContentStream(hoodieInstant), any(), HoodieCommitMetadata.class))
             .thenReturn(commitMetadata);
       } catch (IOException e) {
         throw new RuntimeException("Should not have failed", e);

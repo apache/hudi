@@ -268,7 +268,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   public Option<InputStream> getContentStream(HoodieInstant instant) {
     Option<HoodieInstant> actualInstant = Option.of(instant);
     // [HUDI-9063] to remove this logic
-    if (instant.getCompletionTime().isEmpty() && instant.getState().equals(HoodieInstant.State.COMPLETED)) {
+    if (instant.getState() != null && instant.getState().equals(HoodieInstant.State.COMPLETED) && StringUtils.isNullOrEmpty(instant.getCompletionTime())) {
       actualInstant = getInstantFromTimeline(instant, this, actualInstant);
       if (actualInstant.isEmpty()) {
         throw new HoodieIOException("Could not read commit details from " + instant + " as it does not exists in the active timeline");

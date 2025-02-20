@@ -467,7 +467,8 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
       val lastCompactionInstant = compactionTimeline
         .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-          metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant, compactionTimeline.getInstantContentStream(instant), classOf[HoodieCommitMetadata])
+          metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant, compactionTimeline.getInstantContentStream(instant),
+              () => compactionTimeline.isEmpty(instant), classOf[HoodieCommitMetadata])
             .getOperationType == WriteOperationType.COMPACT))
         .lastInstant()
       val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.PARTITION_STATS.getPartitionPath)
