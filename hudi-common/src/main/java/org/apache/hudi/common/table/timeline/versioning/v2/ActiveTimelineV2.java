@@ -324,12 +324,6 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public Option<byte[]> readRollbackInfoAsBytes(HoodieInstant instant) {
-    // Rollback metadata are always stored only in timeline .hoodie
-    return readDataFromPath(getInstantFileNamePath(getInstantFileName(instant)));
-  }
-
-  @Override
   public Option<byte[]> readRestoreInfoAsBytes(HoodieInstant instant) {
     // Rollback metadata are always stored only in timeline .hoodie
     return readDataFromPath(getInstantFileNamePath(getInstantFileName(instant)));

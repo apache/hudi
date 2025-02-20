@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.function.Supplier;
 
 public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
 
