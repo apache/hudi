@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2025-02-19T12:00:00-08:00
 ---
 # Roadmap
 
@@ -8,50 +8,51 @@ Hudi community strives to deliver major releases every 3 months, while offering 
 This page captures the forward-looking roadmap of ongoing & upcoming projects and when they are expected to land, broken
 down by areas on our [stack](/docs/hudi_stack).
 
-## Recent Releases
+## Recent Release(s)
 
-[1.0.0](https://hudi.apache.org/releases/release-1.0.0) (Dec 2024)
-
-[0.15.0](https://hudi.apache.org/releases/release-0.15.0) (June 2024)
+[1.0.1](/releases/release-1.0.1) (Feb 2025)
 
 ## Future Releases
 
 | Release | Timeline  |
 |---------|-----------|
-| 1.0.1   | Jan 2025  |
-| 1.1.0   | Mar 2025  |
-| 1.2.0   | May 2025  |
-| 1.3.0   | July 2025 |
-| 2.0.0   | Dec 2025  |
+| 1.0.2   | Mar 2025  |
+| 1.1.0   | Apr 2025  |
+| 1.2.0   | Jun 2025  |
+| 1.3.0   | Aug 2025  |
+| 2.0.0   | Nov 2025  |
 
 
 ## Storage Engine
 
 | Feature                                              | Target Release | Tracking                                                                                                                                                                       |
 |------------------------------------------------------|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1.x Storage format                                   | 1.0.0          | [HUDI-6242](https://issues.apache.org/jira/browse/HUDI-6242)                                                                                                                   |
-| Writer performance improvements                      | 1.0.0          | [HUDI-3249](https://issues.apache.org/jira/browse/HUDI-3249)                                                                                                                   |
-| Non-blocking concurrency control                     | 1.0.0          | [HUDI-3187](https://issues.apache.org/jira/browse/HUDI-3187), [HUDI-1042](https://issues.apache.org/jira/browse/HUDI-1042), [RFC-66](https://github.com/apache/hudi/pull/7907) |
-| Secondary indexes to improve query performance       | 1.0.0          | [RFC-52](https://github.com/apache/hudi/pull/5370), [HUDI-3907](https://issues.apache.org/jira/browse/HUDI-3907)                                                               |
-| Index Function for Optimizing Query Performance      | 1.0.0          | [RFC-63](https://github.com/apache/hudi/pull/7235), [HUDI-512](https://issues.apache.org/jira/browse/HUDI-512)                                                                 |
-| Logical partitioning via indexing                    | 1.0.0          | [HUDI-512](https://issues.apache.org/jira/browse/HUDI-512)                                                                                                                     |
-| Storage partition stats index                        | 1.0.0          | [HUDI-7144](https://issues.apache.org/jira/browse/HUDI-7144)                                                                                                                   |
+| Backwards compatible MDT writer and reader support   | 1.0.2          | [HUDI-9026](https://issues.apache.org/jira/browse/HUDI-9026) |
+| Introduce `.abort` state in the timeline             | 1.1.0          | [HUDI-8189](https://issues.apache.org/jira/browse/HUDI-8189) |
+| Schema tracking in metadata table                    | 1.1.0          | [HUDI-6778](https://issues.apache.org/jira/browse/HUDI-6778) |
+| Variant type support on Spark 4                      | 1.1.0          | [HUDI-9046](https://issues.apache.org/jira/browse/HUDI-9046) |
 | Non-blocking updates during clustering               | 1.1.0          | [HUDI-1045](https://issues.apache.org/jira/browse/HUDI-1045)                                                                                                                   |
 | Track schema in metadata table                       | 1.1.0          | [HUDI-6778](https://issues.apache.org/jira/browse/HUDI-6778)                                                                                                                   |
-| Streaming CDC/Incremental read improvement           | 1.1.0          | [HUDI-2749](https://issues.apache.org/jira/browse/HUDI-2749)                                                                                                                   |
-| Supervised table service planning and execution      | 1.1.0          | [RFC-43](https://github.com/apache/hudi/pull/4309), [HUDI-4147](https://issues.apache.org/jira/browse/HUDI-4147)                                                               |
 | Enable partial updates for CDC workload payload      | 1.1.0          | [HUDI-7229](https://issues.apache.org/jira/browse/HUDI-7229)                                                                                                                   |
-| Vector search indexes                                | 1.1.0          |                                                                                                                 |
-| General purpose support for multi-table transactions | 1.2.0          ||
-| Time Travel updates, deletes                         | 1.3.0          ||
-| Unstructured data storage and management             | 1.3.0          ||
+| NBCC for MDT writes                                  | 1.1.0          | [HUDI-8480](https://issues.apache.org/jira/browse/HUDI-8480) |
+| Vector search index                                  | 1.1.0          | [HUDI-9047](https://issues.apache.org/jira/browse/HUDI-9047) |
+| Bitmap index                                         | 1.1.0          | [HUDI-9048](https://issues.apache.org/jira/browse/HUDI-9048) |
+| Native HFile Writer and removal of HBase dependency  | 1.1.0          | [HUDI-8222](https://issues.apache.org/jira/browse/HUDI-8222) |
+| New abstraction for schema, expressions, and filters | 1.1.0          | [RFC-88](https://github.com/apache/hudi/pull/12795) |
+| Streaming CDC/Incremental read improvement           | 1.2.0          | [HUDI-2749](https://issues.apache.org/jira/browse/HUDI-2749) |
+| Supervised table service planning and execution      | 1.2.0          | [RFC-43](https://github.com/apache/hudi/pull/4309), [HUDI-4147](https://issues.apache.org/jira/browse/HUDI-4147)                                                               |
+| General purpose support for multi-table transactions | 1.2.0          | [HUDI-6709](https://issues.apache.org/jira/browse/HUDI-6709) |
+| Supporting different updated columns in a single partial update log file | 1.2.0          | [HUDI-9049](https://issues.apache.org/jira/browse/HUDI-9049) |
+| CDC format consolidation                             | 1.2.0          | [HUDI-7538](https://issues.apache.org/jira/browse/HUDI-7538) |
+| Time Travel updates, deletes                         | 1.3.0          | [HUDI-9050](https://issues.apache.org/jira/browse/HUDI-9050) |
+| Unstructured data storage and management             | 1.3.0          | [HUDI-9051](https://issues.apache.org/jira/browse/HUDI-9051)|
 
 
 ## Programming APIs
 
 | Feature                                                 | Target Release | Tracking                                                                                                                   |
 |---------------------------------------------------------|----------------|----------------------------------------------------------------------------------------------------------------------------|
-| APIs/Abstractions, Record mergers                       | 1.0.0          | [HUDI-6243](https://issues.apache.org/jira/browse/HUDI-6243), [HUDI-3217](https://issues.apache.org/jira/browse/HUDI-3217) |
+| Deprecate Payload and support CDC with built-in merge mode | 1.1.0       | [HUDI-8401](https://issues.apache.org/jira/browse/HUDI-8401) |
 | New Hudi Table Format APIs for Query Integrations       | 1.1.0          | [RFC-64](https://github.com/apache/hudi/pull/7080), [HUDI-4141](https://issues.apache.org/jira/browse/HUDI-4141)           |
 | Snapshot view management                                | 1.2.0          | [RFC-61](https://github.com/apache/hudi/pull/6576), [HUDI-4677](https://issues.apache.org/jira/browse/HUDI-4677)           |
 | Support of verification with multiple event_time fields | 1.2.0          | [RFC-59](https://github.com/apache/hudi/pull/6382), [HUDI-4569](https://issues.apache.org/jira/browse/HUDI-4569)           |
@@ -61,20 +62,31 @@ down by areas on our [stack](/docs/hudi_stack).
 
 | Feature                                                 | Target Release | Tracking                                                                                                                                                                                 |
 |---------------------------------------------------------|----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Presto/Trino queries with new format                    | 1.1.0          | [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-4394), [HUDI-4394](https://issues.apache.org/jira/browse/HUDI-4394), [HUDI-4552](https://issues.apache.org/jira/browse/HUDI-4552) |
-| Table Valued Function to query Hudi timeline            | 1.0.0	         | [HUDI-7243](https://issues.apache.org/jira/browse/HUDI-7243)                                                                                                                             |
+| Presto/Trino queries with new format                    | 1.0.2          | [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-4394), [HUDI-4394](https://issues.apache.org/jira/browse/HUDI-4394), [HUDI-4552](https://issues.apache.org/jira/browse/HUDI-4552) |
+| Improve metadata table write DAG on Spark               | 1.1.0          | [HUDI-8462](https://issues.apache.org/jira/browse/HUDI-8462) |
+| End-to-end DataFrame write path on Spark                | 1.1.0          | [HUDI-9019](https://issues.apache.org/jira/browse/HUDI-9019), [HUDI-4857](https://issues.apache.org/jira/browse/HUDI-4857) |
+| Optimize performance with engine-native records on Flink | 1.1.0          | [HUDI-8799](https://issues.apache.org/jira/browse/HUDI-8799) |
+| File group reader integration on Flink                  | 1.1.0          | [HUDI-6788](https://issues.apache.org/jira/browse/HUDI-6788) |
+| File group reader integration with MDT read path        | 1.1.0          | [HUDI-8720](https://issues.apache.org/jira/browse/HUDI-8720) |
 | Default Java 17 support 	                               | 1.1.0	         | [HUDI-6506](https://issues.apache.org/jira/browse/HUDI-6506)                                                                                                                             |
 | Spark 4 Support	                                       | 1.1.0	         | [HUDI-7915](https://issues.apache.org/jira/browse/HUDI-7915)                                                                                                                             |
 | Spark datasource V2 read                                | 1.1.0          | [HUDI-4449](https://issues.apache.org/jira/browse/HUDI-4449)                                                                                                                             |
-| Replace Dataframe write path for Spark                  | 1.1.0	         | [HUDI-4857](https://issues.apache.org/jira/browse/HUDI-4857)                                                                                                                             |
+| Simplification of engine integration and module organization | 1.1.0          | [HUDI-9502](https://issues.apache.org/jira/browse/HUDI-9502) |
 
 
 ## Platform Components
 
 | Feature                                                                                           | Target Release | Tracking                                                                                                                               |
 |---------------------------------------------------------------------------------------------------|----------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| Support for reliable, event based ingestion from cloud stores - GCS, Azure and the others         | 1.0.0          | [HUDI-1896](https://issues.apache.org/jira/browse/HUDI-1896)                                                                           |
+| Syncing as non-partitoned tables in catalogs             | 1.1.0          | [HUDI-9503](https://issues.apache.org/jira/browse/HUDI-9503) |
 | Hudi Reverse streamer                                                                             | 1.2.0          | [RFC-70](https://github.com/apache/hudi/pull/9040)                                                                                      |
 | Diagnostic Reporter                                                                               | 1.2.0          | [RFC-62](https://github.com/apache/hudi/pull/6600)                                                                        |
 | Mutable, Transactional caching for Hudi Tables (could be accelerated based on community feedback) | 2.0.0          | [Strawman design](https://docs.google.com/presentation/d/1QBgLw11TM2Qf1KUESofGrQDb63EuggNCpPaxc82Kldo/edit#slide=id.gf7e0551254_0_5), [HUDI-6489](https://issues.apache.org/jira/browse/HUDI-6489) |
-| Hudi Metaserver (could be accelerated based on community feedback)                                | 2.0.0          |   |
+| Hudi Metaserver (could be accelerated based on community feedback)                                | 2.0.0          | [HUDI-3345](https://issues.apache.org/jira/browse/HUDI-3345), [RFC-36](https://github.com/apache/hudi/pull/4718) |
+
+
+## Developer Experience
+| Feature                                                 | Target Release | Tracking                                 |
+|---------------------------------------------------------|----------------|------------------------------------------|
+| Support code coverage report and improve test coverage  | 1.0.2          | [HUDI-9015](https://issues.apache.org/jira/browse/HUDI-9015) |
+| Clean up tech debt and deprecate unused code            | 1.1.0          | [HUDI-9504](https://issues.apache.org/jira/browse/HUDI-9504) |
