@@ -160,7 +160,6 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
           hoodieEngineContext,
           (Configuration) storage.getConf().unwrap(),
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
-          (FileSystem) storage.getFileSystem(),
           FileSystemViewManager.createViewManager(
               hoodieEngineContext, metadataConfig, storageConf, HoodieCommonConfig.newBuilder().build()));
       timelineService.startService();

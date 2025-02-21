@@ -57,13 +57,11 @@ public class TimelineServiceTestHarness extends TimelineService {
   public TimelineServiceTestHarness(HoodieEngineContext context,
                                     Configuration hadoopConf,
                                     Config timelineServerConf,
-                                    FileSystem fileSystem,
                                     FileSystemViewManager globalFileSystemViewManager) throws IOException {
     super(
         context,
         new HadoopStorageConfiguration(hadoopConf),
         timelineServerConf,
-        new HoodieHadoopStorage(fileSystem),
         globalFileSystemViewManager);
     server = Option.empty();
     serverPort = 0;
@@ -131,10 +129,9 @@ public class TimelineServiceTestHarness extends TimelineService {
     public TimelineServiceTestHarness build(HoodieEngineContext context,
                                             Configuration hadoopConf,
                                             Config timelineServerConf,
-                                            FileSystem fileSystem,
                                             FileSystemViewManager globalFileSystemViewManager) throws IOException {
       TimelineServiceTestHarness timelineServiceTestHarness = new TimelineServiceTestHarness(
-          context, hadoopConf, timelineServerConf, fileSystem, globalFileSystemViewManager);
+          context, hadoopConf, timelineServerConf, globalFileSystemViewManager);
       timelineServiceTestHarness.setNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures);
       return timelineServiceTestHarness;
     }
