@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -45,6 +46,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -54,6 +56,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -117,6 +120,25 @@ public class TestCompletionTimeQueryView {
       assertThat(getInstantTimeSetFormattedString(view, 10 + 1000, 11 + 1000), is("00000010"));
       // query with non-existing completion time
       assertThat(getInstantTimeSetFormattedString(view, 12 + 1000, 15 + 1000), is(""));
+    }
+  }
+
+  @Test
+  void testGetInstantTimesWithOnlyEndCompletionTime() throws Exception {
+    String tableName = "testTable";
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    prepareTimeline(tablePath, metaClient);
+    try (CompletionTimeQueryView view =
+             metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
+      // Fetch instant matching the completion time provided
+      assertEquals(Collections.singletonList("00000009"), view.getInstantTimes(metaClient.getActiveTimeline(), Option.empty(), Option.of("00001009"), InstantRange.RangeType.CLOSED_CLOSED));
+      // Fetch instant just before the completion time provided
+      assertEquals(Collections.singletonList("00000010"), view.getInstantTimes(metaClient.getActiveTimeline(), Option.empty(), Option.of("00001011"), InstantRange.RangeType.CLOSED_CLOSED));
+      // Fall back case where only archive instants are before the completion time provided
+      assertEquals(Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005"),
+          view.getInstantTimes(metaClient.getActiveTimeline(), Option.empty(), Option.of("00001005"), InstantRange.RangeType.CLOSED_CLOSED));
     }
   }
 
