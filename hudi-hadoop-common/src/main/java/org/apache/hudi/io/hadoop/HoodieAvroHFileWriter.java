@@ -27,6 +27,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.io.hfile.HFileWriter;
+import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.storage.StoragePath;
@@ -38,15 +40,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
-import org.apache.hadoop.io.Writable;
 
-import java.io.DataInput;
-import java.io.DataOutput;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -73,7 +70,7 @@ public class HoodieAvroHFileWriter
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
   private final Option<Schema.Field> keyFieldSchema;
-  private HFile.Writer writer;
+  private HFileWriter nativeWriter;
   private String minRecordKey;
   private String maxRecordKey;
   private String prevRecordKey;
@@ -112,12 +109,10 @@ public class HoodieAvroHFileWriter
     conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY,
         String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
     CacheConfig cacheConfig = new CacheConfig(conf);
-    this.writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withPath(fs, this.file)
-        .withFileContext(context)
-        .create();
+    this.nativeWriter = new HFileWriterImpl(file.toString());
 
-    writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.SCHEMA_KEY),
+    this.nativeWriter.appendFileInfo(
+        HoodieAvroHFileReaderImplBase.SCHEMA_KEY,
         getUTF8Bytes(schema.toString()));
     this.prevRecordKey = "";
   }
@@ -161,9 +156,7 @@ public class HoodieAvroHFileWriter
     if (!isRecordSerialized) {
       value = HoodieAvroUtils.avroToBytes((GenericRecord) record);
     }
-
-    KeyValue kv = new KeyValue(getUTF8Bytes(recordKey), null, null, value);
-    writer.append(kv);
+    nativeWriter.append(getUTF8Bytes(recordKey), value);
 
     if (hfileConfig.useBloomFilter()) {
       hfileConfig.getBloomFilter().add(recordKey);
@@ -185,26 +178,19 @@ public class HoodieAvroHFileWriter
       if (maxRecordKey == null) {
         maxRecordKey = "";
       }
-      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD),
-          getUTF8Bytes(minRecordKey));
-      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD),
-          getUTF8Bytes(maxRecordKey));
-      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE),
+      nativeWriter.appendFileInfo(
+          HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD, getUTF8Bytes(minRecordKey));
+      nativeWriter.appendFileInfo(
+          HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD, getUTF8Bytes(maxRecordKey));
+      nativeWriter.appendFileInfo(
+          HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE,
           getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().toString()));
-      writer.appendMetaBlock(HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK,
-          new Writable() {
-            @Override
-            public void write(DataOutput out) throws IOException {
-              out.write(getUTF8Bytes(bloomFilter.serializeToString()));
-            }
-
-            @Override
-            public void readFields(DataInput in) throws IOException {
-            }
-          });
+      nativeWriter.appendMetaInfo(
+          HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK,
+          getUTF8Bytes(bloomFilter.serializeToString()));
     }
 
-    writer.close();
-    writer = null;
+    nativeWriter.close();
+    nativeWriter = null;
   }
 }
