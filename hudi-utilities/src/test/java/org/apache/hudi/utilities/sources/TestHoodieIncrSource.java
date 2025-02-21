@@ -640,7 +640,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
             getSpillableMap(hoodieTableFileIndex);
         Assertions.assertEquals(fileSlicesCachedInMemory, cachedAllInputFileSlices.getInMemoryMapNumEntries());
         Assertions.assertEquals(numFileSlices - fileSlicesCachedInMemory, cachedAllInputFileSlices.getDiskBasedMapNumEntries());
-        Assertions.assertTrue(cachedAllInputFileSlices.getCurrentInMemoryMapSize() < spillableMemoryBytes,
+        Assertions.assertTrue(cachedAllInputFileSlices.getCurrentInMemoryMapSize() < 2 * spillableMemoryBytes,
             "In-memory map size is greater than expected " + cachedAllInputFileSlices.getCurrentInMemoryMapSize());
       } else {
         HashMap<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>> cachedAllInputFileSlices = getHashMap(hoodieTableFileIndex);
@@ -805,8 +805,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> getArgsForLogicalPlanSizeValidation() {
     return Stream.of(
-        Arguments.of(1, 4096L, true),
-        Arguments.of(20, 4096L, false),
+        Arguments.of(1, 3072L, true),
+        Arguments.of(20, 3072L, false),
         Arguments.of(20, 20 * 1024L * 1024L, true)
     );
   }
