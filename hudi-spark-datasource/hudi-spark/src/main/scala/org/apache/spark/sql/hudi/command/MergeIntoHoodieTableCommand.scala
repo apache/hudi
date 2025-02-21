@@ -53,7 +53,6 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
-import java.util
 import java.util.Base64
 
 import scala.collection.JavaConverters._
@@ -823,7 +822,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
   private def isEventTimeOrdering(props: Map[String, String]) = {
     RecordMergeMode.EVENT_TIME_ORDERING.name()
-      .equals(getStringWithAltKeys(props.asJava.asInstanceOf[util.Map[String, Object]],
+      .equals(getStringWithAltKeys(props.asJava.asInstanceOf[java.util.Map[String, Object]],
         HoodieTableConfig.RECORD_MERGE_MODE))
   }
 

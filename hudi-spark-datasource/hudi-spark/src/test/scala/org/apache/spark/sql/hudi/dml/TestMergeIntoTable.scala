@@ -73,7 +73,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | ) s0
              | on s0.id = $tableName.id
              | when matched and flag = '1' then update set
-             | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts + 1
+             | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
              | when not matched and flag = '1' then insert *
        """.stripMargin)
         validateTableSchema(tableName, structFields)

@@ -25,7 +25,102 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
-  test("Test Spark implicit type casting behaviors") {
+  test("Test Spark successful implicit type casting behaviors") {
+    withRecordType()(withTempDir { tmp =>
+      // Define test cases for successful implicit casting
+      case class TypeCastTestCase(
+          sourceType: String,
+          targetType: String,
+          testValue: String,
+          expectedValue: Any,
+          description: String
+      )
+
+      val successfulTestCases = Seq(
+        // Numeric widening conversions (always safe)
+        TypeCastTestCase("tinyint", "smallint", "127", 127, "tinyint to smallint widening"),
+        TypeCastTestCase("tinyint", "int", "127", 127, "tinyint to int widening"),
+        TypeCastTestCase("tinyint", "bigint", "127", 127L, "tinyint to bigint widening"),
+        TypeCastTestCase("tinyint", "float", "127", 127.0f, "tinyint to float widening"),
+        TypeCastTestCase("tinyint", "double", "127", 127.0d, "tinyint to double widening"),
+        TypeCastTestCase("tinyint", "decimal(10,1)", "127", java.math.BigDecimal.valueOf(127.0), "tinyint to decimal widening"),
+
+        TypeCastTestCase("smallint", "int", "32767", 32767, "smallint to int widening"),
+        TypeCastTestCase("smallint", "bigint", "32767", 32767L, "smallint to bigint widening"),
+        TypeCastTestCase("smallint", "float", "32767", 32767.0f, "smallint to float widening"),
+        TypeCastTestCase("smallint", "double", "32767", 32767.0d, "smallint to double widening"),
+        TypeCastTestCase("smallint", "decimal(10,1)", "32767", java.math.BigDecimal.valueOf(32767.0), "smallint to decimal widening"),
+
+        TypeCastTestCase("int", "bigint", "2147483647", 2147483647L, "int to bigint widening"),
+        TypeCastTestCase("int", "float", "2147483647", 2147483647.0f, "int to float widening"),
+        TypeCastTestCase("int", "double", "2147483647", 2147483647.0d, "int to double widening"),
+        TypeCastTestCase("int", "decimal(10,1)", "22", java.math.BigDecimal.valueOf(22.0), "int to decimal widening"),
+
+        // double value would have some epsilon error which is expected.
+        TypeCastTestCase("float", "double", "3.14", 3.140000104904175d, "float to double widening"),
+        TypeCastTestCase("float", "decimal(10,2)", "3.14", java.math.BigDecimal.valueOf(3.14).setScale(2, java.math.RoundingMode.HALF_UP), "float to decimal"),
+
+        // Numeric narrowing conversions (potential data loss)
+        TypeCastTestCase("double", "int", "123.45", 123, "double to int - truncates decimal"),
+        TypeCastTestCase("decimal(10,2)", "int", "123.45", 123, "decimal to int - truncates decimal"),
+
+        // Boolean conversions
+        TypeCastTestCase("boolean", "string", "true", "true", "boolean to string"),
+
+        // Timestamp/Date conversions
+        TypeCastTestCase("timestamp", "string", "timestamp'2023-01-01 12:00:00'", "2023-01-01 12:00:00", "timestamp to string"),
+        TypeCastTestCase("timestamp", "date", "timestamp'2023-01-01 12:00:00'", java.sql.Date.valueOf("2023-01-01"), "timestamp to date"),
+        TypeCastTestCase("date", "string", "date'2023-01-01'", "2023-01-01", "date to string"),
+        TypeCastTestCase("date", "timestamp", "date'2023-01-01'", java.sql.Timestamp.valueOf("2023-01-01 00:00:00"), "date to timestamp")
+      ).filter(_.expectedValue != null) // Ensure we only test successful cases
+
+      val tableName = generateTableName
+      
+      // Create columns definition dynamically
+      val columnsDefinition = successfulTestCases.zipWithIndex.map { case (test, idx) =>
+        s"col_${idx} ${test.targetType}"
+      }.mkString(",\n  ")
+
+      // Create single table with all target type columns
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  $columnsDefinition,
+           |  ts long
+           |) using hudi
+           |location '${tmp.getCanonicalPath}/$tableName'
+           |tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           |)
+         """.stripMargin)
+
+      // Generate insert values
+      val insertValues = successfulTestCases.zipWithIndex.map { case (test, idx) =>
+        s"cast(${test.testValue} as ${test.sourceType}) as col_${idx}"
+      }.mkString(",\n  ")
+
+      // Insert all test values in one go
+      spark.sql(
+        s"""
+           |insert into $tableName
+           |select 
+           |  1 as id,
+           |  $insertValues,
+           |  1000 as ts
+         """.stripMargin)
+
+      // Verify each column value
+      successfulTestCases.zipWithIndex.foreach { case (test, idx) =>
+        val result = spark.sql(s"select col_${idx} from $tableName where id = 1").collect()(0)(0)
+        assert(result == test.expectedValue,
+          s"${test.description}: Expected ${test.expectedValue} but got $result")
+      }
+    })
+  }
+  
+  test("Test Spark disallowed implicit type casting behaviors") {
     // Capturing the current behavior of Spark's implicit type casting.
     withRecordType()(withTempDir { tmp =>
       // Define test cases for implicit casting
@@ -34,58 +129,26 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                                    targetType: String,
                                    testValue: String, // SQL literal expression
                                    expectedValue: Any,
-                                   shouldSucceed: Boolean,
                                    description: String = ""
                                  )
 
       val testCases = Seq(
-        // Numeric widening conversions (always safe)
-        TypeCastTestCase("tinyint", "smallint", "127", 127, true, "tinyint to smallint widening"),
-        TypeCastTestCase("tinyint", "int", "127", 127, true, "tinyint to int widening"),
-        TypeCastTestCase("tinyint", "bigint", "127", 127L, true, "tinyint to bigint widening"),
-        TypeCastTestCase("tinyint", "float", "127", 127.0f, true, "tinyint to float widening"),
-        TypeCastTestCase("tinyint", "double", "127", 127.0d, true, "tinyint to double widening"),
-        TypeCastTestCase("tinyint", "decimal(10,1)", "127", java.math.BigDecimal.valueOf(127.0), true, "tinyint to decimal widening"),
-
-        TypeCastTestCase("smallint", "int", "32767", 32767, true, "smallint to int widening"),
-        TypeCastTestCase("smallint", "bigint", "32767", 32767L, true, "smallint to bigint widening"),
-        TypeCastTestCase("smallint", "float", "32767", 32767.0f, true, "smallint to float widening"),
-        TypeCastTestCase("smallint", "double", "32767", 32767.0d, true, "smallint to double widening"),
-        TypeCastTestCase("smallint", "decimal(10,1)", "32767", java.math.BigDecimal.valueOf(32767.0), true, "smallint to decimal widening"),
-
-        TypeCastTestCase("int", "bigint", "2147483647", 2147483647L, true, "int to bigint widening"),
-        TypeCastTestCase("int", "float", "2147483647", 2147483647.0f, true, "int to float widening"),
-        TypeCastTestCase("int", "double", "2147483647", 2147483647.0d, true, "int to double widening"),
-        TypeCastTestCase("int", "decimal(10,1)", "22", java.math.BigDecimal.valueOf(22.0), true, "int to decimal widening"),
-        TypeCastTestCase("int", "decimal(10,1)", "2147483647", java.math.BigDecimal.valueOf(2147483647.0), false, "int to decimal widening overflow"),
-
-        // double value would have some epsilon error which is expected.
-        TypeCastTestCase("float", "double", "3.14", 3.140000104904175d, true, "float to double widening"),
-        TypeCastTestCase("float", "decimal(10,2)", "3.14", java.math.BigDecimal.valueOf(3.14).setScale(2, java.math.RoundingMode.HALF_UP), true, "float to decimal"),
+        TypeCastTestCase("int", "decimal(10,1)", "2147483647", java.math.BigDecimal.valueOf(2147483647.0), "int to decimal widening overflow"),
 
         // String conversions
-        TypeCastTestCase("string", "int", "'123'", 123, false, "string to int - invalid numeric string"),
-        TypeCastTestCase("string", "double", "'12.34'", 12.34d, false, "string to double - invalid numeric string"),
-        TypeCastTestCase("string", "double", "'abc'", null, false, "string to double - invalid numeric string"),
-        TypeCastTestCase("string", "boolean", "'abc'", null, false, "string to boolean - invalid boolean string"),
-        TypeCastTestCase("string", "timestamp", "'2023-01-01'", java.sql.Timestamp.valueOf("2023-01-01 00:00:00"), false, "string to timestamp - invalid date string"),
-        TypeCastTestCase("string", "date", "'2023-01-01'", java.sql.Date.valueOf("2023-01-01"), false, "string to date - invalid date string"),
+        TypeCastTestCase("string", "int", "'123'", 123, "string to int - invalid numeric string"),
+        TypeCastTestCase("string", "double", "'12.34'", 12.34d, "string to double - invalid numeric string"),
+        TypeCastTestCase("string", "double", "'abc'", null, "string to double - invalid numeric string"),
+        TypeCastTestCase("string", "boolean", "'abc'", null, "string to boolean - invalid boolean string"),
+        TypeCastTestCase("string", "timestamp", "'2023-01-01'", java.sql.Timestamp.valueOf("2023-01-01 00:00:00"), "string to timestamp - invalid date string"),
+        TypeCastTestCase("string", "date", "'2023-01-01'", java.sql.Date.valueOf("2023-01-01"), "string to date - invalid date string"),
 
         // Numeric narrowing conversions (potential data loss)
-        TypeCastTestCase("double", "int", "123.45", 123, true, "double to int - truncates decimal"),
-        TypeCastTestCase("double", "int", s"${Int.MaxValue.toDouble + 1}", null, false, "double to int - overflow"),
-        TypeCastTestCase("bigint", "int", "2147483648", null, false, "bigint to int - overflow"),
-        TypeCastTestCase("decimal(10,2)", "int", "123.45", 123, true, "decimal to int - truncates decimal"),
+        TypeCastTestCase("double", "int", s"${Int.MaxValue.toDouble + 1}", null, "double to int - overflow"),
+        TypeCastTestCase("bigint", "int", "2147483648", null, "bigint to int - overflow"),
 
         // Boolean conversions
-        TypeCastTestCase("boolean", "int", "true", 1, false, "boolean to int"),
-        TypeCastTestCase("boolean", "string", "true", "true", true, "boolean to string"),
-
-        // Timestamp/Date conversions
-        TypeCastTestCase("timestamp", "string", "timestamp'2023-01-01 12:00:00'", "2023-01-01 12:00:00", true, "timestamp to string"),
-        TypeCastTestCase("timestamp", "date", "timestamp'2023-01-01 12:00:00'", java.sql.Date.valueOf("2023-01-01"), true, "timestamp to date"),
-        TypeCastTestCase("date", "string", "date'2023-01-01'", "2023-01-01", true, "date to string"),
-        TypeCastTestCase("date", "timestamp", "date'2023-01-01'", java.sql.Timestamp.valueOf("2023-01-01 00:00:00"), true, "date to timestamp")
+        TypeCastTestCase("boolean", "int", "true", 1, "boolean to int")
       )
 
       testCases.foreach { testCase =>
@@ -106,34 +169,20 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |)
          """.stripMargin)
 
-        if (testCase.shouldSucceed) {
-          // Test successful conversion
+        // Test failed conversion
+        val exception = intercept[Exception] {
           spark.sql(
             s"""
                |insert into $tableName
                |select 1 as id, cast(${testCase.testValue} as ${testCase.sourceType}) as value, 1000 as ts
            """.stripMargin)
-
-          // Verify the result
-          val result = spark.sql(s"select value from $tableName where id = 1").collect()(0)(0)
-          assert(result == testCase.expectedValue,
-            s"${testCase.description}: Expected ${testCase.expectedValue} but got $result")
-        } else {
-          // Test failed conversion
-          val exception = intercept[Exception] {
-            spark.sql(
-              s"""
-                 |insert into $tableName
-                 |select 1 as id, cast(${testCase.testValue} as ${testCase.sourceType}) as value, 1000 as ts
-             """.stripMargin)
-          }
-
-          val exceptionMsg = exception.getMessage
-          val exceptionCauseMsg = Option(exception.getCause).map(_.getMessage).getOrElse("")
-          assert(isIncompatibleDataException(exception),
-            s"${testCase.description}: Expected casting related error but got different exception: " +
-              s"Message from the exception ${exceptionMsg}, message from the exception cause ${exceptionCauseMsg}")
         }
+
+        val exceptionMsg = exception.getMessage
+        val exceptionCauseMsg = Option(exception.getCause).map(_.getMessage).getOrElse("")
+        assert(isIncompatibleDataException(exception),
+          s"${testCase.description}: Expected casting related error but got different exception: " +
+            s"Message from the exception ${exceptionMsg}, message from the exception cause ${exceptionCauseMsg}")
       }
     })
   }
@@ -518,15 +567,13 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                                      partitionCols: Seq[String],
                                      primaryKey: String,
                                      preCombineField: String,
-                                     mergeAction: String, // UPDATE, INSERT, DELETE
                                      tableType: String, // COW or MOR
                                      expectedErrorPattern: String
                                    )
 
     val testCases = Seq(
-      // UPDATE action cases
       TypeMismatchTestCase(
-        description = "UPDATE: partition column type mismatch",
+        description = "Partition column type mismatch",
         targetSchema = Seq(
           "id" -> "int",
           "name" -> "string",
@@ -542,12 +589,11 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         partitionCols = Seq("name", "price"),
         primaryKey = "id",
         preCombineField = "ts",
-        mergeAction = "UPDATE",
         tableType = "cow",
         expectedErrorPattern = "Partition key data type mismatch between source table and target table. Target table uses StringType for column 'name', source table uses IntegerType for 's0.name'"
       ),
       TypeMismatchTestCase(
-        description = "UPDATE: primary key type mismatch",
+        description = "Primary key type mismatch",
         targetSchema = Seq(
           "id" -> "int",
           "name" -> "string",
@@ -563,12 +609,11 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         partitionCols = Seq("name", "price"),
         primaryKey = "id",
         preCombineField = "ts",
-        mergeAction = "UPDATE",
         tableType = "mor",
         expectedErrorPattern = "Primary key data type mismatch between source table and target table. Target table uses IntegerType for column 'id', source table uses LongType for 's0.id'"
       ),
       TypeMismatchTestCase(
-        description = "UPDATE: precombine field type mismatch",
+        description = "Precombine field type mismatch",
         targetSchema = Seq(
           "id" -> "int",
           "name" -> "string",
@@ -584,73 +629,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         partitionCols = Seq("name", "price"),
         primaryKey = "id",
         preCombineField = "ts",
-        mergeAction = "UPDATE",
         tableType = "cow",
-        expectedErrorPattern = "Precombine field data type mismatch between source table and target table. Target table uses LongType for column 'ts', source table uses IntegerType for 's0.ts'"
-      ),
-
-      // INSERT action cases
-      TypeMismatchTestCase(
-        description = "INSERT: partition column type mismatch",
-        targetSchema = Seq(
-          "id" -> "int",
-          "name" -> "string",
-          "price" -> "int",
-          "ts" -> "long"
-        ),
-        sourceSchema = Seq(
-          "id" -> "int",
-          "name" -> "int", // mismatched type
-          "price" -> "int",
-          "ts" -> "long"
-        ),
-        partitionCols = Seq("name", "price"),
-        primaryKey = "id",
-        preCombineField = "ts",
-        mergeAction = "INSERT",
-        tableType = "mor",
-        expectedErrorPattern = "Partition key data type mismatch between source table and target table. Target table uses StringType for column 'name', source table uses IntegerType for 's0.name'"
-      ),
-      TypeMismatchTestCase(
-        description = "INSERT: primary key type mismatch",
-        targetSchema = Seq(
-          "id" -> "int",
-          "name" -> "string",
-          "price" -> "int",
-          "ts" -> "long"
-        ),
-        sourceSchema = Seq(
-          "id" -> "long", // mismatched type
-          "name" -> "string",
-          "price" -> "int",
-          "ts" -> "long"
-        ),
-        partitionCols = Seq("name", "price"),
-        primaryKey = "id",
-        preCombineField = "ts",
-        mergeAction = "INSERT",
-        tableType = "cow",
-        expectedErrorPattern = "Primary key data type mismatch between source table and target table. Target table uses IntegerType for column 'id', source table uses LongType for 's0.id'"
-      ),
-      TypeMismatchTestCase(
-        description = "INSERT: precombine field type mismatch",
-        targetSchema = Seq(
-          "id" -> "int",
-          "name" -> "string",
-          "price" -> "int",
-          "ts" -> "long"
-        ),
-        sourceSchema = Seq(
-          "id" -> "int",
-          "name" -> "string",
-          "price" -> "int",
-          "ts" -> "int" // mismatched type
-        ),
-        partitionCols = Seq("name", "price"),
-        primaryKey = "id",
-        preCombineField = "ts",
-        mergeAction = "INSERT",
-        tableType = "mor",
         expectedErrorPattern = "Precombine field data type mismatch between source table and target table. Target table uses LongType for column 'ts', source table uses IntegerType for 's0.ts'"
       )
     )
@@ -730,38 +709,37 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
           insertSampleData(targetTable, testCase.targetSchema)
           insertSampleData(sourceTable, testCase.sourceSchema)
 
-          // Construct merge query based on action type
-          val mergeQuery = testCase.mergeAction match {
-            case "UPDATE" =>
-              s"""
-                 |merge into $targetTable t
-                 |using $sourceTable s0
-                 |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
-                 |when matched then update set *
+          // Test UPDATE action
+          val updateQuery =
+            s"""
+               |merge into $targetTable t
+               |using $sourceTable s0
+               |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
+               |when matched then update set *
              """.stripMargin
-            case "INSERT" =>
-              s"""
-                 |merge into $targetTable t
-                 |using $sourceTable s0
-                 |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
-                 |when not matched then insert *
-             """.stripMargin
-            case "DELETE" =>
-              s"""
-                 |merge into $targetTable t
-                 |using $sourceTable s0
-                 |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
-                 |when matched then delete
-             """.stripMargin
-          }
 
-          // Attempt merge operation which should fail with expected error
-          val errorMsg = intercept[AnalysisException] {
-            spark.sql(mergeQuery)
+          val updateError = intercept[AnalysisException] {
+            spark.sql(updateQuery)
           }.getMessage
 
-          assert(errorMsg.contains(testCase.expectedErrorPattern),
-            s"Expected error pattern '${testCase.expectedErrorPattern}' not found in actual error: $errorMsg")
+          assert(updateError.contains(testCase.expectedErrorPattern),
+            s"UPDATE - Expected error pattern '${testCase.expectedErrorPattern}' not found in actual error: $updateError")
+
+          // Test INSERT action
+          val insertQuery =
+            s"""
+               |merge into $targetTable t
+               |using $sourceTable s0
+               |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
+               |when not matched then insert *
+             """.stripMargin
+
+          val insertError = intercept[AnalysisException] {
+            spark.sql(insertQuery)
+          }.getMessage
+
+          assert(insertError.contains(testCase.expectedErrorPattern),
+            s"INSERT - Expected error pattern '${testCase.expectedErrorPattern}' not found in actual error: $insertError")
         })
       }
     }
@@ -866,7 +844,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |  ts long
                |) using hudi
                |location '${tmp.getCanonicalPath}/$sourceTable'
-               |tblproperties (
+               |tblproperties (   
                |  type = 'cow',
                |  primaryKey = 'id',
                |  preCombineField = 'ts'
