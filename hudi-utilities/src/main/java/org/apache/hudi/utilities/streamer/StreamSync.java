@@ -808,7 +808,8 @@ public class StreamSync implements Serializable, Closeable {
       // write to hudi and fetch result
       WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
       Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
-      Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
+      // writeToSink can upgrade table layout version and commitsTimelineOpt computed before will use the old layout version.
+      Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(Option.of(initializeMetaClient().getActiveTimeline().getCommitsTimeline().filterCompletedInstants()));
       // write to error table
       JavaRDD<WriteStatus> dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
       JavaRDD<WriteStatus> writeStatusRDD = dataTableWriteStatusRDD;
@@ -896,6 +897,8 @@ public class StreamSync implements Serializable, Closeable {
       // Send DeltaStreamer Metrics
       metrics.updateStreamerMetrics(overallTimeNanos);
       return Pair.of(scheduledCompactionInstant, dataTableWriteStatusRDD);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to load meta client while writing to sink", e);
     } finally {
       if (!releaseResourcesInvoked) {
         releaseResources(instantTime);
