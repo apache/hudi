@@ -759,11 +759,9 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
      */
     @Override
     public String toString() {
-      StringBuilder sb = new StringBuilder();
-      sb.append(inputSplitShim.toString());
-      sb.append("InputFormatClass: " + inputFormatClassName);
-      sb.append("\n");
-      return sb.toString();
+      return inputSplitShim.toString()
+          + "InputFormatClass: " + inputFormatClassName
+          + "\n";
     }
 
     /**
@@ -829,8 +827,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       if (o instanceof CombinePathInputFormat) {
         CombinePathInputFormat mObj = (CombinePathInputFormat) o;
         return (opList.equals(mObj.opList)) && (inputFormatClassName.equals(mObj.inputFormatClassName))
-            && (deserializerClassName == null ? (mObj.deserializerClassName == null)
-            : deserializerClassName.equals(mObj.deserializerClassName));
+            && (Objects.equals(deserializerClassName, mObj.deserializerClassName));
       }
       return false;
     }

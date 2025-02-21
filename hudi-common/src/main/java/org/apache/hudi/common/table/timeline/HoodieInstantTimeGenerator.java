@@ -48,13 +48,13 @@ public class HoodieInstantTimeGenerator {
   public static final int MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH = MILLIS_INSTANT_TIMESTAMP_FORMAT.length();
   // Formatter to generate Instant timestamps
   // Unfortunately millisecond format is not parsable as is https://bugs.openjdk.java.net/browse/JDK-8031085. hence have to do appendValue()
-  private static DateTimeFormatter MILLIS_INSTANT_TIME_FORMATTER = new DateTimeFormatterBuilder().appendPattern(SECS_INSTANT_TIMESTAMP_FORMAT)
+  private static final DateTimeFormatter MILLIS_INSTANT_TIME_FORMATTER = new DateTimeFormatterBuilder().appendPattern(SECS_INSTANT_TIMESTAMP_FORMAT)
       .appendValue(ChronoField.MILLI_OF_SECOND, 3).toFormatter();
   private static final String MILLIS_GRANULARITY_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
-  private static DateTimeFormatter MILLIS_GRANULARITY_DATE_FORMATTER = DateTimeFormatter.ofPattern(MILLIS_GRANULARITY_DATE_FORMAT);
+  private static final DateTimeFormatter MILLIS_GRANULARITY_DATE_FORMATTER = DateTimeFormatter.ofPattern(MILLIS_GRANULARITY_DATE_FORMAT);
 
   // The last Instant timestamp generated
-  private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
+  private static final AtomicReference<String> LAST_INSTANT_TIME = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
 
   // The default number of milliseconds that we add if they are not present
   // We prefer the max timestamp as it mimics the current behavior with second granularity
@@ -72,7 +72,7 @@ public class HoodieInstantTimeGenerator {
    * @param milliseconds  Milliseconds to add to current time while generating the new instant time
    */
   public static String createNewInstantTime(boolean shouldLock, TimeGenerator timeGenerator, long milliseconds) {
-    return lastInstantTime.updateAndGet((oldVal) -> {
+    return LAST_INSTANT_TIME.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {
         Date d = new Date(timeGenerator.generateTime(!shouldLock) + milliseconds);
@@ -157,7 +157,7 @@ public class HoodieInstantTimeGenerator {
 
   @VisibleForTesting
   public static String getLastInstantTime() {
-    return lastInstantTime.get();
+    return LAST_INSTANT_TIME.get();
   }
 
   /**

@@ -36,11 +36,11 @@ import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.avro.Schema;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,11 +61,11 @@ public class InternalSchemaCache {
   private static final Logger LOG = LoggerFactory.getLogger(InternalSchemaCache.class);
   // Use segment lock to reduce competition.
   // the lock size should be powers of 2 for better hash.
-  private static Object[] lockList = new Object[16];
+  private static final Object[] LOCK_LIST = new Object[16];
 
   static {
-    for (int i = 0; i < lockList.length; i++) {
-      lockList[i] = new Object();
+    for (int i = 0; i < LOCK_LIST.length; i++) {
+      LOCK_LIST[i] = new Object();
     }
   }
 
@@ -90,7 +90,7 @@ public class InternalSchemaCache {
     }
     String tablePath = metaClient.getBasePath().toString();
     // use segment lock to reduce competition.
-    synchronized (lockList[tablePath.hashCode() & (lockList.length - 1)]) {
+    synchronized (LOCK_LIST[tablePath.hashCode() & (LOCK_LIST.length - 1)]) {
       TreeMap<Long, InternalSchema> historicalSchemas = HISTORICAL_SCHEMA_CACHE.getIfPresent(tablePath);
       if (historicalSchemas == null || InternalSchemaUtils.searchSchema(versionID, historicalSchemas) == null) {
         historicalSchemas = getHistoricalSchemas(metaClient);

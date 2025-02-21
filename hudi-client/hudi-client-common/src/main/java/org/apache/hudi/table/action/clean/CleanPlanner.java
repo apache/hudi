@@ -89,7 +89,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingLogCompactionOperations;
   private final HoodieTable<T, I, K, O> hoodieTable;
   private final HoodieWriteConfig config;
-  private transient HoodieEngineContext context;
+  private final transient HoodieEngineContext context;
   private final List<String> savepointedTimestamps;
   private Option<HoodieInstant> earliestCommitToRetain = Option.empty();
 
@@ -233,10 +233,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     // check for any savepointed removed in latest compared to previous saved list
     List<String> removedSavepointedTimestamps = new ArrayList<>(savepointedTimestampsFromLastClean);
     removedSavepointedTimestamps.removeAll(savepointedTimestamps);
-    if (removedSavepointedTimestamps.isEmpty()) {
-      return false;
-    }
-    return true;
+    return !removedSavepointedTimestamps.isEmpty();
   }
 
   /**

@@ -93,7 +93,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
 
-  private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams = new ConcurrentHashMap<>();
   private FileSystem fileSystem;
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
@@ -1008,7 +1008,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
     }
     // When the file is first written, we do not have a track of it
     throw new IllegalArgumentException(
-        file.toString() + " does not have a open stream. Cannot get the bytes written on the stream");
+        file + " does not have a open stream. Cannot get the bytes written on the stream");
   }
 
   public FileSystem getFileSystem() {
