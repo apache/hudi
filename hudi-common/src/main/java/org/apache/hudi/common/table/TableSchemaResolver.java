@@ -265,8 +265,9 @@ public class TableSchemaResolver {
             return Option.empty();
           }
         default:
-          LOG.error("Unknown table type {}", metaClient.getTableType());
-          throw new InvalidTableException(metaClient.getBasePath().toString());
+          String errMsg = String.format("Unknown table type %s", metaClient.getTableType());
+          LOG.error(errMsg);
+          throw new InvalidTableException(metaClient.getBasePath().toString(), errMsg);
       }
     } catch (IOException e) {
       throw new HoodieException("Failed to read data schema", e);
