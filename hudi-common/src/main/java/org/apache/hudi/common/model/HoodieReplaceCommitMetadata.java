@@ -54,12 +54,6 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
     partitionToReplaceFileIds = new HashMap<>();
   }
 
-  @VisibleForTesting
-  public HoodieReplaceCommitMetadata(HoodieCommitMetadata metadata) {
-    super(metadata);
-    partitionToReplaceFileIds = new HashMap<>();
-  }
-
   public void setPartitionToReplaceFileIds(Map<String, List<String>> partitionToReplaceFileIds) {
     this.partitionToReplaceFileIds = partitionToReplaceFileIds;
   }

@@ -115,11 +115,13 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_EVOLVED_1;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_EVOLVED_2;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
+import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
 import static org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -274,6 +276,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     Properties properties = new Properties();
     properties.setProperty(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key(), String.valueOf(0));
     properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    properties.setProperty(ENABLE_SCHEMA_CONFLICT_RESOLUTION.key(), "true");
 
     HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder(TRIP_EXAMPLE_SCHEMA)
         .withHeartbeatIntervalInMs(60 * 1000)
@@ -332,18 +335,16 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     startSchemaEvolutionTransaction(metaClient, client3, nextCommitTime31, tableType);
 
     Properties props = new TypedProperties();
-    props.setProperty("hoodie.datasource.write.row.writer.enable", "false");
-    HoodieWriteConfig clusterWriteCfg = writeConfigBuilder
-        .withProperties(props)
+    HoodieWriteConfig tableServiceWriteCfg = tableType.equals(MERGE_ON_READ) ?
+        writeConfigBuilder.withProperties(props)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withInlineCompaction(true)
-            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build()).build()
+        : writeConfigBuilder.withProperties(props)
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
-            .withInlineClustering(true)
             .withInlineClusteringNumCommits(1)
             .build())
         .build();
-    SparkRDDWriteClient tableServiceClient = getHoodieWriteClient(clusterWriteCfg);
+    SparkRDDWriteClient tableServiceClient = getHoodieWriteClient(tableServiceWriteCfg);
     final String tableServiceCommit32 = "0032";
     // schedule clustering (COW) or compaction (MOR)
     Option<String> tableServiceInstant = Option.empty();
@@ -1333,7 +1334,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.setOperationType(WriteOperationType.UPSERT);
     client.createMetaClient(true).getActiveTimeline().transitionRequestedToInflight(
-        requested, Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+        requested, serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), metadata));
   }
 
   private void createCommitWithUpserts(HoodieWriteConfig cfg, SparkRDDWriteClient client, String prevCommit,

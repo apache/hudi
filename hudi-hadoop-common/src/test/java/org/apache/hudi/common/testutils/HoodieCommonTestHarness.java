@@ -160,11 +160,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected void initMetaClient(boolean preTableVersion8) throws IOException {
-    if (basePath == null) {
-      initPath();
-    }
-    metaClient = HoodieTestUtils.init(basePath, getTableType(), "", false, null, "datestr",
-        preTableVersion8 ? Option.of(HoodieTableVersion.SIX) : Option.of(HoodieTableVersion.current()));
+    initMetaClient(preTableVersion8, getTableType());
   }
 
   protected void initMetaClient(boolean preTableVersion8, HoodieTableType tableType) throws IOException {

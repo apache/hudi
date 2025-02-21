@@ -300,7 +300,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
     Option<Schema> schema;
     try {
-      schema = new TableSchemaGetter(table.getMetaClient()).getTableAvroSchemaIfPresent(false);
+      schema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchemaIfPresent(false);
     } catch (Exception ex) {
       throw new RuntimeException(ex);
     }

@@ -70,14 +70,6 @@ public class HoodieCommitMetadata implements Serializable {
     this.compacted = compacted;
   }
 
-  @VisibleForTesting
-  public HoodieCommitMetadata(HoodieCommitMetadata metadata) {
-    extraMetadata = metadata.getExtraMetadata();
-    partitionToWriteStats = metadata.getPartitionToWriteStats();
-    compacted = metadata.getCompacted();
-    operationType = metadata.getOperationType();
-  }
-
   public void addWriteStat(String partitionPath, HoodieWriteStat stat) {
     if (!partitionToWriteStats.containsKey(partitionPath)) {
       partitionToWriteStats.put(partitionPath, new ArrayList<>());

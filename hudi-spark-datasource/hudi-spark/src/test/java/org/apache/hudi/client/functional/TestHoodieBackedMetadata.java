@@ -3829,7 +3829,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * TODO: Fix this and increase test coverage to include clustering via row writers
    * @return
    */
-  public static Properties getDisabledRowWriterProperties() {
+  private static Properties getDisabledRowWriterProperties() {
     Properties properties = new Properties();
     properties.setProperty("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
     return properties;

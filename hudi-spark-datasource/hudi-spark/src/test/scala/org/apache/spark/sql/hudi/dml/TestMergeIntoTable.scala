@@ -1295,6 +1295,140 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     })
   }
 
+  test("Test partial insert with inline clustering") {
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      val tableType = "mor"
+      val logDataBlockFormat = "parquet"
+      withSparkSqlSessionConfig(
+        HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
+        DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "true",
+        HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logDataBlockFormat,
+        HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> "true",
+        HoodieClusteringConfig.INLINE_CLUSTERING.key -> "true",
+        HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "2",
+        HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key -> "id,price") {
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |   id int,
+             |   name string,
+             |   price long,
+             |   ts long,
+             |   description string
+             | ) using hudi
+             | tblproperties(
+             |   type ='$tableType',
+             |   primaryKey = 'id',
+             |   preCombineField = 'ts'
+             | )
+             | location '$basePath'
+            """.stripMargin)
+        spark.sql(s"insert into $tableName values " +
+          "(1, 'a1', 10, 1000, 'a1: desc1')," +
+          "(2, 'a2', 20, 1200, 'a2: desc2'), " +
+          "(3, 'a3', 30.0, 1250, 'a3: desc3')")
+
+        // Partial updates using MERGE INTO statement with changed fields: "price" and "ts"
+        spark.sql(
+          s"""
+             | merge into $tableName t0
+             | using (
+             |   select 1 as id, 'a1' as name1, 12 as price, 1001 as _ts
+             | union
+             |   select 3 as id, 'a3' as name1, 25 as price, 1260 as _ts
+             |   ) s0
+             | on t0.id = s0.id
+             | when matched then update set price = s0.price, ts = s0._ts
+          """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, description from $tableName order by id")(
+          Seq(1, "a1", 12, 1001, "a1: desc1"),
+          Seq(2, "a2", 20, 1200, "a2: desc2"),
+          Seq(3, "a3", 25, 1260, "a3: desc3")
+        )
+        assert(createMetaClient(spark, basePath).getActiveTimeline.lastInstant().get().getAction.equals(
+          HoodieTimeline.REPLACE_COMMIT_ACTION))
+      }
+    })
+  }
+
+  test("Test Merge Into with target matched columns cast-ed") {
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  value int,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+      // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
+      val errorMsg = "Invalid MERGE INTO matching condition: s0.id: can't cast s0.id (of LongType) to IntegerType"
+
+      checkExceptionContain(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as long) as id, 1001 as ts
+           | ) s0
+           | on cast(h0.id as long) = s0.id
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)(errorMsg)
+
+      // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
+      checkExceptionContain(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as long) as id, 1002 as ts
+           | ) s0
+           | on h0.id = s0.id
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)(errorMsg)
+
+      // Can up-cast incoming dataset's primary-key w/o loss of precision (should succeed)
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as short) as id, 1003 as ts
+           | ) s0
+           | on h0.id = s0.id
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, value, ts from $tableName")(
+        Seq(1, "a1", 10, 1003)
+      )
+
+      // Can remove redundant symmetrical casting on both sides (should succeed)
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select cast(1 as int) as id, 1004 as ts
+           | ) s0
+           | on cast(h0.id as string) = cast(s0.id as string)
+           | when matched then update set h0.ts = s0.ts
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, value, ts from $tableName")(
+        Seq(1, "a1", 10, 1004)
+      )
+    })
+  }
+
   test("Test Merge Into with target matched columns cast-ed") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
