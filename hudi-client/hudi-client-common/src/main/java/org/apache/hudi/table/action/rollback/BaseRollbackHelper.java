@@ -132,13 +132,11 @@ public class BaseRollbackHelper implements Serializable {
         rollbackStats.forEach(entry -> partitionToRollbackStats.add(Pair.of(entry.getPartitionPath(), entry)));
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
-        HoodieLogFormat.Writer writer = null;
         final StoragePath filePath;
-        try {
-          String fileId = rollbackRequest.getFileId();
-          HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
+        String fileId = rollbackRequest.getFileId();
+        HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
 
-          writer = HoodieLogFormat.newWriterBuilder()
+        try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
               .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
               .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
@@ -147,8 +145,7 @@ public class BaseRollbackHelper implements Serializable {
                   )
               .withStorage(metaClient.getStorage())
               .withTableVersion(tableVersion)
-              .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
-
+              .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();) {
           // generate metadata
           if (doDelete) {
             Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.requestedTime());
@@ -160,14 +157,6 @@ public class BaseRollbackHelper implements Serializable {
           }
         } catch (IOException | InterruptedException io) {
           throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);
-        } finally {
-          try {
-            if (writer != null) {
-              writer.close();
-            }
-          } catch (IOException io) {
-            throw new HoodieIOException("Error appending rollback block", io);
-          }
         }
 
         // This step is intentionally done after writer is closed. Guarantees that

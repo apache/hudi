@@ -35,17 +35,17 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
 
   private final PushGatewayReporter pushGatewayReporter;
   private final int periodSeconds;
-  private final boolean deleteShutdown;
   private final String configuredJobName;
   private final Map<String, String> configuredLabels;
   private final boolean randomSuffix;
+  private final Random random = new Random();
 
   public PushGatewayMetricsReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
 
     String serverHost = metricsConfig.getPushGatewayHost();
     int serverPort = metricsConfig.getPushGatewayPort();
     periodSeconds = metricsConfig.getPushGatewayReportPeriodSeconds();
-    deleteShutdown = metricsConfig.getPushGatewayDeleteOnShutdown();
+    boolean deleteShutdown = metricsConfig.getPushGatewayDeleteOnShutdown();
     configuredJobName = metricsConfig.getPushGatewayJobName();
     configuredLabels = Collections.unmodifiableMap(parseLabels(metricsConfig.getPushGatewayLabels()));
     randomSuffix = metricsConfig.getPushGatewayRandomJobNameSuffix();
@@ -83,7 +83,6 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
 
   private String getJobName() {
     if (randomSuffix) {
-      Random random = new Random();
       return configuredJobName + random.nextLong();
     }
     return configuredJobName;
