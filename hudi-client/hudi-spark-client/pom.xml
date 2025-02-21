@@ -93,6 +93,12 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
+    <!-- Used for adding kryo serializers for protobuf -->
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>chill-protobuf</artifactId>
+    </dependency>
+
     <!-- Hoodie - Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>

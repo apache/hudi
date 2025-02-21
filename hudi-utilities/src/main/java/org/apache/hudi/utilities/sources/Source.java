@@ -71,7 +71,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
 
   private final SourceType sourceType;
   private final StorageLevel storageLevel;
-  private final boolean persistRdd;
+  protected final boolean persistRdd;
   private Either<Dataset<Row>, JavaRDD<?>> cachedSourceRdd = null;
 
   protected Source(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -196,7 +196,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
 
   private synchronized void persist(T data) {
     boolean isSparkRdd = data.getClass().isAssignableFrom(Dataset.class) || data.getClass().isAssignableFrom(JavaRDD.class);
-    if (persistRdd && isSparkRdd) {
+    if (allowSourcePersist() && isSparkRdd) {
       if (data.getClass().isAssignableFrom(Dataset.class)) {
         Dataset<Row> df = (Dataset<Row>) data;
         cachedSourceRdd = Either.left(df);
@@ -207,6 +207,10 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
         javaRDD.persist(storageLevel);
       }
     }
+  }
+
+  protected boolean allowSourcePersist() {
+    return persistRdd;
   }
 
   @Override

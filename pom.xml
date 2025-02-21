@@ -208,6 +208,7 @@
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
     <trino.bundle.bootstrap.scope>compile</trino.bundle.bootstrap.scope>
     <trino.bundle.bootstrap.shade.prefix>org.apache.hudi.</trino.bundle.bootstrap.shade.prefix>
+    <twitter.chill.version>0.10.0</twitter.chill.version>
     <shadeSources>true</shadeSources>
     <zk-curator.version>2.7.1</zk-curator.version>
     <disruptor.version>3.4.2</disruptor.version>
@@ -1752,6 +1753,13 @@
         <artifactId>kryo</artifactId>
         <version>4.0.0</version>
         <scope>test</scope>
+      </dependency>
+
+      <!-- Used for adding kryo serializers for protobuf -->
+      <dependency>
+        <groupId>com.twitter</groupId>
+        <artifactId>chill-protobuf</artifactId>
+        <version>${twitter.chill.version}</version>
       </dependency>
 
       <!-- Other Utils -->
