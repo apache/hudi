@@ -168,11 +168,6 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   }
 
   @Override
-  protected void validateClusteringCommit(HoodieWriteMetadata<List<WriteStatus>> clusteringMetadata, String clusteringCommitTime, HoodieTable table) {
-    throw new UnsupportedOperationException("Clustering is not supported yet.");
-  }
-
-  @Override
   protected HoodieWriteMetadata<List<WriteStatus>> convertToOutputMetadata(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
     return writeMetadata;
   }

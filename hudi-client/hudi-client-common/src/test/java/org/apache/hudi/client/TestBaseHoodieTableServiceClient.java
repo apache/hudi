@@ -248,11 +248,6 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     }
 
     @Override
-    protected void validateClusteringCommit(HoodieWriteMetadata<String> clusteringMetadata, String clusteringCommitTime, HoodieTable table) {
-
-    }
-
-    @Override
     protected HoodieWriteMetadata<String> convertToOutputMetadata(HoodieWriteMetadata<String> writeMetadata) {
       return null;
     }
