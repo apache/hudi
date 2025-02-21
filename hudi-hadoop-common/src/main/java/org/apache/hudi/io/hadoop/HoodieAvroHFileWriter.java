@@ -103,7 +103,6 @@ public class HoodieAvroHFileWriter
     StoragePath filePath = new StoragePath(this.file.toUri());
     OutputStream outputStream =  HoodieStorageUtils.getStorage(filePath, storageConf).create(filePath);
     this.writer = new HFileWriterImpl(context, outputStream);
-
     this.prevRecordKey = "";
     writer.appendFileInfo(
         HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(schema.toString()));
@@ -147,10 +146,9 @@ public class HoodieAvroHFileWriter
       }
     }
     if (!isRecordSerialized) {
-      value = HoodieAvroUtils.avroToBytes((GenericRecord) record);
+      value = HoodieAvroUtils.avroToBytes(record);
     }
     writer.append(recordKey, value);
-
     if (hfileConfig.useBloomFilter()) {
       hfileConfig.getBloomFilter().add(recordKey);
       if (minRecordKey == null) {
