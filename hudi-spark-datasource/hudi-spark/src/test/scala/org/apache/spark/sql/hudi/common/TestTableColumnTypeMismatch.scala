@@ -75,7 +75,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
       ).filter(_.expectedValue != null) // Ensure we only test successful cases
 
       val tableName = generateTableName
-      
+
       // Create columns definition dynamically
       val columnsDefinition = successfulTestCases.zipWithIndex.map { case (test, idx) =>
         s"col_${idx} ${test.targetType}"
@@ -105,7 +105,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
       spark.sql(
         s"""
            |insert into $tableName
-           |select 
+           |select
            |  1 as id,
            |  $insertValues,
            |  1000 as ts
@@ -119,7 +119,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
       }
     })
   }
-  
+
   test("Test Spark disallowed implicit type casting behaviors") {
     // Capturing the current behavior of Spark's implicit type casting.
     withRecordType()(withTempDir { tmp =>
@@ -844,7 +844,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |  ts long
                |) using hudi
                |location '${tmp.getCanonicalPath}/$sourceTable'
-               |tblproperties (   
+               |tblproperties (
                |  type = 'cow',
                |  primaryKey = 'id',
                |  preCombineField = 'ts'

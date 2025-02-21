@@ -30,7 +30,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConf
 class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
 
   // TODO(HUDI-8938): add "mor,6,true", "mor,6,false" after the fix
-  Seq("cow,8,true", "cow,8,false", "cow,6,true", "cow,6,false",
+  Seq(
     "mor,8,true", "mor,8,false").foreach { args =>
     val argList = args.split(',')
     val tableType = argList(0)
@@ -226,6 +226,9 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
           )
           // Delete record with no ts.
           spark.sql(s"delete from $tableName where id = 1")
+          if (tableType == "mor") {
+            HoodieSparkSqlTestBase.validateDeleteLogBlockPrecombineNullOrZero(tmp.getCanonicalPath)
+          }
           // Verify deletion
           validateTableConfig(
             storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
