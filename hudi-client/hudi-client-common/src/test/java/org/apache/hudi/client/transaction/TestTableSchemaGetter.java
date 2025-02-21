@@ -64,6 +64,9 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
@@ -71,7 +74,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -95,6 +97,19 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
       + "  ]\n"
       + "}";
 
+  private static final String SCHEMA_WITHOUT_METADATA_STR2 = "{\n"
+      + "  \"namespace\": \"example.avro\",\n"
+      + "  \"type\": \"record\",\n"
+      + "  \"name\": \"User\",\n"
+      + "  \"fields\": [\n"
+      + "    {\"name\": \"timestamp\", \"type\": \"long\"},\n"
+      + "    {\"name\": \"_row_key\", \"type\": \"string\"},\n"
+      + "    {\"name\": \"rider\", \"type\": \"string\"},\n"
+      + "    {\"name\": \"rider2\", \"type\": \"string\"},\n"
+      + "    {\"name\": \"driver\", \"type\": \"string\"}\n"
+      + "  ]\n"
+      + "}";
+
   private static final String SCHEMA_WITH_PARTITION_COLUMN_STR = "{\n"
       + "  \"namespace\": \"example.avro\",\n"
       + "  \"type\": \"record\",\n"
@@ -107,6 +122,7 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
       + "    {\"name\":\"partitionColumn\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null}"
       + "  ]\n"
       + "}";
+  private static Schema SCHEMA_WITHOUT_METADATA2 = new Schema.Parser().parse(SCHEMA_WITHOUT_METADATA_STR2);
   private static Schema SCHEMA_WITHOUT_METADATA = new Schema.Parser().parse(SCHEMA_WITHOUT_METADATA_STR);
   private static Schema SCHEMA_WITH_METADATA = addMetadataFields(SCHEMA_WITHOUT_METADATA, false);
   private static Schema SCHEMA_WITH_PARTITION_COLUMN = new Schema.Parser().parse(SCHEMA_WITH_PARTITION_COLUMN_STR);
@@ -193,6 +209,44 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
               SCHEMA_WITH_METADATA.toString(),
               REPLACE_COMMIT_ACTION)));
     }
+
+    metaClient.reloadActiveTimeline();
+
+    TableSchemaGetter resolver = new TableSchemaGetter(metaClient);
+    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(false);
+    assertTrue(schemaOption.isPresent());
+    assertEquals(SCHEMA_WITHOUT_METADATA, schemaOption.get());
+  }
+
+  @Test
+  void testGetTableSchemaFromLatestCommitMetadata() throws Exception {
+    HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
+    initMetaClient(false, HoodieTableType.MERGE_ON_READ);
+    testTable = HoodieTestTable.of(metaClient);
+
+    String commitTime1 = "001";
+    String commitTime2 = "002";
+    // 001 |------------------| s1
+    // 002    |------| s2
+    // We should use completion time based ordering and get s2.
+    createRequestedDeltaCommit(metaClient, commitTime1);
+    createInflightDeltaCommit(metaClient, commitTime1);
+
+    testTable.addDeltaCommit(commitTime2, buildMetadata(
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        Option.empty(),
+        WriteOperationType.UNKNOWN,
+        SCHEMA_WITHOUT_METADATA2.toString(),
+        DELTA_COMMIT_ACTION));
+
+    createDeltaCommit(metaClient, metaClient.getCommitMetadataSerDe(), commitTime1, buildMetadata(
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        Option.empty(),
+        WriteOperationType.UNKNOWN,
+        SCHEMA_WITH_METADATA.toString(),
+        DELTA_COMMIT_ACTION));
 
     metaClient.reloadActiveTimeline();
 

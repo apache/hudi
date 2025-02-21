@@ -82,7 +82,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -335,8 +334,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     startSchemaEvolutionTransaction(metaClient, client3, nextCommitTime31, tableType);
 
     Properties props = new TypedProperties();
-    HoodieWriteConfig tableServiceWriteCfg = tableType.equals(MERGE_ON_READ) ?
-        writeConfigBuilder.withProperties(props)
+    HoodieWriteConfig tableServiceWriteCfg = tableType.equals(MERGE_ON_READ)
+        ? writeConfigBuilder.withProperties(props)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1).build()).build()
         : writeConfigBuilder.withProperties(props)
