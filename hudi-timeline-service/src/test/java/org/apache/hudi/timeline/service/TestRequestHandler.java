@@ -29,6 +29,8 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.timeline.TimelineServiceClient;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +45,9 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_MARKER_
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.BASEPATH_PARAM;
+import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.LAST_INSTANT_TS;
+import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.REFRESH_TABLE_URL;
+import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.TIMELINE_HASH;
 import static org.apache.hudi.timeline.TimelineServiceClientBase.RequestMethod.POST;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,6 +56,9 @@ class TestRequestHandler extends HoodieCommonTestHarness {
   public static final char SEPARATOR_CHAR = '/';
   private static final String DEFAULT_FILE_SCHEME = "file:/";
   private static final String DELIMITER_CHAR = ":";
+
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
+
   private TimelineService server = null;
   private TimelineServiceClient timelineServiceClient;
 
@@ -87,6 +95,23 @@ class TestRequestHandler extends HoodieCommonTestHarness {
   @AfterEach
   void tearDown() {
     server.close();
+  }
+
+  @Test
+  void refreshTableAPI() throws IOException {
+    assertRefreshTable(tempDir.resolve("base-path-1").toUri().toString(), "test1:/");
+    assertRefreshTable(tempDir.resolve("base-path-2").toUri().toString(), "test2:/");
+  }
+
+  private void assertRefreshTable(String basePath, String scheme) throws IOException {
+    Map<String, String> queryParameters = new HashMap<>();
+    queryParameters.put(BASEPATH_PARAM, getPathWithReplacedSchema(basePath, scheme));
+    metaClient.getActiveTimeline().lastInstant().ifPresent(instant -> queryParameters.put(LAST_INSTANT_TS, instant.requestedTime()));
+    queryParameters.put(TIMELINE_HASH, metaClient.getActiveTimeline().getTimelineHash());
+    boolean content = timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(POST, REFRESH_TABLE_URL).addQueryParams(queryParameters).build())
+        .getDecodedContent(new TypeReference<Boolean>() {});
+    assertTrue(content);
   }
 
   @Test

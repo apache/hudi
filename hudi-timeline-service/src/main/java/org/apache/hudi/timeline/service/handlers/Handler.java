@@ -37,7 +37,7 @@ public abstract class Handler {
     this.viewManager = viewManager;
   }
 
-  public HoodieStorage getStorage(String path) {
+  protected HoodieStorage getStorage(String path) {
     return HoodieStorageUtils.getStorage(path, conf);
   }
 }
