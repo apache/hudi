@@ -27,6 +27,14 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
 
+/**
+ * A mock implementation of {@link HoodieHadoopStorage} that validates the storage scheme and authority
+ * before delegating operations to the superclass.
+ * <p>
+ * This class is primarily used for testing and ensures that all storage operations conform
+ * to the expected scheme and authority.
+ * </p>
+ */
 public class MockHoodieHadoopStorage extends HoodieHadoopStorage {
 
   private final String scheme;

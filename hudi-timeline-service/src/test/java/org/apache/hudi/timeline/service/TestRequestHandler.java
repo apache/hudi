@@ -30,8 +30,6 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.TimelineServiceClient;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -96,7 +94,7 @@ class TestRequestHandler extends HoodieCommonTestHarness {
   }
 
   @Test
-  void refreshTableAPI() throws IOException {
+  void testRefreshTableAPIWithDifferentSchemes() throws IOException {
     assertRefreshTable(tempDir.resolve("base-path-1").toUri().toString(), "test1:/");
     assertRefreshTable(tempDir.resolve("base-path-2").toUri().toString(), "test2:/");
   }
@@ -113,7 +111,7 @@ class TestRequestHandler extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testCreateMarkerAPI() throws IOException {
+  void testCreateMarkerAPIWithDifferentSchemes() throws IOException {
     assertMarkerCreation(tempDir.resolve("base-path-1").toUri().toString(), "test1:/", "marker-file-1");
     assertMarkerCreation(tempDir.resolve("base-path-2").toUri().toString(), "test2:/", "marker-file-2");
   }
