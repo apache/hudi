@@ -21,6 +21,7 @@ package org.apache.hudi.timeline.service;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -112,18 +113,19 @@ class TestRequestHandler extends HoodieCommonTestHarness {
 
   @Test
   void testCreateMarkerAPIWithDifferentSchemes() throws IOException {
-    assertMarkerCreation(tempDir.resolve("base-path-1").toUri().toString(), "test1:/", "marker-file-1");
-    assertMarkerCreation(tempDir.resolve("base-path-2").toUri().toString(), "test2:/", "marker-file-2");
+    assertMarkerCreation(tempDir.resolve("base-path-1").toUri().toString(), "test1:/");
+    assertMarkerCreation(tempDir.resolve("base-path-2").toUri().toString(), "test2:/");
   }
 
-  private void assertMarkerCreation(String basePath, String schema, String markerFile) throws IOException {
+  private void assertMarkerCreation(String basePath, String schema) throws IOException {
     Map<String, String> queryParameters = new HashMap<>();
     String basePathScheme = getPathWithReplacedSchema(basePath, schema);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, getTableType());
     String markerDir = getPathWithReplacedSchema(metaClient.getMarkerFolderPath("101"), schema);
 
     queryParameters.put(BASEPATH_PARAM, basePathScheme);
     queryParameters.put(MARKER_DIR_PATH_PARAM, markerDir);
-    queryParameters.put(MARKER_NAME_PARAM, markerFile);
+    queryParameters.put(MARKER_NAME_PARAM, "marker-file-1");
 
     boolean content = timelineServiceClient.makeRequest(
             TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL)
