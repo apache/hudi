@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.TimelineServiceClient;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -55,9 +56,6 @@ class TestRequestHandler extends HoodieCommonTestHarness {
 
   public static final char SEPARATOR_CHAR = '/';
   private static final String DEFAULT_FILE_SCHEME = "file:/";
-  private static final String DELIMITER_CHAR = ":";
-
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
 
   private TimelineService server = null;
   private TimelineServiceClient timelineServiceClient;
@@ -66,19 +64,19 @@ class TestRequestHandler extends HoodieCommonTestHarness {
   void setUp() throws IOException {
     metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString());
     basePath = metaClient.getBasePath().toString();
+    Configuration configuration = new Configuration();
+    configuration.set(HOODIE_STORAGE_CLASS.key(), MockHoodieHadoopStorage.class.getName());
     FileSystemViewStorageConfig sConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
-    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(configuration));
 
     try {
       if (server != null) {
         server.close();
       }
       TimelineServiceTestHarness.Builder builder = TimelineServiceTestHarness.newBuilder();
-      Configuration configuration = new Configuration();
-      configuration.set(HOODIE_STORAGE_CLASS.key(), MockHoodieHadoopStorage.class.getName());
       server = builder.build(localEngineContext, configuration,
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
           FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
@@ -142,7 +140,7 @@ class TestRequestHandler extends HoodieCommonTestHarness {
     if (path.startsWith(DEFAULT_FILE_SCHEME)) {
       return path.replace(DEFAULT_FILE_SCHEME, schemaToUse);
     } else if (path.startsWith(String.valueOf(SEPARATOR_CHAR))) {
-      return schemaToUse + DELIMITER_CHAR + path;
+      return schemaToUse + SEPARATOR_CHAR + path;
     }
     throw new IllegalArgumentException("Invalid file provided");
   }
