@@ -30,7 +30,6 @@
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
-        <connect.api.version>2.5.0</connect.api.version>
     </properties>
 
     <build>
