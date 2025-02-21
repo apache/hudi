@@ -319,6 +319,27 @@ public class ConfigUtils {
   }
 
   /**
+   * Gets the raw value for a {@link ConfigProperty<T>} config from properties with the option
+   * of using default value.
+   *
+   * @param props           Configs in {@link Properties}.
+   * @param configProperty  {@link ConfigProperty} config to fetch.
+   * @param useDefaultValue If enabled, uses default value for configProperty.
+   * @return raw value of the config.
+   * @param <T> type of the value.
+   */
+  public static <T> T getRawValueWithAltKeys(TypedProperties props, ConfigProperty<T> configProperty, boolean useDefaultValue) {
+    Option<T> rawValue = (Option<T>) getRawValueWithAltKeys(props, configProperty);
+    if (rawValue.isPresent()) {
+      return rawValue.get();
+    }
+    if (useDefaultValue) {
+      return configProperty.defaultValue();
+    }
+    throw new IllegalArgumentException("Property " + configProperty.key() + " not found");
+  }
+
+  /**
    * Gets the String value for a {@link ConfigProperty} config from properties. The key and
    * alternative keys are used to fetch the config. If the config is not found, an
    * {@link IllegalArgumentException} is thrown.
