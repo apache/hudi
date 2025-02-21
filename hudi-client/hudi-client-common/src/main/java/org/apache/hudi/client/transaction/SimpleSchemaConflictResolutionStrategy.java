@@ -18,8 +18,8 @@
 
 package org.apache.hudi.client.transaction;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.avro.AvroSchemaComparatorForSchemaEvolution;
-import org.apache.hudi.client.utils.TableSchemaGetter;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
@@ -27,8 +27,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,7 +80,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
     // schema and writer schema.
     HoodieInstant lastCompletedInstantAtTxnStart = lastCompletedTxnOwnerInstant.isPresent()
         ? getInstantInTimelineImmediatelyPriorToTimestamp(
-            lastCompletedTxnOwnerInstant.get().requestedTime(), schemaResolver.computeSchemaEvolutionTimelineInReverseOrder()).orElse(null)
+        lastCompletedTxnOwnerInstant.get().requestedTime(), schemaResolver.computeSchemaEvolutionTimelineInReverseOrder()).orElse(null)
         : null;
     // If lastCompletedInstantAtTxnValidation is null there are 2 possibilities:
     // - No committed txn at validation starts

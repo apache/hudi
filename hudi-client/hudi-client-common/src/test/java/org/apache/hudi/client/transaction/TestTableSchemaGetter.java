@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -535,7 +536,7 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
     metaClient.reloadActiveTimeline();
 
     // Create spy of TableSchemaGetter to track method calls
-    TableSchemaGetter resolver = spy(new TableSchemaGetter(metaClient));
+    TableSchemaGetter resolver = Mockito.spy(new TableSchemaGetter(metaClient));
     HoodieInstant instant2 = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
     HoodieInstant instant1 = metaClient.getCommitsTimeline().filterCompletedInstants().nthInstant(0).get();
 

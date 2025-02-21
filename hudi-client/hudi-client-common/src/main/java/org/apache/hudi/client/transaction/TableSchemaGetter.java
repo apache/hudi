@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.client.transaction;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
@@ -62,7 +62,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * Helper class to read table schema.
  */
-public class TableSchemaGetter {
+class TableSchemaGetter {
 
   private static final Logger LOG = LoggerFactory.getLogger(TableSchemaGetter.class);
 
@@ -333,8 +333,8 @@ public class TableSchemaGetter {
 
     // We only care committed instant when it comes to table schema.
     TimelineLayout timelineLayout = metaClient.getTimelineLayout();
-    // Should we use completion time based?
-    Comparator<HoodieInstant> reversedComparator = timelineLayout.getInstantComparator().requestedTimeOrderedComparator().reversed();
+    // Table schema getter is completion time based ordering.
+    Comparator<HoodieInstant> reversedComparator = timelineLayout.getInstantComparator().completionTimeOrderedComparator().reversed();
 
     // The timeline still contains DELTA_COMMIT_ACTION/COMMIT_ACTION which might not contain a valid schema
     // field in their commit metadata.
