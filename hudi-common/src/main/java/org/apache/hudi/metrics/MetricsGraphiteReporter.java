@@ -39,8 +39,8 @@ public class MetricsGraphiteReporter extends MetricsReporter {
   private final MetricRegistry registry;
   private final GraphiteReporter graphiteReporter;
   private final HoodieMetricsConfig metricsConfig;
-  private String serverHost;
-  private int serverPort;
+  private final String serverHost;
+  private final int serverPort;
   private final int periodSeconds;
 
   public MetricsGraphiteReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {

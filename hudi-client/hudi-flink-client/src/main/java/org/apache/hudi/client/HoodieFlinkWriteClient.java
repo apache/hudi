@@ -460,7 +460,7 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   public HoodieFlinkTable<T> getHoodieTable() {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
+    return HoodieFlinkTable.create(config, context);
   }
 
   public Map<String, List<String>> getPartitionToReplacedFileIds(

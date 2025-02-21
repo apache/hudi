@@ -112,8 +112,8 @@ public class HoodieMetrics {
   private String conflictResolutionFailureCounterName = null;
   private String compactionRequestedCounterName = null;
   private String compactionCompletedCounterName = null;
-  private HoodieWriteConfig config;
-  private String tableName;
+  private final HoodieWriteConfig config;
+  private final String tableName;
   private Timer rollbackTimer = null;
   private Timer cleanTimer = null;
   private Timer archiveTimer = null;

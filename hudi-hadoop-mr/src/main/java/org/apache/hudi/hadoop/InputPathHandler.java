@@ -60,7 +60,7 @@ public class InputPathHandler {
   private final Map<HoodieTableMetaClient, List<Path>> groupedIncrementalPaths;
   private final List<Path> snapshotPaths;
   private final List<Path> nonHoodieInputPaths;
-  private boolean isIncrementalUseDatabase;
+  private final boolean isIncrementalUseDatabase;
 
   public InputPathHandler(Configuration conf, Path[] inputPaths, List<String> incrementalTables) throws IOException {
     this.conf = conf;

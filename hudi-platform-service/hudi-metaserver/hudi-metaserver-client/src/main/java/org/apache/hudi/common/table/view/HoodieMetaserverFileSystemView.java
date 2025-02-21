@@ -31,10 +31,10 @@ import org.apache.hudi.metaserver.client.HoodieMetaserverClientProxy;
  * is specifically for hoodie table whose metadata is stored in the hoodie metaserver.
  */
 public class HoodieMetaserverFileSystemView extends HoodieTableFileSystemView {
-  private String databaseName;
-  private String tableName;
+  private final String databaseName;
+  private final String tableName;
 
-  private HoodieMetaserverClient metaserverClient;
+  private final HoodieMetaserverClient metaserverClient;
 
   public HoodieMetaserverFileSystemView(HoodieTableMetaClient metaClient,
                                         HoodieTimeline visibleActiveTimeline, HoodieMetaserverConfig config) {

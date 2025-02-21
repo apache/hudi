@@ -456,8 +456,7 @@ public class ConfigUtils {
   public static boolean getBooleanWithAltKeys(Properties props,
                                               ConfigProperty<?> configProperty) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);
-    boolean defaultValue = configProperty.hasDefaultValue()
-        ? Boolean.parseBoolean(configProperty.defaultValue().toString()) : false;
+    boolean defaultValue = configProperty.hasDefaultValue() && Boolean.parseBoolean(configProperty.defaultValue().toString());
     return rawValue.map(v -> Boolean.parseBoolean(v.toString())).orElse(defaultValue);
   }
 
