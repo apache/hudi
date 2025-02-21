@@ -68,7 +68,7 @@ Hudi supports migrating your existing large tables into a Hudi table using the `
 ### INSERT_OVERWRITE
 **Type**: _Batch_, **Action**: _REPLACE_COMMIT (CoW + MoR)_
 
-This operation is used to rerwrite the all the partitions that are present in the input. This operation can be faster 
+This operation is used to rewrite the all the partitions that are present in the input. This operation can be faster 
 than `upsert` for batch ETL jobs, that are recomputing entire target partitions at once (as opposed to incrementally 
 updating the target tables). This is because, we are able to bypass indexing, precombining and other repartitioning 
 steps in the upsert write path completely. This comes in handy if you are doing any backfill or any such type of use-cases.
