@@ -42,6 +42,7 @@ public interface ArchivedTimelineLoader extends Serializable {
   void loadInstants(
       HoodieTableMetaClient metaClient,
       @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+      HoodieArchivedTimeline.LogFileFilter logFileFilter,
       HoodieArchivedTimeline.LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter,
       BiConsumer<String, GenericRecord> recordConsumer);

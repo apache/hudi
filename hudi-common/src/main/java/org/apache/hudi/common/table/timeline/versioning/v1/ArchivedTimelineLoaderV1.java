@@ -68,6 +68,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
   @Override
   public void loadInstants(HoodieTableMetaClient metaClient,
                                           @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                                          @Nullable HoodieArchivedTimeline.LogFileFilter logFileFilter,
                                           HoodieArchivedTimeline.LoadMode loadMode,
                                           Function<GenericRecord, Boolean> commitsFilter,
                                           BiConsumer<String, GenericRecord> recordConsumer) {
@@ -81,6 +82,9 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
       entryList.sort(new ArchiveFileVersionComparator());
 
       for (StoragePathInfo fs : entryList) {
+        if (logFileFilter != null && !logFileFilter.shouldLoadFile(fs)) {
+          continue;
+        }
         // Read the archived file
         try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getStorage(),
             new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
@@ -99,8 +103,10 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                     .filter(commitsFilter::apply)
                     .forEach(r -> {
                       String instantTime = r.get(HoodieTableMetaClient.COMMIT_TIME_KEY).toString();
-                      instantsInRange.add(instantTime);
-                      recordConsumer.accept(instantTime, r);
+                      if (filter == null || filter.isInRange(instantTime)) {
+                        instantsInRange.add(instantTime);
+                        recordConsumer.accept(instantTime, r);
+                      }
                     });
               }
             }

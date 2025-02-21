@@ -233,7 +233,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
       Function<GenericRecord, Boolean> commitsFilter) {
     Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
     Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
-    timelineLoader.loadInstants(metaClient, filter, loadMode, commitsFilter,
+    timelineLoader.loadInstants(metaClient, filter, null, loadMode, commitsFilter,
         (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)));
     List<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
     Collections.sort(result);
