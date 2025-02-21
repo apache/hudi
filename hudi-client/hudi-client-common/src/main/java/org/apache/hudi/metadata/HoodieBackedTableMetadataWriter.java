@@ -65,6 +65,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
@@ -301,7 +302,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           LOG.info("Re-initiating metadata table properties since populate meta fields have changed");
           metadataMetaClient = initializeMetaClient();
         }
-      } catch (TableNotFoundException e) {
+      } catch (TableNotFoundException | InvalidTableException e) {
         return false;
       }
       final Option<HoodieInstant> latestMetadataInstant =
