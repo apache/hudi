@@ -622,3 +622,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-16319][HUDI-8955] Resolve Kafka beginning offsets with retention to prevent OffsetOutOfRange exception (#1159)
 [ENG-11493][INTERNAL] code clean up for managed lock provider (#1210)
 [AUDIT-1176]: Changelog for release-v1.91.0 (#1202)
+
+--- [2025-02-21 16:03:57] [release-v1.93.0] ---
+[ENG-22489][INTERNAL] Tweaking logging for LP based on usage in staging (#1216)
+[AUDIT-1071]: Changelog for release-v1.92.0 (#1212)
