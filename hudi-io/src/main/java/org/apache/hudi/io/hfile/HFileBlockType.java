@@ -168,4 +168,8 @@ public enum HFileBlockType {
           + new String(magic) + ", got " + new String(buf));
     }
   }
+
+  public byte[] getMagic() {
+    return magic;
+  }
 }
