@@ -24,7 +24,7 @@
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <artifactId>hudi-spark${sparkbundle.version}-bundle_${scala.binary.version}</artifactId>
-  <version>0.15.0-heap-fork</version>
+  <version>${heapfork.label}-${heapfork.version}</version>
   <packaging>jar</packaging>
 
   <properties>
