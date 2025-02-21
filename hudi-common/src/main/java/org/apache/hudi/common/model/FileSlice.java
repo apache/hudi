@@ -162,13 +162,11 @@ public class FileSlice implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("FileSlice {");
-    sb.append("fileGroupId=").append(fileGroupId);
-    sb.append(", baseCommitTime=").append(baseInstantTime);
-    sb.append(", baseFile='").append(baseFile).append('\'');
-    sb.append(", logFiles='").append(logFiles).append('\'');
-    sb.append('}');
-    return sb.toString();
+    return "FileSlice {" + "fileGroupId=" + fileGroupId
+        + ", baseCommitTime=" + baseInstantTime
+        + ", baseFile='" + baseFile + '\''
+        + ", logFiles='" + logFiles + '\''
+        + '}';
   }
 
   @Override

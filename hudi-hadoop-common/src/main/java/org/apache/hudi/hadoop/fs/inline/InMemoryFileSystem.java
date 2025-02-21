@@ -29,7 +29,6 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.util.Progressable;
 
 import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -102,7 +101,7 @@ public class InMemoryFileSystem extends FileSystem {
   }
 
   @Override
-  public FileStatus[] listStatus(Path inlinePath) throws FileNotFoundException, IOException {
+  public FileStatus[] listStatus(Path inlinePath) throws IOException {
     throw new UnsupportedOperationException("No support for listStatus");
   }
 

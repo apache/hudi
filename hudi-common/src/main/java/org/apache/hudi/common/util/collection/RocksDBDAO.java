@@ -82,7 +82,7 @@ public class RocksDBDAO {
 
   public RocksDBDAO(String basePath, String rocksDBBasePath, Map<String, CustomSerializer<?>> columnFamilySerializers) {
     this.rocksDBBasePath =
-        String.format("%s/%s/%s", rocksDBBasePath, URI.create(basePath).getPath().replace(":","").replace("/", "_"), UUID.randomUUID().toString());
+        String.format("%s/%s/%s", rocksDBBasePath, URI.create(basePath).getPath().replace(":","").replace("/", "_"), UUID.randomUUID());
     this.columnFamilySerializers = columnFamilySerializers;
     init();
     totalBytesWritten = 0L;

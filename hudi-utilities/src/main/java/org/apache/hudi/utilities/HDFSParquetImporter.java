@@ -64,8 +64,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import scala.Tuple2;
-
 /**
  * Loads data from Parquet Sources.
  *
@@ -185,7 +183,7 @@ public class HDFSParquetImporter implements Serializable {
             job.getConfiguration())
         // To reduce large number of tasks.
         .coalesce(16 * cfg.parallelism).map(entry -> {
-          GenericRecord genericRecord = ((Tuple2<Void, GenericRecord>) entry)._2();
+          GenericRecord genericRecord = ((scala.Tuple2<Void, GenericRecord>) entry)._2();
           Object partitionField = genericRecord.get(cfg.partitionKey);
           if (partitionField == null) {
             throw new HoodieIOException("partition key is missing. :" + cfg.partitionKey);

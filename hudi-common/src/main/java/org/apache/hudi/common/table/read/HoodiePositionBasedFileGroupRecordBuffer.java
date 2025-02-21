@@ -275,13 +275,8 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     }
 
     // When the record key matches with one of the keys or key prefixes, can not skip.
-    if ((isFullKey && keys.contains(recordKey))
-        || (!isFullKey && keys.stream().anyMatch(recordKey::startsWith))) {
-      return false;
-    }
-
-    // Otherwise, this record is not needed.
-    return true;
+    return (!isFullKey || !keys.contains(recordKey))
+        && (isFullKey || keys.stream().noneMatch(recordKey::startsWith));
   }
 
   /**

@@ -53,7 +53,7 @@ public class HoodieCleaner {
   /**
    * Bag of properties with source, hoodie client, key generator etc.
    */
-  private TypedProperties props;
+  private final TypedProperties props;
 
   public HoodieCleaner(Config cfg, JavaSparkContext jssc) {
     this(cfg, jssc, UtilHelpers.buildProperties(jssc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs));

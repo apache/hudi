@@ -48,7 +48,7 @@ public class HoodieTTLJob {
   private final Config cfg;
   private final TypedProperties props;
   private final JavaSparkContext jsc;
-  private HoodieTableMetaClient metaClient;
+  private final HoodieTableMetaClient metaClient;
 
   public HoodieTTLJob(JavaSparkContext jsc, Config cfg) {
     this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs),
