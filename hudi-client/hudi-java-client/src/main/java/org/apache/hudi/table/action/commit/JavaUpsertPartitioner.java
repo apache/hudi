@@ -67,19 +67,19 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
   /**
    * Stat for the input and output workload. Describe the workload before and after being assigned buckets.
    */
-  private WorkloadProfile workloadProfile;
+  private final WorkloadProfile workloadProfile;
   /**
    * Helps decide which bucket an incoming update should go to.
    */
-  private HashMap<String, Integer> updateLocationToBucket;
+  private final HashMap<String, Integer> updateLocationToBucket;
   /**
    * Helps us pack inserts into 1 or more buckets depending on number of incoming records.
    */
-  private HashMap<String, List<InsertBucketCumulativeWeightPair>> partitionPathToInsertBucketInfos;
+  private final HashMap<String, List<InsertBucketCumulativeWeightPair>> partitionPathToInsertBucketInfos;
   /**
    * Remembers what type each bucket is for later.
    */
-  private HashMap<Integer, BucketInfo> bucketInfoMap;
+  private final HashMap<Integer, BucketInfo> bucketInfoMap;
 
   protected final HoodieTable table;
 

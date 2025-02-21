@@ -96,7 +96,7 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
   private String getFieldFromJsonOrFail(String field) throws IOException {
     JsonNode node = new ObjectMapper().readTree(getJsonData());
     if (!node.has(field)) {
-      throw new HoodieException("Field :" + field + " not found in payload => " + node.toString());
+      throw new HoodieException("Field :" + field + " not found in payload => " + node);
     }
     return node.get(field).textValue();
   }

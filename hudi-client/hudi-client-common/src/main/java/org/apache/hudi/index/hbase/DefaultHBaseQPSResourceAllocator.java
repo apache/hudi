@@ -24,7 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class DefaultHBaseQPSResourceAllocator implements HBaseIndexQPSResourceAllocator {
-  private HoodieWriteConfig hoodieWriteConfig;
+  private final HoodieWriteConfig hoodieWriteConfig;
   private static final Logger LOG = LoggerFactory.getLogger(DefaultHBaseQPSResourceAllocator.class);
 
   public DefaultHBaseQPSResourceAllocator(HoodieWriteConfig hoodieWriteConfig) {

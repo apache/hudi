@@ -43,7 +43,7 @@ public class AsyncTimelineServerBasedDetectionStrategy extends TimelineServerBas
 
   private static final Logger LOG = LoggerFactory.getLogger(AsyncTimelineServerBasedDetectionStrategy.class);
 
-  private AtomicBoolean hasConflict = new AtomicBoolean(false);
+  private final AtomicBoolean hasConflict = new AtomicBoolean(false);
   private ScheduledExecutorService asyncDetectorExecutor;
 
   public AsyncTimelineServerBasedDetectionStrategy(String basePath, String markerDir, String markerName, Boolean checkCommitConflict) {

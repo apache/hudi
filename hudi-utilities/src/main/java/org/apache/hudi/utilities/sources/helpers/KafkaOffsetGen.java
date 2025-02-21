@@ -104,12 +104,10 @@ public class KafkaOffsetGen {
     public static String offsetsToStr(OffsetRange[] ranges) {
       // merge the ranges by partition to maintain one offset range map to one topic partition.
       ranges = mergeRangesByTopicPartition(ranges);
-      StringBuilder sb = new StringBuilder();
       // at least 1 partition will be present.
-      sb.append(ranges[0].topic() + ",");
-      sb.append(Arrays.stream(ranges).map(r -> String.format("%s:%d", r.partition(), r.untilOffset()))
-              .collect(Collectors.joining(",")));
-      return sb.toString();
+      return ranges[0].topic() + ","
+          + Arrays.stream(ranges).map(r -> String.format("%s:%d", r.partition(), r.untilOffset()))
+              .collect(Collectors.joining(","));
     }
 
     /**

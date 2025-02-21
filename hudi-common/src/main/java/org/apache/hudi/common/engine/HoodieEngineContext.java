@@ -47,7 +47,7 @@ public abstract class HoodieEngineContext {
   /**
    * A wrapped hadoop configuration which can be serialized.
    */
-  private StorageConfiguration<?> storageConf;
+  private final StorageConfiguration<?> storageConf;
 
   protected TaskContextSupplier taskContextSupplier;
 

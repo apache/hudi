@@ -44,9 +44,9 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFileg
  */
 public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
-  private static final transient Logger LOG = LoggerFactory.getLogger(HoodieCombineRealtimeRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCombineRealtimeRecordReader.class);
   // RecordReaders for each split
-  private List<RecordReader> recordReaders = new LinkedList<>();
+  private final List<RecordReader> recordReaders = new LinkedList<>();
   // Points to the currently iterating record reader
   private RecordReader currentRecordReader;
 

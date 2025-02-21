@@ -73,7 +73,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   @Nullable
   private final Configuration hadoopConfig;
 
-  private StoragePath mainFilePath;
+  private final StoragePath mainFilePath;
 
   // props read from user defined configuration file or input stream
   private final HoodieConfig hoodieConfig;

@@ -55,9 +55,9 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient {
   private final long retryDelayMs;
   private boolean isConnected;
   private boolean isLocal;
-  private ThriftHoodieMetaserver.Iface client;
+  private final ThriftHoodieMetaserver.Iface client;
   private TTransport transport;
-  private DefaultInstantGenerator instantGenerator = new DefaultInstantGenerator();
+  private final DefaultInstantGenerator instantGenerator = new DefaultInstantGenerator();
 
   public HoodieMetaserverClientImp(HoodieMetaserverConfig config) {
     this.config = config;

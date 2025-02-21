@@ -76,7 +76,7 @@ public abstract class AbstractRealtimeRecordReader {
   protected boolean supportPayload;
   // handle hive type to avro record
   protected HiveAvroSerializer serializer;
-  private boolean supportTimestamp;
+  private final boolean supportTimestamp;
 
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;

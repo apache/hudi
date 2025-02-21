@@ -182,7 +182,7 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
 
   public static class Builder {
 
-    private HoodieMetricsPrometheusConfig hoodieMetricsPrometheusConfig = new HoodieMetricsPrometheusConfig();
+    private final HoodieMetricsPrometheusConfig hoodieMetricsPrometheusConfig = new HoodieMetricsPrometheusConfig();
 
     public Builder fromProperties(Properties props) {
       this.hoodieMetricsPrometheusConfig.getProps().putAll(props);

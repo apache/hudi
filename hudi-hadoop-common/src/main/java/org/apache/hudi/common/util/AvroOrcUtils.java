@@ -147,13 +147,13 @@ public class AvroOrcUtils {
           final Utf8 utf8 = (Utf8) value;
           bytes = utf8.getBytes();
         } else if (value instanceof GenericData.EnumSymbol) {
-          bytes = getUTF8Bytes(((GenericData.EnumSymbol) value).toString());
+          bytes = getUTF8Bytes(value.toString());
         } else {
           throw new IllegalStateException(String.format(
               "Unrecognized type for Avro %s field value, which has type %s, value %s",
               type.getCategory().getName(),
               value.getClass().getName(),
-              value.toString()
+              value
           ));
         }
 
@@ -177,7 +177,7 @@ public class AvroOrcUtils {
           throw new IllegalStateException(String.format(
               "Unrecognized type for Avro DATE field value, which has type %s, value %s",
               value.getClass().getName(),
-              value.toString()
+              value
           ));
         }
         dateColVec.vector[vectorPos] = daysSinceEpoch;
@@ -209,7 +209,7 @@ public class AvroOrcUtils {
           throw new IllegalStateException(String.format(
               "Unrecognized type for Avro TIMESTAMP field value, which has type %s, value %s",
               value.getClass().getName(),
-              value.toString()
+              value
           ));
         }
 
@@ -231,7 +231,7 @@ public class AvroOrcUtils {
           throw new IllegalStateException(String.format(
               "Unrecognized type for Avro BINARY field value, which has type %s, value %s",
               value.getClass().getName(),
-              value.toString()
+              value
           ));
         }
         binaryColVec.setRef(vectorPos, binaryBytes, 0, binaryBytes.length);
@@ -338,13 +338,13 @@ public class AvroOrcUtils {
           throw new IllegalStateException(String.format(
               "Failed to add value %s to union with type %s",
               value == null ? "null" : value.toString(),
-              type.toString()
+              type
           ));
         }
 
         break;
       default:
-        throw new IllegalArgumentException("Invalid TypeDescription " + type.toString() + ".");
+        throw new IllegalArgumentException("Invalid TypeDescription " + type + ".");
     }
   }
 
@@ -598,7 +598,7 @@ public class AvroOrcUtils {
         ColumnVector fieldVector = unionVector.fields[tag];
         return readFromVector(type.getChildren().get(tag), fieldVector, avroSchema.getTypes().get(tag), vectorPos);
       default:
-        throw new HoodieIOException("Unrecognized TypeDescription " + type.toString());
+        throw new HoodieIOException("Unrecognized TypeDescription " + type);
     }
   }
 
@@ -811,7 +811,7 @@ public class AvroOrcUtils {
       if (nullable) {
         fields.add(new Schema.Field(field.name(), nullableSchema, null, NULL_VALUE));
       } else {
-        fields.add(new Schema.Field(field.name(), fieldSchema, null, (Object) null));
+        fields.add(new Schema.Field(field.name(), fieldSchema, null, null));
       }
     }
     Schema schema = Schema.createRecord(recordName, null, null, false);

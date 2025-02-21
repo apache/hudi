@@ -30,9 +30,9 @@ import java.util.concurrent.atomic.AtomicLong;
 public class SizeAwareDataOutputStream {
 
   // Actual outputStream
-  private DataOutputStream outputStream;
+  private final DataOutputStream outputStream;
   // Counter to keep track of number of bytes written
-  private AtomicLong size;
+  private final AtomicLong size;
 
   public SizeAwareDataOutputStream(FileOutputStream fileOutputStream, int cacheSize) {
     this.outputStream = new DataOutputStream(new BufferedOutputStream(fileOutputStream, cacheSize));

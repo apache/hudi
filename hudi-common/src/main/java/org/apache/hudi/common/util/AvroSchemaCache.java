@@ -36,8 +36,8 @@ import java.util.Map;
 @NotThreadSafe
 public class AvroSchemaCache implements Closeable {
   private static final Logger LOG = LoggerFactory.getLogger(AvroSchemaCache.class);
-  private Map<Integer, Schema> versionIdToSchema; // the mapping from version_id -> schema
-  private Map<Schema, Integer> schemaToVersionId; // the mapping from schema -> version_id
+  private final Map<Integer, Schema> versionIdToSchema; // the mapping from version_id -> schema
+  private final Map<Schema, Integer> schemaToVersionId; // the mapping from schema -> version_id
 
   private int nextVersionId = 0;
 

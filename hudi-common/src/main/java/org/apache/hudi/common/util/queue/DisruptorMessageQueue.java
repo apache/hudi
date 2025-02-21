@@ -48,7 +48,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   private final Disruptor<HoodieDisruptorEvent> queue;
   private final Function<I, O> transformFunction;
   private final RingBuffer<HoodieDisruptorEvent> ringBuffer;
-  private AtomicReference<Throwable> throwable = new AtomicReference<>(null);
+  private final AtomicReference<Throwable> throwable = new AtomicReference<>(null);
 
   private boolean isShutdown = false;
   private boolean isStarted = false;

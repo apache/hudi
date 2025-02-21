@@ -33,7 +33,7 @@ public class FileStatusUtils {
 
     return new StoragePathInfo(
         new StoragePath(fileStatus.getPath().getUri()), fileStatus.getLength(),
-        fileStatus.getIsDir() == null ? false : fileStatus.getIsDir(),
+        fileStatus.getIsDir() != null && fileStatus.getIsDir(),
         fileStatus.getBlockReplication().shortValue(), fileStatus.getBlockSize(), fileStatus.getModificationTime());
   }
 }

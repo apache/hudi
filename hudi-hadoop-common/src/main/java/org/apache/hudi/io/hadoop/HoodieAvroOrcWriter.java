@@ -68,7 +68,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
 
-  private HoodieOrcConfig orcConfig;
+  private final HoodieOrcConfig orcConfig;
   private String minRecordKey;
   private String maxRecordKey;
 

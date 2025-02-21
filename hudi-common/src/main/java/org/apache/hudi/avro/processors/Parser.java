@@ -46,7 +46,7 @@ public abstract class Parser {
 
   public static class DateParser extends Parser {
 
-    private static long MILLI_SECONDS_PER_DAY = 86400000;
+    private static final long MILLI_SECONDS_PER_DAY = 86400000;
 
     @Override
     public Pair<Boolean, Object> handleNumberValue(Number value) {

@@ -18,10 +18,12 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
+import org.apache.avro.generic.GenericRecord;
+
 import javax.annotation.Nullable;
+
 import java.io.Serializable;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -37,7 +39,7 @@ public interface ArchivedTimelineLoader extends Serializable {
    * @param commitsFilter  Filter of the instant type.
    * @param recordConsumer Consumer of the instant record payload.
    */
-  public void loadInstants(
+  void loadInstants(
       HoodieTableMetaClient metaClient,
       @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
       HoodieArchivedTimeline.LoadMode loadMode,

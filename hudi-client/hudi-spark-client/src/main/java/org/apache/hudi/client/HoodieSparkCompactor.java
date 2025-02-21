@@ -35,7 +35,7 @@ import java.util.List;
 public class HoodieSparkCompactor<T> extends BaseCompactor<T,
     JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkCompactor.class);
-  private transient HoodieEngineContext context;
+  private final transient HoodieEngineContext context;
 
   public HoodieSparkCompactor(BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> compactionClient,
                               HoodieEngineContext context) {

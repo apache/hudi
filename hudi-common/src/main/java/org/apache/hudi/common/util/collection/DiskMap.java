@@ -49,7 +49,7 @@ public abstract class DiskMap<T extends Serializable, R> implements Map<T, R>, K
 
   public DiskMap(String basePath, String prefix) throws IOException {
     this.diskMapPath =
-        String.format("%s/%s-%s-%s", basePath, SUBFOLDER_PREFIX, prefix, UUID.randomUUID().toString());
+        String.format("%s/%s-%s-%s", basePath, SUBFOLDER_PREFIX, prefix, UUID.randomUUID());
     diskMapPathFile = new File(diskMapPath);
     FileIOUtils.deleteDirectory(diskMapPathFile);
     FileIOUtils.mkdir(diskMapPathFile);

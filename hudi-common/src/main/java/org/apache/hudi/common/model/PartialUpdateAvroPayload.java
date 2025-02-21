@@ -216,7 +216,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       return Option.empty();
     }
 
-    return Option.of((IndexedRecord) HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 
   /**

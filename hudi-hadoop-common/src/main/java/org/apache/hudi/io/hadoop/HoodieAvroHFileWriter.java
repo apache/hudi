@@ -64,7 +64,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  */
 public class HoodieAvroHFileWriter
     implements HoodieAvroFileWriter {
-  private static AtomicLong recordIndex = new AtomicLong(1);
+  private static final AtomicLong RECORD_INDEX_COUNT = new AtomicLong(1);
   private final Path file;
   private final HoodieHFileConfig hfileConfig;
   private final boolean isWrapperFileSystem;
@@ -127,7 +127,7 @@ public class HoodieAvroHFileWriter
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(key, avroRecord, instantTime,
-          taskContextSupplier.getPartitionIdSupplier().get(), recordIndex.getAndIncrement(), file.getName());
+          taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX_COUNT.getAndIncrement(), file.getName());
       writeAvro(key.getRecordKey(), avroRecord);
     } else {
       writeAvro(key.getRecordKey(), avroRecord);

@@ -28,14 +28,14 @@ import java.io.IOException;
  */
 public class HoodieWriteCommitCallbackUtil {
 
-  private static ObjectMapper mapper = new ObjectMapper();
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   /**
    * Convert data to json string format.
    */
   public static String convertToJsonString(Object obj) {
     try {
-      return mapper.writeValueAsString(obj);
+      return MAPPER.writeValueAsString(obj);
     } catch (IOException e) {
       throw new HoodieCommitCallbackException("Callback service convert data to json failed", e);
     }

@@ -33,9 +33,9 @@ public class WorkloadStat implements Serializable {
 
   private long numUpdates = 0L;
 
-  private HashMap<String, Pair<String, Long>> insertLocationToCount;
+  private final HashMap<String, Pair<String, Long>> insertLocationToCount;
 
-  private HashMap<String, Pair<String, Long>> updateLocationToCount;
+  private final HashMap<String, Pair<String, Long>> updateLocationToCount;
 
   public WorkloadStat() {
     insertLocationToCount = new HashMap<>();
@@ -86,10 +86,8 @@ public class WorkloadStat implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("WorkloadStat {");
-    sb.append("numInserts=").append(numInserts).append(", ");
-    sb.append("numUpdates=").append(numUpdates);
-    sb.append('}');
-    return sb.toString();
+    return "WorkloadStat {" + "numInserts=" + numInserts + ", "
+        + "numUpdates=" + numUpdates
+        + '}';
   }
 }

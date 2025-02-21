@@ -39,28 +39,28 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * Return Valid extensions expected in active timeline.
    * @return
    */
-  public Set<String> getValidExtensionsInActiveTimeline();
+  Set<String> getValidExtensionsInActiveTimeline();
 
   /**
    * Create a complete instant and save to storage with a completion time.
    * @param instant the complete instant.
    */
-  public void createCompleteInstant(HoodieInstant instant);
+  void createCompleteInstant(HoodieInstant instant);
 
   /**
    * Create a pending instant and save to storage.
    * @param instant the pending instant.
    */
-  public void createNewInstant(HoodieInstant instant);
+  void createNewInstant(HoodieInstant instant);
 
-  public void createRequestedCommitWithReplaceMetadata(String instantTime, String actionType);
+  void createRequestedCommitWithReplaceMetadata(String instantTime, String actionType);
 
   /**
    * Save Completed instant in active timeline.
    * @param instant Instant to be saved.
    * @param data Metadata to be written in the instant file.
    */
-  public void saveAsComplete(HoodieInstant instant, Option<byte[]> data);
+  void saveAsComplete(HoodieInstant instant, Option<byte[]> data);
 
   /**
    * Save Completed instant in active timeline.
@@ -68,80 +68,80 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param instant Instant to be saved.
    * @param data Metadata to be written in the instant file.
    */
-  public void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<byte[]> data);
+  void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<byte[]> data);
 
   /**
    * Delete Compaction requested instant file from timeline.
    * @param instant Instant to be deleted.
    */
-  public HoodieInstant revertToInflight(HoodieInstant instant);
+  HoodieInstant revertToInflight(HoodieInstant instant);
 
   /**
    * Delete inflight instant file from timeline.
    * @param instant Instant to be deleted.
    */
-  public void deleteInflight(HoodieInstant instant);
+  void deleteInflight(HoodieInstant instant);
 
   /**
    * Delete pending instant file from timeline.
    * @param instant Instant to be deleted.
    */
-  public void deletePending(HoodieInstant instant);
+  void deletePending(HoodieInstant instant);
 
   /**
    * Delete completed rollback instant file from timeline.
    * @param instant Instant to be deleted.
    */
-  public void deleteCompletedRollback(HoodieInstant instant);
+  void deleteCompletedRollback(HoodieInstant instant);
 
   /**
    * Delete empty instant file from timeline.
    * @param instant Instant to be deleted.
    */
-  public void deleteEmptyInstantIfExists(HoodieInstant instant);
+  void deleteEmptyInstantIfExists(HoodieInstant instant);
 
   /**
    * Delete Compaction requested instant file from timeline.
    * @param instant Instant to be deleted.
    */
-  public void deleteCompactionRequested(HoodieInstant instant);
+  void deleteCompactionRequested(HoodieInstant instant);
 
   /**
    * Note: This method should only be used in the case that delete requested/inflight instant or empty clean instant,
    * and completed commit instant in an archive operation.
    */
-  public void deleteInstantFileIfExists(HoodieInstant instant);
+  void deleteInstantFileIfExists(HoodieInstant instant);
 
   /**
    * Returns most recent instant having valid schema in its {@link HoodieCommitMetadata}
    */
-  public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidSchema();
+  Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidSchema();
 
   /**
    * Get the last instant with valid data, and convert this to HoodieCommitMetadata
    */
-  public Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidData();
+  Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLastCommitMetadataWithValidData();
 
   /**
    * Read cleaner Info from instant file.
    * @param instant Instant to read from.
    * @return
    */
-  public Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant);
+  Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant);
 
   /**
    * Read rollback info from instant file.
    * @param instant Instant to read from.
    * @return
    */
-  public Option<byte[]> readRollbackInfoAsBytes(HoodieInstant instant);
+  Option<byte[]> readRollbackInfoAsBytes(HoodieInstant instant);
 
   /**
    * Read Restore info from instant file.
    * @param instant Instant to read from.
    * @return
    */
-  public Option<byte[]> readRestoreInfoAsBytes(HoodieInstant instant);
+  Option<byte[]> readRestoreInfoAsBytes(HoodieInstant instant);
 
   //-----------------------------------------------------------------
   //      BEGIN - COMPACTION RELATED META-DATA MANAGEMENT.
@@ -152,14 +152,14 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param instant Instant to read from.
    * @return
    */
-  public Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant);
+  Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant);
 
   /**
    * Read Index Plan from instant file.
    * @param instant Instant to read from.
    * @return
    */
-  public Option<byte[]> readIndexPlanAsBytes(HoodieInstant instant);
+  Option<byte[]> readIndexPlanAsBytes(HoodieInstant instant);
 
   /**
    * Revert instant state from inflight to requested.
@@ -167,7 +167,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param inflightInstant Inflight Instant
    * @return requested instant
    */
-  public HoodieInstant revertInstantFromInflightToRequested(HoodieInstant inflightInstant);
+  HoodieInstant revertInstantFromInflightToRequested(HoodieInstant inflightInstant);
 
   /**
    * TODO: This method is not needed, since log compaction plan is not a immutable plan.
@@ -176,7 +176,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param inflightInstant Inflight Instant
    * @return requested instant
    */
-  public HoodieInstant revertLogCompactionInflightToRequested(HoodieInstant inflightInstant);
+  HoodieInstant revertLogCompactionInflightToRequested(HoodieInstant inflightInstant);
 
   /**
    * Transition Compaction State from requested to inflight.
@@ -184,7 +184,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param requestedInstant Requested instant
    * @return inflight instant
    */
-  public HoodieInstant transitionCompactionRequestedToInflight(HoodieInstant requestedInstant);
+  HoodieInstant transitionCompactionRequestedToInflight(HoodieInstant requestedInstant);
 
   /**
    * Transition LogCompaction State from requested to inflight.
@@ -192,7 +192,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param requestedInstant Requested instant
    * @return inflight instant
    */
-  public HoodieInstant transitionLogCompactionRequestedToInflight(HoodieInstant requestedInstant);
+  HoodieInstant transitionLogCompactionRequestedToInflight(HoodieInstant requestedInstant);
 
   /**
    * Transition Compaction State from inflight to Committed.
@@ -202,8 +202,8 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param data Extra Metadata
    * @return commit instant
    */
-  public HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant,
-                                                              Option<byte[]> data);
+  HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant,
+                                                       Option<byte[]> data);
 
   /**
    * Transition Log Compaction State from inflight to Committed.
@@ -213,8 +213,8 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param data Extra Metadata
    * @return commit instant
    */
-  public HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock,
-                                                                 HoodieInstant inflightInstant, Option<byte[]> data);
+  HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock,
+                                                          HoodieInstant inflightInstant, Option<byte[]> data);
 
   //-----------------------------------------------------------------
   //      END - COMPACTION RELATED META-DATA MANAGEMENT
@@ -228,8 +228,8 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param data Extra Metadata
    * @return commit instant
    */
-  public HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant,
-                                                         Option<byte[]> data);
+  HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant,
+                                                  Option<byte[]> data);
 
   /**
    * Transition Clean State from requested to inflight.
@@ -238,7 +238,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param data Optional data to be stored
    * @return commit instant
    */
-  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data);
+  HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data);
 
   /**
    * Transition Rollback State from inflight to Committed.
@@ -248,8 +248,8 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param data Extra Metadata
    * @return commit instant
    */
-  public HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock,
-                                                            HoodieInstant inflightInstant, Option<byte[]> data);
+  HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock,
+                                                     HoodieInstant inflightInstant, Option<byte[]> data);
 
   /**
    * Transition Rollback State from requested to inflight.
@@ -257,7 +257,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param requestedInstant requested instant
    * @return commit instant
    */
-  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant);
+  HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant);
 
   /**
    * Transition Restore State from requested to inflight.
@@ -265,7 +265,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param requestedInstant requested instant
    * @return commit instant
    */
-  public HoodieInstant transitionRestoreRequestedToInflight(HoodieInstant requestedInstant);
+  HoodieInstant transitionRestoreRequestedToInflight(HoodieInstant requestedInstant);
 
   /**
    * Transition replace requested file to replace inflight.
@@ -274,7 +274,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param data Extra Metadata
    * @return inflight instant
    */
-  public HoodieInstant transitionReplaceRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data);
+  HoodieInstant transitionReplaceRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data);
 
   /**
    * Transition cluster requested file to cluster inflight.
@@ -283,7 +283,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param data Extra Metadata
    * @return inflight instant
    */
-  public HoodieInstant transitionClusterRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data);
+  HoodieInstant transitionClusterRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data);
 
   /**
    * Transition replace inflight to Committed.
@@ -293,8 +293,8 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param data Extra Metadata
    * @return commit instant
    */
-  public HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock,
-                                                           HoodieInstant inflightInstant, Option<byte[]> data);
+  HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock,
+                                                    HoodieInstant inflightInstant, Option<byte[]> data);
 
   /**
    * Transition cluster inflight to replace committed.
@@ -304,37 +304,37 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param data Extra Metadata
    * @return commit instant
    */
-  public HoodieInstant transitionClusterInflightToComplete(boolean shouldLock,
-                                                           HoodieInstant inflightInstant, Option<byte[]> data);
+  HoodieInstant transitionClusterInflightToComplete(boolean shouldLock,
+                                                    HoodieInstant inflightInstant, Option<byte[]> data);
 
   /**
    * Save Restore requested instant with metadata.
    * @param commitType Instant type.
    * @param inFlightInstant Instant timestamp.
    */
-  public void transitionRequestedToInflight(String commitType, String inFlightInstant);
+  void transitionRequestedToInflight(String commitType, String inFlightInstant);
 
   /**
    * Save Restore requested instant with metadata.
    * @param requested Instant to save.
    * @param content Metadata to be stored in instant file.
    */
-  public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content);
+  void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content);
 
   /**
    * Save Restore requested instant with metadata.
    * @param requested Instant to save.
    * @param content Metadata to be stored in instant file.
    */
-  public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content,
-      boolean allowRedundantTransitions);
+  void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content,
+                                     boolean allowRedundantTransitions);
 
   /**
    * Save Compaction requested instant with metadata.
    * @param instant Instant to save.
    * @param content Metadata to be stored in instant file.
    */
-  public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content);
+  void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content);
 
   /**
    * Save Compaction requested instant with metadata.
@@ -342,14 +342,14 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param content Metadata to be stored in instant file.
    * @param overwrite Overwrite existing instant file.
    */
-  public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite);
+  void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite);
 
   /**
    * Save Log Compaction requested instant with metadata.
    * @param instant Instant to save.
    * @param content Metadata to be stored in instant file.
    */
-  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content);
+  void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content);
 
   /**
    * Save Log Compaction requested instant with metadata.
@@ -357,42 +357,42 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param content Metadata to be stored in instant file.
    * @param overwrite Overwrite existing instant file.
    */
-  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite);
+  void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite);
 
   /**
    * Save pending replace instant with metadata.
    * @param instant Instant to save.
    * @param content Metadata to be stored in instant file.
    */
-  public void saveToPendingReplaceCommit(HoodieInstant instant, Option<byte[]> content);
+  void saveToPendingReplaceCommit(HoodieInstant instant, Option<byte[]> content);
 
   /**
    * Save pending cluster instant with metadata.
    * @param instant Instant to save.
    * @param content Metadata to be stored in instant file.
    */
-  public void saveToPendingClusterCommit(HoodieInstant instant, Option<byte[]> content);
+  void saveToPendingClusterCommit(HoodieInstant instant, Option<byte[]> content);
 
   /**
    * Save clean requested instant with metadata.
    * @param instant Instant to save.
    * @param content Metadata to be stored in instant file.
    */
-  public void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content);
+  void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content);
 
   /**
    * Save rollback requested instant with metadata.
    * @param instant Instant to save.
    * @param content Metadata to be stored in instant file.
    */
-  public void saveToRollbackRequested(HoodieInstant instant, Option<byte[]> content);
+  void saveToRollbackRequested(HoodieInstant instant, Option<byte[]> content);
 
   /**
    * Save Restore requested instant with metadata.
    * @param instant Instant to save.
    * @param content Metadata to be stored in instant file.
    */
-  public void saveToRestoreRequested(HoodieInstant instant, Option<byte[]> content);
+  void saveToRestoreRequested(HoodieInstant instant, Option<byte[]> content);
 
   /**
    * Transition index instant state from requested to inflight.
@@ -400,7 +400,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param requestedInstant Inflight Instant
    * @return inflight instant
    */
-  public HoodieInstant transitionIndexRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data);
+  HoodieInstant transitionIndexRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data);
 
   /**
    * Transition index instant state from inflight to completed.
@@ -409,33 +409,33 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param inflightInstant Inflight Instant
    * @return completed instant
    */
-  public HoodieInstant transitionIndexInflightToComplete(boolean shouldLock,
-                                                         HoodieInstant inflightInstant, Option<byte[]> data);
+  HoodieInstant transitionIndexInflightToComplete(boolean shouldLock,
+                                                  HoodieInstant inflightInstant, Option<byte[]> data);
 
   /**
    * Revert index instant state from inflight to requested.
    * @param inflightInstant Inflight Instant
    * @return requested instant
    */
-  public HoodieInstant revertIndexInflightToRequested(HoodieInstant inflightInstant);
+  HoodieInstant revertIndexInflightToRequested(HoodieInstant inflightInstant);
 
   /**
    * Save content for inflight/requested index instant.
    */
-  public void saveToPendingIndexAction(HoodieInstant instant, Option<byte[]> content);
+  void saveToPendingIndexAction(HoodieInstant instant, Option<byte[]> content);
 
   /**
    * Reloads timeline from storage
    * @return
    */
-  public HoodieActiveTimeline reload();
+  HoodieActiveTimeline reload();
 
   /**
    * Copies instant file from active timeline to destination directory.
    * @param instant Instant to copy.
    * @param dstDir Destination location.
    */
-  public void copyInstant(HoodieInstant instant, StoragePath dstDir);
+  void copyInstant(HoodieInstant instant, StoragePath dstDir);
 
   /**
    * Valid Extensions in active timeline.

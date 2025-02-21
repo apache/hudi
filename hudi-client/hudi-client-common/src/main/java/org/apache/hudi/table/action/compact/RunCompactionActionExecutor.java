@@ -56,7 +56,7 @@ public class RunCompactionActionExecutor<T> extends
 
   private final HoodieCompactor compactor;
   private final HoodieCompactionHandler compactionHandler;
-  private WriteOperationType operationType;
+  private final WriteOperationType operationType;
 
   private final HoodieMetrics metrics;
 

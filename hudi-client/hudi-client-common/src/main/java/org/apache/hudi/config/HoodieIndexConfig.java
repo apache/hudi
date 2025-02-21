@@ -524,7 +524,7 @@ public class HoodieIndexConfig extends HoodieConfig {
   @Deprecated
   public static final String DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH = SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE.defaultValue();
 
-  private EngineType engineType;
+  private final EngineType engineType;
 
   /**
    * Use Spark engine by default.

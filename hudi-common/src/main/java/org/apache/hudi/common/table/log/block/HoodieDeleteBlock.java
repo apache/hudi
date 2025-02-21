@@ -159,10 +159,10 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   private static DeleteRecord[] deserialize(int version, byte[] data) throws IOException {
     if (version == 1) {
       // legacy version
-      HoodieKey[] keys = SerializationUtils.<HoodieKey[]>deserialize(data);
+      HoodieKey[] keys = SerializationUtils.deserialize(data);
       return Arrays.stream(keys).map(DeleteRecord::create).toArray(DeleteRecord[]::new);
     } else if (version == 2) {
-      return SerializationUtils.<DeleteRecord[]>deserialize(data);
+      return SerializationUtils.deserialize(data);
     } else {
       DatumReader<HoodieDeleteRecordList> reader = new SpecificDatumReader<>(HoodieDeleteRecordList.class);
       BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(data, 0, data.length, null);

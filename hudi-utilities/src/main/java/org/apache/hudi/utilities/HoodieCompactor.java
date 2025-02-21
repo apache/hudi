@@ -55,7 +55,7 @@ public class HoodieCompactor {
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
   private final Config cfg;
   private transient FileSystem fs;
-  private TypedProperties props;
+  private final TypedProperties props;
   private final JavaSparkContext jsc;
   private HoodieTableMetaClient metaClient;
 

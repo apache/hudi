@@ -114,7 +114,7 @@ public class HoodieDropPartitionsTool implements Serializable {
   // config
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
-  private TypedProperties props;
+  private final TypedProperties props;
 
   private final HoodieTableMetaClient metaClient;
 
@@ -286,7 +286,7 @@ public class HoodieDropPartitionsTool implements Serializable {
     try {
       tool.run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run deleting table partitions for " + cfg.toString(), throwable);
+      LOG.error("Fail to run deleting table partitions for " + cfg, throwable);
     } finally {
       jsc.stop();
     }
@@ -384,7 +384,7 @@ public class HoodieDropPartitionsTool implements Serializable {
         + "). Hive metastore URL :"
         + hiveSyncConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_URL)
         + ", basePath :" + cfg.basePath);
-    LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
+    LOG.info("Hive Sync Conf => " + hiveSyncConfig);
     FileSystem fs = HadoopFSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     HiveConf hiveConf = new HiveConf();
     if (!StringUtils.isNullOrEmpty(cfg.hiveHMSUris)) {

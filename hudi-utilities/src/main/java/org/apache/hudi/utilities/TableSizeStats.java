@@ -111,9 +111,9 @@ public class TableSizeStats implements Serializable {
   // Spark context
   private transient JavaSparkContext jsc;
   // config
-  private Config cfg;
+  private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
-  private TypedProperties props;
+  private final TypedProperties props;
 
   public TableSizeStats(JavaSparkContext jsc, Config cfg) {
     this.jsc = jsc;

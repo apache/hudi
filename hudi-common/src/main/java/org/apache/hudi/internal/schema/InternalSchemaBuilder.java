@@ -170,7 +170,6 @@ public class InternalSchemaBuilder implements Serializable {
         }
         return;
       default:
-        return;
     }
   }
 

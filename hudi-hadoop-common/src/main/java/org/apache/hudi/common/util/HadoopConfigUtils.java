@@ -84,8 +84,7 @@ public class HadoopConfigUtils {
   public static boolean getBooleanWithAltKeys(Configuration conf,
                                               ConfigProperty<?> configProperty) {
     Option<String> rawValue = getRawValueWithAltKeys(conf, configProperty);
-    boolean defaultValue = configProperty.hasDefaultValue()
-        ? Boolean.parseBoolean(configProperty.defaultValue().toString()) : false;
+    boolean defaultValue = configProperty.hasDefaultValue() && Boolean.parseBoolean(configProperty.defaultValue().toString());
     return rawValue.map(Boolean::parseBoolean).orElse(defaultValue);
   }
 }

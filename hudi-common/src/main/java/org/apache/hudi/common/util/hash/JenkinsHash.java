@@ -40,13 +40,13 @@ import java.io.IOException;
  * Dr. Dobbs Article</a>
  */
 public class JenkinsHash extends Hash {
-  private static long INT_MASK = 0x00000000ffffffffL;
-  private static long BYTE_MASK = 0x00000000000000ffL;
+  private static final long INT_MASK = 0x00000000ffffffffL;
+  private static final long BYTE_MASK = 0x00000000000000ffL;
 
-  private static JenkinsHash _instance = new JenkinsHash();
+  private static final JenkinsHash INSTANCE = new JenkinsHash();
 
   public static Hash getInstance() {
-    return _instance;
+    return INSTANCE;
   }
 
   private static long rot(long val, int pos) {
@@ -89,7 +89,7 @@ public class JenkinsHash extends Hash {
     a = b = c = (0x00000000deadbeefL + length + initval) & INT_MASK;
     int offset = 0;
     for (; length > 12; offset += 12, length -= 12) {
-      a = (a + (key[offset + 0] & BYTE_MASK)) & INT_MASK;
+      a = (a + (key[offset] & BYTE_MASK)) & INT_MASK;
       a = (a + (((key[offset + 1] & BYTE_MASK) << 8) & INT_MASK)) & INT_MASK;
       a = (a + (((key[offset + 2] & BYTE_MASK) << 16) & INT_MASK)) & INT_MASK;
       a = (a + (((key[offset + 3] & BYTE_MASK) << 24) & INT_MASK)) & INT_MASK;
@@ -202,7 +202,7 @@ public class JenkinsHash extends Hash {
       case 2:
         a = (a + (((key[offset + 1] & BYTE_MASK) << 8) & INT_MASK)) & INT_MASK;
       case 1:
-        a = (a + (key[offset + 0] & BYTE_MASK)) & INT_MASK;
+        a = (a + (key[offset] & BYTE_MASK)) & INT_MASK;
         break;
       case 0:
         return (int) (c & INT_MASK);

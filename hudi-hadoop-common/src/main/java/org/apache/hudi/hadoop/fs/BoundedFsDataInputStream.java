@@ -31,8 +31,8 @@ import java.io.InputStream;
  * Implementation of {@link FSDataInputStream} with bound check based on file size.
  */
 public class BoundedFsDataInputStream extends FSDataInputStream {
-  private FileSystem fs;
-  private Path file;
+  private final FileSystem fs;
+  private final Path file;
   private long fileLen = -1L;
 
   public BoundedFsDataInputStream(FileSystem fs, Path file, InputStream in) {

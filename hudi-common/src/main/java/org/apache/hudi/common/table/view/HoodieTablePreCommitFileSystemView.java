@@ -39,11 +39,11 @@ import java.util.stream.Stream;
  */
 public class HoodieTablePreCommitFileSystemView {
 
-  private Map<String, List<String>> partitionToReplaceFileIds;
-  private List<HoodieWriteStat> filesWritten;
-  private String preCommitInstantTime;
-  private SyncableFileSystemView completedCommitsFileSystemView;
-  private HoodieTableMetaClient tableMetaClient;
+  private final Map<String, List<String>> partitionToReplaceFileIds;
+  private final List<HoodieWriteStat> filesWritten;
+  private final String preCommitInstantTime;
+  private final SyncableFileSystemView completedCommitsFileSystemView;
+  private final HoodieTableMetaClient tableMetaClient;
 
   /**
    * Create a file system view for the inflight commit that we are validating.

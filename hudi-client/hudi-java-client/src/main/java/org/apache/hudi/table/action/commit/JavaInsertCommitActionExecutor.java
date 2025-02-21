@@ -30,7 +30,7 @@ import java.util.List;
 
 public class JavaInsertCommitActionExecutor<T> extends BaseJavaCommitActionExecutor<T> {
 
-  private List<HoodieRecord<T>> inputRecords;
+  private final List<HoodieRecord<T>> inputRecords;
 
   public JavaInsertCommitActionExecutor(HoodieEngineContext context,
                                          HoodieWriteConfig config,

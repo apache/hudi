@@ -23,6 +23,7 @@ import org.apache.hudi.internal.schema.Type.PrimitiveType;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -650,7 +651,7 @@ public class Types {
 
     @Override
     public List<Field> fields() {
-      return Arrays.asList(elementField);
+      return Collections.singletonList(elementField);
     }
 
     public int elementId() {

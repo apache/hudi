@@ -23,28 +23,28 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 
 public interface HoodieArchivedTimeline extends HoodieTimeline {
 
-  public static final String COMPLETION_TIME_ARCHIVED_META_FIELD = "completionTime";
+  String COMPLETION_TIME_ARCHIVED_META_FIELD = "completionTime";
 
-  public void loadInstantDetailsInMemory(String startTs, String endTs);
+  void loadInstantDetailsInMemory(String startTs, String endTs);
 
-  public void loadCompletedInstantDetailsInMemory();
+  void loadCompletedInstantDetailsInMemory();
 
-  public void loadCompactionDetailsInMemory(String compactionInstantTime);
+  void loadCompactionDetailsInMemory(String compactionInstantTime);
 
-  public void loadCompactionDetailsInMemory(String startTs, String endTs);
+  void loadCompactionDetailsInMemory(String startTs, String endTs);
 
-  public void clearInstantDetailsFromMemory(String instantTime);
+  void clearInstantDetailsFromMemory(String instantTime);
 
-  public void clearInstantDetailsFromMemory(String startTs, String endTs);
+  void clearInstantDetailsFromMemory(String startTs, String endTs);
 
-  public HoodieArchivedTimeline reload();
+  HoodieArchivedTimeline reload();
 
-  public HoodieArchivedTimeline reload(String startTs);
+  HoodieArchivedTimeline reload(String startTs);
 
   /**
    * Different mode for loading the archived instant metadata.
    */
-  public enum LoadMode {
+  enum LoadMode {
     /**
      * Loads the instantTime, completionTime.
      */
@@ -70,7 +70,7 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
   /**
    * A time based filter with range (startTs, endTs].
    */
-  public static class TimeRangeFilter {
+  class TimeRangeFilter {
     protected final String startTs;
     protected final String endTs;
 
@@ -87,7 +87,7 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
   /**
    * A time based filter with range [startTs, endTs).
    */
-  public static class ClosedOpenTimeRangeFilter extends TimeRangeFilter {
+  class ClosedOpenTimeRangeFilter extends TimeRangeFilter {
 
     public ClosedOpenTimeRangeFilter(String startTs, String endTs) {
       super(startTs, endTs);
@@ -101,7 +101,7 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
   /**
    * A time based filter with range [startTs, +&#8734).
    */
-  public static class StartTsFilter extends TimeRangeFilter {
+  class StartTsFilter extends TimeRangeFilter {
 
     public StartTsFilter(String startTs) {
       super(startTs, null); // endTs is never used

@@ -114,12 +114,10 @@ public class WorkloadProfile implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("WorkloadProfile {");
-    sb.append("globalStat=").append(globalStat).append(", ");
-    sb.append("InputPartitionStat=").append(inputPartitionPathStatMap).append(", ");
-    sb.append("OutputPartitionStat=").append(outputPartitionPathStatMap).append(", ");
-    sb.append("operationType=").append(operationType);
-    sb.append('}');
-    return sb.toString();
+    return "WorkloadProfile {" + "globalStat=" + globalStat + ", "
+        + "InputPartitionStat=" + inputPartitionPathStatMap + ", "
+        + "OutputPartitionStat=" + outputPartitionPathStatMap + ", "
+        + "operationType=" + operationType
+        + '}';
   }
 }

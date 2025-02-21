@@ -92,7 +92,7 @@ public class HttpRequestClient {
         break;
     }
     String content = response.returnContent().asString();
-    return (T) MAPPER.readValue(content, reference);
+    return MAPPER.readValue(content, reference);
   }
 
   public enum RequestMethod {

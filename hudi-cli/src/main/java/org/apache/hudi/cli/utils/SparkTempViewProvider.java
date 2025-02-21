@@ -40,8 +40,8 @@ public class SparkTempViewProvider implements TempViewProvider {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkTempViewProvider.class);
 
-  private JavaSparkContext jsc;
-  private SQLContext sqlContext;
+  private final JavaSparkContext jsc;
+  private final SQLContext sqlContext;
 
   public SparkTempViewProvider(String appName) {
     try {

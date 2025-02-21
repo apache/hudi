@@ -79,11 +79,9 @@ public class ConsistentHashingNode implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("ConsistentHashingNode{");
-    sb.append("value=").append(value);
-    sb.append(", fileIdPfx='").append(fileIdPrefix).append('\'');
-    sb.append('}');
-    return sb.toString();
+    return "ConsistentHashingNode{" + "value=" + value
+        + ", fileIdPfx='" + fileIdPrefix + '\''
+        + '}';
   }
 
   /**

@@ -26,22 +26,22 @@ import java.util.function.Function;
 
 public interface CompletionTimeQueryView extends AutoCloseable {
 
-  public boolean isCompleted(String beginInstantTime);
+  boolean isCompleted(String beginInstantTime);
 
   /**
    * Returns whether the instant is archived.
    */
-  public boolean isArchived(String instantTime);
+  boolean isArchived(String instantTime);
 
   /**
    * Returns whether the give instant time {@code instantTime} completed before the base instant {@code baseInstant}.
    */
-  public boolean isCompletedBefore(String baseInstant, String instantTime);
+  boolean isCompletedBefore(String baseInstant, String instantTime);
 
   /**
    * Returns whether the given instant time {@code instantTime} is sliced after or on the base instant {@code baseInstant}.
    */
-  public boolean isSlicedAfterOrOn(String baseInstant, String instantTime);
+  boolean isSlicedAfterOrOn(String baseInstant, String instantTime);
 
   /**
    * Get completion time with a base instant time as a reference to fix the compatibility.
@@ -51,7 +51,7 @@ public interface CompletionTimeQueryView extends AutoCloseable {
    *
    * @return Probability fixed completion time.
    */
-  public Option<String> getCompletionTime(String baseInstant, String instantTime);
+  Option<String> getCompletionTime(String baseInstant, String instantTime);
 
   /**
    * Queries the completion time with given instant time.
@@ -60,7 +60,7 @@ public interface CompletionTimeQueryView extends AutoCloseable {
    *
    * @return The completion time if the instant finished or empty if it is still pending.
    */
-  public Option<String> getCompletionTime(String beginTime);
+  Option<String> getCompletionTime(String beginTime);
 
   /**
    * Queries the instant times with given completion time range.
@@ -74,7 +74,7 @@ public interface CompletionTimeQueryView extends AutoCloseable {
    *
    * @return The sorted instant time list.
    */
-  public List<String> getInstantTimes(
+  List<String> getInstantTimes(
       HoodieTimeline timeline,
       Option<String> startCompletionTime,
       Option<String> endCompletionTime,
@@ -90,7 +90,7 @@ public interface CompletionTimeQueryView extends AutoCloseable {
    *
    * @return The sorted instant time list.
    */
-  public List<String> getInstantTimes(
+  List<String> getInstantTimes(
       String startCompletionTime,
       String endCompletionTime,
       Function<String, String> earliestInstantTimeFunc);
@@ -99,11 +99,11 @@ public interface CompletionTimeQueryView extends AutoCloseable {
    *  Get Cursor Instant
    * @return
    */
-  public String getCursorInstant();
+  String getCursorInstant();
 
   /**
    * Return true if the table is empty.
    * @return
    */
-  public boolean isEmptyTable();
+  boolean isEmptyTable();
 }

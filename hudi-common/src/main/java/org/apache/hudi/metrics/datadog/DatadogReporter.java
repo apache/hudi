@@ -173,6 +173,6 @@ public class DatadogReporter extends ScheduledReporter {
   }
 
   enum MetricType {
-    gauge;
+    gauge
   }
 }

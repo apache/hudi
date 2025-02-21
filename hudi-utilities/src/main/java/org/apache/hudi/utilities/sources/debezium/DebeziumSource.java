@@ -192,7 +192,7 @@ public abstract class DebeziumSource extends RowSource {
             }
           }).map(Field::name).collect(Collectors.toList());
 
-      LOG.info("Date fields: " + dateFields.toString());
+      LOG.info("Date fields: {}", dateFields);
 
       for (String dateCol : dateFields) {
         dataset = dataset.withColumn(dateCol, functions.col(dateCol).cast(DataTypes.DateType));

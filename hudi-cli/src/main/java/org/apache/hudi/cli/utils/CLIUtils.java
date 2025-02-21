@@ -21,10 +21,10 @@ package org.apache.hudi.cli.utils;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.BaseHoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
-import org.apache.hudi.common.table.timeline.BaseHoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
 import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
@@ -57,7 +57,7 @@ public class CLIUtils {
     if (includeArchivedTimeline) {
       HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
-      return ((HoodieTimeline)archivedTimeline.findInstantsInRange(startTs, endTs)).mergeTimeline(activeTimeline);
+      return archivedTimeline.findInstantsInRange(startTs, endTs).mergeTimeline(activeTimeline);
     }
     return activeTimeline;
   }
