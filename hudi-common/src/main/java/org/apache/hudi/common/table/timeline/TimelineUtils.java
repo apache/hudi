@@ -635,6 +635,7 @@ public class TimelineUtils {
   }
 
   public static Option<HoodieInstant> getInstantFromTimelineIfDummyInstant(HoodieInstant instant, HoodieActiveTimeline timeline) {
+    LOG.info("fdss instant1 " + instant);
     if (instant.isCompleted() && StringUtils.isNullOrEmpty(instant.getCompletionTime())) {
       Option<HoodieInstant> actualInstant = Option.fromJavaOptional(timeline.getInstantsAsStream()
           .filter(incomingInstant ->
@@ -646,8 +647,12 @@ public class TimelineUtils {
       if (actualInstant.isEmpty()) {
         throw new HoodieIOException("Could not read commit details from " + instant + " as it does not exists in the active timeline");
       }
+      LOG.info("fdss actualInstant " + actualInstant);
+      LOG.info("fdss all instances " + timeline.getInstants());
+
       return actualInstant;
     }
+    LOG.info("fdss instant2" + instant);
     return Option.of(instant);
   }
 }
