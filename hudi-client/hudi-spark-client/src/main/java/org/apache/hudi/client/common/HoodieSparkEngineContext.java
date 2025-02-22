@@ -148,6 +148,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
                 .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator()
         )
         .reduceByKey(reduceFunc::apply)
+        .coalesce(parallelism)
         .map(e -> new ImmutablePair<>(e._1, e._2))
         .collect().stream();
   }
