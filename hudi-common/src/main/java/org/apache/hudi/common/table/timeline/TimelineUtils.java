@@ -634,14 +634,20 @@ public class TimelineUtils {
     return Option.of(new ByteArrayInputStream(bytes.get()));
   }
 
-  public static Option<HoodieInstant> getInstantFromTimeline(HoodieInstant instant, HoodieActiveTimeline timeline, Option<HoodieInstant> actualInstant) {
-    if (instant.getState().equals(HoodieInstant.State.COMPLETED) && instant.getCompletionTime() == null) {
-      // If the given instant does not have completion time, find the right one in the timeline.
-      actualInstant = Option.fromJavaOptional(timeline.getInstantsAsStream().filter(incomingInstant ->
-          TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion()).getInstantGenerator().createNewInstant(instant.getState(), instant.getAction(),
-              instant.requestedTime(), incomingInstant.getCompletionTime()).equals(incomingInstant)).findFirst());
+  public static Option<HoodieInstant> getInstantFromTimelineIfDummyInstant(HoodieInstant instant, HoodieActiveTimeline timeline) {
+    if (instant.isCompleted() && StringUtils.isNullOrEmpty(instant.getCompletionTime())) {
+      Option<HoodieInstant> actualInstant = Option.fromJavaOptional(timeline.getInstantsAsStream()
+          .filter(incomingInstant ->
+              incomingInstant.isCompleted()
+                  && TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion())
+                  .getInstantGenerator()
+                  .createNewInstant(instant.getState(), instant.getAction(), instant.requestedTime(), incomingInstant.getCompletionTime())
+                  .equals(incomingInstant)).findFirst());
+      if (actualInstant.isEmpty()) {
+        throw new HoodieIOException("Could not read commit details from " + instant + " as it does not exists in the active timeline");
+      }
+      return actualInstant;
     }
-    return actualInstant;
+    return Option.of(instant);
   }
-
 }

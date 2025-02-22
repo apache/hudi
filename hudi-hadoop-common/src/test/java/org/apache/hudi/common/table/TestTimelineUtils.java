@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -38,8 +39,10 @@ import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.BaseTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.AfterEach;
@@ -72,9 +75,11 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.getInstantFromTimelineIfDummyInstant;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -621,5 +626,34 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     // older partition is in the list dropped partitions
     assertEquals(1, droppedPartitions.size());
     assertEquals(olderPartition, droppedPartitions.get(0));
+  }
+
+  @Test
+  public void testIsEmpty() throws Exception {
+    HoodieTestTable table = HoodieTestTable.of(metaClient);
+    table.addCommit("00001");
+    metaClient.reloadActiveTimeline();
+    assertTrue(TimelineUtils.isEmpty(metaClient, INSTANT_GENERATOR.createNewInstant(REQUESTED, COMMIT_ACTION, "00001")));
+    assertTrue(TimelineUtils.isEmpty(metaClient, getInstantFromTimelineIfDummyInstant(INSTANT_GENERATOR.createNewInstant(INFLIGHT, COMMIT_ACTION, "00001"), metaClient.getActiveTimeline()).get()));
+    assertTrue(TimelineUtils.isEmpty(metaClient, getInstantFromTimelineIfDummyInstant(INSTANT_GENERATOR.createNewInstant(COMPLETED, COMMIT_ACTION, "00001"), metaClient.getActiveTimeline()).get()));
+
+    HoodieCommitMetadata metadata = table.createCommitMetadata("00002", WriteOperationType.INSERT, Collections.emptyList(), 0, false);
+    table.addCommit("00002", Option.of(metadata));
+    metaClient.reloadActiveTimeline();
+    assertFalse(TimelineUtils.isEmpty(metaClient, getInstantFromTimelineIfDummyInstant(INSTANT_GENERATOR.createNewInstant(COMPLETED, COMMIT_ACTION, "00002"), metaClient.getActiveTimeline()).get()));
+  }
+
+  @Test
+  public void testGetCompletedInstantUsingDummyInstantFromTimeline() throws Exception {
+    HoodieTestTable table = HoodieTestTable.of(metaClient);
+    table.addCommit("00001");
+    metaClient.reloadActiveTimeline();
+    HoodieInstant inflightInstant = INSTANT_GENERATOR.createNewInstant(INFLIGHT, COMMIT_ACTION, "00001");
+    HoodieInstant dummyCompletedInstant = INSTANT_GENERATOR.createNewInstant(COMPLETED, COMMIT_ACTION, "00001");
+    assertEquals(inflightInstant, getInstantFromTimelineIfDummyInstant(inflightInstant, metaClient.getActiveTimeline()).get());
+    HoodieInstant actual = getInstantFromTimelineIfDummyInstant(dummyCompletedInstant, metaClient.getActiveTimeline()).get();
+    assertNotSame(dummyCompletedInstant, actual);
+    assertTrue(StringUtils.isNullOrEmpty(dummyCompletedInstant.getCompletionTime()));
+    assertFalse(StringUtils.isNullOrEmpty(actual.getCompletionTime()));
   }
 }
