@@ -81,6 +81,8 @@ public enum StorageSchemes {
   TOS("tos", null, null),
   // Volcengine Cloud HDFS
   CFS("cfs", null, null),
+  // Aliyun Apsara File Storage for HDFS
+  DFS("dfs", false, true),
   // Hopsworks File System
   HOPSFS("hopsfs", false, true);
 
