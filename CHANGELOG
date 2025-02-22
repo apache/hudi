@@ -626,3 +626,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-02-21 16:03:57] [release-v1.93.0] ---
 [ENG-22489][INTERNAL] Tweaking logging for LP based on usage in staging (#1216)
 [AUDIT-1071]: Changelog for release-v1.92.0 (#1212)
+
+--- [2025-02-22 16:03:23] [release-v1.94.0] ---
+[ENG-22755][HUDI-9045] Spillable Map operational improvements (#1219)
+[AUDIT-1071]: Changelog for release-v1.93.0 (#1220)
