@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
@@ -91,7 +92,6 @@ public abstract class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T,
     this.baseFileToMerge = baseFile;
     this.keyGeneratorOpt = keyGeneratorOpt;
     init(fileId, partitionPath);
-    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
 
   /**
@@ -155,9 +155,11 @@ public abstract class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T,
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
   private void init(String targetFileId, String partitionPath) {
+    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+    validateInstantTime(baseFileToMerge, instantTime);
+
     LOG.info("partitionPath:" + partitionPath + ", targetFileId to be merged:" + targetFileId);
     String latestValidFilePath = baseFileToMerge.getFileName();
-
     HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
         new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
         hoodieTable.getPartitionMetafileFormat());
@@ -185,5 +187,14 @@ public abstract class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T,
       throw new NoSuchElementException(String.format("FileID %s of partition path %s does not exist.", fileId, partitionPath));
     }
     return baseFileOp.get();
+  }
+
+  private static void validateInstantTime(HoodieBaseFile baseFileToMerge, String instantTime) {
+    if (baseFileToMerge.getCommitTime().compareTo(instantTime) >= 0) {
+      LOG.error("The new instant: " + instantTime + " should be strictly higher than the instant of the latest base file: " + baseFileToMerge.getCommitTime()
+          + " for fileId: " + baseFileToMerge.getFileId());
+      throw new HoodieValidationException("The new instant: " + instantTime + " should be strictly higher than the instant of the latest base file: " + baseFileToMerge.getCommitTime()
+          + " for fileId: " + baseFileToMerge.getFileId());
+    }
   }
 }

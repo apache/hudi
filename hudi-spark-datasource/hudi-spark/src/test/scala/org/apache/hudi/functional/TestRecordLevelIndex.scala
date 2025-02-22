@@ -520,6 +520,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> "optimistic_concurrency_control",
       HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> "LAZY",
+      HoodieWriteConfig.ENABLE_TIMESTAMP_ORDERING_VALIDATION.key() -> "true",
       HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> "org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider",
       HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[PreferWriterConflictResolutionStrategy].getName
     )

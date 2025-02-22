@@ -422,8 +422,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     String instantTime = "000";
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
     final List<HoodieRecord> inserts = dataGen.generateInsertsWithHoodieAvroPayload(instantTime, 100);
-    BaseJavaCommitActionExecutor actionExecutor = new JavaInsertCommitActionExecutor(context, config, table,
-        instantTime, inserts);
+    BaseJavaCommitActionExecutor actionExecutor = new JavaInsertCommitActionExecutor(context, config, table, instantTime, inserts);
 
     final List<List<WriteStatus>> ws = new ArrayList<>();
     actionExecutor.handleInsert(UUID.randomUUID().toString(), inserts.iterator())
@@ -435,12 +434,12 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     //TODO : Find race condition that causes the timeline sometime to reflect 000.commit and sometimes not
     final HoodieJavaCopyOnWriteTable reloadedTable = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, HoodieTableMetaClient.reload(metaClient));
 
-    final List<HoodieRecord> updates = dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts);
+    String newInstantTime = "001";
+    final List<HoodieRecord> updates = dataGen.generateUpdatesWithHoodieAvroPayload(newInstantTime, inserts);
 
     String partitionPath = writeStatus.getPartitionPath();
     long numRecordsInPartition = updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
-    BaseJavaCommitActionExecutor newActionExecutor = new JavaUpsertCommitActionExecutor(context, config, reloadedTable,
-        instantTime, updates);
+    BaseJavaCommitActionExecutor newActionExecutor = new JavaUpsertCommitActionExecutor(context, config, reloadedTable, newInstantTime, updates);
 
     taskContextSupplier.reset();
     final List<List<WriteStatus>> updateStatus = new ArrayList<>();

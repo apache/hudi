@@ -760,7 +760,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         writeStatus.getStat().setNumWrites(0);
         handle.performMergeDataValidationCheck(writeStatus);
         fail("The above line should have thrown an exception");
-      } catch (HoodieCorruptedDataException e2) {
+      } catch (HoodieValidationException | HoodieCorruptedDataException e2) {
         // expected
       } finally {
         if (handle != null) {

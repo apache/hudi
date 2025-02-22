@@ -134,7 +134,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
       assertFileSystemViews(config, enableMdt, storageType);
 
       for (int i = 3; i < 10; i++) {
-        String commitTime = String.format("%10d", i);
+        String commitTime = String.format("%03d", i);
         upsertRecords(client, commitTime, 50);
       }
       expectedFileSystemView.sync();
@@ -142,7 +142,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
       assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt);
 
       for (int i = 10; i < 20; i++) {
-        String commitTime = String.format("%10d", i);
+        String commitTime = String.format("%03d", i);
         upsertRecords(client, commitTime, 50);
       }
 
@@ -156,7 +156,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
 
       // add few more updates
       for (int i = 21; i < 23; i++) {
-        String commitTime = String.format("%10d", i);
+        String commitTime = String.format("%03d", i);
         upsertRecords(client, commitTime, 50);
       }
       actualFileSystemView.close();

@@ -81,6 +81,7 @@ import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.HoodieRowMergeHandle;
@@ -590,7 +591,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       writeStatus.getStat().setNumWrites(0);
       handle.performMergeDataValidationCheck(writeStatus);
       fail("The above line should have thrown an exception");
-    } catch (HoodieUpsertException e2) {
+    } catch (HoodieValidationException | HoodieUpsertException e2) {
       // expected
     } finally {
       if (handle != null) {

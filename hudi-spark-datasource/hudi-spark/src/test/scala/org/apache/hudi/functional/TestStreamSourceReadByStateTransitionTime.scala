@@ -63,14 +63,14 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
         val context = new HoodieSparkEngineContext(sparkContext)
         val writeClient = new SparkRDDWriteClient(context, writeConfig)
         val instantTime1 = makeNewCommitTime(1, "%09d")
-        val instantTime2 = makeNewCommitTime(2,"%09d")
+        val instantTime2 = makeNewCommitTime(2, "%09d")
 
-        val records1 = sparkContext.parallelize(dataGen.generateInserts(instantTime1, 10).toSeq, 2)
-        val records2 = sparkContext.parallelize(dataGen.generateInserts(instantTime2, 15).toSeq, 2)
+        val records1 = sparkContext.parallelize(dataGen.generateInserts(instantTime1, 15).toSeq, 2)
+        val records2 = sparkContext.parallelize(dataGen.generateInserts(instantTime2, 10).toSeq, 2)
 
         writeClient.startCommitWithTime(instantTime1)
         writeClient.startCommitWithTime(instantTime2)
-        writeClient.insert(records2.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[Nothing]]], instantTime2)
+        writeClient.insert(records1.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[Nothing]]], instantTime1)
         val df = spark.readStream
           .format("hudi")
           .option(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode.name())
@@ -78,16 +78,16 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
 
         testStream(df) (
           AssertOnQuery { q => q.processAllAvailable(); true },
-          // Should read all records from instantTime2
+          // Should read all records from instantTime1
           assertCountMatched(15, true),
 
           AssertOnQuery { _ =>
-            writeClient.insert(records1.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[Nothing]]], instantTime1)
+            writeClient.insert(records2.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[Nothing]]], instantTime2)
             true
           },
           AssertOnQuery { q => q.processAllAvailable(); true },
 
-          // Should read all records from instantTime1
+          // Should read all records from instantTime2
           assertCountMatched(10, true),
           StopStream
         )
