@@ -98,8 +98,9 @@ class TestHoodieSparkEngineContext extends SparkClientFunctionalTestHarness {
 
     And then we do reduce by key, where we sum up the values.
     */
-    Stream<ImmutablePair<Integer, Integer>> result = context.mapPartitionsToPairAndReduceByKey(rddData.collectAsList().stream(),
-        new SerializablePairFlatMapTestFunc(), new SerializableReduceTestFunc(), 6);
+    List<ImmutablePair<Integer, Integer>> result = context.mapPartitionsToPairAndReduceByKey(rddData.collectAsList().stream(),
+        new SerializablePairFlatMapTestFunc(), new SerializableReduceTestFunc(), 6).collect(Collectors.toList());
+    assertEquals(50, result.size());
     result.forEach(entry -> {
       assertEquals(entry.getKey() * 10, entry.getValue());
     });
