@@ -1327,7 +1327,7 @@ public class StreamSync implements Serializable, Closeable {
     try {
       // If timelineLayout version changes, initialize the meta client again.
       if (commitsTimelineOpt.get().getTimelineLayoutVersion() != writeClient.getConfig().getWriteVersion().getTimelineLayoutVersion()) {
-        return getLatestInstantWithValidCheckpointInfo(Option.of(initializeMetaClient().getActiveTimeline().getCommitsTimeline().filterCompletedInstants()));
+        initializeMetaClientAndRefreshTimeline();
       }
       return getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
     } catch (IOException e) {
