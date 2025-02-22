@@ -808,8 +808,7 @@ public class StreamSync implements Serializable, Closeable {
       // write to hudi and fetch result
       WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
       Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
-      // writeToSink can upgrade table layout version and commitsTimelineOpt computed before will use the old layout version.
-      Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(Option.of(initializeMetaClient().getActiveTimeline().getCommitsTimeline().filterCompletedInstants()));
+      Option<String> commitedInstantTime = getLatestCommittedInstant();
       // write to error table
       JavaRDD<WriteStatus> dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
       JavaRDD<WriteStatus> writeStatusRDD = dataTableWriteStatusRDD;
@@ -897,8 +896,6 @@ public class StreamSync implements Serializable, Closeable {
       // Send DeltaStreamer Metrics
       metrics.updateStreamerMetrics(overallTimeNanos);
       return Pair.of(scheduledCompactionInstant, dataTableWriteStatusRDD);
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to load meta client while writing to sink", e);
     } finally {
       if (!releaseResourcesInvoked) {
         releaseResources(instantTime);
@@ -1323,6 +1320,18 @@ public class StreamSync implements Serializable, Closeable {
       return writeClient.scheduleClustering(Option.empty());
     } else {
       return Option.empty();
+    }
+  }
+
+  private Option<String> getLatestCommittedInstant() {
+    try {
+      // If timelineLayout version changes, initialize the meta client again.
+      if (commitsTimelineOpt.get().getTimelineLayoutVersion() != writeClient.getConfig().getWriteVersion().getTimelineLayoutVersion()) {
+        return getLatestInstantWithValidCheckpointInfo(Option.of(initializeMetaClient().getActiveTimeline().getCommitsTimeline().filterCompletedInstants()));
+      }
+      return getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to load meta client", e);
     }
   }
 
