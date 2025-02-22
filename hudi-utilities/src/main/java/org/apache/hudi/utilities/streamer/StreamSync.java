@@ -808,14 +808,13 @@ public class StreamSync implements Serializable, Closeable {
       // write to hudi and fetch result
       WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
       Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
-      Option<String> commitedInstantTime = getLatestCommittedInstant();
       // write to error table
       JavaRDD<WriteStatus> dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
       JavaRDD<WriteStatus> writeStatusRDD = dataTableWriteStatusRDD;
       String errorTableInstantTime = writeClient.createNewInstantTime();
       Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
       if (errorTableWriter.isPresent() && isErrorTableWriteUnificationEnabled) {
-        errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, commitedInstantTime));
+        errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, getLatestCommittedInstant()));
         writeStatusRDD = errorTableWriteStatusRDDOpt.map(errorTableWriteStatus -> errorTableWriteStatus.union(dataTableWriteStatusRDD)).orElse(dataTableWriteStatusRDD);
       }
       // process write status
@@ -842,7 +841,7 @@ public class StreamSync implements Serializable, Closeable {
           if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
             errorTableSuccess = errorTableWriter.get().commit(errorTableInstantTime, errorTableWriteStatusRDDOpt.get());
           } else if (!isErrorTableWriteUnificationEnabled) {
-            errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
+            errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, getLatestCommittedInstant());
           }
           if (!errorTableSuccess) {
             switch (errorWriteFailureStrategy) {
