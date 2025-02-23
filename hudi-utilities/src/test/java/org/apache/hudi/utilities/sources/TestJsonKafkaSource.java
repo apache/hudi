@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -338,6 +339,16 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   private BaseErrorTableWriter getAnonymousErrorTableWriter(TypedProperties props) {
     return new BaseErrorTableWriter<ErrorEvent<String>>(new HoodieDeltaStreamer.Config(),
         spark(), props, new HoodieSparkEngineContext(jsc()), fs()) {
+      @Override
+      public JavaRDD<WriteStatus> upsert(String errorTableInstantTime, String baseTableInstantTime, Option<String> commitedInstantTime) {
+        return null;
+      }
+
+      @Override
+      public boolean commit(String errorTableInstantTime, JavaRDD<WriteStatus> writeStatuses) {
+        return false;
+      }
+
       List<JavaRDD<HoodieAvroRecord>> errorEvents = new LinkedList();
 
       @Override
