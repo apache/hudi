@@ -634,3 +634,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-02-22 19:50:43] [release-v1.95.0] ---
 [ENG-21984][HUDI-9067] Fixing num spark tasks for clean action (#1223)
 [AUDIT-1071]: Changelog for release-v1.94.0 (#1224)
+
+--- [2025-02-23 16:03:12] [release-v1.96.0] ---
+[ENG-22750][INTERNAL] Enable timestamp ordering validation by default (#1225)
+[ENG-22747][INTERNAL] Add validation in Merge Handle base class to ensure that the new file version produced has a higher instant time (#1217)
+[AUDIT-1071]: Changelog for release-v1.95.0 (#1226)
