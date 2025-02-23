@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -85,4 +86,8 @@ public abstract class BaseErrorTableWriter<T extends ErrorEvent> implements Seri
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract boolean upsertAndCommit(String baseTableInstantTime, Option<String> commitedInstantTime);
+
+  public abstract JavaRDD<WriteStatus> upsert(String errorTableInstantTime, String baseTableInstantTime, Option<String> commitedInstantTime);
+
+  public abstract boolean commit(String errorTableInstantTime, JavaRDD<WriteStatus> writeStatuses);
 }

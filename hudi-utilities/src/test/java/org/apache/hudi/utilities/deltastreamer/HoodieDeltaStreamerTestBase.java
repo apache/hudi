@@ -317,7 +317,23 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   }
 
   protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath) throws IOException {
-    prepareParquetDFSFiles(numRecords, baseParquetPath, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSFiles(numRecords, baseParquetPath, FIRST_PARQUET_FILE_NAME, false, null, null).close();
+  }
+
+  protected static void prepareParquetDFSMultiFiles(int numRecords, String baseParquetPath, int numFiles) throws IOException {
+    if (numFiles <= 0) {
+      throw new IllegalArgumentException("Number of files must be greater than zero");
+    }
+    int recordsPerFile = numRecords / numFiles;
+    int extraRecords = numRecords % numFiles;
+    for (int i = 0; i < numFiles; i++) {
+      String fileName = String.format("%05d", i) + ".parquet";
+      // Add remaining records to the last file
+      int recordsInThisFile = (i == numFiles - 1) ? recordsPerFile + extraRecords : recordsPerFile;
+      if (recordsInThisFile > 0) {
+        prepareParquetDFSFiles(recordsInThisFile, baseParquetPath, fileName, false, null, null).close();
+      }
+    }
   }
 
   protected static HoodieTestDataGenerator prepareParquetDFSFiles(int numRecords, String baseParquetPath, String fileName, boolean useCustomSchema,
