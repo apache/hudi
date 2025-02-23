@@ -327,27 +327,29 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
              |  primaryKey = 'id',
              |  preCombineField = 'ts'
              | )
-       """.stripMargin)
+        """.stripMargin)
 
         // alter table name.
         val newTableName = s"${tableName}_1"
         val oldLocation = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName)).properties.get("path")
         spark.sql(s"alter table $tableName rename to $newTableName")
-        val newTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName))
-        val newLocation = newTable.properties.get("path")
+        val newLocation = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName)).properties.get("path")
         // only hoodieCatalog will set path to tblp
         if (oldLocation.nonEmpty) {
           assertResult(false)(
             newLocation.equals(oldLocation)
           )
         } else {
-          assertResult(None) (newLocation)
+          assertResult(None)(newLocation)
         }
-        assert(newTable.location.toString.equals(newLocation.get))
-        // newTable.storage.locationUri.get.getPath should remove the scheme of path, thus won't match the location
-        assertResult(false)(newTable.storage.locationUri.get.getPath.equals(newLocation.get))
+      }
+    }
+  }
 
-
+  test("Test Alter Rename Table With Location") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
         // Create table with location
         val locTableName = s"${tableName}_loc"
         val tablePath = s"${tmp.getCanonicalPath}/$locTableName"
@@ -375,11 +377,9 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         val newLocation2 = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newLocTableName))
           .properties.get("path")
         if (oldLocation2.nonEmpty) {
-          // Remove the impact of the schema.
-          val oldLocation2Path = new Path(oldLocation2.get.stripPrefix("file:"))
-          val newLocation2Path = new Path(newLocation2.get.stripPrefix("file:"))
+          // the scheme and authority need to match as well
           assertResult(true)(
-            newLocation2Path.equals(oldLocation2Path)
+            oldLocation2.get.equals(newLocation2.get)
           )
         } else {
           assertResult(None) (newLocation2)
