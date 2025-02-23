@@ -807,7 +807,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_TIMESTAMP_ORDERING_VALIDATION = ConfigProperty
       .key("hoodie.timestamp.ordering.validate.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .sinceVersion("0.15.1")
       .withDocumentation("Enable validation for commit time generation to ensure new commit time generated is always the latest among other entries. "

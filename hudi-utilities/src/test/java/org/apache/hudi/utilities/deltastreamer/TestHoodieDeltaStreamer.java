@@ -1083,6 +1083,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     configs.add(String.format("%s=%s", LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000"));
     configs.add(String.format("%s=%s", HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()));
     configs.add(String.format("%s=%s", HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name()));
+    // ToDo: Enable Timestamp validation after making instant generation and request atomic using a lock
+    configs.add(String.format("%s=%s", HoodieWriteConfig.ENABLE_TIMESTAMP_ORDERING_VALIDATION.key(), "false"));
     return configs;
   }
 

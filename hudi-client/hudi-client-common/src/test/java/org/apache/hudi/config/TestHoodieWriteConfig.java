@@ -537,7 +537,7 @@ public class TestHoodieWriteConfig {
   @Test
   void testEnableTimestampOrderingValidationConfig() {
     HoodieWriteConfig writeConfigBuilderWithTimestampOrderingDefault = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
-    assertFalse(writeConfigBuilderWithTimestampOrderingDefault.shouldEnableTimestampOrderinValidation());
+    assertTrue(writeConfigBuilderWithTimestampOrderingDefault.shouldEnableTimestampOrderinValidation());
 
     HoodieWriteConfig writeConfigBuilderWithTimestampOrderingFalse = HoodieWriteConfig.newBuilder().withPath("/tmp")
         .withEnableTimestampOrderingValidation(false).build();
