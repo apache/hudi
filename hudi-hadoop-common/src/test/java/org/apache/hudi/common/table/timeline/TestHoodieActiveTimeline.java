@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -34,14 +36,11 @@ import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
-
-import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -68,7 +67,6 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_PARSER;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
-import static org.apache.hudi.common.util.CleanerUtils.getCleanerMetadata;
 import static org.apache.hudi.common.util.CleanerUtils.getCleanerPlan;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.hamcrest.CoreMatchers.is;
@@ -197,7 +195,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         HoodieTimeline.COMMIT_ACTION, State.REQUESTED).isPresent());
     assertFalse(timeline.firstInstant(
         HoodieTimeline.REPLACE_COMMIT_ACTION, State.COMPLETED).isPresent());
-    
+
     HoodieTimeline activeCommitTimeline = timeline.getCommitAndReplaceTimeline().filterCompletedInstants();
     assertEquals(10, activeCommitTimeline.countInstants());
 
@@ -351,7 +349,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     checkTimeline.accept(timeline.getWriteTimeline(), CollectionUtils.createSet(
         HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION,
         HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
-    checkTimeline.accept(timeline.getCommitAndReplaceTimeline(),  CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
+    checkTimeline.accept(timeline.getCommitAndReplaceTimeline(), CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
     checkTimeline.accept(timeline.getDeltaCommitTimeline(), Collections.singleton(HoodieTimeline.DELTA_COMMIT_ACTION));
     checkTimeline.accept(timeline.getCleanerTimeline(), Collections.singleton(HoodieTimeline.CLEAN_ACTION));
     checkTimeline.accept(timeline.getRollbackTimeline(), Collections.singleton(HoodieTimeline.ROLLBACK_ACTION));
@@ -365,7 +363,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // Get some random Instants
     Random rand = new Random();
     Set<String> randomActions = allInstantsSup.get().filter(i -> rand.nextBoolean())
-                                          .map(HoodieInstant::getAction).collect(Collectors.toSet());
+        .map(HoodieInstant::getAction).collect(Collectors.toSet());
     checkTimeline.accept(timeline.getTimelineOfActions(randomActions), randomActions);
   }
 
@@ -509,7 +507,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertEquals(INSTANT_FILE_NAME_GENERATOR.getCommitFromCommitFile(INSTANT_FILE_NAME_GENERATOR.getFileName(instantComplete)), "5_6");
 
     assertEquals(INSTANT_FILE_NAME_GENERATOR.makeInflightRestoreFileName(
-        INSTANT_FILE_NAME_PARSER.extractTimestamp(INSTANT_FILE_NAME_GENERATOR.getFileName(instantComplete))),
+            INSTANT_FILE_NAME_PARSER.extractTimestamp(INSTANT_FILE_NAME_GENERATOR.getFileName(instantComplete))),
         INSTANT_FILE_NAME_GENERATOR.getFileName(instantInflight));
   }
 
@@ -541,7 +539,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     checkFilter.accept(timeline.filter(i -> false), new HashSet<>());
     checkFilter.accept(timeline.filterInflights(), Collections.singleton(State.INFLIGHT));
     checkFilter.accept(timeline.filterInflightsAndRequested(),
-            CollectionUtils.createSet(State.INFLIGHT, State.REQUESTED));
+        CollectionUtils.createSet(State.INFLIGHT, State.REQUESTED));
 
     // filterCompletedAndCompactionInstants
     // This cannot be done using checkFilter as it involves both states and actions
@@ -646,8 +644,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.createNewInstant(commitInstant);
     timeline.transitionRequestedToInflight(commitInstant, Option.empty());
     HoodieInstant completeCommitInstant = metaClient.createNewInstant(State.INFLIGHT, commitInstant.getAction(), commitInstant.requestedTime());
-    timeline.saveAsComplete(completeCommitInstant,
-        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    timeline.saveAsComplete(completeCommitInstant, metaClient.getCommitMetadataSerDe().serialize(commitMetadata));
     HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
 
     HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
@@ -658,16 +655,16 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan();
     cleanerPlan.setLastCompletedCommitTimestamp("1");
     cleanerPlan.setPolicy("policy");
-    cleanerPlan.setVersion(1);
+    cleanerPlan.setVersion(TimelineLayoutVersion.CURR_VERSION);
     cleanerPlan.setPartitionsToBeDeleted(Collections.singletonList("partition1"));
     timeline.saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
 
-    assertEquals(cleanerPlan, getCleanerMetadata(metaClient, cleanInstant));
+    assertEquals(cleanerPlan, getCleanerPlan(metaClient, cleanInstant));
 
     HoodieTimeline mergedTimeline = timelineAfterFirstInstant.mergeTimeline(timeline.reload());
     assertEquals(commitMetadata, metaClient.getCommitMetadataSerDe().deserialize(
         completedCommitInstant, mergedTimeline.getInstantContentStream(completedCommitInstant), () -> timeline.isEmpty(completeCommitInstant), HoodieCommitMetadata.class));
-    assertEquals(cleanerPlan,getCleanerPlan(metaClient, cleanInstant));
+    assertEquals(cleanerPlan, getCleanerPlan(metaClient, cleanInstant));
     assertEquals(commitMetadata, metaClient.getCommitMetadataSerDe().deserialize(
         completedCommitInstant, mergedTimeline.getInstantContentStream(completedCommitInstant), () -> timeline.isEmpty(completeCommitInstant), HoodieCommitMetadata.class));
   }
@@ -731,7 +728,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     List<Future> futures = new ArrayList<>(numThreads);
     for (int idx = 0; idx < numThreads; ++idx) {
       futures.add(executorService.submit(() -> {
-        Date date = new Date(System.currentTimeMillis() + (int)(Math.random() * numThreads) * milliSecondsInYear);
+        Date date = new Date(System.currentTimeMillis() + (int) (Math.random() * numThreads) * milliSecondsInYear);
         final String expectedFormat = TimelineUtils.formatDate(date);
         for (int tidx = 0; tidx < numChecks; ++tidx) {
           final String curFormat = TimelineUtils.formatDate(date);
@@ -850,6 +847,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
   /**
    * Returns an exhaustive list of all possible HoodieInstant.
+   *
    * @return list of HoodieInstant
    */
   private List<HoodieInstant> getAllInstants() {

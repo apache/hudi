@@ -230,6 +230,5 @@ public class TimelineMetadataUtils {
       ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
       return fileReader.next();
     }
-    /// todo: do we need boolean supplier
   }
 }

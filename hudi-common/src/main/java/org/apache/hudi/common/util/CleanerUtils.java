@@ -108,22 +108,7 @@ public class CleanerUtils {
    */
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
-    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
-        metaClient.getActiveTimeline().getInstantContentStream(cleanInstant));
-    return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
-  }
-
-  /**
-   * Get Latest Version of Hoodie Cleaner Metadata - Output of cleaner operation.
-   * @return Latest version of Clean metadata corresponding to clean instant
-   * @throws IOException
-   */
-  public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, byte[] details)
-      throws IOException {
-    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(details);
-    return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
+    return getCleanerMetadata(metaClient, metaClient.getActiveTimeline().getInstantContentStream(cleanInstant));
   }
 
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, Option<InputStream> details)
@@ -176,10 +161,7 @@ public class CleanerUtils {
    */
   public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
-    CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
-    HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(
-        metaClient.getActiveTimeline().getInstantContentStream(cleanInstant), HoodieCleanerPlan.class);
-    return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
+    return getCleanerPlan(metaClient, metaClient.getActiveTimeline().getInstantContentStream(cleanInstant));
   }
 
   public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, Option<InputStream> in)
