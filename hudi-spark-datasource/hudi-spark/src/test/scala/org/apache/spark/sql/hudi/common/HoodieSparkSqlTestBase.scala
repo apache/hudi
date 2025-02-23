@@ -20,34 +20,31 @@ package org.apache.spark.sql.hudi.common
 import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
 import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
+import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
-import org.apache.hudi.metadata.HoodieTableMetadata
 
 import org.apache.hadoop.fs.Path
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.util.Utils
-
 import org.joda.time.DateTimeZone
-
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
