@@ -41,7 +41,7 @@ public class MockSubtaskGateway implements OperatorCoordinator.SubtaskGateway {
 
   @Override
   public ExecutionAttemptID getExecution() {
-    return ExecutionAttemptID.randomId();
+    return null;
   }
 
   @Override
