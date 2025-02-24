@@ -18,6 +18,7 @@
 
 package org.apache.hudi.timeline.service;
 
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -81,11 +82,10 @@ public class MockHoodieHadoopStorage extends HoodieHadoopStorage {
   }
 
   private StoragePath validateAndConvertPath(StoragePath path) {
-    assert scheme == null || scheme.equals(path.toUri().getScheme()) :
-        String.format("Invalid scheme, expected %s, found %s", scheme, path.toUri().getScheme());
-
-    assert authority == null || authority.equals(path.toUri().getAuthority()) :
-        String.format("Invalid authority, expected %s, found %s", authority, path.toUri().getAuthority());
+    ValidationUtils.checkArgument(scheme == null || scheme.equals(path.toUri().getScheme()),
+        String.format("Invalid scheme, expected %s, found %s", scheme, path.toUri().getScheme()));
+    ValidationUtils.checkArgument(authority == null || authority.equals(path.toUri().getAuthority()),
+        String.format("Invalid authority, expected %s, found %s", authority, path.toUri().getAuthority()));
 
     return convertToHadoopPath(path);
   }
