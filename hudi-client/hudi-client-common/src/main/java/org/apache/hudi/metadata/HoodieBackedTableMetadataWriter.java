@@ -550,8 +550,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           this.getClass().getSimpleName());
     } else {
       final List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+      String latestCommit = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().map(instant -> instant.getTimestamp()).orElse(SOLO_COMMIT_TIMESTAMP);
       for (String partition : partitions) {
-        fsView.getLatestFileSlices(partition).forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs)));
+        fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestCommit).forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs)));
       }
 
       LOG.info("Initializing record index from " + partitionFileSlicePairs.size() + " file slices in "
