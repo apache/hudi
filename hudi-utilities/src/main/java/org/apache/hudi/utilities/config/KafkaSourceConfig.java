@@ -167,6 +167,16 @@ public class KafkaSourceConfig extends HoodieConfig {
       .withDocumentation("The class name of the Exception that needs to be retried, separated by commas. "
           + "Default is empty which means retry all the IOException and RuntimeException from KafkaConsumer");
 
+  public static final ConfigProperty<Long> OFFSET_SKIP_BUFFER_MINUTES = ConfigProperty
+      .key(PREFIX + "offset.skip.buffer.minutes")
+      .defaultValue(-1L)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Time in minutes to move forward from retention time for reading offsets "
+          + "when the checkpoints are not available or out-of-bound to avoid potential "
+          + "OffsetOutOfRange exception, as it is possible that the earliest Kafka offsets may "
+          + "expire soon while the job is progressing.");
+
   /**
    * Kafka reset offset strategies.
    */
