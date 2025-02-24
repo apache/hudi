@@ -55,6 +55,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -64,7 +65,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 
 /**
  * Sink function to write the data to the underneath filesystem.
@@ -479,27 +479,29 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   }
 
   protected  List<HoodieRecord> convertToHoodieRecords(List<HoodieFlinkInternalRow> records) {
-    return records.stream()
-        .map(record -> {
-          RowData row = record.getRowData();
-          // [HUDI-8969] Analyze how to write `RowData` directly
-          GenericRecord gr = (GenericRecord) this.converter.convert(this.avroSchema, row);
-          HoodieRecordPayload payload;
-          try {
-            payload = payloadCreation.createPayload(gr);
-          } catch (Exception e) {
-            throw new RuntimeException(e);
-          }
-          HoodieRecord hoodieRecord =
-              new HoodieAvroRecord<>(
-                  new HoodieKey(record.getRecordKey(), record.getPartitionPath()),
-                  payload,
-                  HoodieOperation.fromName(record.getOperationType()));
-          hoodieRecord.unseal();
-          hoodieRecord.setCurrentLocation(new HoodieRecordLocation(record.getInstantTime(), record.getFileId()));
-          hoodieRecord.seal();
-          return hoodieRecord;
-        }).collect(Collectors.toList());
+    List<HoodieRecord> hoodieRecords = Arrays.asList(new HoodieRecord[records.size()]);
+    for (int i = 0; i < records.size(); i++) {
+      HoodieFlinkInternalRow record = records.get(i);
+      RowData row = record.getRowData();
+      // [HUDI-8969] Analyze how to write `RowData` directly
+      GenericRecord gr = (GenericRecord) this.converter.convert(this.avroSchema, row);
+      HoodieRecordPayload payload;
+      try {
+        payload = payloadCreation.createPayload(gr);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+      HoodieRecord hoodieRecord =
+          new HoodieAvroRecord<>(
+              new HoodieKey(record.getRecordKey(), record.getPartitionPath()),
+              payload,
+              HoodieOperation.fromName(record.getOperationType()));
+      hoodieRecord.unseal();
+      hoodieRecord.setCurrentLocation(new HoodieRecordLocation(record.getInstantTime(), record.getFileId()));
+      hoodieRecord.seal();
+      hoodieRecords.set(i, hoodieRecord);
+    }
+    return hoodieRecords;
   }
 
   protected List<HoodieRecord> deduplicateRecordsIfNeeded(List<HoodieRecord> records) {
