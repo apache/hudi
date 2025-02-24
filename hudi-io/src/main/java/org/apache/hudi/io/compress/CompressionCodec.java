@@ -41,4 +41,14 @@ public enum CompressionCodec {
   public String getName() {
     return name;
   }
+
+  public static CompressionCodec findCodecByName(String name) {
+    for (CompressionCodec v : CompressionCodec.values()) {
+      if (v.getName().equals(name.toLowerCase())) {
+        return v;
+      }
+    }
+    throw new IllegalArgumentException(
+        "Cannot find compression codec: " + name);
+  }
 }

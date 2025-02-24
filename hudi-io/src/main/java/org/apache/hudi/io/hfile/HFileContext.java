@@ -29,37 +29,50 @@ import org.apache.hudi.io.compress.HoodieDecompressorFactory;
 public class HFileContext {
   private final CompressionCodec compressionCodec;
   private final HoodieDecompressor decompressor;
+  private final int blockSize;
 
-  private HFileContext(CompressionCodec compressionCodec) {
+  private HFileContext(CompressionCodec compressionCodec, int blockSize) {
     this.compressionCodec = compressionCodec;
     this.decompressor = HoodieDecompressorFactory.getDecompressor(compressionCodec);
+    this.blockSize = blockSize;
   }
 
-  CompressionCodec getCompressionCodec() {
+  public CompressionCodec getCompressionCodec() {
     return compressionCodec;
   }
 
-  HoodieDecompressor getDecompressor() {
+  public HoodieDecompressor getDecompressor() {
     return decompressor;
+  }
+
+  public int getBlockSize() {
+    return blockSize;
   }
 
   public static Builder builder() {
     return new Builder();
   }
 
+  // TODO: Add all necessary fileds as HBASE HFileContext.
   public static class Builder {
     private CompressionCodec compressionCodec = CompressionCodec.NONE;
+    private int blockSize = 1024;
 
     public Builder() {
     }
 
-    public Builder compressionCodec(CompressionCodec compressionCodec) {
+    public Builder withBlockSize(int blockSize) {
+      this.blockSize = blockSize;
+      return this;
+    }
+
+    public Builder withCompressionCodec(CompressionCodec compressionCodec) {
       this.compressionCodec = compressionCodec;
       return this;
     }
 
     public HFileContext build() {
-      return new HFileContext(compressionCodec);
+      return new HFileContext(compressionCodec, blockSize);
     }
   }
 }

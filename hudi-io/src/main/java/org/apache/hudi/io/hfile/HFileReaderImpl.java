@@ -72,7 +72,7 @@ public class HFileReaderImpl implements HFileReader {
     // Read Trailer (serialized in Proto)
     this.trailer = readTrailer(stream, fileSize);
     this.context = HFileContext.builder()
-        .compressionCodec(trailer.getCompressionCodec())
+        .withCompressionCodec(trailer.getCompressionCodec())
         .build();
     HFileBlockReader blockReader = new HFileBlockReader(
         context, stream, trailer.getLoadOnOpenDataOffset(),

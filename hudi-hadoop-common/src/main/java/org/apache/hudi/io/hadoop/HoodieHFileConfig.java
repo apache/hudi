@@ -20,12 +20,12 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.CellComparator;
 import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 
 public class HoodieHFileConfig {
@@ -35,8 +35,7 @@ public class HoodieHFileConfig {
   public static final boolean CACHE_DATA_IN_L1 = HColumnDescriptor.DEFAULT_CACHE_DATA_IN_L1;
   // This is private in CacheConfig so have been copied here.
   public static final boolean DROP_BEHIND_CACHE_COMPACTION = true;
-
-  private final Compression.Algorithm compressionAlgorithm;
+  private final CompressionCodec compressionCodec;
   private final int blockSize;
   private final long maxFileSize;
   private final boolean prefetchBlocksOnOpen;
@@ -47,12 +46,12 @@ public class HoodieHFileConfig {
   private final CellComparator hfileComparator;
   private final String keyFieldName;
 
-  public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
-                           long maxFileSize, String keyFieldName,
+  public HoodieHFileConfig(Configuration hadoopConf, CompressionCodec compressionCodec,
+                           int blockSize, long maxFileSize, String keyFieldName,
                            boolean prefetchBlocksOnOpen, boolean cacheDataInL1, boolean dropBehindCacheCompaction,
                            BloomFilter bloomFilter, CellComparator hfileComparator) {
     this.hadoopConf = hadoopConf;
-    this.compressionAlgorithm = compressionAlgorithm;
+    this.compressionCodec = compressionCodec;
     this.blockSize = blockSize;
     this.maxFileSize = maxFileSize;
     this.prefetchBlocksOnOpen = prefetchBlocksOnOpen;
@@ -67,8 +66,8 @@ public class HoodieHFileConfig {
     return hadoopConf;
   }
 
-  public Compression.Algorithm getCompressionAlgorithm() {
-    return compressionAlgorithm;
+  public CompressionCodec getCompressionCodec() {
+    return compressionCodec;
   }
 
   public int getBlockSize() {
