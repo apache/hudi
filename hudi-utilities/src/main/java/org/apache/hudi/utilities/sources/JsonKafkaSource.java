@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -71,7 +72,7 @@ public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
     public static final ConfigProperty<String> KAFKA_JSON_VALUE_DESERIALIZER_CLASS = ConfigProperty
         .key("hoodie.deltastreamer.source.kafka.json.value.deserializer.class")
         .defaultValue(StringDeserializer.class.getName())
-        .sinceVersion("0.14.0")
+        .sinceVersion("1.1.0")
         .withDocumentation("Kafka Json Payload Deserializer Class");
   }
 
@@ -86,8 +87,7 @@ public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
     super(properties, sparkContext, sparkSession, SourceType.JSON, metrics,
         new DefaultStreamContext(UtilHelpers.getSchemaProviderForKafkaSource(streamContext.getSchemaProvider(), properties, sparkContext), streamContext.getSourceProfileSupplier()));
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
-    props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, props.getString(Config.KAFKA_JSON_VALUE_DESERIALIZER_CLASS.key(),
-        Config.KAFKA_JSON_VALUE_DESERIALIZER_CLASS.defaultValue()));
+    props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, ConfigUtils.getStringWithAltKeys(props, Config.KAFKA_JSON_VALUE_DESERIALIZER_CLASS, true));
     this.offsetGen = new KafkaOffsetGen(props);
   }
 
