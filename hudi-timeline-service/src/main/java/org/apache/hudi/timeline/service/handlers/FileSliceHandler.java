@@ -25,11 +25,9 @@ import org.apache.hudi.common.table.timeline.dto.DTOUtils;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -42,8 +40,8 @@ import java.util.stream.Collectors;
 public class FileSliceHandler extends Handler {
 
   public FileSliceHandler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
-                          HoodieStorage storage, FileSystemViewManager viewManager) throws IOException {
-    super(conf, timelineServiceConfig, storage, viewManager);
+                          FileSystemViewManager viewManager) {
+    super(conf, timelineServiceConfig, viewManager);
   }
 
   public List<FileSliceDTO> getAllFileSlices(String basePath, String partitionPath) {

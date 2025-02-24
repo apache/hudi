@@ -26,8 +26,6 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import com.beust.jcommander.JCommander;
@@ -56,7 +54,6 @@ public class TimelineService {
   private final Config timelineServerConf;
   private final StorageConfiguration<?> storageConf;
   private transient HoodieEngineContext context;
-  private transient HoodieStorage storage;
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
   private transient RequestHandler requestHandler;
@@ -66,12 +63,11 @@ public class TimelineService {
   }
 
   public TimelineService(HoodieEngineContext context, StorageConfiguration<?> storageConf, Config timelineServerConf,
-                         HoodieStorage storage, FileSystemViewManager globalFileSystemViewManager) throws IOException {
+                         FileSystemViewManager globalFileSystemViewManager) {
     this.storageConf = storageConf;
     this.timelineServerConf = timelineServerConf;
     this.serverPort = timelineServerConf.serverPort;
     this.context = context;
-    this.storage = storage;
     this.fsViewsManager = globalFileSystemViewManager;
   }
 
@@ -370,7 +366,7 @@ public class TimelineService {
     return realServerPort;
   }
 
-  private void createApp() throws IOException {
+  private void createApp() {
     // if app needs to be recreated, stop the existing one
     if (app != null) {
       app.stop();
@@ -390,7 +386,7 @@ public class TimelineService {
     });
 
     requestHandler = new RequestHandler(
-        app, storageConf, timelineServerConf, context, storage, fsViewsManager);
+        app, storageConf, timelineServerConf, context, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
   }
@@ -450,10 +446,6 @@ public class TimelineService {
     return storageConf;
   }
 
-  public HoodieStorage getStorage() {
-    return storage;
-  }
-
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
@@ -469,7 +461,6 @@ public class TimelineService {
         new HoodieLocalEngineContext(storageConf.newInstance()),
         storageConf.newInstance(),
         cfg,
-        HoodieStorageUtils.getStorage(storageConf),
         viewManager);
     service.run();
   }

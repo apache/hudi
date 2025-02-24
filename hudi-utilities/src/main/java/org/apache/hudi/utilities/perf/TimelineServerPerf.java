@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.timeline.service.TimelineService;
@@ -74,7 +73,7 @@ public class TimelineServerPerf implements Serializable {
   private final boolean useExternalTimelineServer;
   private String hostAddr;
 
-  public TimelineServerPerf(Config cfg) throws IOException {
+  public TimelineServerPerf(Config cfg) {
     this.cfg = cfg;
     useExternalTimelineServer = (cfg.serverHost != null);
     TimelineService.Config timelineServiceConf = cfg.getTimelineServerConfig();
@@ -82,7 +81,6 @@ public class TimelineServerPerf implements Serializable {
         new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf()),
         HadoopFSUtils.getStorageConf(),
         timelineServiceConf,
-        HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf()),
         TimelineService.buildFileSystemViewManager(timelineServiceConf, HadoopFSUtils.getStorageConf()));
   }
 

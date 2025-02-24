@@ -20,23 +20,24 @@ package org.apache.hudi.timeline.service.handlers;
 
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
-
-import java.io.IOException;
 
 public abstract class Handler {
 
   protected final StorageConfiguration<?> conf;
   protected final TimelineService.Config timelineServiceConfig;
-  protected final HoodieStorage storage;
   protected final FileSystemViewManager viewManager;
 
   public Handler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
-                 HoodieStorage storage, FileSystemViewManager viewManager) throws IOException {
-    this.conf = conf;
+                 FileSystemViewManager viewManager) {
+    this.conf = conf.newInstance();
     this.timelineServiceConfig = timelineServiceConfig;
-    this.storage = storage;
     this.viewManager = viewManager;
+  }
+
+  protected HoodieStorage getStorage(String path) {
+    return HoodieStorageUtils.getStorage(path, conf);
   }
 }

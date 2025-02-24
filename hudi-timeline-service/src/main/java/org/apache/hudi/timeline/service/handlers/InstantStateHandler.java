@@ -76,9 +76,8 @@ public class InstantStateHandler extends Handler {
   private final AtomicLong requestCount;
 
   public InstantStateHandler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
-                             HoodieStorage storage,
-                             FileSystemViewManager viewManager) throws IOException {
-    super(conf, timelineServiceConfig, storage, viewManager);
+                             FileSystemViewManager viewManager) {
+    super(conf, timelineServiceConfig, viewManager);
     this.cachedInstantStates = new ConcurrentHashMap<>();
     this.requestCount = new AtomicLong();
   }
@@ -118,8 +117,9 @@ public class InstantStateHandler extends Handler {
   public List<InstantStateDTO> scanInstantState(StoragePath instantStatePath) {
     try {
       // Check instantStatePath exists before list status, see HUDI-5915
-      if (this.storage.exists(instantStatePath)) {
-        return this.storage.listDirectEntries(instantStatePath).stream()
+      HoodieStorage storage = getStorage(instantStatePath.toUri().toString());
+      if (storage.exists(instantStatePath)) {
+        return storage.listDirectEntries(instantStatePath).stream()
             .map(InstantStateDTO::fromStoragePathInfo).collect(Collectors.toList());
       } else {
         return Collections.emptyList();
