@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.ExecutionAttemptUtil;
+
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
@@ -41,7 +43,7 @@ public class MockSubtaskGateway implements OperatorCoordinator.SubtaskGateway {
 
   @Override
   public ExecutionAttemptID getExecution() {
-    return null;
+    return ExecutionAttemptUtil.randomId();
   }
 
   @Override
