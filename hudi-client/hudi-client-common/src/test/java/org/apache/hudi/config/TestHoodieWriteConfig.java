@@ -616,6 +616,17 @@ public class TestHoodieWriteConfig {
   }
 
   @Test
+  void testBloomIndexFileIdKeySortPartitionerConfig() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BLOOM)
+            .bloomIndexFileGroupIdKeySortPartitioner(true).build())
+        .build();
+    assertTrue(writeConfig.useBloomIndexFileGroupIdKeySortPartitioner());
+  }
+  
+  @Test
   public void testAutoAdjustCleanPolicyForNonBlockingConcurrencyControl() {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
