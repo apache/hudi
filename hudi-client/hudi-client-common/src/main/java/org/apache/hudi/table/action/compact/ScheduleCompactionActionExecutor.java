@@ -109,9 +109,9 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
           .getWriteTimeline().filterCompletedAndCompactionInstants().getInstantsAsStream()
           .filter(instant -> compareTimestamps(instant.requestedTime(), GREATER_THAN_OR_EQUALS, instantTime))
           .collect(Collectors.toList());
-//      ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
-//          "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
-//              + conflictingInstants);
+      //      ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
+      //          "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
+      //              + conflictingInstants);
     }
 
     HoodieCompactionPlan plan = scheduleCompaction();

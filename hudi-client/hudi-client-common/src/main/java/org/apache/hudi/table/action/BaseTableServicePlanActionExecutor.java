@@ -125,8 +125,8 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
           try {
             String completionTime = instant.getCompletionTime();
             // Just for test
-            if (completionTime.compareTo(leftBoundary) >= 0 &&
-                ((instant.requestedTime().length() < completionTime.length() && instant.requestedTime().compareTo(rightBoundary) < 0)
+            if (completionTime.compareTo(leftBoundary) >= 0
+                && ((instant.requestedTime().length() < completionTime.length() && instant.requestedTime().compareTo(rightBoundary) < 0)
                     || completionTime.compareTo(rightBoundary) < 0)) {
               HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, activeTimeline);
               return metadata.getWriteStats().stream().map(HoodieWriteStat::getPartitionPath);

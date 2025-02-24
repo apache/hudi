@@ -37,7 +37,6 @@ import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.timeline.versioning.DefaultCommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantComparator;
-import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameParser;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultTimelineFactory;
@@ -270,7 +269,7 @@ public class HoodieTestUtils {
   public static HoodieTableMetaClient createMetaClient(StorageConfiguration<?> storageConf,
                                                        StoragePath basePath, HoodieTableVersion tableVersion) {
     return HoodieTableMetaClient.builder().setLayoutVersion(Option.of(tableVersion.getTimelineLayoutVersion()))
-            .setConf(storageConf).setBasePath(basePath).build();
+        .setConf(storageConf).setBasePath(basePath).build();
   }
 
   /**
