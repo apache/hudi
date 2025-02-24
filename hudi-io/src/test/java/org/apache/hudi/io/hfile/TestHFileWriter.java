@@ -25,6 +25,7 @@ import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -40,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHFileWriter {
   private static final Logger LOG = LoggerFactory.getLogger(TestHFileWriter.class);
   private static final String TEST_FILE = "test.hfile";
+  private static final HFileContext CONTEXT = HFileContext.builder().build();
 
   public static void main(String[] args) throws Exception {
     try {
@@ -62,7 +64,10 @@ public class TestHFileWriter {
   }
 
   private static void writeTestFile() throws Exception {
-    try (HFileWriter writer = new HFileWriterImpl(TEST_FILE)) {
+    try (
+        DataOutputStream outputStream =
+             new DataOutputStream(Files.newOutputStream(Paths.get(TEST_FILE)));
+        HFileWriter writer = new HFileWriterImpl(CONTEXT, outputStream)) {
       writer.append("key1".getBytes(), "value1".getBytes());
       writer.append("key2".getBytes(), "value2".getBytes());
       writer.append("key3".getBytes(), "value3".getBytes());

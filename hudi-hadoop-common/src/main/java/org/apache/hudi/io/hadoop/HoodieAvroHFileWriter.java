@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.io.hfile.HFileContext;
 import org.apache.hudi.io.hfile.HFileWriter;
 import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
@@ -37,12 +38,14 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFileContext;
-import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -61,6 +64,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 public class HoodieAvroHFileWriter
     implements HoodieAvroFileWriter {
   private static final AtomicLong RECORD_INDEX_COUNT = new AtomicLong(1);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileWriter.class);
   private final Path file;
   private final HoodieHFileConfig hfileConfig;
   private final boolean isWrapperFileSystem;
@@ -98,9 +102,9 @@ public class HoodieAvroHFileWriter
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
 
-    HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
-        .withCompression(hfileConfig.getCompressionAlgorithm())
-        .withCellComparator(hfileConfig.getHFileComparator())
+    HFileContext context = new HFileContext.Builder()
+        .withBlockSize(hfileConfig.getBlockSize())
+        .withCompressionCodec(hfileConfig.getCompressionCodec())
         .build();
 
     conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY,
@@ -108,9 +112,10 @@ public class HoodieAvroHFileWriter
     conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
     conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY,
         String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
-    CacheConfig cacheConfig = new CacheConfig(conf);
-    this.nativeWriter = new HFileWriterImpl(file.toString());
 
+    FsPermission fsPermission = FsPermission.getFileDefault();
+    FSDataOutputStream outputStream = create(fs, this.file, fsPermission, false);
+    this.nativeWriter = new HFileWriterImpl(context, outputStream);
     this.nativeWriter.appendFileInfo(
         HoodieAvroHFileReaderImplBase.SCHEMA_KEY,
         getUTF8Bytes(schema.toString()));
@@ -192,5 +197,61 @@ public class HoodieAvroHFileWriter
 
     nativeWriter.close();
     nativeWriter = null;
+  }
+
+  /**
+   * Create the specified file on the filesystem. By default, this will:
+   * <ol>
+   * <li>apply the umask in the configuration (if it is enabled)</li>
+   * <li>use the fs configured buffer size (or 4096 if not set)</li>
+   * <li>use the default replication</li>
+   * <li>use the default block size</li>
+   * <li>not track progress</li>
+   * </ol>
+   * @param fs        {@link FileSystem} on which to write the file
+   * @param path      {@link Path} to the file to write
+   * @param perm      intial permissions
+   * @param overwrite Whether or not the created file should be overwritten.
+   * @return output stream to the created file
+   * @throws IOException if the file cannot be created
+   */
+  public static FSDataOutputStream create(FileSystem fs, Path path, FsPermission perm,
+                                          boolean overwrite) throws IOException {
+    if (LOG.isTraceEnabled()) {
+      LOG.trace("Creating file={} with permission={}, overwrite={}", path, perm, overwrite);
+    }
+    return fs.create(path, perm, overwrite, getDefaultBufferSize(fs),
+        getDefaultReplication(fs, path), getDefaultBlockSize(fs, path), null);
+  }
+
+  /**
+   * Returns the default buffer size to use during writes. The size of the buffer should probably be
+   * a multiple of hardware page size (4096 on Intel x86), and it determines how much data is
+   * buffered during read and write operations.
+   * @param fs filesystem object
+   * @return default buffer size to use during writes
+   */
+  public static int getDefaultBufferSize(final FileSystem fs) {
+    return fs.getConf().getInt("io.file.buffer.size", 4096);
+  }
+
+  /**
+   * Get the default replication.
+   * @param fs filesystem object
+   * @param path path of file
+   * @return default replication for the path's filesystem
+   */
+  public static short getDefaultReplication(final FileSystem fs, final Path path) {
+    return fs.getDefaultReplication(path);
+  }
+
+  /**
+   * Return the number of bytes that large input files should be optimally be split into to minimize
+   * i/o time.
+   * @param fs filesystem object
+   * @return the default block size for the path's filesystem
+   */
+  public static long getDefaultBlockSize(final FileSystem fs, final Path path) {
+    return fs.getDefaultBlockSize(path);
   }
 }

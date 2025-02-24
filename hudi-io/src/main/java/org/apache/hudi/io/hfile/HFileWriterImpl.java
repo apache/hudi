@@ -33,10 +33,9 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedOutputStream;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -47,7 +46,8 @@ import java.util.List;
  * Pure Java implementation of HFile writer (HFile v3 format) for Hudi.
  */
 public class HFileWriterImpl implements HFileWriter {
-  private final FileChannel channel;
+  private final DataOutputStream outputStream;
+  private final HFileContext context;
   // Flushed data blocks.
   private final List<DataBlock> dataBlocks = new ArrayList<>();
   // Data block under construction.
@@ -61,13 +61,12 @@ public class HFileWriterImpl implements HFileWriter {
   private long totalUncompressedBytes;
   private long currentOffset;
   private long loadOnOpenSectionOffset;
-  private static final int DEFAULT_BLOCK_SIZE = 64 * 1024;
   private final int blockSize;
 
-  public HFileWriterImpl(String filePath) throws IOException {
-    this.channel = new RandomAccessFile(filePath, "rw")
-        .getChannel();
-    this.blockSize = DEFAULT_BLOCK_SIZE;
+  public HFileWriterImpl(HFileContext context, DataOutputStream outputStream) {
+    this.outputStream = outputStream;
+    this.context = context;
+    this.blockSize = this.context.getBlockSize();
     this.uncompressedBytes = 0L;
     this.totalUncompressedBytes = 0L;
     this.currentOffset = 0L;
@@ -108,7 +107,8 @@ public class HFileWriterImpl implements HFileWriter {
     // TODO: support meta blocks if needed.
     writeLoadOnOpenSection();
     writeTrailer();
-    channel.close();
+    outputStream.flush();
+    outputStream.close();
   }
 
   private void flushCurrentDataBlock() throws IOException {
@@ -194,7 +194,8 @@ public class HFileWriterImpl implements HFileWriter {
   }
 
   private void writeBuffer(ByteBuffer buffer) throws IOException {
-    channel.write(buffer);
+    // Note that: Use `write(byte[], off, len)`, instead of `write(byte[])`.
+    outputStream.write(buffer.array(), 0, buffer.limit());
     currentOffset += buffer.limit();
   }
 
@@ -204,7 +205,10 @@ public class HFileWriterImpl implements HFileWriter {
 
   // Example to demonstrate the code is runnable.
   public static void main(String[] args) throws Exception {
-    try (HFileWriterImpl writer = new HFileWriterImpl("test.hfile")) {
+    String fileName = "test.hfile";
+    HFileContext context = HFileContext.builder().build();
+    try (DataOutputStream outputStream = new DataOutputStream(Files.newOutputStream(Paths.get(fileName)));
+         HFileWriterImpl writer = new HFileWriterImpl(context, outputStream)) {
       writer.append("key1".getBytes(), "value1".getBytes());
       writer.append("key2".getBytes(), "value2".getBytes());
     }
