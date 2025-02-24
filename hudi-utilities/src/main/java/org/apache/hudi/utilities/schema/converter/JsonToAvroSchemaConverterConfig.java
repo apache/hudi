@@ -28,7 +28,7 @@ public class JsonToAvroSchemaConverterConfig {
   public static final ConfigProperty<Boolean> CONVERT_DEFAULT_VALUE_TYPE = ConfigProperty
       .key("hoodie.streamer.schemaconverter.json_to_avro.convert_default_value_type")
       .defaultValue(true)
-      .sinceVersion("0.14.1")
+      .sinceVersion("1.1.0")
       .withDocumentation("In `org.apache.hudi.utilities.schema.converter.JsonToAvroSchemaConverter`, "
           + "whether to automatically convert the default value based on the field type in the "
           + "schema. For example, the field schema is "

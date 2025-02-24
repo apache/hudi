@@ -18,14 +18,15 @@
 
 package org.apache.hudi.utilities.schema;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.util.Option;
+
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import org.apache.avro.Schema;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.function.SerializableFunctionUnchecked;
-import org.apache.hudi.common.util.Option;
 import org.junit.jupiter.api.Test;
 
 import java.util.Base64;

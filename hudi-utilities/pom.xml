@@ -200,7 +200,7 @@
     <dependency>
       <groupId>org.apache.kafka</groupId>
       <artifactId>connect-api</artifactId>
-      <version>${connect.api.version}</version>
+      <version>${kafka.connect.api.version}</version>
     </dependency>
 
     <!-- Pulsar -->
