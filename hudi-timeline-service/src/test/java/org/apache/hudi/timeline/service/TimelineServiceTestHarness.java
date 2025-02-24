@@ -22,10 +22,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.http.HttpResponse;
 import org.apache.http.NoHttpResponseException;
 import org.apache.http.client.utils.URIBuilder;
@@ -57,13 +55,11 @@ public class TimelineServiceTestHarness extends TimelineService {
   public TimelineServiceTestHarness(HoodieEngineContext context,
                                     Configuration hadoopConf,
                                     Config timelineServerConf,
-                                    FileSystem fileSystem,
                                     FileSystemViewManager globalFileSystemViewManager) throws IOException {
     super(
         context,
         new HadoopStorageConfiguration(hadoopConf),
         timelineServerConf,
-        new HoodieHadoopStorage(fileSystem),
         globalFileSystemViewManager);
     server = Option.empty();
     serverPort = 0;
@@ -131,10 +127,9 @@ public class TimelineServiceTestHarness extends TimelineService {
     public TimelineServiceTestHarness build(HoodieEngineContext context,
                                             Configuration hadoopConf,
                                             Config timelineServerConf,
-                                            FileSystem fileSystem,
                                             FileSystemViewManager globalFileSystemViewManager) throws IOException {
       TimelineServiceTestHarness timelineServiceTestHarness = new TimelineServiceTestHarness(
-          context, hadoopConf, timelineServerConf, fileSystem, globalFileSystemViewManager);
+          context, hadoopConf, timelineServerConf, globalFileSystemViewManager);
       timelineServiceTestHarness.setNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures);
       return timelineServiceTestHarness;
     }
