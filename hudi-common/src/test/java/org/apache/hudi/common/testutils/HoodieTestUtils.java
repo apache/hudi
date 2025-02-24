@@ -41,6 +41,7 @@ import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGe
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameParser;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultTimelineFactory;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -91,7 +92,7 @@ public class HoodieTestUtils {
   public static final String HADOOP_STORAGE_CONF = "org.apache.hudi.storage.hadoop.HadoopStorageConfiguration";
   public static final InstantGenerator INSTANT_GENERATOR = new DefaultInstantGenerator();
   public static final TimelineFactory TIMELINE_FACTORY = new DefaultTimelineFactory();
-  public static final InstantFileNameGenerator INSTANT_FILE_NAME_GENERATOR = new DefaultInstantFileNameGenerator();
+  public static final InstantFileNameGenerator INSTANT_FILE_NAME_GENERATOR = new InstantFileNameGeneratorV1();
   public static final InstantFileNameParser INSTANT_FILE_NAME_PARSER = new DefaultInstantFileNameParser();
   public static final CommitMetadataSerDe COMMIT_METADATA_SER_DE = new DefaultCommitMetadataSerDe();
   public static final InstantComparator INSTANT_COMPARATOR = new DefaultInstantComparator();

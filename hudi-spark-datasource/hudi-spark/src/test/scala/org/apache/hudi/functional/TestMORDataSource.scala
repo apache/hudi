@@ -580,12 +580,12 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // Upsert 50 update records
     // Snopshot view should read 100 records
     val records2 = dataGen.generateUniqueUpdates("002", 50)
+    val commit2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val inputDF2 = toDataset(spark, records2)
     inputDF2.write.format("org.apache.hudi")
       .options(opts)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -593,7 +593,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, "000")
+      .option(DataSourceReadOptions.START_COMMIT.key, commit2CompletionTime)
       .load(basePath)
     val hudiIncDF1Skipmerge = spark.read.format("org.apache.hudi")
       .options(readOpts)
@@ -610,7 +610,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // filter first commit and only read log records
     assertEquals(50,  hudiSnapshotDF2.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history")
       .filter(col("_hoodie_commit_time") > commit1Time).count())
-    assertEquals(50,  hudiIncDF1.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history")
+    assertEquals(50,  hudiIncDF1.select("_hoodie_commit_time", "_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history")
       .filter(col("_hoodie_commit_time") > commit1Time).count())
     assertEquals(50,  hudiIncDF2
       .select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history").count())
@@ -823,6 +823,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .count()
     assertEquals(countIn20160315, count2)
 
+    val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+
     // Second write with Append mode
     val records2 = dataGen.generateInsertsContainsAllPartitions("000", N + 1)
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala.toSeq, 2))
@@ -834,7 +836,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+
     // Incremental query without "*" in path
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
@@ -1298,14 +1300,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(pathForROQuery)
-    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
-    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
+    assertEquals(readOptimizedQueryRes.where("partition_path = '2022-01-01'").count, 50)
+    assertEquals(readOptimizedQueryRes.where("partition_path = '2022-01-02'").count, 60)
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commit3CompletionTime)
+      .option(DataSourceReadOptions.START_COMMIT.key, commit2Time)
       .option(DataSourceReadOptions.END_COMMIT.key, commit3CompletionTime)
       .load(basePath)
     assertEquals(0, incrementalQueryRes.where("partition = '2022-01-01'").count)
