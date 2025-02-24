@@ -33,7 +33,13 @@ fi
 echo "CLI_BUNDLE_JAR: $CLI_BUNDLE_JAR"
 echo "SPARK_BUNDLE_JAR: $SPARK_BUNDLE_JAR"
 
-HUDI_CONF_DIR="${DIR}"/conf
+if [ -z "$HUDI_CONF_DIR" ]; then
+  echo "HUDI_CONF_DIR not set, setting HUDI_CONF_DIR"
+  HUDI_CONF_DIR="${DIR}"/conf
+fi
+
+echo "HUDI_CONF_DIR: $HUDI_CONF_DIR"
+
 # hudi aux lib contains jakarta.el jars, which need to be put directly on class path
 HUDI_AUX_LIB="${DIR}"/auxlib
 
