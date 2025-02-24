@@ -17,40 +17,41 @@
 
 package org.apache.hudi
 
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
-import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties, DataSkippingFailureMode}
+import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TimestampKeyGeneratorConfig, TypedProperties}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{DateTimeUtils, StringUtils}
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.keygen.parser.HoodieDateTimeParser
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
-
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{Expression, GreaterThan, GreaterThanOrEqual, LessThan, LessThanOrEqual, Literal}
+import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
+import org.joda.time.format.DateTimeFormat
+import org.joda.time.{DateTime, DateTimeZone}
 
-import javax.annotation.concurrent.NotThreadSafe
-
-import java.text.SimpleDateFormat
+import java.sql.Timestamp
+import java.util.TimeZone
 import java.util.stream.Collectors
-
+import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
-import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
+import scala.util.{Failure, Success, Try}
 
 /**
  * A file index which support partition prune for hoodie snapshot and read-optimized query.
@@ -565,23 +566,32 @@ object HoodieFileIndex extends Logging {
         partitionFilters
       } else {
         try {
-          val inDateFormat = new SimpleDateFormat(inputFormat)
-          val outDateFormat = new SimpleDateFormat(outputFormat)
+          val propsForTimestampParser = new TypedProperties(tableConfig.getProps)
+          propsForTimestampParser.setProperty(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key,
+            TimestampBasedAvroKeyGenerator.TimestampType.DATE_STRING.name())
+          val dtParser = new HoodieDateTimeParser(propsForTimestampParser)
+          val inDateFormatter = dtParser.getInputFormatter.get()
+          val outTimeZone = if (dtParser.getOutputDateTimeZone == null) {
+            DateTimeZone.forTimeZone(TimeZone.getTimeZone("GMT"))
+          } else {
+            dtParser.getOutputDateTimeZone
+          }
+          val outDateFormatter = DateTimeFormat.forPattern(dtParser.getOutputDateFormat).withZone(outTimeZone)
+
           partitionFilters.toArray.map {
-            _.transformDown {
+            _.transformUp {
               case Literal(value, dataType) if dataType.isInstanceOf[StringType] =>
-                try {
-                  val converted = outDateFormat.format(inDateFormat.parse(value.toString))
-                  Literal(UTF8String.fromString(converted), StringType)
-                } catch {
-                  case _: java.text.ParseException =>
-                    try {
-                      outDateFormat.parse(value.toString)
-                    } catch {
-                      case e: Exception => throw new HoodieException("Partition filter for TimestampKeyGenerator cannot be converted to format " + outDateFormat.toString, e)
-                    }
-                    Literal(UTF8String.fromString(value.toString), StringType)
-                }
+                val dateObj = inDateFormatter.parseDateTime(value.toString)
+                val converted = dateObj.withZone(outTimeZone).toString(outputFormat)
+                Literal(UTF8String.fromString(converted), StringType)
+              case Literal(value, dataType) if dataType.isInstanceOf[TimestampType] =>
+                val javaTime = Timestamp.from(DateTimeUtils.microsToInstant(value.asInstanceOf[Long]))
+                val dateObj = new DateTime(javaTime.getTime, outTimeZone)
+                val converted = dateObj.toString(outputFormat)
+                val dateObjRounded = outDateFormatter.parseDateTime(converted)
+                Literal(DateTimeUtils.instantToMicros(new Timestamp(dateObjRounded.getMillis).toInstant), TimestampType)
+              case GreaterThan(left, right) => GreaterThanOrEqual(left, right)
+              case LessThan(left, right) => LessThanOrEqual(left, right)
             }
           }
         } catch {
