@@ -55,12 +55,12 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.clean.CleanPlanner;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
@@ -76,14 +76,13 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_PARSER;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CleanerUtils.CLEAN_METADATA_VERSION_2;
 import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -118,7 +117,7 @@ public class TestCleanPlanner {
   @ParameterizedTest
   @MethodSource("testCases")
   void testGetDeletePaths(HoodieWriteConfig config, String earliestInstant, List<HoodieFileGroup> allFileGroups, List<Pair<String, Option<byte[]>>> savepoints,
-                          List<HoodieFileGroup> replacedFileGroups, Pair<Boolean, List<CleanFileInfo>> expected) throws IOException {
+                          List<HoodieFileGroup> replacedFileGroups, Pair<Boolean, List<CleanFileInfo>> expected) {
 
     SyncableFileSystemView mockFsView = mock(SyncableFileSystemView.class);
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
@@ -136,7 +135,7 @@ public class TestCleanPlanner {
       when(mockHoodieTable.getActiveTimeline()).thenReturn(activeTimeline);
       for (Pair<String, Option<byte[]>> savepoint : savepoints) {
         HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint.getLeft());
-        when(activeTimeline.getInstantDetails(instant)).thenReturn(savepoint.getRight());
+        when(activeTimeline.getInstantContentStream(instant)).thenReturn(savepoint.getRight().map(ByteArrayInputStream::new));
         when(mockMetaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint.getLeft())).thenReturn(instant);
       }
     }
@@ -183,7 +182,7 @@ public class TestCleanPlanner {
       for (Map.Entry<String, List<String>> entry : savepoints.entrySet()) {
         Pair<HoodieSavepointMetadata, Option<byte[]>> savepointMetadataOptionPair = getSavepointMetadata(entry.getValue());
         HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, entry.getKey());
-        when(activeTimeline.getInstantDetails(instant)).thenReturn(savepointMetadataOptionPair.getRight());
+        when(activeTimeline.getContentStream(instant)).thenReturn(savepointMetadataOptionPair.getRight().map(ByteArrayInputStream::new));
       }
     }
 
@@ -639,12 +638,11 @@ public class TestCleanPlanner {
     HoodieInstant latestCleanInstant = INSTANT_GENERATOR.createNewInstant(COMPLETED, HoodieTimeline.CLEAN_ACTION, timestamp);
     when(completedCleanTimeline.lastInstant()).thenReturn(Option.of(latestCleanInstant));
     when(activeTimeline.isEmpty(latestCleanInstant)).thenReturn(false);
-    when(activeTimeline.getInstantDetails(latestCleanInstant)).thenReturn(cleanMetadata.getRight());
+    when(activeTimeline.getInstantContentStream(latestCleanInstant)).thenReturn(cleanMetadata.getRight().map(ByteArrayInputStream::new));
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(earliestCommitToRetain, HoodieTimeline.COMMIT_ACTION, COMPLETED.name()),
         cleanMetadata.getLeft().getLastCompletedCommitTimestamp(),
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(), Collections.emptyMap(),
         CleanPlanner.LATEST_CLEAN_PLAN_VERSION, null, null, cleanMetadata.getLeft().getExtraMetadata());
-    when(activeTimeline.readCleanerInfoAsBytes(any())).thenReturn(Option.of(TimelineMetadataUtils.serializeAvroMetadata(cleanerPlan, HoodieCleanerPlan.class).get()));
 
     BaseTimelineV2 commitsTimeline = mock(BaseTimelineV2.class);
     when(activeTimeline.getCommitsTimeline()).thenReturn(commitsTimeline);
@@ -675,8 +673,8 @@ public class TestCleanPlanner {
         commitMetadata.getPartitionToWriteStats().put(partition, Collections.emptyList());
       });
       try {
-        when(hoodieTable.getActiveTimeline().getInstantDetails(hoodieInstant)).thenReturn(
-            TimelineMetadataUtils.serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata));
+        when(hoodieTable.getActiveTimeline().getInstantContentStream(hoodieInstant)).thenReturn(
+            TimelineMetadataUtils.serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).map(ByteArrayInputStream::new));
       } catch (IOException e) {
         throw new RuntimeException("Should not have failed", e);
       }

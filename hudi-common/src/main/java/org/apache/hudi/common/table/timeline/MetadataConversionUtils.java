@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
@@ -37,10 +39,8 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.specific.SpecificRecordBase;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -99,7 +99,8 @@ public class MetadataConversionUtils {
           } else {
             // we may have cases with empty HoodieRequestedReplaceMetadata e.g. insert_overwrite_table or insert_overwrite
             // without clustering. However, we should revisit the requested commit file standardization
-            Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = getRequestedReplaceMetadata(metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
+            Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = getRequestedReplaceMetadata(
+                metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
             if (requestedReplaceMetadata.isPresent()) {
               archivedMetaWrapper.setHoodieRequestedReplaceMetadata(requestedReplaceMetadata.get());
             }
@@ -144,9 +145,12 @@ public class MetadataConversionUtils {
       }
       return archivedMetaWrapper;
     } catch (IOException | HoodieIOException ex) {
-      // in local FS and HDFS, there could be empty completed instants due to crash.
-      // let's add an entry to the archival, even if not for the plan.
-      return createMetaWrapperForEmptyInstant(hoodieInstant);
+      if (metaClient.getActiveTimeline().isEmpty(hoodieInstant)) {
+        // in local FS and HDFS, there could be empty completed instants due to crash.
+        // let's add an entry to the archival, even if not for the plan.
+        return createMetaWrapperForEmptyInstant(hoodieInstant);
+      }
+      throw new HoodieException(ex);
     }
     HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
     archivedMetaWrapper.setCommitTime(hoodieInstant.requestedTime());
@@ -269,7 +273,7 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.COMMIT_ACTION: {
         getCommitMetadata(metaClient, hoodieInstant, HoodieCommitMetadata.class)
-              .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata)));
+            .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata)));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
 
         if (planBytes.isPresent()) {
@@ -281,7 +285,7 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.DELTA_COMMIT_ACTION: {
         getCommitMetadata(metaClient, hoodieInstant, HoodieCommitMetadata.class)
-              .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata)));
+            .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata)));
         archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
 
         if (planBytes.isPresent()) {
@@ -294,7 +298,7 @@ public class MetadataConversionUtils {
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
       case HoodieTimeline.CLUSTERING_ACTION: {
         getCommitMetadata(metaClient, hoodieInstant, HoodieReplaceCommitMetadata.class)
-                        .ifPresent(replaceCommitMetadata -> archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadata(replaceCommitMetadata)));
+            .ifPresent(replaceCommitMetadata -> archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadata(replaceCommitMetadata)));
 
         // inflight replacecommit files have the same metadata body as HoodieCommitMetadata
         // so we could re-use it without further creating an inflight extension.
@@ -309,7 +313,7 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
         archivedMetaWrapper.setHoodieRollbackMetadata(
-                TimelineMetadataUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant), HoodieRollbackMetadata.class));
+            TimelineMetadataUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant), HoodieRollbackMetadata.class));
         archivedMetaWrapper.setActionType(ActionType.rollback.name());
         break;
       }
