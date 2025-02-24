@@ -41,7 +41,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
@@ -288,7 +287,6 @@ public class HoodieClientTestUtils {
       TimelineService timelineService = new TimelineService(context, HadoopFSUtils.getStorageConf(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          HoodieStorageUtils.getStorage(HoodieTestUtils.getDefaultStorageConf()),
           FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();
       LOG.info("Timeline service server port: " + timelineServicePort);
