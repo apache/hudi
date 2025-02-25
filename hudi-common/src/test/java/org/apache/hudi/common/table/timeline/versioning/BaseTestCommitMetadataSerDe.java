@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -55,6 +56,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     testPath = "file:///path/1/";
   }
 
+  @Test
   protected void testEmptyMetadataSerDe() throws Exception {
     // Create empty commit metadata
     HoodieCommitMetadata emptyMetadata = new HoodieCommitMetadata();
@@ -80,6 +82,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     assertTrue(deserialized.getExtraMetadata().isEmpty());
   }
 
+  @Test
   protected void testPopulatedMetadataSerDe() throws Exception {
     // Create populated commit metadata
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
@@ -105,6 +108,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     verifyWriteStat(deserialized.getPartitionToWriteStats().get(TEST_PARTITION_PATH).get(0));
   }
 
+  @Test
   protected void testReplaceCommitMetadataSerDe() throws Exception {
     // Create populated replace commit metadata
     HoodieReplaceCommitMetadata metadata = new HoodieReplaceCommitMetadata();
