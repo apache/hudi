@@ -52,8 +52,7 @@ case class AlterHoodieTableRenameCommand(
       // update table properties path in every op
       if (hoodieCatalogTable.table.properties.contains("path")) {
         val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(newName)
-        val path = catalogTable.storage.locationUri.get.getPath
-        AlterTableSetPropertiesCommand(newName, Map("path" -> path), isView).run(sparkSession)
+        AlterTableSetPropertiesCommand(newName, Map("path" -> catalogTable.location.toString), isView).run(sparkSession)
       }
 
     }
