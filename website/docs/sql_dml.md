@@ -140,7 +140,7 @@ For a table where Hudi auto generates primary keys, the join condition in `MERGE
 
 if the `hoodie.record.merge.mode` is set to `EVENT_TIME_ORDERING`, the `preCombineField` is required to be set with value in the `UPDATE`/`INSERT` clause. 
 
-It is enforced that if the target table has primary key and partition key column, the source table counterparts must enforce the same data type accordingly. Plus, if the target table is configured with `hoodie.record.merge.mode` = `EVENT_TIME_ORDERING` where target table is expected to have a valid precombine field configurations, the source table counterpart must also have the same data type.
+It is enforced that if the target table has primary key and partition key column, the source table counterparts must enforce the same data type accordingly. Plus, if the target table is configured with `hoodie.record.merge.mode` = `EVENT_TIME_ORDERING` where target table is expected to have a valid precombine field configuration, the source table counterpart must also have the same data type.
 :::
 
 Examples below
