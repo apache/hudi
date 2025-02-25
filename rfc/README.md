@@ -124,3 +124,4 @@ The list of all RFCs can be found here.
 | 86         | [DataFrame Implementation of HUDI write path](./rfc-86/rfc-86.md)                                                                                                                                                       | `UNDER REVIEW` |
 | 88         | [New Schema/DataType/Expression Abstractions](./rfc-88/rfc-88.md)                                                                                                                                                   | `UNDER REVIEW` |
 | 89         | [Dynamic Partition Level Bucket Index](./rfc-89/rfc-89.md)                                                                                                                                                           | `UNDER REVIEW` |
+| 90       |  Add support for cancellable clustering table service plans  | `UNDER REVIEW` |
