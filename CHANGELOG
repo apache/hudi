@@ -639,3 +639,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-22750][INTERNAL] Enable timestamp ordering validation by default (#1225)
 [ENG-22747][INTERNAL] Add validation in Merge Handle base class to ensure that the new file version produced has a higher instant time (#1217)
 [AUDIT-1071]: Changelog for release-v1.95.0 (#1226)
+
+--- [2025-02-25 16:04:13] [release-v1.97.0] ---
+[ENG-22655][INTERNAL] MDT validator can configure if we need log truncation (#1213)
+[ENG-22592][HUDI-8361] Fixing getLatestFileSlice calls to getLatestMergedFileSlice in MDT writer (#1231)
+[AUDIT-1071]: Changelog for release-v1.96.0 (#1228)
