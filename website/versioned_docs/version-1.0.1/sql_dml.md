@@ -133,6 +133,13 @@ ON <merge_condition>
 There are two kinds of `INSERT` clauses:
 1. `INSERT *` clauses require that the source table has the same columns as those in the target table.
 2. `INSERT (column1 [, column2 ...]) VALUES (value1 [, value2 ...])` clauses do not require to specify all the columns of the target table. For unspecified target columns, insert the `NULL` value.
+
+For a Hudi table with user configured primary keys, the join condition and the `UPDATE`/`INSERT INTO` clause in `MERGE INTO` is expected to contain the primary keys of the table.
+
+For a table where Hudi auto generates primary keys, the join condition in `MERGE INTO` can be on any arbitrary data columns.
+
+if the `hoodie.record.merge.mode` is set to `EVENT_TIME_ORDERING`, the `preCombineField` is required to be set with value in the `UPDATE`/`INSERT` clause.
+
 :::
 
 Examples below
@@ -224,6 +231,8 @@ Partial update is not yet supported in the following cases:
 2. When virtual keys is enabled.
 3. When schema on read is enabled. 
 4. When there is an enum field in the source data.
+
+For a Hudi table with user configured primary keys, the join condition and the `UPDATE`/`INSERT INTO` clause in `MERGE INTO` is expected to contain the primary keys of the table.
 :::
 
 ### Delete From
