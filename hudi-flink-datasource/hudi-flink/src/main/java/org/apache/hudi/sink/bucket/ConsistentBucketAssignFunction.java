@@ -19,12 +19,10 @@
 package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -57,7 +55,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * The function to tag each incoming record with a location of a file based on consistent bucket index.
  */
-public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord, HoodieRecord> implements CheckpointedFunction {
+public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieFlinkInternalRow, HoodieFlinkInternalRow> implements CheckpointedFunction {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketAssignFunction.class);
 
@@ -89,20 +87,19 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
   }
 
   @Override
-  public void processElement(HoodieRecord record, Context context, Collector<HoodieRecord> collector) throws Exception {
-    final HoodieKey hoodieKey = record.getKey();
-    final String partition = hoodieKey.getPartitionPath();
+  public void processElement(HoodieFlinkInternalRow income, Context context, Collector<HoodieFlinkInternalRow> collector) throws Exception {
+    String recordKey = income.getRecordKey();
+    String partition = income.getPartitionPath();
 
-    final ConsistentHashingNode node = getBucketIdentifier(partition).getBucket(hoodieKey, indexKeyFields);
+    final ConsistentHashingNode node = getBucketIdentifier(partition).getBucket(recordKey, indexKeyFields);
     Preconditions.checkArgument(
         StringUtils.nonEmpty(node.getFileIdPrefix()),
         "Consistent hashing node has no file group, partition: " + partition + ", meta: "
-            + partitionToIdentifier.get(partition).getMetadata().getFilename() + ", record_key: " + hoodieKey);
+            + partitionToIdentifier.get(partition).getMetadata().getFilename() + ", record_key: " + recordKey);
 
-    record.unseal();
-    record.setCurrentLocation(new HoodieRecordLocation("U", FSUtils.createNewFileId(node.getFileIdPrefix(), 0)));
-    record.seal();
-    collector.collect(record);
+    income.setInstantTime("U");
+    income.setFileId(FSUtils.createNewFileId(node.getFileIdPrefix(), 0));
+    collector.collect(income);
   }
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {

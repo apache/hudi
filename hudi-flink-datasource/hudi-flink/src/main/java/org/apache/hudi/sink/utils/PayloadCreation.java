@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.model.BaseAvroPayload;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
@@ -81,14 +80,6 @@ public class PayloadCreation implements Serializable {
       return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal);
     } else {
       return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record));
-    }
-  }
-
-  public HoodieRecordPayload<?> createDeletePayload(BaseAvroPayload payload) throws Exception {
-    if (shouldCombine) {
-      return (HoodieRecordPayload<?>) constructor.newInstance(null, payload.getOrderingVal());
-    } else {
-      return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.empty());
     }
   }
 }
