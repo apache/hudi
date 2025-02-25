@@ -36,7 +36,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataAvroToPojo;
-import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertReplaceCommitMetadataAvroToPojo;
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertReplaceCommitMetadataToPojo;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeReplaceCommitMetadata;
 
@@ -58,7 +58,7 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
       }
       // For any new commit metadata class being added, we need the corresponding logic added here
       if (org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class.isAssignableFrom(clazz)) {
-        return (T) convertReplaceCommitMetadataAvroToPojo(deserializeReplaceCommitMetadata(bytes));
+        return (T) convertReplaceCommitMetadataToPojo(deserializeReplaceCommitMetadata(bytes));
       }
       return (T) convertCommitMetadataAvroToPojo(deserializeCommitMetadata(bytes));
     } catch (Exception e) {

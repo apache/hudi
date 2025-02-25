@@ -93,7 +93,7 @@ public class MetadataConversionUtils {
       case HoodieTimeline.CLUSTERING_ACTION: {
         if (hoodieInstant.isCompleted()) {
           HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(instantDetails.get(), HoodieReplaceCommitMetadata.class);
-          archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadata(replaceCommitMetadata));
+          archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadataToAvro(replaceCommitMetadata));
         } else if (hoodieInstant.isInflight()) {
           // inflight replacecommit files have the same metadata body as HoodieCommitMetadata
           // so we could re-use it without further creating an inflight extension.
@@ -208,7 +208,7 @@ public class MetadataConversionUtils {
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
       case HoodieTimeline.CLUSTERING_ACTION: {
         HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(instantDetails.get(), HoodieReplaceCommitMetadata.class);
-        archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadata(replaceCommitMetadata));
+        archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadataToAvro(replaceCommitMetadata));
 
         // inflight replacecommit files have the same metadata body as HoodieCommitMetadata
         // so we could re-use it without further creating an inflight extension.
@@ -362,31 +362,33 @@ public class MetadataConversionUtils {
    */
   public static <T extends SpecificRecordBase> T convertCommitMetadata(HoodieCommitMetadata hoodieCommitMetadata) {
     if (hoodieCommitMetadata instanceof HoodieReplaceCommitMetadata) {
-      return (T) convertReplaceCommitMetadata((HoodieReplaceCommitMetadata) hoodieCommitMetadata);
+      return (T) convertReplaceCommitMetadataToAvro((HoodieReplaceCommitMetadata) hoodieCommitMetadata);
     }
     org.apache.hudi.avro.model.HoodieCommitMetadata avroMetaData = JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
     return (T) avroMetaData;
   }
 
   /**
-   * Convert commit metadata from json to avro.
+   * Convert commit metadata from avro to pojo.
    */
   public static HoodieCommitMetadata convertCommitMetadataAvroToPojo(org.apache.hudi.avro.model.HoodieCommitMetadata hoodieCommitMetadata) {
+    // While it is valid to have a null key in the hash map in java, avro map could not accommodate this, so we need to remove null key explicitly before the conversion.
     hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
     return JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, HoodieCommitMetadata.class);
   }
 
   /**
-   * Convert replacecommit metadata from json to avro.
+   * Convert replacecommit metadata from pojo to avro.
    */
-  private static org.apache.hudi.avro.model.HoodieReplaceCommitMetadata convertReplaceCommitMetadata(HoodieReplaceCommitMetadata replaceCommitMetadata) {
+  private static org.apache.hudi.avro.model.HoodieReplaceCommitMetadata convertReplaceCommitMetadataToAvro(HoodieReplaceCommitMetadata replaceCommitMetadata) {
     return JsonUtils.getObjectMapper().convertValue(replaceCommitMetadata, org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class);
   }
 
   /**
-   * Convert replacecommit metadata from json to avro.
+   * Convert replacecommit metadata from pojo to avro.
    */
-  public static HoodieReplaceCommitMetadata convertReplaceCommitMetadataAvroToPojo(org.apache.hudi.avro.model.HoodieReplaceCommitMetadata replaceCommitMetadata) {
+  public static HoodieReplaceCommitMetadata convertReplaceCommitMetadataToPojo(org.apache.hudi.avro.model.HoodieReplaceCommitMetadata replaceCommitMetadata) {
+    // While it is valid to have a null key in the hash map in java, avro map could not accommodate this, so we need to remove null key explicitly before the conversion.
     replaceCommitMetadata.getPartitionToWriteStats().remove(null);
     replaceCommitMetadata.getPartitionToReplaceFileIds().remove(null);
     return JsonUtils.getObjectMapper().convertValue(replaceCommitMetadata, HoodieReplaceCommitMetadata.class);

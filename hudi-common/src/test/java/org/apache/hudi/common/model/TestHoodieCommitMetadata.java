@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.avro.Schema;
-import org.apache.avro.reflect.ReflectData;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -30,12 +28,14 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.avro.Schema;
+import org.apache.avro.reflect.ReflectData;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -43,10 +43,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.isSchemaCompatible;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -208,13 +208,7 @@ public class TestHoodieCommitMetadata {
     Schema pojoSchema = ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieCommitMetadata.class);
 
     // Step 3: Validate schemas
-    ValidationResult result = validateSchemas(pojoSchema, avroSchema, "root");
-
-    // Print validation results
-    printValidationResults(result);
-
-    // Fail if there are any critical errors (field missing or type mismatch at current layer)
-    assertFalse(result.hasCriticalErrors(), "Critical validation errors found");
+    assertTrue(isSchemaCompatible(pojoSchema, avroSchema, false));
   }
 
   @Test
@@ -226,157 +220,6 @@ public class TestHoodieCommitMetadata {
     Schema pojoSchema = ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class);
 
     // Step 3: Validate schemas
-    ValidationResult result = validateSchemas(pojoSchema, avroSchema, "root");
-
-    // Print validation results
-    printValidationResults(result);
-
-    // Fail if there are any critical errors (field missing or type mismatch at current layer)
-    assertFalse(result.hasCriticalErrors(), "Critical validation errors found");
-  }
-
-  private static class ValidationResult {
-    boolean hasCriticalErrors = false;
-    List<String> errors = new ArrayList<>();
-    List<ValidationResult> nestedResults = new ArrayList<>();
-
-    void addError(String error) {
-      errors.add(error);
-    }
-
-    void addNestedResult(ValidationResult result) {
-      nestedResults.add(result);
-    }
-
-    void markCritical() {
-      hasCriticalErrors = true;
-    }
-
-    boolean hasCriticalErrors() {
-      return hasCriticalErrors;
-    }
-  }
-
-  private void printValidationResults(ValidationResult result) {
-    printValidationResults(result, 0);
-  }
-
-  private void printValidationResults(ValidationResult result, int indent) {
-    // We don't have repeat method in java 8
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < indent; i++) {
-      sb.append("  ");
-    }
-    for (String error : result.errors) {
-      LOGGER.error(sb + error);
-    }
-    for (ValidationResult nested : result.nestedResults) {
-      printValidationResults(nested, indent + 1);
-    }
-  }
-
-  private ValidationResult validateSchemas(Schema pojoSchema, Schema avroSchema, String path) {
-    ValidationResult result = new ValidationResult();
-
-    if (!pojoSchema.getName().equals(avroSchema.getName())) {
-      result.addError(String.format("Schema names don't match at %s: POJO=%s, Avro=%s",
-          path, pojoSchema.getName(), avroSchema.getName()));
-      result.markCritical();
-      return result;
-    }
-
-    Map<String, Schema.Field> pojoFields = getFieldMap(pojoSchema);
-    Map<String, Schema.Field> avroFields = getFieldMap(avroSchema);
-
-    // Check all POJO fields have corresponding Avro fields with compatible types
-    for (Map.Entry<String, Schema.Field> entry : pojoFields.entrySet()) {
-      String fieldName = entry.getKey();
-      Schema.Field pojoField = entry.getValue();
-      String fieldPath = path + "." + fieldName;
-
-      Schema.Field avroField = avroFields.get(fieldName);
-      if (avroField == null) {
-        result.addError("Field " + fieldPath + " from POJO missing in Avro schema");
-        result.markCritical();
-        continue;
-      }
-
-      ValidationResult fieldResult = validateFieldTypes(pojoField.schema(), avroField.schema(), fieldPath);
-      result.addNestedResult(fieldResult);
-      if (fieldResult.hasCriticalErrors()) {
-        result.markCritical();
-      }
-    }
-
-    return result;
-  }
-
-  private Map<String, Schema.Field> getFieldMap(Schema schema) {
-    Map<String, Schema.Field> fieldMap = new HashMap<>();
-    for (Schema.Field field : schema.getFields()) {
-      fieldMap.put(field.name(), field);
-    }
-    return fieldMap;
-  }
-
-  private ValidationResult validateFieldTypes(Schema pojoType, Schema avroType, String path) {
-    ValidationResult result = new ValidationResult();
-
-    // Handle union types in Avro schema
-    if (avroType.getType() == Schema.Type.UNION) {
-      boolean isCompatible = false;
-      for (Schema unionType : avroType.getTypes()) {
-        ValidationResult unionResult = validateFieldTypes(pojoType, unionType, path);
-        if (!unionResult.hasCriticalErrors()) {
-          isCompatible = true;
-          break;
-        }
-      }
-      if (!isCompatible) {
-        result.addError("Field " + path + " has incompatible types: POJO=" + pojoType + ", Avro=" + avroType);
-        result.markCritical();
-      }
-      return result;
-    }
-
-    // Check type compatibility
-    if (!isTypeCompatible(pojoType, avroType)) {
-      result.addError("Field " + path + " has incompatible types: POJO=" + pojoType + ", Avro=" + avroType);
-      result.markCritical();
-      return result;
-    }
-
-    // If types are compatible, proceed with nested validation
-    if (pojoType.getType() == Schema.Type.RECORD && avroType.getType() == Schema.Type.RECORD) {
-      ValidationResult nestedResult = validateSchemas(pojoType, avroType, path);
-      result.addNestedResult(nestedResult);
-    } else if (pojoType.getType() == Schema.Type.MAP && avroType.getType() == Schema.Type.MAP) {
-      ValidationResult nestedResult = validateFieldTypes(pojoType.getValueType(), avroType.getValueType(),
-          path + ".value");
-      result.addNestedResult(nestedResult);
-    } else if (pojoType.getType() == Schema.Type.ARRAY && avroType.getType() == Schema.Type.ARRAY) {
-      ValidationResult nestedResult = validateFieldTypes(pojoType.getElementType(), avroType.getElementType(),
-          path + ".element");
-      result.addNestedResult(nestedResult);
-    }
-
-    return result;
-  }
-
-  private boolean isTypeCompatible(Schema pojoType, Schema avroType) {
-    // Handle special case for enum to string conversion
-    if (pojoType.getType() == Schema.Type.ENUM && avroType.getType() == Schema.Type.STRING) {
-      return true;
-    }
-
-    // For container types, only check the type itself, not the contained types
-    if ((pojoType.getType() == Schema.Type.MAP && avroType.getType() == Schema.Type.MAP)
-        || (pojoType.getType() == Schema.Type.ARRAY && avroType.getType() == Schema.Type.ARRAY)
-        || (pojoType.getType() == Schema.Type.RECORD && avroType.getType() == Schema.Type.RECORD)) {
-      return true;
-    }
-
-    // Basic type compatibility
-    return pojoType.getType() == avroType.getType();
+    assertTrue(isSchemaCompatible(pojoSchema, avroSchema, false));
   }
 }
