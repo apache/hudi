@@ -49,6 +49,16 @@ public class HoodiePayloadProps {
    */
   public static final String PAYLOAD_IS_UPDATE_RECORD_FOR_MOR = "hoodie.is.update.record.for.mor";
 
+  /**
+   * Property which defines how to treat incoming record when payload-ordering-field is same. If set to true,
+   * the case where payload ordering field is the same is considered as incoming record is an update.
+   *
+   * @see DefaultHoodieRecordPayload
+   */
+  public static final String UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_KEY = "hoodie.payload.update.on.same.ordering.field";
+
+  public static final String DEFAULT_UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_VALUE = "true";
+
   /** @deprecated Use {@link #PAYLOAD_ORDERING_FIELD_PROP_KEY} */
   @Deprecated
   public static final String PAYLOAD_ORDERING_FIELD_PROP = PAYLOAD_ORDERING_FIELD_PROP_KEY;

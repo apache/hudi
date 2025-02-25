@@ -39,6 +39,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.hudi.common.model.HoodieRecord.SENTINEL;
+
 /**
  * Default payload.
  * {@link HoodieRecordPayload} impl that honors ordering field in both preCombine and combineAndGetUpdateValue.
@@ -82,7 +84,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
     if (!needUpdatingPersistedRecord(currentValue, incomingRecord, properties)) {
-      return Option.of(currentValue);
+      return Option.of(SENTINEL);
     }
 
     if (!isDeleteComputed.getAndSet(true)) {
@@ -155,8 +157,8 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     /*
      * Combining strategy here returns currentValue on disk if incoming record is older.
      * The incoming record can be either a delete (sent as an upsert with _hoodie_is_deleted set to true)
-     * or an insert/update record. In any case, if it is older than the record in disk, the currentValue
-     * in disk is returned (to be rewritten with new commit time).
+     * or an insert/update record. In any case, if it is older than the record in disk, SENTINEL is sent
+     * so current value in disk is rewritten as it is without changing the _hoodie_commit_time field..
      *
      * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
      * and need to be dealt with separately.
@@ -179,7 +181,31 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     if (incomingRecord.isEmpty() && OrderingValues.isDefault(incomingOrderingVal)) {
       return true;
     }
-    return persistedOrderingVal == null || persistedOrderingVal.compareTo(incomingOrderingVal) <= 0;
+    boolean updateOnSameOrderingField = Boolean.parseBoolean(properties.getProperty(
+        HoodiePayloadProps.UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_KEY,
+        HoodiePayloadProps.DEFAULT_UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_VALUE));
+    return compareOrderingVal(persistedOrderingVal, incomingOrderingVal, updateOnSameOrderingField);
+  }
+
+  /**
+   * Compares the ordering between persisted entry and input payload.
+   * If updateOnSameOrderingField is true, then incoming record is returned when payload ordering field is the same.
+   * @param persistedOrderingVal record present in Disk
+   * @param incomingOrderingVal record part of input payload
+   * @return true if the older record(persisted entry) is older than incoming record.
+   */
+  protected boolean compareOrderingVal(Comparable persistedOrderingVal, Comparable incomingOrderingVal,
+                                       boolean updateOnSameOrderingField) {
+    if (persistedOrderingVal == null) {
+      return true;
+    } else {
+      int compareVal = persistedOrderingVal.compareTo(incomingOrderingVal);
+      if (updateOnSameOrderingField) {
+        return compareVal <= 0;
+      } else {
+        return compareVal < 0;
+      }
+    }
   }
 
   @Override
@@ -199,5 +225,10 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     if (isDeleteComputedValue) {
       isDefaultRecordPayloadDeleted = input.readBoolean();
     }
+  }
+
+  @Override
+  public boolean canProduceSentinel() {
+    return true;
   }
 }

@@ -36,6 +36,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.HoodieRecord.SENTINEL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -86,8 +87,10 @@ public class TestDefaultHoodieRecordPayload {
     assertEquals(record1, payload1.getInsertValue(schema, props).get());
     assertEquals(record2, payload2.getInsertValue(schema, props).get());
 
-    assertEquals(payload1.combineAndGetUpdateValue(record2, schema, props).get(), record2);
-    assertEquals(payload2.combineAndGetUpdateValue(record1, schema, props).get(), record2);
+    // Here payload1 with lower orderingVal trying to combine with
+    // record2 with higher orderingVal this will return IgnoreRecord
+    assertEquals(SENTINEL, payload1.combineAndGetUpdateValue(record2, schema, props).get());
+    assertEquals(record2, payload2.combineAndGetUpdateValue(record1, schema, props).get());
   }
 
   @ParameterizedTest
@@ -116,7 +119,8 @@ public class TestDefaultHoodieRecordPayload {
     assertEquals(record1, payload1.getInsertValue(schema, props).get());
     assertFalse(payload2.getInsertValue(schema, props).isPresent());
 
-    assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema, props).get(), delRecord1);
+    // Here payload1 trying to override delRecord1 with greater ordering val this will return IgnoreRecord.
+    assertEquals(SENTINEL, payload1.combineAndGetUpdateValue(delRecord1, schema, props).get());
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema, props).isPresent());
   }
 
@@ -216,5 +220,59 @@ public class TestDefaultHoodieRecordPayload {
     Properties properties = new Properties();
     payload.getInsertValue(schema, properties);
     payload.combineAndGetUpdateValue(record2, schema, properties);
+  }
+
+  @ParameterizedTest
+  @ValueSource(longs = {1L, 1612542030000L})
+  public void testGetEventTimeInMetadataForInserts(long eventTime) throws IOException {
+    GenericRecord record = new GenericData.Record(schema);
+
+    record.put("id", "1");
+    record.put("partition", "partition0");
+    record.put("ts", eventTime);
+    record.put("_hoodie_is_deleted", false);
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, eventTime);
+    payload.getInsertValue(schema, props);
+    assertTrue(payload.getMetadata().isPresent());
+    assertEquals(eventTime,
+        Long.parseLong(payload.getMetadata().get().get(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY)));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCombineAndGetMethodWhenOrderingFieldIsSame(boolean updateOnSameOrderingField) throws IOException {
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("id", "1");
+    record1.put("partition", "partition0");
+    record1.put("ts", 0L);
+    record1.put("_hoodie_is_deleted", false);
+
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("id", "2");
+    record2.put("partition", "partition1");
+    record2.put("ts", 0L);
+    record2.put("_hoodie_is_deleted", false);
+
+    Properties customProperties = new Properties();
+    props.forEach((key, value) -> customProperties.put(key, value));
+    customProperties.put(HoodiePayloadProps.UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_KEY,
+        String.valueOf(updateOnSameOrderingField));
+
+    DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 1);
+    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(record2, 2);
+
+    assertEquals(payload1.preCombine(payload2, customProperties), payload2);
+    assertEquals(payload2.preCombine(payload1, customProperties), payload2);
+
+    assertEquals(record1, payload1.getInsertValue(schema, customProperties).get());
+    assertEquals(record2, payload2.getInsertValue(schema, customProperties).get());
+
+    if (updateOnSameOrderingField) {
+      assertEquals(record1, payload1.combineAndGetUpdateValue(record2, schema, customProperties).get());
+      assertEquals(record2, payload2.combineAndGetUpdateValue(record1, schema, customProperties).get());
+    } else {
+      assertEquals(SENTINEL, payload1.combineAndGetUpdateValue(record2, schema, customProperties).get());
+      assertEquals(SENTINEL, payload2.combineAndGetUpdateValue(record1, schema, customProperties).get());
+    }
   }
 }

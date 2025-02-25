@@ -36,10 +36,13 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
-import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+
+import org.apache.hudi.common.model.HoodieRecord.SENTINEL
 
 /**
  * Tests on the default key generator, payload classes.
@@ -664,8 +667,10 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     assertEquals("field2", precombinedGR.get("field1").toString)
     assertEquals(laterOrderingVal, precombinedGR.get("favoriteIntNumber"))
 
-    val earlierWithLater = earlierPayload.combineAndGetUpdateValue(laterRecord, schema.toAvroSchema, props)
-    val earlierwithLaterGR = earlierWithLater.get().asInstanceOf[GenericRecord]
+    val ignoreRecord = earlierPayload.combineAndGetUpdateValue(laterRecord, schema.toAvroSchema, props)
+    assertTrue(ignoreRecord.isPresent)
+    assertEquals(SENTINEL, ignoreRecord.get())
+    val earlierwithLaterGR = laterRecord
     assertEquals("field2", earlierwithLaterGR.get("field1").toString)
     assertEquals(laterOrderingVal, earlierwithLaterGR.get("favoriteIntNumber"))
 
