@@ -383,6 +383,10 @@ public class StringUtils {
     if (objectList == null || objectList.isEmpty()) {
       return "";
     }
+    // For non-positive value, we will not do any truncation.
+    if (lengthThreshold <= 0) {
+      return objectList.toString();
+    }
     StringBuilder sb = new StringBuilder();
 
     for (Object obj : objectList) {
