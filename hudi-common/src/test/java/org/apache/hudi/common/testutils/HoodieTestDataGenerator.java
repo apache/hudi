@@ -147,7 +147,12 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   public static final String TRIP_NESTED_EXAMPLE_SCHEMA =
       TRIP_SCHEMA_PREFIX + FARE_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
-
+  public static final String TRIP_ENCODED_DECIMAL_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":["
+      + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
+      + "{\"name\":\"decfield\",\"type\":{\"type\":\"bytes\",\"name\":\"abc\",\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},"
+      + "{\"name\":\"lowprecision\",\"type\":{\"type\":\"bytes\",\"name\":\"def\",\"logicalType\":\"decimal\",\"precision\":4,\"scale\":2}},"
+      + "{\"name\":\"highprecision\",\"type\":{\"type\":\"bytes\",\"name\":\"ghi\",\"logicalType\":\"decimal\",\"precision\":32,\"scale\":12}},"
+      + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
   public static final String TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":["
       + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
