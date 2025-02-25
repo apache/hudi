@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.HoodieSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -30,10 +31,12 @@ import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.converter.JsonToAvroSchemaConverter;
 import org.apache.hudi.utilities.streamer.BaseErrorTableWriter;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.ErrorEvent;
@@ -59,6 +62,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -249,6 +253,43 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     InputBatch<JavaRDD<GenericRecord>> fetch6 =
         kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch4.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(Option.empty(), fetch6.getBatch());
+  }
+
+  @Test
+  void testJsonKafkaSourceWithEncodedDecimals() throws URISyntaxException {
+    String schemaFilePath = Objects.requireNonNull(TestJsonKafkaSource.class.getClassLoader()
+        .getResource("streamer-config/source_uber_encoded_decimal.json")).toURI().getPath();
+    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceWithEncodedDecimals";
+    testUtils.createTopic(topic, 2);
+    TypedProperties props = createPropsForKafkaSource(topic, Long.MAX_VALUE, "earliest");
+    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
+    props.put(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key(), JsonToAvroSchemaConverter.class.getName());
+    schemaProvider = new FilebasedSchemaProvider(props, jsc());
+
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
+    List<HoodieRecord> send1 =
+        dataGenerator.generateInsertsAsPerSchema("000", 10, HoodieTestDataGenerator.TRIP_ENCODED_DECIMAL_SCHEMA);
+    testUtils.sendMessages(topic, jsonifyRecords(send1));
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    List<GenericRecord> recs = fetch1.getBatch().get().collect();
+    assertEquals(10, recs.size());
+
+    Schema deducedSchema =
+        HoodieSchemaUtils.deduceWriterSchema(schemaProvider.getSourceSchema(), Option.empty(), Option.empty(), props);
+    verifyDecimalValue(recs, deducedSchema, "decfield");
+    verifyDecimalValue(recs, deducedSchema, "lowprecision");
+    verifyDecimalValue(recs, deducedSchema, "highprecision");
+
+    testUtils.sendMessages(topic, jsonifyRecords(
+        dataGenerator.generateInsertsAsPerSchema("001", 20, HoodieTestDataGenerator.TRIP_ENCODED_DECIMAL_SCHEMA)));
+    InputBatch<Dataset<Row>> fetch2 =
+        kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), 30);
+    assertEquals(20, fetch2.getBatch().get().count());
+    assertEquals(20, fetch2.getBatch().get().filter("decfield < 10000.0").filter("decfield > 1000.0")
+        .filter("lowprecision < 100.0").filter("lowprecision > 10.0")
+        .filter("highprecision < 100000000000000000000.0").filter("highprecision > 10000000000000000000.0").count());
   }
 
   private static void verifyDecimalValue(List<GenericRecord> records, Schema schema, String fieldname) {

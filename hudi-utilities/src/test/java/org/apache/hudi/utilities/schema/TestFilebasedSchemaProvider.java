@@ -19,13 +19,13 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
+import org.apache.hudi.utilities.schema.converter.JsonToAvroSchemaConverter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.SchemaParseException;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * Unit tests for {@link FilebasedSchemaProvider}.
  */
-public class TestFilebasedSchemaProvider extends UtilitiesTestBase {
+class TestFilebasedSchemaProvider extends UtilitiesTestBase {
 
   private FilebasedSchemaProvider schemaProvider;
 
@@ -55,25 +55,15 @@ public class TestFilebasedSchemaProvider extends UtilitiesTestBase {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
-  @BeforeEach
-  public void setup() throws Exception {
-    super.setup();
-  }
-
-  @AfterEach
-  public void teardown() throws Exception {
-    super.teardown();
-  }
-
   @Test
-  public void properlyFormattedNestedSchemaTest() throws IOException {
+  void properlyFormattedNestedSchemaTest() throws IOException {
     this.schemaProvider = new FilebasedSchemaProvider(
         Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_valid.avsc"), jsc);
     assertEquals(this.schemaProvider.getSourceSchema(), generateProperFormattedSchema());
   }
 
   @Test
-  public void renameBadlyFormattedSchemaTest() throws IOException {
+  void renameBadlyFormattedSchemaTest() throws IOException {
     TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_invalid.avsc");
     props.put(SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
     this.schemaProvider = new FilebasedSchemaProvider(props, jsc);
@@ -81,7 +71,7 @@ public class TestFilebasedSchemaProvider extends UtilitiesTestBase {
   }
 
   @Test
-  public void renameBadlyFormattedSchemaWithPropertyDisabledTest() {
+  void renameBadlyFormattedSchemaWithPropertyDisabledTest() {
     assertThrows(SchemaParseException.class, () -> {
       new FilebasedSchemaProvider(
           Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_invalid.avsc"), jsc);
@@ -89,11 +79,22 @@ public class TestFilebasedSchemaProvider extends UtilitiesTestBase {
   }
 
   @Test
-  public void renameBadlyFormattedSchemaWithAltCharMaskConfiguredTest() throws IOException {
+  void renameBadlyFormattedSchemaWithAltCharMaskConfiguredTest() throws IOException {
     TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_invalid.avsc");
     props.put(SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
     props.put(SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "_");
     this.schemaProvider = new FilebasedSchemaProvider(props, jsc);
     assertEquals(this.schemaProvider.getSourceSchema(), generateRenamedSchemaWithConfiguredReplacement());
+  }
+
+  @Test
+  void testJsonSchema() throws IOException {
+    TypedProperties jsonProps = Helpers.setupSchemaOnDFS("streamer-config", "source_uber_encoded_decimal.json");
+    jsonProps.setProperty(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key(), JsonToAvroSchemaConverter.class.getName());
+    FilebasedSchemaProvider jsonFilebasedSchemaProvider = new FilebasedSchemaProvider(jsonProps, jsc);
+    FilebasedSchemaProvider filebasedSchemaProvider = new FilebasedSchemaProvider(
+        Helpers.setupSchemaOnDFS("streamer-config", "source_uber_encoded_decimal.avsc"), jsc);
+
+    assertEquals(filebasedSchemaProvider.getSourceSchema(), jsonFilebasedSchemaProvider.getSourceSchema());
   }
 }
