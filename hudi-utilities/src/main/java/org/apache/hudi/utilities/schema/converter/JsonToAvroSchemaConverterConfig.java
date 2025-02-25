@@ -40,7 +40,7 @@ public class JsonToAvroSchemaConverterConfig {
   public static final ConfigProperty<Boolean> STRIP_DEFAULT_VALUE_QUOTES = ConfigProperty
       .key("hoodie.streamer.schemaconverter.json_to_avro.strip_default_value_quotes")
       .defaultValue(true)
-      .sinceVersion("0.14.1")
+      .sinceVersion("1.1.0")
       .withDocumentation("In `org.apache.hudi.utilities.schema.converter.JsonToAvroSchemaConverter`, "
           + "whether to automatically strip the surrounding quotes on the default value of the "
           + "String-typed field in the schema. For example, the field schema is "
