@@ -35,7 +35,7 @@ import org.apache.avro.specific.SpecificRecordBase;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
-import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataAvroToPojo;
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToPojo;
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertReplaceCommitMetadataToPojo;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeReplaceCommitMetadata;
@@ -60,7 +60,7 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
       if (org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class.isAssignableFrom(clazz)) {
         return (T) convertReplaceCommitMetadataToPojo(deserializeReplaceCommitMetadata(bytes));
       }
-      return (T) convertCommitMetadataAvroToPojo(deserializeCommitMetadata(bytes));
+      return (T) convertCommitMetadataToPojo(deserializeCommitMetadata(bytes));
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata for instant " + instant + " bytes length: " + bytes.length, e);
     }

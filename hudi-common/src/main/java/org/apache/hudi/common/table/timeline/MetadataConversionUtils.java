@@ -371,7 +371,7 @@ public class MetadataConversionUtils {
   /**
    * Convert commit metadata from avro to pojo.
    */
-  public static HoodieCommitMetadata convertCommitMetadataAvroToPojo(org.apache.hudi.avro.model.HoodieCommitMetadata hoodieCommitMetadata) {
+  public static HoodieCommitMetadata convertCommitMetadataToPojo(org.apache.hudi.avro.model.HoodieCommitMetadata hoodieCommitMetadata) {
     // While it is valid to have a null key in the hash map in java, avro map could not accommodate this, so we need to remove null key explicitly before the conversion.
     hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
     return JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, HoodieCommitMetadata.class);
@@ -385,7 +385,7 @@ public class MetadataConversionUtils {
   }
 
   /**
-   * Convert replacecommit metadata from pojo to avro.
+   * Convert replacecommit metadata from avro to pojo.
    */
   public static HoodieReplaceCommitMetadata convertReplaceCommitMetadataToPojo(org.apache.hudi.avro.model.HoodieReplaceCommitMetadata replaceCommitMetadata) {
     // While it is valid to have a null key in the hash map in java, avro map could not accommodate this, so we need to remove null key explicitly before the conversion.
