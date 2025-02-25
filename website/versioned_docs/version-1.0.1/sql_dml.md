@@ -136,7 +136,7 @@ There are two kinds of `INSERT` clauses:
 
 For a Hudi table with user configured primary keys, the join condition and the `UPDATE`/`INSERT INTO` clause in `MERGE INTO` is expected to contain the primary keys of the table.
 
-For a Table where Hudi auto generates primary keys, the join condition in `MERGE INTO` can be on any arbitrary data columns.
+For a table where Hudi auto generates primary keys, the join condition in `MERGE INTO` can be on any arbitrary data columns.
 
 if the `hoodie.record.merge.mode` is set to `EVENT_TIME_ORDERING`, the `preCombineField` is required to be set with value in the `UPDATE`/`INSERT` clause.
 
