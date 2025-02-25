@@ -129,14 +129,15 @@ following changes:
 
 * We are proposing to add an ".aborted" state type for cancellable table service plan. This state is terminal and with
   this new addition, an instant can only be transitioned to .*commit or .aborted (not both) or could be rolledback (
-  ingestion writes). The new ".aborted" state will allow writers to infer whether a cancelled table service plan needs
-  to still have it's partial data writes cleaned up from the dataset, which is needed for (C). Once an instant appears
-  in /.cancel folder, it can and must eventually be transitioned to .aborted state. This new state will ensure that
-  cancelled instants are eventually "cleaned up" from the dataset and internal timeline metadata.
+  ingestion writes). The new ".aborted" state will allow writers to infer whether a cancelled table service plan still needs to
+  have its partial data writes cleaned up from the dataset or can be deleted from the active timeline during archival
+  (as the active timeline should not grow unbounded). Once an instant appears in /.cancel folder, it can and must eventually be
+  transitioned to .aborted state. To summarize, this new state will ensure that cancelled instants are eventually "cleaned up" from the dataset
+  and internal timeline metadata.
 
 ### Handling cancellation of plans
 
-In order to ensure that other writers can indeed permanantely cancel a cancellable table service plan (such that it can
+In order to ensure that other writers can indeed permanantely cancel a cancellable clustering plan (such that it can
 no longer be executed), additional changes to cluster table service flow will be need to be added as well, as will be
 proposed below. In addition to clustering being able to cleanup/abort an instant, a user may want to setup
 a seperate utility application to directly cancel/abort cancellable cluster instants, in order to manually ensure that clean/archival
