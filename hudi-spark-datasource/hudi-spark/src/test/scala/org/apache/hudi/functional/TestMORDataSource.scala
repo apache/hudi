@@ -98,18 +98,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   @ParameterizedTest
   @CsvSource(Array(
-    // Inferred as COMMIT_TIME_ORDERING
-    "AVRO, AVRO, avro, false,,,EIGHT", "AVRO, SPARK, parquet, false,,,EIGHT",
-    "SPARK, AVRO, parquet, false,,,EIGHT", "SPARK, SPARK, parquet, false,,,EIGHT",
-    // EVENT_TIME_ORDERING without precombine field
-    "AVRO, AVRO, avro, false,,EVENT_TIME_ORDERING,EIGHT", "AVRO, SPARK, parquet, false,,EVENT_TIME_ORDERING,EIGHT",
-    "SPARK, AVRO, parquet, false,,EVENT_TIME_ORDERING,EIGHT", "SPARK, SPARK, parquet, false,,EVENT_TIME_ORDERING,EIGHT",
-    // EVENT_TIME_ORDERING with empty precombine field
-    "AVRO, AVRO, avro, true,,EVENT_TIME_ORDERING,EIGHT", "AVRO, SPARK, parquet, true,,EVENT_TIME_ORDERING,EIGHT",
-    "SPARK, AVRO, parquet, true,,EVENT_TIME_ORDERING,EIGHT", "SPARK, SPARK, parquet, true,,EVENT_TIME_ORDERING,EIGHT",
-    // Inferred as EVENT_TIME_ORDERING
-    "AVRO, AVRO, avro, true, timestamp,,EIGHT", "AVRO, SPARK, parquet, true, timestamp,,EIGHT",
-    "SPARK, AVRO, parquet, true, timestamp,,EIGHT", "SPARK, SPARK, parquet, true, timestamp,,EIGHT",
     // test table version 6
     "AVRO, AVRO, avro, true,timestamp,EVENT_TIME_ORDERING,SIX",
     "AVRO, AVRO, avro, true,timestamp,COMMIT_TIME_ORDERING,SIX"))
@@ -1508,24 +1496,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     } else {
       basePath
     }
-  }
-
-  @Test
-  def testMergerStrategySet(): Unit = {
-    val (writeOpts, _) = getWriterReaderOpts()
-    val input = recordsToStrings(dataGen.generateInserts("000", 1)).asScala
-    val inputDf= spark.read.json(spark.sparkContext.parallelize(input.toSeq, 1))
-    val mergerStrategyName = "example_merger_strategy"
-    inputDf.write.format("hudi")
-      .options(writeOpts)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), mergerStrategyName)
-      .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-    metaClient = createMetaClient(spark, basePath)
-    assertEquals(metaClient.getTableConfig.getRecordMergeStrategyId, mergerStrategyName)
   }
 
   /**

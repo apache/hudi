@@ -160,6 +160,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
         .drop("current_ts", "_row_key_temp").withColumn("current_ts", col("current_ts_temp"))
         .drop("current_ts_temp")
     }
+    val completionTime2 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
 
     val uniqueKeyCnt = inputDF2.select("_row_key").distinct().count()
 
@@ -213,7 +214,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     // pull the latest commit
     val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, completionTime3)
+      .option(DataSourceReadOptions.START_COMMIT.key, completionTime2)
       .load(basePath)
 
     assertEquals(uniqueKeyCnt, hoodieIncViewDF2.count()) // 100 records must be pulled
@@ -224,7 +225,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     // pull the latest commit within certain partitions
     val hoodieIncViewDF3 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, completionTime3)
+      .option(DataSourceReadOptions.START_COMMIT.key, completionTime2)
       .option(DataSourceReadOptions.INCR_PATH_GLOB.key, if (isTimestampBasedKeyGen) "/2016*/*" else "/2016/*/*/*")
       .load(basePath)
     assertEquals(hoodieIncViewDF2
@@ -232,7 +233,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     val timeTravelDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, completionTime1)
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .option(DataSourceReadOptions.END_COMMIT.key, completionTime1)
       .load(basePath)
     assertEquals(100, timeTravelDF.count()) // 100 initial inserts must be pulled

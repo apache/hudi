@@ -561,8 +561,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // snapshot query
     val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
     val snapshotQueryRes = spark.read.format("hudi").options(readOpts).load(pathForReader)
-    assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
-    assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
+    if (enableFileIndex) {
+      assertEquals(snapshotQueryRes.where("partition = '2022/01/01'").count, 20)
+      assertEquals(snapshotQueryRes.where("partition = '2022/01/02'").count, 30)
+    } else {
+      assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
+      assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
+    }
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")
@@ -1084,7 +1089,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     writer.partitionBy("current_ts")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    var recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    var recordsReadDF = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath + "/*/*")
 
     assertEquals(0L, recordsReadDF.filter(col("_hoodie_partition_path") =!= col("current_ts").cast("string")).count())
 
@@ -1095,7 +1102,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyyMMdd")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    recordsReadDF = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath + "/*/*")
     val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
 
     assertEquals(0L, recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count())
@@ -1107,7 +1116,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyyMMdd")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    recordsReadDF = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath + "/*/*/*")
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!=
       concat(col("driver"), lit("/"), col("rider"), lit("/"), udf_date_format(col("current_ts")))).count() == 0)
 
@@ -1249,7 +1260,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    val recordsReadDF = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath + "/*/*")
     val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
   }
@@ -1515,8 +1528,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     assert(firstDF.count() == 2)
 
+    val expectedValues = if (useGlobbing || !enableFileIndex) {
+      Seq("2018-09-23", "2018-09-24")
+    } else {
+      Seq("2018/09/23", "2018/09/24")
+    }
     assertEquals(
-      Seq("2018-09-23", "2018-09-24"),
+      expectedValues,
       firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
     )
 
