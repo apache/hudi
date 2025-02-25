@@ -221,6 +221,8 @@ public class TestStringUtils {
         toStringWithThreshold(Collections.singletonList(str1), 2));
     assertEquals("string_...",
         toStringWithThreshold(Collections.singletonList(str1), str1.length() - 3));
+    assertEquals("[string_value1]",
+        toStringWithThreshold(Collections.singletonList(str1), 0));
     assertEquals(str1,
         toStringWithThreshold(Collections.singletonList(str1), str1.length()));
     assertEquals(str1,
@@ -241,5 +243,7 @@ public class TestStringUtils {
         toStringWithThreshold(stringList, str1.length() + str2.length() + str3.length() - 3));
     assertEquals("string_value1,string_value2,string_value3",
         toStringWithThreshold(stringList, str1.length() + str2.length() + str3.length() + 2));
+    assertEquals("[string_value1, string_value2, string_value3]",
+        toStringWithThreshold(stringList, - 1));
   }
 }
