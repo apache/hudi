@@ -28,28 +28,28 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 
 public class TestCommitMetadataSerDeV2 extends BaseTestCommitMetadataSerDe {
 
-    @Override
-    protected CommitMetadataSerDe getSerDe() {
-        return new CommitMetadataSerDeV2();
-    }
+  @Override
+  protected CommitMetadataSerDe getSerDe() {
+    return new CommitMetadataSerDeV2();
+  }
 
-    @Override
-    protected HoodieInstant createTestInstant(String action, String id) {
-        return INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, action, id);
-    }
+  @Override
+  protected HoodieInstant createTestInstant(String action, String id) {
+    return INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, action, id);
+  }
 
-    @Test
-    public void testEmptyMetadataSerDe() throws Exception {
-        super.testEmptyMetadataSerDe();
-    }
+  @Test
+  public void testEmptyMetadataSerDe() throws Exception {
+    super.testEmptyMetadataSerDe();
+  }
 
-    @Test
-    public void testPopulatedMetadataSerDe() throws Exception {
-        super.testPopulatedMetadataSerDe();
-    }
+  @Test
+  public void testPopulatedMetadataSerDe() throws Exception {
+    super.testPopulatedMetadataSerDe();
+  }
 
-    @Test
-    public void testReplaceCommitMetadataSerDe() throws Exception {
-        super.testReplaceCommitMetadataSerDe();
-    }
+  @Test
+  public void testReplaceCommitMetadataSerDe() throws Exception {
+    super.testReplaceCommitMetadataSerDe();
+  }
 }
