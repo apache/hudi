@@ -23,6 +23,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.append.AppendWriteFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
+import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
@@ -58,6 +59,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   private final MockStreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
+  private final MockSubtaskGateway subtaskGateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
   private StreamWriteOperatorCoordinator coordinator;
   private final MockStateInitializationContext stateInitializationContext;
@@ -79,6 +81,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
         .build();
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment);
     this.gateway = new MockOperatorEventGateway();
+    this.subtaskGateway = new MockSubtaskGateway();
     this.conf = conf;
     this.rowType = (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
     // one function
@@ -119,6 +122,11 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public OperatorEvent getNextEvent() {
     return this.gateway.getNextEvent();
+  }
+
+  @Override
+  public OperatorEvent getNextSubTaskEvent() {
+    return this.subtaskGateway.getNextEvent();
   }
 
   public void checkpointFunction(long checkpointId) throws Exception {
@@ -175,6 +183,11 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   @Override
+  public AbstractWriteFunction getWriteFunction() {
+    return this.writeFunction;
+  }
+
+  @Override
   public void close() throws Exception {
     this.coordinator.close();
     if (clusteringFunctionWrapper != null) {
@@ -196,5 +209,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
     writeFunction.open(conf);
+    // set up subtask gateway
+    coordinator.subtaskReady(0, subtaskGateway);
   }
 }
