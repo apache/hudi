@@ -42,6 +42,7 @@ ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
+ln -sf $JARS_DIR/hudi-cli-bundle*.jar $JARS_DIR/cli.jar
 
 ##
 # Function to change Java runtime version by changing JAVA_HOME
@@ -268,10 +269,56 @@ test_metaserver_bundle () {
     kill $DERBY_PID $HIVE_PID $METASEVER_PID
 }
 
+##
+# Function to test the hudi-cli bundle.
+# It creates a test table and connects to it using CLI commands
+#
+# env vars
+#   SPARK_HOME: path to the spark directory
+#   CLI_BUNDLE_JAR: path to the hudi cli bundle jar
+#   SPARK_BUNDLE_JAR: path to the hudi spark bundle jar
+##
+test_cli_bundle() {
+    echo "::warning::validate.sh setting up CLI bundle validation"
+
+    # Create a temporary directory for CLI commands output
+    CLI_TEST_DIR="/tmp/hudi-bundles/tests/log"
+    mkdir -p $CLI_TEST_DIR
+
+    # Set required environment variables
+    export SPARK_HOME=$SPARK_HOME
+    export CLI_BUNDLE_JAR=$JARS_DIR/cli.jar
+    export SPARK_BUNDLE_JAR=$JARS_DIR/spark.jar
+
+    # Execute with debug output
+    echo "Executing Hudi CLI commands..."
+    $WORKDIR/cli/hudi-cli-with-bundle.sh < $WORKDIR/cli/commands.txt 2>&1 | tee $CLI_TEST_DIR/output.txt
+
+    # Verify table was created
+    if [ ! -d "/tmp/hudi-bundles/tests/table/.hoodie" ]; then
+        echo "::error::validate.sh CLI bundle validation failed - Table directory not created"
+        return 1
+    fi
+
+    if ! grep -q "Metadata for table trips loaded" $CLI_TEST_DIR/output.txt; then
+        echo "::error::validate.sh CLI bundle validation failed - Table connection failed"
+        return 1
+    fi
+
+    echo "::warning::validate.sh CLI bundle validation was successful"
+    return 0
+}
 
 ############################
 # Execute tests
 ############################
+
+echo "::warning::validate.sh validating cli bundle"
+test_cli_bundle
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh done validating cli bundle"
 
 echo "::warning::validate.sh validating spark & hadoop-mr bundle"
 test_spark_hadoop_mr_bundles
