@@ -31,7 +31,6 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -46,7 +45,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_ENCODED_DECIMAL_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -89,8 +87,6 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
 
     assertEquals(rec, CONVERTER.convert(json, simpleSchema));
   }
-
-  private static final String DECIMAL_AVRO_FILE_PATH = "/decimal-logical-type.avsc";
 
   /**
    * Covered case:
@@ -195,38 +191,6 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     }
   }
 
-  static Stream<Object> zeroScaleDecimalCases() {
-    return Stream.of(
-        // Input value in JSON, expected decimal, whether conversion should be successful
-        // Values that can be converted
-        Arguments.of("0.0", "0", true),
-        Arguments.of("20.0", "20", true),
-        Arguments.of("320", "320", true),
-        Arguments.of("320.00", "320", true),
-        Arguments.of("-1320.00", "-1320", true),
-        Arguments.of("1520423524459", "1520423524459", true),
-        Arguments.of("1520423524459.0", "1520423524459", true),
-        Arguments.of("1000000000000000.0", "1000000000000000", true),
-        // Values that are big enough and out of range of int or long types
-        // Note that we can have at most 17 significant decimal digits in double values
-        Arguments.of("1.2684037455962608e+16", "12684037455962608", true),
-        Arguments.of("4.0100001e+16", "40100001000000000", true),
-        Arguments.of("3.52838e+17", "352838000000000000", true),
-        Arguments.of("9223372036853999600.0000", "9223372036853999600", true),
-        Arguments.of("999998887654321000000000000000.0000", "999998887654321000000000000000", true),
-        Arguments.of("-999998887654321000000000000000.0000", "-999998887654321000000000000000", true),
-        // Values covering high precision decimals that lose precision when converting to a double
-        Arguments.of("3.781239258857277e+16", "37812392588572770", true),
-        Arguments.of("1.6585135379127473e+18", "1658513537912747300", true),
-        // Values that should not be converted
-        Arguments.of("0.0001", null, false),
-        Arguments.of("300.9999", null, false),
-        Arguments.of("1928943043.0001", null, false)
-    );
-  }
-
-  private static final String DURATION_AVRO_FILE_PATH = "/duration-logical-type.avsc";
-  private static final String DURATION_AVRO_FILE_PATH_INVALID = "/duration-logical-type-invalid.avsc";
   /**
    * Covered case:
    * Avro Logical Type: Duration
@@ -274,8 +238,6 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
   }
 
 
-  private static final String DATE_AVRO_FILE_PATH = "/date-type.avsc";
-  private static final String DATE_AVRO_INVALID_FILE_PATH = "/date-type-invalid.avsc";
   /**
    * Covered case:
    * Avro Logical Type: Date
@@ -348,8 +310,6 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     assertEquals(record, real);
   }
 
-  private static final String LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH = "/local-timestamp-millis-logical-type.avsc";
-  private static final String LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH = "/local-timestamp-micros-logical-type.avsc";
   @ParameterizedTest
   @MethodSource("localTimestampBadCaseProvider")
   void localTimestampLogicalTypeBadTest(
@@ -365,7 +325,6 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     });
   }
 
-  private static final String TIMESTAMP_AVRO_FILE_PATH = "/timestamp-logical-type2.avsc";
   /**
    * Covered case:
    * Avro Logical Type: localTimestampMillisField & localTimestampMillisField
@@ -495,6 +454,33 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
     assertEquals(record, real);
+  }
+
+  @ParameterizedTest
+  @MethodSource("nestedRecord")
+  void nestedRecordTest(String contactInput, boolean isString) {
+    String nestedSchemaStr =
+        "{\"type\":\"record\",\"name\":\"User\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"},"
+            + "{\"name\":\"contact\",\"type\":{\"type\":\"record\",\"name\":\"Contact\","
+            + "\"fields\":[{\"name\":\"email\",\"type\":\"string\"}]}}]}";
+    String json = isString
+        ? String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":\"%s\"}}", contactInput)
+        : String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":%s}}", contactInput);
+    Schema nestedSchema = new Schema.Parser().parse(nestedSchemaStr);
+    GenericRecord userRecord = new GenericData.Record(nestedSchema);
+
+    // Create the nested record for Contact
+    Schema contactSchema = nestedSchema.getField("contact").schema();
+    GenericRecord contactRecord = new GenericData.Record(contactSchema);
+
+    // Set the email field in the nested Contact record
+    contactRecord.put("email", contactInput);
+
+    // Set the fields in the outer User record
+    userRecord.put("name", "Jane Smith");
+    userRecord.put("contact", contactRecord);
+
+    assertEquals(userRecord, CONVERTER.convert(json, nestedSchema));
   }
 
   @Test
