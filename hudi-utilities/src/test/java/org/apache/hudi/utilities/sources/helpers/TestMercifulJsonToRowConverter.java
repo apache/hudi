@@ -23,6 +23,7 @@ import org.apache.hudi.avro.MercifulJsonConverterTestBase;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Conversions;
 import org.apache.avro.Schema;
@@ -33,23 +34,28 @@ import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_ENCODED_DECIMAL_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -220,6 +226,27 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
   }
 
   private static final String DURATION_AVRO_FILE_PATH = "/duration-logical-type.avsc";
+
+  @ParameterizedTest
+  @MethodSource("zeroScaleDecimalCases")
+  void zeroScaleDecimalConversion(String inputValue, String expected, boolean shouldConvert) {
+    Schema schema = new Schema.Parser().parse(
+        "{\"namespace\": \"example.avro\",\"type\": \"record\",\"name\": \"decimalLogicalType\","
+            + "\"fields\": [{\"name\": \"decimalField\", \"type\": {\"type\": \"bytes\", "
+            + "\"logicalType\": \"decimal\", \"precision\": 38, \"scale\": 0}}]}");
+    String json = String.format("{\"decimalField\":%s}", inputValue);
+
+    if (shouldConvert) {
+      BigDecimal bigDecimal = new BigDecimal(expected);
+      Row expectedRow = RowFactory.create(bigDecimal);
+      Row actualRow = CONVERTER.convertToRow(json, schema);
+      validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
+      assertEquals(expectedRow, actualRow);
+    } else {
+      assertThrows(HoodieJsonToRowConversionException.class, () -> CONVERTER.convertToRow(json, schema));
+    }
+  }
+
   /**
    * Covered case:
    * Avro Logical Type: Duration
@@ -489,6 +516,49 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
     assertEquals(rec, real);
   }
 
+  @ParameterizedTest
+  @MethodSource("nestedRecord")
+  void nestedRecordTest(String contactInput, boolean isString) {
+    String nestedSchemaStr =
+        "{\"type\":\"record\",\"name\":\"User\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"},"
+            +
+            "{\"name\":\"contact\",\"type\":{\"type\":\"record\",\"name\":\"Contact\",\"fields\":[{\"name\":\"email\",\"type\":\"string\"}]}}]}";
+    String json = isString ? String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":\"%s\"}}", contactInput)
+        : String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":%s}}", contactInput);
+    Schema nestedSchema = new Schema.Parser().parse(nestedSchemaStr);
+
+    Row expected = RowFactory.create("Jane Smith", RowFactory.create(contactInput));
+    Row real = CONVERTER.convertToRow(json, nestedSchema);
+    validateSchemaCompatibility(Collections.singletonList(real), nestedSchema);
+    assertEquals(expected, real);
+  }
+
+  @Test
+  public void conversionWithFieldNameSanitization() throws IOException {
+    String sanitizedSchemaString =
+        "{\"namespace\": \"example.avro\", \"type\": \"record\", \"name\": \"User\", \"fields\": [{\"name\": \"__name\", \"type\": \"string\"}, "
+            +
+            "{\"name\": \"favorite__number\", \"type\": \"int\"}, {\"name\": \"favorite__color__\", \"type\": \"string\"}]}";
+    Schema sanitizedSchema = Schema.parse(sanitizedSchemaString);
+    String name = "John Smith";
+    int number = 1337;
+    String color = "Blue. No yellow!";
+    Map<String, Object> data = new HashMap<>();
+    data.put("$name", name);
+    data.put("favorite-number", number);
+    data.put("favorite.color!", color);
+    String json = MAPPER.writeValueAsString(data);
+
+    List<Object> values = new ArrayList<>(Collections.nCopies(sanitizedSchema.getFields().size(), null));
+    values.set(0, name);
+    values.set(1, number);
+    values.set(2, color);
+    Row expected = RowFactory.create(values.toArray());
+    Row actual = CONVERTER.convertToRow(json, sanitizedSchema);
+    validateSchemaCompatibility(Collections.singletonList(actual), sanitizedSchema);
+    assertEquals(expected, actual);
+  }
+
   @Test
   void conversionWithFieldNameAliases() throws IOException {
     String schemaStringWithAliases = "{\"namespace\": \"example.avro\", \"type\": \"record\", \"name\": \"User\", \"fields\": [{\"name\": \"name\", \"type\": \"string\", \"aliases\": [\"$name\"]}, "
@@ -515,6 +585,63 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
     Row realRow = CONVERTER.convertToRow(json, sanitizedSchema);
     validateSchemaCompatibility(Collections.singletonList(realRow), sanitizedSchema);
     assertEquals(recRow, realRow);
+  }
+
+  @ParameterizedTest
+  @MethodSource("encodedDecimalScalePrecisionProvider")
+  void testEncodedDecimal(int scale, int precision) throws JsonProcessingException {
+    Random rand = new Random();
+    BigDecimal decfield = BigDecimal.valueOf(rand.nextDouble())
+        .setScale(scale, RoundingMode.HALF_UP).round(new MathContext(precision, RoundingMode.HALF_UP));
+    Map<String, Object> data = new HashMap<>();
+    data.put("_row_key", "mykey");
+    long timestamp = 214523432;
+    data.put("timestamp", timestamp);
+    data.put("rider", "myrider");
+    data.put("decfield", Base64.getEncoder().encodeToString(decfield.unscaledValue().toByteArray()));
+    data.put("driver", "mydriver");
+    data.put("lowprecision", 12.34);
+    data.put("highprecision", 12.987654312312);
+    data.put("fare", rand.nextDouble() * 100);
+    data.put("_hoodie_is_deleted", false);
+    String json = MAPPER.writeValueAsString(data);
+    Schema tripSchema = new Schema.Parser().parse(
+        TRIP_ENCODED_DECIMAL_SCHEMA.replace("6", Integer.toString(scale)).replace("10", Integer.toString(precision)));
+    Row rec = CONVERTER.convertToRow(json, tripSchema);
+    validateSchemaCompatibility(Collections.singletonList(rec), tripSchema);
+    BigDecimal actualField = rec.getDecimal(tripSchema.getField("decfield").pos());
+    assertEquals(decfield, actualField);
+  }
+
+  @ParameterizedTest
+  @MethodSource("encodedDecimalFixedScalePrecisionProvider")
+  void testEncodedDecimalAvroSparkPostProcessorCase(int size, int scale, int precision) throws JsonProcessingException {
+    Random rand = new Random();
+    String postProcessSchemaString = String.format("{\"type\":\"record\",\"name\":\"tripUberRec\","
+        + "\"fields\":[{\"name\":\"timestamp\",\"type\":\"long\",\"doc\":\"\"},{\"name\":\"_row_key\","
+        + "\"type\":\"string\",\"doc\":\"\"},{\"name\":\"rider\",\"type\":\"string\",\"doc\":\"\"},"
+        + "{\"name\":\"decfield\",\"type\":{\"type\":\"fixed\",\"name\":\"fixed\","
+        + "\"namespace\":\"tripUberRec.decfield\",\"size\":%d,\"logicalType\":\"decimal\","
+        + "\"precision\":%d,\"scale\":%d},\"doc\":\"\"},{\"name\":\"driver\",\"type\":\"string\","
+        + "\"doc\":\"\"},{\"name\":\"fare\",\"type\":\"double\",\"doc\":\"\"},{\"name\":\"_hoodie_is_deleted\","
+        + "\"type\":\"boolean\",\"doc\":\"\"}]}", size, precision, scale);
+    Schema postProcessSchema = new Schema.Parser().parse(postProcessSchemaString);
+    BigDecimal decfield = BigDecimal.valueOf(rand.nextDouble())
+        .setScale(scale, RoundingMode.HALF_UP).round(new MathContext(precision, RoundingMode.HALF_UP));
+    Map<String, Object> data = new HashMap<>();
+    data.put("_row_key", "mykey");
+    long timestamp = 214523432;
+    data.put("timestamp", timestamp);
+    data.put("rider", "myrider");
+    data.put("decfield", Base64.getEncoder().encodeToString(decfield.unscaledValue().toByteArray()));
+    data.put("driver", "mydriver");
+    data.put("fare", rand.nextDouble() * 100);
+    data.put("_hoodie_is_deleted", false);
+    String json = MAPPER.writeValueAsString(data);
+    Row rec = CONVERTER.convertToRow(json, postProcessSchema);
+    BigDecimal actualField = rec.getDecimal(postProcessSchema.getField("decfield").pos());
+    validateSchemaCompatibility(Collections.singletonList(rec), postProcessSchema);
+    assertEquals(decfield, actualField);
   }
 
   private void validateSchemaCompatibility(List<Row> rows, Schema schema) {
