@@ -89,44 +89,6 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
   }
 
   /**
-   * A time-based filter with range [startTs, endTs].
-   */
-  class ClosedClosedTimeRangeFilter extends TimeRangeFilter {
-    private final String startTs;
-    private final String endTs;
-
-    public ClosedClosedTimeRangeFilter(String startTs, String endTs) {
-      super(startTs, endTs);
-      this.startTs = startTs;
-      this.endTs = endTs;
-    }
-
-    @Override
-    public boolean isInRange(String instantTime) {
-      return InstantComparison.isInClosedRange(instantTime, this.startTs, this.endTs);
-    }
-
-    public boolean isInRange(HoodieInstant instant) {
-      return InstantComparison.isInClosedRange(instant.requestedTime(), this.startTs, this.endTs);
-    }
-  }
-
-  /**
-   * A log file filter based on the full file paths
-   */
-  class LogFileFilter {
-    private final Set<String> logFiles;
-
-    public LogFileFilter(Set<String> logFiles) {
-      this.logFiles = logFiles;
-    }
-
-    public boolean shouldLoadFile(StoragePathInfo storagePathInfo) {
-      return logFiles.contains(storagePathInfo.getPath().toString());
-    }
-  }
-
-  /**
    * A time based filter with range [startTs, endTs).
    */
   class ClosedOpenTimeRangeFilter extends TimeRangeFilter {
