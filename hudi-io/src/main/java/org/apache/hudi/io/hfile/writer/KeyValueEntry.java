@@ -20,15 +20,14 @@
 package org.apache.hudi.io.hfile.writer;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 public class KeyValueEntry implements Comparable<KeyValueEntry> {
   final byte[] key;
   final byte[] value;
 
   KeyValueEntry(byte[] key, byte[] value) {
-    this.key = Arrays.copyOf(key, key.length);
-    this.value = Arrays.copyOf(value, value.length);
+    this.key = key;
+    this.value = value;
   }
 
   @Override
