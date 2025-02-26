@@ -279,7 +279,6 @@ public class CloudWatchReporter extends ScheduledReporter {
             "metricName doesn't follow the naming convention and doesn't contain a dot as splitter! metricName:" + metricName);
     String tableName = metricNameParts[0];
 
-
     metricData.add(MetricDatum.builder()
         .timestamp(Instant.ofEpochMilli(timestampMilliSec))
         .metricName(prefix(metricNameParts[1]))
