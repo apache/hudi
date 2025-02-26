@@ -56,7 +56,7 @@ File Groups. Updates are captured in log files tied to these File Groups, ensuri
 File Slices. File groups contain multiple versions of File Slices and are split into multiple File Slices. A File Slice comprises the Base and Log File. Each File Slice within 
 the file-group is uniquely identified by the write that created its base file or the first log file, which helps order the File Slices.
 
-- **Metadata Table** : Implemented as an another merge-on-read Hudi table, the [metadata table](./metadata) efficiently handles quick updates with low write amplification. 
+- **Metadata Table** : Implemented as another merge-on-read Hudi table, the [metadata table](./metadata) efficiently handles quick updates with low write amplification. 
 It leverages a [SSTable](https://cassandra.apache.org/doc/stable/cassandra/architecture/storage_engine.html#sstables) based file format for quick, indexed key lookups, 
 storing vital information like file paths, column statistics and schema. This approach streamlines operations by reducing the necessity for expensive cloud file listings. 
 
