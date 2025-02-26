@@ -72,9 +72,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link HoodieArchivedTimeline}.
+ * Tests {@link ArchivedTimelineV1}.
  */
-public class TestHoodieArchivedTimelineV1 extends HoodieCommonTestHarness {
+public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
 
   private HoodieArchivedTimeline timeline;
 
