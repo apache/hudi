@@ -56,12 +56,15 @@ import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -170,6 +173,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
       HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
   public static final Schema AVRO_SHORT_TRIP_SCHEMA = new Schema.Parser().parse(SHORT_TRIP_SCHEMA);
+  public static final Schema AVRO_TRIP_ENCODED_DECIMAL_SCHEMA = new Schema.Parser().parse(TRIP_ENCODED_DECIMAL_SCHEMA);
   public static final Schema AVRO_TRIP_SCHEMA = new Schema.Parser().parse(TRIP_SCHEMA);
   public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
   private final Random rand;
@@ -294,6 +298,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       return generateRandomValue(key, commitTime, true);
     } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
       return generateRandomValue(key, commitTime, isFlattened);
+    } else if (TRIP_ENCODED_DECIMAL_SCHEMA.equals(schemaStr)) {
+      return generatePayloadForTripEncodedDecimalSchema(key, commitTime);
     } else if (TRIP_SCHEMA.equals(schemaStr)) {
       return generatePayloadForTripSchema(key, commitTime);
     } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
@@ -351,6 +357,17 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, ts,
         false);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+  }
+
+  /**
+   * Generates a new avro record with TRIP_ENCODED_DECIMAL_SCHEMA, retaining the key if optionally provided.
+   */
+  public RawTripTestPayload generatePayloadForTripEncodedDecimalSchema(HoodieKey key, String commitTime)
+      throws IOException {
+    GenericRecord rec =
+        generateRecordForTripEncodedDecimalSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
+    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(),
+        TRIP_ENCODED_DECIMAL_SCHEMA);
   }
 
   /**
@@ -506,6 +523,38 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     generateFareNestedValues(rec);
     generateTripSuffixValues(rec, isDeleteRecord);
     return rec;
+  }
+
+  /*
+Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
+ */
+  public GenericRecord generateRecordForTripEncodedDecimalSchema(String rowKey, String riderName, String driverName,
+                                                                 long timestamp) {
+    GenericRecord rec = new GenericData.Record(AVRO_TRIP_ENCODED_DECIMAL_SCHEMA);
+    rec.put("_row_key", rowKey);
+    rec.put("timestamp", timestamp);
+    rec.put("rider", riderName);
+    rec.put("decfield", getNonzeroEncodedBigDecimal(rand, 6, 10));
+    rec.put("lowprecision", getNonzeroEncodedBigDecimal(rand, 2, 4));
+    rec.put("highprecision", getNonzeroEncodedBigDecimal(rand, 12, 32));
+    rec.put("driver", driverName);
+    rec.put("fare", rand.nextDouble() * 100);
+    rec.put("_hoodie_is_deleted", false);
+    return rec;
+  }
+
+  private static String getNonzeroEncodedBigDecimal(Random rand, int scale, int precision) {
+    //scale the value because rand.nextDouble() only returns a val that is between 0 and 1
+
+    //make it between 0.1 and 1 so that we keep all values in the same order of magnitude
+    double nextDouble = rand.nextDouble();
+    while (nextDouble <= 0.1) {
+      nextDouble = rand.nextDouble();
+    }
+    double valuescale = Math.pow(10, precision - scale);
+    BigDecimal dec = BigDecimal.valueOf(nextDouble * valuescale)
+        .setScale(scale, RoundingMode.HALF_UP).round(new MathContext(precision, RoundingMode.HALF_UP));
+    return Base64.getEncoder().encodeToString(dec.unscaledValue().toByteArray());
   }
 
   /*

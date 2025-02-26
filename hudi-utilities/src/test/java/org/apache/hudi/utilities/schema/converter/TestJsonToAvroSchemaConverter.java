@@ -52,6 +52,7 @@ class TestJsonToAvroSchemaConverter {
       "not-null-default-value-schema,_no_stripping_quotes",
       "not-null-default-value-schema,_stripping_quotes",
       "array-with-item-type-union,",
+      "kafka-decimal-simple,"
   })
   void testConvertJsonSchemaToAvroSchema(String inputCase, String avroSchemaFileSuffix) throws IOException {
     String jsonSchema = loadJsonSchema(inputCase);

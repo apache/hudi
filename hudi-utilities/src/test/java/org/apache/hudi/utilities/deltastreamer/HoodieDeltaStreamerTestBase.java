@@ -195,6 +195,13 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/source_short_trip_uber.avsc", storage, dfsBasePath + "/source_short_trip_uber.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/source_uber.avsc", storage, dfsBasePath + "/source_uber.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "streamer-config/source_uber_encoded_decimal.json", storage,
+        dfsBasePath + "/source_uber_encoded_decimal.json");
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "streamer-config/source_uber_encoded_decimal.avsc", storage,
+        dfsBasePath + "/source_uber_encoded_decimal.avsc");
+
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/target_short_trip_uber.avsc", storage, dfsBasePath + "/target_short_trip_uber.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/target_uber.avsc", storage, dfsBasePath + "/target_uber.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("streamer-config/invalid_hive_sync_uber_config.properties", storage, dfsBasePath + "/config/invalid_hive_sync_uber_config.properties");

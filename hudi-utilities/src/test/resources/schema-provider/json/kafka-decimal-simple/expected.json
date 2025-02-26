@@ -1,0 +1,24 @@
+{
+  "type" : "record",
+  "name" : "Product",
+  "doc" : "A product from Acme's catalog",
+  "namespace" : "example.com",
+  "fields" : [ {
+    "name" : "product",
+    "doc" : "The unique identifier for a product",
+    "type" : "long"
+  }, {
+    "name" : "productId",
+    "doc" : "The unique identifier for a product",
+    "type" : {
+      "type": "bytes",
+      "logicalType": "decimal",
+      "precision": 14,
+      "scale": 2
+    }
+  }, {
+    "name" : "productName",
+    "doc" : "Name of the product",
+    "type" : "string"
+  }]
+}
