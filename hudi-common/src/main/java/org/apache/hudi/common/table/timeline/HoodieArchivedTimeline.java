@@ -18,10 +18,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.storage.StoragePathInfo;
-
-import java.util.Set;
-
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
