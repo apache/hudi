@@ -20,7 +20,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.8682b225.css">
-<script src="/assets/js/runtime~main.8b43c1f3.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.0d92f83e.js" defer="defer"></script>
 <script src="/assets/js/main.18605a47.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -67,7 +67,7 @@ File Slices. File groups contain multiple versions of File Slices and are split 
 the file-group is uniquely identified by the write that created its base file or the first log file, which helps order the File Slices.</p>
 </li>
 <li>
-<p><strong>Metadata Table</strong> : Implemented as an another merge-on-read Hudi table, the <a href="/docs/next/metadata">metadata table</a> efficiently handles quick updates with low write amplification.
+<p><strong>Metadata Table</strong> : Implemented as another merge-on-read Hudi table, the <a href="/docs/next/metadata">metadata table</a> efficiently handles quick updates with low write amplification.
 It leverages a <a href="https://cassandra.apache.org/doc/stable/cassandra/architecture/storage_engine.html#sstables" target="_blank" rel="noopener noreferrer">SSTable</a> based file format for quick, indexed key lookups,
 storing vital information like file paths, column statistics and schema. This approach streamlines operations by reducing the necessity for expensive cloud file listings.</p>
 </li>
