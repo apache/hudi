@@ -19,8 +19,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
@@ -41,6 +39,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.specific.SpecificRecordBase;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -87,7 +88,7 @@ public class MetadataConversionUtils {
         case HoodieTimeline.CLUSTERING_ACTION: {
           if (hoodieInstant.isCompleted()) {
             getCommitMetadata(metaClient, hoodieInstant, HoodieReplaceCommitMetadata.class)
-                .ifPresent(replaceCommitMetadata -> archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadata(replaceCommitMetadata)));
+                .ifPresent(replaceCommitMetadata -> archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadataToAvro(replaceCommitMetadata)));
           } else if (hoodieInstant.isInflight()) {
             // inflight replacecommit files have the same metadata body as HoodieCommitMetadata
             // so we could re-use it without further creating an inflight extension.
@@ -152,90 +153,6 @@ public class MetadataConversionUtils {
       }
       throw new HoodieException(ex);
     }
-    HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
-    archivedMetaWrapper.setCommitTime(hoodieInstant.requestedTime());
-    archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
-    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getCompletionTime());
-    switch (hoodieInstant.getAction()) {
-      case HoodieTimeline.CLEAN_ACTION: {
-        if (hoodieInstant.isCompleted()) {
-          archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(metaClient, instantDetails.get()));
-        } else {
-          archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlan(metaClient, instantDetails.get()));
-        }
-        archivedMetaWrapper.setActionType(ActionType.clean.name());
-        break;
-      }
-      case HoodieTimeline.COMMIT_ACTION: {
-        HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(hoodieInstant, instantDetails.get(), HoodieCommitMetadata.class);
-        archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
-        archivedMetaWrapper.setActionType(ActionType.commit.name());
-        break;
-      }
-      case HoodieTimeline.DELTA_COMMIT_ACTION: {
-        HoodieCommitMetadata deltaCommitMetadata = metaClient.getCommitMetadataSerDe().deserialize(hoodieInstant, instantDetails.get(), HoodieCommitMetadata.class);
-        archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(deltaCommitMetadata));
-        archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
-        break;
-      }
-      case HoodieTimeline.REPLACE_COMMIT_ACTION:
-      case HoodieTimeline.CLUSTERING_ACTION: {
-        if (hoodieInstant.isCompleted()) {
-          HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(instantDetails.get(), HoodieReplaceCommitMetadata.class);
-          archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadataToAvro(replaceCommitMetadata));
-        } else if (hoodieInstant.isInflight()) {
-          // inflight replacecommit files have the same metadata body as HoodieCommitMetadata
-          // so we could re-use it without further creating an inflight extension.
-          // Or inflight replacecommit files are empty under clustering circumstance
-          Option<HoodieCommitMetadata> inflightCommitMetadata = getInflightCommitMetadata(metaClient, hoodieInstant, instantDetails);
-          if (inflightCommitMetadata.isPresent()) {
-            archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadata(inflightCommitMetadata.get()));
-          }
-        } else {
-          // we may have cases with empty HoodieRequestedReplaceMetadata e.g. insert_overwrite_table or insert_overwrite
-          // without clustering. However, we should revisit the requested commit file standardization
-          Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = getRequestedReplaceMetadata(instantDetails);
-          if (requestedReplaceMetadata.isPresent()) {
-            archivedMetaWrapper.setHoodieRequestedReplaceMetadata(requestedReplaceMetadata.get());
-          }
-        }
-        archivedMetaWrapper.setActionType(
-            hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) ? ActionType.replacecommit.name() : ActionType.clustering.name());
-        break;
-      }
-      case HoodieTimeline.ROLLBACK_ACTION: {
-        if (hoodieInstant.isCompleted()) {
-          archivedMetaWrapper.setHoodieRollbackMetadata(TimelineMetadataUtils.deserializeAvroMetadata(instantDetails.get(), HoodieRollbackMetadata.class));
-        }
-        archivedMetaWrapper.setActionType(ActionType.rollback.name());
-        break;
-      }
-      case HoodieTimeline.SAVEPOINT_ACTION: {
-        archivedMetaWrapper.setHoodieSavePointMetadata(TimelineMetadataUtils.deserializeAvroMetadata(instantDetails.get(), HoodieSavepointMetadata.class));
-        archivedMetaWrapper.setActionType(ActionType.savepoint.name());
-        break;
-      }
-      case HoodieTimeline.COMPACTION_ACTION: {
-        if (hoodieInstant.isRequested()) {
-          HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, instantDetails);
-          archivedMetaWrapper.setHoodieCompactionPlan(plan);
-        }
-        archivedMetaWrapper.setActionType(ActionType.compaction.name());
-        break;
-      }
-      case HoodieTimeline.LOG_COMPACTION_ACTION: {
-        if (hoodieInstant.isRequested()) {
-          HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, instantDetails);
-          archivedMetaWrapper.setHoodieCompactionPlan(plan);
-        }
-        archivedMetaWrapper.setActionType(ActionType.logcompaction.name());
-        break;
-      }
-      default: {
-        throw new UnsupportedOperationException("Action not fully supported yet");
-      }
-    }
-    return archivedMetaWrapper;
   }
 
   /**
@@ -298,7 +215,7 @@ public class MetadataConversionUtils {
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
       case HoodieTimeline.CLUSTERING_ACTION: {
         getCommitMetadata(metaClient, hoodieInstant, HoodieReplaceCommitMetadata.class)
-            .ifPresent(replaceCommitMetadata -> archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadata(replaceCommitMetadata)));
+            .ifPresent(replaceCommitMetadata -> archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadataToAvro(replaceCommitMetadata)));
 
         // inflight replacecommit files have the same metadata body as HoodieCommitMetadata
         // so we could re-use it without further creating an inflight extension.
