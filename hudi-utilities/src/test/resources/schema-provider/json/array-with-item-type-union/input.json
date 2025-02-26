@@ -1,0 +1,93 @@
+{
+  "type": "object",
+  "title": "namespace1",
+  "connect.version": 1,
+  "properties": {
+    "field1": {
+      "type": "integer",
+      "connect.index": 5,
+      "connect.type": "int32"
+    },
+    "field2": {
+      "type": "string",
+      "connect.index": 8
+    },
+    "field3": {
+      "connect.index": 2,
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer",
+          "connect.type": "int64"
+        }
+      ]
+    },
+    "field4": {
+      "type": "integer",
+      "connect.index": 7,
+      "connect.type": "int32"
+    },
+    "field5": {
+      "type": "integer",
+      "connect.index": 10,
+      "connect.type": "int64"
+    },
+    "field6": {
+      "type": "string",
+      "connect.index": 1
+    },
+    "field7": {
+      "type": "string",
+      "connect.index": 6
+    },
+    "field8": {
+      "type": "integer",
+      "connect.index": 4,
+      "connect.type": "int64"
+    },
+    "field9": {
+      "type": "string",
+      "connect.index": 9
+    },
+    "field10": {
+      "type": "string",
+      "connect.index": 0
+    },
+    "field11": {
+      "connect.index": 3,
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "title": "namespace2",
+                "connect.version": 1,
+                "properties": {
+                  "field12": {
+                    "type": "string",
+                    "connect.index": 0
+                  },
+                  "field13": {
+                    "type": "integer",
+                    "connect.index": 1,
+                    "connect.type": "int64"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

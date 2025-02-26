@@ -199,7 +199,6 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataTableValidator.class);
-  static final int LOG_DETAIL_MAX_LENGTH = 100_000;
 
   // Spark context
   private transient JavaSparkContext jsc;
@@ -403,6 +402,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
+    @Parameter(names = {"--log-detail-max-length"}, description = "Maximum length for log details in validation messages. To avoid truncation, input a non-positive value.")
+    public int logDetailMaxLength = 100_000;
+
     @Override
     public String toString() {
       return "MetadataTableValidatorConfig {\n"
@@ -429,6 +431,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --spark-master " + sparkMaster + ", \n"
           + "   --spark-memory " + sparkMemory + ", \n"
           + "   --assumeDatePartitioning-memory " + assumeDatePartitioning + ", \n"
+          + "   --log-detail-max-length " + logDetailMaxLength + ", \n"
           + "   --props " + propsFilePath + ", \n"
           + "   --hoodie-conf " + configs
           + "\n}";
@@ -465,6 +468,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           && Objects.equals(sparkMaster, config.sparkMaster)
           && Objects.equals(sparkMemory, config.sparkMemory)
           && Objects.equals(assumeDatePartitioning, config.assumeDatePartitioning)
+          && Objects.equals(logDetailMaxLength, config.logDetailMaxLength)
           && Objects.equals(propsFilePath, config.propsFilePath)
           && Objects.equals(configs, config.configs);
     }
@@ -476,7 +480,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           validateSecondaryIndex, validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
           viewStorageTypeForFSListing, viewStorageTypeForMetadata,
           minValidateIntervalSeconds, parallelism, recordIndexParallelism, ignoreFailed,
-          sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
+          sparkMaster, sparkMemory, assumeDatePartitioning, logDetailMaxLength, propsFilePath, configs, help);
     }
   }
 
@@ -776,12 +780,12 @@ public class HoodieMetadataTableValidator implements Serializable {
       if (misMatch.get()) {
         String message = "Compare Partitions Failed! " + " Additional "
             + additionalFromFS.size() + " partitions from FS, but missing from MDT : \""
-            + toStringWithThreshold(additionalFromFS, LOG_DETAIL_MAX_LENGTH)
+            + toStringWithThreshold(additionalFromFS, cfg.logDetailMaxLength)
             + "\" and additional " + actualAdditionalPartitionsInMDT.size()
-            + "partitions from MDT, but missing from FS listing : \""
-            + toStringWithThreshold(actualAdditionalPartitionsInMDT, LOG_DETAIL_MAX_LENGTH)
+            + " partitions from MDT, but missing from FS listing : \""
+            + toStringWithThreshold(actualAdditionalPartitionsInMDT, cfg.logDetailMaxLength)
             + "\".\n All " + allPartitionPathsFromFS.size() + " partitions from FS listing "
-            + toStringWithThreshold(allPartitionPathsFromFS, LOG_DETAIL_MAX_LENGTH);
+            + toStringWithThreshold(allPartitionPathsFromFS, cfg.logDetailMaxLength);
         LOG.error(message);
         throw new HoodieValidationException(message);
       }
@@ -1401,9 +1405,9 @@ public class HoodieMetadataTableValidator implements Serializable {
               + "MDT-based listing (%s): %s.",
           label,
           infoListFromFS.size(),
-          toStringWithThreshold(infoListFromFS, LOG_DETAIL_MAX_LENGTH),
+          toStringWithThreshold(infoListFromFS, cfg.logDetailMaxLength),
           infoListFromMetadataTable.size(),
-          toStringWithThreshold(infoListFromMetadataTable, LOG_DETAIL_MAX_LENGTH));
+          toStringWithThreshold(infoListFromMetadataTable, cfg.logDetailMaxLength));
       mismatch = true;
     } else {
       for (int i = 0; i < infoListFromMetadataTable.size(); i++) {
@@ -1440,9 +1444,9 @@ public class HoodieMetadataTableValidator implements Serializable {
               + "metadata table. File system-based listing (%s file slices): %s; "
               + "MDT-based listing (%s file slices): %s.",
           fileSliceListFromFS.size(),
-          toStringWithThreshold(fileSliceListFromFS, LOG_DETAIL_MAX_LENGTH),
+          toStringWithThreshold(fileSliceListFromFS, cfg.logDetailMaxLength),
           fileSliceListFromMetadataTable.size(),
-          toStringWithThreshold(fileSliceListFromMetadataTable, LOG_DETAIL_MAX_LENGTH));
+          toStringWithThreshold(fileSliceListFromMetadataTable, cfg.logDetailMaxLength));
       mismatch = true;
     } else if (!fileSliceListFromMetadataTable.equals(fileSliceListFromFS)) {
       // In-memory cache for the set of committed files of commits of interest
