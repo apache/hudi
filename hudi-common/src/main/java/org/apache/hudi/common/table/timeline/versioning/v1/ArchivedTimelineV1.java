@@ -251,8 +251,8 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
     public void accept(String instantTime, GenericRecord record) {
       Option<HoodieInstant> instant = readCommit(instantTime, record, loadInstantDetails, null);
       if (instant.isPresent()) {
-        instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList());
-        instantsInRange.get(instant.get().requestedTime()).add(instant.get());
+        instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList<>())
+            .add(instant.get());
       }
     }
 

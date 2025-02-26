@@ -88,6 +88,9 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
     }
   }
 
+  /**
+   * A time-based filter with range [startTs, endTs].
+   */
   class ClosedClosedTimeRangeFilter extends TimeRangeFilter {
     private final String startTs;
     private final String endTs;
@@ -108,6 +111,9 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
     }
   }
 
+  /**
+   * A log file filter based on the full file paths
+   */
   class LogFileFilter {
     private final Set<String> logFiles;
 

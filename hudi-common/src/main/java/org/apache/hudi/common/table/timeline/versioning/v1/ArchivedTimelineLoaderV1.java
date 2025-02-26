@@ -91,7 +91,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
       entryList.sort(new ArchiveFileVersionComparator());
 
       for (StoragePathInfo fs : entryList) {
-        if (logFileFilter != null && !logFileFilter.shouldLoadFile(fs)) {
+        if (logFileFilter.isPresent() && !logFileFilter.get().shouldLoadFile(fs)) {
           continue;
         }
         // Read the archived file
