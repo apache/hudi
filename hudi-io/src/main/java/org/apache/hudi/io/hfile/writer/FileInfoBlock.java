@@ -29,6 +29,7 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.hfile.HFileFileInfoBlock.PB_MAGIC;
 
 public class FileInfoBlock extends Block {
@@ -50,7 +51,7 @@ public class FileInfoBlock extends Block {
     for (Map.Entry<String, byte[]> e : entries.entrySet()) {
       HFileProtos.BytesBytesPair bbp = HFileProtos.BytesBytesPair
           .newBuilder()
-          .setFirst(ByteString.copyFromUtf8(e.getKey()))
+          .setFirst(ByteString.copyFrom(getUTF8Bytes(e.getKey())))
           .setSecond(ByteString.copyFrom(e.getValue()))
           .build();
       builder.addMapEntry(bbp);

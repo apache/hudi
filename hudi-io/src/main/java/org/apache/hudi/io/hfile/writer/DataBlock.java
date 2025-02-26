@@ -62,11 +62,17 @@ public class DataBlock extends Block {
     return entries.get(0).key;
   }
 
+  // Note: HFileReaderImpl assumes that:
+  //   The last key should contain the content length bytes.
   public byte[] getLastKey() {
     if (entries.isEmpty()) {
       return new byte[0];
     }
-    return entries.get(entries.size() - 1).key;
+    byte[] key = entries.get(entries.size() - 1).key;
+    ByteBuffer byteBuffer = ByteBuffer.allocate(key.length + SIZEOF_INT16);
+    byteBuffer.putShort((short) key.length);
+    byteBuffer.put(key);
+    return byteBuffer.array();
   }
 
   @Override
