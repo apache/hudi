@@ -232,8 +232,8 @@ can prevent workers from re-attempting their execution of the plan. In such case
 to guarantee, that an incomplete cancellable plan which has a request for cancellation, is eventually cleaned up(rolled
 back and aborted), since datasets that undergo clustering are anyway expected to undergo regular clean operations.
 Because an inflight plan remaining on the timeline can degrade performance of reads/writes (as mentioned earlier), a
-cancellable table service plan should be elligible to be targeted for cleanup if it has been already requested for
-cancellation or if HUDI clean, deems that it has remained inflight for too long (or some other critera). In other words,
+cancellable clustering plan should be elligible to be targeted for cleanup if it has been already requested for
+cancellation or if HUDI clean deems that it has remained inflight for too long (based on some user-configured critera discussed later below). In other words,
 the two main scenarios that `CLEAN` will now address are
 
 - If a cancellable clustering plan is scheduled but is never successfully executed (due to the corresponding worker
@@ -244,7 +244,7 @@ the two main scenarios that `CLEAN` will now address are
 - If a cancellable clustering plan was requested for cancellation but never fully aborted (again due to the corresponding
   worker never running or repeatedly failing), `CLEAN` will take up task of cleaning up and aborting the inflight instant.
 
-Note that a non-retried and failed cancellable clustering plan can still be safely cleaned up immediately by execute_abort API - the goal here
+Note that a cancellable clustering plan that has been requestd for cancellation can still be safely cleaned up immediately by execute_abort API - the goal here
 is just to make sure, an inflight plan won't stay on the timeline for an unbounded amount of time but also won't be
 likely to be prematurely cleaned up by clean before it has a chance to be executed.
 
@@ -256,12 +256,12 @@ service plan, based on the amount of time they expect the plan to remain on the 
 execution. For example, if the plan is expected to have its execution deferred to a few hours later, then the
 cancellation-policy should be lenient in allowing the plan to remain many hours on the timeline before it could be
 deemed eligible for abortion. Note that this cancellation policy is not used to infer whether a clustering plan is
-currently being executed - similar to how concurrent ingestion writes are rolled back by lazy clean policy, A
+currently being executed - similar to how concurrent ingestion writes are safely rolled back by lazy clean policy, A
 cancellable clustering plan can only be aborted once it is confirmed that an ongoing writer is no longer progressing it
 (which the aforementioned execute_abort API already enforces). Note that the cancellation-policy is only required to be honored by `CLEAN`
 
 To implement this optional feature, the clean operation can use both of these APIs in order to cancel any incomplete plans that have
-satisfied their cancellation policy or already been requested for cancellation. This is analagous to how clean schedules and
+satisfied their cancellation policy or already been requested for cancellation. This is analagous to how clean already schedules and
 executes the rollback of any failed ingestion writes. Specifically, clean will now perform the following steps
 
 1. Iterate through each inflight cancellable instant, for each instant that has met their cancellation policy, call
@@ -284,7 +284,7 @@ changes
 
 ## Rollout
 
-This design proposal has one critical drawback:
+This design proposal requires a general change to HDUI:
 
 * A new state and action type needs to be added to HUDI, requiring updates to all reader/writer logic of the HUDI
   filesystem view. Readers need to account for skipping aborted plans, and archival should clean up aborted instants or
