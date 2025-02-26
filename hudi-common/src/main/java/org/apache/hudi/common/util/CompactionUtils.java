@@ -203,16 +203,6 @@ public class CompactionUtils {
     }
   }
 
-  public static HoodieCompactionPlan getCompactionPlanLegacy(HoodieTableMetaClient metaClient, byte[] bytes) {
-    CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
-    try {
-      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlanLegacy(bytes);
-      return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
-    } catch (IOException e) {
-      throw new HoodieException(e);
-    }
-  }
-
   /**
    * Get all PartitionPath + file-ids with pending Compaction operations and their target compaction instant time.
    *

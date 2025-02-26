@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -36,6 +35,8 @@ import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -648,9 +649,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
 
     HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
-    assertEquals(commitMetadata, metaClient.getCommitMetadataSerDe().deserialize(
-        completedCommitInstant, timelineAfterFirstInstant.getInstantContentStream(completedCommitInstant),
-        () -> timeline.isEmpty(completeCommitInstant), HoodieCommitMetadata.class));
+    assertEquals(commitMetadata, timelineAfterFirstInstant.loadInstantContent(metaClient, completedCommitInstant, HoodieCommitMetadata.class));
 
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan();
     cleanerPlan.setLastCompletedCommitTimestamp("1");

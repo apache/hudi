@@ -25,7 +25,6 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -72,8 +71,7 @@ public class CommitsCommand {
         .getInstantsAsStream().sorted(instantComparator.requestedTimeOrderedComparator().reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      CommitMetadataSerDe serDe = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe();
-      final HoodieCommitMetadata commitMetadata = serDe.deserialize(
+      final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe().deserialize(
           commit, timeline.getInstantContentStream(commit),
           () -> timeline.isEmpty(commit),
           HoodieCommitMetadata.class);

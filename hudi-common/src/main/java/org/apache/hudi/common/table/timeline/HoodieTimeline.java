@@ -18,17 +18,30 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCommitMetadata;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
+import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 /**
  * HoodieTimeline is a view of meta-data instants in the hoodie table. Instants are specific points in time
@@ -181,6 +194,51 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @return
    */
   HoodieTimeline getWriteTimeline();
+
+  default <T> T loadInstantContent(HoodieTableMetaClient metaClient, HoodieInstant instant, Class<T> clazz) throws IOException {
+    return metaClient.getCommitMetadataSerDe().deserialize(instant, getInstantContentStream(instant), () -> isEmpty(instant), clazz);
+  }
+
+  default HoodieCleanerPlan deserializeCleanerPlan(HoodieInstant instant) throws IOException {
+    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieCleanerPlan.class);
+  }
+
+  default HoodieCompactionPlan deserializeCompactionPlan(HoodieInstant instant) throws IOException {
+    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieCompactionPlan.class);
+  }
+
+  default HoodieCleanMetadata deserializeHoodieCleanMetadata(HoodieInstant instant) throws IOException {
+    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieCleanMetadata.class);
+  }
+
+  default HoodieRollbackMetadata deserializeHoodieRollbackMetadata(HoodieInstant instant) throws IOException {
+    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieRollbackMetadata.class);
+  }
+
+  default HoodieRestoreMetadata deserializeHoodieRestoreMetadata(HoodieInstant instant) throws IOException {
+    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieRestoreMetadata.class);
+  }
+
+  default HoodieSavepointMetadata deserializeHoodieSavepointMetadata(HoodieInstant instant) throws IOException {
+    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieSavepointMetadata.class);
+  }
+
+  default HoodieRequestedReplaceMetadata deserializeRequestedReplaceMetadata(HoodieInstant instant) throws IOException {
+    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieRequestedReplaceMetadata.class);
+  }
+
+  default HoodieIndexPlan deserializeIndexPlan(HoodieInstant instant) throws IOException {
+    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieIndexPlan.class);
+  }
+
+  default HoodieCommitMetadata deserializeCommitMetadata(HoodieInstant instant) throws IOException {
+    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieCommitMetadata.class);
+  }
+
+  default HoodieReplaceCommitMetadata deserializeReplaceCommitMetadata(HoodieInstant instant) throws IOException {
+    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieReplaceCommitMetadata.class);
+  }
+
 
   /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions that are completed and contiguous.

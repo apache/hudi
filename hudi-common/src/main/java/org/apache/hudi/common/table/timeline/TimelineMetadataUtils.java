@@ -20,12 +20,10 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieCommitMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
-import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
@@ -167,54 +165,6 @@ public class TimelineMetadataUtils {
     }
   }
 
-  public static HoodieCleanerPlan deserializeCleanerPlan(Option<InputStream> in) throws IOException {
-    return deserializeAvroMetadata(in, HoodieCleanerPlan.class);
-  }
-
-  public static HoodieCompactionPlan deserializeCompactionPlan(Option<InputStream> in) throws IOException {
-    return deserializeAvroMetadata(in, HoodieCompactionPlan.class);
-  }
-
-  public static HoodieCompactionPlan deserializeCompactionPlanLegacy(byte[] bytes) throws IOException {
-    return deserializeAvroMetadataLegacy(bytes, HoodieCompactionPlan.class);
-  }
-
-  public static HoodieCleanMetadata deserializeHoodieCleanMetadata(Option<InputStream> inputStream) throws IOException {
-    return deserializeAvroMetadata(inputStream, HoodieCleanMetadata.class);
-  }
-
-  public static HoodieCleanMetadata deserializeHoodieCleanMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadataLegacy(bytes, HoodieCleanMetadata.class);
-  }
-
-  public static HoodieRollbackMetadata deserializeHoodieRollbackMetadata(Option<InputStream> in) throws IOException {
-    return deserializeAvroMetadata(in, HoodieRollbackMetadata.class);
-  }
-
-  public static HoodieRestoreMetadata deserializeHoodieRestoreMetadata(Option<InputStream> in) throws IOException {
-    return deserializeAvroMetadata(in, HoodieRestoreMetadata.class);
-  }
-
-  public static HoodieSavepointMetadata deserializeHoodieSavepointMetadata(Option<InputStream> instantStream) throws IOException {
-    return deserializeAvroMetadata(instantStream, HoodieSavepointMetadata.class);
-  }
-
-  public static HoodieRequestedReplaceMetadata deserializeRequestedReplaceMetadata(Option<InputStream> in) throws IOException {
-    return deserializeAvroMetadata(in, HoodieRequestedReplaceMetadata.class);
-  }
-
-  public static HoodieIndexPlan deserializeIndexPlan(Option<InputStream> in) throws IOException {
-    return deserializeAvroMetadata(in, HoodieIndexPlan.class);
-  }
-
-  public static HoodieCommitMetadata deserializeCommitMetadata(Option<InputStream> instantStream) throws IOException {
-    return deserializeAvroMetadata(instantStream, HoodieCommitMetadata.class);
-  }
-
-  public static HoodieReplaceCommitMetadata deserializeReplaceCommitMetadata(Option<InputStream> instantStream) throws IOException {
-    return deserializeAvroMetadata(instantStream, HoodieReplaceCommitMetadata.class);
-  }
-
   public static <T extends SpecificRecordBase> T deserializeAvroMetadataLegacy(byte[] bytes, Class<T> clazz)
       throws IOException {
     DatumReader<T> reader = new SpecificDatumReader<>(clazz);
@@ -223,10 +173,10 @@ public class TimelineMetadataUtils {
     return fileReader.next();
   }
 
-  public static <T extends SpecificRecordBase> T deserializeAvroMetadata(Option<InputStream> instantStream, Class<T> clazz)
+  public static <T extends SpecificRecordBase> T deserializeAvroMetadata(Option<InputStream> inputStream, Class<T> clazz)
       throws IOException {
     DatumReader<T> reader = new SpecificDatumReader<>(clazz);
-    try (DataFileStream<T> fileReader = new DataFileStream<>(instantStream.get(), reader)) {
+    try (DataFileStream<T> fileReader = new DataFileStream<>(inputStream.get(), reader)) {
       ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
       return fileReader.next();
     }
