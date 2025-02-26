@@ -2,7 +2,7 @@
 title: "Spark Quick Start"
 sidebar_position: 2
 toc: true
-last_modified_at: 2023-08-23T21:14:52+09:00
+last_modified_at: 2025-02-21T03:17:02+09:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -458,10 +458,11 @@ values={[
 val adjustedFareDF = spark.read.format("hudi").
   load(basePath).limit(2).
   withColumn("fare", col("fare") * 10)
+
 adjustedFareDF.write.format("hudi").
-option("hoodie.datasource.write.payload.class","com.payloads.CustomMergeIntoConnector").
-mode(Append).
-save(basePath)
+  option("hoodie.datasource.write.payload.class","com.payloads.CustomMergeIntoConnector").
+  mode(Append).
+  save(basePath)
 // Notice Fare column has been updated but all other columns remain intact.
 spark.read.format("hudi").load(basePath).show()
 ```
