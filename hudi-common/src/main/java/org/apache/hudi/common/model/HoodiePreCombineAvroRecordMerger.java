@@ -40,7 +40,7 @@ public class HoodiePreCombineAvroRecordMerger extends HoodieAvroRecordMerger {
   }
 
   @SuppressWarnings("rawtypes, unchecked")
-  private Pair<HoodieRecord, Schema> preCombine(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) {
+  private Pair<HoodieRecord, Schema> preCombine(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     HoodieRecordPayload newerPayload = ((HoodieAvroRecord) newer).getData();
     HoodieRecordPayload olderPayload = ((HoodieAvroRecord) older).getData();
     HoodieRecordPayload payload = newerPayload.preCombine(olderPayload, newSchema, props);
