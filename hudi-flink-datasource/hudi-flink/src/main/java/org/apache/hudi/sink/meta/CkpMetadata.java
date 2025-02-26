@@ -136,6 +136,20 @@ public class CkpMetadata implements Serializable, AutoCloseable {
   }
 
   /**
+   * start a checkpoint commit message.
+   *
+   * @param instant The start commit instant
+   */
+  public void startCommitInstant(String instant) {
+    Path path = fullPath(CkpMessage.getFileName(instant, CkpMessage.State.START_COMPLETE));
+    try {
+      fs.createNewFile(path);
+    } catch (IOException e) {
+      throw new HoodieException("Exception while adding checkpoint commit metadata for instant: " + instant, e);
+    }
+  }
+
+  /**
    * Add a checkpoint commit message.
    *
    * @param instant The committed instant
