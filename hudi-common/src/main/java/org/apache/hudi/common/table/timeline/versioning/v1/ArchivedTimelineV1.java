@@ -111,14 +111,14 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
    * Loads completed instants from startTs(inclusive) to endTs(inclusive).
    */
   public ArchivedTimelineV1(HoodieTableMetaClient metaClient, String startTs, String endTs) {
-    this(metaClient, new InclusiveStartAndEndTsFilter(startTs, endTs));
+    this(metaClient, new ClosedClosedTimeRangeFilter(startTs, endTs));
   }
 
   /**
    * Loads instants of input state from startTs(inclusive) to endTs(inclusive).
    */
   public ArchivedTimelineV1(HoodieTableMetaClient metaClient, String startTs, String endTs, Option<HoodieInstant.State> state) {
-    this(metaClient, new InclusiveStartAndEndTsFilter(startTs, endTs), state);
+    this(metaClient, new ClosedClosedTimeRangeFilter(startTs, endTs), state);
   }
 
   /**
@@ -194,7 +194,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   @Override
   public void loadCompactionDetailsInMemory(String startTs, String endTs) {
     // load compactionPlan
-    loadInstants(new HoodieArchivedTimeline.InclusiveStartAndEndTsFilter(startTs, endTs), null, true,
+    loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
         record -> {
           // Older files don't have action state set.
           Object action = record.get(ACTION_STATE);

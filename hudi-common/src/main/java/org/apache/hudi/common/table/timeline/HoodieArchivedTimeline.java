@@ -88,11 +88,11 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
     }
   }
 
-  class InclusiveStartAndEndTsFilter extends TimeRangeFilter {
+  class ClosedClosedTimeRangeFilter extends TimeRangeFilter {
     private final String startTs;
     private final String endTs;
 
-    public InclusiveStartAndEndTsFilter(String startTs, String endTs) {
+    public ClosedClosedTimeRangeFilter(String startTs, String endTs) {
       super(startTs, endTs);
       this.startTs = startTs;
       this.endTs = endTs;
@@ -108,7 +108,7 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
     }
   }
 
-  public static class LogFileFilter {
+  class LogFileFilter {
     private final Set<String> logFiles;
 
     public LogFileFilter(Set<String> logFiles) {
