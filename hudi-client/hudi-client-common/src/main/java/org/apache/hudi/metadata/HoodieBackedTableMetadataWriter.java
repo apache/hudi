@@ -1510,10 +1510,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       String tableName = writeClient.getConfig().getTableName();
       boolean tableNameExists = StringUtils.nonEmpty(tableName);
       String executionDurationMetricName = tableNameExists
-              ? String.format("%s.%s", tableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION)
+              ? String.format("%s_mdt.%s", tableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION)
               : HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION;
       String executionStatusMetricName = tableNameExists
-              ? String.format("%s.%s", tableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS)
+              ? String.format("%s_mdt.%s", tableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS)
               : HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS;
       long timeSpent = metadataTableServicesTimer.endTimer();
       metrics.ifPresent(m -> m.setMetric(executionDurationMetricName, timeSpent));
