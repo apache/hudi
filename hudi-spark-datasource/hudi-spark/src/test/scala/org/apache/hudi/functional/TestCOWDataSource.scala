@@ -1940,6 +1940,58 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(2, clusterInstants.size)
   }
 
+  @Test
+  def testClusteringWithRowWriterEnabledAndDisable(): Unit = {
+    val optsWithCluster = Map(
+      INLINE_CLUSTERING_ENABLE.key() -> "true",
+      "hoodie.clustering.inline.max.commits" -> "2",
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.OPERATION.key-> DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL
+    )
+
+    val schema = StructType(
+      StructField("_row_key", StringType, nullable = false) ::
+        StructField("name", StringType, nullable = true) ::
+        StructField("timestamp", LongType, nullable = true) ::
+        StructField("partition", LongType, nullable = true) :: Nil)
+
+    val record1 = List(Row("1", null, 1L, 1L))
+    var inputDF = spark.createDataFrame(spark.sparkContext.parallelize(record1, 2), schema)
+    inputDF.write.format("org.apache.hudi")
+      .options(optsWithCluster)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // set hoodie.datasource.write.row.writer.enable = true
+    val record2 = List(Row("2", null, 2L, 2L))
+    inputDF = spark.createDataFrame(spark.sparkContext.parallelize(record2, 2), schema)
+    inputDF.write.format("org.apache.hudi")
+      .options(optsWithCluster)
+      .option("hoodie.datasource.write.row.writer.enable", "true")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val record3 = List(Row("3", null, 3L, 3L))
+    inputDF = spark.createDataFrame(spark.sparkContext.parallelize(record3, 2), schema)
+    inputDF.write.format("org.apache.hudi")
+      .options(optsWithCluster)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // set hoodie.datasource.write.row.writer.enable = false
+    val record4 = List(Row("4", null, 4L, 4L))
+    inputDF = spark.createDataFrame(spark.sparkContext.parallelize(record4, 2), schema)
+    inputDF.write.format("org.apache.hudi")
+      .options(optsWithCluster)
+      .option("hoodie.datasource.write.row.writer.enable", "false")
+      .mode(SaveMode.Append)
+      .save(basePath)
+  }
+
 
   @Test
   def testReadOfAnEmptyTable(): Unit = {
