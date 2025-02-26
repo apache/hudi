@@ -18,9 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.versioning.BaseTestCommitMetadataSerDe;
+import java.time.Instant;
 
 /**
  * An implementation of {@link LogicalClock} that returns the current
