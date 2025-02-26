@@ -280,7 +280,7 @@ object DefaultSource {
                      parameters: Map[String, String]): BaseRelation = {
     val tableType = metaClient.getTableType
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
-    val queryType = parameters(QUERY_TYPE.key)
+    val queryType = SparkConfigUtils.getStringWithAltKeys(parameters, QUERY_TYPE)
     val isCdcQuery = queryType == QUERY_TYPE_INCREMENTAL_OPT_VAL &&
       parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
 
