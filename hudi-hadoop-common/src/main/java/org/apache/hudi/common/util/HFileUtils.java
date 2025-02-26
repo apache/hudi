@@ -29,9 +29,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.compress.CompressionCodec;
+import org.apache.hudi.io.hfile.HFileContext;
+import org.apache.hudi.io.hfile.HFileWriter;
+import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
@@ -39,19 +41,14 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.io.hfile.HFileContext;
-import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -67,7 +64,6 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  */
 public class HFileUtils extends FileFormatUtils {
   private static final Logger LOG = LoggerFactory.getLogger(HFileUtils.class);
-  private static final int DEFAULT_BLOCK_SIZE_FOR_LOG_FILE = 1024 * 1024;
 
   /**
    * Gets the {@link Compression.Algorithm} Enum based on the {@link CompressionCodec} name.
@@ -167,15 +163,6 @@ public class HFileUtils extends FileFormatUtils {
                                            Schema readerSchema,
                                            String keyFieldName,
                                            Map<String, String> paramsMap) throws IOException {
-    Compression.Algorithm compressionAlgorithm = getHFileCompressionAlgorithm(paramsMap);
-    HFileContext context = new HFileContextBuilder()
-        .withBlockSize(DEFAULT_BLOCK_SIZE_FOR_LOG_FILE)
-        .withCompression(compressionAlgorithm)
-        .withCellComparator(new HoodieHBaseKVComparator())
-        .build();
-
-    Configuration conf = storage.getConf().unwrapAs(Configuration.class);
-    CacheConfig cacheConfig = new CacheConfig(conf);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     FSDataOutputStream ostream = new FSDataOutputStream(baos, null);
 
@@ -209,23 +196,19 @@ public class HFileUtils extends FileFormatUtils {
       sortedRecordsMap.put(recordKey, recordBytes);
     }
 
-    HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withOutputStream(ostream).withFileContext(context).create();
-
-    // Write the records
+    HFileContext context = HFileContext.builder().build();
+    HFileWriter writer = new HFileWriterImpl(context, ostream);
     sortedRecordsMap.forEach((recordKey, recordBytes) -> {
       try {
-        KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, recordBytes);
-        writer.append(kv);
+        writer.append(recordKey.getBytes(StandardCharsets.UTF_8), recordBytes);
       } catch (IOException e) {
         throw new HoodieIOException("IOException serializing records", e);
       }
     });
-
     writer.appendFileInfo(
-        getUTF8Bytes(HoodieAvroHFileReaderImplBase.SCHEMA_KEY), getUTF8Bytes(readerSchema.toString()));
-
+        HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(readerSchema.toString()));
     writer.close();
+
     ostream.flush();
     ostream.close();
 

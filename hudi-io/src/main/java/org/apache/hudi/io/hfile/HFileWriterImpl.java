@@ -96,7 +96,7 @@ public class HFileWriterImpl implements HFileWriter {
         StringUtils.getUTF8Bytes(name), value);
   }
 
-  // Append a file info kv pairc.
+  // Append a file info kv pair.
   public void appendFileInfo(String name, byte[] value) {
     fileInfoBlock.add(name, value);
   }
@@ -142,8 +142,13 @@ public class HFileWriterImpl implements HFileWriter {
     metaIndexBlock.setBlockOffset(currentOffset);
     writeBuffer(metaIndexBuffer);
     // Write File Info.
-    fileInfoBlock.add(
-        "hfile.LASTKEY", dataBlocks.get(dataBlocks.size() - 1).getLastKey());
+    if (!dataBlocks.isEmpty()) {
+      fileInfoBlock.add(
+          "hfile.LASTKEY", dataBlocks.get(dataBlocks.size() - 1).getLastKey());
+    } else {
+      fileInfoBlock.add(
+          "hfile.LASTKEY", new byte[0]);
+    }
     fileInfoBlock.setBlockOffset(currentOffset);
     writeBuffer(fileInfoBlock.serialize());
   }
@@ -158,8 +163,10 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setEntryCount(getTotalNumOfEntries());
     // TODO: support multiple levels.
     builder.setNumDataIndexLevels(1);
-    builder.setFirstDataBlockOffset(dataBlocks.get(0).getBlockOffset());
-    builder.setLastDataBlockOffset(dataBlocks.get(dataBlocks.size() - 1).getBlockOffset());
+    if (!dataBlocks.isEmpty()) {
+      builder.setFirstDataBlockOffset(dataBlocks.get(0).getBlockOffset());
+      builder.setLastDataBlockOffset(dataBlocks.get(dataBlocks.size() - 1).getBlockOffset());
+    }
     builder.setComparatorClassName("NA");
     builder.setCompressionCodec(2);
     builder.setEncryptionKey(ByteString.EMPTY);
@@ -207,7 +214,8 @@ public class HFileWriterImpl implements HFileWriter {
   public static void main(String[] args) throws Exception {
     String fileName = "test.hfile";
     HFileContext context = HFileContext.builder().build();
-    try (DataOutputStream outputStream = new DataOutputStream(Files.newOutputStream(Paths.get(fileName)));
+    try (DataOutputStream outputStream = new DataOutputStream(
+        Files.newOutputStream(Paths.get(fileName)));
          HFileWriterImpl writer = new HFileWriterImpl(context, outputStream)) {
       writer.append("key1".getBytes(), "value1".getBytes());
       writer.append("key2".getBytes(), "value2".getBytes());
