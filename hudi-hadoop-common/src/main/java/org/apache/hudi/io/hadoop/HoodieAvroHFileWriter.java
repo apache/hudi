@@ -75,7 +75,7 @@ public class HoodieAvroHFileWriter
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
   private final Option<Schema.Field> keyFieldSchema;
-  private HFileWriter nativeWriter;
+  private HFileWriter writer;
   private String minRecordKey;
   private String maxRecordKey;
   private String prevRecordKey;
@@ -115,12 +115,12 @@ public class HoodieAvroHFileWriter
         String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
 
     FsPermission fsPermission = FsPermission.getFileDefault();
-    FSDataOutputStream outputStream = create(fs, this.file, fsPermission, false);
-    this.nativeWriter = new HFileWriterImpl(context, outputStream);
-    this.nativeWriter.appendFileInfo(
-        HoodieAvroHFileReaderImplBase.SCHEMA_KEY,
-        getUTF8Bytes(schema.toString()));
+    FSDataOutputStream outputStream = create(fs, this.file, fsPermission, true);
+    this.writer = new HFileWriterImpl(context, outputStream);
+
     this.prevRecordKey = "";
+    writer.appendFileInfo(
+        HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(schema.toString()));
   }
 
   @Override
@@ -152,7 +152,8 @@ public class HoodieAvroHFileWriter
     if (keyFieldSchema.isPresent()) {
       GenericRecord keyExcludedRecord = (GenericRecord) record;
       int keyFieldPos = this.keyFieldSchema.get().pos();
-      boolean isKeyAvailable = (record.get(keyFieldPos) != null && !(record.get(keyFieldPos).toString().isEmpty()));
+      boolean isKeyAvailable = (record.get(keyFieldPos) != null
+          && !(record.get(keyFieldPos).toString().isEmpty()));
       if (isKeyAvailable) {
         Object originalKey = keyExcludedRecord.get(keyFieldPos);
         keyExcludedRecord.put(keyFieldPos, EMPTY_STRING);
@@ -164,7 +165,7 @@ public class HoodieAvroHFileWriter
     if (!isRecordSerialized) {
       value = HoodieAvroUtils.avroToBytes((GenericRecord) record);
     }
-    nativeWriter.append(getUTF8Bytes(recordKey), value);
+    writer.append(getUTF8Bytes(recordKey), value);
 
     if (hfileConfig.useBloomFilter()) {
       hfileConfig.getBloomFilter().add(recordKey);
@@ -186,20 +187,19 @@ public class HoodieAvroHFileWriter
       if (maxRecordKey == null) {
         maxRecordKey = "";
       }
-      nativeWriter.appendFileInfo(
+      writer.appendFileInfo(
           HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD, getUTF8Bytes(minRecordKey));
-      nativeWriter.appendFileInfo(
+      writer.appendFileInfo(
           HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD, getUTF8Bytes(maxRecordKey));
-      nativeWriter.appendFileInfo(
+      writer.appendFileInfo(
           HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE,
           getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().toString()));
-      nativeWriter.appendMetaInfo(
+      writer.appendMetaInfo(
           HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK,
           getUTF8Bytes(bloomFilter.serializeToString()));
     }
-
-    nativeWriter.close();
-    nativeWriter = null;
+    writer.close();
+    writer = null;
   }
 
   /**
