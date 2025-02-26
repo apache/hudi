@@ -173,8 +173,8 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     // 03 does not load inflight because it is replace commit
     validateInstantsLoaded(timeline, Arrays.asList("03"), true, Arrays.asList(REQUESTED, COMPLETED));
     validateInstantsLoaded(timeline, Arrays.asList("03"), false, Collections.singletonList(INFLIGHT));
-    validateInstantsLoaded(timeline, Arrays.asList("05", "08", "09"), true,
-        Arrays.asList(REQUESTED, INFLIGHT, COMPLETED));
+    validateInstantsLoaded(
+        timeline, Arrays.asList("05", "08", "09"), true, Arrays.asList(REQUESTED, INFLIGHT, COMPLETED));
     validateInstantsLoaded(timeline, Collections.singletonList("11"), true, Arrays.asList(REQUESTED, INFLIGHT));
 
     // All the instants should be returned although only compaction instants should be loaded to memory
@@ -220,8 +220,8 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   public void testLoadFilteredArchivedRequestedInstantsBySingleLogFilePath() throws Exception {
     List<HoodieInstant> instants = createInstants();
     List<String> archivedLogFilePaths = getArchiveLogFilePaths();
-    timeline = new ArchivedTimelineV1(metaClient, Collections.singleton(archivedLogFilePaths.get(0)), Option.of(
-        REQUESTED));
+    timeline = new ArchivedTimelineV1(
+        metaClient, Collections.singleton(archivedLogFilePaths.get(0)), Option.of(REQUESTED));
 
     // Instants 01, 03, 05 of requested states should be loaded to memory (since they are in log file 0)
     validateInstantsLoaded(timeline, Arrays.asList("01", "03", "05"), true, Collections.singletonList(REQUESTED));
@@ -240,8 +240,8 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   public void testLoadFilteredArchivedInflightInstantsBySingleLogFilePath() throws Exception {
     List<HoodieInstant> instants = createInstants();
     List<String> archivedLogFilePaths = getArchiveLogFilePaths();
-    timeline =
-        new ArchivedTimelineV1(metaClient, Collections.singleton(archivedLogFilePaths.get(0)), Option.of(INFLIGHT));
+    timeline = new ArchivedTimelineV1(
+        metaClient, Collections.singleton(archivedLogFilePaths.get(0)), Option.of(INFLIGHT));
 
     // Only inflight instant of 01 should be loaded to memory
     // Since 03 is replacecommit, 03 inflight will not be loaded (refer to MetadataConversionUtils.java)
@@ -303,8 +303,8 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     List<HoodieInstant> instants = createInstants();
 
     List<String> archivedLogFilePaths = getArchiveLogFilePaths();
-    timeline =
-        new ArchivedTimelineV1(metaClient, new HashSet<>(archivedLogFilePaths.subList(0, 2)), Option.of(REQUESTED));
+    timeline = new ArchivedTimelineV1(
+        metaClient, new HashSet<>(archivedLogFilePaths.subList(0, 2)), Option.of(REQUESTED));
 
     // Instant 03 requested should be loaded (since 03 is replace commit)
     validateInstantsLoaded(timeline, Collections.singletonList("03"), true, Collections.singletonList(REQUESTED));
@@ -326,8 +326,8 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     List<HoodieInstant> instants = createInstants();
 
     List<String> archivedLogFilePaths = getArchiveLogFilePaths();
-    timeline =
-        new ArchivedTimelineV1(metaClient, new HashSet<>(archivedLogFilePaths.subList(0, 2)), Option.of(INFLIGHT));
+    timeline = new ArchivedTimelineV1(
+        metaClient, new HashSet<>(archivedLogFilePaths.subList(0, 2)), Option.of(INFLIGHT));
 
     // Instant 03 should not be loaded since it is a replace commit
     validateInstantsLoaded(timeline, Collections.singletonList("03"), false);
