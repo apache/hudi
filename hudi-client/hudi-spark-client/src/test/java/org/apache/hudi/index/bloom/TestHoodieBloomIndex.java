@@ -83,11 +83,11 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   private static final Schema SCHEMA = getSchemaFromResource(TestHoodieBloomIndex.class, "/exampleSchema.avsc", true);
   private static final String TEST_NAME_WITH_PARAMS =
       "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}, "
-          + "useMetadataTable={3}, enableFileGroupIDKeySorting={4}";
+          + "useMetadataTable={3}, enableFileGroupIdKeySorting={4}";
   private static final Random RANDOM = new Random(0xDEED);
 
   public static Stream<Arguments> configParams() {
-    // rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIDKeySorting
+    // rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting
     Object[][] data = new Object[][] {
         {true, true, true, false, false},
         {false, true, true, false, false},
@@ -126,7 +126,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
   private HoodieWriteConfig makeConfig(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable, boolean enableFileGroupIDKeySorting) {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) {
     // For the bloom index to use column stats and bloom filters from metadata table,
     // the following configs must be set to true:
     // "hoodie.bloom.index.use.metadata"
@@ -140,7 +140,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
             .bloomIndexBucketizedChecking(bucketizedChecking)
             .bloomIndexKeysPerBucket(2)
             .bloomIndexUseMetadata(useMetadataTable)
-            .enableBloomIndexFileGroupIdKeySorting(enableFileGroupIDKeySorting)
+            .enableBloomIndexFileGroupIdKeySorting(enableFileGroupIdKeySorting)
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMetadataIndexBloomFilter(useMetadataTable)
@@ -153,9 +153,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testLoadInvolvedFiles(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable, boolean enableFileGroupIDKeySorting) throws Exception {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) throws Exception {
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIDKeySorting);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieBloomIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
@@ -256,9 +256,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testRangePruning(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable, boolean enableFileGroupIDKeySorting) {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) {
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIDKeySorting);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieBloomIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
@@ -359,12 +359,12 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testTagLocationWithEmptyRDD(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable, boolean enableFileGroupIDKeySorting) {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) {
     // We have some records to be tagged (two different partitions)
     JavaRDD<HoodieRecord> recordRDD = jsc.emptyRDD();
     // Also create the metadata and config
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIDKeySorting);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
 
@@ -380,7 +380,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testTagLocationOnPartitionedTable(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable, boolean enableFileGroupIDKeySorting) throws Exception {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) throws Exception {
     // We have some records to be tagged (two different partitions)
     String rowKey1 = genRandomUUID();
     String rowKey2 = genRandomUUID();
@@ -406,7 +406,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     // Also create the metadata and config
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIDKeySorting);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
@@ -481,7 +481,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testTagLocationOnNonpartitionedTable(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable, boolean enableFileGroupIDKeySorting) throws Exception {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) throws Exception {
     // We have some records to be tagged (two different partitions)
     String rowKey1 = genRandomUUID();
     String rowKey2 = genRandomUUID();
@@ -505,7 +505,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     // Also create the metadata and config
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIDKeySorting);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
@@ -574,7 +574,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testCheckExists(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable, boolean enableFileGroupIDKeySorting) throws Exception {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) throws Exception {
     // We have some records to be tagged (two different partitions)
 
     String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -601,7 +601,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     // Also create the metadata and config
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIDKeySorting);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
@@ -689,7 +689,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testBloomFilterFalseError(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable, boolean enableFileGroupIDKeySorting) throws Exception {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) throws Exception {
     // We have two hoodie records
     String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
@@ -715,7 +715,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // We do the tag
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2));
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIDKeySorting);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
 
