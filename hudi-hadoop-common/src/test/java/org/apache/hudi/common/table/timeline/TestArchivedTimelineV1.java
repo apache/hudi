@@ -42,6 +42,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.v1.ArchivedTimelineV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -67,6 +68,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
+import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
+import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -76,6 +80,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
 
+  private static final InstantGeneratorV1 INSTANT_GENERATOR_V1 = new InstantGeneratorV1();
   private HoodieArchivedTimeline timeline;
 
   @BeforeEach
@@ -118,7 +123,7 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   public void testLoadArchivedInstantsInInclusiveTsRangeToMemory() throws Exception {
     List<HoodieInstant> instants = createInstants();
 
-    timeline = new ArchivedTimelineV1(metaClient, "04", "09");
+    timeline = new ArchivedTimelineV1(metaClient, "05", "09");
 
     validateInstantsLoaded(timeline, Arrays.asList("01", "03", "11"), false);
     validateInstantsLoaded(timeline, Arrays.asList("05", "08", "09"), true);
@@ -150,7 +155,7 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
 
     // Only compaction commit (timestamp 08) should be loaded to memory
     validateInstantsLoaded(timeline, Arrays.asList("01", "03", "05", "09", "11"), false);
-    validateInstantsLoaded(timeline, Arrays.asList("08"), true, Arrays.asList(HoodieInstant.State.INFLIGHT));
+    validateInstantsLoaded(timeline, Arrays.asList("08"), true, Arrays.asList(INFLIGHT));
 
     // All the instants should be returned although only compaction instants should be loaded to memory
     assertEquals(instants, timeline.getInstants());
@@ -166,10 +171,11 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     // Instants 03, 05, 08, 09 and completed states and 11 has requested and inflight states
     // loadInstantDetailsInMemory load instants of all states
     // 03 does not load inflight because it is replace commit
-    validateInstantsLoaded(timeline, Arrays.asList("03"), true, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.COMPLETED));
-    validateInstantsLoaded(timeline, Arrays.asList("03"), false, Collections.singletonList(HoodieInstant.State.INFLIGHT));
-    validateInstantsLoaded(timeline, Arrays.asList("05", "08", "09"), true, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.INFLIGHT, HoodieInstant.State.COMPLETED));
-    validateInstantsLoaded(timeline, Collections.singletonList("11"), true, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.INFLIGHT));
+    validateInstantsLoaded(timeline, Arrays.asList("03"), true, Arrays.asList(REQUESTED, COMPLETED));
+    validateInstantsLoaded(timeline, Arrays.asList("03"), false, Collections.singletonList(INFLIGHT));
+    validateInstantsLoaded(timeline, Arrays.asList("05", "08", "09"), true,
+        Arrays.asList(REQUESTED, INFLIGHT, COMPLETED));
+    validateInstantsLoaded(timeline, Collections.singletonList("11"), true, Arrays.asList(REQUESTED, INFLIGHT));
 
     // All the instants should be returned although only compaction instants should be loaded to memory
     assertEquals(instants, timeline.getInstants());
@@ -198,8 +204,8 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     timeline = new ArchivedTimelineV1(metaClient, Collections.singleton(archivedLogFilePaths.get(0)));
 
     // Only Instant 03 of completed state should be loaded to memory (since they are in log file 0)
-    validateInstantsLoaded(timeline, Collections.singletonList("03"), true, Collections.singletonList(HoodieInstant.State.COMPLETED));
-    validateInstantsLoaded(timeline, Collections.singletonList("03"), false, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.INFLIGHT));
+    validateInstantsLoaded(timeline, Collections.singletonList("03"), true, Collections.singletonList(COMPLETED));
+    validateInstantsLoaded(timeline, Collections.singletonList("03"), false, Arrays.asList(REQUESTED, INFLIGHT));
     validateInstantsLoaded(timeline, Arrays.asList("01", "05", "08", "09", "11"), false);
 
     assertEquals(instants.stream().filter(HoodieInstant::isCompleted)
@@ -214,11 +220,12 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   public void testLoadFilteredArchivedRequestedInstantsBySingleLogFilePath() throws Exception {
     List<HoodieInstant> instants = createInstants();
     List<String> archivedLogFilePaths = getArchiveLogFilePaths();
-    timeline = new ArchivedTimelineV1(metaClient, Collections.singleton(archivedLogFilePaths.get(0)), Option.of(HoodieInstant.State.REQUESTED));
+    timeline = new ArchivedTimelineV1(metaClient, Collections.singleton(archivedLogFilePaths.get(0)), Option.of(
+        REQUESTED));
 
     // Instants 01, 03, 05 of requested states should be loaded to memory (since they are in log file 0)
-    validateInstantsLoaded(timeline, Arrays.asList("01", "03", "05"), true, Collections.singletonList(HoodieInstant.State.REQUESTED));
-    validateInstantsLoaded(timeline, Arrays.asList("01", "03", "05"), false, Arrays.asList(HoodieInstant.State.INFLIGHT, HoodieInstant.State.COMPLETED));
+    validateInstantsLoaded(timeline, Arrays.asList("01", "03", "05"), true, Collections.singletonList(REQUESTED));
+    validateInstantsLoaded(timeline, Arrays.asList("01", "03", "05"), false, Arrays.asList(INFLIGHT, COMPLETED));
     validateInstantsLoaded(timeline, Arrays.asList("08", "09", "11"), false);
 
     assertEquals(instants.stream().filter(HoodieInstant::isRequested)
@@ -233,12 +240,13 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   public void testLoadFilteredArchivedInflightInstantsBySingleLogFilePath() throws Exception {
     List<HoodieInstant> instants = createInstants();
     List<String> archivedLogFilePaths = getArchiveLogFilePaths();
-    timeline = new ArchivedTimelineV1(metaClient, Collections.singleton(archivedLogFilePaths.get(0)), Option.of(HoodieInstant.State.INFLIGHT));
+    timeline =
+        new ArchivedTimelineV1(metaClient, Collections.singleton(archivedLogFilePaths.get(0)), Option.of(INFLIGHT));
 
     // Only inflight instant of 01 should be loaded to memory
     // Since 03 is replacecommit, 03 inflight will not be loaded (refer to MetadataConversionUtils.java)
-    validateInstantsLoaded(timeline, Arrays.asList("01"), true, Collections.singletonList(HoodieInstant.State.INFLIGHT));
-    validateInstantsLoaded(timeline, Arrays.asList("01"), false, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.COMPLETED));
+    validateInstantsLoaded(timeline, Arrays.asList("01"), true, Collections.singletonList(INFLIGHT));
+    validateInstantsLoaded(timeline, Arrays.asList("01"), false, Arrays.asList(REQUESTED, COMPLETED));
     validateInstantsLoaded(timeline, Arrays.asList("03"), false);
     validateInstantsLoaded(timeline, Arrays.asList("05", "08", "09", "11"), false);
 
@@ -257,12 +265,12 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     timeline = new ArchivedTimelineV1(metaClient, Collections.singleton(archivedLogFilePaths.get(0)), Option.empty());
 
     // Instant 03 requested and completed should be loaded (since 03 is replace commit)
-    validateInstantsLoaded(timeline, Collections.singletonList("03"), true, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.COMPLETED));
-    validateInstantsLoaded(timeline, Collections.singletonList("03"), false, Collections.singletonList(HoodieInstant.State.INFLIGHT));
-    validateInstantsLoaded(timeline, Collections.singletonList("01"), true, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.INFLIGHT));
-    validateInstantsLoaded(timeline, Collections.singletonList("01"), false, Collections.singletonList(HoodieInstant.State.COMPLETED));
-    validateInstantsLoaded(timeline, Collections.singletonList("05"), true, Collections.singletonList(HoodieInstant.State.REQUESTED));
-    validateInstantsLoaded(timeline, Collections.singletonList("05"), false, Arrays.asList(HoodieInstant.State.INFLIGHT, HoodieInstant.State.COMPLETED));
+    validateInstantsLoaded(timeline, Collections.singletonList("03"), true, Arrays.asList(REQUESTED, COMPLETED));
+    validateInstantsLoaded(timeline, Collections.singletonList("03"), false, Collections.singletonList(INFLIGHT));
+    validateInstantsLoaded(timeline, Collections.singletonList("01"), true, Arrays.asList(REQUESTED, INFLIGHT));
+    validateInstantsLoaded(timeline, Collections.singletonList("01"), false, Collections.singletonList(COMPLETED));
+    validateInstantsLoaded(timeline, Collections.singletonList("05"), true, Collections.singletonList(REQUESTED));
+    validateInstantsLoaded(timeline, Collections.singletonList("05"), false, Arrays.asList(INFLIGHT, COMPLETED));
 
     // Instants 01, 05 should be loaded to memory (since they are in log file 0)
     validateInstantsLoaded(timeline, Arrays.asList("01", "05"), true);
@@ -279,8 +287,8 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     timeline = new ArchivedTimelineV1(metaClient, new HashSet<>(archivedLogFilePaths.subList(0, 2)));
 
     // Instants 03, 05, 08, 09 of completed state should be loaded to memory (since they are in log file 0 and 1)
-    validateInstantsLoaded(timeline, Arrays.asList("03", "05", "08", "09"), true, Collections.singletonList(HoodieInstant.State.COMPLETED));
-    validateInstantsLoaded(timeline, Arrays.asList("03", "05", "08", "09"), false, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.INFLIGHT));
+    validateInstantsLoaded(timeline, Arrays.asList("03", "05", "08", "09"), true, Collections.singletonList(COMPLETED));
+    validateInstantsLoaded(timeline, Arrays.asList("03", "05", "08", "09"), false, Arrays.asList(REQUESTED, INFLIGHT));
     validateInstantsLoaded(timeline, Arrays.asList("01", "11"), false);
 
     assertEquals(instants.stream().filter(HoodieInstant::isCompleted)
@@ -295,14 +303,15 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     List<HoodieInstant> instants = createInstants();
 
     List<String> archivedLogFilePaths = getArchiveLogFilePaths();
-    timeline = new ArchivedTimelineV1(metaClient, new HashSet<>(archivedLogFilePaths.subList(0, 2)), Option.of(HoodieInstant.State.REQUESTED));
+    timeline =
+        new ArchivedTimelineV1(metaClient, new HashSet<>(archivedLogFilePaths.subList(0, 2)), Option.of(REQUESTED));
 
     // Instant 03 requested should be loaded (since 03 is replace commit)
-    validateInstantsLoaded(timeline, Collections.singletonList("03"), true, Collections.singletonList(HoodieInstant.State.REQUESTED));
-    validateInstantsLoaded(timeline, Collections.singletonList("03"), false, Arrays.asList(HoodieInstant.State.INFLIGHT, HoodieInstant.State.COMPLETED));
+    validateInstantsLoaded(timeline, Collections.singletonList("03"), true, Collections.singletonList(REQUESTED));
+    validateInstantsLoaded(timeline, Collections.singletonList("03"), false, Arrays.asList(INFLIGHT, COMPLETED));
     // Instants 01, 05, 08, 09 should be loaded to memory (since they are in log file 0 and 1)
-    validateInstantsLoaded(timeline, Arrays.asList("01", "05", "08", "09"), true, Collections.singletonList(HoodieInstant.State.REQUESTED));
-    validateInstantsLoaded(timeline, Arrays.asList("01", "05", "08", "09"), false, Arrays.asList(HoodieInstant.State.INFLIGHT, HoodieInstant.State.COMPLETED));
+    validateInstantsLoaded(timeline, Arrays.asList("01", "05", "08", "09"), true, Collections.singletonList(REQUESTED));
+    validateInstantsLoaded(timeline, Arrays.asList("01", "05", "08", "09"), false, Arrays.asList(INFLIGHT, COMPLETED));
     validateInstantsLoaded(timeline, Arrays.asList("11"), false);
 
     assertEquals(instants.stream().filter(HoodieInstant::isRequested)
@@ -317,12 +326,13 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     List<HoodieInstant> instants = createInstants();
 
     List<String> archivedLogFilePaths = getArchiveLogFilePaths();
-    timeline = new ArchivedTimelineV1(metaClient, new HashSet<>(archivedLogFilePaths.subList(0, 2)), Option.of(HoodieInstant.State.INFLIGHT));
+    timeline =
+        new ArchivedTimelineV1(metaClient, new HashSet<>(archivedLogFilePaths.subList(0, 2)), Option.of(INFLIGHT));
 
     // Instant 03 should not be loaded since it is a replace commit
     validateInstantsLoaded(timeline, Collections.singletonList("03"), false);
     // Instants 01, 05, 08, 09 should be loaded to memory (since they are in log file 0 and 1)
-    validateInstantsLoaded(timeline, Arrays.asList("01", "05", "08", "09"), true, Collections.singletonList(HoodieInstant.State.INFLIGHT));
+    validateInstantsLoaded(timeline, Arrays.asList("01", "05", "08", "09"), true, Collections.singletonList(INFLIGHT));
     validateInstantsLoaded(timeline, Arrays.asList("11"), false);
 
     assertEquals(instants.stream().filter(HoodieInstant::isInflight)
@@ -340,8 +350,8 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     timeline = new ArchivedTimelineV1(metaClient, new HashSet<>(archivedLogFilePaths.subList(0, 2)), Option.empty());
 
     // Instant 03 requested and completed should be loaded (since 03 is replace commit)
-    validateInstantsLoaded(timeline, Collections.singletonList("03"), true, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.COMPLETED));
-    validateInstantsLoaded(timeline, Collections.singletonList("03"), false, Collections.singletonList(HoodieInstant.State.INFLIGHT));
+    validateInstantsLoaded(timeline, Collections.singletonList("03"), true, Arrays.asList(REQUESTED, COMPLETED));
+    validateInstantsLoaded(timeline, Collections.singletonList("03"), false, Collections.singletonList(INFLIGHT));
     // Instants 01, 05, 08, 09 should be loaded to memory (since they are in log file 0 and 1)
     validateInstantsLoaded(timeline, Arrays.asList("01", "05", "08", "09"), true);
     validateInstantsLoaded(timeline, Arrays.asList("11"), false);
@@ -352,11 +362,11 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   @Test
   public void testLoadArchivedCompletedInstantsForAdditionalActions() throws Exception {
     List<HoodieInstant> instants = createAdditionalInstants();
-    timeline = new ArchivedTimelineV1(metaClient, "14", "21");
+    timeline = new ArchivedTimelineV1(metaClient, "15", "21");
 
     List<String> timestamps = Arrays.asList("15", "17", "19", "21");
-    validateInstantsLoaded(timeline, timestamps, true, Collections.singletonList(HoodieInstant.State.COMPLETED));
-    validateInstantsLoaded(timeline, timestamps, false, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.INFLIGHT));
+    validateInstantsLoaded(timeline, timestamps, true, Collections.singletonList(COMPLETED));
+    validateInstantsLoaded(timeline, timestamps, false, Arrays.asList(REQUESTED, INFLIGHT));
 
     assertEquals(getCompletedInstantForTs(instants, timestamps), timeline.getInstants());
   }
@@ -364,16 +374,16 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   @Test
   public void testLoadArchivedRequestedInstantsForAdditionalActions() throws Exception {
     List<HoodieInstant> instants = createAdditionalInstants();
-    timeline = new ArchivedTimelineV1(metaClient, "14", "21", Option.of(HoodieInstant.State.REQUESTED));
+    timeline = new ArchivedTimelineV1(metaClient, "15", "21", Option.of(REQUESTED));
 
     /**
      * According to {@link org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.getMetadataKey},
      * requested instants are not loaded for CLEAN and ROLLBACK actions
      */
     List<String> timestamps = Arrays.asList("15", "17", "19", "21");
-    validateInstantsLoaded(timeline, Arrays.asList("17", "21"), true, Collections.singletonList(HoodieInstant.State.REQUESTED));
-    validateInstantsLoaded(timeline, Arrays.asList("15", "19"), false, Collections.singletonList(HoodieInstant.State.REQUESTED));
-    validateInstantsLoaded(timeline, timestamps, false, Arrays.asList(HoodieInstant.State.INFLIGHT, HoodieInstant.State.COMPLETED));
+    validateInstantsLoaded(timeline, Arrays.asList("17", "21"), true, Collections.singletonList(REQUESTED));
+    validateInstantsLoaded(timeline, Arrays.asList("15", "19"), false, Collections.singletonList(REQUESTED));
+    validateInstantsLoaded(timeline, timestamps, false, Arrays.asList(INFLIGHT, COMPLETED));
 
     assertEquals(instants.stream().filter(HoodieInstant::isRequested).collect(Collectors.toList()), timeline.getInstants());
   }
@@ -381,16 +391,16 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   @Test
   public void testLoadArchivedInflightInstantsForAdditionalActions() throws Exception {
     List<HoodieInstant> instants = createAdditionalInstants();
-    timeline = new ArchivedTimelineV1(metaClient, "14", "21", Option.of(HoodieInstant.State.INFLIGHT));
+    timeline = new ArchivedTimelineV1(metaClient, "15", "21", Option.of(INFLIGHT));
 
     /**
      * According to {@link org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.getMetadataKey},
      * inflight instants are not loaded for CLEAN and ROLLBACK actions
      */
     List<String> timestamps = Arrays.asList("15", "17", "19", "21");
-    validateInstantsLoaded(timeline, Arrays.asList("17", "21"), true, Collections.singletonList(HoodieInstant.State.INFLIGHT));
-    validateInstantsLoaded(timeline, Arrays.asList("15", "19"), false, Collections.singletonList(HoodieInstant.State.INFLIGHT));
-    validateInstantsLoaded(timeline, timestamps, false, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.COMPLETED));
+    validateInstantsLoaded(timeline, Arrays.asList("17", "21"), true, Collections.singletonList(INFLIGHT));
+    validateInstantsLoaded(timeline, Arrays.asList("15", "19"), false, Collections.singletonList(INFLIGHT));
+    validateInstantsLoaded(timeline, timestamps, false, Arrays.asList(REQUESTED, COMPLETED));
 
     assertEquals(instants.stream().filter(HoodieInstant::isInflight).collect(Collectors.toList()), timeline.getInstants());
   }
@@ -398,12 +408,12 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   @Test
   public void testLoadArchivedInstantsForAdditionalActions() throws Exception {
     List<HoodieInstant> instants = createAdditionalInstants();
-    timeline = new ArchivedTimelineV1(metaClient, "14", "21", Option.empty());
+    timeline = new ArchivedTimelineV1(metaClient, "15", "21", Option.empty());
 
     List<String> timestamps = Arrays.asList("15", "17", "19", "21");
     // For CLEAN (ts 15) and ROLLBACK (ts 19) actions, only completed instants are loaded
-    validateInstantsLoaded(timeline, Arrays.asList("15", "19"), true, Collections.singletonList(HoodieInstant.State.COMPLETED));
-    validateInstantsLoaded(timeline, Arrays.asList("15", "19"), false, Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.INFLIGHT));
+    validateInstantsLoaded(timeline, Arrays.asList("15", "19"), true, Collections.singletonList(COMPLETED));
+    validateInstantsLoaded(timeline, Arrays.asList("15", "19"), false, Arrays.asList(REQUESTED, INFLIGHT));
     validateInstantsLoaded(timeline, Arrays.asList("17", "21"), true);
 
     assertEquals(instants, timeline.getInstants());
@@ -494,27 +504,27 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
    * log file 3 - instant 11 (inflight)
    */
   private List<HoodieInstant> createInstants() throws Exception {
-    HoodieInstant instant1Requested = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "01", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant1Inflight = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "01", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant instant1Requested = createInstantV1(REQUESTED, HoodieTimeline.COMMIT_ACTION, "01");
+    HoodieInstant instant1Inflight = createInstantV1(INFLIGHT, HoodieTimeline.COMMIT_ACTION, "01");
 
-    HoodieInstant instant2Requested = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "03", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant2Inflight = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "03", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant2Complete = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, "03", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant instant2Requested = createInstantV1(REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "03");
+    HoodieInstant instant2Inflight = createInstantV1(INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "03");
+    HoodieInstant instant2Complete = createInstantV1(COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, "03");
 
-    HoodieInstant instant3Requested = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "05", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant3Inflight = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "05", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant3Complete = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant instant3Requested = createInstantV1(REQUESTED, HoodieTimeline.COMMIT_ACTION, "05");
+    HoodieInstant instant3Inflight = createInstantV1(INFLIGHT, HoodieTimeline.COMMIT_ACTION, "05");
+    HoodieInstant instant3Complete = createInstantV1(COMPLETED, HoodieTimeline.COMMIT_ACTION, "05");
 
-    HoodieInstant instant4Requested = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "08", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant4Inflight = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "08", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant4Complete = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMPACTION_ACTION, "08", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant instant4Requested = createInstantV1(REQUESTED, HoodieTimeline.COMPACTION_ACTION, "08");
+    HoodieInstant instant4Inflight = createInstantV1(INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "08");
+    HoodieInstant instant4Complete = createInstantV1(COMPLETED, HoodieTimeline.COMPACTION_ACTION, "08");
 
-    HoodieInstant instant5Requested = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "09", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant5Inflight = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "09", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant5Complete = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "09", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant instant5Requested = createInstantV1(REQUESTED, HoodieTimeline.COMMIT_ACTION, "09");
+    HoodieInstant instant5Inflight = createInstantV1(INFLIGHT, HoodieTimeline.COMMIT_ACTION, "09");
+    HoodieInstant instant5Complete = createInstantV1(COMPLETED, HoodieTimeline.COMMIT_ACTION, "09");
 
-    HoodieInstant instant6Requested = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "11", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant6Inflight = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "11", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant instant6Requested = createInstantV1(REQUESTED, HoodieTimeline.COMMIT_ACTION, "11");
+    HoodieInstant instant6Inflight = createInstantV1(INFLIGHT, HoodieTimeline.COMMIT_ACTION, "11");
 
     List<HoodieInstant> instants = Arrays.asList(instant1Requested, instant1Inflight, instant2Requested, instant2Inflight,
         instant2Complete, instant3Requested, instant3Inflight, instant3Complete, instant4Requested, instant4Inflight,
@@ -564,21 +574,21 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
 
   // A separate method for creating additional instants of more actions - for additional tests on top of existing ones
   private List<HoodieInstant> createAdditionalInstants() throws Exception {
-    HoodieInstant instant7Requested = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "15", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant7Inflight = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "15", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant7Complete = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "15", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant instant7Requested = createInstantV1(REQUESTED, HoodieTimeline.CLEAN_ACTION, "15");
+    HoodieInstant instant7Inflight = createInstantV1(INFLIGHT, HoodieTimeline.CLEAN_ACTION, "15");
+    HoodieInstant instant7Complete = createInstantV1(COMPLETED, HoodieTimeline.CLEAN_ACTION, "15");
 
-    HoodieInstant instant8Requested = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, "17", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant8Inflight = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "17", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant8Complete = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "17", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant instant8Requested = createInstantV1(REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, "17");
+    HoodieInstant instant8Inflight = createInstantV1(INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "17");
+    HoodieInstant instant8Complete = createInstantV1(COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "17");
 
-    HoodieInstant instant9Requested = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, "19", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant9Inflight = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, "19", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant9Complete = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "19", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant instant9Requested = createInstantV1(REQUESTED, HoodieTimeline.ROLLBACK_ACTION, "19");
+    HoodieInstant instant9Inflight = createInstantV1(INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, "19");
+    HoodieInstant instant9Complete = createInstantV1(COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "19");
 
-    HoodieInstant instant10Requested = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "21", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant10Inflight = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "21", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant instant10Complete = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMPACTION_ACTION, "21", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant instant10Requested = createInstantV1(REQUESTED, HoodieTimeline.COMPACTION_ACTION, "21");
+    HoodieInstant instant10Inflight = createInstantV1(INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "21");
+    HoodieInstant instant10Complete = createInstantV1(COMPLETED, HoodieTimeline.COMPACTION_ACTION, "21");
 
     List<HoodieInstant> instantsInCommit1 = Arrays.asList(instant7Requested, instant7Inflight, instant7Complete,
         instant8Requested, instant8Inflight, instant8Complete);
@@ -714,6 +724,12 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, header, keyField);
     writer.appendBlock(block);
     records.clear();
+  }
+
+  private static HoodieInstant createInstantV1(HoodieInstant.State state,
+                                               String action,
+                                               String requestedTime) {
+    return INSTANT_GENERATOR_V1.createNewInstant(state, action, requestedTime);
   }
 
   private static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(

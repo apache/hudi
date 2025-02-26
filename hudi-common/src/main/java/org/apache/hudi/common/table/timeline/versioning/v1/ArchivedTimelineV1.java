@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -41,7 +40,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +48,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchivedTimeline, HoodieInstantReader {
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
@@ -232,10 +232,8 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
     InstantsLoader loader = new InstantsLoader(loadInstantDetails);
     timelineLoader.loadInstants(
         metaClient, filter, Option.ofNullable(logFileFilter), LoadMode.PLAN, commitsFilter, loader);
-    List<HoodieInstant> result = new ArrayList<>();
-    loader.getInstantsInRangeCollected().values().stream().forEach(list -> result.addAll(list));
-    Collections.sort(result);
-    return result;
+    return loader.getInstantsInRangeCollected().values()
+        .stream().flatMap(Collection::stream).sorted().collect(Collectors.toList());
   }
 
   /**
@@ -264,7 +262,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   }
 
   private Option<HoodieInstant> readCommit(String instantTime, GenericRecord record, boolean loadDetails,
-                                   TimeRangeFilter timeRangeFilter) {
+                                           TimeRangeFilter timeRangeFilter) {
     final String action = record.get(ACTION_TYPE_KEY).toString();
     final String stateTransitionTime = (String) record.get(STATE_TRANSITION_TIME);
     final HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
@@ -325,29 +323,6 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   @Override
   public HoodieArchivedTimeline reload(String startTs) {
     return new ArchivedTimelineV1(metaClient, startTs);
-  }
-
-  /**
-   * A time-based filter with range [startTs, endTs].
-   */
-  static class ClosedClosedTimeRangeFilter extends TimeRangeFilter {
-    private final String startTs;
-    private final String endTs;
-
-    public ClosedClosedTimeRangeFilter(String startTs, String endTs) {
-      super(startTs, endTs);
-      this.startTs = startTs;
-      this.endTs = endTs;
-    }
-
-    @Override
-    public boolean isInRange(String instantTime) {
-      return InstantComparison.isInClosedRange(instantTime, this.startTs, this.endTs);
-    }
-
-    public boolean isInRange(HoodieInstant instant) {
-      return InstantComparison.isInClosedRange(instant.requestedTime(), this.startTs, this.endTs);
-    }
   }
 
   /**
