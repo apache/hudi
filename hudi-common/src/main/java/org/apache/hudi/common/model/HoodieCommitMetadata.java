@@ -45,6 +45,13 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
 
 /**
  * All the metadata that gets stored along with a commit.
+ * ******** IMPORTANT ********
+ * For any newly added/removed data fields, make sure we have the same definition in
+ * src/main/avro/HoodieCommitMetadata.avsc file!!!!!
+ *
+ * For any newly added subclass, make sure we add corresponding handler in
+ * org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2#deserialize method.
+ * ***************************
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieCommitMetadata implements Serializable {
