@@ -49,7 +49,6 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
   @Override
   public void loadInstants(HoodieTableMetaClient metaClient,
                            @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
-                           @Nullable HoodieArchivedTimeline.LogFileFilter logFileFilter,
                            HoodieArchivedTimeline.LoadMode loadMode,
                            Function<GenericRecord, Boolean> commitsFilter,
                            BiConsumer<String, GenericRecord> recordConsumer) {

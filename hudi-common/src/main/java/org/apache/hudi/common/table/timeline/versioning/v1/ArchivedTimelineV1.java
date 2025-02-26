@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.timeline.versioning.v1;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
@@ -56,7 +55,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   private static final String STATE_TRANSITION_TIME = "stateTransitionTime";
   private HoodieTableMetaClient metaClient;
   private final Map<String, Map<HoodieInstant.State, byte[]>> readCommits = new HashMap<>();
-  private final ArchivedTimelineLoader timelineLoader = new ArchivedTimelineLoaderV1();
+  private final ArchivedTimelineLoaderV1 timelineLoader = new ArchivedTimelineLoaderV1();
 
   private static final Logger LOG = LoggerFactory.getLogger(org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.class);
 
@@ -229,7 +228,8 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
 
   private List<HoodieInstant> loadInstants(HoodieArchivedTimeline.TimeRangeFilter filter, LogFileFilter logFileFilter, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
     InstantsLoader loader = new InstantsLoader(loadInstantDetails);
-    timelineLoader.loadInstants(metaClient, filter, logFileFilter, LoadMode.PLAN, commitsFilter, loader);
+    timelineLoader.loadInstants(
+        metaClient, filter, Option.ofNullable(logFileFilter), LoadMode.PLAN, commitsFilter, loader);
     List<HoodieInstant> result = new ArrayList<>();
     loader.getInstantsInRangeCollected().values().stream().forEach(list -> result.addAll(list));
     Collections.sort(result);

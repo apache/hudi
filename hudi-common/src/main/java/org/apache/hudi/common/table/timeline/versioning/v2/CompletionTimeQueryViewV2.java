@@ -290,7 +290,6 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
       if (InstantComparison.compareTimestamps(startTime, LESSER_THAN, this.cursorInstant)) {
         metaClient.getTimelineLayout().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
             new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTime, this.cursorInstant),
-            null,
             HoodieArchivedTimeline.LoadMode.TIME,
             r -> true,
             this::readCompletionTime);
@@ -313,7 +312,6 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
     // then load the archived instants.
     metaClient.getTimelineLayout().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
         new HoodieArchivedTimeline.StartTsFilter(this.cursorInstant),
-        null,
         HoodieArchivedTimeline.LoadMode.TIME,
         r -> true,
         this::readCompletionTime);

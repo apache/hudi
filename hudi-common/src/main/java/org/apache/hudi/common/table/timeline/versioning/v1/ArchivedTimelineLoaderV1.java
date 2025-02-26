@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
@@ -67,11 +68,19 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
 
   @Override
   public void loadInstants(HoodieTableMetaClient metaClient,
-                                          @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
-                                          @Nullable HoodieArchivedTimeline.LogFileFilter logFileFilter,
-                                          HoodieArchivedTimeline.LoadMode loadMode,
-                                          Function<GenericRecord, Boolean> commitsFilter,
-                                          BiConsumer<String, GenericRecord> recordConsumer) {
+                           @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                           HoodieArchivedTimeline.LoadMode loadMode,
+                           Function<GenericRecord, Boolean> commitsFilter,
+                           BiConsumer<String, GenericRecord> recordConsumer) {
+    loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer);
+  }
+
+  public void loadInstants(HoodieTableMetaClient metaClient,
+                           @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                           Option<HoodieArchivedTimeline.LogFileFilter> logFileFilter,
+                           HoodieArchivedTimeline.LoadMode loadMode,
+                           Function<GenericRecord, Boolean> commitsFilter,
+                           BiConsumer<String, GenericRecord> recordConsumer) {
     Set<String> instantsInRange = new HashSet<>();
     try {
       // List all files
