@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
+import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -34,9 +35,10 @@ import org.apache.avro.specific.SpecificRecordBase;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
-import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToJsonBytes;
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToPojo;
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertReplaceCommitMetadataToPojo;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
-import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeReplaceCommitMetadata;
 
 public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
 
@@ -47,16 +49,18 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
         return clazz.newInstance();
       }
       if (instant.isLegacy()) {
+        // For legacy instant, delegate to legacy SerDe.
         try {
-          return fromJsonString(fromUTF8Bytes(bytes), clazz);
+          return new CommitMetadataSerDeV1().deserialize(instant, bytes, clazz);
         } catch (Exception e) {
           throw new IOException("unable to read legacy commit metadata for instant " + instant, e);
         }
       }
-      return fromJsonString(
-          fromUTF8Bytes(
-              convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class)),
-          clazz);
+      // For any new commit metadata class being added, we need the corresponding logic added here
+      if (org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class.isAssignableFrom(clazz)) {
+        return (T) convertReplaceCommitMetadataToPojo(deserializeReplaceCommitMetadata(bytes));
+      }
+      return (T) convertCommitMetadataToPojo(deserializeCommitMetadata(bytes));
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata for instant " + instant + " bytes length: " + bytes.length, e);
     }

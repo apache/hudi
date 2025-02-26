@@ -162,11 +162,81 @@
                            }
                         ],
                         "default": null
+                     },
+                     {
+                        "name":"prevBaseFile",
+                        "type":["null","string"],
+                        "default": null
+                     },
+                     {
+                        "name":"minEventTime",
+                        "type":["null","long"],
+                        "default": null
+                     },
+                     {
+                        "name":"maxEventTime", 
+                        "type":["null","long"],
+                        "default": null
+                     },
+                     {
+                        "name":"runtimeStats",
+                        "type":["null", {
+                           "type": "record",
+                           "name": "HoodieRuntimeStats",
+                           "fields": [
+                              {
+                                 "name": "totalScanTime",
+                                 "type": ["null", "long"],
+                                 "default": null
+                              },
+                              {
+                                 "name": "totalCreateTime",
+                                 "type": ["null", "long"],
+                                 "default": null
+                              },
+                              {
+                                 "name": "totalUpsertTime",
+                                 "type": ["null", "long"],
+                                 "default": null
+                              }
+                           ]
+                        }],
+                        "default": null
+                     },
+                     {
+                        "name":"totalLogFilesCompacted",
+                        "type":["null","long"],
+                        "default" : null
+                     },
+                     {
+                        "name":"totalLogReadTimeMs",
+                        "type":["null","long"],
+                        "default" : null
+                     },
+                     {
+                        "name":"totalLogSizeCompacted",
+                        "type":["null","long"],
+                        "default" : null
+                     },
+                     {
+                        "name":"tempPath",
+                        "type":["null","string"],
+                        "default" : null
+                     },
+                     {
+                        "name":"numUpdates",
+                        "type":["null","long"],
+                        "default" : null
                      }
                   ]
                }
             }
          }],
+         "default": null
+      },
+      {
+         "name":"compacted",
+         "type":["null", "boolean"],
          "default": null
       },
       {
