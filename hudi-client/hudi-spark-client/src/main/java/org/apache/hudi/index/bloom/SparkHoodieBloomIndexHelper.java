@@ -170,7 +170,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
           .repartitionAndSortWithinPartitions(partitioner, new FileGroupIdComparator())
           .map(Tuple2::_1)
           .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
-    } else if (config.useBloomIndexFileGroupIdKeySortPartitioner()) {
+    } else if (config.isBloomIndexFileGroupIdKeySortingEnabled()) {
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(fileGroupAndRecordKey -> new Tuple2<>(fileGroupAndRecordKey, false))
           .sortByKey(new FileGroupIdAndRecordKeyComparator(), true, targetParallelism)
           .map(Tuple2::_1)
