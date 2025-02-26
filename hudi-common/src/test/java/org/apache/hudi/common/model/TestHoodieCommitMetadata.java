@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -208,7 +209,8 @@ public class TestHoodieCommitMetadata {
     Schema pojoSchema = ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieCommitMetadata.class);
 
     // Step 3: Validate schemas
-    assertTrue(isSchemaCompatible(pojoSchema, avroSchema, false));
+    // We need to replace ENUM with STRING to workaround inherit type mismatch of java ENUM when coverted to avro object.
+    assertTrue(isSchemaCompatible(replaceEnumWithString(pojoSchema), avroSchema, false, false));
   }
 
   @Test
@@ -220,6 +222,32 @@ public class TestHoodieCommitMetadata {
     Schema pojoSchema = ReflectData.get().getSchema(org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class);
 
     // Step 3: Validate schemas
-    assertTrue(isSchemaCompatible(pojoSchema, avroSchema, false));
+    // We need to replace ENUM with STRING to workaround inherit type mismatch of java ENUM when coverted to avro object.
+    assertTrue(isSchemaCompatible(replaceEnumWithString(pojoSchema), avroSchema, false, false));
+  }
+
+  // Utility method that search for all ENUM fields and replace it with STRING.
+  private Schema replaceEnumWithString(Schema schema) {
+    if (schema.getType() == Schema.Type.ENUM) {
+      return Schema.create(Schema.Type.STRING);
+    } else if (schema.getType() == Schema.Type.RECORD) {
+      List<Schema.Field> newFields = new ArrayList<>();
+      for (Schema.Field field : schema.getFields()) {
+        Schema newFieldSchema = replaceEnumWithString(field.schema());
+        newFields.add(new Schema.Field(field.name(), newFieldSchema, field.doc(), field.defaultVal()));
+      }
+      return Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false, newFields);
+    } else if (schema.getType() == Schema.Type.UNION) {
+      List<Schema> types = new ArrayList<>();
+      for (Schema type : schema.getTypes()) {
+        types.add(replaceEnumWithString(type));
+      }
+      return Schema.createUnion(types);
+    } else if (schema.getType() == Schema.Type.ARRAY) {
+      return Schema.createArray(replaceEnumWithString(schema.getElementType()));
+    } else if (schema.getType() == Schema.Type.MAP) {
+      return Schema.createMap(replaceEnumWithString(schema.getValueType()));
+    }
+    return schema;
   }
 }
