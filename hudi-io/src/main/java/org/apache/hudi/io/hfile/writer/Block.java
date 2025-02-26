@@ -74,15 +74,12 @@ public abstract class Block {
     // 5. checksum type.
     buf.put(CHECKSUM_TYPE.getCode());
     // TODO: verify that if hudi uses 4 bytes for checksum always.
-    // 6. num of bytes used for checksum.
+    // 6. bytes covered per checksum.
+    buf.putInt(DEFAULT_BYTES_PER_CHECKSUM);
+    // 7. onDiskDataSizeWithHeader
     int onDiskDataSizeWithHeader =
         HFileBlock.HFILEBLOCK_HEADER_SIZE + payloadBuff.limit();
-    long numOfChecksumBytes = calcNumChecksumBytes(
-        onDiskDataSizeWithHeader, DEFAULT_BYTES_PER_CHECKSUM);
-    buf.putInt((int) numOfChecksumBytes);
-    // 7. onDiskDataSizeWithHeader
-    buf.putInt(
-        HFileBlock.HFILEBLOCK_HEADER_SIZE + payloadBuff.limit());
+    buf.putInt(onDiskDataSizeWithHeader);
     // 8. payload.
     buf.put(payloadBuff);
     // 9. Checksum
