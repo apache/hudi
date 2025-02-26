@@ -20,8 +20,9 @@
 - @zhangyue19921010
 
 ## Approvers
-- @Danny0405
+- @danny0405
 - @codope
+- @xiarixiaoyao
 
 ## Status
 
