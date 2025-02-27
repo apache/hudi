@@ -21,6 +21,7 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 
 import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
@@ -49,9 +50,16 @@ public interface TestFunctionWrapper<I> {
   WriteMetadataEvent[] getEventBuffer();
 
   /**
-   * Returns the next event.
+   * Returns the next event sent to Coordinator.
    */
   OperatorEvent getNextEvent();
+
+  /**
+   * Returns the next event sent to subtask.
+   */
+  default OperatorEvent getNextSubTaskEvent() {
+    throw new UnsupportedOperationException();
+  }
 
   /**
    * Snapshot all the functions in the wrapper.
@@ -94,6 +102,11 @@ public interface TestFunctionWrapper<I> {
    * Returns the operator coordinator.
    */
   StreamWriteOperatorCoordinator getCoordinator();
+
+  /**
+   * Returns the write function.
+   */
+  AbstractWriteFunction getWriteFunction();
 
   /**
    * Returns the data buffer of the write task.

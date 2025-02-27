@@ -144,6 +144,30 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
+  @Test
+  public void testAppendInsertAfterFailoverWithEmptyCheckpoint() throws Exception {
+    // open the function and ingest data
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+    conf.setString(FlinkOptions.OPERATION, "INSERT");
+    preparePipeline()
+        .assertEmptyDataFiles()
+        // make an empty snapshot
+        .checkpoint(1)
+        .assertEmptyEvent()
+        // trigger a partial failure
+        .subTaskFails(0, 1)
+        .assertNextEvent()
+        // make sure coordinator send an ack event to unblock the writers.
+        .assertNextSubTaskEvent()
+        // write a set of data and check the result.
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED1)
+        .end();
+  }
+
   // Only when Job level fails with INSERT operationType can we roll back the unfinished instant.
   // Task level failed retry, we should reuse the unfinished Instant with INSERT operationType
   @Test
