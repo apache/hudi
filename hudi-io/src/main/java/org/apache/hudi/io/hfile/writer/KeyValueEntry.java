@@ -17,38 +17,22 @@
  * under the License.
  */
 
-package org.apache.hudi.io.compress;
+package org.apache.hudi.io.hfile.writer;
 
-/**
- * Available compression codecs.
- * There should not be any assumption on the ordering or ordinal of the defined enums.
- */
-public enum CompressionCodec {
-  NONE("none"),
-  BZIP2("bz2"),
-  GZIP("gz"),
-  LZ4("lz4"),
-  LZO("lzo"),
-  SNAPPY("snappy"),
-  ZSTD("zstd");
+import java.nio.ByteBuffer;
 
-  private final String name;
+public class KeyValueEntry implements Comparable<KeyValueEntry> {
+  final byte[] key;
+  final byte[] value;
 
-  CompressionCodec(final String name) {
-    this.name = name;
+  KeyValueEntry(byte[] key, byte[] value) {
+    this.key = key;
+    this.value = value;
   }
 
-  public String getName() {
-    return name;
-  }
-
-  public static CompressionCodec findCodecByName(String name) {
-    for (CompressionCodec v : CompressionCodec.values()) {
-      if (v.getName().equals(name.toLowerCase())) {
-        return v;
-      }
-    }
-    throw new IllegalArgumentException(
-        "Cannot find compression codec: " + name);
+  @Override
+  public int compareTo(KeyValueEntry o) {
+    return ByteBuffer.wrap(this.key)
+        .compareTo(ByteBuffer.wrap(o.key));
   }
 }

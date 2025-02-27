@@ -68,7 +68,7 @@ public class HFileReaderImpl implements HFileReader {
     // Read Trailer (serialized in Proto)
     this.trailer = readTrailer(stream, fileSize);
     this.context = HFileContext.builder()
-        .compressionCodec(trailer.getCompressionCodec())
+        .withCompressionCodec(trailer.getCompressionCodec())
         .build();
     HFileBlockReader blockReader = new HFileBlockReader(
         context, stream, trailer.getLoadOnOpenDataOffset(),
@@ -78,7 +78,7 @@ public class HFileReaderImpl implements HFileReader {
     this.dataBlockIndexEntryMap = dataIndexBlock.readBlockIndex(trailer.getDataIndexCount(), false);
     HFileRootIndexBlock metaIndexBlock =
         (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
-    this.metaBlockIndexEntryMap = metaIndexBlock.readBlockIndex(trailer.getMetaIndexCount(), true);
+    this.metaBlockIndexEntryMap = metaIndexBlock.readBlockIndex(trailer.getMetaIndexCount(), false);
     HFileFileInfoBlock fileInfoBlock =
         (HFileFileInfoBlock) blockReader.nextBlock(HFileBlockType.FILE_INFO);
     this.fileInfo = fileInfoBlock.readFileInfo();
