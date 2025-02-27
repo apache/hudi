@@ -176,13 +176,6 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       }
 
       if (baseDir != null) {
-        // Check whether baseDir in nonHoodiePathCache
-        if (nonHoodiePathCache.contains(baseDir.toString())) {
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Accepting non-hoodie path from cache: " + path);
-          }
-          return true;
-        }
         HoodieTableFileSystemView fsView = null;
         try {
           HoodieTableMetaClient metaClient = metaClientCache.get(baseDir.toString());
@@ -232,7 +225,6 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             LOG.debug(String.format("(1) Caching non-hoodie path under %s with basePath %s \n", folder.toString(), baseDir.toString()));
           }
           nonHoodiePathCache.add(folder.toString());
-          nonHoodiePathCache.add(baseDir.toString());
           return true;
         } finally {
           if (fsView != null) {
