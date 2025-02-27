@@ -430,8 +430,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   protected Pair<String, String> getPartitionAndBaseFilePathsFromLatestCommitMetadata(HoodieTableMetaClient metaClient) throws IOException {
     String extension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
     HoodieInstant instant = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
-    HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe()
-        .deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().loadInstantContent(instant, HoodieCommitMetadata.class);
     String filePath = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).filter(s -> s.getPath().endsWith(extension)).findAny()
         .map(HoodieWriteStat::getPath).orElse(null);
@@ -554,9 +553,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     metaClient = HoodieTableMetaClient.reload(createMetaClient());
     HoodieInstant replaceCommitInstant =
             metaClient.getActiveTimeline().getCompletedReplaceTimeline().firstInstant().get();
-    HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
-            .fromBytes(metaClient.getActiveTimeline().getInstantDetails(replaceCommitInstant).get(),
-                    HoodieReplaceCommitMetadata.class);
+    HoodieReplaceCommitMetadata replaceCommitMetadata = metaClient.getActiveTimeline().loadInstantContent(replaceCommitInstant, HoodieReplaceCommitMetadata.class);
 
     List<String> filesFromReplaceCommit = new ArrayList<>();
     replaceCommitMetadata.getPartitionToWriteStats()
@@ -880,16 +877,13 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       String actionType = metaClient.getCommitActionType();
       HoodieInstant commitInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, actionType, instantTime);
       HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
-      HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe()
-          .deserialize(commitInstant, commitTimeline.getInstantDetails(commitInstant).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = commitTimeline.loadInstantContent(commitInstant, HoodieCommitMetadata.class);
       StoragePath basePath = metaClient.getBasePath();
       Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(basePath).values();
 
       // Read from commit file
       HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(COMPLETED, COMMIT_ACTION, instantTime);
-      HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(instant,
-              metaClient.reloadActiveTimeline().getInstantDetails(instant).get(),
-              HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = metaClient.reloadActiveTimeline().loadInstantContent(instant, HoodieCommitMetadata.class);
       HashMap<String, String> paths = metadata.getFileIdAndFullPaths(basePath);
       // Compare values in both to make sure they are equal.
       for (String pathName : paths.values()) {
@@ -912,9 +906,8 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
     // Read from commit file
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(COMPLETED, COMMIT_ACTION, instantTime0);
-    HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(instant,
-            createMetaClient().reloadActiveTimeline().getInstantDetails(instant).get(),
-            HoodieCommitMetadata.class);
+    HoodieActiveTimeline activeTimeline = createMetaClient().reloadActiveTimeline();
+    HoodieCommitMetadata metadata = activeTimeline.loadInstantContent(instant, HoodieCommitMetadata.class);
     int inserts = 0;
     for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
       for (HoodieWriteStat stat : pstat.getValue()) {
@@ -933,9 +926,8 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     metaClient = createMetaClient();
     instant = INSTANT_GENERATOR.createNewInstant(COMPLETED, COMMIT_ACTION, instantTime1);
     // Read from commit file
-    metadata = metaClient.getCommitMetadataSerDe().deserialize(instant,
-            metaClient.reloadActiveTimeline().getInstantDetails(instant).get(),
-            HoodieCommitMetadata.class);
+    HoodieActiveTimeline activeTimeline1 = metaClient.reloadActiveTimeline();
+    metadata = activeTimeline1.loadInstantContent(instant, HoodieCommitMetadata.class);
     inserts = 0;
     int upserts = 0;
     for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {

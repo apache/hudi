@@ -22,14 +22,16 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
+import java.util.function.BooleanSupplier;
 
 /**
  * Interface for serializing and deserializing commit metadata.
  */
 public interface CommitMetadataSerDe extends Serializable {
 
-  <T> T deserialize(HoodieInstant instant, byte[] bytes, Class<T> clazz) throws IOException;
+  <T> T deserialize(HoodieInstant instant, InputStream instantStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException;
 
   Option<byte[]> serialize(HoodieCommitMetadata commitMetadata) throws IOException;
 }

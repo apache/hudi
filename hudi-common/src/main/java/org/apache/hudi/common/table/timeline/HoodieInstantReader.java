@@ -31,6 +31,7 @@ import java.io.InputStream;
 public interface HoodieInstantReader {
   /**
    * Reads the provided instant's content into a stream for parsing.
+   *
    * @param instant the instant to read
    * @return an InputStream with the content
    */

@@ -171,8 +171,7 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
           String action = tableServiceType.equals(TableServiceType.COMPACT) ? HoodieTimeline.COMPACTION_ACTION : HoodieTimeline.LOG_COMPACTION_ACTION;
           HoodieInstant compactionPlanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, action,
               instant.get().requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-          Option<byte[]> details = table.getMetaClient().getActiveTimeline().readCompactionPlanAsBytes(compactionPlanInstant);
-          HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(table.getMetaClient(), details);
+          HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(table.getMetaClient(), compactionPlanInstant);
           if (compactionPlan.getMissingSchedulePartitions() != null) {
             missingPartitions = compactionPlan.getMissingSchedulePartitions();
           }

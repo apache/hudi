@@ -41,7 +41,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -265,7 +264,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public InputStream getContentStream(HoodieInstant instant) {
-    StoragePath filePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(instant));
+    StoragePath filePath = getInstantFileNamePath(getInstantFileName(instant));
     return readDataStreamFromPath(filePath);
   }
 
@@ -302,8 +301,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         .sorted(Comparator.comparing(HoodieInstant::requestedTime).reversed())
         .map(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata =
-                metaClient.getCommitMetadataSerDe().deserialize(instant, getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = loadInstantContent(instant, HoodieCommitMetadata.class);
             return Pair.of(instant, commitMetadata);
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);
@@ -314,12 +312,6 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   @Override
   public Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant) {
     // Cleaner metadata are always stored only in timeline .hoodie
-    return readDataFromPath(getInstantFileNamePath(getInstantFileName(instant)));
-  }
-
-  @Override
-  public Option<byte[]> readRollbackInfoAsBytes(HoodieInstant instant) {
-    // Rollback metadata are always stored only in timeline .hoodie
     return readDataFromPath(getInstantFileNamePath(getInstantFileName(instant)));
   }
 
@@ -793,5 +785,10 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   @Override
   public Set<String> getValidExtensions() {
     return VALID_EXTENSIONS_IN_ACTIVE_TIMELINE;
+  }
+
+  @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    return TimelineUtils.isEmpty(metaClient, instant);
   }
 }

@@ -107,11 +107,10 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
     val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     if (hoodieInstant.isDefined) {
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
-        Option(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
-          classOf[HoodieReplaceCommitMetadata]))
+
+        Option(timeline.loadInstantContent(hoodieInstant.get, classOf[HoodieReplaceCommitMetadata]))
       } else {
-        Option(layout.getCommitMetadataSerDe.deserialize(hoodieInstant.get, timeline.getInstantDetails(hoodieInstant.get).get,
-          classOf[HoodieCommitMetadata]))
+        Option(timeline.loadInstantContent(hoodieInstant.get, classOf[HoodieCommitMetadata]))
       }
     } else {
       Option.empty

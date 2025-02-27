@@ -38,7 +38,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.io.File
+import java.io.{File, InputStream}
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
@@ -184,7 +184,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
         val localPath = localFolder + StoragePath.SEPARATOR + instantFileNameGenerator.getFileName(instant)
         val data: Array[Byte] = instant.getAction match {
           case HoodieTimeline.CLEAN_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = timeline.loadHoodieCleanMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.DELTA_COMMIT_ACTION =>
@@ -200,11 +200,11 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
             timeline.getInstantDetails(instant).get
 
           case HoodieTimeline.ROLLBACK_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = timeline.loadHoodieRollbackMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.SAVEPOINT_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = timeline.loadHoodieSavepointMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case _ => null

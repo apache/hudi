@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplement
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, OP_KEY_ONLY}
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.StoragePath
@@ -94,10 +94,8 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
    * whether this instant will create a cdc log file.
    */
   protected def hasCDCLogFile(instant: HoodieInstant): Boolean = {
-    val commitMetadata = metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant,
-      metaClient.reloadActiveTimeline().getInstantDetails(instant).get(),
-      classOf[HoodieCommitMetadata]
-    )
+    val timeline = metaClient.reloadActiveTimeline
+    val commitMetadata = timeline.loadInstantContent(instant, classOf[HoodieCommitMetadata])
     val hoodieWriteStats = commitMetadata.getWriteStats.asScala
     hoodieWriteStats.exists { hoodieWriteStat =>
       val cdcPaths = hoodieWriteStat.getCdcStats
@@ -110,10 +108,8 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
    * extract a list of cdc log file.
    */
   protected def getCDCLogFile(instant: HoodieInstant): List[String] = {
-    val commitMetadata = metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant,
-      metaClient.reloadActiveTimeline().getInstantDetails(instant).get(),
-      classOf[HoodieCommitMetadata]
-    )
+    val activeTimeline = metaClient.reloadActiveTimeline()
+    val commitMetadata = activeTimeline.loadInstantContent(instant, classOf[HoodieCommitMetadata])
     commitMetadata.getWriteStats.asScala.flatMap(_.getCdcStats.asScala.keys).toList
   }
 

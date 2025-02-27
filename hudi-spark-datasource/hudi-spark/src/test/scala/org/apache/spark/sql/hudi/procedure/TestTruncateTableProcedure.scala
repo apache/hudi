@@ -95,8 +95,8 @@ class TestTruncateTableProcedure extends HoodieSparkProcedureTestBase {
       val replaceCommitInstant = metaClient.getActiveTimeline.getWriteTimeline
         .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
         .get()
-      val partitions = HoodieReplaceCommitMetadata
-        .fromBytes(metaClient.getActiveTimeline.getInstantDetails(replaceCommitInstant).get(), classOf[HoodieReplaceCommitMetadata])
+      val partitions = metaClient.getActiveTimeline.loadInstantContent(replaceCommitInstant,
+          classOf[HoodieReplaceCommitMetadata])
         .getPartitionToReplaceFileIds
         .keySet()
       //Step3: check number of truncated partitions and location startWith

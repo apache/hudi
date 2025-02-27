@@ -421,9 +421,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     Option<HoodieInstant> latestCompactionInstant = metaClient.getActiveTimeline().getCommitTimeline().lastInstant();
     HoodieInstant compactionPlanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION,
         latestCompactionInstant.get().requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    Option<byte[]> details = metaClient.getActiveTimeline().readCompactionPlanAsBytes(compactionPlanInstant);
-
-    return CompactionUtils.getCompactionPlan(metaClient, details);
+    return CompactionUtils.getCompactionPlan(metaClient, compactionPlanInstant);
   }
 
   @Override

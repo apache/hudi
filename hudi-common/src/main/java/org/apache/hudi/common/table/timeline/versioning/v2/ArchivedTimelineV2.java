@@ -32,8 +32,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -48,6 +46,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.getInputStreamOptionLegacy;
 
 public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchivedTimeline, HoodieInstantReader {
   public static final String INSTANT_TIME_ARCHIVED_META_FIELD = "instantTime";
@@ -156,7 +155,11 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
 
   @Override
   public InputStream getContentStream(HoodieInstant instant) {
-    return new ByteArrayInputStream(getInstantDetails(instant).orElseGet(() -> new byte[0]));
+    Option<InputStream> stream = getInputStreamOptionLegacy(this, instant);
+    if (stream.isEmpty()) {
+      return new ByteArrayInputStream(new byte[]{});
+    }
+    return stream.get();
   }
 
   @Override
@@ -185,7 +188,6 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     return instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime);
   }
 
-  @Nullable
   private BiConsumer<String, GenericRecord> getInstantDetailsFunc(HoodieArchivedTimeline.LoadMode loadMode) {
     switch (loadMode) {
       case METADATA:
@@ -228,7 +230,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
    * If commitsFilter is specified, only the filtered records are loaded.
    */
   private List<HoodieInstant> loadInstants(
-      @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+      HoodieArchivedTimeline.TimeRangeFilter filter,
       HoodieArchivedTimeline.LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter) {
     Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
@@ -248,5 +250,10 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     return new BaseTimelineV2(getInstantsAsStream().filter(i ->
             readCommits.containsKey(i.requestedTime()))
         .filter(s -> validActions.contains(s.getAction())), instantReader);
+  }
+
+  @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    return getInstantDetails(instant).isEmpty();
   }
 }

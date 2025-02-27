@@ -74,8 +74,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     int numCommits;
     if (lastCleanInstant.isPresent() && !table.getActiveTimeline().isEmpty(lastCleanInstant.get())) {
       try {
-        HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-            .deserializeHoodieCleanMetadata(table.getActiveTimeline().getInstantDetails(lastCleanInstant.get()).get());
+        HoodieCleanMetadata cleanMetadata = table.getActiveTimeline().loadHoodieCleanMetadata(lastCleanInstant.get());
         String lastCompletedCommitTimestamp = cleanMetadata.getLastCompletedCommitTimestamp();
         numCommits = commitTimeline.findInstantsAfter(lastCompletedCommitTimestamp).countInstants();
       } catch (IOException e) {
@@ -189,18 +188,17 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     if (lastClean.isPresent()) {
       HoodieInstant cleanInstant = lastClean.get();
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+      HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
       if (activeTimeline.isEmpty(cleanInstant)) {
         activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
-        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
         try {
-          Option<byte[]> content = activeTimeline.getInstantDetails(cleanPlanInstant);
-          // Deserialize plan if it is non-empty
-          if (content.map(bytes -> bytes.length > 0).orElse(false)) {
-            return Option.of(TimelineMetadataUtils.deserializeCleanerPlan(content.get()));
-          } else {
+          // Deserialize plan.
+          return Option.of(activeTimeline.loadCleanerPlan(cleanPlanInstant));
+        } catch (IOException ex) {
+          // If it is empty we catch error and repair.
+          if (activeTimeline.isEmpty(cleanPlanInstant)) {
             return Option.of(new HoodieCleanerPlan());
           }
-        } catch (IOException ex) {
           throw new HoodieIOException("Failed to parse cleaner plan", ex);
         }
       }

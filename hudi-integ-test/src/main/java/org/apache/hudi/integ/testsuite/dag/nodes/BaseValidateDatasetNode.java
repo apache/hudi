@@ -201,8 +201,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     return (Option<String>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
         TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
-        HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
-            .deserialize(instant, timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(instant, HoodieCommitMetadata.class);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
           return Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
         } else {

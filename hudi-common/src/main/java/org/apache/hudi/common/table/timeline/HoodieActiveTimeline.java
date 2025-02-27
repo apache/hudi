@@ -130,13 +130,6 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant);
 
   /**
-   * Read rollback info from instant file.
-   * @param instant Instant to read from.
-   * @return
-   */
-  Option<byte[]> readRollbackInfoAsBytes(HoodieInstant instant);
-
-  /**
    * Read Restore info from instant file.
    * @param instant Instant to read from.
    * @return
