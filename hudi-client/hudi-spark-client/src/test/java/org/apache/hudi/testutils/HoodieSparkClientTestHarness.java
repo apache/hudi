@@ -559,7 +559,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       return;
     }
     // Open up the metadata table again, for syncing
-    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(storageConf, writeConfig, context)) {
+    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(writeConfig, context)) {
       LOG.info("Successfully synced to metadata table");
     } catch (Exception e) {
       throw new HoodieMetadataException("Error syncing to metadata table.", e);
@@ -568,7 +568,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   public HoodieBackedTableMetadataWriter metadataWriter(HoodieWriteConfig clientConfig) {
     return (HoodieBackedTableMetadataWriter) SparkHoodieBackedTableMetadataWriter
-        .create(storageConf, clientConfig, new HoodieSparkEngineContext(jsc));
+        .create(clientConfig, new HoodieSparkEngineContext(jsc));
   }
 
   public HoodieTableMetadata metadata(HoodieWriteConfig clientConfig,

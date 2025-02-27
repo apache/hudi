@@ -131,7 +131,7 @@ public class MetadataCommand {
     HoodieTimer timer = HoodieTimer.start();
     HoodieWriteConfig writeConfig = getWriteConfig();
     initJavaSparkContext(Option.of(master));
-    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc))) {
+    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(writeConfig, new HoodieSparkEngineContext(jsc))) {
       return String.format("Created Metadata Table in %s (duration=%.2f secs)", metadataPath, timer.endTimer() / 1000.0);
     }
   }
@@ -139,7 +139,7 @@ public class MetadataCommand {
   @ShellMethod(key = "metadata delete", value = "Remove the Metadata Table")
   public String delete(@ShellOption(value = "--backup", help = "Backup the metadata table before delete", defaultValue = "true", arity = 1) final boolean backup) throws Exception {
     HoodieTableMetaClient dataMetaClient = HoodieCLI.getTableMetaClient();
-    String backupPath = HoodieTableMetadataUtil.deleteMetadataTable(dataMetaClient, new HoodieSparkEngineContext(jsc), backup);
+    String backupPath = HoodieTableMetadataUtil.deleteMetadataTable(dataMetaClient, backup);
     if (backup) {
       return "Metadata Table has been deleted and backed up to " + backupPath;
     } else {
@@ -150,8 +150,7 @@ public class MetadataCommand {
   @ShellMethod(key = "metadata delete-record-index", value = "Delete the record index from Metadata Table")
   public String deleteRecordIndex(@ShellOption(value = "--backup", help = "Backup the record index before delete", defaultValue = "true", arity = 1) final boolean backup) throws Exception {
     HoodieTableMetaClient dataMetaClient = HoodieCLI.getTableMetaClient();
-    String backupPath = HoodieTableMetadataUtil.deleteMetadataTablePartition(dataMetaClient, new HoodieSparkEngineContext(jsc),
-        MetadataPartitionType.RECORD_INDEX.getPartitionPath(), backup);
+    String backupPath = HoodieTableMetadataUtil.deleteMetadataTablePartition(dataMetaClient, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), backup);
     if (backup) {
       return "Record Index has been deleted from the Metadata Table and backed up to " + backupPath;
     } else {
@@ -176,7 +175,7 @@ public class MetadataCommand {
     if (!readOnly) {
       HoodieWriteConfig writeConfig = getWriteConfig();
       initJavaSparkContext(Option.of(master));
-      try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc))) {
+      try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(writeConfig, new HoodieSparkEngineContext(jsc))) {
         // Empty
       }
     }

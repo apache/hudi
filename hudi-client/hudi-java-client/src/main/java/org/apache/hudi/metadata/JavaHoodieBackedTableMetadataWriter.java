@@ -49,16 +49,12 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   /**
    * Hudi backed table metadata writer.
    *
-   * @param storageConf                Storage configuration to use for the metadata writer
    * @param writeConfig                Writer config
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
-   * @param inflightInstantTimestamp   Timestamp of any instant in progress
    */
-  protected JavaHoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                HoodieEngineContext engineContext,
-                                                Option<String> inflightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+  protected JavaHoodieBackedTableMetadataWriter(HoodieWriteConfig writeConfig, HoodieEngineContext engineContext, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    super(writeConfig, failedWritesCleaningPolicy, engineContext);
   }
 
   @Override
@@ -66,21 +62,12 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
     return HoodieJavaTable.create(writeConfig, engineContext, metaClient);
   }
 
-  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
-                                                 HoodieWriteConfig writeConfig,
-                                                 HoodieEngineContext context,
-                                                 Option<String> inflightInstantTimestamp) {
-    return new JavaHoodieBackedTableMetadataWriter(
-        conf, writeConfig, EAGER, context, inflightInstantTimestamp);
+  public static HoodieTableMetadataWriter create(HoodieWriteConfig writeConfig, HoodieEngineContext context) {
+    return new JavaHoodieBackedTableMetadataWriter(writeConfig, context, EAGER);
   }
 
-  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
-                                                 HoodieWriteConfig writeConfig,
-                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                 HoodieEngineContext context,
-                                                 Option<String> inflightInstantTimestamp) {
-    return new JavaHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
+  public static HoodieTableMetadataWriter create(HoodieWriteConfig writeConfig, HoodieEngineContext context, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    return new JavaHoodieBackedTableMetadataWriter(writeConfig, context, failedWritesCleaningPolicy);
   }
 
   @Override

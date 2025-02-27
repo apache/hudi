@@ -114,7 +114,7 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
   protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {
     this.writeConfig = writeConfig;
     if (enableMetadataTable) {
-      metadataWriter = JavaHoodieBackedTableMetadataWriter.create(storageConf, writeConfig, context, Option.empty());
+      metadataWriter = JavaHoodieBackedTableMetadataWriter.create(writeConfig, context);
       // reload because table configs could have been updated
       metaClient = HoodieTableMetaClient.reload(metaClient);
       testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));

@@ -83,8 +83,7 @@ public class TestCompactionUtil {
     this.metaClient = table.getMetaClient();
     // initialize the metadata table path
     if (conf.getBoolean(FlinkOptions.METADATA_ENABLED)) {
-      FlinkHoodieBackedTableMetadataWriter.create(table.getStorageConf(), table.getConfig(),
-          table.getContext(), Option.empty());
+      FlinkHoodieBackedTableMetadataWriter.create(table.getConfig(), table.getContext());
     }
   }
 

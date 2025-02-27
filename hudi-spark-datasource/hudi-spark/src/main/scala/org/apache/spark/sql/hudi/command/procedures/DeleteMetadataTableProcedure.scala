@@ -51,7 +51,7 @@ class DeleteMetadataTableProcedure extends BaseProcedure with ProcedureBuilder w
       val metaClient = createMetaClient(jsc, basePath)
 
       try {
-        val metadataTableBasePath = deleteMetadataTable(metaClient, new HoodieSparkEngineContext(jsc), false)
+        val metadataTableBasePath = deleteMetadataTable(metaClient, false)
         metadataPaths = s"$metadataPaths,$metadataTableBasePath"
         Seq(Row(s"Deleted Metadata Table at '$metadataTableBasePath'"))
       } catch {

@@ -158,7 +158,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieBloomIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
+    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(config, context);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Create some partitions, and put some files
@@ -408,7 +408,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     HoodieWriteConfig config =
         makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
+    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(config, context);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Let's tag
@@ -507,7 +507,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     HoodieWriteConfig config =
         makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
+    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(config, context);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Let's tag
@@ -603,7 +603,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     HoodieWriteConfig config =
         makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
+    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(config, context);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Let's tag

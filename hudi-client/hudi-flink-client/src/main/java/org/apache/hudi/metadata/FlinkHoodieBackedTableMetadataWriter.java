@@ -57,34 +57,17 @@ import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGE
 public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>> {
   private static final Logger LOG = LoggerFactory.getLogger(FlinkHoodieBackedTableMetadataWriter.class);
 
-  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
+  public static HoodieTableMetadataWriter create(HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
-    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, EAGER, context, Option.empty());
+    return new FlinkHoodieBackedTableMetadataWriter(writeConfig, context, EAGER);
   }
 
-  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
-                                                 HoodieWriteConfig writeConfig,
-                                                 HoodieEngineContext context,
-                                                 Option<String> inFlightInstantTimestamp) {
-    return new FlinkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, EAGER, context, inFlightInstantTimestamp);
+  public static HoodieTableMetadataWriter create(HoodieWriteConfig writeConfig, HoodieEngineContext context, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    return new FlinkHoodieBackedTableMetadataWriter(writeConfig, context, failedWritesCleaningPolicy);
   }
 
-  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
-                                                 HoodieWriteConfig writeConfig,
-                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                 HoodieEngineContext context,
-                                                 Option<String> inFlightInstantTimestamp) {
-    return new FlinkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, inFlightInstantTimestamp);
-  }
-
-  FlinkHoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
-                                       HoodieWriteConfig writeConfig,
-                                       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                       HoodieEngineContext engineContext,
-                                       Option<String> inFlightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inFlightInstantTimestamp);
+  FlinkHoodieBackedTableMetadataWriter(HoodieWriteConfig writeConfig, HoodieEngineContext engineContext, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    super(writeConfig, failedWritesCleaningPolicy, engineContext);
   }
 
   @Override

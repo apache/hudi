@@ -36,7 +36,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.io.IOException;
 import java.util.List;
 
 public abstract class HoodieJavaTable<T>
@@ -81,22 +80,19 @@ public abstract class HoodieJavaTable<T>
   @Override
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     if (config.isMetadataTableEnabled() || metaClient.getTableConfig().isMetadataTableAvailable()) {
-      // Create the metadata table writer. First time after the upgrade this creation might trigger
-      // metadata table bootstrapping. Bootstrapping process could fail and checking the table
-      // existence after the creation is needed.
-      final HoodieTableMetadataWriter metadataWriter = JavaHoodieBackedTableMetadataWriter.create(
-          getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
-          Option.of(triggeringInstantTimestamp));
       // even with metadata enabled, some index could have been disabled
       // delete metadata partitions corresponding to such indexes
       deleteMetadataIndexIfNecessary();
-      try {
+      // Create the metadata table writer. First time after the upgrade this creation might trigger
+      // metadata table bootstrapping. Bootstrapping process could fail and checking the table
+      // existence after the creation is needed.
+      try (HoodieTableMetadataWriter metadataWriter = JavaHoodieBackedTableMetadataWriter.create(config, getContext(), failedWritesCleaningPolicy)) {
         if (isMetadataTableExists || metaClient.getStorage().exists(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))) {
           isMetadataTableExists = true;
           return Option.of(metadataWriter);
         }
-      } catch (IOException e) {
+      } catch (Exception e) {
         throw new HoodieMetadataException("Checking existence of metadata table failed", e);
       }
     } else {

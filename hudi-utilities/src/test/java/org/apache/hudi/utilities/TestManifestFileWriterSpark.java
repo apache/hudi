@@ -91,7 +91,7 @@ public class TestManifestFileWriterSpark extends HoodieSparkClientTestHarness {
     final String instantTime = "100";
     HoodieTestTable testTable = null;
     if (enableMetadata) {
-      HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConfiguration, writeConfig, context);
+      HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(writeConfig, context);
       // reload because table configs could have been updated
       metaClient = HoodieTableMetaClient.reload(metaClient);
       testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));

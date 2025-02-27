@@ -376,7 +376,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
-          writeClient.getEngineContext().getStorageConf(), config, writeClient.getEngineContext())) {
+          config, writeClient.getEngineContext())) {
         HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
             .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
 
@@ -488,7 +488,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
-          writeClient.getEngineContext().getStorageConf(), config, writeClient.getEngineContext())) {
+          config, writeClient.getEngineContext())) {
         HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
             .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
 
