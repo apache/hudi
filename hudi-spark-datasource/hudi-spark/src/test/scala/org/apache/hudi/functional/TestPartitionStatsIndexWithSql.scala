@@ -161,7 +161,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              |merge into $tableName h0
-             |using (select 1 as id, 'a1' as name, 11 as price, 1001 as ts, '$partitionValue' as dt) s0
+             |using (select 1 as id, 'a1' as name, 11 as price, 1001 as ts, cast('$partitionValue' as Date) as dt) s0
              |on h0.id = s0.id
              |when matched then update set *
              |""".stripMargin)

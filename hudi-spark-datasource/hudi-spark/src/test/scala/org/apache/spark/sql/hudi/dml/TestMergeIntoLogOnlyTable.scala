@@ -58,7 +58,7 @@ class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {
         s"""
            |merge into $tableName h0
            |using (
-           | select 1 as id, 'a1' as name, 11 as price, 1001 as ts
+           | select 1 as id, 'a1' as name, 11 as price, 1001L as ts
            | ) s0
            | on h0.id = s0.id
            | when matched then update set *
@@ -74,7 +74,7 @@ class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {
         s"""
            |merge into $tableName h0
            |using (
-           | select 4 as id, 'a4' as name, 11 as price, 1000 as ts
+           | select 4 as id, 'a4' as name, 11 as price, 1000L as ts
            | ) s0
            | on h0.id = s0.id
            | when not matched then insert *
