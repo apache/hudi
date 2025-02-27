@@ -284,6 +284,8 @@ public class StreamWriteOperatorCoordinator
     ValidationUtils.checkState(operatorEvent instanceof WriteMetadataEvent,
         "The coordinator can only handle WriteMetaEvent");
     WriteMetadataEvent event = (WriteMetadataEvent) operatorEvent;
+    // throw exception as early as possible
+    detectWriteFailure(event);
 
     if (event.isEndInput()) {
       // handle end input event synchronously
@@ -475,6 +477,17 @@ public class StreamWriteOperatorCoordinator
         // schedules the compaction or clustering if it is enabled in batch execution mode
         scheduleTableServices(true);
       }
+    }
+  }
+
+  private void detectWriteFailure(WriteMetadataEvent event) throws HoodieException {
+    // It will early detect any write failures in each of task and rollback the instant
+    // to prevent data loss caused by commit failure after a checkpoint is finished successfully.
+    long totalErrorRecords = event.getWriteStatuses().stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
+    if (totalErrorRecords > 0 && ! this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
+      // Rolls back instant
+      writeClient.rollback(event.getInstantTime());
+      throw new HoodieException(String.format("Write failure happened for Instant [%s] and rolled back !", instant));
     }
   }
 
