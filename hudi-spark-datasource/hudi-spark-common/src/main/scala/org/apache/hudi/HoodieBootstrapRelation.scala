@@ -98,8 +98,6 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
 
   private lazy val skeletonSchema = HoodieSparkUtils.getMetaSchema
 
-  override lazy val mandatoryFields: Seq[String] = Seq.empty
-
   protected def getFileSlices(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
     listLatestFileSlices(globPaths, partitionFilters, dataFilters)
   }
@@ -133,27 +131,27 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
    * get all the file readers required for composeRDD
    */
   protected def getFileReaders(tableSchema: HoodieTableSchema,
-                               requiredSchema: HoodieTableSchema,
-                               requestedColumns: Array[String],
+                               optionalSchema: HoodieTableSchema,
                                filters: Array[Filter]): (BaseFileReader, BaseFileReader, BaseFileReader) = {
+
     val requiredSkeletonFileSchema =
-      StructType(skeletonSchema.filter(f => requestedColumns.exists(col => resolver(f.name, col))))
+      StructType(skeletonSchema.filter(f => optionalSchema.structTypeSchema.fields.exists(col => resolver(f.name, col.name))))
 
     val (bootstrapDataFileReader, bootstrapSkeletonFileReader) =
-      createBootstrapFileReaders(tableSchema, requiredSchema, requiredSkeletonFileSchema, filters)
+      createBootstrapFileReaders(tableSchema, optionalSchema, requiredSkeletonFileSchema, filters)
 
-    val regularFileReader = createRegularFileReader(tableSchema, requiredSchema, filters)
+    val regularFileReader = createRegularFileReader(tableSchema, optionalSchema, filters)
     (bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader)
   }
 
   protected override def composeRDD(fileSplits: Seq[FileSplit],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
-                                    requestedColumns: Array[String],
+                                    optionalSchema: HoodieTableSchema,
                                     filters: Array[Filter]): RDD[InternalRow] = {
 
     val (bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader) = getFileReaders(tableSchema,
-      requiredSchema, requestedColumns, filters)
+      requiredSchema, filters)
     new HoodieBootstrapRDD(sqlContext.sparkSession, bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader,
       requiredSchema, fileSplits)
   }
