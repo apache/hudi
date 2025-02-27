@@ -46,6 +46,10 @@ public class IndexBlock extends Block {
     return payloadSize;
   }
 
+  public boolean isEmpty() {
+    return entries.isEmpty();
+  }
+
   @Override
   public ByteBuffer getPayload() {
     ByteBuffer buf = ByteBuffer.allocate(blockSize * 2);
