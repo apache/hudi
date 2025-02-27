@@ -754,9 +754,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         //
         // 2) set source column name to be different with target column
         //
-        val errorMessage = "Failed to resolve precombine field `v` w/in the source-table output"
-
-        checkExceptionContain(
+        checkException(
           s"""
              | merge into $tableName1 as t0
              | using (
@@ -765,7 +763,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | on t0.id = s0.s_id
              | when matched then update set id=s0.s_id, name=s0.s_name, price=s0.s_price*2, v=s0.s_v+2, dt=s0.dt
          """.stripMargin
-        )(errorMessage)
+        )(
+          "MERGE INTO field resolution error: " +
+            "Failed to resolve precombine field `v` w/in the source-table output")
 
         spark.sql(
           s"""
@@ -815,8 +815,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       // Delete data with a condition expression on primaryKey field
       // 1) set source column name to be same as target column
       //
-      val complexConditionsErrorMessage = "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.id = (s0.id + 1)`"
-
       checkExceptionContain(
         s"""merge into $tableName1 t0
            | using (
@@ -824,7 +822,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            | ) s0
            | on t0.id = s0.id + 1
            | when matched then delete
-       """.stripMargin)(complexConditionsErrorMessage)
+       """.stripMargin)(
+        "MERGE INTO field resolution error: "
+          + "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key "
+          + "and partition path column. Found `t0.id = (s0.id + 1)`")
 
       spark.sql(
         s"""
@@ -844,16 +845,16 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       //
       // 2.a) set source column name to be different with target column (should fail unable to match precombine field)
       //
-      val failedToResolveErrorMessage = "Failed to resolve precombine field `v` w/in the source-table output"
-
-      checkExceptionContain(
+      checkException(
         s"""merge into $tableName1 t0
            | using (
            |  select 3 as s_id, 'a3' as s_name, 30 as s_price, 3000 as s_v, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id
            | when matched then delete
-           |""".stripMargin)(failedToResolveErrorMessage)
+           |""".stripMargin)(
+        "MERGE INTO field resolution error: "
+          + "Failed to resolve precombine field `v` w/in the source-table output")
 
       //
       // 2.b) set source column name to be different with target column
