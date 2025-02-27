@@ -632,6 +632,7 @@ public class HoodieTableConfig extends HoodieConfig {
     // validate that the table version is greater than or equal to the config version
     HoodieTableVersion firstVersion = HoodieTableVersion.fromReleaseVersion(configProperty.getSinceVersion().get());
     boolean valid = tableVersion.greaterThan(firstVersion) || tableVersion.equals(firstVersion);
+    valid = valid || configProperty.key().equals(KEY_GENERATOR_CLASS_NAME.key()) || configProperty.key().equals(KEY_GENERATOR_TYPE.key());
     if (!valid) {
       LOG.warn("Table version {} is lower than or equal to config's first version {}. Config {} will be ignored.",
           tableVersion, firstVersion, configProperty.key());
