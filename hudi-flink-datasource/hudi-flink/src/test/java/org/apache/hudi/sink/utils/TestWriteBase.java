@@ -29,6 +29,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -169,6 +170,18 @@ public class TestWriteBase {
           this.pipeline.getEventBuffer().length == 1
               && this.pipeline.getEventBuffer()[0] == null,
           "The coordinator events buffer expect to be empty");
+      return this;
+    }
+
+    /**
+     * Assert the next event exists and handle over it to the coordinator.
+     */
+    public TestHarness assertNextSubTaskEvent() {
+      final OperatorEvent nextEvent = this.pipeline.getNextSubTaskEvent();
+      if (nextEvent != null) {
+        MatcherAssert.assertThat("The Coordinator expect to send an event", nextEvent, instanceOf(CommitAckEvent.class));
+        this.pipeline.getWriteFunction().handleOperatorEvent(nextEvent);
+      }
       return this;
     }
 
