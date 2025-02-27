@@ -70,7 +70,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
   public BigQuerySyncTool(Properties props) {
     // will build file writer, client, etc. from configs
     super(props);
-    this.config = new BigQuerySyncConfig(props);
+    this.config = new BigQuerySyncConfig(this.props);
     this.tableName = config.getString(BIGQUERY_SYNC_TABLE_NAME);
     this.manifestTableName = tableName + SUFFIX_MANIFEST;
     this.versionsTableName = tableName + SUFFIX_VERSIONS;
