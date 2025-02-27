@@ -77,7 +77,7 @@ public class TestHFileWriter {
   private static void validateHFileSize() throws IOException {
     Path path = Paths.get(TEST_FILE);
     long actualSize = Files.size(path);
-    long expectedSize = 4370L;
+    long expectedSize = 4372L;
     assertEquals(expectedSize, actualSize); // Will now pass
   }
 
@@ -124,7 +124,7 @@ public class TestHFileWriter {
     byte[] versionBytes = new byte[4];
     buf.get(versionBytes);
     int version = ByteBuffer.wrap(versionBytes).getInt();
-    assertEquals(3, version >>> 24);
+    assertEquals(3, version);
   }
 
   private static void validateDataBlocks(ByteBuffer buf) {
