@@ -794,7 +794,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
 
   test("Test Type Casting with Global Index for Primary Key and Partition Key Updates") {
     Seq("cow", "mor").foreach { tableType =>
-      withRecordType()(withTempDir { tmp =>
+      withTempDir { tmp =>
         withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE",
           "hoodie.simple.index.update.partition.path" -> "true") {
           val tableName = generateTableName
@@ -834,20 +834,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             Seq(1, 1, "a")
           )
 
-          // Test Case 2 [Not supported]: Update partition key (c2)
-          // spark.sql(
-          //   s"""
-          //      |update $tableName
-          //      |set c2 = cast(2.0 as double)
-          //      |where c3 = 'a'
-          //  """.stripMargin)
-          // // Verify partition key update
-          // checkAnswer(
-          //   s"select c1, c2, c3 from $tableName")(
-          //   Seq(1, 2, "a")
-          // )
-
-          // Test Case 3: Insert overwrite with double values
+          // Test Case 2: Insert overwrite with double values
           spark.sql(
             s"""
                |insert overwrite table $tableName
@@ -864,7 +851,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             Seq(1, 3, "a")
           )
         }
-      })
+      }
     }
   }
 }
