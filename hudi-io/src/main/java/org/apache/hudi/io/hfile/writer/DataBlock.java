@@ -42,6 +42,10 @@ public class DataBlock extends Block {
     return entries.isEmpty();
   }
 
+  public List<KeyValueEntry> getEntries() {
+    return entries;
+  }
+
   public void add(byte[] key, byte[] value) {
     KeyValueEntry kv = new KeyValueEntry(key, value);
     add(kv, true);
