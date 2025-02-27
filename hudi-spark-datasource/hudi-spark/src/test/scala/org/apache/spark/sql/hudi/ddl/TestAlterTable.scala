@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeComm
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
-import org.apache.hadoop.fs.Path
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -49,7 +48,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
              |  id int,
              |  name string,
              |  price double,
-             |  ts int
+             |  ts long
              |) using hudi
              | location '$tablePath'
              | tblproperties (
@@ -123,7 +122,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
           s"""
              |merge into $newTableName t0
              |using (
-             |  select 1 as id, 'a1' as name, 12 as price, 1001 as ts, 'e0' as ext0
+             |  select 1 as id, 'a1' as name, 12 as price, 1001L as ts, 'e0' as ext0
              |) s0
              |on t0.id = s0.id
              |when matched then update set *

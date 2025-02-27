@@ -64,6 +64,13 @@ class MergeIntoFieldResolutionException(message: String)
   extends AnalysisException(s"MERGE INTO field resolution error: $message")
 
 /**
+ * Exception thrown when field type does not match between source and target table
+ * during MERGE INTO validation
+ */
+class MergeIntoFieldTypeMismatchException(message: String)
+  extends AnalysisException(s"MERGE INTO field type mismatch error: $message")
+
+/**
  * Hudi's implementation of the {@code MERGE INTO} (MIT) Spark SQL statement.
  *
  * NOTE: That this implementation is restricted in a some aspects to accommodate for Hudi's crucial
@@ -257,7 +264,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         "precombine field",
         updatingActions.flatMap(_.assignments)).head
     }
-
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
@@ -798,7 +804,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // Please note we are relying on merge mode in the table config as writer merge mode is always "CUSTOM" for MIT.
     if (isEventTimeOrdering(props)) {
       insertActions.foreach(action =>
-        hoodieCatalogTable.preCombineKey.foreach(
+        hoodieCatalogTable.preCombineKey.map(
           field => {
             validateTargetTableAttrExistsInAssignments(
               sparkSession.sessionState.conf.resolver,
@@ -1040,7 +1046,7 @@ object MergeIntoHoodieTableCommand {
 
   def validateDataTypes(attr: Attribute, expr: Expression, columnType: String): Unit = {
     if (attr.dataType != expr.dataType) {
-      throw new AnalysisException(
+      throw new MergeIntoFieldTypeMismatchException(
         s"$columnType data type mismatch between source table and target table. " +
           s"Target table uses ${attr.dataType} for column '${attr.name}', " +
           s"source table uses ${expr.dataType} for '${expr.sql}'"

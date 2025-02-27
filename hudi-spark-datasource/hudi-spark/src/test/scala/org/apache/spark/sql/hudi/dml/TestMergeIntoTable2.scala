@@ -1066,7 +1066,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
             // Test 1: Update statements where at least one misses primary key assignment
             if (tableType.equals("mor")) {
-              checkExceptionContain(
+              checkException(
                 s"""
                    |merge into $tableName as t0
                    |using (
@@ -1080,9 +1080,9 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                    |  dt = s0.dt
                    |when matched and s0.id = 2 then update set *
                """.stripMargin
-              )("No matching assignment found for target table record key field `id`")
+              )("MERGE INTO field resolution error: No matching assignment found for target table record key field `id`")
 
-              checkExceptionContain(
+              checkException(
                 s"""
                    |merge into $tableName as t0
                    |using (
@@ -1095,7 +1095,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                    |  ts = s0.ts,
                    |  dt = s0.dt
                """.stripMargin
-              )("No matching assignment found for target table record key field `id`")
+              )("MERGE INTO field resolution error: No matching assignment found for target table record key field `id`")
             }
 
             // Test 2: At least one partial insert assignment clause misses primary key.
@@ -1138,8 +1138,8 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                """.stripMargin
 
             if (mergeMode == "EVENT_TIME_ORDERING") {
-              checkExceptionContain(mergeStmt)(
-                "No matching assignment found for target table precombine field `ts`"
+              checkException(mergeStmt)(
+                "MERGE INTO field resolution error: No matching assignment found for target table precombine field `ts`"
               )
             } else {
               // For COMMIT_TIME_ORDERING, this should execute without error

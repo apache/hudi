@@ -186,7 +186,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |create table ${targetTable} (
            |  `id` string,
            |  `name` string,
-           |  `dt` int,
+           |  `dt` bigint,
            |  `day` STRING,
            |  `hour` INT
            |) using hudi
@@ -214,7 +214,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         s"""
            |merge into ${targetTable} as target
            |using (
-           |select '2' as id, 'bb' as name, 456 as dt, '2024-02-19' as `day`, 10 as `hour`
+           |select '2' as id, 'bb' as name, 456L as dt, '2024-02-19' as `day`, 10 as `hour`
            |) as source
            |on target.id = source.id
            |when matched then update set *

@@ -30,7 +30,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConf
 class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
 
   // TODO(HUDI-8938): add "mor,6,true", "mor,6,false" after the fix
-  Seq(
+  Seq("cow,8,true", "cow,8,false", "cow,6,true", "cow,6,false",
     "mor,8,true", "mor,8,false").foreach { args =>
     val argList = args.split(',')
     val tableType = argList(0)
@@ -259,7 +259,7 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
                  |  id int,
                  |  name string,
                  |  price double,
-                 |  ts int
+                 |  ts long
                  | ) using hudi
                  | tblproperties (
                  |  $writeTableVersionClause
@@ -277,13 +277,13 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
             spark.sql(
               s"""
                  | insert into $tableName
-                 | select 0 as id, 'A0' as name, 0.0 as price, 100 as ts union all
-                 | select 1, 'A', 10.0, 100 union all
-                 | select 2, 'B', 20.0, 100 union all
-                 | select 3, 'C', 30.0, 100 union all
-                 | select 4, 'D', 40.0, 100 union all
-                 | select 5, 'E', 50.0, 100 union all
-                 | select 6, 'F', 60.0, 100
+                 | select 0 as id, 'A0' as name, 0.0 as price, 100L as ts union all
+                 | select 1, 'A', 10.0, 100L union all
+                 | select 2, 'B', 20.0, 100L union all
+                 | select 3, 'C', 30.0, 100L union all
+                 | select 4, 'D', 40.0, 100L union all
+                 | select 5, 'E', 50.0, 100L union all
+                 | select 6, 'F', 60.0, 100L
              """.stripMargin)
 
             // Merge operation - delete with arbitrary ts value (lower, equal and higher). Lower ts won't take effect.
@@ -291,9 +291,9 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
               s"""
                  | merge into $tableName t
                  | using (
-                 |   select 0 as id, 'B2' as name, 25.0 as price, 100 as ts union all
-                 |   select 1 as id, 'B2' as name, 25.0 as price, 101 as ts union all
-                 |   select 2 as id, 'B2' as name, 25.0 as price, 99 as ts
+                 |   select 0 as id, 'B2' as name, 25.0 as price, 100L as ts union all
+                 |   select 1 as id, 'B2' as name, 25.0 as price, 101L as ts union all
+                 |   select 2 as id, 'B2' as name, 25.0 as price, 99L as ts
                  | ) s
                  | on t.id = s.id
                  | when matched then delete
@@ -304,9 +304,9 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
               s"""
                  | merge into $tableName t
                  | using (
-                 |   select 4 as id, 'D2' as name, 45.0 as price, 101 as ts union all
-                 |   select 5, 'E2', 55.0, 99 as ts union all
-                 |   select 6, 'F2', 65.0, 100 as ts
+                 |   select 4 as id, 'D2' as name, 45.0 as price, 101L as ts union all
+                 |   select 5, 'E2', 55.0, 99L as ts union all
+                 |   select 6, 'F2', 65.0, 100L as ts
                  | ) s
                  | on t.id = s.id
                  | when matched then update set *
