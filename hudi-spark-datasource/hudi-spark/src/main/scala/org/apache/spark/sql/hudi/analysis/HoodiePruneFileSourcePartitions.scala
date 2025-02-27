@@ -17,18 +17,17 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-
+import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.CatalogStatistics
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, AttributeSet, Expression, ExpressionSet, NamedExpression, PredicateHelper, SubqueryExpression}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, LeafNode, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.FilterEstimation
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, LeafNode, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
-import org.apache.spark.sql.hudi.analysis.HoodiePruneFileSourcePartitions.{exprUtils, getPartitionFiltersAndDataFilters, rebuildPhysicalOperation, HoodieRelationMatcher}
+import org.apache.spark.sql.hudi.analysis.HoodiePruneFileSourcePartitions.{HoodieRelationMatcher, exprUtils, getPartitionFiltersAndDataFilters, rebuildPhysicalOperation}
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StructType
 
@@ -52,7 +51,8 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
 
       // [[HudiFileIndex]] is a caching one, therefore we don't need to reconstruct new relation,
       // instead we simply just refresh the index and update the stats
-      fileIndex.filterFileSlices(dataFilters, partitionPruningFilters, isPartitionPruned = true)
+      fileIndex.filterFileSlices(dataFilters,
+        HoodieFileIndex.convertFilterForTimestampKeyGenerator(fileIndex.metaClient, partitionPruningFilters), isPartitionPruned = true)
 
       if (partitionPruningFilters.nonEmpty) {
         // Change table stats based on the sizeInBytes of pruned files
