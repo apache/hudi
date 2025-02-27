@@ -18,9 +18,8 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.JsonUtils;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.apache.hudi.common.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
