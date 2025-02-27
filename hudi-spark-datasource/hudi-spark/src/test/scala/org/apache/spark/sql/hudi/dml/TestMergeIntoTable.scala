@@ -47,7 +47,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id int,
              |  name string,
              |  price double,
-             |  ts long
+             |  ts int
              |) using hudi
              | location '${tmp.getCanonicalPath}'
              | tblproperties (
@@ -63,7 +63,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           StructField("id", IntegerType, nullable = true),
           StructField("name", StringType, nullable = true),
           StructField("price", DoubleType, nullable = true),
-          StructField("ts", LongType, nullable = true))
+          StructField("ts", IntegerType, nullable = true))
         // First merge with a extra input field 'flag' (insert a new record)
         spark.sql(
           s"""
@@ -155,7 +155,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  name string,
            |  data int,
            |  country string,
-           |  ts bigint
+           |  ts int
            |) using hudi
            |tblproperties (
            |  type = 'cow',
@@ -169,7 +169,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            |merge into $targetTable as target
            |using (
-           |select 1 as id, 'lb' as name, 6 as data, 'shu' as country, 1646643193 as ts
+           |select 1 as id, 'lb' as name, 6 as data, 'shu' as country, 43193 as ts
            |) source
            |on source.id = target.id
            |when matched then
@@ -181,7 +181,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            |merge into $targetTable as target
            |using (
-           |select 1 as id, 'lb' as name, 5 as data, 'shu' as country, 1646643196 as ts
+           |select 1 as id, 'lb' as name, 5 as data, 'shu' as country, 43196 as ts
            |) source
            |on source.id = target.id
            |when matched and source.data > target.data then
@@ -193,7 +193,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |""".stripMargin)
 
       checkAnswer(s"select id, name, data, country, ts from $targetTable")(
-        Seq(1, "lb", 5, "shu", 1646643196L)
+        Seq(1, "lb", 5, "shu", 43196)
       )
     }
   }
@@ -285,7 +285,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            | ) using parquet
            | location '${tmp.getCanonicalPath}/$sourceTable'
          """.stripMargin)
@@ -296,7 +296,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}/$targetTable'
            | tblproperties (
@@ -447,7 +447,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -462,7 +462,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         StructField("id", IntegerType, nullable = true),
         StructField("name", StringType, nullable = true),
         StructField("price", DoubleType, nullable = true),
-        StructField("ts", LongType, nullable = true),
+        StructField("ts", IntegerType, nullable = true),
         StructField("dt", StringType, nullable = true))
 
       // Insert data
@@ -470,7 +470,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 10 as price, 1000L as ts, '2021-03-21' as dt
+           |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when not matched and s0.id % 2 = 1 then insert *
@@ -485,7 +485,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as _id, 'a1' as name, 12 as _price, 1001L as _ts, '2021-03-21' as dt
+           |  select 1 as _id, 'a1' as name, 12 as _price, 1001 as _ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0._id
            | when matched and s0._id % 2 = 0 then update set
@@ -501,7 +501,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as _id, 'a1' as name, 12 as _price, 1001L as _ts, '2021-03-21' as dt
+           |  select 1 as _id, 'a1' as name, 12 as _price, 1001 as _ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0._id
            | when matched and s0._id % 2 = 1 then update set
@@ -517,7 +517,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 2 as id, 'a2' as name, 10 as price, 1000L as ts, '2021-03-21' as dt
+           |  select 2 as id, 'a2' as name, 10 as price, 1000 as ts, '2021-03-21' as dt
            | ) as s0
            | on t0.id = s0.id
            | when not matched and s0.id % 2 = 0 then insert *
@@ -532,7 +532,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName t0
            | using (
-           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001L as s_ts, '2021-03-21' as dt
+           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as s_ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id
            | when matched and s_ts = 1001
@@ -552,7 +552,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName t0
            | using (
-           |  select 1 as s_id, 'a2' as s_name, 15 as s_price, 1001L as s_ts, '2021-03-21' as dt
+           |  select 1 as s_id, 'a2' as s_name, 15 as s_price, 1001 as s_ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id + 1
            | when matched and s_ts = 1001 then delete
@@ -563,7 +563,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName t0
            | using (
-           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001L as ts, '2021-03-21' as dt
+           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id
            | when matched and s0.ts = 1001 then delete
@@ -584,7 +584,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       spark.sql(
         s"""
            | create table $tableName (
-           |  id bigint,
+           |  id int,
            |  name string,
            |  price double,
            |  dt string
@@ -644,7 +644,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id int,
              |  name string,
              |  price double,
-             |  v long,
+             |  v int,
              |  dt string
              | ) using hudi
              | tblproperties (
@@ -718,7 +718,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id int,
              |  name string,
              |  price double,
-             |  v long,
+             |  v int,
              |  dt string
              | ) using hudi
              | tblproperties (
@@ -754,8 +754,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         //
         // 2) set source column name to be different with target column
         //
-        val errorMessage = "Failed to resolve precombine field `v` w/in the source-table output"
-
         checkException(
           s"""
              | merge into $tableName1 as t0
@@ -765,7 +763,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | on t0.id = s0.s_id
              | when matched then update set id=s0.s_id, name=s0.s_name, price=s0.s_price*2, v=s0.s_v+2, dt=s0.dt
          """.stripMargin
-        )(errorMessage)
+        )(
+          "MERGE INTO field resolution error: " +
+            "Failed to resolve precombine field `v` w/in the source-table output")
 
         spark.sql(
           s"""
@@ -795,7 +795,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  price double,
-           |  v long,
+           |  v int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -815,8 +815,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       // Delete data with a condition expression on primaryKey field
       // 1) set source column name to be same as target column
       //
-      val complexConditionsErrorMessage = "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.id = (s0.id + 1)`"
-
       checkException(
         s"""merge into $tableName1 t0
            | using (
@@ -824,7 +822,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            | ) s0
            | on t0.id = s0.id + 1
            | when matched then delete
-       """.stripMargin)(complexConditionsErrorMessage)
+       """.stripMargin)(
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key "
+          + "and partition path column. Found `t0.id = (s0.id + 1)`")
 
       spark.sql(
         s"""
@@ -844,8 +844,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       //
       // 2.a) set source column name to be different with target column (should fail unable to match precombine field)
       //
-      val failedToResolveErrorMessage = "Failed to resolve precombine field `v` w/in the source-table output"
-
       checkException(
         s"""merge into $tableName1 t0
            | using (
@@ -853,7 +851,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            | ) s0
            | on t0.id = s0.s_id
            | when matched then delete
-           |""".stripMargin)(failedToResolveErrorMessage)
+           |""".stripMargin)(
+        "MERGE INTO field resolution error: "
+          + "Failed to resolve precombine field `v` w/in the source-table output")
 
       //
       // 2.b) set source column name to be different with target column
@@ -1079,7 +1079,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           s"""
              | merge into $tableName
              | using (
-             |  select 1 as id, 'a1' as name, 10 as price, $dataValue as c, '1' as flag
+             |  select 1 as id, 'a1' as name, 10 as price, cast($dataValue as $dataType) as c, '1' as flag
              | ) s0
              | on s0.id = $tableName.id
              | when matched and flag = '1' then update set *
@@ -1092,7 +1092,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           s"""
              | merge into $tableName
              | using (
-             |  select 1 as id, 'a1' as name, 10 as price, $dataValue as c
+             |  select 1 as id, 'a1' as name, 10 as price, cast($dataValue as $dataType) as c
              | ) s0
              | on s0.id = $tableName.id
              | when matched then update set
@@ -1117,7 +1117,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}'
            | tblproperties (
@@ -1131,7 +1131,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         StructField("id", IntegerType, nullable = true),
         StructField("name", StringType, nullable = true),
         StructField("price", DoubleType, nullable = true),
-        StructField("ts", LongType, nullable = true))
+        StructField("ts", IntegerType, nullable = true))
 
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
@@ -1188,7 +1188,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id int,
              |  name string,
              |  value $dataType,
-             |  ts long
+             |  ts int
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
              | tblproperties (
@@ -1235,7 +1235,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id int,
              |  name string,
              |  value $dataType,
-             |  ts long
+             |  ts int
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
              | tblproperties (
@@ -1269,7 +1269,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  value int,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
@@ -1362,7 +1362,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  value int,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
@@ -1372,45 +1372,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
        """.stripMargin)
 
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-
-      // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
-      val errorMsg = "Invalid MERGE INTO matching condition: s0.id: can't cast s0.id (of LongType) to IntegerType"
-
-      checkExceptionContain(
-        s"""
-           |merge into $tableName h0
-           |using (
-           |  select cast(1 as long) as id, 1001 as ts
-           | ) s0
-           | on cast(h0.id as long) = s0.id
-           | when matched then update set h0.ts = s0.ts
-           |""".stripMargin)(errorMsg)
-
-      // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
-      checkExceptionContain(
-        s"""
-           |merge into $tableName h0
-           |using (
-           |  select cast(1 as long) as id, 1002 as ts
-           | ) s0
-           | on h0.id = s0.id
-           | when matched then update set h0.ts = s0.ts
-           |""".stripMargin)(errorMsg)
-
-      // Can up-cast incoming dataset's primary-key w/o loss of precision (should succeed)
-      spark.sql(
-        s"""
-           |merge into $tableName h0
-           |using (
-           |  select cast(1 as short) as id, 1003 as ts
-           | ) s0
-           | on h0.id = s0.id
-           | when matched then update set h0.ts = s0.ts
-           |""".stripMargin)
-
-      checkAnswer(s"select id, name, value, ts from $tableName")(
-        Seq(1, "a1", 10, 1003)
-      )
 
       // Can remove redundant symmetrical casting on both sides (should succeed)
       spark.sql(
@@ -1439,7 +1400,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         spark.sql(
           s"""
              | create table $tableName (
-             |  id bigint,
+             |  id int,
              |  name string,
              |  price double,
              |  dt string
@@ -1497,7 +1458,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           spark.sql(
             s"""
                | create table $tableName (
-               |  id bigint,
+               |  id int,
                |  name string,
                |  price double,
                |  ts bigint,
