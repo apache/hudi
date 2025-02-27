@@ -130,28 +130,13 @@ public class HFileWriterImpl implements HFileWriter {
     currentDataBlock = new DataBlock(blockSize);
   }
 
+  // NOTE that: reader assumes that every meta info piece
+  // should be a separate meta block.
   private void flushMetaBlocks() throws IOException {
-    MetaBlock currentMetaBlock = new MetaBlock(blockSize);
-    int uncompressedBytes = 0;
     for (Map.Entry<String, byte[]> e : metaInfo.entrySet()) {
+      MetaBlock currentMetaBlock = new MetaBlock(blockSize);
       byte[] key = StringUtils.getUTF8Bytes(e.getKey());
-      if (uncompressedBytes + key.length + e.getValue().length + 9 <= blockSize) {
-        currentMetaBlock.add(key, e.getValue());
-        uncompressedBytes += key.length + e.getValue().length + 9;
-      } else {
-        ByteBuffer blockBuffer = currentMetaBlock.serialize();
-        long blockOffset = currentOffset;
-        currentMetaBlock.setBlockOffset(currentOffset);
-        writeBuffer(blockBuffer);
-        metaIndexBlock.add(
-            currentMetaBlock.getFirstKey(), blockOffset, blockBuffer.limit());
-        currentMetaBlock = new MetaBlock(blockSize);
-        uncompressedBytes = 0;
-      }
-    }
-
-    // Handle last meta block.
-    if (!currentMetaBlock.isEmpty()) {
+      currentMetaBlock.add(key, e.getValue());
       ByteBuffer blockBuffer = currentMetaBlock.serialize();
       long blockOffset = currentOffset;
       currentMetaBlock.setBlockOffset(currentOffset);
@@ -201,6 +186,7 @@ public class HFileWriterImpl implements HFileWriter {
     }
     builder.setComparatorClassName("NA");
     builder.setCompressionCodec(2);
+    // TODO: support compression.
     builder.setEncryptionKey(ByteString.EMPTY);
     HFileProtos.TrailerProto trailerProto = builder.build();
 
