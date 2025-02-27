@@ -392,7 +392,8 @@ object HoodieSparkSqlTestBase {
       .getActiveTimeline.getInstantDetails(cleanInstant).get)
   }
 
-  def validateDeleteLogBlockPrecombineNullOrZero(basePath: String): Unit = {
+  def getMetaClientAndFileSystemView(basePath: String):
+  (HoodieTableMetaClient, SyncableFileSystemView) = {
     val storageConf = HoodieTestUtils.getDefaultStorageConf
     val metaClient: HoodieTableMetaClient =
       HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
@@ -401,12 +402,17 @@ object HoodieSparkSqlTestBase {
     val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
       engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
       HoodieCommonConfig.newBuilder.build,
-      (v1: HoodieTableMetaClient) => {
+      (_: HoodieTableMetaClient) => {
         HoodieTableMetadata.create(
           engineContext, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
       }
     )
     val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
+    (metaClient, fsView)
+  }
+
+  def validateDeleteLogBlockPrecombineNullOrZero(basePath: String): Unit = {
+    val (metaClient, fsView) = getMetaClientAndFileSystemView(basePath)
     val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("").findFirst()
     assertTrue(fileSlice.isPresent)
     val logFilePathList: java.util.List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)

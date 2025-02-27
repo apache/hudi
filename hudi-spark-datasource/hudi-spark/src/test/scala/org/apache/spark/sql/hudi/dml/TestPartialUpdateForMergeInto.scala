@@ -35,6 +35,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata
 
 import org.apache.avro.Schema
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getMetaClientAndFileSystemView
 import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
@@ -528,20 +529,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
                        expectedNumLogFile: Int,
                        changedFields: Seq[Seq[String]],
                        isPartial: Boolean): Unit = {
-    val storageConf = HoodieTestUtils.getDefaultStorageConf
-    val metaClient: HoodieTableMetaClient =
-      HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
-    val metadataConfig = HoodieMetadataConfig.newBuilder.build
-    val engineContext = new HoodieLocalEngineContext(storageConf)
-    val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
-      engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
-      HoodieCommonConfig.newBuilder.build,
-      (v1: HoodieTableMetaClient) => {
-        HoodieTableMetadata.create(
-          engineContext, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
-      }
-    )
-    val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
+    val (metaClient, fsView) = getMetaClientAndFileSystemView(basePath)
     val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("")
       .filter((fileSlice: FileSlice) => {
         HoodieTestUtils.getLogFileListFromFileSlice(fileSlice).size() == expectedNumLogFile
