@@ -815,7 +815,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       // Delete data with a condition expression on primaryKey field
       // 1) set source column name to be same as target column
       //
-      checkExceptionContain(
+      checkException(
         s"""merge into $tableName1 t0
            | using (
            |  select 1 as id, 'a1' as name, 15 as price, 1001 as v, '2021-03-21' as dt
@@ -823,8 +823,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            | on t0.id = s0.id + 1
            | when matched then delete
        """.stripMargin)(
-        "MERGE INTO field resolution error: "
-          + "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key "
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key "
           + "and partition path column. Found `t0.id = (s0.id + 1)`")
 
       spark.sql(
