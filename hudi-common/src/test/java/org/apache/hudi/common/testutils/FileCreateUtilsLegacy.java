@@ -68,7 +68,9 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 public class FileCreateUtilsLegacy extends FileCreateUtilsBase {
 
   public static StoragePath getTimelinePath(StoragePath basePath) throws IOException {
-    return new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    return new StoragePath(
+        new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME),
+        HoodieTableMetaClient.TIMELINEFOLDER_NAME);
   }
 
   private static StoragePath getMetaPath(String basePath) {

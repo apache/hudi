@@ -297,6 +297,48 @@ class TestStreamingSource extends StreamTest {
     })
   }
 
+  test("Test checkpoint translation") {
+    withTempDir { inputDir =>
+      val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream_ckpt"
+      val metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(COPY_ON_WRITE)
+        .setTableName(getTableName(tablePath))
+        .setRecordKeyFields("id")
+        .setPreCombineField("ts")
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+
+      addData(tablePath, Seq(("1", "a1", "10", "000")))
+      addData(tablePath, Seq(("2", "a1", "11", "001")))
+      addData(tablePath, Seq(("3", "a1", "12", "002")))
+
+      val instants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants.getInstants
+      assertEquals(3, instants.size())
+
+      // If the request time is used, i.e., V1, then the second record is included in the output.
+      // Otherwise, only third record in the output.
+      val startTimestamp = instants.get(1).requestedTime
+      for (streamingReadTableVersion <- List(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.EIGHT.versionCode())) {
+        val df = spark.readStream
+          .format("org.apache.hudi")
+          .option(START_OFFSET.key, startTimestamp)
+          .option(WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode().toString)
+          .option(STREAMING_READ_TABLE_VERSION.key, streamingReadTableVersion.toString)
+          .load(tablePath)
+          .select("id", "name", "price", "ts")
+        val expectedRows = if (streamingReadTableVersion == HoodieTableVersion.EIGHT.versionCode()) {
+          Seq(Row("2", "a1", "11", "001"), Row("3", "a1", "12", "002"))
+        } else {
+          Seq(Row("3", "a1", "12", "002"))
+        }
+        testStream(df)(
+          AssertOnQuery { q => q.processAllAvailable(); true },
+          // Start after the first commit
+          CheckAnswerRows(expectedRows, lastOnly = true, isSorted = false)
+        )
+      }
+    }
+  }
+
   private def addData(inputPath: String,
                       rows: Seq[(String, String, String, String)],
                       enableInlineCompaction: Boolean = false,

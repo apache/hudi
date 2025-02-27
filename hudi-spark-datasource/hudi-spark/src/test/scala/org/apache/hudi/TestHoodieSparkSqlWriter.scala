@@ -657,7 +657,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val snapshotDF1 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(10, snapshotDF1.count())
 
-    //assertEquals(df1.except(dropMetaFields(snapshotDF1)).count(), 0)
+    assertEquals(df1.except(dropMetaFields(snapshotDF1)).count(), 0)
 
     // Generate 2d batch (consisting of updates so that log files are created for MOR table)
     val updatesSeq = convertRowListToSeq(DataSourceTestUtils.generateUpdates(records, 5))
@@ -829,7 +829,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     assertEquals(10, snapshotDF1.count())
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf1 = dropMetaFields(snapshotDF1)
-    //assert(df1.except(trimmedDf1).count() == 0)
+    assert(df1.except(trimmedDf1).count() == 0)
     // issue updates so that log files are created for MOR table
     val updatesSeq = convertRowListToSeq(DataSourceTestUtils.generateUpdates(records, 5))
     val updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)

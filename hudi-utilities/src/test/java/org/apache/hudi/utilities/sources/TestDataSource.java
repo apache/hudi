@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.testutils.sources.AbstractBaseTestSource;
@@ -70,6 +69,6 @@ public class TestDataSource extends AbstractBaseTestSource {
     List<GenericRecord> records =
         fetchNextBatch(props, (int) sourceLimit, instantTime, DEFAULT_PARTITION_NUM).collect(Collectors.toList());
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
-    return new InputBatch<>(Option.of(avroRDD), new StreamerCheckpointV1(instantTime));
+    return new InputBatch<>(Option.of(avroRDD), instantTime);
   }
 }

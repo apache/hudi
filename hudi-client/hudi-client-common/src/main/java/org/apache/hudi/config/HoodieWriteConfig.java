@@ -143,7 +143,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> WRITE_TABLE_VERSION = ConfigProperty
       .key("hoodie.write.table.version")
-      .defaultValue(HoodieTableVersion.SIX.versionCode())
+      .defaultValue(HoodieTableVersion.current().versionCode())
       .withValidValues(
           String.valueOf(HoodieTableVersion.SIX.versionCode()),
           String.valueOf(HoodieTableVersion.current().versionCode())

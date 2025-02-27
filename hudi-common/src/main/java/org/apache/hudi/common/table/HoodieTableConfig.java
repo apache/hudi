@@ -576,7 +576,7 @@ public class HoodieTableConfig extends HoodieConfig {
       hoodieConfig.setDefaultValue(TIMELINE_PATH);
       if (!hoodieConfig.contains(TIMELINE_LAYOUT_VERSION)) {
         // Use latest Version as default unless forced by client
-        hoodieConfig.setValue(TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.LAYOUT_VERSION_1.toString());
+        hoodieConfig.setValue(TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.CURR_VERSION.toString());
       }
       if (hoodieConfig.contains(BOOTSTRAP_BASE_PATH)) {
         if (tableVersion.greaterThan(HoodieTableVersion.SEVEN)) {
@@ -632,8 +632,7 @@ public class HoodieTableConfig extends HoodieConfig {
     // validate that the table version is greater than or equal to the config version
     HoodieTableVersion firstVersion = HoodieTableVersion.fromReleaseVersion(configProperty.getSinceVersion().get());
     boolean valid = tableVersion.greaterThan(firstVersion) || tableVersion.equals(firstVersion);
-    valid = valid || (tableVersion.lesserThan(HoodieTableVersion.EIGHT) && (configProperty.key().equals(KEY_GENERATOR_CLASS_NAME.key())
-        || configProperty.key().equals(KEY_GENERATOR_TYPE.key())));
+    valid = valid || configProperty.key().equals(KEY_GENERATOR_CLASS_NAME.key()) || configProperty.key().equals(KEY_GENERATOR_TYPE.key());
     if (!valid) {
       LOG.warn("Table version {} is lower than or equal to config's first version {}. Config {} will be ignored.",
           tableVersion, firstVersion, configProperty.key());

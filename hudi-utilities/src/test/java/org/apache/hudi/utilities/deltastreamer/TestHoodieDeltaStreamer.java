@@ -174,6 +174,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -439,8 +441,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         metaClient, metaClient.getActiveTimeline().lastInstant().get());
     assertFalse(metadata.isEmpty());
     Map<String, String> extraMetadata = metadata.get().getExtraMetadata();
-    //assertTrue(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V2));
-    //assertFalse(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V1));
+    assertTrue(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V2));
+    assertFalse(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V1));
   }
 
   @Test
@@ -756,7 +758,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
     // validate table version matches
     HoodieTableMetaClient hudiTblMetaClient = HoodieTableMetaClient.builder().setBasePath(cfg.targetBasePath).setConf(context.getStorageConf()).build();
-    //assertEquals(HoodieTableVersion.valueOf(writeTableVersion), hudiTblMetaClient.getTableConfig().getTableVersion());
+    assertEquals(HoodieTableVersion.valueOf(writeTableVersion), hudiTblMetaClient.getTableConfig().getTableVersion());
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
@@ -898,7 +900,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     HoodieInstant commitInstant = timeline.lastInstant().get();
-    String commitFileName = tableBasePath + "/.hoodie/" + INSTANT_FILE_NAME_GENERATOR.getFileName(commitInstant);
+    String commitFileName = tableBasePath + "/.hoodie/timeline/" + INSTANT_FILE_NAME_GENERATOR.getFileName(commitInstant);
     fs.delete(new Path(commitFileName), false);
 
     // sync again
@@ -1741,7 +1743,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCountWithExactValue(1000, downstreamTableBasePath, sqlContext);
-    TestHelpers.assertCommitMetadata(lastInstantForUpstreamTable.requestedTime(), downstreamTableBasePath, 1);
+    TestHelpers.assertCommitMetadata(lastInstantForUpstreamTable.getCompletionTime(), downstreamTableBasePath, 1);
 
     // No new data => no commits for upstream table
     cfg.sourceLimit = 0;
@@ -1759,7 +1761,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCount(1000, downstreamTableBasePath, sqlContext);
     assertDistanceCountWithExactValue(1000, downstreamTableBasePath, sqlContext);
-    TestHelpers.assertCommitMetadata(lastInstantForUpstreamTable.requestedTime(), downstreamTableBasePath, 1);
+    TestHelpers.assertCommitMetadata(lastInstantForUpstreamTable.getCompletionTime(), downstreamTableBasePath, 1);
 
     // upsert() #1 on upstream hudi table
     cfg.sourceLimit = 2000;
@@ -1783,7 +1785,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertDistanceCount(2000, downstreamTableBasePath, sqlContext);
     assertDistanceCountWithExactValue(2000, downstreamTableBasePath, sqlContext);
     HoodieInstant finalInstant =
-        TestHelpers.assertCommitMetadata(lastInstantForUpstreamTable.requestedTime(), downstreamTableBasePath, 2);
+        TestHelpers.assertCommitMetadata(lastInstantForUpstreamTable.getCompletionTime(), downstreamTableBasePath, 2);
     counts = countsPerCommit(downstreamTableBasePath, sqlContext);
     assertEquals(2000, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
@@ -1872,7 +1874,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
 
     assertTrue(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
-    //    assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGE_MODE.key()));
+    assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGE_MODE.key()));
     assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()));
 
     //now create one more deltaStreamer instance and update payload class
@@ -2466,7 +2468,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.sync();
 
     if (testInitFailure) {
-      FileStatus[] fileStatuses = fs.listStatus(new Path(tableBasePath + "/.hoodie/"));
+      FileStatus[] fileStatuses = fs.listStatus(new Path(tableBasePath + "/.hoodie/timeline/"));
       Arrays.stream(fileStatuses).filter(entry -> entry.getPath().getName().contains("commit") || entry.getPath().getName().contains("inflight")).forEach(entry -> {
         try {
           fs.delete(entry.getPath());
@@ -2900,7 +2902,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
-  @Disabled
   @Test
   public void testFetchingCheckpointFromPreviousCommits() throws IOException {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(basePath + "/testFetchPreviousCheckpoint", WriteOperationType.BULK_INSERT);

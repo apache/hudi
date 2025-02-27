@@ -98,6 +98,18 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   @ParameterizedTest
   @CsvSource(Array(
+    // Inferred as COMMIT_TIME_ORDERING
+    "AVRO, AVRO, avro, false,,,EIGHT", "AVRO, SPARK, parquet, false,,,EIGHT",
+    "SPARK, AVRO, parquet, false,,,EIGHT", "SPARK, SPARK, parquet, false,,,EIGHT",
+    // EVENT_TIME_ORDERING without precombine field
+    "AVRO, AVRO, avro, false,,EVENT_TIME_ORDERING,EIGHT", "AVRO, SPARK, parquet, false,,EVENT_TIME_ORDERING,EIGHT",
+    "SPARK, AVRO, parquet, false,,EVENT_TIME_ORDERING,EIGHT", "SPARK, SPARK, parquet, false,,EVENT_TIME_ORDERING,EIGHT",
+    // EVENT_TIME_ORDERING with empty precombine field
+    "AVRO, AVRO, avro, true,,EVENT_TIME_ORDERING,EIGHT", "AVRO, SPARK, parquet, true,,EVENT_TIME_ORDERING,EIGHT",
+    "SPARK, AVRO, parquet, true,,EVENT_TIME_ORDERING,EIGHT", "SPARK, SPARK, parquet, true,,EVENT_TIME_ORDERING,EIGHT",
+    // Inferred as EVENT_TIME_ORDERING
+    "AVRO, AVRO, avro, true, timestamp,,EIGHT", "AVRO, SPARK, parquet, true, timestamp,,EIGHT",
+    "SPARK, AVRO, parquet, true, timestamp,,EIGHT", "SPARK, SPARK, parquet, true, timestamp,,EIGHT",
     // test table version 6
     "AVRO, AVRO, avro, true,timestamp,EVENT_TIME_ORDERING,SIX",
     "AVRO, AVRO, avro, true,timestamp,COMMIT_TIME_ORDERING,SIX"))
@@ -568,12 +580,12 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // Upsert 50 update records
     // Snopshot view should read 100 records
     val records2 = dataGen.generateUniqueUpdates("002", 50)
-    val commit2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val inputDF2 = toDataset(spark, records2)
     inputDF2.write.format("org.apache.hudi")
       .options(opts)
       .mode(SaveMode.Append)
       .save(basePath)
+    val commit2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -581,7 +593,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commit2CompletionTime)
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .load(basePath)
     val hudiIncDF1Skipmerge = spark.read.format("org.apache.hudi")
       .options(readOpts)
@@ -598,7 +610,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // filter first commit and only read log records
     assertEquals(50,  hudiSnapshotDF2.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history")
       .filter(col("_hoodie_commit_time") > commit1Time).count())
-    assertEquals(50,  hudiIncDF1.select("_hoodie_commit_time", "_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history")
+    assertEquals(50,  hudiIncDF1.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history")
       .filter(col("_hoodie_commit_time") > commit1Time).count())
     assertEquals(50,  hudiIncDF2
       .select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history").count())
@@ -811,8 +823,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .count()
     assertEquals(countIn20160315, count2)
 
-    val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
-
     // Second write with Append mode
     val records2 = dataGen.generateInsertsContainsAllPartitions("000", N + 1)
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala.toSeq, 2))
@@ -824,7 +834,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
-
+    val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     // Incremental query without "*" in path
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
@@ -1288,14 +1298,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(pathForROQuery)
-    assertEquals(readOptimizedQueryRes.where("partition_path = '2022-01-01'").count, 50)
-    assertEquals(readOptimizedQueryRes.where("partition_path = '2022-01-02'").count, 60)
+    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
+    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commit2Time)
+      .option(DataSourceReadOptions.START_COMMIT.key, commit3CompletionTime)
       .option(DataSourceReadOptions.END_COMMIT.key, commit3CompletionTime)
       .load(basePath)
     assertEquals(0, incrementalQueryRes.where("partition = '2022-01-01'").count)
@@ -1496,6 +1506,24 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     } else {
       basePath
     }
+  }
+
+  @Test
+  def testMergerStrategySet(): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts()
+    val input = recordsToStrings(dataGen.generateInserts("000", 1)).asScala
+    val inputDf= spark.read.json(spark.sparkContext.parallelize(input.toSeq, 1))
+    val mergerStrategyName = "example_merger_strategy"
+    inputDf.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), mergerStrategyName)
+      .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = createMetaClient(spark, basePath)
+    assertEquals(metaClient.getTableConfig.getRecordMergeStrategyId, mergerStrategyName)
   }
 
   /**

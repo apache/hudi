@@ -1386,7 +1386,7 @@ public class HoodieTableMetaClient implements Serializable {
       tableConfig.setValue(HoodieTableConfig.TYPE, tableType.name());
 
       if (null == tableVersion) {
-        tableVersion = HoodieTableVersion.SIX;
+        tableVersion = HoodieTableVersion.current();
       }
 
       tableConfig.setTableVersion(tableVersion);
