@@ -173,10 +173,10 @@ public class TimelineMetadataUtils {
     return fileReader.next();
   }
 
-  public static <T extends SpecificRecordBase> T deserializeAvroMetadata(Option<InputStream> inputStream, Class<T> clazz)
+  public static <T extends SpecificRecordBase> T deserializeAvroMetadata(InputStream inputStream, Class<T> clazz)
       throws IOException {
     DatumReader<T> reader = new SpecificDatumReader<>(clazz);
-    try (DataFileStream<T> fileReader = new DataFileStream<>(inputStream.get(), reader)) {
+    try (DataFileStream<T> fileReader = new DataFileStream<>(inputStream, reader)) {
       ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
       return fileReader.next();
     }

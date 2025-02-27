@@ -45,9 +45,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     // And available public methods does not allow to specify exact instant to get schema from, only latest after some filtering
     // which may lead to false positives in test scenarios.
     val lastInstant = metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant().get()
-    val commitMetadata = metaClient.getCommitMetadataSerDe.deserialize(
-      lastInstant, metaClient.getActiveTimeline.getInstantContentStream(lastInstant),
-      () => metaClient.getActiveTimeline.isEmpty(lastInstant), classOf[HoodieCommitMetadata])
+    val commitMetadata = metaClient.getActiveTimeline.loadInstantContent(lastInstant,  classOf[HoodieCommitMetadata])
     val schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)
     val schema = new Schema.Parser().parse(schemaStr)
     val fields = schema.getFields.asScala.map(_.name())
@@ -503,9 +501,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         // check schema
         val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
         val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.lastInstant()
-        val commitMetadata = metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(lastInstant.get(),
-          metaClient.getActiveTimeline.getInstantContentStream(lastInstant.get()),
-          () => metaClient.getActiveTimeline.isEmpty(lastInstant.get()), classOf[HoodieCommitMetadata])
+        val commitMetadata =
+          metaClient.getActiveTimeline.loadInstantContent(lastInstant.get(), classOf[HoodieCommitMetadata])
         val schemaStr = commitMetadata.getExtraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY)
         Assertions.assertFalse(StringUtils.isNullOrEmpty(schemaStr))
 

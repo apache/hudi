@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV2MigrationHandler;
@@ -43,6 +42,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 /**
  * Helper class to generate compaction plan from FileGroup/FileSlice abstraction.
@@ -186,17 +187,23 @@ public class CompactionUtils {
   /**
    * Util method to fetch both compaction and log compaction plan from requestedInstant.
    */
-  private static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, HoodieInstant requestedInstant) {
-    return getCompactionPlan(metaClient, metaClient.getActiveTimeline().getInstantContentStream(requestedInstant));
+  public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, HoodieInstant requestedInstant) {
+    CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
+    try {
+      HoodieCompactionPlan compactionPlan = metaClient.getActiveTimeline().deserializeCompactionPlan(requestedInstant);
+      return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
+    } catch (IOException e) {
+      throw new HoodieException(e);
+    }
   }
 
   /**
    * Util method to fetch both compaction and log compaction plan from requestedInstant.
    */
-  public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, Option<InputStream> planContent) {
+  public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, InputStream planContent) {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
     try {
-      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(planContent);
+      HoodieCompactionPlan compactionPlan = deserializeAvroMetadata(planContent, HoodieCompactionPlan.class);
       return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
     } catch (IOException e) {
       throw new HoodieException(e);

@@ -123,15 +123,9 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
     val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     if (hoodieInstant.isDefined) {
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
-        Option(layout.getCommitMetadataSerDe.deserialize(
-          hoodieInstant.get,
-          timeline.getInstantContentStream(hoodieInstant.get),
-          () => timeline.isEmpty(hoodieInstant.get),
-          classOf[HoodieReplaceCommitMetadata]))
+        Option(timeline.loadInstantContent(hoodieInstant.get, classOf[HoodieReplaceCommitMetadata]))
       } else {
-        Option(layout.getCommitMetadataSerDe.deserialize(hoodieInstant.get, timeline.getInstantContentStream(hoodieInstant.get),
-          () => timeline.isEmpty(hoodieInstant.get),
-          classOf[HoodieCommitMetadata]))
+        Option(timeline.loadInstantContent(hoodieInstant.get, classOf[HoodieCommitMetadata]))
       }
     } else {
       Option.empty

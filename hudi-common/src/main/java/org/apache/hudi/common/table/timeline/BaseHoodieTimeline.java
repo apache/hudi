@@ -554,7 +554,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   }
 
   @Override
-  public Option<InputStream> getInstantContentStream(HoodieInstant instant) {
+  public InputStream getInstantContentStream(HoodieInstant instant) {
     return getInstantReader().getContentStream(instant);
   }
 
@@ -663,7 +663,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
     }
 
     @Override
-    public Option<InputStream> getContentStream(HoodieInstant instant) {
+    public InputStream getContentStream(HoodieInstant instant) {
       if (timeline1.getInstantsAsStream().anyMatch(i -> i.equals(instant))) {
         return timeline1.getInstantContentStream(instant);
       } else {

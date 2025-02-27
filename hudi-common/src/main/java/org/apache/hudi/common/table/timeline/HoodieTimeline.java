@@ -195,8 +195,9 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    */
   HoodieTimeline getWriteTimeline();
 
-  default <T> T loadInstantContent(HoodieTableMetaClient metaClient, HoodieInstant instant, Class<T> clazz) throws IOException {
-    return metaClient.getCommitMetadataSerDe().deserialize(instant, getInstantContentStream(instant), () -> isEmpty(instant), clazz);
+  default <T> T loadInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException {
+    TimelineLayout layout = TimelineLayout.fromVersion(getTimelineLayoutVersion());
+    return layout.getCommitMetadataSerDe().deserialize(instant, getInstantContentStream(instant), () -> isEmpty(instant), clazz);
   }
 
   default HoodieCleanerPlan deserializeCleanerPlan(HoodieInstant instant) throws IOException {
@@ -512,7 +513,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @param instant the instant to fetch
    * @return stream option with content for instant. If the instant file is empty, return empty option.
    */
-  Option<InputStream> getInstantContentStream(HoodieInstant instant);
+  InputStream getInstantContentStream(HoodieInstant instant);
 
   boolean isEmpty(HoodieInstant instant);
 

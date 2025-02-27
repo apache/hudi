@@ -33,7 +33,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -292,9 +291,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieInstant indexingInstant = metaClient.getActiveTimeline()
         .filter(i -> HoodieTimeline.INDEXING_ACTION.equals(i.getAction()))
         .getInstants().get(0);
-    HoodieIndexPlan indexPlan = TimelineMetadataUtils.deserializeIndexPlan(
-        metaClient.getActiveTimeline().getContentStream(indexingInstant));
-    String indexUptoInstantTime = indexPlan.getIndexPartitionInfos().get(0).getIndexUptoInstant();
+    HoodieIndexPlan indexPlan = metaClient.getActiveTimeline().deserializeIndexPlan(indexingInstant);
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
         context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
@@ -335,8 +332,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertEquals(1, metadataMetaClient.getActiveTimeline().getRollbackTimeline().countInstants());
     HoodieInstant rollbackInstant = metadataMetaClient.getActiveTimeline()
         .getRollbackTimeline().firstInstant().get();
-    HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-        metadataMetaClient.getActiveTimeline().getInstantContentStream(rollbackInstant));
+    HoodieRollbackMetadata rollbackMetadata =
+        metadataMetaClient.getActiveTimeline().deserializeHoodieRollbackMetadata(rollbackInstant);
     assertEquals(mdtCommitTime, rollbackMetadata.getInstantsRollback()
         .stream().findFirst().get().getCommitTime());
   }

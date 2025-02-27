@@ -45,7 +45,6 @@ import org.apache.avro.specific.SpecificRecordBase;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 /**
@@ -63,11 +62,9 @@ public class MetadataConversionUtils {
       switch (hoodieInstant.getAction()) {
         case HoodieTimeline.CLEAN_ACTION: {
           if (hoodieInstant.isCompleted()) {
-            archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(
-                metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant)));
+            archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(metaClient, hoodieInstant));
           } else {
-            archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlan(
-                metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant)));
+            archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlan(metaClient, hoodieInstant));
           }
           archivedMetaWrapper.setActionType(ActionType.clean.name());
           break;
@@ -100,8 +97,8 @@ public class MetadataConversionUtils {
           } else {
             // we may have cases with empty HoodieRequestedReplaceMetadata e.g. insert_overwrite_table or insert_overwrite
             // without clustering. However, we should revisit the requested commit file standardization
-            Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = getRequestedReplaceMetadata(
-                metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
+            Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = Option.of(metaClient.getActiveTimeline()
+                .deserializeRequestedReplaceMetadata(hoodieInstant));
             if (requestedReplaceMetadata.isPresent()) {
               archivedMetaWrapper.setHoodieRequestedReplaceMetadata(requestedReplaceMetadata.get());
             }
@@ -112,21 +109,19 @@ public class MetadataConversionUtils {
         }
         case HoodieTimeline.ROLLBACK_ACTION: {
           if (hoodieInstant.isCompleted()) {
-            archivedMetaWrapper.setHoodieRollbackMetadata(
-                TimelineMetadataUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant), HoodieRollbackMetadata.class));
+            archivedMetaWrapper.setHoodieRollbackMetadata(metaClient.getActiveTimeline().loadInstantContent(hoodieInstant, HoodieRollbackMetadata.class));
           }
           archivedMetaWrapper.setActionType(ActionType.rollback.name());
           break;
         }
         case HoodieTimeline.SAVEPOINT_ACTION: {
-          archivedMetaWrapper.setHoodieSavePointMetadata(
-              TimelineMetadataUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant), HoodieSavepointMetadata.class));
+          archivedMetaWrapper.setHoodieSavePointMetadata(metaClient.getActiveTimeline().loadInstantContent(hoodieInstant, HoodieSavepointMetadata.class));
           archivedMetaWrapper.setActionType(ActionType.savepoint.name());
           break;
         }
         case HoodieTimeline.COMPACTION_ACTION: {
           if (hoodieInstant.isRequested()) {
-            HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
+            HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, hoodieInstant);
             archivedMetaWrapper.setHoodieCompactionPlan(plan);
           }
           archivedMetaWrapper.setActionType(ActionType.compaction.name());
@@ -134,7 +129,7 @@ public class MetadataConversionUtils {
         }
         case HoodieTimeline.LOG_COMPACTION_ACTION: {
           if (hoodieInstant.isRequested()) {
-            HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
+            HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, hoodieInstant);
             archivedMetaWrapper.setHoodieCompactionPlan(plan);
           }
           archivedMetaWrapper.setActionType(ActionType.logcompaction.name());
@@ -183,8 +178,8 @@ public class MetadataConversionUtils {
     HoodieInstant hoodieInstant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, actionType, instantTime, completionTime);
     switch (actionType) {
       case HoodieTimeline.CLEAN_ACTION: {
-        archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(metaClient, Option.of(new ByteArrayInputStream(instantDetails.get()))));
-        archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlan(metaClient, Option.of(new ByteArrayInputStream(planBytes.get()))));
+        archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(metaClient, new ByteArrayInputStream(instantDetails.get())));
+        archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlan(metaClient, new ByteArrayInputStream(planBytes.get())));
         archivedMetaWrapper.setActionType(ActionType.clean.name());
         break;
       }
@@ -195,7 +190,7 @@ public class MetadataConversionUtils {
 
         if (planBytes.isPresent()) {
           // this should be a compaction
-          HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, Option.of(new ByteArrayInputStream(planBytes.get())));
+          HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, new ByteArrayInputStream(planBytes.get()));
           archivedMetaWrapper.setHoodieCompactionPlan(plan);
         }
         break;
@@ -207,7 +202,7 @@ public class MetadataConversionUtils {
 
         if (planBytes.isPresent()) {
           // this should be a log compaction
-          HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, Option.of(new ByteArrayInputStream(planBytes.get())));
+          HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, new ByteArrayInputStream(planBytes.get()));
           archivedMetaWrapper.setHoodieCompactionPlan(plan);
         }
         break;
@@ -229,26 +224,24 @@ public class MetadataConversionUtils {
         break;
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
-        archivedMetaWrapper.setHoodieRollbackMetadata(
-            TimelineMetadataUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant), HoodieRollbackMetadata.class));
+        archivedMetaWrapper.setHoodieRollbackMetadata(metaClient.getActiveTimeline().loadInstantContent(hoodieInstant, HoodieRollbackMetadata.class));
         archivedMetaWrapper.setActionType(ActionType.rollback.name());
         break;
       }
       case HoodieTimeline.SAVEPOINT_ACTION: {
-        archivedMetaWrapper.setHoodieSavePointMetadata(
-            TimelineMetadataUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant), HoodieSavepointMetadata.class));
+        archivedMetaWrapper.setHoodieSavePointMetadata(metaClient.getActiveTimeline().loadInstantContent(hoodieInstant, HoodieSavepointMetadata.class));
         archivedMetaWrapper.setActionType(ActionType.savepoint.name());
         break;
       }
       case HoodieTimeline.COMPACTION_ACTION: {
         // should be handled by commit_action branch though, this logic is redundant.
-        HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
+        HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, hoodieInstant);
         archivedMetaWrapper.setHoodieCompactionPlan(plan);
         archivedMetaWrapper.setActionType(ActionType.compaction.name());
         break;
       }
       case HoodieTimeline.LOG_COMPACTION_ACTION: {
-        HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant));
+        HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, hoodieInstant);
         archivedMetaWrapper.setHoodieCompactionPlan(plan);
         archivedMetaWrapper.setActionType(ActionType.logcompaction.name());
         break;
@@ -343,18 +336,12 @@ public class MetadataConversionUtils {
   }
 
   private static <T extends HoodieCommitMetadata> Option<T> getCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant, Class<T> clazz) throws IOException {
-    T commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
-        instant, metaClient.getActiveTimeline().getInstantContentStream(instant), () -> metaClient.getActiveTimeline().isEmpty(instant), clazz);
+    T commitMetadata = metaClient.getActiveTimeline().loadInstantContent(instant, clazz);
     // an empty file will return the default instance with an UNKNOWN operation type and in that case we return an empty option
     if (commitMetadata.getOperationType() == WriteOperationType.UNKNOWN) {
       return Option.empty();
     }
     return Option.of(commitMetadata);
-  }
-
-  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(Option<InputStream> inputStream) throws IOException {
-    // TODO revisit requested commit file standardization https://issues.apache.org/jira/browse/HUDI-1739
-    return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(inputStream));
   }
 
   public static Option<HoodieCommitMetadata> getHoodieCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant hoodieInstant) throws IOException {

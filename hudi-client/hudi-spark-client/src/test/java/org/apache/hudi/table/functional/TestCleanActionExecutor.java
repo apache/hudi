@@ -138,7 +138,7 @@ public class TestCleanActionExecutor {
     HoodieActiveTimeline cleanTimeline = mock(HoodieActiveTimeline.class);
     when(activeTimeline.getCleanerTimeline()).thenReturn(cleanTimeline);
     when(cleanTimeline.getInstants()).thenReturn(Collections.singletonList(cleanInstant));
-    when(activeTimeline.getInstantContentStream(cleanInstant)).thenReturn(Option.of(new ByteArrayInputStream(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan).get())));
+    when(activeTimeline.getInstantContentStream(cleanInstant)).thenReturn(new ByteArrayInputStream(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan).get()));
     when(activeTimeline.readCleanerInfoAsBytes(cleanInstant)).thenReturn(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
 
     when(mockHoodieTable.getCleanTimeline()).thenReturn(cleanTimeline);

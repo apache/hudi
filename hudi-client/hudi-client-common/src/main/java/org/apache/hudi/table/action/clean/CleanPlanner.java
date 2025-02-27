@@ -243,15 +243,10 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     try {
       if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
         TimelineLayout layout = TimelineLayout.fromVersion(hoodieTable.getMetaClient().getTimelineLayoutVersion());
-        HoodieReplaceCommitMetadata replaceCommitMetadata = layout.getCommitMetadataSerDe().deserialize(
-            instant, hoodieTable.getActiveTimeline().getInstantContentStream(instant),
-            () -> hoodieTable.getActiveTimeline().isEmpty(instant),
-            HoodieReplaceCommitMetadata.class);
+        HoodieReplaceCommitMetadata replaceCommitMetadata = hoodieTable.getActiveTimeline().loadInstantContent(instant, HoodieReplaceCommitMetadata.class);
         return Stream.concat(replaceCommitMetadata.getPartitionToReplaceFileIds().keySet().stream(), replaceCommitMetadata.getPartitionToWriteStats().keySet().stream());
       } else {
-        HoodieCommitMetadata commitMetadata = hoodieTable.getMetaClient()
-            .getCommitMetadataSerDe().deserialize(instant, hoodieTable.getActiveTimeline().getInstantContentStream(instant),
-                () -> hoodieTable.getActiveTimeline().isEmpty(instant), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = hoodieTable.getActiveTimeline().loadInstantContent(instant, HoodieCommitMetadata.class);
         return commitMetadata.getPartitionToWriteStats().keySet().stream();
       }
     } catch (IOException e) {

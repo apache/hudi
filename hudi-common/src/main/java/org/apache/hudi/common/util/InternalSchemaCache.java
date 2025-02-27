@@ -124,9 +124,7 @@ public class InternalSchemaCache {
       if (instants.isEmpty()) {
         return Option.empty();
       }
-      HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(
-          instants.get(0), timeline.getInstantContentStream(instants.get(0)),
-          () -> timeline.isEmpty(instants.get(0)), HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = timeline.loadInstantContent(instants.get(0), HoodieCommitMetadata.class);
       String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
       return SerDeHelper.fromJson(latestInternalSchemaStr);
     } catch (Exception e) {
@@ -149,11 +147,7 @@ public class InternalSchemaCache {
       // try to find internalSchema
       HoodieCommitMetadata metadata;
       try {
-        metadata = metaClient.getCommitMetadataSerDe().deserialize(
-            lastInstantBeforeCurrentCompaction.get(),
-            timelineBeforeCurrentCompaction.getInstantContentStream(lastInstantBeforeCurrentCompaction.get()),
-            () -> timelineBeforeCurrentCompaction.isEmpty(lastInstantBeforeCurrentCompaction.get()),
-            HoodieCommitMetadata.class);
+        metadata = timelineBeforeCurrentCompaction.loadInstantContent(lastInstantBeforeCurrentCompaction.get(), HoodieCommitMetadata.class);
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot read metadata from commit: %s", lastInstantBeforeCurrentCompaction.get()), e);
       }
@@ -206,7 +200,7 @@ public class InternalSchemaCache {
         try (InputStream is = storage.open(candidateCommitFile)) {
           metadata = commitMetadataSerDe.deserialize(instantGenerator.createNewInstant(
                   new StoragePathInfo(candidateCommitFile, -1, false, (short) 0, 0L, 0L)),
-              Option.of(is), () -> true, HoodieCommitMetadata.class);
+              is, () -> true, HoodieCommitMetadata.class);
         } catch (IOException e) {
           throw e;
         }

@@ -39,13 +39,12 @@ import java.util.function.BooleanSupplier;
 
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToPojo;
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertReplaceCommitMetadataToPojo;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeReplaceCommitMetadata;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
 
   @Override
-  public <T> T deserialize(HoodieInstant instant, Option<InputStream> inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {
+  public <T> T deserialize(HoodieInstant instant, InputStream inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {
     try {
       if (instant.isLegacy()) {
         // For legacy instant, delegate to legacy SerDe.
@@ -55,11 +54,20 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
           throw new IOException("unable to read legacy commit metadata for instant " + instant, e);
         }
       }
-      // For any new commit metadata class being added, we need the corresponding logic added here
       if (org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class.isAssignableFrom(clazz)) {
-        return (T) convertReplaceCommitMetadataToPojo(deserializeReplaceCommitMetadata(inputStream));
+        return (T) convertReplaceCommitMetadataToPojo(deserializeAvroMetadata(inputStream, HoodieReplaceCommitMetadata.class));
       }
-      return (T) convertCommitMetadataToPojo(deserializeCommitMetadata(inputStream));
+      // For any new commit metadata class being added, we need the corresponding logic added here
+      if (org.apache.hudi.common.model.HoodieCommitMetadata.class.isAssignableFrom(clazz)) {
+        return (T) convertCommitMetadataToPojo(deserializeAvroMetadata(inputStream, HoodieCommitMetadata.class));
+      }
+      // For all the other cases they must be SpecificRecordBase
+      if (!SpecificRecordBase.class.isAssignableFrom(clazz)) {
+        throw new IllegalArgumentException("Class must extend SpecificRecordBase: " + clazz.getName());
+      }
+      @SuppressWarnings("unchecked")
+      Class<? extends SpecificRecordBase> avroClass = (Class<? extends SpecificRecordBase>) clazz;
+      return (T) deserializeAvroMetadata(inputStream, avroClass);
     } catch (Exception e) {
       // Empty file does not conform to avro format, in that case we return newInstance.
       if (isEmptyInstant.getAsBoolean()) {

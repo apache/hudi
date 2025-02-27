@@ -67,7 +67,7 @@ class TestCleanPlanActionExecutor {
 
     HoodieCleanerPlan cleanerPlan;
     if (isEmptyPlan) {
-      when(activeTimeline.getContentStream(lastInflightInstant)).thenReturn(Option.of(new ByteArrayInputStream(new byte[0])));
+      when(activeTimeline.getContentStream(lastInflightInstant)).thenReturn(new ByteArrayInputStream(new byte[0]));
       when(activeTimeline.isEmpty(lastInflightInstant)).thenReturn(true);
       cleanerPlan = new HoodieCleanerPlan();
     } else {
@@ -77,7 +77,7 @@ class TestCleanPlanActionExecutor {
           .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
           .setVersion(TimelineLayoutVersion.CURR_VERSION)
           .build();
-      when(activeTimeline.getContentStream(lastInflightInstant)).thenReturn(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan).map(ByteArrayInputStream::new));
+      when(activeTimeline.getContentStream(lastInflightInstant)).thenReturn(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan).map(ByteArrayInputStream::new).get());
     }
 
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
@@ -101,7 +101,7 @@ class TestCleanPlanActionExecutor {
     HoodieInstant lastInflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, "clean", "001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
     mockEmptyLastCompletedClean(table, lastCompletedInstant, activeTimeline);
 
-    when(activeTimeline.getContentStream(lastInflightInstant)).thenReturn(Option.of(new ByteArrayInputStream(new byte[]{0x20})));
+    when(activeTimeline.getContentStream(lastInflightInstant)).thenReturn(new ByteArrayInputStream(new byte[]{0x20}));
 
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
     CleanPlanActionExecutor<?, ?, ?, ?> executor = new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, "002", Option.empty());

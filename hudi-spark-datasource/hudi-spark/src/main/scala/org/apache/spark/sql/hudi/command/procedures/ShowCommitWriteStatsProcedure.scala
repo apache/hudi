@@ -63,7 +63,7 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
     val activeTimeline = metaClient.getActiveTimeline
     val timeline = activeTimeline.getCommitsTimeline.filterCompletedInstants
     val hoodieInstantOption = getCommitForInstant(metaClient, timeline, instantTime)
-    val commitMetadataOptional = getHoodieCommitMetadata(metaClient.getCommitMetadataSerDe, timeline, hoodieInstantOption)
+    val commitMetadataOptional = getHoodieCommitMetadata(timeline, hoodieInstantOption)
 
     if (commitMetadataOptional.isEmpty) {
       throw new HoodieException(s"Commit $instantTime not found in Commits $timeline.")
@@ -95,18 +95,12 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
     hoodieInstant
   }
 
-  private def getHoodieCommitMetadata(serDe: CommitMetadataSerDe, timeline: HoodieTimeline, hoodieInstant: Option[HoodieInstant]): Option[HoodieCommitMetadata] = {
+  private def getHoodieCommitMetadata(timeline: HoodieTimeline, hoodieInstant: Option[HoodieInstant]): Option[HoodieCommitMetadata] = {
     if (hoodieInstant.isDefined) {
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
-        Option(serDe.deserialize(hoodieInstant.get,
-          timeline.getInstantContentStream(hoodieInstant.get),
-          () => timeline.isEmpty(hoodieInstant.get),
-          classOf[HoodieReplaceCommitMetadata]))
+        Option(timeline.loadInstantContent(hoodieInstant.get, classOf[HoodieReplaceCommitMetadata]))
       } else {
-        val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
-        Option(layout.getCommitMetadataSerDe.deserialize(hoodieInstant.get, timeline.getInstantContentStream(hoodieInstant.get),
-          () => timeline.isEmpty(hoodieInstant.get),
-          classOf[HoodieCommitMetadata]))
+        Option(timeline.loadInstantContent(hoodieInstant.get, classOf[HoodieCommitMetadata]))
       }
     } else {
       Option.empty

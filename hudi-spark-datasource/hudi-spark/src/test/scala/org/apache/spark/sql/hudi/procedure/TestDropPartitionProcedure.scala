@@ -61,9 +61,7 @@ class TestDropPartitionProcedure extends HoodieSparkProcedureTestBase {
         .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
         .get()
 
-      val partitions = metaClient.getCommitMetadataSerDe.deserialize(replaceCommitInstant,
-          metaClient.getActiveTimeline.getInstantContentStream(replaceCommitInstant),
-          () => metaClient.getActiveTimeline.isEmpty(replaceCommitInstant),
+      val partitions = metaClient.getActiveTimeline.loadInstantContent(replaceCommitInstant,
           classOf[HoodieReplaceCommitMetadata])
         .getPartitionToReplaceFileIds
         .keySet()
@@ -112,10 +110,8 @@ class TestDropPartitionProcedure extends HoodieSparkProcedureTestBase {
         .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
         .get()
 
-      val partitions = metaClient.getCommitMetadataSerDe.deserialize(replaceCommitInstant,
-          metaClient.getActiveTimeline.getInstantContentStream(replaceCommitInstant),
-          () => metaClient.getActiveTimeline.isEmpty(replaceCommitInstant),
-          classOf[HoodieReplaceCommitMetadata])
+      val partitions = metaClient.getActiveTimeline.loadInstantContent(
+          replaceCommitInstant, classOf[HoodieReplaceCommitMetadata])
         .getPartitionToReplaceFileIds
         .keySet()
 
@@ -162,9 +158,7 @@ class TestDropPartitionProcedure extends HoodieSparkProcedureTestBase {
         .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
         .get()
 
-      val partitions = metaClient.getCommitMetadataSerDe.deserialize(replaceCommitInstant,
-          metaClient.getActiveTimeline.getInstantContentStream(replaceCommitInstant),
-          () => metaClient.getActiveTimeline.isEmpty(replaceCommitInstant),
+      val partitions = metaClient.getActiveTimeline.loadInstantContent(replaceCommitInstant,
           classOf[HoodieReplaceCommitMetadata])
         .getPartitionToReplaceFileIds
         .keySet()
@@ -213,9 +207,7 @@ class TestDropPartitionProcedure extends HoodieSparkProcedureTestBase {
         .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
         .get()
 
-      val partitions = metaClient.getCommitMetadataSerDe
-        .deserialize(replaceCommitInstant, metaClient.getActiveTimeline.getInstantContentStream(replaceCommitInstant),
-          () => metaClient.getActiveTimeline.isEmpty(replaceCommitInstant),
+      val partitions = metaClient.getActiveTimeline.loadInstantContent(replaceCommitInstant,
           classOf[HoodieReplaceCommitMetadata])
         .getPartitionToReplaceFileIds
         .keySet()

@@ -37,8 +37,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineDiffHelper;
 import org.apache.hudi.common.table.timeline.TimelineDiffHelper.TimelineDiffResult;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -260,8 +258,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void addCommitInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing committed instant (" + instant + ")");
-    HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
-        instant, timeline.getInstantContentStream(instant), () -> timeline.isEmpty(instant), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(instant, HoodieCommitMetadata.class);
     updatePartitionWriteFileGroups(commitMetadata.getPartitionToWriteStats(), timeline, instant);
     LOG.info("Done Syncing committed instant (" + instant + ")");
   }
@@ -296,8 +293,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void addRestoreInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing restore instant (" + instant + ")");
-    HoodieRestoreMetadata metadata =
-        TimelineMetadataUtils.deserializeAvroMetadata(timeline.getInstantContentStream(instant), HoodieRestoreMetadata.class);
+    HoodieRestoreMetadata metadata = timeline.loadInstantContent(instant, HoodieRestoreMetadata.class);
 
     Map<String, List<Pair<String, String>>> partitionFiles =
         metadata.getHoodieRestoreMetadata().entrySet().stream().flatMap(entry -> {
@@ -327,8 +323,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void addRollbackInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing rollback instant (" + instant + ")");
-    HoodieRollbackMetadata metadata =
-        TimelineMetadataUtils.deserializeAvroMetadata(timeline.getInstantContentStream(instant), HoodieRollbackMetadata.class);
+    HoodieRollbackMetadata metadata = timeline.loadInstantContent(instant, HoodieRollbackMetadata.class);
 
     metadata.getPartitionMetadata().entrySet().stream().forEach(e -> {
       removeFileSlicesForPartition(timeline, instant, e.getKey(), e.getValue().getSuccessDeleteFiles());
@@ -344,9 +339,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void addReplaceInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing replace instant (" + instant + ")");
-    TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
-    HoodieReplaceCommitMetadata replaceMetadata = layout.getCommitMetadataSerDe().deserialize(
-        instant, timeline.getInstantContentStream(instant), () -> timeline.isEmpty(instant), HoodieReplaceCommitMetadata.class);
+    HoodieReplaceCommitMetadata replaceMetadata = timeline.loadInstantContent(instant, HoodieReplaceCommitMetadata.class);
     updatePartitionWriteFileGroups(replaceMetadata.getPartitionToWriteStats(), timeline, instant);
     replaceMetadata.getPartitionToReplaceFileIds().entrySet().stream().forEach(entry -> {
       String partition = entry.getKey();

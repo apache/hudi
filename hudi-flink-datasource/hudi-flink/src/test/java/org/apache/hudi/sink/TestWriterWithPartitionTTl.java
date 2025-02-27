@@ -23,7 +23,6 @@ package org.apache.hudi.sink;
 import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.config.HoodieTTLConfig;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.table.HoodieTable;
@@ -84,7 +83,7 @@ public class TestWriterWithPartitionTTl extends TestWriteBase {
     HoodieActiveTimeline timeline = StreamerUtil.createMetaClient(conf).getActiveTimeline();
     assertTrue(timeline.getCompletedReplaceTimeline().getInstants().size() > 0);
     HoodieInstant replaceCommit = timeline.getCompletedReplaceTimeline().getInstants().get(0);
-    HoodieReplaceCommitMetadata commitMetadata = TimelineMetadataUtils.deserializeReplaceCommitMetadata(timeline.getInstantContentStream(replaceCommit));
+    HoodieReplaceCommitMetadata commitMetadata = timeline.deserializeReplaceCommitMetadata(replaceCommit);
     assertTrue(commitMetadata.getPartitionToReplaceFileIds().containsKey("par1"));
   }
 }

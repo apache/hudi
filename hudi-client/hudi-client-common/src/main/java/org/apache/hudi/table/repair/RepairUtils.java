@@ -27,7 +27,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
@@ -91,23 +90,13 @@ public final class RepairUtils {
     switch (instant.getAction()) {
       case COMMIT_ACTION:
       case DELTA_COMMIT_ACTION: {
-        TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
-        final HoodieCommitMetadata commitMetadata =
-            layout.getCommitMetadataSerDe().deserialize(instant,
-                timeline.getInstantContentStream(instant),
-                () -> timeline.isEmpty(instant),
-                HoodieCommitMetadata.class);
+        final HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(instant, HoodieCommitMetadata.class);
         return Option.of(commitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
       }
       case REPLACE_COMMIT_ACTION:
       case CLUSTERING_ACTION: {
-        TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
-        final HoodieReplaceCommitMetadata replaceCommitMetadata =
-            layout.getCommitMetadataSerDe().deserialize(instant,
-                timeline.getInstantContentStream(instant),
-                () -> timeline.isEmpty(instant),
-                HoodieReplaceCommitMetadata.class);
+        final HoodieReplaceCommitMetadata replaceCommitMetadata = timeline.loadInstantContent(instant, HoodieReplaceCommitMetadata.class);
         return Option.of(replaceCommitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
       }

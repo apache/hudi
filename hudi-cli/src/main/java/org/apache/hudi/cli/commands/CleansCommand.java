@@ -28,11 +28,9 @@ import org.apache.hudi.cli.utils.CLIUtils;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.utilities.UtilHelpers;
 
 import org.apache.spark.launcher.SparkLauncher;
@@ -77,8 +75,7 @@ public class CleansCommand {
     List<HoodieInstant> cleans = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
     for (HoodieInstant clean : cleans) {
-      HoodieCleanMetadata cleanMetadata =
-          TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantContentStream(clean));
+      HoodieCleanMetadata cleanMetadata = timeline.deserializeHoodieCleanMetadata(clean);
       rows.add(new Comparable[] {clean.requestedTime(), cleanMetadata.getEarliestCommitToRetain(),
           cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
     }
@@ -109,8 +106,7 @@ public class CleansCommand {
       return "Clean " + instantTime + " not found in metadata " + timeline;
     }
 
-    HoodieCleanMetadata cleanMetadata =
-        TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantContentStream(cleanInstant));
+    HoodieCleanMetadata cleanMetadata = timeline.deserializeHoodieCleanMetadata(cleanInstant);
     List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, HoodieCleanPartitionMetadata> entry : cleanMetadata.getPartitionMetadata().entrySet()) {
       String path = entry.getKey();

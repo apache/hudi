@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -106,16 +105,12 @@ public class TestSavepoint extends HoodieClientTestBase {
       assertEquals(1, savepointTimeline.countInstants());
 
       Map<String, HoodieSavepointPartitionMetadata> savepointPartitionMetadataMap =
-          TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
-                  savepointTimeline.getInstantContentStream(savepointTimeline.firstInstant().get()))
+                  savepointTimeline.deserializeHoodieSavepointMetadata(savepointTimeline.firstInstant().get())
               .getPartitionMetadata();
 
       HoodieTimeline commitsTimeline = table.getActiveTimeline().getCommitsTimeline();
-      Map<String, List<HoodieWriteStat>> partitionToWriteStats = metaClient.getCommitMetadataSerDe().deserialize(
-              commitsTimeline.lastInstant().get(),
-              commitsTimeline.getInstantContentStream(commitsTimeline.lastInstant().get()),
-              () -> true,
-              HoodieCommitMetadata.class)
+      Map<String, List<HoodieWriteStat>> partitionToWriteStats =
+          commitsTimeline.loadInstantContent(commitsTimeline.lastInstant().get(), HoodieCommitMetadata.class)
           .getPartitionToWriteStats();
 
       assertEquals(partitionToWriteStats.size(), savepointPartitionMetadataMap.size());

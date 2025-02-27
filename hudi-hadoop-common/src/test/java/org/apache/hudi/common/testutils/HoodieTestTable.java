@@ -1271,16 +1271,12 @@ public class HoodieTestTable implements AutoCloseable {
     switch (hoodieInstant.getAction()) {
       case REPLACE_COMMIT_ACTION:
       case CLUSTERING_ACTION:
-        HoodieReplaceCommitMetadata replaceCommitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
-            hoodieInstant, metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant), () -> metaClient.getActiveTimeline().isEmpty(hoodieInstant), HoodieReplaceCommitMetadata.class);
+        HoodieReplaceCommitMetadata replaceCommitMetadata = metaClient.getActiveTimeline().loadInstantContent(hoodieInstant, HoodieReplaceCommitMetadata.class);
         return Option.of(replaceCommitMetadata);
       case HoodieTimeline.DELTA_COMMIT_ACTION:
       case HoodieTimeline.COMMIT_ACTION:
-        HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
-            hoodieInstant,
-            metaClient.getActiveTimeline().getInstantContentStream(hoodieInstant),
-            () -> metaClient.getActiveTimeline().isEmpty(hoodieInstant),
-            HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().loadInstantContent(
+            hoodieInstant, HoodieCommitMetadata.class);
         return Option.of(commitMetadata);
       default:
         throw new IllegalArgumentException("Unknown instant action" + hoodieInstant.getAction());

@@ -86,7 +86,7 @@ class TestHoodieSparkSqlWriterPartitionTTL extends HoodieSparkWriterTestBase {
     val timeline = HoodieTestUtils.createMetaClient(tempBasePath).getActiveTimeline
     assert(timeline.getCompletedReplaceTimeline.getInstants.size() > 0)
     val replaceInstant = timeline.getCompletedReplaceTimeline.getInstants.get(0)
-    val replaceMetadata = TimelineMetadataUtils.deserializeReplaceCommitMetadata(timeline.getInstantContentStream(replaceInstant))
+    val replaceMetadata = timeline.deserializeReplaceCommitMetadata(replaceInstant)
     assert(replaceMetadata.getPartitionToReplaceFileIds.containsKey("part1"))
   }
 

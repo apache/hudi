@@ -31,11 +31,11 @@ import java.util.function.BooleanSupplier;
 public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
 
   @Override
-  public <T> T deserialize(HoodieInstant instant, Option<InputStream> inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {
+  public <T> T deserialize(HoodieInstant instant, InputStream inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {
     try {
       // Use ObjectMapper to directly read from InputStream
       // This avoids loading entire content into memory at once
-      return JsonUtils.getObjectMapper().readValue(inputStream.get(), clazz);
+      return JsonUtils.getObjectMapper().readValue(inputStream, clazz);
     } catch (Exception e) {
       // Empty file does not conform to avro format, in that case we return newInstance.
       if (isEmptyInstant.getAsBoolean()) {

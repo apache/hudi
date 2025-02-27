@@ -716,8 +716,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
       HoodieInstant lastInstant = timeline.lastInstant().get();
-      HoodieCommitMetadata commitMetadata =
-          meta.getCommitMetadataSerDe().deserialize(lastInstant, timeline.getInstantContentStream(lastInstant), () -> true, HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(lastInstant, HoodieCommitMetadata.class);
       assertEquals(totalCommits, timeline.countInstants());
       if (meta.getTableConfig().getTableVersion() == HoodieTableVersion.EIGHT) {
         assertEquals(expected, commitMetadata.getMetadata(StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2));

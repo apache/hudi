@@ -137,7 +137,7 @@ public class TestHoodieCommitMetadata {
         commitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class).get();
 
     Option<Pair<String, List<String>>> result = HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-        Option.of(new ByteArrayInputStream(serializedCommitMetadata)), new HoodieFileGroupId("partition1", "111"));
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"));
 
     assertTrue(result.isPresent());
     assertEquals("111base", result.get().getKey());
@@ -146,7 +146,7 @@ public class TestHoodieCommitMetadata {
     assertEquals("4.log", result.get().getValue().get(1));
 
     result = HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-        Option.of(new ByteArrayInputStream(serializedCommitMetadata)), new HoodieFileGroupId("partition1", "222"));
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "222"));
     assertTrue(result.isPresent());
     assertTrue(result.get().getKey().isEmpty());
     assertEquals(1, result.get().getValue().size());
@@ -169,7 +169,7 @@ public class TestHoodieCommitMetadata {
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "1");
     org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata1 =
         COMMIT_METADATA_SER_DE.deserialize(instant,
-            Option.of(new ByteArrayInputStream(serializedCommitMetadata)), () -> true, org.apache.hudi.common.model.HoodieCommitMetadata.class);
+            new ByteArrayInputStream(serializedCommitMetadata), () -> true, org.apache.hudi.common.model.HoodieCommitMetadata.class);
     assertEquals(2, commitMetadata1.partitionToWriteStats.size());
     assertEquals(2, commitMetadata1.partitionToWriteStats.get("partition1").size());
     assertEquals(2, commitMetadata1.partitionToWriteStats.get("partition1").size());
@@ -183,7 +183,7 @@ public class TestHoodieCommitMetadata {
     byte[] v1Bytes = v1SerDe.serialize(commitMetadata1).get();
     System.out.println(new String(v1Bytes));
     org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata2 =
-        COMMIT_METADATA_SER_DE.deserialize(legacyInstant, Option.of(new ByteArrayInputStream(v1Bytes)), () -> true, org.apache.hudi.common.model.HoodieCommitMetadata.class);
+        COMMIT_METADATA_SER_DE.deserialize(legacyInstant, new ByteArrayInputStream(v1Bytes), () -> true, org.apache.hudi.common.model.HoodieCommitMetadata.class);
     assertEquals(2, commitMetadata2.partitionToWriteStats.size());
     assertEquals(2, commitMetadata2.partitionToWriteStats.get("partition1").size());
     assertEquals(2, commitMetadata2.partitionToWriteStats.get("partition1").size());

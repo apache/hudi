@@ -135,7 +135,7 @@ public class TestCleanPlanner {
       when(mockHoodieTable.getActiveTimeline()).thenReturn(activeTimeline);
       for (Pair<String, Option<byte[]>> savepoint : savepoints) {
         HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint.getLeft());
-        when(activeTimeline.getInstantContentStream(instant)).thenReturn(savepoint.getRight().map(ByteArrayInputStream::new));
+        when(activeTimeline.getInstantContentStream(instant)).thenReturn(savepoint.getRight().map(ByteArrayInputStream::new).get());
         when(mockMetaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint.getLeft())).thenReturn(instant);
       }
     }
@@ -182,7 +182,7 @@ public class TestCleanPlanner {
       for (Map.Entry<String, List<String>> entry : savepoints.entrySet()) {
         Pair<HoodieSavepointMetadata, Option<byte[]>> savepointMetadataOptionPair = getSavepointMetadata(entry.getValue());
         HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, entry.getKey());
-        when(activeTimeline.getContentStream(instant)).thenReturn(savepointMetadataOptionPair.getRight().map(ByteArrayInputStream::new));
+        when(activeTimeline.getContentStream(instant)).thenReturn(savepointMetadataOptionPair.getRight().map(ByteArrayInputStream::new).get());
       }
     }
 
@@ -638,7 +638,7 @@ public class TestCleanPlanner {
     HoodieInstant latestCleanInstant = INSTANT_GENERATOR.createNewInstant(COMPLETED, HoodieTimeline.CLEAN_ACTION, timestamp);
     when(completedCleanTimeline.lastInstant()).thenReturn(Option.of(latestCleanInstant));
     when(activeTimeline.isEmpty(latestCleanInstant)).thenReturn(false);
-    when(activeTimeline.getInstantContentStream(latestCleanInstant)).thenReturn(cleanMetadata.getRight().map(ByteArrayInputStream::new));
+    when(activeTimeline.getInstantContentStream(latestCleanInstant)).thenReturn(cleanMetadata.getRight().map(ByteArrayInputStream::new).get());
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(earliestCommitToRetain, HoodieTimeline.COMMIT_ACTION, COMPLETED.name()),
         cleanMetadata.getLeft().getLastCompletedCommitTimestamp(),
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(), Collections.emptyMap(),
@@ -674,7 +674,7 @@ public class TestCleanPlanner {
       });
       try {
         when(hoodieTable.getActiveTimeline().getInstantContentStream(hoodieInstant)).thenReturn(
-            TimelineMetadataUtils.serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).map(ByteArrayInputStream::new));
+            TimelineMetadataUtils.serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).map(ByteArrayInputStream::new).get());
       } catch (IOException e) {
         throw new RuntimeException("Should not have failed", e);
       }

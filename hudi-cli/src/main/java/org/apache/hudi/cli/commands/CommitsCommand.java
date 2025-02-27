@@ -71,10 +71,7 @@ public class CommitsCommand {
         .getInstantsAsStream().sorted(instantComparator.requestedTimeOrderedComparator().reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe().deserialize(
-          commit, timeline.getInstantContentStream(commit),
-          () -> timeline.isEmpty(commit),
-          HoodieCommitMetadata.class);
+      final HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(commit, HoodieCommitMetadata.class);
       rows.add(new Comparable[] {commit.requestedTime(),
           commitMetadata.fetchTotalBytesWritten(),
           commitMetadata.fetchTotalFilesInsert(),
@@ -109,11 +106,7 @@ public class CommitsCommand {
         .getInstantsAsStream().sorted(instantComparator.requestedTimeOrderedComparator().reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe().deserialize(
-          commit,
-          timeline.getInstantContentStream(commit),
-          () -> timeline.isEmpty(commit),
-          HoodieCommitMetadata.class);
+      final HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(commit, HoodieCommitMetadata.class);
 
       for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
           commitMetadata.getPartitionToWriteStats().entrySet()) {

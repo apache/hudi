@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -278,9 +277,7 @@ public class MarkerUtils {
     currentInstants.removeAll(completedCommitInstants);
     Set<String> missingFileIDs = currentInstants.stream().flatMap(instant -> {
       try {
-        TimelineLayout layout = TimelineLayout.fromVersion(activeTimeline.getTimelineLayoutVersion());
-        return layout.getCommitMetadataSerDe().deserialize(instant, activeTimeline.getInstantContentStream(instant), () -> activeTimeline.isEmpty(instant), HoodieCommitMetadata.class)
-            .getFileIdAndRelativePaths().keySet().stream();
+        return activeTimeline.loadInstantContent(instant, HoodieCommitMetadata.class).getFileIdAndRelativePaths().keySet().stream();
       } catch (Exception e) {
         return Stream.empty();
       }

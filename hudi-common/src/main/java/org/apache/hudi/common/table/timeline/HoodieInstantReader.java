@@ -35,7 +35,7 @@ public interface HoodieInstantReader {
    * @param instant the instant to read
    * @return an InputStream with the content
    */
-  default Option<InputStream> getContentStream(HoodieInstant instant) {
+  default InputStream getContentStream(HoodieInstant instant) {
     throw new RuntimeException("Not implemented");
   }
 
@@ -46,7 +46,7 @@ public interface HoodieInstantReader {
    */
   @Deprecated
   default Option<byte[]> getInstantDetails(HoodieInstant instant) {
-    try (InputStream inputStream = getContentStream(instant).get()) {
+    try (InputStream inputStream = getContentStream(instant)) {
       return Option.of(FileIOUtils.readAsByteArray(inputStream));
     } catch (IOException ex) {
       throw new HoodieIOException("Could not read commit details from stream", ex);

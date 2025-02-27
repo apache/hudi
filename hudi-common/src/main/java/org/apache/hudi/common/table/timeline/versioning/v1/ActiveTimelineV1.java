@@ -249,9 +249,9 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   @Override
-  public Option<InputStream> getContentStream(HoodieInstant instant) {
+  public InputStream getContentStream(HoodieInstant instant) {
     StoragePath filePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(instant));
-    return Option.of(readDataStreamFromPath(filePath));
+    return readDataStreamFromPath(filePath);
   }
 
   @Override
@@ -287,9 +287,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
         .sorted(Comparator.comparing(HoodieInstant::requestedTime).reversed())
         .map(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata =
-                metaClient.getCommitMetadataSerDe().deserialize(instant, getInstantContentStream(instant),
-                    () -> isEmpty(instant), HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = loadInstantContent(instant, HoodieCommitMetadata.class);
             return Pair.of(instant, commitMetadata);
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);

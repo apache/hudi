@@ -44,7 +44,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -172,8 +171,7 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
           String action = tableServiceType.equals(TableServiceType.COMPACT) ? HoodieTimeline.COMPACTION_ACTION : HoodieTimeline.LOG_COMPACTION_ACTION;
           HoodieInstant compactionPlanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, action,
               instant.get().requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-          Option<InputStream> instantContentStream = table.getMetaClient().getActiveTimeline().getInstantContentStream(compactionPlanInstant);
-          HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(table.getMetaClient(), instantContentStream);
+          HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(table.getMetaClient(), compactionPlanInstant);
           if (compactionPlan.getMissingSchedulePartitions() != null) {
             missingPartitions = compactionPlan.getMissingSchedulePartitions();
           }

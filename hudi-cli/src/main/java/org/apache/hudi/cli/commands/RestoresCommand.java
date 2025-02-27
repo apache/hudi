@@ -27,7 +27,6 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
@@ -97,8 +96,7 @@ public class RestoresCommand {
   private void addDetailsOfCompletedRestore(HoodieActiveTimeline activeTimeline, List<Comparable[]> rows,
                                             HoodieInstant restoreInstant) throws IOException {
     HoodieRestoreMetadata instantMetadata;
-    instantMetadata = TimelineMetadataUtils
-            .deserializeAvroMetadata(activeTimeline.getInstantContentStream(restoreInstant), HoodieRestoreMetadata.class);
+    instantMetadata = activeTimeline.loadInstantContent(restoreInstant, HoodieRestoreMetadata.class);
 
     for (String rolledbackInstant : instantMetadata.getInstantsToRollback()) {
       Comparable[] row = createDataRow(instantMetadata.getStartRestoreTime(), rolledbackInstant,
@@ -120,9 +118,7 @@ public class RestoresCommand {
   private HoodieRestorePlan getRestorePlan(HoodieActiveTimeline activeTimeline, HoodieInstant restoreInstant) throws IOException {
     HoodieInstant instantKey = HoodieCLI.getTableMetaClient().createNewInstant(HoodieInstant.State.REQUESTED, RESTORE_ACTION,
             restoreInstant.requestedTime());
-    HoodieRestorePlan restorePlan = TimelineMetadataUtils
-            .deserializeAvroMetadata(activeTimeline.getInstantContentStream(instantKey), HoodieRestorePlan.class);
-    return restorePlan;
+    return activeTimeline.loadInstantContent(instantKey, HoodieRestorePlan.class);
   }
 
   private List<HoodieInstant> getRestoreInstants(HoodieActiveTimeline activeTimeline, boolean includeInFlight) {

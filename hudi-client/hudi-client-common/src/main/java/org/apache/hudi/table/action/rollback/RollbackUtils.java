@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -60,8 +59,7 @@ public class RollbackUtils {
       throws IOException {
     // TODO: add upgrade step if required.
     final HoodieInstant requested = metaClient.getInstantGenerator().getRollbackRequestedInstant(rollbackInstant);
-    return TimelineMetadataUtils.deserializeAvroMetadata(
-        metaClient.getActiveTimeline().getInstantContentStream(requested), HoodieRollbackPlan.class);
+    return metaClient.getActiveTimeline().loadInstantContent(requested, HoodieRollbackPlan.class);
   }
 
   static Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String instantToRollback, String rollbackInstantTime) {

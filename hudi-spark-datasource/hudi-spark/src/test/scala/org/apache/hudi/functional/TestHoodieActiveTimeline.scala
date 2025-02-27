@@ -248,7 +248,6 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
       .save(basePath)
     val metaClient: HoodieTableMetaClient = createMetaClient(basePath)
     val activeTimeline = metaClient.getActiveTimeline
-    assertNotNull(activeTimeline.getInstantContentStream(activeTimeline.lastInstant().get()))
     try {
       activeTimeline.getInstantContentStream(HoodieTestUtils.INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT,
         HoodieTimeline.CLUSTERING_ACTION, metaClient.createNewInstantTime()))

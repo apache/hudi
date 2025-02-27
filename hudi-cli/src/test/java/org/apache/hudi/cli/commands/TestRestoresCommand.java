@@ -33,7 +33,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -142,8 +141,7 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     List<Comparable[]> rows = new ArrayList<>();
     restores.sorted().forEach(instant -> {
       try {
-        HoodieRestoreMetadata metadata = TimelineMetadataUtils
-                .deserializeAvroMetadata(activeTimeline.getInstantContentStream(instant), HoodieRestoreMetadata.class);
+        HoodieRestoreMetadata metadata = activeTimeline.loadInstantContent(instant, HoodieRestoreMetadata.class);
         metadata.getInstantsToRollback().forEach(c -> {
           Comparable[] row = new Comparable[4];
           row[0] = metadata.getStartRestoreTime();
@@ -181,8 +179,7 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // get metadata of instant
-    HoodieRestoreMetadata instantMetadata = TimelineMetadataUtils.deserializeAvroMetadata(
-            activeTimeline.getInstantContentStream(instant), HoodieRestoreMetadata.class);
+    HoodieRestoreMetadata instantMetadata = activeTimeline.loadInstantContent(instant, HoodieRestoreMetadata.class);
 
     // generate expected result
     TableHeader header = new TableHeader()

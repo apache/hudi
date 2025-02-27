@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -112,8 +113,12 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   }
 
   @Override
-  public Option<InputStream> getContentStream(HoodieInstant instant) {
-    return getInputStreamOptionLegacy(this, instant);
+  public InputStream getContentStream(HoodieInstant instant) {
+    Option<InputStream> stream = getInputStreamOptionLegacy(this, instant);
+    if (stream.isEmpty()) {
+      return new ByteArrayInputStream(new byte[]{});
+    }
+    return stream.get();
   }
 
   public static StoragePath getArchiveLogPath(StoragePath archiveFolder) {

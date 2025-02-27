@@ -125,9 +125,7 @@ class ShowFileStatusProcedure extends BaseProcedure
 
     restoreInstant.find { instant =>
       val hoodieRestoreMetadata =
-        TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
-          metaClient.getActiveTimeline.getInstantContentStream(instant)
-        )
+          metaClient.getActiveTimeline.deserializeHoodieRestoreMetadata(instant)
       val restoreMetadata = hoodieRestoreMetadata.getHoodieRestoreMetadata.values().asScala
 
       restoreMetadata.exists { metadata =>
@@ -168,8 +166,7 @@ class ShowFileStatusProcedure extends BaseProcedure
     reloadTimelineIfNecessary(timeline)
 
     rollbackInstant.find { instant =>
-      val rollbackMetadata =
-        TimelineMetadataUtils.deserializeHoodieRollbackMetadata(timeline.getInstantContentStream(instant))
+      val rollbackMetadata = timeline.deserializeHoodieRollbackMetadata(instant)
       val partitionRollbackMetadata = rollbackMetadata.getPartitionMetadata
       partition.flatMap(
         p => Option.apply(partitionRollbackMetadata.get(p)).flatMap(
@@ -192,8 +189,7 @@ class ShowFileStatusProcedure extends BaseProcedure
       .asScala
     reloadTimelineIfNecessary(timeline)
     cleanedInstant.find { instant =>
-      val cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
-        timeline.getInstantContentStream(instant))
+      val cleanMetadata = timeline.deserializeHoodieCleanMetadata(instant)
       val partitionCleanMetadata = cleanMetadata.getPartitionMetadata
       partition.flatMap(p => Option.apply(partitionCleanMetadata.get(p)).flatMap(_.getSuccessDeleteFiles.asScala.find(_.contains(fileName)))).isDefined ||
         partitionCleanMetadata.values.iterator.asScala.exists(_.getSuccessDeleteFiles.asScala.exists(_.contains(fileName)))

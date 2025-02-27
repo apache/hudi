@@ -1417,8 +1417,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                   || s.getAction().equals(HoodieActiveTimeline.REPLACE_COMMIT_ACTION))
               .lastInstant();
       if (lastInstant.isPresent()) {
-        HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(lastInstant.get(),
-            activeTimeline.getInstantContentStream(lastInstant.get()), () -> activeTimeline.isEmpty(lastInstant.get()), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = activeTimeline.loadInstantContent(lastInstant.get(), HoodieCommitMetadata.class);
         String extraSchema = commitMetadata.getExtraMetadata().get(SCHEMA_KEY);
         if (!StringUtils.isNullOrEmpty(extraSchema)) {
           config.setSchema(commitMetadata.getExtraMetadata().get(SCHEMA_KEY));

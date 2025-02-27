@@ -31,7 +31,7 @@ import java.util.function.BooleanSupplier;
  */
 public interface CommitMetadataSerDe extends Serializable {
 
-  <T> T deserialize(HoodieInstant instant, Option<InputStream> instantStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException;
+  <T> T deserialize(HoodieInstant instant, InputStream instantStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException;
 
   Option<byte[]> serialize(HoodieCommitMetadata commitMetadata) throws IOException;
 }
