@@ -174,7 +174,11 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     } getOrElse {
       Try(schemaResolver.getTableSchema) match {
         case Success(schema) => schema
-        case Failure(e) => throw e
+        case Failure(_) =>
+          // Schema not found on the dataset, so fetching schema from HMS.
+          logWarning(s"Schema not found on the dataset for $tableName, so fetching schema from HMS.")
+          val catalogTable = sparkSession.sessionState.catalog.externalCatalog.getTable(metaClient.getDbName, metaClient.getTableName)
+          convertToHoodieSchema(catalogTable.schema, tableName)
       }
     }
 
