@@ -419,20 +419,22 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |)
          """.stripMargin)
 
+          val sourceTableSubQuery =
+            s"""
+               |  select
+               |    cast(1 as int) as id,
+               |    cast('updated1' as string) as name,
+               |    cast(1.11 as double) as value_double,
+               |    cast(1001 as long) as ts,
+               |    cast('2024-01-01' as date) as part_col,
+               |    cast('Y' as string) as delete_flag
+               |""".stripMargin
           // Should fail with cast related error due to incompatible partition types
           val e1 = intercept[Exception] {
             spark.sql(
               s"""
                  |merge into $targetTable t
-                 |using (
-                 |  select
-                 |    cast(1 as int) as id,
-                 |    cast('updated1' as string) as name,
-                 |    cast(1.11 as double) as value_double,
-                 |    cast(1001 as long) as ts,
-                 |    cast('2024-01-01' as date) as part_col,
-                 |    cast('Y' as string) as delete_flag
-                 |) s
+                 |using ($sourceTableSubQuery) s
                  |on t.id = s.id and t.part_col = s.part_col
                  |when matched and s.delete_flag = 'Y' then delete
            """.stripMargin)
@@ -448,17 +450,9 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
           spark.sql(
             s"""
                |merge into $targetTable t
-               |using (
-                 |  select
-                 |    cast(1 as int) as id,
-                 |    cast('updated1' as string) as name,
-                 |    cast(1.11 as double) as value_double,
-                 |    cast(1001 as long) as ts,
-                 |    cast('2024-01-01' as date) as part_col,
-                 |    cast('Y' as string) as delete_flag
-                 |) s
-                 |on t.id = s.id
-                 |when matched and s.delete_flag = 'Y' then delete
+               |using (sourceTableSubQuery) s
+               |on t.id = s.id
+               |when matched and s.delete_flag = 'Y' then delete
            """.stripMargin)
 
           checkAnswer(s"select id, name, value_double, ts, part_col from $targetTable order by id")(
@@ -600,28 +594,6 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
            |  primaryKey = '$primaryKey',
            |  preCombineField = '$preCombineField'
            |)
-       """.stripMargin)
-    }
-
-    def insertSampleData(tableName: String, schema: Seq[(String, String)]): Unit = {
-      val sampleData = if (schema.exists(_._2 == "string")) {
-        s"""
-           |select 1 as id, 'John Doe' as name, 19 as price, 1598886000 as ts
-           |union all
-           |select 2, 'Jane Doe', 24, 1598972400
-       """.stripMargin
-      } else {
-        s"""
-           |select 1 as id, 1 as name, 19 as price, 1598886000 as ts
-           |union all
-           |select 2, 2, 24, 1598972400
-       """.stripMargin
-      }
-
-      spark.sql(
-        s"""
-           |insert into $tableName
-           |$sampleData
        """.stripMargin)
     }
 
