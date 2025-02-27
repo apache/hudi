@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -37,13 +38,16 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.ArchivedTimelineV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -228,6 +232,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
     Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
     Set<String> savepointTimestamps = table.getSavepointTimestamps();
+    Option<String> earliestCommitToNotArchiveOpt = getEarliestCommitToNotArchive(table.getActiveTimeline(), table.getMetaClient());
     if (!commitTimeline.empty() && commitTimeline.countInstants() > maxInstantsToKeep) {
       // For Merge-On-Read table, inline or async compaction is enabled
       // We need to make sure that there are enough delta commits in the active timeline
@@ -255,9 +260,16 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
               // skip savepoint commits and proceed further
               return !savepointTimestamps.contains(s.requestedTime());
             } else {
-              // if no savepoint present, then don't filter
-              // stop at first savepoint commit
-              return !(firstSavepoint.isPresent() && compareTimestamps(firstSavepoint.get().requestedTime(), LESSER_THAN_OR_EQUALS, s.requestedTime()));
+              Option<String> firstSavepointOpt = table.getCompletedSavepointTimeline().firstInstant().map(HoodieInstant::requestedTime);
+              Option<String> commitToNotArchiveOpt = earliestCommitToNotArchiveOpt;
+              if (firstSavepointOpt.isPresent() && earliestCommitToNotArchiveOpt.isPresent()
+                  && compareTimestamps(firstSavepointOpt.get(), LESSER_THAN, earliestCommitToNotArchiveOpt.get())) {
+                LOG.error("earliestCommitToNotArchive {} is greater than first savepoint {}, using first savepoint as the commitToNotArchive",
+                    earliestCommitToNotArchiveOpt.get(), firstSavepointOpt.get());
+                commitToNotArchiveOpt = firstSavepointOpt;
+              }
+              // stop at earliest commit to not archive
+              return !(commitToNotArchiveOpt.isPresent() && compareTimestamps(commitToNotArchiveOpt.get(), LESSER_THAN_OR_EQUALS, s.requestedTime()));
             }
           }).filter(s -> {
             // oldestCommitToRetain is the highest completed commit instant that is less than the oldest inflight instant.
@@ -279,6 +291,29 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     } else {
       return Stream.empty();
     }
+  }
+
+  private Option<String> getEarliestCommitToNotArchive(HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient) throws IOException {
+    // if clean policy is based on file versions, earliest commit to not archive may not be set. So, we have to explicitly check the savepoint timeline
+    // and guard against the first one.
+    InstantGenerator factory = metaClient.getInstantGenerator();
+    String earliestInstantToNotArchive = table.getCompletedSavepointTimeline().firstInstant().map(HoodieInstant::requestedTime).orElse(null);
+    if (config.getCleanerPolicy() != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
+      Option<HoodieInstant> cleanInstantOpt =
+          activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
+      if (cleanInstantOpt.isPresent()) {
+        HoodieInstant cleanInstant = cleanInstantOpt.get();
+        Map<String, String> extraMetadata = CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested()
+                ? cleanInstant
+                : factory.getCleanRequestedInstant(cleanInstant.requestedTime()))
+            .getExtraMetadata();
+        if (extraMetadata != null) {
+          String cleanerEarliestInstantToNotArchive = extraMetadata.getOrDefault(CleanerUtils.EARLIEST_COMMIT_TO_NOT_ARCHIVE, null);
+          earliestInstantToNotArchive = InstantComparison.minTimestamp(earliestInstantToNotArchive, cleanerEarliestInstantToNotArchive);
+        }
+      }
+    }
+    return Option.ofNullable(earliestInstantToNotArchive);
   }
 
   private List<HoodieInstant> getInstantsToArchive() throws IOException {

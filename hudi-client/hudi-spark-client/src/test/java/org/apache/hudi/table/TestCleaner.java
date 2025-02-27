@@ -59,9 +59,9 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigra
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CleanerUtils;
@@ -107,6 +107,7 @@ import scala.Tuple3;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NO_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
@@ -383,7 +384,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
             .build())
         .withEmbeddedTimelineServerEnabled(false).build();
     // datagen for non-partitioned table
-    initTestDataGenerator(new String[] {HoodieTestDataGenerator.NO_PARTITION_PATH});
+    initTestDataGenerator(new String[] {NO_PARTITION_PATH});
     // init non-partitioned table
     HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET,
         true, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", true);
@@ -401,17 +402,66 @@ public class TestCleaner extends HoodieCleanerTestBase {
       HoodieTable table = HoodieSparkTable.create(writeConfig, context);
       Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
       assertEquals(cleanPlan.get().getPartitionsToBeDeleted().size(), 0);
-      assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(HoodieTestDataGenerator.NO_PARTITION_PATH).size(), 1);
+      assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(NO_PARTITION_PATH).size(), 1);
       table.getMetaClient().reloadActiveTimeline();
-      String filePathToClean = cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(HoodieTestDataGenerator.NO_PARTITION_PATH).get(0).getFilePath();
+      String filePathToClean = cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(NO_PARTITION_PATH).get(0).getFilePath();
       // clean
       HoodieCleanMetadata cleanMetadata = table.clean(context, instantTime);
       // check the cleaned file
-      assertEquals(cleanMetadata.getPartitionMetadata().get(HoodieTestDataGenerator.NO_PARTITION_PATH).getSuccessDeleteFiles().size(), 1);
-      assertTrue(filePathToClean.contains(cleanMetadata.getPartitionMetadata().get(HoodieTestDataGenerator.NO_PARTITION_PATH).getSuccessDeleteFiles().get(0)));
+      assertEquals(cleanMetadata.getPartitionMetadata().get(NO_PARTITION_PATH).getSuccessDeleteFiles().size(), 1);
+      assertTrue(filePathToClean.contains(cleanMetadata.getPartitionMetadata().get(NO_PARTITION_PATH).getSuccessDeleteFiles().get(0)));
       // ensure table is not fully cleaned and has a file group
       assertTrue(FSUtils.isTableExists(basePath, storage));
-      assertTrue(table.getFileSystemView().getAllFileGroups(HoodieTestDataGenerator.NO_PARTITION_PATH).findAny().isPresent());
+      assertTrue(table.getFileSystemView().getAllFileGroups(NO_PARTITION_PATH).findAny().isPresent());
+    }
+  }
+
+  @Test
+  void testEmptyClean() throws IOException {
+    // validate that an empty cleaner plan does not throw any errors at execution time
+    HoodieWriteConfig writeConfig = getConfigBuilder().withPath(basePath)
+        .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
+            .withEnableBackupForRemoteFileSystemView(false)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAutoClean(false)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS)
+            .retainCommits(1)
+            .build())
+        .withEmbeddedTimelineServerEnabled(false).build();
+    // datagen for non-partitioned table
+    initTestDataGenerator(new String[] {NO_PARTITION_PATH});
+    // init non-partitioned table
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(context.getStorageConf(), basePath, HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET,
+        true, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", true);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
+      String instantTime = client.createNewInstantTime();
+      List<HoodieRecord> records = dataGen.generateInserts(instantTime, 1);
+      client.startCommitWithTime(instantTime);
+      client.insert(jsc.parallelize(records, 1), instantTime).collect();
+
+      instantTime = client.createNewInstantTime();
+      HoodieTable table = HoodieSparkTable.create(writeConfig, context);
+
+      HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+      HoodieInstant hoodieInstant = timeline.firstInstant().get();
+      HoodieCleanerPlan cleanerPlan = HoodieCleanerPlan.newBuilder()
+          .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS.name())
+          .setVersion(CleanPlanner.LATEST_CLEAN_PLAN_VERSION)
+          .setEarliestInstantToRetain(new HoodieActionInstant(hoodieInstant.requestedTime(), hoodieInstant.getAction(), hoodieInstant.getState().name()))
+          .setLastCompletedCommitTimestamp(timeline.lastInstant().get().requestedTime())
+          .setFilePathsToBeDeletedPerPartition(Collections.emptyMap())
+          .build();
+      final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, instantTime,
+          InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+      table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+
+      table.getMetaClient().reloadActiveTimeline();
+      // clean
+      HoodieCleanMetadata cleanMetadata = table.clean(context, instantTime);
+      // check the cleaned files are empty
+      assertTrue(cleanMetadata.getPartitionMetadata().isEmpty());
     }
   }
 

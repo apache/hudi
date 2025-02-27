@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
@@ -92,6 +93,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private final transient HoodieEngineContext context;
   private final List<String> savepointedTimestamps;
   private Option<HoodieInstant> earliestCommitToRetain = Option.empty();
+  private Option<String> earliestCommitToNotArchive = Option.empty();
 
   public CleanPlanner(HoodieEngineContext context, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config) {
     this.context = context;
@@ -566,6 +568,40 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone());
     }
     return earliestCommitToRetain;
+  }
+
+  /**
+   * Returns earliest commit to not archive to assist with guarding archival.
+   * @return
+   */
+  public Option<String> getEarliestCommitToNotArchive() {
+    // compute only if not set
+    if (!earliestCommitToNotArchive.isPresent() && config.getCleanerPolicy() != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) { // earliest commit to retain and earliest commit to not archive
+      // makes sense only when clean policy is num commits based or hours based.
+      Option<HoodieInstant> earliestToRetain = getEarliestCommitToRetain();
+      if (!savepointedTimestamps.isEmpty()) { // if savepoints are found.
+        // find the first savepoint timestamp
+        earliestCommitToNotArchive = Option.fromJavaOptional(savepointedTimestamps.stream().sorted().findFirst());
+
+        // earliest commit to not archive = min (earliest commit to retain, earliest commit to not archive)
+        if (earliestToRetain.isPresent()) {
+          earliestCommitToNotArchive = Option.of(InstantComparison.minTimestamp(earliestToRetain.get().requestedTime(), earliestCommitToNotArchive.get()));
+        }
+        LOG.info(String.format("Setting Earliest Commit to Not Archive to %s, earliestCommitToRetain: %s, total list of savepointed timestamps : %s", earliestCommitToNotArchive.get(),
+            earliestToRetain, Arrays.toString(savepointedTimestamps.toArray())));
+      } else {
+        // no savepoints found.
+        // lets set the value regardless. Would help us differentiate older versions of hudi where this will not be set vs latest version where this will be set to either earliest savepoint
+        // or the earliest commit to retain.
+        if (earliestToRetain.isPresent()) {
+          LOG.info(String.format("Setting Earliest Commit to Not Archive same as Earliest commit to retain to %s", earliestToRetain.get().requestedTime()));
+          earliestCommitToNotArchive = Option.of(earliestToRetain.get().requestedTime());
+        } else {
+          earliestCommitToNotArchive = Option.empty();
+        }
+      }
+    }
+    return earliestCommitToNotArchive;
   }
 
   /**
