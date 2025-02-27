@@ -358,33 +358,9 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
           targetTable
         }
 
-        def createSourceTable(partitionCol: String, partitionType: String): String = {
-          val sourceTable = generateTableName
-          spark.sql(
-            s"""
-               |create table $sourceTable (
-               |  id int,
-               |  name string,
-               |  value_double double,
-               |  ts long,
-               |  $partitionCol $partitionType,
-               |  delete_flag string
-               |) using hudi
-               |partitioned by ($partitionCol)
-               |location '${tmp.getCanonicalPath}/$sourceTable'
-               |tblproperties (
-               |  type = '$tableType',
-               |  primaryKey = 'id',
-               |  preCombineField = 'ts'
-               |)
-         """.stripMargin)
-          sourceTable
-        }
-
         // Scenario 1: Successful merge with partition column (both partition and pk can be cast)
         {
           val targetTable = createTargetTable("part_col", "long")
-          val sourceTable = createSourceTable("part_col", "int")
 
           // Insert initial data into target table
           spark.sql(
@@ -403,20 +379,19 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |)
          """.stripMargin)
 
-          // Insert data into source table
-          spark.sql(
-            s"""
-               |insert into $sourceTable
-               |select * from (
-               |  select 1 as id, 'updated1' as name, 1.11 as value_double, 1001 as ts, 100 as part_col, 'Y' as delete_flag
-               |)
-         """.stripMargin)
-
-          // Should succeed as both partition and pk can be upcast
+          // Merge using inline subquery instead of source table
           spark.sql(
             s"""
                |merge into $targetTable t
-               |using $sourceTable s
+               |using (
+               |  select 
+               |    cast(1 as int) as id,
+               |    cast('updated1' as string) as name,
+               |    cast(1.11 as double) as value_double,
+               |    cast(1001 as long) as ts,
+               |    cast(100 as int) as part_col,
+               |    cast('Y' as string) as delete_flag
+               |) s
                |on t.id = s.id and t.part_col = s.part_col
                |when matched and s.delete_flag = 'Y' then delete
          """.stripMargin)
@@ -425,12 +400,9 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             Seq(2L, "record2", 2.2, 1000L, 200L))
         }
 
-        // Scenario 2: Partition column type not cast-able.
-        // - If ON clause contains partition column - Merge into will fail
-        // - If ON clause does not contain partition column - Merge into will proceed
+        // Scenario 2: Partition column type not cast-able
         {
           val targetTable = createTargetTable("part_col", "boolean")
-          val sourceTable = createSourceTable("part_col", "date")
 
           // Insert initial data into target table with boolean partition
           spark.sql(
@@ -447,27 +419,20 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |)
          """.stripMargin)
 
-          // Insert data into source table with date partition
-          spark.sql(
-            s"""
-               |insert into $sourceTable
-               |select * from (
-               |  select
-               |    1 as id,
-               |    'updated1' as name,
-               |    1.11 as value_double,
-               |    1001 as ts,
-               |    cast('2024-01-01' as date) as part_col,
-               |    'Y' as delete_flag
-               |)
-         """.stripMargin)
-
           // Should fail with cast related error due to incompatible partition types
           val e1 = intercept[Exception] {
             spark.sql(
               s"""
                  |merge into $targetTable t
-                 |using $sourceTable s
+                 |using (
+                 |  select
+                 |    cast(1 as int) as id,
+                 |    cast('updated1' as string) as name,
+                 |    cast(1.11 as double) as value_double,
+                 |    cast(1001 as long) as ts,
+                 |    cast('2024-01-01' as date) as part_col,
+                 |    cast('Y' as string) as delete_flag
+                 |) s
                  |on t.id = s.id and t.part_col = s.part_col
                  |when matched and s.delete_flag = 'Y' then delete
            """.stripMargin)
@@ -483,12 +448,19 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
           spark.sql(
             s"""
                |merge into $targetTable t
-               |using $sourceTable s
-               |on t.id = s.id
-               |when matched and s.delete_flag = 'Y' then delete
-         """.stripMargin)
-          // No changes to table content since records of source and targets are in different partitions
-          // so MIT does not take effect.
+               |using (
+                 |  select
+                 |    cast(1 as int) as id,
+                 |    cast('updated1' as string) as name,
+                 |    cast(1.11 as double) as value_double,
+                 |    cast(1001 as long) as ts,
+                 |    cast('2024-01-01' as date) as part_col,
+                 |    cast('Y' as string) as delete_flag
+                 |) s
+                 |on t.id = s.id
+                 |when matched and s.delete_flag = 'Y' then delete
+           """.stripMargin)
+
           checkAnswer(s"select id, name, value_double, ts, part_col from $targetTable order by id")(
             Seq(1L, "record1", 1.1, 1000L, true))
         }
@@ -496,27 +468,6 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         // Scenario 4: Failed merge due to primary key type mismatch
         {
           val targetTable = createTargetTable("part_col", "long")
-          val sourceTable = generateTableName
-
-          // Create source table with string primary key
-          spark.sql(
-            s"""
-               |create table $sourceTable (
-               |  id double,
-               |  name string,
-               |  value_double double,
-               |  ts long,
-               |  part_col long,
-               |  delete_flag string
-               |) using hudi
-               |partitioned by (part_col)
-               |location '${tmp.getCanonicalPath}/$sourceTable'
-               |tblproperties (
-               |  type = '$tableType',
-               |  primaryKey = 'id',
-               |  preCombineField = 'ts'
-               |)
-         """.stripMargin)
 
           // Insert initial data
           spark.sql(
@@ -533,19 +484,19 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |)
          """.stripMargin)
 
-          spark.sql(
-            s"""
-               |insert into $sourceTable
-               |select * from (
-               |  select 1.0 as id, 'updated1' as name, 1.11 as value_double, 1001 as ts, 100 as part_col, 'Y' as delete_flag
-               |)
-         """.stripMargin)
-
           val e2 = intercept[Exception] {
             spark.sql(
               s"""
                  |merge into $targetTable t
-                 |using $sourceTable s
+                 |using (
+                 |  select
+                 |    cast(1.0 as double) as id,
+                 |    cast('updated1' as string) as name,
+                 |    cast(1.11 as double) as value_double,
+                 |    cast(1001 as long) as ts,
+                 |    cast(100 as long) as part_col,
+                 |    cast('Y' as string) as delete_flag
+                 |) s
                  |on t.id = s.id
                  |when matched and s.delete_flag = 'Y' then delete
            """.stripMargin)
@@ -653,7 +604,6 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
     }
 
     def insertSampleData(tableName: String, schema: Seq[(String, String)]): Unit = {
-      val columns = schema.map(_._1).mkString(", ")
       val sampleData = if (schema.exists(_._2 == "string")) {
         s"""
            |select 1 as id, 'John Doe' as name, 19 as price, 1598886000 as ts
@@ -680,9 +630,8 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
       withSparkSqlSessionConfig(s"${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}" -> "false") {
         withTempDir { tmp =>
           val targetTable = generateTableName
-          val sourceTable = generateTableName
 
-          // Create target and source tables
+          // Create only target table
           createTable(
             targetTable,
             testCase.targetSchema,
@@ -693,25 +642,26 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             s"${tmp.getCanonicalPath}/$targetTable"
           )
 
-          createTable(
-            sourceTable,
-            testCase.sourceSchema,
-            Seq.empty,
-            testCase.primaryKey,
-            testCase.preCombineField,
-            testCase.tableType,
-            s"${tmp.getCanonicalPath}/$sourceTable"
-          )
+          // Insert sample data into target table
+          spark.sql(
+            s"""
+               |insert into $targetTable
+               |select 1 as id, 'John Doe' as name, 19 as price, 1598886000 as ts
+               |union all
+               |select 2, 'Jane Doe', 24, 1598972400
+           """.stripMargin)
 
-          // Insert sample data
-          insertSampleData(targetTable, testCase.targetSchema)
-          insertSampleData(sourceTable, testCase.sourceSchema)
-
-          // Test UPDATE action
+          // Test UPDATE action with inline subquery
           val updateQuery =
             s"""
                |merge into $targetTable t
-               |using $sourceTable s0
+               |using (
+               |  select 
+               |    cast(1 as ${testCase.sourceSchema.find(_._1 == "id").get._2}) as id,
+               |    cast('John Doe' as ${testCase.sourceSchema.find(_._1 == "name").get._2}) as name,
+               |    cast(20 as ${testCase.sourceSchema.find(_._1 == "price").get._2}) as price,
+               |    cast(1598886001 as ${testCase.sourceSchema.find(_._1 == "ts").get._2}) as ts
+               |) s0
                |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
                |when matched then update set *
              """.stripMargin
@@ -723,11 +673,17 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
           assert(updateError.contains(testCase.expectedErrorPattern),
             s"UPDATE - Expected error pattern '${testCase.expectedErrorPattern}' not found in actual error: $updateError")
 
-          // Test INSERT action
+          // Test INSERT action with inline subquery
           val insertQuery =
             s"""
                |merge into $targetTable t
-               |using $sourceTable s0
+               |using (
+               |  select 
+               |    cast(3 as ${testCase.sourceSchema.find(_._1 == "id").get._2}) as id,
+               |    cast('Bob Smith' as ${testCase.sourceSchema.find(_._1 == "name").get._2}) as name,
+               |    cast(30 as ${testCase.sourceSchema.find(_._1 == "price").get._2}) as price,
+               |    cast(1598886002 as ${testCase.sourceSchema.find(_._1 == "ts").get._2}) as ts
+               |) s0
                |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
                |when not matched then insert *
              """.stripMargin
@@ -747,7 +703,6 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
     withSparkSqlSessionConfig(s"${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}" -> "false") {
       withTempDir { tmp =>
         val targetTable = generateTableName
-        val sourceTable = generateTableName
 
         // Create target table with string partition
         spark.sql(
@@ -766,42 +721,26 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |)
          """.stripMargin)
 
-        // Create source table with int partition
-        spark.sql(
-          s"""
-             |create table $sourceTable (
-             |  id int,
-             |  name int,
-             |  ts int
-             |) using hudi
-             |location '${tmp.getCanonicalPath}/$sourceTable'
-             |tblproperties (
-             |  type = 'cow',
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             |)
-         """.stripMargin)
-
         // Insert sample data
         spark.sql(
           s"""
              |insert into $targetTable
              |select 1 as id, 124L as name, 1000 as ts
-         """.stripMargin)
-        spark.sql(
-          s"""
-             |insert into $sourceTable
-             |select 1 as id, 123 as name, 1001L as ts
-         """.stripMargin)
+       """.stripMargin)
 
         val e = intercept[AnalysisException] {
           spark.sql(
             s"""
                |merge into $targetTable t
-               |using $sourceTable s
+               |using (
+               |  select 
+               |    cast(1 as int) as id,
+               |    cast(123 as int) as name,
+               |    cast(1001 as long) as ts
+               |) s
                |on t.id = s.id
                |when matched then update set name = s.name
-           """.stripMargin)
+         """.stripMargin)
         }
         assert(e.getMessage.contains("data type mismatch between source table and target table"))
       }
@@ -813,7 +752,6 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
       withTempDir { tmp =>
         Seq("EVENT_TIME_ORDERING", "COMMIT_TIME_ORDERING").foreach { mergeMode =>
           val targetTable = generateTableName
-          val sourceTable = generateTableName
 
           // Create target table with int ts
           spark.sql(
@@ -833,33 +771,12 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |)
            """.stripMargin)
 
-          // Create source table with long ts
-          spark.sql(
-            s"""
-               |create table $sourceTable (
-               |  id int,
-               |  name string,
-               |  ts long
-               |) using hudi
-               |location '${tmp.getCanonicalPath}/$sourceTable'
-               |tblproperties (
-               |  type = 'cow',
-               |  primaryKey = 'id',
-               |  preCombineField = 'ts'
-               |)
-           """.stripMargin)
-
           // Insert sample data
           spark.sql(
             s"""
                |insert into $targetTable
                |select 1 as id, 'John' as name, 1000 as ts
-           """.stripMargin)
-          spark.sql(
-            s"""
-               |insert into $sourceTable
-               |select 1 as id, 'John' as name, 1001L as ts
-           """.stripMargin)
+         """.stripMargin)
 
           if (mergeMode == "EVENT_TIME_ORDERING") {
             // Should throw exception for EVENT_TIME_ORDERING
@@ -867,7 +784,12 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
               spark.sql(
                 s"""
                    |merge into $targetTable t
-                   |using $sourceTable s
+                   |using (
+                   |  select 
+                   |    cast(1 as int) as id,
+                   |    cast('John' as string) as name,
+                   |    cast(1001 as long) as ts
+                   |) s
                    |on t.id = s.id
                    |when matched then update set ts = s.ts
                """.stripMargin)
@@ -878,7 +800,12 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             spark.sql(
               s"""
                  |merge into $targetTable t
-                 |using $sourceTable s
+                 |using (
+                 |  select 
+                 |    cast(1 as int) as id,
+                 |    cast('John' as string) as name,
+                 |    cast(1001 as long) as ts
+                 |) s
                  |on t.id = s.id
                  |when matched then update set ts = s.ts
              """.stripMargin)

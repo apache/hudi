@@ -1221,28 +1221,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         Seq(RecordMergeMode.COMMIT_TIME_ORDERING.name(),
           RecordMergeMode.EVENT_TIME_ORDERING.name()).foreach { recordMergeMode =>
-          val sourceTable = generateTableName
-          spark.sql(
-            s"""
-               |CREATE TABLE $sourceTable (
-               |    id INT,
-               |    name STRING,
-               |    price INT,
-               |    ts BIGINT
-               |) USING hudi
-               | tblproperties (
-               |  type = '$tableType'
-               | )
-               |LOCATION '${tmp.getCanonicalPath}/$sourceTable'
-               |""".stripMargin)
-
-          spark.sql(
-            s"""
-               | INSERT INTO $sourceTable
-               | VALUES (1, 'John Doe', 19, 1),
-               |        (4, 'Alice Johnson', 49, 2)
-               |""".stripMargin)
-
           val targetTable = generateTableName
           spark.sql(
             s"""
@@ -1277,7 +1255,19 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
           spark.sql(
             s"""
                |MERGE INTO $targetTable t
-               |USING $sourceTable s
+               |USING (
+               | SELECT 
+               |   CAST(1 AS INT) as id, 
+               |   CAST('John Doe' AS STRING) as name, 
+               |   CAST(19 AS INT) as price, 
+               |   CAST(1 AS BIGINT) as ts
+               | UNION ALL
+               | SELECT 
+               |   CAST(4 AS INT), 
+               |   CAST('Alice Johnson' AS STRING), 
+               |   CAST(49 AS INT), 
+               |   CAST(2 AS BIGINT)
+               |) s
                |ON t.price = s.price
                |WHEN MATCHED THEN UPDATE SET
                |    t.id = s.id,
@@ -1303,30 +1293,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   test("Test MergeInto with CUSTOM merge mode using FirstValueAvroPayload") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val sourceTable = generateTableName
-        spark.sql(
-          s"""
-            |CREATE TABLE $sourceTable (
-            |    id INT,
-            |    name STRING,
-            |    price INT,
-            |    ts BIGINT
-            |) USING hudi
-            | tblproperties (
-            |  type = '$tableType'
-            | )
-            |LOCATION '${tmp.getCanonicalPath}/$sourceTable'
-            |""".stripMargin)
-
-        // Insert source data with same ts=1598886001 for id=1
-        spark.sql(
-          s"""
-            | INSERT INTO $sourceTable
-            | VALUES (1, 'John Doe Updated', 19, 1598886001),
-            |        (2, 'Jane Doe Updated', 24, 1598972401),
-            |        (4, 'Alice Johnson', 49, 2)
-            |""".stripMargin)
-
         val targetTable = generateTableName
         spark.sql(
           s"""
@@ -1337,7 +1303,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             |  ts BIGINT
             |) using hudi
             |TBLPROPERTIES (
-            |  type = 'cow',
+            |  type = '$tableType',
             |  primaryKey = 'id',
             |  preCombineField = 'ts',
             |  recordMergeMode = '${RecordMergeMode.CUSTOM.name()}',
@@ -1347,44 +1313,60 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             |LOCATION '${tmp.getCanonicalPath}/$targetTable'
             |""".stripMargin)
 
-        spark.sql(
-          s"""
-            |INSERT INTO $targetTable
-            |SELECT id, name, price, ts
-            |FROM (
-            |    SELECT 1 as id, 'John Doe Initial' as name, 19 as price, 1598886001 as ts
-            |     UNION ALL
-            |     SELECT 2, 'Jane Doe', 24, 1598972400
-            |     UNION ALL
-            |     SELECT 3, 'Bob Smith', 14, 1599058800
-            |)
-            |""".stripMargin)
+          spark.sql(
+            s"""
+              |INSERT INTO $targetTable
+              |SELECT id, name, price, ts
+              |FROM (
+              |    SELECT 1 as id, 'John Doe Initial' as name, 19 as price, 1598886001 as ts
+              |     UNION ALL
+              |     SELECT 2, 'Jane Doe', 24, 1598972400
+              |     UNION ALL
+              |     SELECT 3, 'Bob Smith', 14, 1599058800
+              |)
+              |""".stripMargin)
 
-        spark.sql(
-          s"""
-            |MERGE INTO $targetTable t
-            |USING $sourceTable s
-            |ON t.price = s.price
-            |WHEN MATCHED THEN UPDATE SET
-            |    t.id = s.id,
-            |    t.name = s.name,
-            |    t.price = s.price,
-            |    t.ts = s.ts
-            |WHEN NOT MATCHED THEN INSERT
-            |    (id, name, price, ts)
-            |VALUES
-            |    (s.id, s.name, s.price, s.ts)
-            |""".stripMargin)
+          spark.sql(
+            s"""
+              |MERGE INTO $targetTable t
+              |USING (
+              | SELECT
+              |   CAST(1 AS INT) as id,
+              |   CAST('John Doe Updated' AS STRING) as name,
+              |   CAST(19 AS INT) as price,
+              |   CAST(1598886001 AS BIGINT) as ts
+              | UNION ALL
+              | SELECT
+              |   CAST(2 AS INT),
+              |   CAST('Jane Doe Updated' AS STRING),
+              |   CAST(24 AS INT),
+              |   CAST(1598972401 AS BIGINT)
+              | UNION ALL
+              | SELECT
+              |   CAST(4 AS INT),
+              |   CAST('Alice Johnson' AS STRING),
+              |   CAST(49 AS INT),
+              |   CAST(2 AS BIGINT)
+              |) s
+              |ON t.price = s.price
+              |WHEN MATCHED THEN UPDATE SET
+              |    t.id = s.id,
+              |    t.name = s.name,
+              |    t.price = s.price,
+              |    t.ts = s.ts
+              |WHEN NOT MATCHED THEN INSERT
+              |    (id, name, price, ts)
+              |VALUES
+              |    (s.id, s.name, s.price, s.ts)
+              |""".stripMargin)
 
-        // Verify FirstValueAvroPayload behavior:
-        // - For id=1: keeps first value ("John Doe Initial") since timestamps are equal
-        // - For id=4: inserts new record normally
-        checkAnswer(s"select id, name, price, ts from $targetTable ORDER BY id")(
-          Seq(1, "John Doe Initial", 19, 1598886001L), // FirstValueAvroPayload keeps first record
-          Seq(2, "Jane Doe Updated", 24, 1598972401L),
-          Seq(3, "Bob Smith", 14, 1599058800L),
-          Seq(4, "Alice Johnson", 49, 2L))
+          checkAnswer(s"select id, name, price, ts from $targetTable ORDER BY id")(
+            Seq(1, "John Doe Initial", 19, 1598886001L),
+            Seq(2, "Jane Doe Updated", 24, 1598972401L),
+            Seq(3, "Bob Smith", 14, 1599058800L),
+            Seq(4, "Alice Johnson", 49, 2L))
+        }
       }
-    })
+    )
   }
 }
