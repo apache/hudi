@@ -313,12 +313,17 @@ test_cli_bundle() {
 # Execute tests
 ############################
 
-echo "::warning::validate.sh validating cli bundle"
-test_cli_bundle
-if [ "$?" -ne 0 ]; then
-    exit 1
+if [[ $SPARK_HOME == *"spark-3.5"* ]]
+then
+  echo "::warning::validate.sh validating cli bundle"
+  test_cli_bundle
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done validating cli bundle"
+else
+  echo "::warning::validate.sh skip validating cli bundle for non-spark3.5 build"
 fi
-echo "::warning::validate.sh done validating cli bundle"
 
 echo "::warning::validate.sh validating spark & hadoop-mr bundle"
 test_spark_hadoop_mr_bundles
@@ -327,7 +332,7 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
-if [[  $SPARK_HOME == *"spark-3.5"* ]]
+if [[ $SPARK_HOME == *"spark-3.5"* ]]
 then
   echo "::warning::validate.sh validating utilities bundle"
   test_utilities_bundle $JARS_DIR/utilities.jar
