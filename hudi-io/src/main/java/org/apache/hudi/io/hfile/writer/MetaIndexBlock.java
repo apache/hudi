@@ -19,35 +19,14 @@
 
 package org.apache.hudi.io.hfile.writer;
 
+import org.apache.hudi.io.hfile.HFileBlockType;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
 
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
-
-public class IndexBlock extends Block {
-  protected final List<IndexEntry> entries = new ArrayList<>();
-  protected long payloadSize = -1L;
-
-  public IndexBlock(byte[] magic, int blockSize) {
-    super(magic, blockSize);
-  }
-
-  public void add(byte[] firstKey, long offset, int size) {
-    entries.add(new IndexEntry(firstKey, offset, size));
-  }
-
-  public int getNumOfEntries() {
-    return entries.size();
-  }
-
-  public long getPayloadSize() {
-    return payloadSize;
-  }
-
-  public boolean isEmpty() {
-    return entries.isEmpty();
+public class MetaIndexBlock extends IndexBlock {
+  public MetaIndexBlock(int blockSize) {
+    super(HFileBlockType.ROOT_INDEX.getMagic(), blockSize);
   }
 
   @Override
@@ -56,15 +35,14 @@ public class IndexBlock extends Block {
     for (IndexEntry entry : entries) {
       buf.putLong(entry.offset);
       buf.putInt(entry.size);
-      // Key length + 2.
+      // Key length.
       try {
-        byte[] keyLength = getVariableLengthEncodes(entry.firstKey.length + SIZEOF_INT16);
+        byte[] keyLength = getVariableLengthEncodes(entry.firstKey.length);
         buf.put(keyLength);
       } catch (IOException e) {
-        throw new RuntimeException("Failed to serialize number: " + entry.firstKey.length + SIZEOF_INT16);
+        throw new RuntimeException("Failed to serialize number: " + entry.firstKey.length);
       }
-      // Key length.
-      buf.putShort((short) entry.firstKey.length);
+      // Note that: NO two-bytes for encoding key length.
       // Key.
       buf.put(entry.firstKey);
     }
