@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.TimeGeneratorType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
@@ -149,7 +150,7 @@ public class TableCommand {
     try {
       HoodieTableMetaClient.builder().setConf(HoodieCLI.conf.newInstance()).setBasePath(path).build();
       existing = true;
-    } catch (TableNotFoundException dfe) {
+    } catch (TableNotFoundException | InvalidTableException dfe) {
       // expected
     }
 
