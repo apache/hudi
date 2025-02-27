@@ -170,6 +170,11 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
           .repartitionAndSortWithinPartitions(partitioner, new FileGroupIdComparator())
           .map(Tuple2::_1)
           .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
+    } else if (config.isBloomIndexFileGroupIdKeySortingEnabled()) {
+      keyLookupResultRDD = fileComparisonsRDD.mapToPair(fileGroupAndRecordKey -> new Tuple2<>(fileGroupAndRecordKey, false))
+          .sortByKey(new FileGroupIdAndRecordKeyComparator(), true, targetParallelism)
+          .map(Tuple2::_1)
+          .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
     } else {
       keyLookupResultRDD = fileComparisonsRDD.sortByKey(true, targetParallelism)
           .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
@@ -189,6 +194,17 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     @Override
     public int compare(Tuple2<HoodieFileGroupId, String> o1, Tuple2<HoodieFileGroupId, String> o2) {
       return o1._1().compareTo(o2._1());
+    }
+  }
+
+  private static class FileGroupIdAndRecordKeyComparator implements Comparator<Tuple2<HoodieFileGroupId, String>>, Serializable {
+    @Override
+    public int compare(Tuple2<HoodieFileGroupId, String> o1, Tuple2<HoodieFileGroupId, String> o2) {
+      int fileGroupIdComparison = o1._1.compareTo(o2._1);
+      if (fileGroupIdComparison != 0) {
+        return fileGroupIdComparison;
+      }
+      return o1._2.compareTo(o2._2);
     }
   }
 
