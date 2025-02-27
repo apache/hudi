@@ -139,6 +139,14 @@ The read-write process of Spark based on Bucket Index is also similar.
 - Use `BucketIndexSupport` to Bucket Index pruning during reading.
 
 ## Design
+### Overview
+![workflow.jpg](workflow.jpg)
+The core process of writing to the Partition Level Bucket Index is shown in the figure below. First, the Bucket Identifier 
+loads the partition bucket count information from the metadata as a cache. During the Partitioner and Writer stages, when 
+using the Identifier for shuffling and tagging, it will first attempt to find the bucketNumber of the corresponding 
+partition from the cache. If the cache was missed, it will calculate the corresponding value based on the user's expression, 
+and then submit it to the metadata during the commit stage.
+
 ### Config
 Add a new config named `hoodie.bucket.index.partition.expressions` default null. Users can specify the bucket numbers for different
 partitions by configuring a JSON expression. For example
@@ -146,24 +154,17 @@ partitions by configuring a JSON expression. For example
 {
     "expressions": [
         {
-            "expression": "11-11",
-            "bucketNumber": 10,
+            "expression": "\\d{4}-(06-(01|17|18)|11-(01|10|11))",
+            "bucketNumber": 256,
             "rule": "regex"
-        },
-        {
-            "expression": "01-01",
-            "bucketNumber": 20,
-            "rule": "regex"
-        },
-        {
-            "expression": "dt>2025-01-01",
-            "bucketNumber": 20,
-            "rule": "range"
         }
-    ]
+    ],
+  "defaultBucketNumber": 10
 }
 ```
-for partitions match different rule will get and set corresponding bucket number.
+When the user sets the above expression, for the dates of 06-01, 06-17, 06-18 in June and 01-11, 10-11, 11-11 in 
+November of each year (in the format of yyyy-MM-dd), the corresponding bucket number for the partition is 256. 
+For the ordinary "dt" partitions, the bucket number is 10.
 
 We can determine whether the user is currently using the partition-level bucket index based on the value of
 `hoodie.bucket.index.partition.expressions`. If it is null, the processing behavior will be exactly the same as the current logic.
@@ -171,8 +172,8 @@ The advantage of this approach is that it can be fully compatible with the curre
 enabling a seamless migration for users without their awareness.
 
 ### Hashing Metadata
-The hashing metadata will be persisted as files named as `<instant>.simple_hashing_meta` for current table, it stores in
-`.hoodie/.simple_hashing_meta/` directory and contains the following information in a readable encoding
+The hashing metadata will be persisted as files named as `<instant>.hashing_meta` for current table, it stores in
+`.hoodie/.hashing_meta/simple/` directory and contains the following information in a readable encoding
 
 ```avro schema
 {
@@ -218,10 +219,10 @@ The hashing metadata will be persisted as files named as `<instant>.simple_hashi
 }
 ```
 We will write <instant>.simple_hashing_meta during commit action:
-1. Call TransactionManager to beginTransaction
-2. Get last complete T1.simple_hashing_meta
-3. Merging T1.simple_hashing_meta with new written partitions as T2.simple_hashing_meta
-4. Call TransactionManager to endTransaction
+1. Get last complete T1.simple_hashing_meta
+2. Merging T1.simple_hashing_meta with new written partitions as T2.simple_hashing_meta
+3. Write T2.simple_hashing_meta into .hoodie folder
+4. Do commit action
 
 ### SimpleBucketIdentifier
 ```java
