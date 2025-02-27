@@ -19,6 +19,7 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
@@ -183,9 +184,17 @@ public class StreamerUtil {
    */
   public static Option<HoodieLockConfig> getLockConfig(Configuration conf) {
     if (OptionsResolver.isLockRequired(conf) && !conf.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
-      // configure the fs lock provider by default
+      Properties lockProperties;
+      // for single writer with async table services, use InProcessLockProvider as default lock provider.
+      if (!OptionsResolver.isMultiWriter(conf)
+          && (OptionsResolver.isAppendMode(conf) ? OptionsResolver.needsAsyncClustering(conf) : OptionsResolver.needsAsyncCompaction(conf))) {
+        lockProperties =  new TypedProperties();
+        lockProperties.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName());
+      } else {
+        lockProperties = FileSystemBasedLockProvider.getLockConfig(conf.get(FlinkOptions.PATH));
+      }
       return Option.of(HoodieLockConfig.newBuilder()
-          .fromProperties(FileSystemBasedLockProvider.getLockConfig(conf.getString(FlinkOptions.PATH)))
+          .fromProperties(lockProperties)
           .withConflictResolutionStrategy(OptionsResolver.getConflictResolutionStrategy(conf))
           .build());
     }
