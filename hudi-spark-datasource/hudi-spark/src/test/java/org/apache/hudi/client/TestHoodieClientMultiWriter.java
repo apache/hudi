@@ -253,7 +253,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         Collections.emptyList(),
         Collections.emptyMap(),
         Option.empty(),
-        WriteOperationType.UNKNOWN,
+        WriteOperationType.INSERT,
         schemaAttrValue,
         action)));
   }
