@@ -48,9 +48,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
- * Test cases for {@link HoodieArchivedTimeline}.
+ * Test cases for {@link org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineV2}.
  */
-public class TestHoodieArchivedTimeline extends HoodieCommonTestHarness {
+public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
