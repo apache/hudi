@@ -29,13 +29,13 @@ import org.apache.hudi.common.table.timeline.versioning.v2.BaseTimelineV2;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -49,8 +49,6 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_COMPARATO
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -123,11 +121,7 @@ public class TestAverageRecordSizeEstimator {
       });
       instants.add(hoodieInstant);
       try {
-        when(mockTimeline.getInstantDetails(hoodieInstant))
-            .thenReturn(org.apache.hudi.common.util.Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-        when(mockCommitMetadataSerDe.deserialize(
-            eq(hoodieInstant), any(), any(), eq(HoodieCommitMetadata.class)))
-            .thenReturn(commitMetadata);
+        when(mockTimeline.loadInstantContent(hoodieInstant, HoodieCommitMetadata.class)).thenReturn(commitMetadata);
       } catch (IOException e) {
         throw new RuntimeException("Should not have failed", e);
       }

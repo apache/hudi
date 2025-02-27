@@ -109,15 +109,18 @@ public class CleanerUtils {
    */
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
-    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
     HoodieCleanMetadata cleanMetadata = metaClient.getActiveTimeline().loadHoodieCleanMetadata(cleanInstant);
-    return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
+    return upgradeCleanMetadata(metaClient, cleanMetadata);
   }
 
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, InputStream inputStream)
       throws IOException {
-    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
     HoodieCleanMetadata cleanMetadata = deserializeAvroMetadata(inputStream, HoodieCleanMetadata.class);
+    return upgradeCleanMetadata(metaClient, cleanMetadata);
+  }
+
+  private static HoodieCleanMetadata upgradeCleanMetadata(HoodieTableMetaClient metaClient, HoodieCleanMetadata cleanMetadata) {
+    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
     return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
   }
 
@@ -165,7 +168,7 @@ public class CleanerUtils {
   public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
     CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
-    HoodieCleanerPlan cleanerPlan = metaClient.getActiveTimeline().loadInstantContent(cleanInstant, HoodieCleanerPlan.class);
+    HoodieCleanerPlan cleanerPlan = metaClient.getActiveTimeline().loadCleanerPlan(cleanInstant);
     return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
   }
 

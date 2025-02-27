@@ -188,22 +188,26 @@ public class CompactionUtils {
    * Util method to fetch both compaction and log compaction plan from requestedInstant.
    */
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, HoodieInstant requestedInstant) {
-    CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
-    try {
-      HoodieCompactionPlan compactionPlan = metaClient.getActiveTimeline().loadCompactionPlan(requestedInstant);
-      return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
-    } catch (IOException e) {
-      throw new HoodieException(e);
-    }
+    return getCompactionPlanInternal(metaClient, () -> metaClient.getActiveTimeline().loadCompactionPlan(requestedInstant));
   }
 
   /**
    * Util method to fetch both compaction and log compaction plan from requestedInstant.
    */
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, InputStream planContent) {
+    return getCompactionPlanInternal(metaClient, () -> deserializeAvroMetadata(planContent, HoodieCompactionPlan.class));
+  }
+
+  @FunctionalInterface
+  private interface ThrowingSupplier<T, E extends Exception> {
+    T get() throws E;
+  }
+
+  private static HoodieCompactionPlan getCompactionPlanInternal(HoodieTableMetaClient metaClient, 
+      ThrowingSupplier<HoodieCompactionPlan, IOException> planSupplier) {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
     try {
-      HoodieCompactionPlan compactionPlan = deserializeAvroMetadata(planContent, HoodieCompactionPlan.class);
+      HoodieCompactionPlan compactionPlan = planSupplier.get();
       return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
     } catch (IOException e) {
       throw new HoodieException(e);
