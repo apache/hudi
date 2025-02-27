@@ -450,7 +450,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
           spark.sql(
             s"""
                |merge into $targetTable t
-               |using (sourceTableSubQuery) s
+               |using ($sourceTableSubQuery) s
                |on t.id = s.id
                |when matched and s.delete_flag = 'Y' then delete
            """.stripMargin)
