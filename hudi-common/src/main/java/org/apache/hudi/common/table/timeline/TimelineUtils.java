@@ -111,7 +111,7 @@ public class TimelineUtils {
           try {
             HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(cleanerTimeline.getInstantDetails(instant).get());
             cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
-              if (partitionMetadata.getIsPartitionDeleted()) {
+              if (Boolean.TRUE.equals(partitionMetadata.getIsPartitionDeleted())) {
                 partitionToLatestDeleteTimestamp.put(partition, instant.getTimestamp());
               }
             });
