@@ -1256,16 +1256,16 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             s"""
                |MERGE INTO $targetTable t
                |USING (
-               | SELECT 
-               |   CAST(1 AS INT) as id, 
-               |   CAST('John Doe' AS STRING) as name, 
-               |   CAST(19 AS INT) as price, 
+               | SELECT
+               |   CAST(1 AS INT) as id,
+               |   CAST('John Doe' AS STRING) as name,
+               |   CAST(19 AS INT) as price,
                |   CAST(1 AS BIGINT) as ts
                | UNION ALL
-               | SELECT 
-               |   CAST(4 AS INT), 
-               |   CAST('Alice Johnson' AS STRING), 
-               |   CAST(49 AS INT), 
+               | SELECT
+               |   CAST(4 AS INT),
+               |   CAST('Alice Johnson' AS STRING),
+               |   CAST(49 AS INT),
                |   CAST(2 AS BIGINT)
                |) s
                |ON t.price = s.price

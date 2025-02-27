@@ -384,7 +384,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             s"""
                |merge into $targetTable t
                |using (
-               |  select 
+               |  select
                |    cast(1 as int) as id,
                |    cast('updated1' as string) as name,
                |    cast(1.11 as double) as value_double,
@@ -656,7 +656,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             s"""
                |merge into $targetTable t
                |using (
-               |  select 
+               |  select
                |    cast(1 as ${testCase.sourceSchema.find(_._1 == "id").get._2}) as id,
                |    cast('John Doe' as ${testCase.sourceSchema.find(_._1 == "name").get._2}) as name,
                |    cast(20 as ${testCase.sourceSchema.find(_._1 == "price").get._2}) as price,
@@ -678,7 +678,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             s"""
                |merge into $targetTable t
                |using (
-               |  select 
+               |  select
                |    cast(3 as ${testCase.sourceSchema.find(_._1 == "id").get._2}) as id,
                |    cast('Bob Smith' as ${testCase.sourceSchema.find(_._1 == "name").get._2}) as name,
                |    cast(30 as ${testCase.sourceSchema.find(_._1 == "price").get._2}) as price,
@@ -733,7 +733,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             s"""
                |merge into $targetTable t
                |using (
-               |  select 
+               |  select
                |    cast(1 as int) as id,
                |    cast(123 as int) as name,
                |    cast(1001 as long) as ts
@@ -785,7 +785,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                 s"""
                    |merge into $targetTable t
                    |using (
-                   |  select 
+                   |  select
                    |    cast(1 as int) as id,
                    |    cast('John' as string) as name,
                    |    cast(1001 as long) as ts
@@ -801,7 +801,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
               s"""
                  |merge into $targetTable t
                  |using (
-                 |  select 
+                 |  select
                  |    cast(1 as int) as id,
                  |    cast('John' as string) as name,
                  |    cast(1001 as long) as ts
