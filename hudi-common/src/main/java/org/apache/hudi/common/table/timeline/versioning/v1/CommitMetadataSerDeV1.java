@@ -24,18 +24,30 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.avro.specific.SpecificRecordBase;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.function.BooleanSupplier;
+
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
 
   @Override
   public <T> T deserialize(HoodieInstant instant, InputStream inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {
     try {
-      // Use ObjectMapper to directly read from InputStream
-      // This avoids loading entire content into memory at once
-      return JsonUtils.getObjectMapper().readValue(inputStream, clazz);
+      // For commit metadata we need special case handling as they are using non avro type in memory.
+      if (org.apache.hudi.common.model.HoodieCommitMetadata.class.isAssignableFrom(clazz)) {
+        return JsonUtils.getObjectMapper().readValue(inputStream, clazz);
+      } else {
+        if (!SpecificRecordBase.class.isAssignableFrom(clazz)) {
+          throw new IllegalArgumentException("Class must extend SpecificRecordBase: " + clazz.getName());
+        }
+        @SuppressWarnings("unchecked")
+        Class<? extends SpecificRecordBase> avroClass = (Class<? extends SpecificRecordBase>) clazz;
+        return (T) deserializeAvroMetadata(inputStream, avroClass);
+      }
     } catch (Exception e) {
       // Empty file does not conform to avro format, in that case we return newInstance.
       if (isEmptyInstant.getAsBoolean()) {
@@ -47,14 +59,6 @@ public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
       }
       throw new IOException("Unable to read commit metadata for instant " + instant, e);
     }
-  }
-
-  public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
-    if (jsonStr == null || jsonStr.isEmpty()) {
-      // For empty commit file
-      return clazz.newInstance();
-    }
-    return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
   }
 
   @Override

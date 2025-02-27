@@ -18,18 +18,28 @@
 
 package org.apache.hudi.common.table.timeline.versioning;
 
+import org.apache.hudi.avro.model.HoodieInstantInfo;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -38,6 +48,8 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public abstract class BaseTestCommitMetadataSerDe {
@@ -142,7 +154,105 @@ public abstract class BaseTestCommitMetadataSerDe {
     verifyReplaceFileIds(deserialized.getPartitionToReplaceFileIds());
   }
 
-  private HoodieWriteStat createTestWriteStat() {
+  private StoragePathInfo generateFileStatus(String filePath) {
+    return new StoragePathInfo(new StoragePath(filePath), 1, true, (short) 2, 1000000L, 1);
+  }
+
+  @Test
+  protected void testRollbackMetadataSerDe() throws Exception {
+    // Create rollback metadata
+    HoodieRollbackMetadata metadata = new HoodieRollbackMetadata();
+
+    // Create rollback stat for partition2 with log files
+    Map<StoragePathInfo, Long> commandBlocksCount = new HashMap<>();
+    commandBlocksCount.put(generateFileStatus("file:///path/1/partition2/.log.1"), 1L);
+    HoodieRollbackPartitionMetadata rollbackPartitionMetadata = new HoodieRollbackPartitionMetadata();
+    rollbackPartitionMetadata.setPartitionPath("p1");
+    rollbackPartitionMetadata.setSuccessDeleteFiles(Arrays.asList("f1"));
+    rollbackPartitionMetadata.setFailedDeleteFiles(new ArrayList<>());
+    rollbackPartitionMetadata.setRollbackLogFiles(new HashMap<>());
+    Map<String, HoodieRollbackPartitionMetadata> partitionMetadataMap = new HashMap<>();
+    partitionMetadataMap.put("p1", rollbackPartitionMetadata);
+    metadata.setPartitionMetadata(partitionMetadataMap);
+
+    // Set instant to rollback
+    metadata.setInstantsRollback(Collections.singletonList(new HoodieInstantInfo("001", HoodieTimeline.COMMIT_ACTION)));
+
+    // Set other metadata fields
+    metadata.setStartRollbackTime("002");
+    metadata.setTimeTakenInMillis(100);
+    metadata.setTotalFilesDeleted(1);
+    metadata.setCommitsRollback(Arrays.asList("111", "222"));
+
+    // Create SerDe instance and test instant
+    CommitMetadataSerDe serDe = getSerDe();
+    HoodieInstant instant = createTestInstant("rollback", "002");
+
+    // Serialize and deserialize
+    Option<byte[]> serialized = TimelineMetadataUtils.serializeRollbackMetadata(metadata);
+    assertTrue(serialized.isPresent());
+    HoodieRollbackMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> true, HoodieRollbackMetadata.class);
+
+    // Verify
+    assertNotNull(deserialized);
+
+    // Verify other fields
+    assertEquals(Collections.singletonList(new HoodieInstantInfo("001", HoodieTimeline.COMMIT_ACTION)),
+        deserialized.getInstantsRollback());
+    assertEquals("002", deserialized.getStartRollbackTime());
+    assertEquals(100, deserialized.getTimeTakenInMillis());
+    assertEquals(1, deserialized.getTotalFilesDeleted());
+  }
+
+  @Test
+  protected void testEmptyFile() throws Exception {
+    // Create SerDe instance and test instant
+    CommitMetadataSerDe serDe = getSerDe();
+    HoodieInstant instant = createTestInstant("rollback", "002");
+
+    // Serialize and deserialize
+    Option<byte[]> serialized = Option.of(new byte[]{});
+    HoodieRollbackMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> true, HoodieRollbackMetadata.class);
+
+    // Verify
+    assertNotNull(deserialized);
+    assertNull(deserialized.getStartRollbackTime());
+    assertNull(deserialized.getCommitsRollback());
+    assertNull(deserialized.getPartitionMetadata());
+    assertNull(deserialized.getVersion());
+  }
+
+  @Test
+  protected void testCorruptedAvroFile() {
+    // Create SerDe instance and test instant
+    CommitMetadataSerDe serDe = getSerDe();
+    HoodieInstant instant = createTestInstant("rollback", "002");
+
+    // Serialize and deserialize
+    Option<byte[]> serialized = Option.of(new byte[]{});
+    Exception ex = assertThrows(IOException.class, () -> serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> false, HoodieRollbackMetadata.class));
+    assertEquals(ex.getCause().getMessage(), "Not an Avro data file.");
+  }
+
+  @Test
+  protected void testCorruptedJsonFile() {
+    // Create SerDe instance and test instant
+    CommitMetadataSerDe serDe = getSerDe();
+    HoodieInstant instant = createTestInstant("commit", "002");
+
+    // Serialize and deserialize
+    Option<byte[]> serialized = Option.of(new byte[]{});
+    Exception ex = assertThrows(IOException.class, () -> serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> false, HoodieCommitMetadata.class));
+
+    if (serDe instanceof CommitMetadataSerDeV2) {
+      assertEquals(ex.getCause().getMessage(), "Not an Avro data file.");
+    } else {
+      assertEquals(ex.getCause().getMessage(), "No content to map due to end-of-input\n"
+          + " at [Source: (ByteArrayInputStream); line: 1, column: 0]");
+    }
+  }
+
+  protected HoodieWriteStat createTestWriteStat() {
     HoodieWriteStat writeStat = new HoodieWriteStat();
     // Set basic fields
     writeStat.setFileId(TEST_FILE_ID);
@@ -179,7 +289,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     return writeStat;
   }
 
-  private void verifyCommitMetadata(HoodieCommitMetadata metadata) {
+  public void verifyCommitMetadata(HoodieCommitMetadata metadata) {
     assertNotNull(metadata);
     assertEquals(1, metadata.getPartitionToWriteStats().size());
     assertEquals(true, metadata.getCompacted());
@@ -195,7 +305,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     assertEquals("test-value-2", metadata.getExtraMetadata().get("test-key-2"));
   }
 
-  private void verifyWriteStat(HoodieWriteStat stat) {
+  public void verifyWriteStat(HoodieWriteStat stat) {
     assertEquals(TEST_FILE_ID, stat.getFileId());
     assertEquals(testPath, stat.getPath());
     assertEquals(TEST_PREV_COMMIT, stat.getPrevCommit());

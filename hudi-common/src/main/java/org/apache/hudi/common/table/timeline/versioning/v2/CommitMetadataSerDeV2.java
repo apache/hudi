@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
-import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.file.DataFileWriter;
@@ -54,6 +53,7 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
           throw new IOException("unable to read legacy commit metadata for instant " + instant, e);
         }
       }
+      // For commit metadata and replace commit metadata need special case handling since it requires in memory object in POJO form.
       if (org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class.isAssignableFrom(clazz)) {
         return (T) convertReplaceCommitMetadataToPojo(deserializeAvroMetadata(inputStream, HoodieReplaceCommitMetadata.class));
       }
@@ -79,10 +79,6 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
       }
       throw new IOException("unable to read commit metadata for instant " + instant, e);
     }
-  }
-
-  public static <T> T fromJsonString(InputStream inputStream, Class<T> clazz) throws Exception {
-    return JsonUtils.getObjectMapper().readValue(inputStream, clazz);
   }
 
   @Override
