@@ -26,7 +26,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
   test("Test Spark successful implicit type casting behaviors") {
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       // Define test cases for successful implicit casting
       case class TypeCastTestCase(
           sourceType: String,
@@ -72,7 +72,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         TypeCastTestCase("timestamp", "date", "timestamp'2023-01-01 12:00:00'", java.sql.Date.valueOf("2023-01-01"), "timestamp to date"),
         TypeCastTestCase("date", "string", "date'2023-01-01'", "2023-01-01", "date to string"),
         TypeCastTestCase("date", "timestamp", "date'2023-01-01'", java.sql.Timestamp.valueOf("2023-01-01 00:00:00"), "date to timestamp")
-      ).filter(_.expectedValue != null) // Ensure we only test successful cases
+      )
 
       val tableName = generateTableName
 
@@ -112,25 +112,25 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
          """.stripMargin)
 
       // Verify each column value
+      val result = spark.sql("select "
+        + successfulTestCases.zipWithIndex.map { case (_, idx) => s"col_$idx" }.mkString(",\n  ")
+        + s" from $tableName where id = 1").collect()(0)
       successfulTestCases.zipWithIndex.foreach { case (test, idx) =>
-        val result = spark.sql(s"select col_${idx} from $tableName where id = 1").collect()(0)(0)
-        assert(result == test.expectedValue,
-          s"${test.description}: Expected ${test.expectedValue} but got $result")
+        assert(result(idx) == test.expectedValue,
+          s"${test.description}: Expected ${test.expectedValue} but got ${result(idx)}")
       }
-    })
+    }
   }
 
   test("Test Spark disallowed implicit type casting behaviors") {
     // Capturing the current behavior of Spark's implicit type casting.
-    withRecordType()(withTempDir { tmp =>
+    withTempDir { tmp =>
       // Define test cases for implicit casting
-      case class TypeCastTestCase(
-                                   sourceType: String,
-                                   targetType: String,
-                                   testValue: String, // SQL literal expression
-                                   expectedValue: Any,
-                                   description: String = ""
-                                 )
+      case class TypeCastTestCase(sourceType: String,
+                                  targetType: String,
+                                  testValue: String, // SQL literal expression
+                                  expectedValue: Any,
+                                  description: String = "")
 
       val testCases = Seq(
         TypeCastTestCase("int", "decimal(10,1)", "2147483647", java.math.BigDecimal.valueOf(2147483647.0), "int to decimal widening overflow"),
@@ -184,19 +184,17 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
           s"${testCase.description}: Expected casting related error but got different exception: " +
             s"Message from the exception ${exceptionMsg}, message from the exception cause ${exceptionCauseMsg}")
       }
-    })
+    }
   }
 
   test("Test All Valid Type Casting For Merge Into and Insert") {
     // For all valid type casting pairs, test merge into and insert operations.
     // Define the column types for testing, based on successful casting cases
-    case class ColumnTypePair(
-                               sourceType: String,
-                               targetType: String,
-                               testValue: String,
-                               expectedValue: Any,
-                               columnName: String
-                             )
+    case class ColumnTypePair(sourceType: String,
+                              targetType: String,
+                              testValue: String,
+                              expectedValue: Any,
+                              columnName: String)
 
     // Define valid type casting pairs based on the previous test cases
     val validTypePairs = Seq(
@@ -233,7 +231,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
     )
 
     Seq("cow", "mor").foreach { tableType =>
-      withRecordType()(withTempDir { tmp =>
+      withTempDir { tmp =>
         val targetTable = generateTableName
         val sourceTable = generateTableName
 
@@ -241,7 +239,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         val targetColumns = validTypePairs.map(p => s"${p.columnName} ${p.targetType}").mkString(",\n  ")
         val sourceColumns = validTypePairs.map(p => s"${p.columnName} ${p.sourceType}").mkString(",\n  ")
 
-        // Create target table. /
+        // Create target table.
         spark.sql(
           s"""
              |create table $targetTable (
@@ -331,13 +329,13 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
           assert(actualValue != pair.expectedValue,
             s"${tableType.toUpperCase}: Insert - Column ${pair.columnName} - Expected ${pair.expectedValue} (${pair.expectedValue.getClass}) but got $actualValue (${if (actualValue != null) actualValue.getClass else "null"})")
         }
-      })
+      }
     }
   }
 
   test("Test Column Type Mismatches for MergeInto Delete Actions") {
     Seq("mor").foreach { tableType =>
-      withRecordType()(withTempDir { tmp =>
+      withTempDir { tmp =>
         def createTargetTable(partitionCol: String, partitionType: String): String = {
           val targetTable = generateTableName
           spark.sql(
@@ -554,7 +552,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
           }
           assert(e2.getMessage.contains("Invalid MERGE INTO matching condition: s.id: can't cast s.id (of DoubleType) to LongType"))
         }
-      })
+      }
     }
   }
 
@@ -680,7 +678,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
     // Run test cases
     testCases.foreach { testCase =>
       withSparkSqlSessionConfig(s"${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}" -> "false") {
-        withRecordType()(withTempDir { tmp =>
+        withTempDir { tmp =>
           val targetTable = generateTableName
           val sourceTable = generateTableName
 
@@ -740,14 +738,14 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
 
           assert(insertError.contains(testCase.expectedErrorPattern),
             s"INSERT - Expected error pattern '${testCase.expectedErrorPattern}' not found in actual error: $insertError")
-        })
+        }
       }
     }
   }
 
   test("Test MergeInto with partition column type mismatch should throw") {
     withSparkSqlSessionConfig(s"${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}" -> "false") {
-      withRecordType()(withTempDir { tmp =>
+      withTempDir { tmp =>
         val targetTable = generateTableName
         val sourceTable = generateTableName
 
@@ -806,13 +804,13 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
            """.stripMargin)
         }
         assert(e.getMessage.contains("data type mismatch between source table and target table"))
-      })
+      }
     }
   }
 
   test("Test MergeInto with precombine column type mismatch behavior based on record.merge.mode") {
     withSparkSqlSessionConfig(s"${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}" -> "false") {
-      withRecordType()(withTempDir { tmp =>
+      withTempDir { tmp =>
         Seq("EVENT_TIME_ORDERING", "COMMIT_TIME_ORDERING").foreach { mergeMode =>
           val targetTable = generateTableName
           val sourceTable = generateTableName
@@ -891,7 +889,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             )
           }
         }
-      })
+      }
     }
   }
 }
