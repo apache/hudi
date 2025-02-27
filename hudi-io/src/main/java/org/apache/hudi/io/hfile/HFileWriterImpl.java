@@ -40,7 +40,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Pure Java implementation of HFile writer (HFile v3 format) for Hudi.
@@ -50,10 +52,11 @@ public class HFileWriterImpl implements HFileWriter {
   private final HFileContext context;
   // Flushed data blocks.
   private final List<DataBlock> dataBlocks = new ArrayList<>();
+  // Meta Info map.
+  private final Map<String, byte[]> metaInfo = new HashMap<>();
   // Data block under construction.
   private DataBlock currentDataBlock;
   // Meta block under construction.
-  private MetaBlock currentMetaBlock;
   private final IndexBlock rootIndexBlock;
   private final IndexBlock metaIndexBlock;
   private final FileInfoBlock fileInfoBlock;
@@ -71,7 +74,6 @@ public class HFileWriterImpl implements HFileWriter {
     this.totalUncompressedBytes = 0L;
     this.currentOffset = 0L;
     this.currentDataBlock = new DataBlock(blockSize);
-    this.currentMetaBlock = new MetaBlock(blockSize);
     this.rootIndexBlock = new RootIndexBlock(blockSize);
     this.metaIndexBlock = new RootIndexBlock(blockSize);
     this.fileInfoBlock = new FileInfoBlock(blockSize);
@@ -92,8 +94,7 @@ public class HFileWriterImpl implements HFileWriter {
 
   // Append a metadata kv pair.
   public void appendMetaInfo(String name, byte[] value) {
-    currentMetaBlock.add(
-        StringUtils.getUTF8Bytes(name), value);
+    metaInfo.put(name, value);
   }
 
   // Append a file info kv pair.
@@ -104,7 +105,7 @@ public class HFileWriterImpl implements HFileWriter {
   @Override
   public void close() throws IOException {
     flushCurrentDataBlock();
-    // TODO: support meta blocks if needed.
+    flushMetaBlocks();
     writeLoadOnOpenSection();
     writeTrailer();
     outputStream.flush();
@@ -122,13 +123,42 @@ public class HFileWriterImpl implements HFileWriter {
     long blockOffset = currentOffset;
     writeBuffer(blockBuffer);
     dataBlocks.add(currentDataBlock);
-
-    currentOffset = blockOffset + blockBuffer.limit();
     // Create an index entry.
     rootIndexBlock.add(
         currentDataBlock.getFirstKey(), blockOffset, blockBuffer.limit());
     // Create a new data block.
     currentDataBlock = new DataBlock(blockSize);
+  }
+
+  private void flushMetaBlocks() throws IOException {
+    MetaBlock currentMetaBlock = new MetaBlock(blockSize);
+    int uncompressedBytes = 0;
+    for (Map.Entry<String, byte[]> e : metaInfo.entrySet()) {
+      byte[] key = StringUtils.getUTF8Bytes(e.getKey());
+      if (uncompressedBytes + key.length + e.getValue().length + 9 <= blockSize) {
+        currentMetaBlock.add(key, e.getValue());
+        uncompressedBytes += key.length + e.getValue().length + 9;
+      } else {
+        ByteBuffer blockBuffer = currentMetaBlock.serialize();
+        long blockOffset = currentOffset;
+        currentMetaBlock.setBlockOffset(currentOffset);
+        writeBuffer(blockBuffer);
+        metaIndexBlock.add(
+            currentMetaBlock.getFirstKey(), blockOffset, blockBuffer.limit());
+        currentMetaBlock = new MetaBlock(blockSize);
+        uncompressedBytes = 0;
+      }
+    }
+
+    // Handle last meta block.
+    if (!currentMetaBlock.isEmpty()) {
+      ByteBuffer blockBuffer = currentMetaBlock.serialize();
+      long blockOffset = currentOffset;
+      currentMetaBlock.setBlockOffset(currentOffset);
+      writeBuffer(blockBuffer);
+      metaIndexBlock.add(
+          currentMetaBlock.getFirstKey(), blockOffset, blockBuffer.limit());
+    }
   }
 
   private void writeLoadOnOpenSection() throws IOException {
@@ -138,6 +168,8 @@ public class HFileWriterImpl implements HFileWriter {
     rootIndexBlock.setBlockOffset(currentOffset);
     writeBuffer(dataIndexBuffer);
     // Write Meta Data Index.
+    // Note: Even this block is empty, it has to be there
+    //  due to the behavior of the reader.
     ByteBuffer metaIndexBuffer = metaIndexBlock.serialize();
     metaIndexBlock.setBlockOffset(currentOffset);
     writeBuffer(metaIndexBuffer);
@@ -159,7 +191,7 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setLoadOnOpenDataOffset(loadOnOpenSectionOffset);
     builder.setUncompressedDataIndexSize(totalUncompressedBytes);
     builder.setDataIndexCount(rootIndexBlock.getNumOfEntries());
-    builder.setMetaIndexCount(0);
+    builder.setMetaIndexCount(metaIndexBlock.getNumOfEntries());
     builder.setEntryCount(getTotalNumOfEntries());
     // TODO: support multiple levels.
     builder.setNumDataIndexLevels(1);
@@ -185,8 +217,8 @@ public class HFileWriterImpl implements HFileWriter {
     trailer.put(varintBuffer.toByteArray());
     trailer.put(trailerProto.toByteArray());
     // Force trailer to have fixed length.
-    trailer.position(4092);
-    trailer.putInt(3 << 24);
+    trailer.position(4095);
+    trailer.put((byte)3);
 
     trailer.flip();
     writeBuffer(trailer);
