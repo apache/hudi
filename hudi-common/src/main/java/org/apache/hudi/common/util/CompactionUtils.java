@@ -190,7 +190,7 @@ public class CompactionUtils {
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, HoodieInstant requestedInstant) {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
     try {
-      HoodieCompactionPlan compactionPlan = metaClient.getActiveTimeline().deserializeCompactionPlan(requestedInstant);
+      HoodieCompactionPlan compactionPlan = metaClient.getActiveTimeline().loadCompactionPlan(requestedInstant);
       return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
     } catch (IOException e) {
       throw new HoodieException(e);

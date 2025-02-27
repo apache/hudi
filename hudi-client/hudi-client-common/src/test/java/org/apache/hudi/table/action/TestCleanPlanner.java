@@ -133,7 +133,7 @@ public class TestCleanPlanner {
       when(mockHoodieTable.getActiveTimeline()).thenReturn(activeTimeline);
       for (Pair<String, HoodieSavepointMetadata> savepoint : savepoints) {
         HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint.getLeft());
-        when(activeTimeline.deserializeHoodieSavepointMetadata(instant)).thenReturn(savepoint.getRight());
+        when(activeTimeline.loadHoodieSavepointMetadata(instant)).thenReturn(savepoint.getRight());
         when(mockMetaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint.getLeft())).thenReturn(instant);
       }
     }
@@ -180,7 +180,7 @@ public class TestCleanPlanner {
       for (Map.Entry<String, List<String>> entry : savepoints.entrySet()) {
         Pair<HoodieSavepointMetadata, HoodieSavepointMetadata> savepointMetadataOptionPair = getSavepointMetadata(entry.getValue());
         HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, entry.getKey());
-        when(activeTimeline.deserializeHoodieSavepointMetadata(instant)).thenReturn(savepointMetadataOptionPair.getRight());
+        when(activeTimeline.loadHoodieSavepointMetadata(instant)).thenReturn(savepointMetadataOptionPair.getRight());
       }
     }
 
@@ -622,7 +622,7 @@ public class TestCleanPlanner {
     HoodieInstant latestCleanInstant = INSTANT_GENERATOR.createNewInstant(COMPLETED, HoodieTimeline.CLEAN_ACTION, timestamp);
     when(completedCleanTimeline.lastInstant()).thenReturn(Option.of(latestCleanInstant));
     when(activeTimeline.isEmpty(latestCleanInstant)).thenReturn(false);
-    when(activeTimeline.deserializeHoodieCleanMetadata(latestCleanInstant)).thenReturn(cleanMetadata.getRight());
+    when(activeTimeline.loadHoodieCleanMetadata(latestCleanInstant)).thenReturn(cleanMetadata.getRight());
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(earliestCommitToRetain, HoodieTimeline.COMMIT_ACTION, COMPLETED.name()),
         cleanMetadata.getLeft().getLastCompletedCommitTimestamp(),
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(), Collections.emptyMap(),

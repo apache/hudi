@@ -110,7 +110,7 @@ public class CleanerUtils {
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
     CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = metaClient.getActiveTimeline().deserializeHoodieCleanMetadata(cleanInstant);
+    HoodieCleanMetadata cleanMetadata = metaClient.getActiveTimeline().loadHoodieCleanMetadata(cleanInstant);
     return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
   }
 

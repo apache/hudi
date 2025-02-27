@@ -205,13 +205,13 @@ public class ClusteringUtils {
   private static Option<HoodieRequestedReplaceMetadata> getHoodieRequestedReplaceMetadataOption(
       HoodieTimeline timeline, HoodieInstant pendingReplaceOrClusterInstant, InstantGenerator factory, HoodieInstant requestedInstant) throws IOException {
     try {
-      return Option.of(timeline.deserializeRequestedReplaceMetadata(requestedInstant));
+      return Option.of(timeline.loadRequestedReplaceMetadata(requestedInstant));
     } catch (HoodieIOException e) {
       if (e.getCause() instanceof FileNotFoundException && pendingReplaceOrClusterInstant.isCompleted()) {
         // For clustering instants, completed instant is also a replace commit instant. For input replace commit instant,
         // it is not known whether requested instant is CLUSTER or REPLACE_COMMIT_ACTION. So we need to query both.
         requestedInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, pendingReplaceOrClusterInstant.requestedTime());
-        return Option.of(timeline.deserializeRequestedReplaceMetadata(requestedInstant));
+        return Option.of(timeline.loadRequestedReplaceMetadata(requestedInstant));
       }
       throw e;
     }

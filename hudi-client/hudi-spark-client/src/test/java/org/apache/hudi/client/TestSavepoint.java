@@ -105,7 +105,7 @@ public class TestSavepoint extends HoodieClientTestBase {
       assertEquals(1, savepointTimeline.countInstants());
 
       Map<String, HoodieSavepointPartitionMetadata> savepointPartitionMetadataMap =
-                  savepointTimeline.deserializeHoodieSavepointMetadata(savepointTimeline.firstInstant().get())
+                  savepointTimeline.loadHoodieSavepointMetadata(savepointTimeline.firstInstant().get())
               .getPartitionMetadata();
 
       HoodieTimeline commitsTimeline = table.getActiveTimeline().getCommitsTimeline();

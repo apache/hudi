@@ -77,11 +77,11 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       String lastCommitRetained = cleanInstant.map(instant -> {
         try {
           if (instant.isCompleted()) {
-            return table.getActiveTimeline().deserializeHoodieCleanMetadata(instant)
+            return table.getActiveTimeline().loadHoodieCleanMetadata(instant)
                 .getEarliestCommitToRetain();
           } else {
             // clean is pending or inflight
-            return table.getActiveTimeline().deserializeCleanerPlan(instantGenerator.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime()))
+            return table.getActiveTimeline().loadCleanerPlan(instantGenerator.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime()))
                 .getEarliestInstantToRetain().getTimestamp();
           }
         } catch (IOException e) {

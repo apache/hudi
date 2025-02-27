@@ -124,7 +124,7 @@ public class TimelineUtils {
     cleanerTimeline.getInstantsAsStream()
         .forEach(instant -> {
           try {
-            HoodieCleanMetadata cleanMetadata = cleanerTimeline.deserializeHoodieCleanMetadata(instant);
+            HoodieCleanMetadata cleanMetadata = cleanerTimeline.loadHoodieCleanMetadata(instant);
             cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
               if (Boolean.TRUE.equals(partitionMetadata.getIsPartitionDeleted())) {
                 partitionToLatestDeleteTimestamp.put(partition, instant.requestedTime());
@@ -186,14 +186,14 @@ public class TimelineUtils {
           }
         case HoodieTimeline.CLEAN_ACTION:
           try {
-            HoodieCleanMetadata cleanMetadata = timeline.deserializeHoodieCleanMetadata(s);
+            HoodieCleanMetadata cleanMetadata = timeline.loadHoodieCleanMetadata(s);
             return cleanMetadata.getPartitionMetadata().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions cleaned at " + s, e);
           }
         case HoodieTimeline.ROLLBACK_ACTION:
           try {
-            return timeline.deserializeHoodieRollbackMetadata(s).getPartitionMetadata().keySet().stream();
+            return timeline.loadHoodieRollbackMetadata(s).getPartitionMetadata().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions rolledback at " + s, e);
           }
@@ -208,7 +208,7 @@ public class TimelineUtils {
           }
         case HoodieTimeline.SAVEPOINT_ACTION:
           try {
-            return timeline.deserializeHoodieSavepointMetadata(s).getPartitionMetadata().keySet().stream();
+            return timeline.loadHoodieSavepointMetadata(s).getPartitionMetadata().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions savepoint at " + s, e);
           }

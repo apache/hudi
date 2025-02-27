@@ -2011,7 +2011,7 @@ public class HoodieTableMetadataUtil {
       List<String> commitsToRollback;
       if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
         try {
-          HoodieRollbackMetadata rollbackMetadata = timeline.deserializeHoodieRollbackMetadata(instant);
+          HoodieRollbackMetadata rollbackMetadata = timeline.loadHoodieRollbackMetadata(instant);
           commitsToRollback = rollbackMetadata.getCommitsRollback();
         } catch (IOException e) {
           // if file is empty, fetch the commits to rollback from rollback.requested file
@@ -2027,7 +2027,7 @@ public class HoodieTableMetadataUtil {
       List<String> rollbackedCommits = new LinkedList<>();
       if (instant.getAction().equals(HoodieTimeline.RESTORE_ACTION)) {
         // Restore is made up of several rollbacks
-        HoodieRestoreMetadata restoreMetadata = timeline.deserializeHoodieRestoreMetadata(instant);
+        HoodieRestoreMetadata restoreMetadata = timeline.loadHoodieRestoreMetadata(instant);
         restoreMetadata.getHoodieRestoreMetadata().values()
                 .forEach(rms -> rms.forEach(rm -> rollbackedCommits.addAll(rm.getCommitsRollback())));
       }

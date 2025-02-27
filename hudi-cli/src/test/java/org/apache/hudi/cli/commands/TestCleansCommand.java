@@ -200,7 +200,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
     HoodieInstant clean = timeline.getReverseOrderedInstants().findFirst().orElse(null);
     if (clean != null) {
-      HoodieCleanMetadata cleanMetadata = timeline.deserializeHoodieCleanMetadata(clean);
+      HoodieCleanMetadata cleanMetadata = timeline.loadHoodieCleanMetadata(clean);
       return cleanMetadata.getTimeTakenInMillis();
     }
     return -1L;

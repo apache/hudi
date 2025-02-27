@@ -98,7 +98,7 @@ public class MetadataConversionUtils {
             // we may have cases with empty HoodieRequestedReplaceMetadata e.g. insert_overwrite_table or insert_overwrite
             // without clustering. However, we should revisit the requested commit file standardization
             Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = Option.of(metaClient.getActiveTimeline()
-                .deserializeRequestedReplaceMetadata(hoodieInstant));
+                .loadRequestedReplaceMetadata(hoodieInstant));
             if (requestedReplaceMetadata.isPresent()) {
               archivedMetaWrapper.setHoodieRequestedReplaceMetadata(requestedReplaceMetadata.get());
             }

@@ -184,7 +184,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
         val localPath = localFolder + StoragePath.SEPARATOR + instantFileNameGenerator.getFileName(instant)
         val data: Array[Byte] = instant.getAction match {
           case HoodieTimeline.CLEAN_ACTION =>
-            val metadata = timeline.deserializeHoodieCleanMetadata(instant)
+            val metadata = timeline.loadHoodieCleanMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.DELTA_COMMIT_ACTION =>
@@ -200,11 +200,11 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
             timeline.getInstantDetails(instant).get
 
           case HoodieTimeline.ROLLBACK_ACTION =>
-            val metadata = timeline.deserializeHoodieRollbackMetadata(instant)
+            val metadata = timeline.loadHoodieRollbackMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.SAVEPOINT_ACTION =>
-            val metadata = timeline.deserializeHoodieSavepointMetadata(instant)
+            val metadata = timeline.loadHoodieSavepointMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case _ => null

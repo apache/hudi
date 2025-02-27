@@ -142,7 +142,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
     HoodieInstant instant = hoodieTable.getMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepointTimestamp);
     try {
-      return hoodieTable.getActiveTimeline().deserializeHoodieSavepointMetadata(instant);
+      return hoodieTable.getActiveTimeline().loadHoodieSavepointMetadata(instant);
     } catch (IOException e) {
       throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTimestamp, e);
     }
@@ -182,7 +182,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     if (config.incrementalCleanerModeEnabled()) {
       Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
       if (lastClean.isPresent()) {
-        HoodieCleanMetadata cleanMetadata = hoodieTable.getActiveTimeline().deserializeHoodieCleanMetadata(lastClean.get());
+        HoodieCleanMetadata cleanMetadata = hoodieTable.getActiveTimeline().loadHoodieCleanMetadata(lastClean.get());
         if ((cleanMetadata.getEarliestCommitToRetain() != null)
                 && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()
                 && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {

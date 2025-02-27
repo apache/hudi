@@ -75,7 +75,7 @@ public class CleansCommand {
     List<HoodieInstant> cleans = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
     for (HoodieInstant clean : cleans) {
-      HoodieCleanMetadata cleanMetadata = timeline.deserializeHoodieCleanMetadata(clean);
+      HoodieCleanMetadata cleanMetadata = timeline.loadHoodieCleanMetadata(clean);
       rows.add(new Comparable[] {clean.requestedTime(), cleanMetadata.getEarliestCommitToRetain(),
           cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
     }
@@ -106,7 +106,7 @@ public class CleansCommand {
       return "Clean " + instantTime + " not found in metadata " + timeline;
     }
 
-    HoodieCleanMetadata cleanMetadata = timeline.deserializeHoodieCleanMetadata(cleanInstant);
+    HoodieCleanMetadata cleanMetadata = timeline.loadHoodieCleanMetadata(cleanInstant);
     List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, HoodieCleanPartitionMetadata> entry : cleanMetadata.getPartitionMetadata().entrySet()) {
       String path = entry.getKey();

@@ -195,51 +195,128 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    */
   HoodieTimeline getWriteTimeline();
 
+  /**
+   * Load and deserialize the content of an instant into the specified class type.
+   *
+   * @param instant The instant to load content from
+   * @param clazz The target class to deserialize into
+   * @return Deserialized instant content
+   * @throws IOException when reading instant content fails
+   */
   default <T> T loadInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException {
     TimelineLayout layout = TimelineLayout.fromVersion(getTimelineLayoutVersion());
     return layout.getCommitMetadataSerDe().deserialize(instant, getInstantContentStream(instant), () -> isEmpty(instant), clazz);
   }
 
-  default HoodieCleanerPlan deserializeCleanerPlan(HoodieInstant instant) throws IOException {
+  /**
+   * Load and deserialize cleaner plan from an instant.
+   *
+   * @param instant The instant containing the cleaner plan
+   * @return Deserialized HoodieCleanerPlan
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieCleanerPlan loadCleanerPlan(HoodieInstant instant) throws IOException {
     return deserializeAvroMetadata(getInstantContentStream(instant), HoodieCleanerPlan.class);
   }
 
-  default HoodieCompactionPlan deserializeCompactionPlan(HoodieInstant instant) throws IOException {
+  /**
+   * Load and deserialize compaction plan from an instant.
+   *
+   * @param instant The instant containing the compaction plan
+   * @return Deserialized HoodieCompactionPlan
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieCompactionPlan loadCompactionPlan(HoodieInstant instant) throws IOException {
     return deserializeAvroMetadata(getInstantContentStream(instant), HoodieCompactionPlan.class);
   }
 
-  default HoodieCleanMetadata deserializeHoodieCleanMetadata(HoodieInstant instant) throws IOException {
+  /**
+   * Load and deserialize clean metadata from an instant.
+   *
+   * @param instant The instant containing the clean metadata
+   * @return Deserialized HoodieCleanMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieCleanMetadata loadHoodieCleanMetadata(HoodieInstant instant) throws IOException {
     return deserializeAvroMetadata(getInstantContentStream(instant), HoodieCleanMetadata.class);
   }
 
-  default HoodieRollbackMetadata deserializeHoodieRollbackMetadata(HoodieInstant instant) throws IOException {
+  /**
+   * Load and deserialize rollback metadata from an instant.
+   *
+   * @param instant The instant containing the rollback metadata
+   * @return Deserialized HoodieRollbackMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieRollbackMetadata loadHoodieRollbackMetadata(HoodieInstant instant) throws IOException {
     return deserializeAvroMetadata(getInstantContentStream(instant), HoodieRollbackMetadata.class);
   }
 
-  default HoodieRestoreMetadata deserializeHoodieRestoreMetadata(HoodieInstant instant) throws IOException {
+  /**
+   * Load and deserialize restore metadata from an instant.
+   *
+   * @param instant The instant containing the restore metadata
+   * @return Deserialized HoodieRestoreMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieRestoreMetadata loadHoodieRestoreMetadata(HoodieInstant instant) throws IOException {
     return deserializeAvroMetadata(getInstantContentStream(instant), HoodieRestoreMetadata.class);
   }
 
-  default HoodieSavepointMetadata deserializeHoodieSavepointMetadata(HoodieInstant instant) throws IOException {
+  /**
+   * Load and deserialize savepoint metadata from an instant.
+   *
+   * @param instant The instant containing the savepoint metadata
+   * @return Deserialized HoodieSavepointMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieSavepointMetadata loadHoodieSavepointMetadata(HoodieInstant instant) throws IOException {
     return deserializeAvroMetadata(getInstantContentStream(instant), HoodieSavepointMetadata.class);
   }
 
-  default HoodieRequestedReplaceMetadata deserializeRequestedReplaceMetadata(HoodieInstant instant) throws IOException {
+  /**
+   * Load and deserialize requested replace metadata from an instant.
+   *
+   * @param instant The instant containing the requested replace metadata
+   * @return Deserialized HoodieRequestedReplaceMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieRequestedReplaceMetadata loadRequestedReplaceMetadata(HoodieInstant instant) throws IOException {
     return deserializeAvroMetadata(getInstantContentStream(instant), HoodieRequestedReplaceMetadata.class);
   }
 
-  default HoodieIndexPlan deserializeIndexPlan(HoodieInstant instant) throws IOException {
+  /**
+   * Load and deserialize index plan from an instant.
+   *
+   * @param instant The instant containing the index plan
+   * @return Deserialized HoodieIndexPlan
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieIndexPlan loadIndexPlan(HoodieInstant instant) throws IOException {
     return deserializeAvroMetadata(getInstantContentStream(instant), HoodieIndexPlan.class);
   }
 
-  default HoodieCommitMetadata deserializeCommitMetadata(HoodieInstant instant) throws IOException {
+  /**
+   * Load and deserialize commit metadata in Avro format from an instant.
+   *
+   * @param instant The instant containing the commit metadata
+   * @return Deserialized HoodieCommitMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieCommitMetadata loadCommitMetadataAvro(HoodieInstant instant) throws IOException {
     return deserializeAvroMetadata(getInstantContentStream(instant), HoodieCommitMetadata.class);
   }
 
-  default HoodieReplaceCommitMetadata deserializeReplaceCommitMetadata(HoodieInstant instant) throws IOException {
+  /**
+   * Load and deserialize replace commit metadata in Avro format from an instant.
+   *
+   * @param instant The instant containing the replace commit metadata
+   * @return Deserialized HoodieReplaceCommitMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieReplaceCommitMetadata loadReplaceCommitMetadataAvro(HoodieInstant instant) throws IOException {
     return deserializeAvroMetadata(getInstantContentStream(instant), HoodieReplaceCommitMetadata.class);
   }
-
 
   /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions that are completed and contiguous.
