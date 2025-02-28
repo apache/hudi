@@ -114,7 +114,7 @@ public class HoodieAvroHFileWriter
         String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
 
     FsPermission fsPermission = FsPermission.getFileDefault();
-    FSDataOutputStream outputStream = create(fs, this.file, fsPermission, true);
+    FSDataOutputStream outputStream = HoodieHFileUtils.create(fs, this.file, fsPermission, true);
     this.writer = new HFileWriterImpl(context, outputStream);
 
     this.prevRecordKey = "";
@@ -197,61 +197,5 @@ public class HoodieAvroHFileWriter
     }
     writer.close();
     writer = null;
-  }
-
-  /**
-   * Create the specified file on the filesystem. By default, this will:
-   * <ol>
-   * <li>apply the umask in the configuration (if it is enabled)</li>
-   * <li>use the fs configured buffer size (or 4096 if not set)</li>
-   * <li>use the default replication</li>
-   * <li>use the default block size</li>
-   * <li>not track progress</li>
-   * </ol>
-   * @param fs        {@link FileSystem} on which to write the file
-   * @param path      {@link Path} to the file to write
-   * @param perm      intial permissions
-   * @param overwrite Whether or not the created file should be overwritten.
-   * @return output stream to the created file
-   * @throws IOException if the file cannot be created
-   */
-  public static FSDataOutputStream create(FileSystem fs, Path path, FsPermission perm,
-                                          boolean overwrite) throws IOException {
-    if (LOG.isTraceEnabled()) {
-      LOG.trace("Creating file={} with permission={}, overwrite={}", path, perm, overwrite);
-    }
-    return fs.create(path, perm, overwrite, getDefaultBufferSize(fs),
-        getDefaultReplication(fs, path), getDefaultBlockSize(fs, path), null);
-  }
-
-  /**
-   * Returns the default buffer size to use during writes. The size of the buffer should probably be
-   * a multiple of hardware page size (4096 on Intel x86), and it determines how much data is
-   * buffered during read and write operations.
-   * @param fs filesystem object
-   * @return default buffer size to use during writes
-   */
-  public static int getDefaultBufferSize(final FileSystem fs) {
-    return fs.getConf().getInt("io.file.buffer.size", 4096);
-  }
-
-  /**
-   * Get the default replication.
-   * @param fs filesystem object
-   * @param path path of file
-   * @return default replication for the path's filesystem
-   */
-  public static short getDefaultReplication(final FileSystem fs, final Path path) {
-    return fs.getDefaultReplication(path);
-  }
-
-  /**
-   * Return the number of bytes that large input files should be optimally be split into to minimize
-   * i/o time.
-   * @param fs filesystem object
-   * @return the default block size for the path's filesystem
-   */
-  public static long getDefaultBlockSize(final FileSystem fs, final Path path) {
-    return fs.getDefaultBlockSize(path);
   }
 }
