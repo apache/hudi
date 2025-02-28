@@ -52,7 +52,7 @@ class TestDataSourceUtils extends HoodieClientTestBase {
       Map<String, String> parameters = config.getProps().entrySet().stream().collect(Collectors.toMap(entry -> entry.getKey().toString(), entry -> entry.getValue().toString()));
       List<HoodieRecord> newRecords = dataGen.generateInserts(newCommitTime, 10);
       List<HoodieRecord> inputRecords = Stream.concat(records.subList(0, 10).stream(), newRecords.stream()).collect(Collectors.toList());
-      List<HoodieRecord> output = DataSourceUtils.resolveDuplicates(jsc, jsc.parallelize(inputRecords, 1), parameters, false).collect();
+      List<HoodieRecord> output = DataSourceUtils.resolveDuplicates(context.getJavaSparkContext(), context.getJavaSparkContext().parallelize(inputRecords, 1), parameters, false).collect();
       Set<String> expectedRecordKeys = newRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet());
       assertEquals(expectedRecordKeys, output.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet()));
     }
