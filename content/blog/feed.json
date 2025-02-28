@@ -5,6 +5,64 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "https://hudi.apache.org/blog/2025/02/25/curious-engineering-facts-trace-agents-hudi-daft-1",
+            "content_html": "<span>Redirecting... please wait!! <!-- -->or click <a href=\"https://medium.com/@kkgsanjeewac77/curious-engineering-facts-trace-agents-hudi-daft-1-march-release-18-25-bedc00e05ecd\">here</a></span>",
+            "url": "https://hudi.apache.org/blog/2025/02/25/curious-engineering-facts-trace-agents-hudi-daft-1",
+            "title": "Curious Engineering Facts ( Trace Agents | Hudi| Daft : 1) : March Release 18 : 25",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2025-02-25T00:00:00.000Z",
+            "author": {
+                "name": "Gayan Sanjeewa"
+            },
+            "tags": [
+                "blog",
+                "apache hudi",
+                "daft",
+                "trace agents",
+                "openai",
+                "llm",
+                "medium"
+            ]
+        },
+        {
+            "id": "https://hudi.apache.org/blog/2025/02/24/building-a-lakehouse-architecture-on-aws-with-terraform",
+            "content_html": "<span>Redirecting... please wait!! <!-- -->or click <a href=\"https://medium.com/@juanfelipear97/building-a-lakehouse-architecture-on-aws-with-terraform-139c079ec385\">here</a></span>",
+            "url": "https://hudi.apache.org/blog/2025/02/24/building-a-lakehouse-architecture-on-aws-with-terraform",
+            "title": "Building a Lakehouse Architecture on AWS with Terraform",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2025-02-24T00:00:00.000Z",
+            "author": {
+                "name": "Juanfelipear"
+            },
+            "tags": [
+                "blog",
+                "apache hudi",
+                "aws",
+                "terraform",
+                "lakehouse",
+                "medium"
+            ]
+        },
+        {
+            "id": "https://hudi.apache.org/blog/2025/02/23/curious-engineering-facts-lakehouse-apache-hudi-daft-positional-argument",
+            "content_html": "<span>Redirecting... please wait!! <!-- -->or click <a href=\"https://medium.com/@kkgsanjeewac77/curious-engineering-facts-lakehouse-apache-hudi-daft-positional-argument-march-release-d0fee8151736\">here</a></span>",
+            "url": "https://hudi.apache.org/blog/2025/02/23/curious-engineering-facts-lakehouse-apache-hudi-daft-positional-argument",
+            "title": "Curious Engineering Facts (Lakehouse | Apache Hudi | Daft |Positional argument|) : March Release 19 : 25",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2025-02-23T00:00:00.000Z",
+            "author": {
+                "name": "Gayan Sanjeewa"
+            },
+            "tags": [
+                "blog",
+                "apache hudi",
+                "daft",
+                "streamlit",
+                "cow",
+                "medium"
+            ]
+        },
+        {
             "id": "https://hudi.apache.org/blog/2025/01/30/an-intro-to-hudi-with-minio",
             "content_html": "<span>Redirecting... please wait!! <!-- -->or click <a href=\"https://dataxplorer.medium.com/an-intro-to-hudi-with-minio-i-75536fe75b4c\">here</a></span>",
             "url": "https://hudi.apache.org/blog/2025/01/30/an-intro-to-hudi-with-minio",
@@ -315,58 +373,6 @@
                 "record index",
                 "record level index",
                 "medium"
-            ]
-        },
-        {
-            "id": "https://hudi.apache.org/blog/2024/11/12/storing-200-billion-entities-notions",
-            "content_html": "<span>Redirecting... please wait!! <!-- -->or click <a href=\"https://blog.bytebytego.com/p/storing-200-billion-entities-notions\">here</a></span>",
-            "url": "https://hudi.apache.org/blog/2024/11/12/storing-200-billion-entities-notions",
-            "title": "Storing 200 Billion Entities: Notion’s Data Lake Project",
-            "summary": "Redirecting... please wait!!",
-            "date_modified": "2024-11-12T00:00:00.000Z",
-            "author": {
-                "name": "ByteByteGo"
-            },
-            "tags": [
-                "blog",
-                "apache hudi",
-                "use-case",
-                "bytebytego"
-            ]
-        },
-        {
-            "id": "https://hudi.apache.org/blog/2024/11/12/understanding-cow-and-mor-in-apache-hudi",
-            "content_html": "<span>Redirecting... please wait!! <!-- -->or click <a href=\"https://opstree.com/blog/2024/11/12/understanding-cow-and-mor-in-apache-hudi-choosing-the-right-storage-strategy/\">here</a></span>",
-            "url": "https://hudi.apache.org/blog/2024/11/12/understanding-cow-and-mor-in-apache-hudi",
-            "title": "Understanding COW and MOR in Apache Hudi: Choosing the Right Storage Strategy",
-            "summary": "Redirecting... please wait!!",
-            "date_modified": "2024-11-12T00:00:00.000Z",
-            "author": {
-                "name": "Deepak Nishad"
-            },
-            "tags": [
-                "blog",
-                "apache hudi",
-                "cow",
-                "mor",
-                "opstree"
-            ]
-        },
-        {
-            "id": "https://hudi.apache.org/blog/2024/10/27/I-spent-5-hours-exploring-the-story-behind-Apache-Hudi",
-            "content_html": "<span>Redirecting... please wait!! <!-- -->or click <a href=\"https://blog.det.life/i-spent-5-hours-exploring-the-story-behind-apache-hudi-dacad829394d\">here</a></span>",
-            "url": "https://hudi.apache.org/blog/2024/10/27/I-spent-5-hours-exploring-the-story-behind-Apache-Hudi",
-            "title": "I spent 5 hours exploring the story behind Apache Hudi.",
-            "summary": "Redirecting... please wait!!",
-            "date_modified": "2024-10-27T00:00:00.000Z",
-            "author": {
-                "name": "Vu Trinh"
-            },
-            "tags": [
-                "blog",
-                "apache hudi",
-                "beginner",
-                "det"
             ]
         }
     ]

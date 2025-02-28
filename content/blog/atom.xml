@@ -2,11 +2,63 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2025-01-30T00:00:00.000Z</updated>
+    <updated>2025-02-25T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Curious Engineering Facts ( Trace Agents | Hudi| Daft : 1) : March Release 18 : 25]]></title>
+        <id>https://hudi.apache.org/blog/2025/02/25/curious-engineering-facts-trace-agents-hudi-daft-1</id>
+        <link href="https://hudi.apache.org/blog/2025/02/25/curious-engineering-facts-trace-agents-hudi-daft-1"/>
+        <updated>2025-02-25T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@kkgsanjeewac77/curious-engineering-facts-trace-agents-hudi-daft-1-march-release-18-25-bedc00e05ecd">here</a></span>]]></content>
+        <author>
+            <name>Gayan Sanjeewa</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="daft" term="daft"/>
+        <category label="trace agents" term="trace agents"/>
+        <category label="openai" term="openai"/>
+        <category label="llm" term="llm"/>
+        <category label="medium" term="medium"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Building a Lakehouse Architecture on AWS with Terraform]]></title>
+        <id>https://hudi.apache.org/blog/2025/02/24/building-a-lakehouse-architecture-on-aws-with-terraform</id>
+        <link href="https://hudi.apache.org/blog/2025/02/24/building-a-lakehouse-architecture-on-aws-with-terraform"/>
+        <updated>2025-02-24T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@juanfelipear97/building-a-lakehouse-architecture-on-aws-with-terraform-139c079ec385">here</a></span>]]></content>
+        <author>
+            <name>Juanfelipear</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="aws" term="aws"/>
+        <category label="terraform" term="terraform"/>
+        <category label="lakehouse" term="lakehouse"/>
+        <category label="medium" term="medium"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Curious Engineering Facts (Lakehouse | Apache Hudi | Daft |Positional argument|) : March Release 19 : 25]]></title>
+        <id>https://hudi.apache.org/blog/2025/02/23/curious-engineering-facts-lakehouse-apache-hudi-daft-positional-argument</id>
+        <link href="https://hudi.apache.org/blog/2025/02/23/curious-engineering-facts-lakehouse-apache-hudi-daft-positional-argument"/>
+        <updated>2025-02-23T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@kkgsanjeewac77/curious-engineering-facts-lakehouse-apache-hudi-daft-positional-argument-march-release-d0fee8151736">here</a></span>]]></content>
+        <author>
+            <name>Gayan Sanjeewa</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="daft" term="daft"/>
+        <category label="streamlit" term="streamlit"/>
+        <category label="cow" term="cow"/>
+        <category label="medium" term="medium"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[An intro to Hudi with MinIO]]></title>
         <id>https://hudi.apache.org/blog/2025/01/30/an-intro-to-hudi-with-minio</id>
@@ -833,51 +885,5 @@ This setting specifies the maximum number of file groups whose base files meet t
         <category label="record index" term="record index"/>
         <category label="record level index" term="record level index"/>
         <category label="medium" term="medium"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Storing 200 Billion Entities: Notion’s Data Lake Project]]></title>
-        <id>https://hudi.apache.org/blog/2024/11/12/storing-200-billion-entities-notions</id>
-        <link href="https://hudi.apache.org/blog/2024/11/12/storing-200-billion-entities-notions"/>
-        <updated>2024-11-12T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.bytebytego.com/p/storing-200-billion-entities-notions">here</a></span>]]></content>
-        <author>
-            <name>ByteByteGo</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="use-case" term="use-case"/>
-        <category label="bytebytego" term="bytebytego"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Understanding COW and MOR in Apache Hudi: Choosing the Right Storage Strategy]]></title>
-        <id>https://hudi.apache.org/blog/2024/11/12/understanding-cow-and-mor-in-apache-hudi</id>
-        <link href="https://hudi.apache.org/blog/2024/11/12/understanding-cow-and-mor-in-apache-hudi"/>
-        <updated>2024-11-12T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://opstree.com/blog/2024/11/12/understanding-cow-and-mor-in-apache-hudi-choosing-the-right-storage-strategy/">here</a></span>]]></content>
-        <author>
-            <name>Deepak Nishad</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="cow" term="cow"/>
-        <category label="mor" term="mor"/>
-        <category label="opstree" term="opstree"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[I spent 5 hours exploring the story behind Apache Hudi.]]></title>
-        <id>https://hudi.apache.org/blog/2024/10/27/I-spent-5-hours-exploring-the-story-behind-Apache-Hudi</id>
-        <link href="https://hudi.apache.org/blog/2024/10/27/I-spent-5-hours-exploring-the-story-behind-Apache-Hudi"/>
-        <updated>2024-10-27T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.det.life/i-spent-5-hours-exploring-the-story-behind-apache-hudi-dacad829394d">here</a></span>]]></content>
-        <author>
-            <name>Vu Trinh</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="beginner" term="beginner"/>
-        <category label="det" term="det"/>
     </entry>
 </feed>
