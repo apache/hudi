@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -58,6 +59,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -95,8 +97,8 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     int configuredBloomIndexParallelism = config.getBloomIndexParallelism();
 
     // NOTE: Target parallelism could be overridden by the config
-    boolean isBloomIndexParallelismConfigured = configuredBloomIndexParallelism > 0;
-    int targetParallelism = isBloomIndexParallelismConfigured ? configuredBloomIndexParallelism : inputParallelism;
+    Option<Integer> configuredBoomIndexParallelism = configuredBloomIndexParallelism > 0 ? Option.of(configuredBloomIndexParallelism) : Option.empty();
+    int targetParallelism = configuredBoomIndexParallelism.map(Function.identity()).orElse(inputParallelism);
 
     LOG.info(String.format("Input parallelism: %d, Index parallelism: %d", inputParallelism, targetParallelism));
 
@@ -164,7 +166,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       Map<HoodieFileGroupId, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(
           config, recordsPerPartition, partitionToFileInfo, fileComparisonsRDD, context);
       Partitioner partitioner = new BucketizedBloomCheckPartitioner(targetParallelism, comparisonsPerFileGroup,
-          config.getBloomIndexKeysPerBucket(), isBloomIndexParallelismConfigured);
+          config.getBloomIndexKeysPerBucket(), configuredBoomIndexParallelism.isPresent());
 
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(fileGroupAndRecordKey -> new Tuple2<>(fileGroupAndRecordKey, false))
           .repartitionAndSortWithinPartitions(partitioner, new FileGroupIdComparator())
@@ -172,7 +174,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
           .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
     } else if (config.isBloomIndexFileGroupIdKeySortingEnabled()) {
       long totalComparisons = fileComparisonsRDD.count();
-      int parallelismForSortPartitioner = (int) Math.max(1L, totalComparisons / ((Integer)config.getBloomIndexKeysPerBucket()).longValue());
+      int parallelismForSortPartitioner = (int) Math.max(1L, totalComparisons / config.getBloomIndexKeysPerBucket());
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(fileGroupAndRecordKey -> new Tuple2<>(fileGroupAndRecordKey, false))
           .sortByKey(new FileGroupIdAndRecordKeyComparator(), true, parallelismForSortPartitioner)
           .map(Tuple2::_1)
