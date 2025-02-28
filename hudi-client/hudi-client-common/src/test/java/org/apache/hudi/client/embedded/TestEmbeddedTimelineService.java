@@ -18,19 +18,41 @@
 
 package org.apache.hudi.client.embedded;
 
+import org.apache.hudi.client.embedded.EmbeddedTimelineService.TimelineServiceIdentifier;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
+import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.Properties;
+import java.util.UUID;
+
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -44,6 +66,12 @@ import static org.mockito.Mockito.when;
  * These tests are mainly focused on testing the creation and reuse of the embedded timeline server.
  */
 public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
+
+  @BeforeEach
+  void setUp() throws IOException {
+    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString());
+    basePath = metaClient.getBasePath().toString();
+  }
 
   @Test
   public void embeddedTimelineServiceReused() throws Exception {
@@ -196,5 +224,91 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
     service2.stopForBasePath(writeConfig2.getBasePath());
     verify(mockService2, times(1)).unregisterBasePath(writeConfig2.getBasePath());
     verify(mockService2, times(1)).close();
+  }
+
+  @Test
+  void testMultipleTimelineServersWithDifferentPorts() throws IOException {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "temp");
+    properties.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    HoodieWriteConfig.Builder writeConfigBuilder = HoodieWriteConfig.newBuilder()
+        .withProperties(properties)
+        .withPath(basePath)
+        .withEmbeddedTimelineServerEnabled(true)
+        .withEmbeddedTimelineServerReuseEnabled(true);
+    HoodieWriteConfig writeConfig1 = writeConfigBuilder.withEmbeddedTimelineServerPort(8010).build();
+    HoodieWriteConfig writeConfig2 = writeConfigBuilder.withEmbeddedTimelineServerPort(8020).build();
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    // Start two services and having assert they have different views for same table.
+    HoodieTableMetaClient.newTableBuilder().fromProperties(writeConfig1.getProps()).initTable(getDefaultStorageConf(), basePath);
+    EmbeddedTimelineService service1 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, "localhost", writeConfig1);
+    service1.getViewManager().getFileSystemView(basePath);
+    // Write commits to basePath.
+    String partitionPath = "partition1";
+    writeInstantToTimeline(basePath, partitionPath);
+    EmbeddedTimelineService service2 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, "localhost", writeConfig2);
+    // Assert service1 is still behind.
+    assertTrue(service1.getViewManager().getFileSystemView(basePath).getTimeline().getInstants().isEmpty());
+    assertEquals(0, service1.getViewManager().getFileSystemView(basePath).getAllBaseFiles(partitionPath).count());
+    // Assert service1 is still latest.
+    assertEquals(1, service2.getViewManager().getFileSystemView(basePath).getTimeline().getInstants().size());
+    assertEquals(1, service2.getViewManager().getFileSystemView(basePath).getAllBaseFiles(partitionPath).count());
+    // Assert services are independent of each other.
+    service1.stopForBasePath(basePath);
+    assertEquals(1, service2.getViewManager().getFileSystemView(basePath).getAllBaseFiles(partitionPath).count());
+    assertNotEquals(service1.hashCode(), service2.hashCode());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"hostAddrNull", "hostAddr", "port", "markerType", "isMetadataEnabled", "isEarlyConflictDetectionEnable", "isTimelineServerBasedInstantStateEnabled"})
+  void testEquals(String equalityField) {
+    String hostAddr = "localhost";
+    int port = 9090;
+    MarkerType markerType = MarkerType.DIRECT;
+    boolean isMetadataEnabled = true;
+    boolean isEarlyConflictDetectionEnable = true;
+    TimelineServiceIdentifier firstTimelineId = new TimelineServiceIdentifier(
+        hostAddr, port, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable);
+    switch (equalityField) {
+      case "hostAddrNull":
+        hostAddr = null;
+        break;
+      case "hostAddr":
+        hostAddr = "onehouse.ai";
+        break;
+      case "port":
+        port = 9091;
+        break;
+      case "markerType":
+        markerType = MarkerType.TIMELINE_SERVER_BASED;
+        break;
+      case "isMetadataEnabled":
+        isMetadataEnabled = false;
+        break;
+      case "isEarlyConflictDetectionEnable":
+        isEarlyConflictDetectionEnable = false;
+        break;
+      default:
+        throw new IllegalArgumentException("Invalid parameterized test");
+    }
+    TimelineServiceIdentifier secondTimelineId = new TimelineServiceIdentifier(
+        hostAddr, port, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable);
+    assertNotEquals(firstTimelineId, secondTimelineId);
+    assertNotEquals(firstTimelineId.hashCode(), secondTimelineId.hashCode());
+  }
+
+  private void writeInstantToTimeline(String basePath, String partitionPath) throws IOException {
+    // Write data to a single partition.
+    Paths.get(basePath, partitionPath).toFile().mkdirs();
+    String fileId = UUID.randomUUID().toString();
+    String instantTime1 = "1";
+    String fileName1 = FSUtils.makeBaseFileName(instantTime1,"1-0-1", fileId, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
+    Paths.get(basePath, partitionPath, fileName1).toFile().createNewFile();
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant inflight = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime1, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, inflight.getAction(), inflight.requestedTime(), InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    commitTimeline.createNewInstant(requested);
+    commitTimeline.transitionRequestedToInflight(requested, Option.empty());
+    commitTimeline.saveAsComplete(inflight, Option.empty());
   }
 }
