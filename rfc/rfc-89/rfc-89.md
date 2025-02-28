@@ -140,15 +140,46 @@ The read-write process of Spark based on Bucket Index is also similar.
 
 ## Design
 ### Overview
-![workflow.jpg](workflow.jpg)
+#### Demo
+The following is a Demo of using the partition-level bucket index through Flink.
+
+```text
+CREATE TABLE hudi_table(
+  id BIGINT,
+  name STRING,
+  price DOUBLE
+)
+WITH (
+'connector' = 'hudi',
+'path' = 'file:///tmp/hudi_table',
+'table.type' = 'MERGE_ON_READ',
+'index.type' = 'BUCKET',
+'hoodie.bucket.index.partition.expressions' = '{"expressions":[{"expression":"\\d{4}-(06-(01|17|18)|11-(01|10|11))","bucketNumber":256,"rule":"regex"}],"defaultBucketNumber":10}'
+);
+```
+
+This `hoodie.bucket.index.partition.expressions` config is at table level, Users can't change this config through
+runtime options like Flink /*+ OPTIONS(...) */
+
+We can use `ALTER TABLE table_name SET ('hoodie.bucket.index.partition.expressions' = 'new-expression'')` to change the table bucket expression
+
+When users need to modify or add rules in multi-write scenarios, they should refer to the following steps:
+1. Call "alter table" command to modify the configuration, and then restart all jobs.
+2. Alternatively, stop all jobs first, then modify the configuration, and finally start the jobs.
+
+Should not modify the configuration during the process of starting or stopping jobs. Otherwise, the jobs will be failed because of inner conflict detection
+
+#### workflow
 The core process of writing to the Partition Level Bucket Index is shown in the figure below. First, the Bucket Identifier 
 loads the partition bucket count information from the metadata as a cache. During the Partitioner and Writer stages, when 
 using the Identifier for shuffling and tagging, it will first attempt to find the bucketNumber of the corresponding 
 partition from the cache. If the cache was missed, it will calculate the corresponding value based on the user's expression, 
 and then submit it to the metadata during the commit stage.
+![workflow.jpg](workflow.jpg)
+The design details of each part are as follows.
 
 ### Config
-Add a new config named `hoodie.bucket.index.partition.expressions` default null. Users can specify the bucket numbers for different
+Add a new config named `hoodie.bucket.index.partition.expressions` default null. Users can specify a computation rules of bucket-numbers for different
 partitions by configuring a JSON expression. For example
 ```json
 {
@@ -162,15 +193,17 @@ partitions by configuring a JSON expression. For example
   "defaultBucketNumber": 10
 }
 ```
-When the user sets the above expression, for the dates of 06-01, 06-17, 06-18 in June and 01-11, 10-11, 11-11 in 
-November of each year (in the format of yyyy-MM-dd), the corresponding bucket number for the partition is 256. 
+
+When the user sets the above expression, for the dates of 06-01, 06-17, 06-18 in June and 01-11, 10-11, 11-11 in
+November of each year (in the format of yyyy-MM-dd), the corresponding bucket number for the partition is 256.
 For the ordinary "dt" partitions, the bucket number is 10.
 
-We can determine whether the user is currently using the partition-level bucket index based on the value of
-`hoodie.bucket.index.partition.expressions`. If it is null, the processing behavior will be exactly the same as the current logic.
-The advantage of this approach is that it can be fully compatible with the current design of the table-level bucket index,
-enabling a seamless migration for users without their awareness.
+Also `<timestamp>.hash_config` will be create during table DDL under `.hoodie/.hashing_meta/simple/`.
 
+Users can use `ALTER TABLE table_name SET ('hoodie.bucket.index.partition.expressions' = 'new-expression')` to modify this `<timestamp>.hash_config` and it will
+create a new version of hashing_config
+
+please note that `alter table` command won't block read and write but only by restarting the job can the new config work.
 ### Hashing Metadata
 The hashing metadata will be persisted as files named as `<instant>.hashing_meta` for current table, it stores in
 `.hoodie/.hashing_meta/simple/` directory and contains the following information in a readable encoding
@@ -218,10 +251,12 @@ The hashing metadata will be persisted as files named as `<instant>.hashing_meta
    ]
 }
 ```
-We will write <instant>.simple_hashing_meta during commit action:
+We will write <instant>.simple_hashing_meta during commit action (at pre-commit stage):
 1. Get last complete T1.simple_hashing_meta
-2. Merging T1.simple_hashing_meta with new written partitions as T2.simple_hashing_meta
-3. Write T2.simple_hashing_meta into .hoodie folder
+2. Merging T1.simple_hashing_meta with new written partitions as T2.simple_hashing_meta also do partition conflict detection
+   1. For example, current write write partition1 with 20 buckets but there is already defined partition1 with 10 bucket numbers, which means there is 
+another writer that uses the latest expression to pre-determine the bucket number of the current partition. In order to ensure data consistency, it is necessary to abort the current writer.
+3. If conflict detection is passed, then write T2.simple_hashing_meta into .hoodie folder
 4. Do commit action
 
 ### SimpleBucketIdentifier
@@ -244,6 +279,14 @@ public class SimpleBucketIdentifier extends BucketIdentifier {
   }
 }
 ```
+**WorkFlow for SimpleBucketIdentifier**
+1. Get and Cache partition2BucketNumber 
+2. For the partition of the given data, try to get its corresponding bucket number from the cache.
+   1. If the cache missed, calculate the expression through the Bucket Calculator to obtain the corresponding Bucket Number.
+   2. If the cache hit, it is still necessary to calculate the expression through the Bucket Calculator to 
+obtain the corresponding Bucket Number and verify its consistency. This step is mandatory because there may be a situation where 
+a new expression is loaded but a historical partition is operated on. Here, a pre - conflict check is performed to achieve fast failure.
+
 Using SimpleBucketIdentifier to get `BucketNumber` or `BucketID` based on given partitionPath and corresponding expression
 
 For new Partitioner:
@@ -251,6 +294,9 @@ For new Partitioner:
 
 For Writer:
 Writer like `BucketStreamWriteFunction` in Flink also use this new `SimpleBucketIdentifier` to compute bucketID
+
+NOTE：We need to get hashing_meta instant and hashing_config timestamp at the beginning and pass it to each operator, 
+ensure the consistency of config loading.
 
 ### BucketCalculator
 The BucketCalculator calculates the bucket numbers for different partitions based on the different rules set by users.
