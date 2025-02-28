@@ -200,7 +200,7 @@ public class InternalSchemaCache {
         try (InputStream is = storage.open(candidateCommitFile)) {
           metadata = commitMetadataSerDe.deserialize(instantGenerator.createNewInstant(
                   new StoragePathInfo(candidateCommitFile, -1, false, (short) 0, 0L, 0L)),
-              is, () -> true, HoodieCommitMetadata.class);
+              is, () -> false, HoodieCommitMetadata.class);
         } catch (IOException e) {
           throw e;
         }

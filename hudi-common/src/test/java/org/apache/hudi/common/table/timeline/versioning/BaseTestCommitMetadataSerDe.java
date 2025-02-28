@@ -85,7 +85,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     assertTrue(serialized.isPresent());
 
     // Deserialize
-    HoodieCommitMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> true, HoodieCommitMetadata.class);
+    HoodieCommitMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> false, HoodieCommitMetadata.class);
 
     // Verify
     assertNotNull(deserialized);
@@ -114,7 +114,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     // Serialize and deserialize
     Option<byte[]> serialized = serDe.serialize(metadata);
     assertTrue(serialized.isPresent());
-    HoodieCommitMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> true, HoodieCommitMetadata.class);
+    HoodieCommitMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> false, HoodieCommitMetadata.class);
 
     // Verify
     verifyCommitMetadata(deserialized);
@@ -146,7 +146,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     // Serialize and deserialize
     Option<byte[]> serialized = serDe.serialize(metadata);
     assertTrue(serialized.isPresent());
-    HoodieReplaceCommitMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> true, HoodieReplaceCommitMetadata.class);
+    HoodieReplaceCommitMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> false, HoodieReplaceCommitMetadata.class);
 
     // Verify
     verifyReplaceCommitMetadata(deserialized);
@@ -191,7 +191,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     // Serialize and deserialize
     Option<byte[]> serialized = TimelineMetadataUtils.serializeRollbackMetadata(metadata);
     assertTrue(serialized.isPresent());
-    HoodieRollbackMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> true, HoodieRollbackMetadata.class);
+    HoodieRollbackMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> false, HoodieRollbackMetadata.class);
 
     // Verify
     assertNotNull(deserialized);
@@ -212,7 +212,7 @@ public abstract class BaseTestCommitMetadataSerDe {
 
     // Serialize and deserialize
     Option<byte[]> serialized = Option.of(new byte[]{});
-    HoodieRollbackMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> true, HoodieRollbackMetadata.class);
+    HoodieRollbackMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> false, HoodieRollbackMetadata.class);
 
     // Verify
     assertNotNull(deserialized);
@@ -289,7 +289,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     return writeStat;
   }
 
-  public void verifyCommitMetadata(HoodieCommitMetadata metadata) {
+  protected void verifyCommitMetadata(HoodieCommitMetadata metadata) {
     assertNotNull(metadata);
     assertEquals(1, metadata.getPartitionToWriteStats().size());
     assertEquals(true, metadata.getCompacted());
@@ -305,7 +305,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     assertEquals("test-value-2", metadata.getExtraMetadata().get("test-key-2"));
   }
 
-  public void verifyWriteStat(HoodieWriteStat stat) {
+  protected void verifyWriteStat(HoodieWriteStat stat) {
     assertEquals(TEST_FILE_ID, stat.getFileId());
     assertEquals(testPath, stat.getPath());
     assertEquals(TEST_PREV_COMMIT, stat.getPrevCommit());

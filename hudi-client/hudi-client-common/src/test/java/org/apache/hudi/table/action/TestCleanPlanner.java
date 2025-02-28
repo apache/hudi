@@ -178,17 +178,17 @@ public class TestCleanPlanner {
     when(mockHoodieTable.getInstantFileNameParser()).thenReturn(INSTANT_FILE_NAME_PARSER);
     if (!savepoints.isEmpty()) {
       for (Map.Entry<String, List<String>> entry : savepoints.entrySet()) {
-        Pair<HoodieSavepointMetadata, HoodieSavepointMetadata> savepointMetadataOptionPair = getSavepointMetadata(entry.getValue());
+        HoodieSavepointMetadata savepointMetadata = getSavepointMetadata(entry.getValue());
         HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, entry.getKey());
-        when(activeTimeline.loadHoodieSavepointMetadata(instant)).thenReturn(savepointMetadataOptionPair.getRight());
+        when(activeTimeline.loadHoodieSavepointMetadata(instant)).thenReturn(savepointMetadata);
       }
     }
 
     // prepare last Clean Metadata
-    Pair<HoodieCleanMetadata, HoodieCleanMetadata> cleanMetadataOptionPair =
+    HoodieCleanMetadata cleanMetadata =
         getCleanCommitMetadata(partitionsInLastClean, lastCleanInstant, earliestInstantsInLastClean, lastCompletedTimeInLastClean,
             savepointsTrackedInLastClean.keySet(), expectedEarliestSavepointInLastClean);
-    HoodieCleanerPlan cleanerPlan = mockLastCleanCommit(mockHoodieTable, lastCleanInstant, earliestInstantsInLastClean, activeTimeline, cleanMetadataOptionPair, savepointsTrackedInLastClean.keySet());
+    HoodieCleanerPlan cleanerPlan = mockLastCleanCommit(mockHoodieTable, lastCleanInstant, earliestInstantsInLastClean, activeTimeline, cleanMetadata, savepointsTrackedInLastClean.keySet());
     mockFewActiveInstants(mockHoodieTable, activeTimeline, activeInstantsPartitions, savepointsTrackedInLastClean, areCommitsForSavepointsRemoved, replaceCommits);
 
     // mock getAllPartitions
@@ -591,28 +591,25 @@ public class TestCleanPlanner {
     return new HoodieSavepointMetadata("user", 1L, "comments", partitionMetadata, 1);
   }
 
-  private static Pair<HoodieCleanMetadata, HoodieCleanMetadata> getCleanCommitMetadata(List<String> partitions, String instantTime, String earliestCommitToRetain,
+  private static HoodieCleanMetadata getCleanCommitMetadata(List<String> partitions, String instantTime, String earliestCommitToRetain,
                                                                                   String lastCompletedTime, Set<String> savepointsToTrack, Option<String> earliestCommitToNotArchive) {
     Map<String, HoodieCleanPartitionMetadata> partitionMetadata = new HashMap<>();
     partitions.forEach(partition -> partitionMetadata.put(partition, new HoodieCleanPartitionMetadata(partition, HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(),
         Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false)));
     Map<String, String> extraMetadata = new HashMap<>();
     extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointsToTrack.stream().collect(Collectors.joining(",")));
-    HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(instantTime, 100L, 10, earliestCommitToRetain, lastCompletedTime, partitionMetadata,
+    return new HoodieCleanMetadata(instantTime, 100L, 10, earliestCommitToRetain, lastCompletedTime, partitionMetadata,
         CLEAN_METADATA_VERSION_2, Collections.EMPTY_MAP, extraMetadata.isEmpty() ? null : extraMetadata);
-    return Pair.of(cleanMetadata, cleanMetadata);
   }
 
-  private static Pair<HoodieSavepointMetadata, HoodieSavepointMetadata> getSavepointMetadata(List<String> partitions) {
+  private static HoodieSavepointMetadata getSavepointMetadata(List<String> partitions) {
     Map<String, HoodieSavepointPartitionMetadata> partitionMetadata = new HashMap<>();
     partitions.forEach(partition -> partitionMetadata.put(partition, new HoodieSavepointPartitionMetadata(partition, Collections.emptyList())));
-    HoodieSavepointMetadata savepointMetadata =
-        new HoodieSavepointMetadata("user", 1L, "comments", partitionMetadata, 1);
-    return Pair.of(savepointMetadata, savepointMetadata);
+    return new HoodieSavepointMetadata("user", 1L, "comments", partitionMetadata, 1);
   }
 
   private static HoodieCleanerPlan mockLastCleanCommit(HoodieTable hoodieTable, String timestamp, String earliestCommitToRetain, HoodieActiveTimeline activeTimeline,
-                                                       Pair<HoodieCleanMetadata, HoodieCleanMetadata> cleanMetadata, Set<String> savepointsTrackedInLastClean)
+                                                       HoodieCleanMetadata cleanMetadata, Set<String> savepointsTrackedInLastClean)
       throws IOException {
     BaseTimelineV2 cleanTimeline = mock(BaseTimelineV2.class);
     when(activeTimeline.getCleanerTimeline()).thenReturn(cleanTimeline);
@@ -622,11 +619,11 @@ public class TestCleanPlanner {
     HoodieInstant latestCleanInstant = INSTANT_GENERATOR.createNewInstant(COMPLETED, HoodieTimeline.CLEAN_ACTION, timestamp);
     when(completedCleanTimeline.lastInstant()).thenReturn(Option.of(latestCleanInstant));
     when(activeTimeline.isEmpty(latestCleanInstant)).thenReturn(false);
-    when(activeTimeline.loadHoodieCleanMetadata(latestCleanInstant)).thenReturn(cleanMetadata.getRight());
+    when(activeTimeline.loadHoodieCleanMetadata(latestCleanInstant)).thenReturn(cleanMetadata);
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(earliestCommitToRetain, HoodieTimeline.COMMIT_ACTION, COMPLETED.name()),
-        cleanMetadata.getLeft().getLastCompletedCommitTimestamp(),
+        cleanMetadata.getLastCompletedCommitTimestamp(),
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(), Collections.emptyMap(),
-        CleanPlanner.LATEST_CLEAN_PLAN_VERSION, null, null, cleanMetadata.getLeft().getExtraMetadata());
+        CleanPlanner.LATEST_CLEAN_PLAN_VERSION, null, null, cleanMetadata.getExtraMetadata());
 
     BaseTimelineV2 commitsTimeline = mock(BaseTimelineV2.class);
     when(activeTimeline.getCommitsTimeline()).thenReturn(commitsTimeline);

@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -136,7 +135,6 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieFlinkI
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
     HoodieTimeline timeline = writeClient.getHoodieTable().getActiveTimeline().getCompletedReplaceTimeline().findInstantsAfter(lastRefreshInstant);
     if (!timeline.empty()) {
-      TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
       for (HoodieInstant instant : timeline.getInstants()) {
         HoodieReplaceCommitMetadata commitMetadata = timeline.loadInstantContent(instant, HoodieReplaceCommitMetadata.class);
         Set<String> affectedPartitions = commitMetadata.getPartitionToReplaceFileIds().keySet();

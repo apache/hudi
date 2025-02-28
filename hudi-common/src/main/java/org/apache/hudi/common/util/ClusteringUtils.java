@@ -191,7 +191,7 @@ public class ClusteringUtils {
     }
     try {
       // First assume the instant file is not empty and parse it.
-      return getHoodieRequestedReplaceMetadataOption(timeline, pendingReplaceOrClusterInstant, factory, requestedInstant);
+      return getRequestedReplaceMetadataOption(timeline, pendingReplaceOrClusterInstant, factory, requestedInstant);
     } catch (Exception ex) {
       // If anything goes wrong, check if this is empty file.
       if (isEmptyReplaceOrClusteringInstant(timeline, pendingReplaceOrClusterInstant, factory, requestedInstant)) {
@@ -202,7 +202,7 @@ public class ClusteringUtils {
     }
   }
 
-  private static Option<HoodieRequestedReplaceMetadata> getHoodieRequestedReplaceMetadataOption(
+  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadataOption(
       HoodieTimeline timeline, HoodieInstant pendingReplaceOrClusterInstant, InstantGenerator factory, HoodieInstant requestedInstant) throws IOException {
     try {
       return Option.of(timeline.loadRequestedReplaceMetadata(requestedInstant));

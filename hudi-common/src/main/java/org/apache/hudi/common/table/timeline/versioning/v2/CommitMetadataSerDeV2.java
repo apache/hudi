@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
+import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.file.DataFileWriter;
@@ -36,11 +37,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.function.BooleanSupplier;
 
-import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToPojo;
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertReplaceCommitMetadataToPojo;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
+
+  /**
+   * Convert commit metadata from avro to pojo.
+   */
+  private HoodieCommitMetadata convertCommitMetadataToPojo(org.apache.hudi.avro.model.HoodieCommitMetadata hoodieCommitMetadata) {
+    // While it is valid to have a null key in the hash map in java, avro map could not accommodate this, so we need to remove null key explicitly before the conversion.
+    hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
+    return JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, HoodieCommitMetadata.class);
+  }
 
   @Override
   public <T> T deserialize(HoodieInstant instant, InputStream inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {

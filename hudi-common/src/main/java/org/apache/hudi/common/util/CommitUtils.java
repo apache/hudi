@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -178,7 +177,6 @@ public class CommitUtils {
    */
   public static Option<String> getValidCheckpointForCurrentWriter(HoodieTimeline timeline, String checkpointKey,
                                                                   String keyToLookup) {
-    TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
     return (Option<String>) timeline.getWriteTimeline().filterCompletedInstants().getReverseOrderedInstants()
         .map(instant -> {
           try {

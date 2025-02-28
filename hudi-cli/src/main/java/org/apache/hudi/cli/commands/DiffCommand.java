@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantComparator;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.NumericUtils;
 
 import org.springframework.shell.standard.ShellComponent;
@@ -110,7 +109,6 @@ public class DiffCommand {
 
   private String printDiffWithMetadata(HoodieTimeline timeline, Integer limit, String sortByField, boolean descending, boolean headerOnly, String tempTableName, String diffEntity,
                                        BiFunction<HoodieWriteStat, String, Boolean> diffEntityChecker) throws IOException {
-    TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
     List<Comparable[]> rows = new ArrayList<>();
     InstantComparator instantComparator = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantComparator();
     List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()

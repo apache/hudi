@@ -151,7 +151,6 @@ public class MetadataConversionUtils {
   }
 
   /**
-   * TODO(reviewers) - new code applied similar refactoring, please pay close attention.
    * Creates the legacy archived metadata entry from the new LSM-timeline read.
    *
    * <p>For legacy archive log, 3 entries are persisted for one instant, here only one summary entry is converted into.
@@ -219,8 +218,7 @@ public class MetadataConversionUtils {
         if (inflightCommitMetadata.isPresent()) {
           archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadata(inflightCommitMetadata.get()));
         }
-        archivedMetaWrapper.setActionType(
-            hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) ? ActionType.replacecommit.name() : ActionType.clustering.name());
+        archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
         break;
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
@@ -361,15 +359,6 @@ public class MetadataConversionUtils {
   }
 
   /**
-   * Convert commit metadata from avro to pojo.
-   */
-  public static HoodieCommitMetadata convertCommitMetadataToPojo(org.apache.hudi.avro.model.HoodieCommitMetadata hoodieCommitMetadata) {
-    // While it is valid to have a null key in the hash map in java, avro map could not accommodate this, so we need to remove null key explicitly before the conversion.
-    hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
-    return JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, HoodieCommitMetadata.class);
-  }
-
-  /**
    * Convert replacecommit metadata from pojo to avro.
    */
   private static org.apache.hudi.avro.model.HoodieReplaceCommitMetadata convertReplaceCommitMetadataToAvro(HoodieReplaceCommitMetadata replaceCommitMetadata) {
@@ -383,19 +372,6 @@ public class MetadataConversionUtils {
     // While it is valid to have a null key in the hash map in java, avro map could not accommodate this, so we need to remove null key explicitly before the conversion.
     replaceCommitMetadata.getPartitionToWriteStats().remove(null);
     replaceCommitMetadata.getPartitionToReplaceFileIds().remove(null);
-    return JsonUtils.getObjectMapper().convertValue(replaceCommitMetadata, HoodieReplaceCommitMetadata.class);
-  }
-
-  /**
-   * Convert replacecommit metadata from avro to pojo.
-   */
-  public static HoodieReplaceCommitMetadata convertReplaceCommitMetadataAvroToPojo(org.apache.hudi.avro.model.HoodieReplaceCommitMetadata replaceCommitMetadata) {
-    if (replaceCommitMetadata.getPartitionToWriteStats() != null) {
-      replaceCommitMetadata.getPartitionToWriteStats().remove(null);
-    }
-    if (replaceCommitMetadata.getPartitionToReplaceFileIds() != null) {
-      replaceCommitMetadata.getPartitionToReplaceFileIds().remove(null);
-    }
     return JsonUtils.getObjectMapper().convertValue(replaceCommitMetadata, HoodieReplaceCommitMetadata.class);
   }
 }

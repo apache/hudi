@@ -67,7 +67,7 @@ public class TestCommitMetadataSerDeV2 extends BaseTestCommitMetadataSerDe {
     // Serialize and deserialize
     Option<byte[]> serialized = serDeV1.serialize(metadata);
     assertTrue(serialized.isPresent());
-    HoodieCommitMetadata deserialized = getSerDe().deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> true, HoodieCommitMetadata.class);
+    HoodieCommitMetadata deserialized = getSerDe().deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> false, HoodieCommitMetadata.class);
     verifyCommitMetadata(deserialized);
     verifyWriteStat(deserialized.getPartitionToWriteStats().get(TEST_PARTITION_PATH).get(0));
   }

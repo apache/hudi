@@ -95,7 +95,7 @@ public class RollbacksCommand {
       throws IOException {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     final List<Comparable[]> rows = new ArrayList<>();
-    HoodieRollbackMetadata metadata =  activeTimeline.loadInstantContent(
+    HoodieRollbackMetadata metadata = activeTimeline.loadInstantContent(
         HoodieCLI.getTableMetaClient().createNewInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant),
         HoodieRollbackMetadata.class);
     metadata.getPartitionMetadata().forEach((key, value) -> Stream

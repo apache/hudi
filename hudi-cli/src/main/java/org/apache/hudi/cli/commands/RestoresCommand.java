@@ -95,8 +95,7 @@ public class RestoresCommand {
 
   private void addDetailsOfCompletedRestore(HoodieActiveTimeline activeTimeline, List<Comparable[]> rows,
                                             HoodieInstant restoreInstant) throws IOException {
-    HoodieRestoreMetadata instantMetadata;
-    instantMetadata = activeTimeline.loadInstantContent(restoreInstant, HoodieRestoreMetadata.class);
+    HoodieRestoreMetadata instantMetadata = activeTimeline.loadInstantContent(restoreInstant, HoodieRestoreMetadata.class);
 
     for (String rolledbackInstant : instantMetadata.getInstantsToRollback()) {
       Comparable[] row = createDataRow(instantMetadata.getStartRestoreTime(), rolledbackInstant,

@@ -41,7 +41,6 @@ import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineLoaderV2;
-import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -119,12 +118,11 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
     if (!instants.isEmpty()) {
       InstantFileNameGenerator instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
-      CommitMetadataSerDeV2 commitMetadataSerDeV2 = new CommitMetadataSerDeV2();
       CommitMetadataSerDeV1 commitMetadataSerDeV1 = new CommitMetadataSerDeV1();
       ActiveTimelineV1 activeTimelineV1 = new ActiveTimelineV1(metaClient);
       context.map(instants, instant -> {
         String originalFileName = instantFileNameGenerator.getFileName(instant);
-        return downgradeActiveTimelineInstant(instant, originalFileName, metaClient, commitMetadataSerDeV2, commitMetadataSerDeV1, activeTimelineV1);
+        return downgradeActiveTimelineInstant(instant, originalFileName, metaClient, commitMetadataSerDeV1, activeTimelineV1);
       }, instants.size());
     }
     try {
@@ -272,7 +270,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     }
   }
 
-  static boolean downgradeActiveTimelineInstant(HoodieInstant instant, String originalFileName, HoodieTableMetaClient metaClient, CommitMetadataSerDeV2 commitMetadataSerDeV2,
+  static boolean downgradeActiveTimelineInstant(HoodieInstant instant, String originalFileName, HoodieTableMetaClient metaClient,
                                                 CommitMetadataSerDeV1 commitMetadataSerDeV1, ActiveTimelineV1 activeTimelineV1) {
     String replacedFileName = originalFileName;
     boolean isCompleted = instant.isCompleted();
@@ -287,7 +285,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       replacedFileName = replacedFileName.replace(instant.getAction(), EIGHT_TO_SIX_TIMELINE_ACTION_MAP.get(instant.getAction()));
     }
     try {
-      return rewriteTimelineV2InstantFileToV1Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV2, commitMetadataSerDeV1, activeTimelineV1);
+      return rewriteTimelineV2InstantFileToV1Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV1, activeTimelineV1);
     } catch (IOException e) {
       LOG.error("Can not to complete the downgrade from version eight to version seven. The reason for failure is {}", e.getMessage());
       throw new HoodieException(e);
@@ -295,7 +293,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
   }
 
   static boolean rewriteTimelineV2InstantFileToV1Format(HoodieInstant instant, HoodieTableMetaClient metaClient, String originalFileName, String replacedFileName,
-                                                        CommitMetadataSerDeV2 commitMetadataSerDeV2, CommitMetadataSerDeV1 commitMetadataSerDeV1, ActiveTimelineV1 activeTimelineV1)
+                                                        CommitMetadataSerDeV1 commitMetadataSerDeV1, ActiveTimelineV1 activeTimelineV1)
       throws IOException {
     StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePathProvider().getTimelinePath(metaClient.getTableConfig(), metaClient.getBasePath()), originalFileName);
     long modificationTime = instant.isCompleted() ? convertCompletionTimeToEpoch(instant) : -1;
