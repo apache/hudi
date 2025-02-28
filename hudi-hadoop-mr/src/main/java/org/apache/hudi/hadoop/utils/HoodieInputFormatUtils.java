@@ -92,6 +92,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 
 public class HoodieInputFormatUtils {
 
@@ -537,8 +538,9 @@ public class HoodieInputFormatUtils {
   /**
    * `schema.on.read` and skip merge not implemented
    */
-  public static boolean shouldUseFilegroupReader(final JobConf jobConf, final InputSplit split) {
-    return jobConf.getBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue())
+  public static boolean shouldUseFilegroupReader(final JobConf jobConf, final InputSplit split) throws IOException {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(getStorageConf(jobConf)).setBasePath(getTableBasePath(split, jobConf)).build();
+    return HoodieReaderConfig.isFileGroupReaderEnabled(metaClient.getTableConfig().getTableVersion(), jobConf)
         && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
         && !(split instanceof BootstrapBaseFileSplit);
   }
