@@ -27,6 +27,7 @@ import org.apache.hudi.io.hfile.writer.DataBlock;
 import org.apache.hudi.io.hfile.writer.FileInfoBlock;
 import org.apache.hudi.io.hfile.writer.IndexBlock;
 import org.apache.hudi.io.hfile.writer.MetaBlock;
+import org.apache.hudi.io.hfile.writer.MetaIndexBlock;
 import org.apache.hudi.io.hfile.writer.RootIndexBlock;
 
 import com.google.protobuf.ByteString;
@@ -46,6 +47,10 @@ import java.util.Map;
 
 /**
  * Pure Java implementation of HFile writer (HFile v3 format) for Hudi.
+ *
+ * TODO: Known improvements to be done:
+ *   1. fully compatible with Hbase reader.
+ *   2. support given compression codec.
  */
 public class HFileWriterImpl implements HFileWriter {
   private final DataOutputStream outputStream;
@@ -75,7 +80,7 @@ public class HFileWriterImpl implements HFileWriter {
     this.currentOffset = 0L;
     this.currentDataBlock = new DataBlock(blockSize);
     this.rootIndexBlock = new RootIndexBlock(blockSize);
-    this.metaIndexBlock = new RootIndexBlock(blockSize);
+    this.metaIndexBlock = new MetaIndexBlock(blockSize);
     this.fileInfoBlock = new FileInfoBlock(blockSize);
     initFileInfo();
   }
