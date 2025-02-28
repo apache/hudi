@@ -89,6 +89,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private final long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
+  // ratio of records to be spilled to disk
+  private double spillRatio;
 
   @SuppressWarnings("unchecked")
   private HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -205,6 +207,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = records.size();
+    this.spillRatio = records.getInDiskRecordsNumRatio();
 
     if (LOG.isInfoEnabled()) {
       LOG.info("Number of log files scanned => {}", logFilePaths.size());
@@ -213,6 +216,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       LOG.info("Total size in bytes of MemoryBasedMap in ExternalSpillableMap => {}", records.getCurrentInMemoryMapSize());
       LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => {}", records.getDiskBasedMapNumEntries());
       LOG.info("Size of file spilled to disk => {}", records.getSizeOfFileOnDiskInBytes());
+      LOG.info("Spill ratio => " + this.spillRatio);
     }
   }
 
@@ -304,6 +308,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   public long getTotalTimeTakenToReadAndMergeBlocks() {
     return totalTimeTakenToReadAndMergeBlocks;
+  }
+
+  public double getSpillRatio() {
+    return spillRatio;
   }
 
   @Override

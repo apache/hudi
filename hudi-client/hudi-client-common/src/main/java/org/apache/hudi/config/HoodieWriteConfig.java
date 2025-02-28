@@ -2154,6 +2154,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metricsConfig.isCompactionLogBlockMetricsOn();
   }
 
+  public boolean isPartitionLevelMetricsOn() {
+    return getBoolean(HoodieMetricsConfig.PARTITION_LEVEL_METRICS_ENABLE);
+  }
+
   public boolean isExecutorMetricsEnabled() {
     return metricsConfig.isExecutorMetricsEnabled();
   }
