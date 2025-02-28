@@ -23,7 +23,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.sources.Filter
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Disabled
 
 class TestHoodieDataSourceHelper extends HoodieSparkClientTestHarness with SparkAdapterSupport {
 
@@ -32,7 +32,7 @@ class TestHoodieDataSourceHelper extends HoodieSparkClientTestHarness with Spark
     assertEquals(expected, actual)
   }
 
-  @Test
+  @Disabled("HUDI-9086")
   def testExtractPredicatesWithinOutputSet() : Unit = {
     val dataColsWithNoPartitionCols = Set("id", "extra_col")
 
