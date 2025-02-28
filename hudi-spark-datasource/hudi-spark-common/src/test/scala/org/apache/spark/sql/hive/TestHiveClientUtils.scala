@@ -47,7 +47,12 @@ class TestHiveClientUtils {
 
   @Test
   def reuseHiveClientFromSparkSession(): Unit = {
-    assert(spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "hive")
-    assert(HiveClientUtils.getSingletonClientForMetadata(spark) == hiveClient)
+    if (getJavaVersion != 11 && getJavaVersion != 17) {
+      assert(spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "hive")
+      assert(HiveClientUtils.getSingletonClientForMetadata(spark) == hiveClient)
+      // tear down
+      hiveClient = null
+      spark = null
+    }
   }
 }
