@@ -18,12 +18,13 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.sources.Filter
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Disabled, Test}
 
-class TestHoodieDataSourceHelper extends SparkAdapterSupport {
+class TestHoodieDataSourceHelper extends HoodieSparkClientTestHarness with SparkAdapterSupport {
 
   def checkCondition(filter: Option[Filter], outputSet: Set[String], expected: Any): Unit = {
     val actual = HoodieDataSourceHelper.extractPredicatesWithinOutputSet(filter.get, outputSet)
