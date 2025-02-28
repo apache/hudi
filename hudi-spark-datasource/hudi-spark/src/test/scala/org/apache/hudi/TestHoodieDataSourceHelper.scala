@@ -18,12 +18,14 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.testutils.HoodieClientTestBase
+
 import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.sources.Filter
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
-class TestHoodieDataSourceHelper extends SparkAdapterSupport {
+class TestHoodieDataSourceHelper extends HoodieClientTestBase with SparkAdapterSupport {
 
   def checkCondition(filter: Option[Filter], outputSet: Set[String], expected: Any): Unit = {
     val actual = HoodieDataSourceHelper.extractPredicatesWithinOutputSet(filter.get, outputSet)
@@ -31,7 +33,7 @@ class TestHoodieDataSourceHelper extends SparkAdapterSupport {
   }
 
   @Test
-  def testExtractPredicatesWithinOutputSet() : Unit = {
+  def testExtractPredicatesWithinOutputSet(): Unit = {
     val dataColsWithNoPartitionCols = Set("id", "extra_col")
 
     val expr1 = sparkAdapter.translateFilter(expr("(region='reg2' and id = 1) or region='reg1'").expr)
