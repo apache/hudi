@@ -462,9 +462,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testPayloadDelete(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @CsvSource(value = Array("AVRO,6", "AVRO,8", "SPARK,6", "SPARK,8"))
+  def testPayloadDelete(recordType: HoodieRecordType, tableVersion: Int) {
+    var (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    writeOpts = writeOpts + (HoodieTableConfig.VERSION.key() -> tableVersion.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
 
     // First Operation:
     // Producing parquet files to three default partitions.
@@ -539,10 +541,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testPrunedFiltered(recordType: HoodieRecordType) {
-
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @CsvSource(value = Array("AVRO,6", "AVRO,8", "SPARK,6", "SPARK,8"))
+  def testPrunedFiltered(recordType: HoodieRecordType, tableVersion: Int) {
+    var (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    writeOpts = writeOpts + (HoodieTableConfig.VERSION.key() -> tableVersion.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
 
     // First Operation:
     // Producing parquet files to three default partitions.
