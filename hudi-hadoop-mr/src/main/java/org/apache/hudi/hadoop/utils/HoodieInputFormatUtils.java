@@ -539,9 +539,12 @@ public class HoodieInputFormatUtils {
    * `schema.on.read` and skip merge not implemented
    */
   public static boolean shouldUseFilegroupReader(final JobConf jobConf, final InputSplit split) throws IOException {
+    if (!(split instanceof FileSplit)) {
+      return false;
+    }
+
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(getStorageConf(jobConf)).setBasePath(getTableBasePath(split, jobConf)).build();
-    return HoodieReaderConfig.isFileGroupReaderEnabled(metaClient.getTableConfig().getTableVersion(), jobConf)
-        && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
-        && !(split instanceof BootstrapBaseFileSplit);
+    return HoodieReaderConfig.isFileGroupReaderEnabled(metaClient.getTableConfig().getTableVersion(), jobConf) &&
+        !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue()) && !(split instanceof BootstrapBaseFileSplit);
   }
 }

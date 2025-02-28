@@ -237,7 +237,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       HoodieTableConfig.VERSION.key() -> tableVersion.toString,
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
     val props = new Properties()
-    props.putAll(hudiOpts.asJava)
+    for ((k, v) <- hudiOpts) {
+      props.put(k, v)
+    }
     initMetaClient(HoodieTableType.valueOf(tableType), props)
 
     val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
@@ -429,7 +431,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2"
     )
     val props = new Properties()
-    props.putAll(hudiOpts.asJava)
+    for ((k, v) <- hudiOpts) {
+      props.put(k, v)
+    }
     initMetaClient(HoodieTableType.valueOf(tableType), props)
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,

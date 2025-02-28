@@ -607,7 +607,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commit2CompletionTime)
+      .option(DataSourceReadOptions.START_COMMIT.key, if (tableVersion == 6) commit1Time else commit2CompletionTime)
       .load(basePath)
 
     // filter first commit and only read log records
