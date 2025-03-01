@@ -111,6 +111,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   // POST Requests
   public static final String REFRESH_TABLE_URL = String.format("%s/%s", BASE_URL, "refresh/");
   public static final String INIT_TIMELINE_URL = String.format("%s/%s", BASE_URL, "inittimeline");
+  public static final String CLOSE_TABLE_URL = String.format("%s/%s", BASE_URL, "close/");
   public static final String LOAD_ALL_PARTITIONS_URL = String.format("%s/%s", BASE_URL, "loadallpartitions/");
   public static final String LOAD_PARTITIONS_URL = String.format("%s/%s", BASE_URL, "loadpartitions/");
 
@@ -146,6 +147,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private final HoodieTableMetaClient metaClient;
   private HoodieTimeline timeline;
   private final TimelineServiceClient timelineServiceClient;
+  private final boolean remoteInitEnabled;
 
   private boolean closed = false;
 
@@ -167,7 +169,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     this.metaClient = metaClient;
     this.timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     this.timelineServiceClient = timelineServiceClient;
-    if (viewConf.isRemoteInitEnabled()) {
+    this.remoteInitEnabled = viewConf.isRemoteInitEnabled();
+    if (remoteInitEnabled) {
       initialiseTimelineInRemoteView(timeline);
     }
   }
@@ -460,8 +463,14 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = getParams();
     try {
       // refresh the local timeline first.
-      this.timeline = metaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
-      return executeRequest(REFRESH_TABLE_URL, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
+      metaClient.reloadActiveTimeline();
+      this.timeline = TimelineUtils.getVisibleTimelineForFsView(metaClient);
+      if (remoteInitEnabled) {
+        initialiseTimelineInRemoteView(timeline);
+        return true;
+      } else {
+        return executeRequest(REFRESH_TABLE_URL, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
+      }
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
@@ -551,7 +560,17 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   @Override
   public void close() {
-    closed = true;
+    if (!closed) {
+      LOG.info("Closing view for base path: {}", basePath);
+      try {
+        executeRequest(CLOSE_TABLE_URL, getParams(), BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
+      } catch (IOException ex) {
+        LOG.warn("Failed to close table", ex);
+      }
+      closed = true;
+    } else {
+      LOG.info("Calling close on a closed view for base path: {}", basePath);
+    }
   }
 
   @Override

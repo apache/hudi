@@ -151,7 +151,7 @@ class TestTimelineHandler extends HoodieCommonTestHarness {
     String partitionPath = "partition1";
     Paths.get(basePath, partitionPath).toFile().mkdirs();
     String fileId = UUID.randomUUID().toString();
-    String newInstantTime = metaClient.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime(true);
     String fileName1 = FSUtils.makeBaseFileName(newInstantTime,"1-0-1", fileId, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
     Paths.get(basePath, partitionPath, fileName1).toFile().createNewFile();
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();

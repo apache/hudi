@@ -83,7 +83,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * incremental fashion.
    */
   private transient Option<EmbeddedTimelineService> timelineServer;
-  private final boolean shouldStopTimelineServer;
+  protected final boolean shouldStopTimelineServer;
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
