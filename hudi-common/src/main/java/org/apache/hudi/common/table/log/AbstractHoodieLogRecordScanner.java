@@ -149,6 +149,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final boolean enableOptimizedLogBlocksScan;
   // table version for compatibility
   private final HoodieTableVersion tableVersion;
+  // Allows to consider inflight instants while merging log records
+  protected boolean allowInflightInstants = false;
   // for pending log block check with table version before 8
   private HoodieTimeline commitsTimeline = null;
   private HoodieTimeline completedInstantsTimeline = null;
@@ -281,6 +283,13 @@ public abstract class AbstractHoodieLogRecordScanner {
         final String instantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
         totalLogBlocks.incrementAndGet();
         if (logBlock.isDataOrDeleteBlock()) {
+          if (this.tableVersion.lesserThan(HoodieTableVersion.EIGHT) && !allowInflightInstants) {
+            if (!getOrCreateCompletedInstantsTimeline().containsOrBeforeTimelineStarts(instantTime)
+                || getOrCreateInflightInstantsTimeline().containsInstant(instantTime)) {
+              // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
+              continue;
+            }
+          }
           if (compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), GREATER_THAN, this.latestInstantTime)) {
             // Skip processing a data or delete block with the instant time greater than the latest instant time used by this log record reader
             continue;
@@ -472,6 +481,13 @@ public abstract class AbstractHoodieLogRecordScanner {
           continue;
         }
         if (logBlock.getBlockType() != COMMAND_BLOCK) {
+          if (this.tableVersion.lesserThan(HoodieTableVersion.EIGHT) && !allowInflightInstants) {
+            if (!getOrCreateCompletedInstantsTimeline().containsOrBeforeTimelineStarts(instantTime)
+                || getOrCreateInflightInstantsTimeline().containsInstant(instantTime)) {
+              // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
+              continue;
+            }
+          }
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
             // filter the log block by instant range
             continue;
