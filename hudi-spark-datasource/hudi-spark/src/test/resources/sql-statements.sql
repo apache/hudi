@@ -63,10 +63,10 @@ select id, name, price, cast(dt as string) from h0_p;
 # CREATE TABLE
 
 create table h1 (
-  id bigint,
+  id int,
   name string,
   price double,
-  ts bigint
+  ts int
 ) using hudi
 options (
   type = '${tableType}',
@@ -79,10 +79,10 @@ location '${tmpDir}/h1';
 +----------+
 
 create table h1_p (
-  id bigint,
+  id int,
   name string,
   price double,
-  ts bigint,
+  ts int,
   dt string
 ) using hudi
 partitioned by (dt)
@@ -205,7 +205,7 @@ select id, name, price, ts, dt from h1_p order by id;
 
 merge into h1_p t0
 using (
-  select 5 as _id, 'a5' as _name, 10 as _price, 1000L as _ts, '2021-05-08' as dt
+  select 5 as _id, 'a5' as _name, 10 as _price, 1000 as _ts, '2021-05-08' as dt
 ) s0
 on s0._id = t0.id
 when matched then update set id = _id, name = _name, price = _price, ts = _ts, dt = s0.dt
@@ -224,11 +224,11 @@ select id, name, price, ts, dt from h1_p order by id;
 
 merge into h1_p t0
 using (
-  select 1 as id, '_delete' as name, 10 as price, 1000L as ts, '2021-05-07' as dt
+  select 1 as id, '_delete' as name, 10 as price, 1000 as ts, '2021-05-07' as dt
   union
-  select 2 as id, '_update' as name, 12 as price, 1001L as ts, '2021-05-07' as dt
+  select 2 as id, '_update' as name, 12 as price, 1001 as ts, '2021-05-07' as dt
   union
-  select 6 as id, '_insert' as name, 10 as price, 1000L as ts, '2021-05-08' as dt
+  select 6 as id, '_insert' as name, 10 as price, 1000 as ts, '2021-05-08' as dt
 ) s0
 on s0.id = t0.id
 when matched and s0.name = '_update'
