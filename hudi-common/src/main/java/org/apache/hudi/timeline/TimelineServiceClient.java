@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 
 import org.apache.http.client.utils.URIBuilder;
 
+import org.apache.http.entity.ContentType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,17 +61,19 @@ public class TimelineServiceClient extends TimelineServiceClientBase {
 
     String url = builder.toString();
     LOG.debug("Sending request : ({})", url);
-    org.apache.http.client.fluent.Response response = get(request.getMethod(), url, timeoutMs);
+    org.apache.http.client.fluent.Response response = get(request.getMethod(), url, timeoutMs, request.getBody());
     return new Response(response.returnContent().asStream());
   }
 
-  private org.apache.http.client.fluent.Response get(RequestMethod method, String url, int timeoutMs) throws IOException {
+  private org.apache.http.client.fluent.Response get(RequestMethod method, String url, int timeoutMs, String body) throws IOException {
     switch (method) {
       case GET:
         return org.apache.http.client.fluent.Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute();
       case POST:
       default:
-        return org.apache.http.client.fluent.Request.Post(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute();
+        return org.apache.http.client.fluent.Request.Post(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs)
+            .bodyString(body, ContentType.APPLICATION_JSON)
+            .execute();
     }
   }
 }

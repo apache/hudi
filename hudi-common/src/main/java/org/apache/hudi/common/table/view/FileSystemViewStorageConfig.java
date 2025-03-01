@@ -173,6 +173,12 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       .withDocumentation("Config to control whether backup needs to be configured if clients were not able to reach"
           + " timeline service.");
 
+  public static final ConfigProperty<Boolean> REMOTE_INIT_TIMELINE_ENABLE = ConfigProperty
+      .key("hoodie.filesystem.remote.init.timeline.enable")
+      .defaultValue(false) // Need to be disabled only for tests.
+      .markAdvanced()
+      .withDocumentation("Config to control whether timeline from client needs to be initialized on the server through a remote call");
+
   public static FileSystemViewStorageConfig.Builder newBuilder() {
     return new Builder();
   }
@@ -273,6 +279,10 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public String getRocksdbBasePath() {
     return getString(ROCKSDB_BASE_PATH);
+  }
+
+  public boolean isRemoteInitEnabled() {
+    return getBoolean(REMOTE_INIT_TIMELINE_ENABLE);
   }
 
   /**
@@ -376,6 +386,11 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
     public Builder withEnableBackupForRemoteFileSystemView(boolean enable) {
       fileSystemViewStorageConfig.setValue(REMOTE_BACKUP_VIEW_ENABLE, Boolean.toString(enable));
+      return this;
+    }
+
+    public Builder withRemoteInitTimeline(boolean enableRemoteInit) {
+      fileSystemViewStorageConfig.setValue(REMOTE_INIT_TIMELINE_ENABLE, Boolean.toString(enableRemoteInit));
       return this;
     }
 

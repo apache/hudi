@@ -18,21 +18,21 @@
 
 package org.apache.hudi.timeline.service;
 
+import org.apache.http.client.HttpResponseException;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.TimelineServiceClient;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import org.apache.hadoop.conf.Configuration;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,20 +41,20 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.common.config.HoodieStorageConfig.HOODIE_STORAGE_CLASS;
-import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_MARKER_URL;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
-import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.BASEPATH_PARAM;
+import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.INIT_TIMELINE_URL;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.LAST_INSTANT_TS;
+import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.LOAD_PARTITIONS_URL;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.REFRESH_TABLE_URL;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.TIMELINE_HASH;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 import static org.apache.hudi.timeline.TimelineServiceClientBase.RequestMethod.POST;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestRequestHandler extends HoodieCommonTestHarness {
 
-  private static final String DEFAULT_FILE_SCHEME = "file:/";
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
 
   private TimelineService server = null;
   private TimelineServiceClient timelineServiceClient;
@@ -63,20 +63,18 @@ class TestRequestHandler extends HoodieCommonTestHarness {
   void setUp() throws IOException {
     metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString());
     basePath = metaClient.getBasePath().toString();
-    Configuration configuration = new Configuration();
-    configuration.set(HOODIE_STORAGE_CLASS.key(), MockHoodieHadoopStorage.class.getName());
     FileSystemViewStorageConfig sConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
-    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(configuration));
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
 
     try {
       if (server != null) {
         server.close();
       }
       TimelineServiceTestHarness.Builder builder = TimelineServiceTestHarness.newBuilder();
-      server = builder.build(configuration,
+      server = builder.build(getStorageConf().unwrap(),
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
           FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
       server.startService();
@@ -85,6 +83,7 @@ class TestRequestHandler extends HoodieCommonTestHarness {
     }
     FileSystemViewStorageConfig.Builder builder = FileSystemViewStorageConfig.newBuilder().withRemoteServerHost("localhost")
         .withRemoteServerPort(server.getServerPort())
+        .withRemoteInitTimeline(true)
         .withRemoteTimelineClientTimeoutSecs(60);
     timelineServiceClient = new TimelineServiceClient(builder.build());
   }
@@ -95,14 +94,22 @@ class TestRequestHandler extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testRefreshTableAPIWithDifferentSchemes() throws IOException {
-    assertRefreshTable(tempDir.resolve("base-path-1").toUri().toString(), "test1:/");
-    assertRefreshTable(tempDir.resolve("base-path-2").toUri().toString(), "test2:/");
+  void initTimelineAPI() throws IOException {
+    Map<String, String> queryParameters = new HashMap<>();
+    queryParameters.put(BASEPATH_PARAM, basePath);
+    metaClient.getActiveTimeline().lastInstant().ifPresent(instant -> queryParameters.put(LAST_INSTANT_TS, instant.requestedTime()));
+    queryParameters.put(TIMELINE_HASH, metaClient.getActiveTimeline().getTimelineHash());
+    String body = OBJECT_MAPPER.writeValueAsString(TimelineDTO.fromTimeline(metaClient.getActiveTimeline()));
+    boolean content = timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(POST, INIT_TIMELINE_URL).addQueryParams(queryParameters).setBody(body).build())
+        .getDecodedContent(new TypeReference<Boolean>() {});
+    assertTrue(content);
   }
 
-  private void assertRefreshTable(String basePath, String scheme) throws IOException {
+  @Test
+  void refreshTableAPI() throws IOException {
     Map<String, String> queryParameters = new HashMap<>();
-    queryParameters.put(BASEPATH_PARAM, getPathWithReplacedSchema(basePath, scheme));
+    queryParameters.put(BASEPATH_PARAM, basePath);
     metaClient.getActiveTimeline().lastInstant().ifPresent(instant -> queryParameters.put(LAST_INSTANT_TS, instant.requestedTime()));
     queryParameters.put(TIMELINE_HASH, metaClient.getActiveTimeline().getTimelineHash());
     boolean content = timelineServiceClient.makeRequest(
@@ -112,36 +119,19 @@ class TestRequestHandler extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testCreateMarkerAPIWithDifferentSchemes() throws IOException {
-    assertMarkerCreation(tempDir.resolve("base-path-1").toUri().toString(), "test1:/");
-    assertMarkerCreation(tempDir.resolve("base-path-2").toUri().toString(), "test2:/");
-  }
-
-  private void assertMarkerCreation(String basePath, String schema) throws IOException {
+  void loadPartitionAPI() throws IOException {
+    String[] partitionPaths = {"partition-path"};
     Map<String, String> queryParameters = new HashMap<>();
-    String basePathScheme = getPathWithReplacedSchema(basePath, schema);
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, getTableType());
-    String markerDir = getPathWithReplacedSchema(metaClient.getMarkerFolderPath("101"), schema);
-
-    queryParameters.put(BASEPATH_PARAM, basePathScheme);
-    queryParameters.put(MARKER_DIR_PATH_PARAM, markerDir);
-    queryParameters.put(MARKER_NAME_PARAM, "marker-file-1");
+    queryParameters.put(BASEPATH_PARAM, basePath);
 
     boolean content = timelineServiceClient.makeRequest(
-            TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL)
-                .addQueryParams(queryParameters)
-                .build())
+            TimelineServiceClient.Request.newBuilder(POST, LOAD_PARTITIONS_URL).addQueryParams(queryParameters)
+                .setBody(OBJECT_MAPPER.writeValueAsString(partitionPaths)).build())
         .getDecodedContent(new TypeReference<Boolean>() {});
-
     assertTrue(content);
-  }
 
-  private String getPathWithReplacedSchema(String path, String schemaToUse) {
-    if (path.startsWith(DEFAULT_FILE_SCHEME)) {
-      return path.replace(DEFAULT_FILE_SCHEME, schemaToUse);
-    } else if (path.startsWith(String.valueOf(StoragePath.SEPARATOR_CHAR))) {
-      return schemaToUse + StoragePath.SEPARATOR_CHAR + path;
-    }
-    throw new IllegalArgumentException("Invalid file provided");
+    // Test that if a request is made with no partitionPaths in body, then an exception is thrown.
+    assertThrows(HttpResponseException.class, () -> timelineServiceClient.makeRequest(
+        TimelineServiceClient.Request.newBuilder(POST, LOAD_PARTITIONS_URL).addQueryParams(queryParameters).build()));
   }
 }

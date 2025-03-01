@@ -53,7 +53,7 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
   TransactionManager transactionManager;
 
   @BeforeEach
-  private void init(TestInfo testInfo) throws IOException {
+  public void init(TestInfo testInfo) throws IOException {
     initPath();
     initMetaClient();
     this.writeConfig = getWriteConfig(testInfo.getTags().contains("useLockProviderWithRuntimeError"));
