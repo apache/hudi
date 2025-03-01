@@ -32,8 +32,8 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TestAvroOrcUtils;
 import org.apache.hudi.common.util.collection.Triple;
@@ -524,11 +524,11 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
     if (commitActiontype.equals(HoodieTimeline.CLUSTERING_ACTION)) {
       metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant,
-          TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
+          Option.of(commitMetadata));
     } else {
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),
-          TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
+          Option.of(commitMetadata));
     }
   }
 

@@ -241,7 +241,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
     if (updateIndexDefn) {
       try {
-        FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
+        FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), getUTF8Bytes(indexMetadataOpt.get().toJson()));
       } catch (IOException e) {
         throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
       }
@@ -259,7 +259,7 @@ public class HoodieTableMetaClient implements Serializable {
     indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
     String indexMetaPath = getIndexDefinitionPath();
     try {
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), getUTF8Bytes(indexMetadataOpt.get().toJson()));
     } catch (IOException e) {
       throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
     }
@@ -293,7 +293,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.indexMetadataOpt = Option.of(newExpressionIndexMetadata);
     try {
       // update the index metadata file as well
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), getUTF8Bytes(indexMetadataOpt.get().toJson()));
     } catch (IOException e) {
       throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
     }

@@ -592,7 +592,7 @@ public class TestCleanPlanner {
   }
 
   private static HoodieCleanMetadata getCleanCommitMetadata(List<String> partitions, String instantTime, String earliestCommitToRetain,
-                                                                                  String lastCompletedTime, Set<String> savepointsToTrack, Option<String> earliestCommitToNotArchive) {
+                                                            String lastCompletedTime, Set<String> savepointsToTrack, Option<String> earliestCommitToNotArchive) {
     Map<String, HoodieCleanPartitionMetadata> partitionMetadata = new HashMap<>();
     partitions.forEach(partition -> partitionMetadata.put(partition, new HoodieCleanPartitionMetadata(partition, HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(),
         Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false)));

@@ -40,6 +40,8 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.specific.SpecificRecordBase;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -49,6 +51,7 @@ import java.nio.ByteBuffer;
  * Helper class to convert between different action related payloads and {@link HoodieArchivedMetaEntry}.
  */
 public class MetadataConversionUtils {
+  private static final Logger LOG = LoggerFactory.getLogger(MetadataConversionUtils.class);
 
   public static HoodieArchivedMetaEntry createMetaWrapper(HoodieInstant hoodieInstant, HoodieTableMetaClient metaClient) {
     try {
@@ -353,6 +356,10 @@ public class MetadataConversionUtils {
    * Convert commit metadata from json to avro.
    */
   public static <T extends SpecificRecordBase> T convertCommitMetadata(HoodieCommitMetadata hoodieCommitMetadata) {
+    if (hoodieCommitMetadata.getPartitionToWriteStats().containsKey(null)) {
+      LOG.info("partition path is null for {}", hoodieCommitMetadata.getPartitionToWriteStats().get(null));
+      hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
+    }
     if (hoodieCommitMetadata instanceof HoodieReplaceCommitMetadata) {
       return (T) convertReplaceCommitMetadataToAvro((HoodieReplaceCommitMetadata) hoodieCommitMetadata);
     }
@@ -364,6 +371,10 @@ public class MetadataConversionUtils {
    * Convert replacecommit metadata from pojo to avro.
    */
   private static org.apache.hudi.avro.model.HoodieReplaceCommitMetadata convertReplaceCommitMetadataToAvro(HoodieReplaceCommitMetadata replaceCommitMetadata) {
+    if (replaceCommitMetadata.getPartitionToReplaceFileIds().containsKey(null)) {
+      LOG.info("partition path is null for {}", replaceCommitMetadata.getPartitionToReplaceFileIds().get(null));
+      replaceCommitMetadata.getPartitionToReplaceFileIds().remove(null);
+    }
     return JsonUtils.getObjectMapper().convertValue(replaceCommitMetadata, org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class);
   }
 

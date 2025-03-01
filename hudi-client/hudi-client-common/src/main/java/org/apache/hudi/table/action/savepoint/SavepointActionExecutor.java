@@ -71,84 +71,79 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       throw new HoodieSavepointException("Could not savepoint non-existing commit " + instantTime);
     }
 
-    try {
-      // Check the last commit that was not cleaned and check if savepoint time is > that commit
-      Option<HoodieInstant> cleanInstant = table.getCleanTimeline().lastInstant();
-      String lastCommitRetained = cleanInstant.map(instant -> {
-        try {
-          if (instant.isCompleted()) {
-            return table.getActiveTimeline().readCleanMetadata(instant)
-                .getEarliestCommitToRetain();
-          } else {
-            // clean is pending or inflight
-            return table.getActiveTimeline().readCleanerPlan(
-                    instantGenerator.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime()))
-                .getEarliestInstantToRetain().getTimestamp();
-          }
-        } catch (IOException e) {
-          throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
+    // Check the last commit that was not cleaned and check if savepoint time is > that commit
+    Option<HoodieInstant> cleanInstant = table.getCleanTimeline().lastInstant();
+    String lastCommitRetained = cleanInstant.map(instant -> {
+      try {
+        if (instant.isCompleted()) {
+          return table.getActiveTimeline().readCleanMetadata(instant)
+              .getEarliestCommitToRetain();
+        } else {
+          // clean is pending or inflight
+          return table.getActiveTimeline().readCleanerPlan(
+                  instantGenerator.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime()))
+              .getEarliestInstantToRetain().getTimestamp();
         }
-      }).orElseGet(() -> table.getCompletedCommitsTimeline().firstInstant().get().requestedTime());
-
-      // Cannot allow savepoint time on a commit that could have been cleaned
-      ValidationUtils.checkArgument(compareTimestamps(instantTime, GREATER_THAN_OR_EQUALS, lastCommitRetained),
-          "Could not savepoint commit " + instantTime + " as this is beyond the lookup window " + lastCommitRetained);
-
-      context.setJobStatus(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime + " " + table.getConfig().getTableName());
-      TableFileSystemView.SliceView view = table.getSliceView();
-
-      Map<String, List<String>> latestFilesMap;
-      // NOTE: for performance, we have to use different logic here for listing the latest files
-      // before or on the given instant:
-      // (1) using metadata-table-based file listing: instead of parallelizing the partition
-      // listing which incurs unnecessary metadata table reads, we directly read the metadata
-      // table once in a batch manner through the timeline server;
-      // (2) using direct file system listing:  we parallelize the partition listing so that
-      // each partition can be listed on the file system concurrently through Spark.
-      // Note that
-      if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
-        latestFilesMap = view.getAllLatestFileSlicesBeforeOrOn(instantTime).entrySet().stream()
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> {
-                  List<String> latestFiles = new ArrayList<>();
-                  entry.getValue().forEach(fileSlice -> {
-                    if (fileSlice.getBaseFile().isPresent()) {
-                      latestFiles.add(fileSlice.getBaseFile().get().getFileName());
-                    }
-                    latestFiles.addAll(fileSlice.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));
-                  });
-                  return latestFiles;
-                }));
-      } else {
-        List<String> partitions = FSUtils.getAllPartitionPaths(
-            context, table.getStorage(), config.getMetadataConfig(), table.getMetaClient().getBasePath());
-        latestFilesMap = context.mapToPair(partitions, partitionPath -> {
-          // Scan all partitions files with this commit time
-          LOG.info("Collecting latest files in partition path " + partitionPath);
-          List<String> latestFiles = new ArrayList<>();
-          view.getLatestFileSlicesBeforeOrOn(partitionPath, instantTime, true).forEach(fileSlice -> {
-            if (fileSlice.getBaseFile().isPresent()) {
-              latestFiles.add(fileSlice.getBaseFile().get().getFileName());
-            }
-            latestFiles.addAll(fileSlice.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));
-          });
-          return new ImmutablePair<>(partitionPath, latestFiles);
-        }, null);
+      } catch (IOException e) {
+        throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
       }
+    }).orElseGet(() -> table.getCompletedCommitsTimeline().firstInstant().get().requestedTime());
 
-      HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
-      // Nothing to save in the savepoint
-      table.getActiveTimeline().createNewInstant(
-          instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
-      table.getActiveTimeline()
-          .saveAsComplete(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime),
-              TimelineMetadataUtils.serializeSavepointMetadata(metadata));
-      LOG.info("Savepoint " + instantTime + " created");
-      return metadata;
-    } catch (IOException e) {
-      throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
+    // Cannot allow savepoint time on a commit that could have been cleaned
+    ValidationUtils.checkArgument(compareTimestamps(instantTime, GREATER_THAN_OR_EQUALS, lastCommitRetained),
+        "Could not savepoint commit " + instantTime + " as this is beyond the lookup window " + lastCommitRetained);
+
+    context.setJobStatus(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime + " " + table.getConfig().getTableName());
+    TableFileSystemView.SliceView view = table.getSliceView();
+
+    Map<String, List<String>> latestFilesMap;
+    // NOTE: for performance, we have to use different logic here for listing the latest files
+    // before or on the given instant:
+    // (1) using metadata-table-based file listing: instead of parallelizing the partition
+    // listing which incurs unnecessary metadata table reads, we directly read the metadata
+    // table once in a batch manner through the timeline server;
+    // (2) using direct file system listing:  we parallelize the partition listing so that
+    // each partition can be listed on the file system concurrently through Spark.
+    // Note that
+    if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
+      latestFilesMap = view.getAllLatestFileSlicesBeforeOrOn(instantTime).entrySet().stream()
+          .collect(Collectors.toMap(
+              Map.Entry::getKey,
+              entry -> {
+                List<String> latestFiles = new ArrayList<>();
+                entry.getValue().forEach(fileSlice -> {
+                  if (fileSlice.getBaseFile().isPresent()) {
+                    latestFiles.add(fileSlice.getBaseFile().get().getFileName());
+                  }
+                  latestFiles.addAll(fileSlice.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));
+                });
+                return latestFiles;
+              }));
+    } else {
+      List<String> partitions = FSUtils.getAllPartitionPaths(
+          context, table.getStorage(), config.getMetadataConfig(), table.getMetaClient().getBasePath());
+      latestFilesMap = context.mapToPair(partitions, partitionPath -> {
+        // Scan all partitions files with this commit time
+        LOG.info("Collecting latest files in partition path " + partitionPath);
+        List<String> latestFiles = new ArrayList<>();
+        view.getLatestFileSlicesBeforeOrOn(partitionPath, instantTime, true).forEach(fileSlice -> {
+          if (fileSlice.getBaseFile().isPresent()) {
+            latestFiles.add(fileSlice.getBaseFile().get().getFileName());
+          }
+          latestFiles.addAll(fileSlice.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));
+        });
+        return new ImmutablePair<>(partitionPath, latestFiles);
+      }, null);
     }
-  }
 
+    HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
+    // Nothing to save in the savepoint
+    table.getActiveTimeline().createNewInstant(
+        instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
+    table.getActiveTimeline()
+        .saveAsComplete(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime),
+            Option.of(metadata));
+    LOG.info("Savepoint " + instantTime + " created");
+    return metadata;
+  }
 }

@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -170,11 +169,11 @@ public class TestCommitUtils {
     commitMetadata.addMetadata(SINK_CHECKPOINT_KEY,
         getCheckpointValueAsString(id, batchId));
     timeline.createNewInstant(instant);
-    timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
+    timeline.transitionRequestedToInflight(instant, Option.of(commitMetadata));
     if (isCompleted) {
       timeline.saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
-          TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
+          Option.of(commitMetadata));
     }
   }
 
@@ -185,10 +184,10 @@ public class TestCommitUtils {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     timeline.createNewInstant(instant);
-    timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
+    timeline.transitionRequestedToInflight(instant, Option.of(commitMetadata));
     timeline.saveAsComplete(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
-        TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
+        Option.of(commitMetadata));
   }
 
   private void addRequestedCompaction(HoodieActiveTimeline timeline,
@@ -201,12 +200,12 @@ public class TestCommitUtils {
         .build();
     timeline.saveToCompactionRequested(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, COMPACTION_ACTION, ts),
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan)
+        Option.of(compactionPlan)
     );
   }
 
   private void addRequestedReplaceCommit(HoodieActiveTimeline timeline,
-                                         String ts) throws IOException {
+                                         String ts) {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata =
         HoodieRequestedReplaceMetadata.newBuilder()
             .setOperationType(WriteOperationType.CLUSTER.name())
@@ -215,7 +214,7 @@ public class TestCommitUtils {
             .build();
     timeline.saveToPendingClusterCommit(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, CLUSTERING_ACTION, ts),
-        TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata)
+        Option.of(requestedReplaceMetadata)
     );
   }
 }

@@ -28,6 +28,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,6 +60,7 @@ public class HoodieCommitMetadata implements Serializable {
 
   public static final String SCHEMA_KEY = "schema";
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCommitMetadata.class);
+  private static final ObjectWriter WRITER = JsonUtils.getObjectMapper().writerFor(HoodieCommitMetadata.class).withDefaultPrettyPrinter();
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
   protected Boolean compacted;
 
