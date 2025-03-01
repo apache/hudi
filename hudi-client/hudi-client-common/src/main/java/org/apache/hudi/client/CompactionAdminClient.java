@@ -193,7 +193,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
    */
   private static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
-    return metaClient.getActiveTimeline().loadCompactionPlan(
+    return metaClient.getActiveTimeline().readCompactionPlan(
                     metaClient.getInstantGenerator().getCompactionRequestedInstant(compactionInstant));
   }
 

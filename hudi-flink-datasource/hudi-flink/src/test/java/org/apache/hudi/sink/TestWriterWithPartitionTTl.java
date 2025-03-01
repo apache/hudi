@@ -83,7 +83,7 @@ public class TestWriterWithPartitionTTl extends TestWriteBase {
     HoodieActiveTimeline timeline = StreamerUtil.createMetaClient(conf).getActiveTimeline();
     assertTrue(timeline.getCompletedReplaceTimeline().getInstants().size() > 0);
     HoodieInstant replaceCommit = timeline.getCompletedReplaceTimeline().getInstants().get(0);
-    HoodieReplaceCommitMetadata commitMetadata = timeline.loadReplaceCommitMetadataAvro(replaceCommit);
+    HoodieReplaceCommitMetadata commitMetadata = timeline.readReplaceCommitMetadataToAvro(replaceCommit);
     assertTrue(commitMetadata.getPartitionToReplaceFileIds().containsKey("par1"));
   }
 }

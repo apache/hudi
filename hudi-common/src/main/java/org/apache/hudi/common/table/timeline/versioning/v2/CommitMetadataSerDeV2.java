@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.table.timeline.versioning.v2;
 
-import org.apache.hudi.avro.model.HoodieCommitMetadata;
 import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
@@ -64,11 +64,13 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
       }
       // For commit metadata and replace commit metadata need special case handling since it requires in memory object in POJO form.
       if (org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class.isAssignableFrom(clazz)) {
-        return (T) convertReplaceCommitMetadataToPojo(deserializeAvroMetadata(inputStream, HoodieReplaceCommitMetadata.class));
+        return (T) convertReplaceCommitMetadataToPojo(
+            deserializeAvroMetadata(inputStream, HoodieReplaceCommitMetadata.class));
       }
       // For any new commit metadata class being added, we need the corresponding logic added here
       if (org.apache.hudi.common.model.HoodieCommitMetadata.class.isAssignableFrom(clazz)) {
-        return (T) convertCommitMetadataToPojo(deserializeAvroMetadata(inputStream, HoodieCommitMetadata.class));
+        return (T) convertCommitMetadataToPojo(
+            deserializeAvroMetadata(inputStream, org.apache.hudi.avro.model.HoodieCommitMetadata.class));
       }
       // For all the other cases they must be SpecificRecordBase
       if (!SpecificRecordBase.class.isAssignableFrom(clazz)) {
@@ -95,7 +97,9 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
     if (commitMetadata instanceof org.apache.hudi.common.model.HoodieReplaceCommitMetadata) {
       return serializeAvroMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata), HoodieReplaceCommitMetadata.class);
     }
-    return serializeAvroMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata), HoodieCommitMetadata.class);
+    return serializeAvroMetadata(
+        MetadataConversionUtils.convertCommitMetadata(commitMetadata),
+        org.apache.hudi.avro.model.HoodieCommitMetadata.class);
   }
 
   public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)

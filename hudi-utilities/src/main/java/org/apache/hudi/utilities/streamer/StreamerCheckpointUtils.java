@@ -203,7 +203,7 @@ public class StreamerCheckpointUtils {
       throws IOException {
     return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
-        HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(instant, HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = timeline.readInstantContent(instant, HoodieCommitMetadata.class);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY))
             || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_RESET_KEY))
             || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2))

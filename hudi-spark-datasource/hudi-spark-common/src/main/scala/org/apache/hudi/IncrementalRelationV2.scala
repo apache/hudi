@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, Hoo
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -141,10 +141,8 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
 
       // create Replaced file group
       val replacedInstants = commitsToReturn.filter(_.getAction.equals(HoodieTimeline.REPLACE_COMMIT_ACTION))
-      val layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion)
-
       val replacedFile = replacedInstants.flatMap { instant =>
-        val replaceMetadata = metaClient.getActiveTimeline.loadInstantContent(instant,
+        val replaceMetadata = metaClient.getActiveTimeline.readInstantContent(instant,
           classOf[HoodieReplaceCommitMetadata])
         replaceMetadata.getPartitionToReplaceFileIds.entrySet().asScala.flatMap { entry =>
           entry.getValue.asScala.map { e =>
@@ -155,7 +153,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
       }.toMap
 
       for (commit <- commitsToReturn) {
-        val metadata: HoodieCommitMetadata = commitTimeline.loadInstantContent(commit, classOf[HoodieCommitMetadata])
+        val metadata: HoodieCommitMetadata = commitTimeline.readInstantContent(commit, classOf[HoodieCommitMetadata])
 
         if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.requestedTime) {
           metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>

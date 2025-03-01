@@ -373,7 +373,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     // check hoodieCommitMeta
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001");
     HoodieCommitMetadata commitMetadata =
-        table.getMetaClient().getCommitTimeline().loadInstantContent(instant, HoodieCommitMetadata.class);
+        table.getMetaClient().getCommitTimeline().readInstantContent(instant, HoodieCommitMetadata.class);
     List<HoodieWriteStat> firstPartitionWriteStat = commitMetadata.getPartitionToWriteStats().get(DEFAULT_FIRST_PARTITION_PATH);
     assertEquals(2, firstPartitionWriteStat.size());
     // we have an empty writeStat for all partition
@@ -397,7 +397,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     client.commit(newCommitTime, statuses);
     table = this.getHoodieTable(metaClient, cfg);
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime);
-    commitMetadata = table.getMetaClient().getCommitTimeline().loadInstantContent(instant1, HoodieCommitMetadata.class);
+    commitMetadata = table.getMetaClient().getCommitTimeline().readInstantContent(instant1, HoodieCommitMetadata.class);
     assertTrue(commitMetadata.getPartitionToWriteStats().containsKey(DEFAULT_FIRST_PARTITION_PATH));
     assertTrue(commitMetadata.getPartitionToWriteStats().containsKey(DEFAULT_SECOND_PARTITION_PATH));
     List<HoodieWriteStat> hoodieWriteStatOptionList = commitMetadata.getPartitionToWriteStats().get(DEFAULT_FIRST_PARTITION_PATH);

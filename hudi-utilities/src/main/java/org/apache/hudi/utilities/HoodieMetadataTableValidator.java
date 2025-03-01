@@ -1588,7 +1588,8 @@ public class HoodieMetadataTableValidator implements Serializable {
             if (!committedFilesMap.containsKey(instantTime)) {
               HoodieInstant instant =  completedInstantsTimeline.filter(i -> i.requestedTime().equals(instantTime))
                   .firstInstant().get();
-              HoodieCommitMetadata commitMetadata = completedInstantsTimeline.loadInstantContent(instant, HoodieCommitMetadata.class);
+              HoodieCommitMetadata commitMetadata =
+                  completedInstantsTimeline.readInstantContent(instant, HoodieCommitMetadata.class);
               committedFilesMap.put(
                   instantTime,
                   commitMetadata.getWriteStats().stream()

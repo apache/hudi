@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -301,7 +302,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         .sorted(Comparator.comparing(HoodieInstant::requestedTime).reversed())
         .map(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata = loadInstantContent(instant, HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = readInstantContent(instant, HoodieCommitMetadata.class);
             return Pair.of(instant, commitMetadata);
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);

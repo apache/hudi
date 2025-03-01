@@ -287,7 +287,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
         .sorted(Comparator.comparing(HoodieInstant::requestedTime).reversed())
         .map(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata = loadInstantContent(instant, HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = readInstantContent(instant, HoodieCommitMetadata.class);
             return Pair.of(instant, commitMetadata);
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);

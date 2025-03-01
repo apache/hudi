@@ -188,7 +188,8 @@ public class CompactionUtils {
    * Util method to fetch both compaction and log compaction plan from requestedInstant.
    */
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, HoodieInstant requestedInstant) {
-    return getCompactionPlanInternal(metaClient, () -> metaClient.getActiveTimeline().loadCompactionPlan(requestedInstant));
+    return getCompactionPlanInternal(metaClient,
+        () -> metaClient.getActiveTimeline().readCompactionPlan(requestedInstant));
   }
 
   /**

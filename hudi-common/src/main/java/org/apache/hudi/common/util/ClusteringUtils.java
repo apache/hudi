@@ -205,27 +205,32 @@ public class ClusteringUtils {
   private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadataOption(
       HoodieTimeline timeline, HoodieInstant pendingReplaceOrClusterInstant, InstantGenerator factory, HoodieInstant requestedInstant) throws IOException {
     try {
-      return Option.of(timeline.loadRequestedReplaceMetadata(requestedInstant));
+      return Option.of(timeline.readRequestedReplaceMetadata(requestedInstant));
     } catch (HoodieIOException e) {
       if (e.getCause() instanceof FileNotFoundException && pendingReplaceOrClusterInstant.isCompleted()) {
         // For clustering instants, completed instant is also a replace commit instant. For input replace commit instant,
         // it is not known whether requested instant is CLUSTER or REPLACE_COMMIT_ACTION. So we need to query both.
         requestedInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, pendingReplaceOrClusterInstant.requestedTime());
-        return Option.of(timeline.loadRequestedReplaceMetadata(requestedInstant));
+        return Option.of(timeline.readRequestedReplaceMetadata(requestedInstant));
       }
       throw e;
     }
   }
 
-  private static boolean isEmptyReplaceOrClusteringInstant(
-      HoodieTimeline timeline, HoodieInstant pendingReplaceOrClusterInstant, InstantGenerator factory, HoodieInstant requestedInstant) {
+  private static boolean isEmptyReplaceOrClusteringInstant(HoodieTimeline timeline,
+                                                           HoodieInstant pendingReplaceOrClusterInstant,
+                                                           InstantGenerator instantGenerator,
+                                                           HoodieInstant requestedInstant) {
     try {
       return timeline.isEmpty(requestedInstant);
     } catch (HoodieIOException e) {
       if (e.getCause() instanceof FileNotFoundException && pendingReplaceOrClusterInstant.isCompleted()) {
         // For clustering instants, completed instant is also a replace commit instant. For input replace commit instant,
         // it is not known whether requested instant is CLUSTER or REPLACE_COMMIT_ACTION. So we need to query both.
-        requestedInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, pendingReplaceOrClusterInstant.requestedTime());
+        requestedInstant = instantGenerator.createNewInstant(
+            HoodieInstant.State.REQUESTED,
+            HoodieTimeline.REPLACE_COMMIT_ACTION,
+            pendingReplaceOrClusterInstant.requestedTime());
         return timeline.isEmpty(requestedInstant);
       }
       throw e;

@@ -216,7 +216,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
         try {
           HoodieInstant instant1 = timeline.filter(inst -> inst.requestedTime().equals(newInstant))
               .firstInstant().get();
-          return timeline.loadInstantContent(instant1, HoodieCommitMetadata.class).getWriteStats();
+          return timeline.readInstantContent(instant1, HoodieCommitMetadata.class).getWriteStats();
         } catch (IOException e) {
           return Collections.EMPTY_LIST;
         }

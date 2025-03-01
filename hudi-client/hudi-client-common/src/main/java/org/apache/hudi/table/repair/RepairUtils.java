@@ -90,13 +90,14 @@ public final class RepairUtils {
     switch (instant.getAction()) {
       case COMMIT_ACTION:
       case DELTA_COMMIT_ACTION: {
-        final HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(instant, HoodieCommitMetadata.class);
+        final HoodieCommitMetadata commitMetadata = timeline.readInstantContent(instant, HoodieCommitMetadata.class);
         return Option.of(commitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
       }
       case REPLACE_COMMIT_ACTION:
       case CLUSTERING_ACTION: {
-        final HoodieReplaceCommitMetadata replaceCommitMetadata = timeline.loadInstantContent(instant, HoodieReplaceCommitMetadata.class);
+        final HoodieReplaceCommitMetadata replaceCommitMetadata =
+            timeline.readInstantContent(instant, HoodieReplaceCommitMetadata.class);
         return Option.of(replaceCommitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
       }

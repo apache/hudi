@@ -25,8 +25,8 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.utils.CLIUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparator;
 import org.apache.hudi.common.util.NumericUtils;
 
@@ -115,7 +115,7 @@ public class DiffCommand {
         .getInstantsAsStream().sorted(instantComparator.requestedTimeOrderedComparator().reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(commit, HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = timeline.readInstantContent(commit, HoodieCommitMetadata.class);
       for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
           commitMetadata.getPartitionToWriteStats().entrySet()) {
         for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {

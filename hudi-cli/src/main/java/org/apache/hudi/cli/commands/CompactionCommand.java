@@ -124,7 +124,8 @@ public class CompactionCommand {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
     InstantGenerator instantGenerator = client.getInstantGenerator();
-    HoodieCompactionPlan compactionPlan = activeTimeline.loadCompactionPlan(instantGenerator.getCompactionRequestedInstant(compactionInstantTime));
+    HoodieCompactionPlan compactionPlan =
+        activeTimeline.readCompactionPlan(instantGenerator.getCompactionRequestedInstant(compactionInstantTime));
 
     return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly, partition);
   }
@@ -177,7 +178,7 @@ public class CompactionCommand {
         HoodieTimeline.COMPACTION_ACTION, compactionInstantTime);
     try {
       archivedTimeline.loadCompactionDetailsInMemory(compactionInstantTime);
-      HoodieCompactionPlan compactionPlan = archivedTimeline.loadCompactionPlan(instant);
+      HoodieCompactionPlan compactionPlan = archivedTimeline.readCompactionPlan(instant);
       return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly, partition);
     } finally {
       archivedTimeline.clearInstantDetailsFromMemory(compactionInstantTime);
@@ -367,7 +368,7 @@ public class CompactionCommand {
   private HoodieCompactionPlan readCompactionPlanForArchivedTimeline(HoodieArchivedTimeline archivedTimeline,
                                                                      HoodieInstant instant) {
     try {
-      return archivedTimeline.loadCompactionPlan(instant);
+      return archivedTimeline.readCompactionPlan(instant);
     } catch (Exception e) {
       throw new HoodieException(e.getMessage(), e);
     }
@@ -383,13 +384,15 @@ public class CompactionCommand {
       if (!HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())) {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
-          return activeTimeline.loadCompactionPlan(instantGenerator.getCompactionRequestedInstant(instant.requestedTime()));
+          return activeTimeline.readCompactionPlan(
+              instantGenerator.getCompactionRequestedInstant(instant.requestedTime()));
         } catch (HoodieIOException ioe) {
           // SKIP
           return null;
         }
       } else {
-        return activeTimeline.loadCompactionPlan(instantGenerator.getCompactionRequestedInstant(instant.requestedTime()));
+        return activeTimeline.readCompactionPlan(
+            instantGenerator.getCompactionRequestedInstant(instant.requestedTime()));
       }
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);

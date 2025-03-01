@@ -265,7 +265,7 @@ public class TableSchemaResolver {
         // Make sure the commit metadata has a valid schema inside. Same caching the result for expensive operation.
         .filter(s -> {
           try {
-            return !StringUtils.isNullOrEmpty(reversedTimeline.loadInstantContent(s, HoodieCommitMetadata.class)
+            return !StringUtils.isNullOrEmpty(reversedTimeline.readInstantContent(s, HoodieCommitMetadata.class)
                 .getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
           } catch (IOException e) {
             throw new RuntimeException(e);
@@ -362,7 +362,8 @@ public class TableSchemaResolver {
         "Could not read schema from last compaction, no compaction commits found on path " + metaClient));
 
     // Read from the compacted file wrote
-    HoodieCommitMetadata compactionMetadata = activeTimeline.loadInstantContent(lastCompactionCommit, HoodieCommitMetadata.class);
+    HoodieCommitMetadata compactionMetadata =
+        activeTimeline.readInstantContent(lastCompactionCommit, HoodieCommitMetadata.class);
     String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
         .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for compaction "
             + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath()));
@@ -406,7 +407,8 @@ public class TableSchemaResolver {
     HoodieTimeline timeline = completedInstants
         .filter(instant -> { // consider only instants that can update/change schema.
           try {
-            HoodieCommitMetadata commitMetadata = completedInstants.loadInstantContent(instant, HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata =
+                completedInstants.readInstantContent(instant, HoodieCommitMetadata.class);
             return WriteOperationType.canUpdateSchema(commitMetadata.getOperationType());
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);
@@ -518,7 +520,7 @@ public class TableSchemaResolver {
         .computeIfAbsent(instant, (missingInstant) -> {
           HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
           try {
-            return timeline.loadInstantContent(missingInstant, HoodieCommitMetadata.class);
+            return timeline.readInstantContent(missingInstant, HoodieCommitMetadata.class);
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", missingInstant), e);
           }

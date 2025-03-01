@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, TimelineMetadataUtils}
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION
 import org.apache.hudi.exception.HoodieException
@@ -90,7 +90,7 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
                         limit: Int): Seq[Row] = {
     val rows = new util.ArrayList[Row]
     val instantGenerator = metaClient.getTimelineLayout.getInstantGenerator
-    val metadata = activeTimeline.loadInstantContent(
+    val metadata = activeTimeline.readInstantContent(
       instantGenerator.createNewInstant(State.COMPLETED, ROLLBACK_ACTION, instantTime), classOf[HoodieRollbackMetadata])
 
     metadata.getPartitionMetadata.asScala.toMap.iterator.foreach(entry => Stream
@@ -110,7 +110,7 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
 
     rollback.getInstants.iterator().asScala.foreach(instant => {
       try {
-        val metadata = activeTimeline.loadInstantContent(instant, classOf[HoodieRollbackMetadata])
+        val metadata = activeTimeline.readInstantContent(instant, classOf[HoodieRollbackMetadata])
 
         metadata.getCommitsRollback.iterator().asScala.foreach(c => {
           rows.add(Row(metadata.getStartRollbackTime, c,

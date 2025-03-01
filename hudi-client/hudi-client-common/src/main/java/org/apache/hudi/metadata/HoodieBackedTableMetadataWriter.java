@@ -989,7 +989,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     metaClient.reloadActiveTimeline().filterPendingIndexTimeline().getInstantsAsStream().filter(instant -> REQUESTED.equals(instant.getState()))
         .forEach(instant -> {
           try {
-            HoodieIndexPlan indexPlan = metaClient.getActiveTimeline().loadIndexPlan(instant);
+            HoodieIndexPlan indexPlan = metaClient.getActiveTimeline().readIndexPlan(instant);
             if (indexPlan.getIndexPartitionInfos().stream()
                 .anyMatch(indexPartitionInfo -> indexPartitionInfo.getMetadataPartitionPath().equals(partitionPath))) {
               metaClient.getActiveTimeline().deleteInstantFileIfExists(instant);
@@ -1209,7 +1209,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieInstant requested = datainstantGenerator.getRestoreRequestedInstant(restoreInstant);
     HoodieRestorePlan restorePlan = null;
     try {
-      restorePlan = dataMetaClient.getActiveTimeline().loadInstantContent(requested, HoodieRestorePlan.class);
+      restorePlan = dataMetaClient.getActiveTimeline().readInstantContent(requested, HoodieRestorePlan.class);
     } catch (IOException e) {
       throw new HoodieIOException(String.format("Deserialization of restore plan failed whose restore instant time is %s in data table", instantTime), e);
     }

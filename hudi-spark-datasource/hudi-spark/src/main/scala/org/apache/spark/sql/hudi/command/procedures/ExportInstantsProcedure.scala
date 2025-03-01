@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
@@ -38,7 +38,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.io.{File, InputStream}
+import java.io.File
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
@@ -184,7 +184,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
         val localPath = localFolder + StoragePath.SEPARATOR + instantFileNameGenerator.getFileName(instant)
         val data: Array[Byte] = instant.getAction match {
           case HoodieTimeline.CLEAN_ACTION =>
-            val metadata = timeline.loadHoodieCleanMetadata(instant)
+            val metadata = timeline.readCleanMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.DELTA_COMMIT_ACTION =>
@@ -200,11 +200,11 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
             timeline.getInstantDetails(instant).get
 
           case HoodieTimeline.ROLLBACK_ACTION =>
-            val metadata = timeline.loadHoodieRollbackMetadata(instant)
+            val metadata = timeline.readRollbackMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.SAVEPOINT_ACTION =>
-            val metadata = timeline.loadHoodieSavepointMetadata(instant)
+            val metadata = timeline.readSavepointMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case _ => null

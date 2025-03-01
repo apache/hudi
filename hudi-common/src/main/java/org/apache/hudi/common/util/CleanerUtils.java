@@ -109,7 +109,7 @@ public class CleanerUtils {
    */
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
-    HoodieCleanMetadata cleanMetadata = metaClient.getActiveTimeline().loadHoodieCleanMetadata(cleanInstant);
+    HoodieCleanMetadata cleanMetadata = metaClient.getActiveTimeline().readCleanMetadata(cleanInstant);
     return upgradeCleanMetadata(metaClient, cleanMetadata);
   }
 
@@ -168,7 +168,7 @@ public class CleanerUtils {
   public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
     CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
-    HoodieCleanerPlan cleanerPlan = metaClient.getActiveTimeline().loadCleanerPlan(cleanInstant);
+    HoodieCleanerPlan cleanerPlan = metaClient.getActiveTimeline().readCleanerPlan(cleanInstant);
     return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
   }
 

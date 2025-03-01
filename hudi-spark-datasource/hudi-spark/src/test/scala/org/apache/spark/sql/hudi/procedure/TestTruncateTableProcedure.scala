@@ -95,7 +95,7 @@ class TestTruncateTableProcedure extends HoodieSparkProcedureTestBase {
       val replaceCommitInstant = metaClient.getActiveTimeline.getWriteTimeline
         .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
         .get()
-      val partitions = metaClient.getActiveTimeline.loadInstantContent(replaceCommitInstant,
+      val partitions = metaClient.getActiveTimeline.readInstantContent(replaceCommitInstant,
           classOf[HoodieReplaceCommitMetadata])
         .getPartitionToReplaceFileIds
         .keySet()

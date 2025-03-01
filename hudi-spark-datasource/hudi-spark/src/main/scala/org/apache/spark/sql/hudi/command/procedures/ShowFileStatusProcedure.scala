@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieArchivedTimeline, HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieArchivedTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.table.HoodieSparkTable
 
@@ -125,7 +125,7 @@ class ShowFileStatusProcedure extends BaseProcedure
 
     restoreInstant.find { instant =>
       val hoodieRestoreMetadata =
-          metaClient.getActiveTimeline.loadHoodieRestoreMetadata(instant)
+        metaClient.getActiveTimeline.readRestoreMetadata(instant)
       val restoreMetadata = hoodieRestoreMetadata.getHoodieRestoreMetadata.values().asScala
 
       restoreMetadata.exists { metadata =>
@@ -166,7 +166,7 @@ class ShowFileStatusProcedure extends BaseProcedure
     reloadTimelineIfNecessary(timeline)
 
     rollbackInstant.find { instant =>
-      val rollbackMetadata = timeline.loadHoodieRollbackMetadata(instant)
+      val rollbackMetadata = timeline.readRollbackMetadata(instant)
       val partitionRollbackMetadata = rollbackMetadata.getPartitionMetadata
       partition.flatMap(
         p => Option.apply(partitionRollbackMetadata.get(p)).flatMap(
@@ -189,7 +189,7 @@ class ShowFileStatusProcedure extends BaseProcedure
       .asScala
     reloadTimelineIfNecessary(timeline)
     cleanedInstant.find { instant =>
-      val cleanMetadata = timeline.loadHoodieCleanMetadata(instant)
+      val cleanMetadata = timeline.readCleanMetadata(instant)
       val partitionCleanMetadata = cleanMetadata.getPartitionMetadata
       partition.flatMap(p => Option.apply(partitionCleanMetadata.get(p)).flatMap(_.getSuccessDeleteFiles.asScala.find(_.contains(fileName)))).isDefined ||
         partitionCleanMetadata.values.iterator.asScala.exists(_.getSuccessDeleteFiles.asScala.exists(_.contains(fileName)))

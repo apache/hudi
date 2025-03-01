@@ -63,7 +63,7 @@ public class CompactHelpers<T, I, K, O> {
       HoodieTable table, String compactionInstantTime, HoodieData<WriteStatus> writeStatuses,
       String schema) throws IOException {
     InstantGenerator instantGenerator = table.getInstantGenerator();
-    HoodieCompactionPlan compactionPlan = table.getActiveTimeline().loadCompactionPlan(
+    HoodieCompactionPlan compactionPlan = table.getActiveTimeline().readCompactionPlan(
         instantGenerator.getCompactionRequestedInstant(compactionInstantTime));
     List<HoodieWriteStat> updateStatusMap = writeStatuses.map(WriteStatus::getStat).collectAsList();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);

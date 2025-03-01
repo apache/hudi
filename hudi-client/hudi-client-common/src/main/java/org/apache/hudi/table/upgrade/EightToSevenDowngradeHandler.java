@@ -303,9 +303,11 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
         || ((instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) && instant.isCompleted())) {
       Option<byte[]> data;
       if (instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) {
-        data = commitMetadataSerDeV1.serialize(metaClient.getActiveTimeline().loadInstantContent(instant, HoodieReplaceCommitMetadata.class));
+        data = commitMetadataSerDeV1.serialize(
+            metaClient.getActiveTimeline().readInstantContent(instant, HoodieReplaceCommitMetadata.class));
       } else {
-        data = commitMetadataSerDeV1.serialize(metaClient.getActiveTimeline().loadInstantContent(instant, HoodieCommitMetadata.class));
+        data = commitMetadataSerDeV1.serialize(
+            metaClient.getActiveTimeline().readInstantContent(instant, HoodieCommitMetadata.class));
       }
       String toPathStr = toPath.toUri().toString();
       activeTimelineV1.createFileInMetaPath(toPathStr, data, true);

@@ -141,7 +141,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
     HoodieInstant instant = hoodieTable.getMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepointTimestamp);
     try {
-      return hoodieTable.getActiveTimeline().loadHoodieSavepointMetadata(instant);
+      return hoodieTable.getActiveTimeline().readSavepointMetadata(instant);
     } catch (IOException e) {
       throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTimestamp, e);
     }
@@ -181,7 +181,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     if (config.incrementalCleanerModeEnabled()) {
       Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
       if (lastClean.isPresent()) {
-        HoodieCleanMetadata cleanMetadata = hoodieTable.getActiveTimeline().loadHoodieCleanMetadata(lastClean.get());
+        HoodieCleanMetadata cleanMetadata = hoodieTable.getActiveTimeline().readCleanMetadata(lastClean.get());
         if ((cleanMetadata.getEarliestCommitToRetain() != null)
                 && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()
                 && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
@@ -241,10 +241,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private Stream<String> getPartitionsForInstants(HoodieInstant instant) {
     try {
       if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
-        HoodieReplaceCommitMetadata replaceCommitMetadata = hoodieTable.getActiveTimeline().loadInstantContent(instant, HoodieReplaceCommitMetadata.class);
+        HoodieReplaceCommitMetadata replaceCommitMetadata =
+            hoodieTable.getActiveTimeline().readInstantContent(instant, HoodieReplaceCommitMetadata.class);
         return Stream.concat(replaceCommitMetadata.getPartitionToReplaceFileIds().keySet().stream(), replaceCommitMetadata.getPartitionToWriteStats().keySet().stream());
       } else {
-        HoodieCommitMetadata commitMetadata = hoodieTable.getActiveTimeline().loadInstantContent(instant, HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata =
+            hoodieTable.getActiveTimeline().readInstantContent(instant, HoodieCommitMetadata.class);
         return commitMetadata.getPartitionToWriteStats().keySet().stream();
       }
     } catch (IOException e) {

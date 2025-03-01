@@ -59,7 +59,7 @@ public class RollbackUtils {
       throws IOException {
     // TODO: add upgrade step if required.
     final HoodieInstant requested = metaClient.getInstantGenerator().getRollbackRequestedInstant(rollbackInstant);
-    return metaClient.getActiveTimeline().loadInstantContent(requested, HoodieRollbackPlan.class);
+    return metaClient.getActiveTimeline().readInstantContent(requested, HoodieRollbackPlan.class);
   }
 
   static Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String instantToRollback, String rollbackInstantTime) {

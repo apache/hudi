@@ -133,7 +133,7 @@ public class TestCleanPlanner {
       when(mockHoodieTable.getActiveTimeline()).thenReturn(activeTimeline);
       for (Pair<String, HoodieSavepointMetadata> savepoint : savepoints) {
         HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint.getLeft());
-        when(activeTimeline.loadHoodieSavepointMetadata(instant)).thenReturn(savepoint.getRight());
+        when(activeTimeline.readSavepointMetadata(instant)).thenReturn(savepoint.getRight());
         when(mockMetaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint.getLeft())).thenReturn(instant);
       }
     }
@@ -180,7 +180,7 @@ public class TestCleanPlanner {
       for (Map.Entry<String, List<String>> entry : savepoints.entrySet()) {
         HoodieSavepointMetadata savepointMetadata = getSavepointMetadata(entry.getValue());
         HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, entry.getKey());
-        when(activeTimeline.loadHoodieSavepointMetadata(instant)).thenReturn(savepointMetadata);
+        when(activeTimeline.readSavepointMetadata(instant)).thenReturn(savepointMetadata);
       }
     }
 
@@ -619,7 +619,7 @@ public class TestCleanPlanner {
     HoodieInstant latestCleanInstant = INSTANT_GENERATOR.createNewInstant(COMPLETED, HoodieTimeline.CLEAN_ACTION, timestamp);
     when(completedCleanTimeline.lastInstant()).thenReturn(Option.of(latestCleanInstant));
     when(activeTimeline.isEmpty(latestCleanInstant)).thenReturn(false);
-    when(activeTimeline.loadHoodieCleanMetadata(latestCleanInstant)).thenReturn(cleanMetadata);
+    when(activeTimeline.readCleanMetadata(latestCleanInstant)).thenReturn(cleanMetadata);
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(earliestCommitToRetain, HoodieTimeline.COMMIT_ACTION, COMPLETED.name()),
         cleanMetadata.getLastCompletedCommitTimestamp(),
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(), Collections.emptyMap(),
@@ -653,7 +653,8 @@ public class TestCleanPlanner {
         commitMetadata.getPartitionToWriteStats().put(partition, Collections.emptyList());
       });
       try {
-        when(hoodieTable.getActiveTimeline().loadInstantContent(hoodieInstant, HoodieCommitMetadata.class)).thenReturn(commitMetadata);
+        when(hoodieTable.getActiveTimeline().readInstantContent(hoodieInstant, HoodieCommitMetadata.class)).thenReturn(
+            commitMetadata);
       } catch (IOException e) {
         throw new RuntimeException("Should not have failed", e);
       }

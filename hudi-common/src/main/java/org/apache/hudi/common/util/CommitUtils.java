@@ -23,9 +23,9 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -126,7 +126,7 @@ public class CommitUtils {
 
   public static Option<HoodieCommitMetadata> buildMetadataFromInstant(HoodieTimeline timeline, HoodieInstant instant) {
     try {
-      HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(instant, HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = timeline.readInstantContent(instant, HoodieCommitMetadata.class);
 
       return Option.of(commitMetadata);
     } catch (IOException e) {
@@ -180,7 +180,7 @@ public class CommitUtils {
     return (Option<String>) timeline.getWriteTimeline().filterCompletedInstants().getReverseOrderedInstants()
         .map(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(instant, HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = timeline.readInstantContent(instant, HoodieCommitMetadata.class);
             // process commits only with checkpoint entries
             String checkpointValue = commitMetadata.getMetadata(checkpointKey);
             if (StringUtils.nonEmpty(checkpointValue)) {

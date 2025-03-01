@@ -74,7 +74,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     int numCommits;
     if (lastCleanInstant.isPresent() && !table.getActiveTimeline().isEmpty(lastCleanInstant.get())) {
       try {
-        HoodieCleanMetadata cleanMetadata = table.getActiveTimeline().loadHoodieCleanMetadata(lastCleanInstant.get());
+        HoodieCleanMetadata cleanMetadata = table.getActiveTimeline().readCleanMetadata(lastCleanInstant.get());
         String lastCompletedCommitTimestamp = cleanMetadata.getLastCompletedCommitTimestamp();
         numCommits = commitTimeline.findInstantsAfter(lastCompletedCommitTimestamp).countInstants();
       } catch (IOException e) {
@@ -189,11 +189,11 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       HoodieInstant cleanInstant = lastClean.get();
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       if (activeTimeline.isEmpty(cleanInstant)) {
-        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
         activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
+        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
         try {
           // Deserialize plan.
-          return Option.of(activeTimeline.loadCleanerPlan(cleanPlanInstant));
+          return Option.of(activeTimeline.readCleanerPlan(cleanPlanInstant));
         } catch (IOException ex) {
           // If it is empty we catch error and repair.
           if (activeTimeline.isEmpty(cleanPlanInstant)) {

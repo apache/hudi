@@ -62,7 +62,7 @@ public class RollbacksCommand {
     final List<Comparable[]> rows = new ArrayList<>();
     rollback.getInstants().forEach(instant -> {
       try {
-        HoodieRollbackMetadata metadata = activeTimeline.loadInstantContent(instant, HoodieRollbackMetadata.class);
+        HoodieRollbackMetadata metadata = activeTimeline.readInstantContent(instant, HoodieRollbackMetadata.class);
         metadata.getCommitsRollback().forEach(c -> {
           Comparable[] row = new Comparable[5];
           row[0] = metadata.getStartRollbackTime();
@@ -95,7 +95,7 @@ public class RollbacksCommand {
       throws IOException {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     final List<Comparable[]> rows = new ArrayList<>();
-    HoodieRollbackMetadata metadata = activeTimeline.loadInstantContent(
+    HoodieRollbackMetadata metadata = activeTimeline.readInstantContent(
         HoodieCLI.getTableMetaClient().createNewInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant),
         HoodieRollbackMetadata.class);
     metadata.getPartitionMetadata().forEach((key, value) -> Stream

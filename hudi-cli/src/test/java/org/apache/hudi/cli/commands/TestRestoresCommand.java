@@ -141,7 +141,7 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     List<Comparable[]> rows = new ArrayList<>();
     restores.sorted().forEach(instant -> {
       try {
-        HoodieRestoreMetadata metadata = activeTimeline.loadInstantContent(instant, HoodieRestoreMetadata.class);
+        HoodieRestoreMetadata metadata = activeTimeline.readInstantContent(instant, HoodieRestoreMetadata.class);
         metadata.getInstantsToRollback().forEach(c -> {
           Comparable[] row = new Comparable[4];
           row[0] = metadata.getStartRestoreTime();
@@ -179,7 +179,7 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // get metadata of instant
-    HoodieRestoreMetadata instantMetadata = activeTimeline.loadInstantContent(instant, HoodieRestoreMetadata.class);
+    HoodieRestoreMetadata instantMetadata = activeTimeline.readInstantContent(instant, HoodieRestoreMetadata.class);
 
     // generate expected result
     TableHeader header = new TableHeader()

@@ -137,7 +137,7 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
     rollback.sorted().forEach(instant -> {
       try {
         // get pair of rollback time and instant time
-        HoodieRollbackMetadata metadata = activeTimeline.loadInstantContent(instant, HoodieRollbackMetadata.class);
+        HoodieRollbackMetadata metadata = activeTimeline.readInstantContent(instant, HoodieRollbackMetadata.class);
         metadata.getCommitsRollback().forEach(c -> {
           Comparable[] row = new Comparable[5];
           row[0] = metadata.getStartRollbackTime();
@@ -180,7 +180,7 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
 
     List<Comparable[]> rows = new ArrayList<>();
     // get metadata of instant
-    HoodieRollbackMetadata metadata = activeTimeline.loadInstantContent(instant, HoodieRollbackMetadata.class);
+    HoodieRollbackMetadata metadata = activeTimeline.readInstantContent(instant, HoodieRollbackMetadata.class);
     // generate expect result
     metadata.getPartitionMetadata().forEach((key, value) -> Stream
         .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),

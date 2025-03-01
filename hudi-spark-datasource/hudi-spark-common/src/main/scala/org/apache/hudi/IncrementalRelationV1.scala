@@ -25,7 +25,7 @@ import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
@@ -157,9 +157,8 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
 
       // create Replaced file group
       val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
-      val layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion)
       val replacedFile = replacedTimeline.getInstants.asScala.flatMap { instant =>
-        val replaceMetadata = metaClient.getActiveTimeline.loadInstantContent(instant, classOf[HoodieReplaceCommitMetadata])
+        val replaceMetadata = metaClient.getActiveTimeline.readInstantContent(instant, classOf[HoodieReplaceCommitMetadata])
         replaceMetadata.getPartitionToReplaceFileIds.entrySet().asScala.flatMap { entry =>
           entry.getValue.asScala.map { e =>
             val fullPath = FSUtils.constructAbsolutePath(basePath, entry.getKey).toString
@@ -169,7 +168,7 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
       }.toMap
 
       for (commit <- commitsToReturn) {
-        val metadata: HoodieCommitMetadata = commitTimeline.loadInstantContent(commit,
+        val metadata: HoodieCommitMetadata = commitTimeline.readInstantContent(commit,
           classOf[HoodieCommitMetadata])
 
         if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.requestedTime) {

@@ -41,7 +41,6 @@ import org.apache.hudi.storage.StoragePathInfo;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.avro.Schema;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -124,7 +123,7 @@ public class InternalSchemaCache {
       if (instants.isEmpty()) {
         return Option.empty();
       }
-      HoodieCommitMetadata metadata = timeline.loadInstantContent(instants.get(0), HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = timeline.readInstantContent(instants.get(0), HoodieCommitMetadata.class);
       String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
       return SerDeHelper.fromJson(latestInternalSchemaStr);
     } catch (Exception e) {
@@ -147,7 +146,8 @@ public class InternalSchemaCache {
       // try to find internalSchema
       HoodieCommitMetadata metadata;
       try {
-        metadata = timelineBeforeCurrentCompaction.loadInstantContent(lastInstantBeforeCurrentCompaction.get(), HoodieCommitMetadata.class);
+        metadata = timelineBeforeCurrentCompaction.readInstantContent(lastInstantBeforeCurrentCompaction.get(),
+            HoodieCommitMetadata.class);
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot read metadata from commit: %s", lastInstantBeforeCurrentCompaction.get()), e);
       }

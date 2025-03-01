@@ -202,7 +202,7 @@ public class ExportCommand {
       byte[] data = null;
       switch (instant.getAction()) {
         case HoodieTimeline.CLEAN_ACTION: {
-          HoodieCleanMetadata metadata = timeline.loadHoodieCleanMetadata(instant);
+          HoodieCleanMetadata metadata = timeline.readCleanMetadata(instant);
           data = HoodieAvroUtils.avroToJson(metadata, true);
           break;
         }
@@ -214,12 +214,12 @@ public class ExportCommand {
           break;
         }
         case HoodieTimeline.ROLLBACK_ACTION: {
-          HoodieRollbackMetadata metadata = timeline.loadHoodieRollbackMetadata(instant);
+          HoodieRollbackMetadata metadata = timeline.readRollbackMetadata(instant);
           data = HoodieAvroUtils.avroToJson(metadata, true);
           break;
         }
         case HoodieTimeline.SAVEPOINT_ACTION: {
-          HoodieSavepointMetadata metadata = timeline.loadHoodieSavepointMetadata(instant);
+          HoodieSavepointMetadata metadata = timeline.readSavepointMetadata(instant);
           data = HoodieAvroUtils.avroToJson(metadata, true);
           break;
         }

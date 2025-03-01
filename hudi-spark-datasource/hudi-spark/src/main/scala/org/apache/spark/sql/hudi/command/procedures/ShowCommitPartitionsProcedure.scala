@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata, HoodieWriteStat}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.ClusteringUtils
 import org.apache.hudi.exception.HoodieException
 
@@ -121,9 +121,9 @@ class ShowCommitPartitionsProcedure() extends BaseProcedure with ProcedureBuilde
   private def getHoodieCommitMetadata(timeline: HoodieTimeline, hoodieInstant: Option[HoodieInstant]): Option[HoodieCommitMetadata] = {
     if (hoodieInstant.isDefined) {
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
-        Option(timeline.loadInstantContent(hoodieInstant.get, classOf[HoodieReplaceCommitMetadata]))
+        Option(timeline.readInstantContent(hoodieInstant.get, classOf[HoodieReplaceCommitMetadata]))
       } else {
-        Option(timeline.loadInstantContent(hoodieInstant.get, classOf[HoodieCommitMetadata]))
+        Option(timeline.readInstantContent(hoodieInstant.get, classOf[HoodieCommitMetadata]))
       }
     } else {
       Option.empty

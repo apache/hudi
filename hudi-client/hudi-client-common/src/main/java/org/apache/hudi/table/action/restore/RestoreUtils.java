@@ -41,7 +41,7 @@ public class RestoreUtils {
   public static HoodieRestorePlan getRestorePlan(HoodieTableMetaClient metaClient, HoodieInstant restoreInstant)
       throws IOException {
     final HoodieInstant requested = metaClient.getInstantGenerator().getRollbackRequestedInstant(restoreInstant);
-    return metaClient.getActiveTimeline().loadInstantContent(requested, HoodieRestorePlan.class);
+    return metaClient.getActiveTimeline().readInstantContent(requested, HoodieRestorePlan.class);
   }
 
   public static String getSavepointToRestoreTimestampV1Schema(HoodieTable table, HoodieRestorePlan plan) {

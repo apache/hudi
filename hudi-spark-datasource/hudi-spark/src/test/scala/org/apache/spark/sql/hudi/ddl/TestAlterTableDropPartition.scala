@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.util.{Option => HOption, PartitionPathEncodeUtils, StringUtils}
+import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -45,7 +45,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     // And available public methods does not allow to specify exact instant to get schema from, only latest after some filtering
     // which may lead to false positives in test scenarios.
     val lastInstant = metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant().get()
-    val commitMetadata = metaClient.getActiveTimeline.loadInstantContent(lastInstant,  classOf[HoodieCommitMetadata])
+    val commitMetadata = metaClient.getActiveTimeline.readInstantContent(lastInstant, classOf[HoodieCommitMetadata])
     val schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)
     val schema = new Schema.Parser().parse(schemaStr)
     val fields = schema.getFields.asScala.map(_.name())
@@ -502,7 +502,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
         val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.lastInstant()
         val commitMetadata =
-          metaClient.getActiveTimeline.loadInstantContent(lastInstant.get(), classOf[HoodieCommitMetadata])
+          metaClient.getActiveTimeline.readInstantContent(lastInstant.get(), classOf[HoodieCommitMetadata])
         val schemaStr = commitMetadata.getExtraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY)
         Assertions.assertFalse(StringUtils.isNullOrEmpty(schemaStr))
 

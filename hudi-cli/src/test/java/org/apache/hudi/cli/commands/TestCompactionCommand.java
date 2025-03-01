@@ -217,7 +217,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
 
     String instance = "001";
     // get compaction plan before compaction
-    HoodieCompactionPlan plan = HoodieCLI.getTableMetaClient().reloadActiveTimeline().loadCompactionPlan(
+    HoodieCompactionPlan plan = HoodieCLI.getTableMetaClient().reloadActiveTimeline().readCompactionPlan(
             INSTANT_GENERATOR.getCompactionRequestedInstant(instance));
 
     generateArchive();

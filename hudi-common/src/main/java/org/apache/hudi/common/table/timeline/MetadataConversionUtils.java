@@ -98,7 +98,7 @@ public class MetadataConversionUtils {
             // we may have cases with empty HoodieRequestedReplaceMetadata e.g. insert_overwrite_table or insert_overwrite
             // without clustering. However, we should revisit the requested commit file standardization
             Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = Option.of(metaClient.getActiveTimeline()
-                .loadRequestedReplaceMetadata(hoodieInstant));
+                .readRequestedReplaceMetadata(hoodieInstant));
             if (requestedReplaceMetadata.isPresent()) {
               archivedMetaWrapper.setHoodieRequestedReplaceMetadata(requestedReplaceMetadata.get());
             }
@@ -109,13 +109,15 @@ public class MetadataConversionUtils {
         }
         case HoodieTimeline.ROLLBACK_ACTION: {
           if (hoodieInstant.isCompleted()) {
-            archivedMetaWrapper.setHoodieRollbackMetadata(metaClient.getActiveTimeline().loadInstantContent(hoodieInstant, HoodieRollbackMetadata.class));
+            archivedMetaWrapper.setHoodieRollbackMetadata(
+                metaClient.getActiveTimeline().readInstantContent(hoodieInstant, HoodieRollbackMetadata.class));
           }
           archivedMetaWrapper.setActionType(ActionType.rollback.name());
           break;
         }
         case HoodieTimeline.SAVEPOINT_ACTION: {
-          archivedMetaWrapper.setHoodieSavePointMetadata(metaClient.getActiveTimeline().loadInstantContent(hoodieInstant, HoodieSavepointMetadata.class));
+          archivedMetaWrapper.setHoodieSavePointMetadata(
+              metaClient.getActiveTimeline().readInstantContent(hoodieInstant, HoodieSavepointMetadata.class));
           archivedMetaWrapper.setActionType(ActionType.savepoint.name());
           break;
         }
@@ -222,12 +224,14 @@ public class MetadataConversionUtils {
         break;
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
-        archivedMetaWrapper.setHoodieRollbackMetadata(metaClient.getActiveTimeline().loadInstantContent(hoodieInstant, HoodieRollbackMetadata.class));
+        archivedMetaWrapper.setHoodieRollbackMetadata(
+            metaClient.getActiveTimeline().readInstantContent(hoodieInstant, HoodieRollbackMetadata.class));
         archivedMetaWrapper.setActionType(ActionType.rollback.name());
         break;
       }
       case HoodieTimeline.SAVEPOINT_ACTION: {
-        archivedMetaWrapper.setHoodieSavePointMetadata(metaClient.getActiveTimeline().loadInstantContent(hoodieInstant, HoodieSavepointMetadata.class));
+        archivedMetaWrapper.setHoodieSavePointMetadata(
+            metaClient.getActiveTimeline().readInstantContent(hoodieInstant, HoodieSavepointMetadata.class));
         archivedMetaWrapper.setActionType(ActionType.savepoint.name());
         break;
       }
@@ -334,7 +338,7 @@ public class MetadataConversionUtils {
   }
 
   private static <T extends HoodieCommitMetadata> Option<T> getCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant, Class<T> clazz) throws IOException {
-    T commitMetadata = metaClient.getActiveTimeline().loadInstantContent(instant, clazz);
+    T commitMetadata = metaClient.getActiveTimeline().readInstantContent(instant, clazz);
     // an empty file will return the default instance with an UNKNOWN operation type and in that case we return an empty option
     if (commitMetadata.getOperationType() == WriteOperationType.UNKNOWN) {
       return Option.empty();

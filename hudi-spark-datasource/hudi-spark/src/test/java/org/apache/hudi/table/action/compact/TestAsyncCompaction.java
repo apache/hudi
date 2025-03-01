@@ -246,7 +246,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       moveCompactionFromRequestedToInflight(compactionInstantTime, cfg);
 
       // validate the compaction plan does not include pending log files.
-      HoodieCompactionPlan compactionPlan = metaClient.reloadActiveTimeline().loadCompactionPlan(
+      HoodieCompactionPlan compactionPlan = metaClient.reloadActiveTimeline().readCompactionPlan(
           INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime));
       assertTrue(compactionPlan.getOperations().stream()
               .noneMatch(op -> op.getDeltaFilePaths().stream().anyMatch(deltaFile -> getCommitTime(deltaFile).equals(pendingInstantTime))),
