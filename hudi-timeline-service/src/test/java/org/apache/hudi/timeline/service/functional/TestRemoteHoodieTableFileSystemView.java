@@ -21,11 +21,18 @@ package org.apache.hudi.timeline.service.functional;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.dto.DTOUtils;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -47,10 +54,14 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -103,11 +114,11 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     view.getLatestBaseFiles();
 
     // Simulate only a single failure and ensure the request fails.
-    getFileSystemView(metaClient.getActiveTimeline(), 1);
+    validateRequestFailed(() -> getFileSystemView(metaClient.getActiveTimeline(), 1));
     validateRequestFailed(view::getLatestBaseFiles);
 
     // Simulate 3 failures, but make sure the request succeeds as retries are enabled
-    getFileSystemView(metaClient.getActiveTimeline(), 3);
+    validateRequestFailed(() -> getFileSystemView(metaClient.getActiveTimeline(), 3));
     RemoteHoodieTableFileSystemView viewWithRetries = initFsView(metaClient, server.getServerPort(), true);
     viewWithRetries.getLatestBaseFiles();
   }
@@ -152,6 +163,31 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     normalFileGroups.forEach(g -> assertNotNull(g.getTimeline()));
   }
 
+  @Test
+  void testInitTimelineRemoteBasic() throws IOException {
+    // Refresh timeline in remote.
+    view = initFsView(metaClient, server.getServerPort(), false);
+    // Write data to a single partition.
+    String partitionPath = "partition1";
+    Paths.get(basePath, partitionPath).toFile().mkdirs();
+    String fileId = UUID.randomUUID().toString();
+    String instantTime1 = "1";
+    String fileName1 = FSUtils.makeBaseFileName(instantTime1,"1-0-1", fileId, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
+    Paths.get(basePath, partitionPath, fileName1).toFile().createNewFile();
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant1 = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime1, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
+    // Refresh timeline in remote after reloading timeline.
+    metaClient.reloadActiveTimeline();
+    view = initFsView(metaClient, server.getServerPort(), false);
+    List<HoodieBaseFile> baseFiles = view.getAllBaseFiles("partition1").collect(Collectors.toList());
+    assertEquals(1, baseFiles.size());
+    List<HoodieInstant> instantsFromMetaClient = metaClient.getActiveTimeline().getInstants();
+    List<HoodieInstant> instantsFromDTO = view.getTimeline().getInstants();
+    assertEquals(instantsFromMetaClient, instantsFromDTO);
+    assertEquals(instantsFromMetaClient.get(0).getCompletionTime(), instantsFromDTO.get(0).getCompletionTime());
+  }
+
   private Stream<HoodieFileGroup> readFileGroupStream(String result, ObjectMapper mapper) throws IOException {
     return DTOUtils.fileGroupDTOsToFileGroups(
         (List<FileGroupDTO>) mapper.readValue(
@@ -172,7 +208,8 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
                                                             boolean enableRetries) {
     FileSystemViewStorageConfig.Builder builder = FileSystemViewStorageConfig.newBuilder().withRemoteServerHost("localhost")
         .withRemoteServerPort(serverPort)
-        .withRemoteTimelineClientTimeoutSecs(DEFAULT_READ_TIMEOUT_SECS);
+        .withRemoteInitTimeline(true)
+        .withRemoteTimelineClientTimeoutSecs(5);
     if (enableRetries) {
       builder.withRemoteTimelineClientTimeoutSecs(300)
           .withRemoteTimelineClientRetry(true)

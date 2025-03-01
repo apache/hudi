@@ -36,12 +36,11 @@ public class InstantDTO {
   String timestamp;
   @JsonProperty("state")
   String state;
+  @JsonProperty("completionTime")
+  String completionTime;
 
   @JsonProperty("requestedTime")
   String requestedTime;
-
-  @JsonProperty("completionTime")
-  String completionTime;
 
   public static InstantDTO fromInstant(HoodieInstant instant) {
     if (null == instant) {

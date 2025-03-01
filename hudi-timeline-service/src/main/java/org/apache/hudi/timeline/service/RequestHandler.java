@@ -435,9 +435,29 @@ public class RequestHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.GET_TIMELINE_HASH_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("GET_TIMELINE_HASH", 1);
+      String basePath = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class)
+          .getOrThrow(e -> new HoodieException("Basepath is invalid"));
+      String timelineHash = instantHandler.getTimelineHash(basePath);
+      writeValueAsString(ctx, timelineHash);
+    }, false));
+
     app.post(RemoteHoodieTableFileSystemView.REFRESH_TABLE_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("REFRESH_TABLE", 1);
-      boolean success = sliceHandler.refreshTable(getBasePathParam(ctx));
+      String basePath = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class)
+          .getOrThrow(e -> new HoodieException("Basepath is invalid"));
+      LOG.info("Refreshing timeline for base path {}", basePath);
+      boolean success = sliceHandler.refreshTable(basePath);
+      writeValueAsString(ctx, success);
+    }, false));
+
+    app.post(RemoteHoodieTableFileSystemView.INIT_TIMELINE_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("INIT_TIMELINE", 1);
+      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+      LOG.info("Initializing timeline for base path {}", basePath);
+      TimelineDTO timelineDTO = OBJECT_MAPPER.readValue(ctx.body(), TimelineDTO.class);
+      boolean success = instantHandler.initializeTimeline(basePath, timelineDTO);
       writeValueAsString(ctx, success);
     }, false));
 
@@ -445,12 +465,11 @@ public class RequestHandler {
       metricsRegistry.add("LOAD_PARTITIONS", 1);
       String basePath = getBasePathParam(ctx);
       try {
-        List<String> partitionPaths = OBJECT_MAPPER.readValue(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITIONS_PARAM, String.class)
-            .getOrThrow(e -> new HoodieException("Partitions param is invalid")), LIST_TYPE_REFERENCE);
+        List<String> partitionPaths = OBJECT_MAPPER.readValue(ctx.body(), LIST_TYPE_REFERENCE);
         boolean success = sliceHandler.loadPartitions(basePath, partitionPaths);
         writeValueAsString(ctx, success);
       } catch (IOException e) {
-        throw new HoodieIOException("Failed to parse request parameter", e);
+        throw new HoodieIOException("Failed to parse request body", e);
       }
     }, false));
 
@@ -661,6 +680,7 @@ public class RequestHandler {
       String localTimelineHash = localTimeline.getTimelineHash();
       // refresh if timeline hash mismatches
       if (!localTimelineHash.equals(timelineHashFromClient)) {
+        LOG.warn("Timeline hashes don't match, local view is not in sync for {}", basePath);
         return true;
       }
 
