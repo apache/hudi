@@ -59,6 +59,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -241,8 +242,10 @@ public class HoodieTableMetaClient implements Serializable {
     }
     if (updateIndexDefn) {
       try {
-        FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
-      } catch (IOException e) {
+        // TODO[HUDI-9094]: should not write byte array directly
+        FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath),
+            Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadataOpt.get().toJson()))));
+      }  catch (IOException e) {
         throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
       }
     }
@@ -259,8 +262,10 @@ public class HoodieTableMetaClient implements Serializable {
     indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
     String indexMetaPath = getIndexDefinitionPath();
     try {
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
-    } catch (IOException e) {
+      // TODO[HUDI-9094]: should not write byte array directly
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath),
+          Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadataOpt.get().toJson()))));
+    }  catch (IOException e) {
       throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
     }
   }
@@ -287,16 +292,6 @@ public class HoodieTableMetaClient implements Serializable {
       }
     }
     return Option.empty();
-  }
-
-  public void updateIndexMetadata(HoodieIndexMetadata newExpressionIndexMetadata, String indexMetaPath) {
-    this.indexMetadataOpt = Option.of(newExpressionIndexMetadata);
-    try {
-      // update the index metadata file as well
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
-    }
   }
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {

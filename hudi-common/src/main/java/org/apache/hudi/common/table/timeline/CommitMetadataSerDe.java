@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.HoodieInstantWriter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,5 +33,5 @@ public interface CommitMetadataSerDe extends Serializable {
 
   <T> T deserialize(HoodieInstant instant, InputStream instantStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException;
 
-  Option<byte[]> serialize(HoodieCommitMetadata commitMetadata) throws IOException;
+  <T> Option<HoodieInstantWriter> getInstantWriter(T commitMetadata);
 }

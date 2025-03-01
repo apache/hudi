@@ -77,7 +77,6 @@ import java.util.UUID;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback {
@@ -174,12 +173,11 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, Bef
   }
 
   private void createCommitFile(HoodieCommitMetadata commitMetadata, String commitTime, String basePath) throws IOException {
-    byte[] bytes = serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get();
     Path fullPath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/"
         + INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
-    OutputStream fsout = dfsCluster.getFileSystem().create(fullPath, true);
-    fsout.write(bytes);
-    fsout.close();
+    try (OutputStream fsout = dfsCluster.getFileSystem().create(fullPath, true)) {
+      COMMIT_METADATA_SER_DE.getInstantWriter(commitMetadata).get().writeToStream(fsout);
+    }
   }
 
   private HoodieCommitMetadata createPartitions(int numberOfPartitions, boolean isParquetSchemaSimple,
