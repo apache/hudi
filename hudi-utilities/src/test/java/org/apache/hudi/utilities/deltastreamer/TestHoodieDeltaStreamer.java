@@ -947,7 +947,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Option<HoodieInstant> firstReplaceHoodieInstant = replacedTimeline.nthFromLastInstant(1);
     assertTrue(firstReplaceHoodieInstant.isPresent());
     HoodieReplaceCommitMetadata firstReplaceMetadata =
-        replacedTimeline.readInstantContent(firstReplaceHoodieInstant.get(), HoodieReplaceCommitMetadata.class);
+        replacedTimeline.readReplaceCommitMetadata(firstReplaceHoodieInstant.get());
     Map<String, List<String>> partitionToReplaceFileIds = firstReplaceMetadata.getPartitionToReplaceFileIds();
     String partitionName = null;
     List replacedFileIDs = null;
@@ -1963,7 +1963,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Ensure it is empty
     HoodieCommitMetadata commitMetadata =
-        mClient.getActiveTimeline().readInstantContent(newLastFinished, HoodieCommitMetadata.class);
+        mClient.getActiveTimeline().readCommitMetadata(newLastFinished);
     System.out.println("New Commit Metadata=" + commitMetadata);
     assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
 
@@ -2085,7 +2085,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                                                                  WriteOperationType operationType) {
     try {
       HoodieCommitMetadata commitMetadata =
-          metaClient.getActiveTimeline().readInstantContent(instant, HoodieCommitMetadata.class);
+          metaClient.getActiveTimeline().readCommitMetadata(instant);
       assertFalse(StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)));
       assertEquals(operationType, commitMetadata.getOperationType());
     } catch (IOException ioException) {
@@ -2338,18 +2338,18 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     ObjectMapper objectMapper = new ObjectMapper();
     HoodieCommitMetadata commitMetadata =
-        metaClient.getCommitsTimeline().readInstantContent(instants.get(0), HoodieCommitMetadata.class);
+        metaClient.getCommitsTimeline().readCommitMetadata(instants.get(0));
     Map<String, String> checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(HoodieDeltaStreamer.CHECKPOINT_KEY), Map.class);
 
     String parquetFirstcheckpoint = checkpointVals.get("parquet");
     assertNotNull(parquetFirstcheckpoint);
-    commitMetadata = metaClient.getCommitsTimeline().readInstantContent(instants.get(1), HoodieCommitMetadata.class);
+    commitMetadata = metaClient.getCommitsTimeline().readCommitMetadata(instants.get(1));
     checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(HoodieDeltaStreamer.CHECKPOINT_KEY), Map.class);
     String kafkaCheckpoint = checkpointVals.get("kafka");
     assertNotNull(kafkaCheckpoint);
     assertEquals(parquetFirstcheckpoint, checkpointVals.get("parquet"));
 
-    commitMetadata = metaClient.getCommitsTimeline().readInstantContent(instants.get(2), HoodieCommitMetadata.class);
+    commitMetadata = metaClient.getCommitsTimeline().readCommitMetadata(instants.get(2));
     checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(HoodieDeltaStreamer.CHECKPOINT_KEY), Map.class);
     String parquetSecondCheckpoint = checkpointVals.get("parquet");
     assertNotNull(parquetSecondCheckpoint);

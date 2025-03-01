@@ -26,7 +26,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -467,7 +467,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
       val lastCompactionInstant = compactionTimeline
         .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-          compactionTimeline.readInstantContent(instant, classOf[HoodieCommitMetadata])
+          compactionTimeline.readCommitMetadata(instant)
             .getOperationType == WriteOperationType.COMPACT))
         .lastInstant()
       val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.PARTITION_STATS.getPartitionPath)

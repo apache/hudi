@@ -308,10 +308,10 @@ public class TimelineCommand {
       if (instant.isInflight()) {
         HoodieInstant instantToUse = HoodieCLI.getTableMetaClient().createNewInstant(
             HoodieInstant.State.REQUESTED, instant.getAction(), instant.requestedTime());
-        HoodieRollbackPlan metadata = timeline.readInstantContent(instantToUse, HoodieRollbackPlan.class);
+        HoodieRollbackPlan metadata = timeline.readRollbackPlan(instantToUse);
         return metadata.getInstantToRollback().getCommitTime();
       } else {
-        HoodieRollbackMetadata metadata = timeline.readInstantContent(instant, HoodieRollbackMetadata.class);
+        HoodieRollbackMetadata metadata = timeline.readRollbackMetadata(instant);
         return String.join(",", metadata.getCommitsRollback());
       }
     } catch (IOException e) {
@@ -331,11 +331,11 @@ public class TimelineCommand {
         if (rollbackInstant.isInflight()) {
           HoodieInstant instantToUse = HoodieCLI.getTableMetaClient().createNewInstant(
               HoodieInstant.State.REQUESTED, rollbackInstant.getAction(), rollbackInstant.requestedTime());
-          HoodieRollbackPlan metadata = timeline.readInstantContent(instantToUse, HoodieRollbackPlan.class);
+          HoodieRollbackPlan metadata = timeline.readRollbackPlan(instantToUse);
           rollbackInfoMap.computeIfAbsent(metadata.getInstantToRollback().getCommitTime(), k -> new ArrayList<>())
               .add(rollbackInstant.requestedTime());
         } else {
-          HoodieRollbackMetadata metadata = timeline.readInstantContent(rollbackInstant, HoodieRollbackMetadata.class);
+          HoodieRollbackMetadata metadata = timeline.readRollbackMetadata(rollbackInstant);
           metadata.getCommitsRollback().forEach(instant -> {
             rollbackInfoMap.computeIfAbsent(instant, k -> new ArrayList<>())
                 .add(rollbackInstant.requestedTime());

@@ -22,7 +22,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -216,7 +215,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
         try {
           HoodieInstant instant1 = timeline.filter(inst -> inst.requestedTime().equals(newInstant))
               .firstInstant().get();
-          return timeline.readInstantContent(instant1, HoodieCommitMetadata.class).getWriteStats();
+          return timeline.readCommitMetadata(instant1).getWriteStats();
         } catch (IOException e) {
           return Collections.EMPTY_LIST;
         }

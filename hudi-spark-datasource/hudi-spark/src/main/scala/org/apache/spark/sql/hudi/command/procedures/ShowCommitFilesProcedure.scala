@@ -108,9 +108,9 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
     if (hoodieInstant.isDefined) {
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
 
-        Option(timeline.readInstantContent(hoodieInstant.get, classOf[HoodieReplaceCommitMetadata]))
+        Option(timeline.readReplaceCommitMetadata(hoodieInstant.get))
       } else {
-        Option(timeline.readInstantContent(hoodieInstant.get, classOf[HoodieCommitMetadata]))
+        Option(timeline.readCommitMetadata(hoodieInstant.get))
       }
     } else {
       Option.empty

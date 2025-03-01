@@ -23,8 +23,6 @@ import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -110,14 +108,14 @@ public class MetadataConversionUtils {
         case HoodieTimeline.ROLLBACK_ACTION: {
           if (hoodieInstant.isCompleted()) {
             archivedMetaWrapper.setHoodieRollbackMetadata(
-                metaClient.getActiveTimeline().readInstantContent(hoodieInstant, HoodieRollbackMetadata.class));
+                metaClient.getActiveTimeline().readRollbackMetadata(hoodieInstant));
           }
           archivedMetaWrapper.setActionType(ActionType.rollback.name());
           break;
         }
         case HoodieTimeline.SAVEPOINT_ACTION: {
           archivedMetaWrapper.setHoodieSavePointMetadata(
-              metaClient.getActiveTimeline().readInstantContent(hoodieInstant, HoodieSavepointMetadata.class));
+              metaClient.getActiveTimeline().readSavepointMetadata(hoodieInstant));
           archivedMetaWrapper.setActionType(ActionType.savepoint.name());
           break;
         }
@@ -225,13 +223,13 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
         archivedMetaWrapper.setHoodieRollbackMetadata(
-            metaClient.getActiveTimeline().readInstantContent(hoodieInstant, HoodieRollbackMetadata.class));
+            metaClient.getActiveTimeline().readRollbackMetadata(hoodieInstant));
         archivedMetaWrapper.setActionType(ActionType.rollback.name());
         break;
       }
       case HoodieTimeline.SAVEPOINT_ACTION: {
         archivedMetaWrapper.setHoodieSavePointMetadata(
-            metaClient.getActiveTimeline().readInstantContent(hoodieInstant, HoodieSavepointMetadata.class));
+            metaClient.getActiveTimeline().readSavepointMetadata(hoodieInstant));
         archivedMetaWrapper.setActionType(ActionType.savepoint.name());
         break;
       }

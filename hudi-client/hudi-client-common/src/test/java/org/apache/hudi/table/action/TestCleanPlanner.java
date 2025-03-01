@@ -653,7 +653,7 @@ public class TestCleanPlanner {
         commitMetadata.getPartitionToWriteStats().put(partition, Collections.emptyList());
       });
       try {
-        when(hoodieTable.getActiveTimeline().readInstantContent(hoodieInstant, HoodieCommitMetadata.class)).thenReturn(
+        when(hoodieTable.getActiveTimeline().readCommitMetadata(hoodieInstant)).thenReturn(
             commitMetadata);
       } catch (IOException e) {
         throw new RuntimeException("Should not have failed", e);

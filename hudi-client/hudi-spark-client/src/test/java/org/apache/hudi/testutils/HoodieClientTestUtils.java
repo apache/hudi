@@ -138,7 +138,7 @@ public class HoodieClientTestUtils {
                                                                     List<HoodieInstant> commitsToReturn) throws IOException {
     HashMap<String, String> fileIdToFullPath = new HashMap<>();
     for (HoodieInstant commit : commitsToReturn) {
-      HoodieCommitMetadata metadata = commitTimeline.readInstantContent(commit, HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = commitTimeline.readCommitMetadata(commit);
       fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new StoragePath(basePath)));
     }
     return fileIdToFullPath;
@@ -323,7 +323,7 @@ public class HoodieClientTestUtils {
   public static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     try {
       HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-      return Option.of(timeline.readInstantContent(instant, HoodieCommitMetadata.class));
+      return Option.of(timeline.readCommitMetadata(instant));
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema from commit metadata", e);
     }

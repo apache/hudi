@@ -25,8 +25,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapIndexType;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -304,10 +302,10 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       Option<byte[]> data;
       if (instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) {
         data = commitMetadataSerDeV1.serialize(
-            metaClient.getActiveTimeline().readInstantContent(instant, HoodieReplaceCommitMetadata.class));
+            metaClient.getActiveTimeline().readReplaceCommitMetadata(instant));
       } else {
         data = commitMetadataSerDeV1.serialize(
-            metaClient.getActiveTimeline().readInstantContent(instant, HoodieCommitMetadata.class));
+            metaClient.getActiveTimeline().readCommitMetadata(instant));
       }
       String toPathStr = toPath.toUri().toString();
       activeTimelineV1.createFileInMetaPath(toPathStr, data, true);

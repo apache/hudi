@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -110,7 +109,7 @@ public class TestSavepoint extends HoodieClientTestBase {
 
       HoodieTimeline commitsTimeline = table.getActiveTimeline().getCommitsTimeline();
       Map<String, List<HoodieWriteStat>> partitionToWriteStats =
-          commitsTimeline.readInstantContent(commitsTimeline.lastInstant().get(), HoodieCommitMetadata.class)
+          commitsTimeline.readCommitMetadata(commitsTimeline.lastInstant().get())
           .getPartitionToWriteStats();
 
       assertEquals(partitionToWriteStats.size(), savepointPartitionMetadataMap.size());

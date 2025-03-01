@@ -684,7 +684,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
       val lastCompactionInstant = compactionTimeline
         .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-          compactionTimeline.readInstantContent(instant, classOf[HoodieCommitMetadata])
+          compactionTimeline.readCommitMetadata(instant)
             .getOperationType == WriteOperationType.COMPACT))
         .lastInstant()
       val compactionBaseFile = metadataTableFSView.getAllBaseFiles("secondary_index_idx_not_record_key_col")

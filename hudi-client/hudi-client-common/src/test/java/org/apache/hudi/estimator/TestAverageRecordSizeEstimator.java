@@ -121,7 +121,7 @@ public class TestAverageRecordSizeEstimator {
       });
       instants.add(hoodieInstant);
       try {
-        when(mockTimeline.readInstantContent(hoodieInstant, HoodieCommitMetadata.class)).thenReturn(commitMetadata);
+        when(mockTimeline.readCommitMetadata(hoodieInstant)).thenReturn(commitMetadata);
       } catch (IOException e) {
         throw new RuntimeException("Should not have failed", e);
       }

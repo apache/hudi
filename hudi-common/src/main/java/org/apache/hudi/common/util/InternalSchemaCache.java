@@ -123,7 +123,7 @@ public class InternalSchemaCache {
       if (instants.isEmpty()) {
         return Option.empty();
       }
-      HoodieCommitMetadata metadata = timeline.readInstantContent(instants.get(0), HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = timeline.readCommitMetadata(instants.get(0));
       String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
       return SerDeHelper.fromJson(latestInternalSchemaStr);
     } catch (Exception e) {
@@ -146,8 +146,7 @@ public class InternalSchemaCache {
       // try to find internalSchema
       HoodieCommitMetadata metadata;
       try {
-        metadata = timelineBeforeCurrentCompaction.readInstantContent(lastInstantBeforeCurrentCompaction.get(),
-            HoodieCommitMetadata.class);
+        metadata = timelineBeforeCurrentCompaction.readCommitMetadata(lastInstantBeforeCurrentCompaction.get());
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot read metadata from commit: %s", lastInstantBeforeCurrentCompaction.get()), e);
       }

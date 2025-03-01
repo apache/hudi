@@ -1209,7 +1209,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieInstant requested = datainstantGenerator.getRestoreRequestedInstant(restoreInstant);
     HoodieRestorePlan restorePlan = null;
     try {
-      restorePlan = dataMetaClient.getActiveTimeline().readInstantContent(requested, HoodieRestorePlan.class);
+      restorePlan = dataMetaClient.getActiveTimeline().readRestorePlan(requested);
     } catch (IOException e) {
       throw new HoodieIOException(String.format("Deserialization of restore plan failed whose restore instant time is %s in data table", instantTime), e);
     }

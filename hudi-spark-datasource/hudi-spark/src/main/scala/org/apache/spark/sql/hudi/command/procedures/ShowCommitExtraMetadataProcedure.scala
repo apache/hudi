@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata}
+import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.util.ClusteringUtils
@@ -123,9 +123,9 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
     val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     if (hoodieInstant.isDefined) {
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
-        Option(timeline.readInstantContent(hoodieInstant.get, classOf[HoodieReplaceCommitMetadata]))
+        Option(timeline.readReplaceCommitMetadata(hoodieInstant.get))
       } else {
-        Option(timeline.readInstantContent(hoodieInstant.get, classOf[HoodieCommitMetadata]))
+        Option(timeline.readCommitMetadata(hoodieInstant.get))
       }
     } else {
       Option.empty

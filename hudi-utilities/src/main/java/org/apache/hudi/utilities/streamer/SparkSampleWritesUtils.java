@@ -152,7 +152,7 @@ public class SparkSampleWritesUtils {
     checkState(lastInstantOpt.isPresent(), "The only completed instant should be present in sample_writes table.");
     HoodieInstant instant = lastInstantOpt.get();
     HoodieCommitMetadata commitMetadata =
-        metaClient.getCommitTimeline().readInstantContent(instant, HoodieCommitMetadata.class);
+        metaClient.getCommitTimeline().readCommitMetadata(instant);
     long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
     long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
     return (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);

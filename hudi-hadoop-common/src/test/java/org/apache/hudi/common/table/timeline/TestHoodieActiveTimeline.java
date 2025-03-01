@@ -650,7 +650,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
     HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
     assertEquals(commitMetadata,
-        timelineAfterFirstInstant.readInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
+        timelineAfterFirstInstant.readCommitMetadata(completedCommitInstant));
 
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan();
     cleanerPlan.setLastCompletedCommitTimestamp("1");
@@ -662,9 +662,9 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertEquals(cleanerPlan, getCleanerPlan(metaClient, cleanInstant));
 
     HoodieTimeline mergedTimeline = timelineAfterFirstInstant.mergeTimeline(timeline.reload());
-    assertEquals(commitMetadata, mergedTimeline.readInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
+    assertEquals(commitMetadata, mergedTimeline.readCommitMetadata(completedCommitInstant));
     assertEquals(cleanerPlan, getCleanerPlan(metaClient, cleanInstant));
-    assertEquals(commitMetadata, mergedTimeline.readInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
+    assertEquals(commitMetadata, mergedTimeline.readCommitMetadata(completedCommitInstant));
   }
 
   @Test

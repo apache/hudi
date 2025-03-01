@@ -287,7 +287,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
         .sorted(Comparator.comparing(HoodieInstant::requestedTime).reversed())
         .map(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata = readInstantContent(instant, HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = readCommitMetadata(instant);
             return Pair.of(instant, commitMetadata);
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);
@@ -301,22 +301,11 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
     return readDataFromPath(getInstantFileNamePath(instantFileNameGenerator.getFileName(instant)));
   }
 
-  @Override
-  public Option<byte[]> readRestoreInfoAsBytes(HoodieInstant instant) {
-    // Rollback metadata are always stored only in timeline .hoodie
-    return readDataFromPath(new StoragePath(metaClient.getTimelinePath(), instantFileNameGenerator.getFileName(instant)));
-  }
-
   //-----------------------------------------------------------------
   //      BEGIN - COMPACTION RELATED META-DATA MANAGEMENT.
   //-----------------------------------------------------------------
   @Override
   public Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant) {
-    return readDataFromPath(new StoragePath(metaClient.getTimelinePath(), instantFileNameGenerator.getFileName(instant)));
-  }
-
-  @Override
-  public Option<byte[]> readIndexPlanAsBytes(HoodieInstant instant) {
     return readDataFromPath(new StoragePath(metaClient.getTimelinePath(), instantFileNameGenerator.getFileName(instant)));
   }
 

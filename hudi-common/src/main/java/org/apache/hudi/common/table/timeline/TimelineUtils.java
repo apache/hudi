@@ -111,7 +111,7 @@ public class TimelineUtils {
         .map(instant -> {
           try {
             HoodieReplaceCommitMetadata commitMetadata =
-                replaceCommitTimeline.readInstantContent(instant, HoodieReplaceCommitMetadata.class);
+                replaceCommitTimeline.readReplaceCommitMetadata(instant);
             return Pair.of(instant, commitMetadata);
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions modified at " + instant, e);
@@ -171,15 +171,14 @@ public class TimelineUtils {
         case COMMIT_ACTION:
         case DELTA_COMMIT_ACTION:
           try {
-            HoodieCommitMetadata commitMetadata = timeline.readInstantContent(s, HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(s);
             return commitMetadata.getPartitionToWriteStats().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions written at " + s, e);
           }
         case REPLACE_COMMIT_ACTION:
           try {
-            HoodieReplaceCommitMetadata commitMetadata =
-                timeline.readInstantContent(s, HoodieReplaceCommitMetadata.class);
+            HoodieReplaceCommitMetadata commitMetadata = timeline.readReplaceCommitMetadata(s);
             Set<String> partitions = new HashSet<>();
             partitions.addAll(commitMetadata.getPartitionToReplaceFileIds().keySet());
             partitions.addAll(commitMetadata.getPartitionToWriteStats().keySet());
@@ -202,7 +201,7 @@ public class TimelineUtils {
           }
         case HoodieTimeline.RESTORE_ACTION:
           try {
-            HoodieRestoreMetadata restoreMetadata = timeline.readInstantContent(s, HoodieRestoreMetadata.class);
+            HoodieRestoreMetadata restoreMetadata = timeline.readRestoreMetadata(s);
             return restoreMetadata.getHoodieRestoreMetadata().values().stream()
                 .flatMap(Collection::stream)
                 .flatMap(rollbackMetadata -> rollbackMetadata.getPartitionMetadata().keySet().stream());
@@ -258,7 +257,7 @@ public class TimelineUtils {
     try {
       LOG.info("reading checkpoint info for:" + instant + " key: " + extraMetadataKey);
       HoodieCommitMetadata commitMetadata =
-          metaClient.getCommitsTimeline().readInstantContent(instant, HoodieCommitMetadata.class);
+          metaClient.getCommitsTimeline().readCommitMetadata(instant);
 
       return Option.ofNullable(commitMetadata.getExtraMetadata().get(extraMetadataKey));
     } catch (IOException e) {
@@ -273,8 +272,8 @@ public class TimelineUtils {
         // replacecommit is used for multiple operations: insert_overwrite/cluster etc. 
         // Check operation type to see if this instant is related to clustering.
 
-        HoodieReplaceCommitMetadata replaceMetadata = metaClient.getActiveTimeline().readInstantContent(
-            completedInstant, HoodieReplaceCommitMetadata.class);
+        HoodieReplaceCommitMetadata replaceMetadata =
+            metaClient.getActiveTimeline().readReplaceCommitMetadata(completedInstant);
         return WriteOperationType.CLUSTER.equals(replaceMetadata.getOperationType());
       }
 
@@ -337,9 +336,9 @@ public class TimelineUtils {
       HoodieInstant instant,
       HoodieTimeline timeline) throws IOException {
     if (instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) {
-      return timeline.readInstantContent(instant, HoodieReplaceCommitMetadata.class);
+      return timeline.readReplaceCommitMetadata(instant);
     } else {
-      return timeline.readInstantContent(instant, HoodieCommitMetadata.class);
+      return timeline.readCommitMetadata(instant);
     }
   }
 

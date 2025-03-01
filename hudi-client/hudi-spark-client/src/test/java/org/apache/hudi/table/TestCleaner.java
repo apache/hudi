@@ -268,7 +268,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       Option<HoodieInstant> rollBackInstantForFailedCommit = timeline.getTimelineOfActions(
           CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().lastInstant();
       HoodieRollbackMetadata rollbackMetadata =
-          timeline.readInstantContent(rollBackInstantForFailedCommit.get(), HoodieRollbackMetadata.class);
+          timeline.readRollbackMetadata(rollBackInstantForFailedCommit.get());
       // Rollback of one of the failed writes should have deleted 3 files
       assertEquals(3, rollbackMetadata.getTotalFilesDeleted());
     }
@@ -545,7 +545,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     Option<HoodieInstant> rollBackInstantForFailedCommit = timeline.getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().lastInstant();
     HoodieRollbackMetadata rollbackMetadata =
-        timeline.readInstantContent(rollBackInstantForFailedCommit.get(), HoodieRollbackMetadata.class);
+        timeline.readRollbackMetadata(rollBackInstantForFailedCommit.get());
     // Rollback of one of the failed writes should have deleted 3 files
     assertEquals(3, rollbackMetadata.getTotalFilesDeleted());
   }

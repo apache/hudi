@@ -115,7 +115,7 @@ public class DiffCommand {
         .getInstantsAsStream().sorted(instantComparator.requestedTimeOrderedComparator().reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      HoodieCommitMetadata commitMetadata = timeline.readInstantContent(commit, HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(commit);
       for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
           commitMetadata.getPartitionToWriteStats().entrySet()) {
         for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {

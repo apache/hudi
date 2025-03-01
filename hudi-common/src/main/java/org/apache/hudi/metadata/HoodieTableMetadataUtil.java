@@ -1093,7 +1093,7 @@ public class HoodieTableMetadataUtil {
     HoodieInstant requested = factory.getRollbackRequestedInstant(rollbackInstant);
     try {
       HoodieRollbackPlan rollbackPlan =
-          dataTableMetaClient.getActiveTimeline().readInstantContent(requested, HoodieRollbackPlan.class);
+          dataTableMetaClient.getActiveTimeline().readRollbackPlan(requested);
 
       rollbackPlan.getRollbackRequests().forEach(rollbackRequest -> {
         final String partitionId = getPartitionIdentifierForFilesPartition(rollbackRequest.getPartitionPath());
@@ -2017,9 +2017,9 @@ public class HoodieTableMetadataUtil {
         } catch (IOException e) {
           // if file is empty, fetch the commits to rollback from rollback.requested file
           HoodieRollbackPlan rollbackPlan =
-              timeline.readInstantContent(
+              timeline.readRollbackPlan(
                   factory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION,
-                  instant.requestedTime()), HoodieRollbackPlan.class);
+                      instant.requestedTime()));
           commitsToRollback = Collections.singletonList(rollbackPlan.getInstantToRollback().getCommitTime());
           LOG.warn("Had to fetch rollback info from requested instant since completed file is empty {}", instant);
         }

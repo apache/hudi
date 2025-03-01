@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.timeline.TimelineLayout
 
 import org.apache.spark.sql.Row
@@ -58,7 +57,7 @@ class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuild
     timeline.getInstants.iterator.asScala.foreach(
       instantTime => {
         var waf = "0"
-        val commit = activeTimeline.readInstantContent(instantTime, classOf[HoodieCommitMetadata])
+        val commit = activeTimeline.readCommitMetadata(instantTime)
         if (commit.fetchTotalUpdateRecordsWritten() > 0) {
           waf = df.format(commit.fetchTotalRecordsWritten().toFloat / commit.fetchTotalUpdateRecordsWritten())
         }
