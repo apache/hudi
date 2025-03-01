@@ -98,7 +98,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
             .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
             .setClusteringPlan(planOption.get())
             .build();
-        table.validateForLatestTimestamp(clusteringInstant.getTimestamp());
+        table.validateForLatestTimestamp(clusteringInstant.getTimestamp(), WriteOperationType.CLUSTER.name());
         table.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
             TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
       } catch (IOException ioe) {

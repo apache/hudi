@@ -19,6 +19,10 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 
@@ -30,6 +34,7 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
 
@@ -60,5 +65,36 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
     }
 
     writeClient.close();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testOutOfOrderCommitTimestamps(boolean enableValidation) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withEmbeddedTimelineServerEnabled(true)
+        .withEnableTimestampOrderingValidation(enableValidation)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .build();
+
+    try (HoodieFlinkWriteClient client = new HoodieFlinkWriteClient(context, writeConfig)) {
+      String commit1 = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(commit1);
+      String commit2 = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(commit2);
+      String commit3 = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(commit3);
+
+      // create commit4 after commit5. commit4 creation should fail when timestamp ordering validation is enabled.
+      String commit4 = HoodieActiveTimeline.createNewInstantTime();
+      String commit5 = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(commit5);
+      if (enableValidation) {
+        assertThrows(IllegalArgumentException.class, () -> client.startCommitWithTime(commit4));
+      } else {
+        client.startCommitWithTime(commit4);
+      }
+    }
   }
 }
