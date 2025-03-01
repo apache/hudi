@@ -41,8 +41,6 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
-
 /**
  * HoodieTimeline is a view of meta-data instants in the hoodie table. Instants are specific points in time
  * represented as HoodieInstant.
@@ -140,6 +138,22 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   }
 
   /**
+   * Read and deserialize the content of an instant into the specified class type
+   * assuming that the instant file must exist and not empty. If the file does not
+   * exist or is empty, IOException is thrown.
+   *
+   * @param instant The instant to read content from
+   * @param clazz   The target class to deserialize into
+   * @return Deserialized instant content
+   * @throws IOException when reading instant content fails
+   */
+  default <T> T readNonEmptyInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException {
+    TimelineLayout layout = TimelineLayout.fromVersion(getTimelineLayoutVersion());
+    return layout.getCommitMetadataSerDe().deserialize(
+        instant, getInstantContentStream(instant), () -> false, clazz);
+  }
+
+  /**
    * Read and deserialize commit metadata from an instant
    *
    * @param instant the instant to read
@@ -170,8 +184,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    */
   default org.apache.hudi.avro.model.HoodieCommitMetadata readCommitMetadataToAvro(HoodieInstant instant)
       throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant),
-        org.apache.hudi.avro.model.HoodieCommitMetadata.class);
+    return readInstantContent(instant, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
   }
 
   /**
@@ -183,8 +196,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    */
   default org.apache.hudi.avro.model.HoodieReplaceCommitMetadata readReplaceCommitMetadataToAvro(HoodieInstant instant)
       throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant),
-        org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class);
+    return readInstantContent(instant, org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class);
   }
 
   /**
@@ -195,7 +207,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @throws IOException when reading instant content fails
    */
   default HoodieCleanerPlan readCleanerPlan(HoodieInstant instant) throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieCleanerPlan.class);
+    return readNonEmptyInstantContent(instant, HoodieCleanerPlan.class);
   }
 
   /**
@@ -206,7 +218,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @throws IOException when reading instant content fails
    */
   default HoodieCompactionPlan readCompactionPlan(HoodieInstant instant) throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieCompactionPlan.class);
+    return readNonEmptyInstantContent(instant, HoodieCompactionPlan.class);
   }
 
   /**
@@ -217,7 +229,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @throws IOException when reading instant content fails
    */
   default HoodieCleanMetadata readCleanMetadata(HoodieInstant instant) throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieCleanMetadata.class);
+    return readNonEmptyInstantContent(instant, HoodieCleanMetadata.class);
   }
 
   /**
@@ -228,7 +240,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @throws IOException when reading instant content fails
    */
   default HoodieRollbackPlan readRollbackPlan(HoodieInstant instant) throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieRollbackPlan.class);
+    return readNonEmptyInstantContent(instant, HoodieRollbackPlan.class);
   }
 
   /**
@@ -239,7 +251,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @throws IOException when reading instant content fails
    */
   default HoodieRollbackMetadata readRollbackMetadata(HoodieInstant instant) throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieRollbackMetadata.class);
+    return readNonEmptyInstantContent(instant, HoodieRollbackMetadata.class);
   }
 
   /**
@@ -250,7 +262,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @throws IOException when reading instant content fails
    */
   default HoodieRestorePlan readRestorePlan(HoodieInstant instant) throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieRestorePlan.class);
+    return readNonEmptyInstantContent(instant, HoodieRestorePlan.class);
   }
 
   /**
@@ -261,7 +273,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @throws IOException when reading instant content fails
    */
   default HoodieRestoreMetadata readRestoreMetadata(HoodieInstant instant) throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieRestoreMetadata.class);
+    return readNonEmptyInstantContent(instant, HoodieRestoreMetadata.class);
   }
 
   /**
@@ -272,7 +284,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @throws IOException when reading instant content fails
    */
   default HoodieSavepointMetadata readSavepointMetadata(HoodieInstant instant) throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieSavepointMetadata.class);
+    return readNonEmptyInstantContent(instant, HoodieSavepointMetadata.class);
   }
 
   /**
@@ -283,7 +295,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @throws IOException when reading instant content fails
    */
   default HoodieRequestedReplaceMetadata readRequestedReplaceMetadata(HoodieInstant instant) throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieRequestedReplaceMetadata.class);
+    return readNonEmptyInstantContent(instant, HoodieRequestedReplaceMetadata.class);
   }
 
   /**
@@ -294,7 +306,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @throws IOException when reading instant content fails
    */
   default HoodieIndexPlan readIndexPlan(HoodieInstant instant) throws IOException {
-    return deserializeAvroMetadata(getInstantContentStream(instant), HoodieIndexPlan.class);
+    return readNonEmptyInstantContent(instant, HoodieIndexPlan.class);
   }
 
   /**
