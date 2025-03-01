@@ -232,7 +232,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     "COPY_ON_WRITE,6", "COPY_ON_WRITE,8", "MERGE_ON_READ,6", "MERGE_ON_READ,8"
   ))
   def testRLIWithDelete(tableType: String, tableVersion: Int): Unit = {
-    val hudiOpts = commonOpts + (
+    val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       HoodieTableConfig.VERSION.key() -> tableVersion.toString,
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
