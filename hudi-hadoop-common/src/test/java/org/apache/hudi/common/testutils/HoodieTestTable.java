@@ -68,6 +68,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -339,7 +340,8 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
-  public HoodieTestTable addPendingReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+  public HoodieTestTable addPendingReplace(
+      String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(metaClient, instantTime, requestedReplaceMetadata);
     createInflightReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
@@ -365,10 +367,10 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
-  public HoodieTestTable addCluster(
+  public <T> HoodieTestTable addCluster(
       String instantTime,
       HoodieRequestedReplaceMetadata requestedReplaceMetadata,
-      Option<HoodieCommitMetadata> inflightReplaceMetadata,
+      Option<T> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
     createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
@@ -380,7 +382,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addCluster(
       String instantTime,
       HoodieRequestedReplaceMetadata requestedReplaceMetadata,
-      Option<HoodieCommitMetadata> inflightReplaceMetadata,
+      Option<HoodieInstantWriter> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata,
       String completionTime) throws Exception {
     createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
@@ -459,7 +461,7 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
-  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata,HoodieRollbackPlan rollbackPlan) throws IOException {
+  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata, HoodieRollbackPlan rollbackPlan) throws IOException {
     return addRollback(instantTime, rollbackMetadata, false, rollbackPlan);
   }
 
@@ -556,16 +558,14 @@ public class HoodieTestTable implements AutoCloseable {
         .buildFromFileSlices(fileSlices.stream().map(fs -> Pair.of(fs.getPartitionPath(), fs))
             .collect(Collectors.toList()), Option.empty(), Option.empty());
     HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
-    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, Option.of(compactionPlan));
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addRequestedCompaction(String instantTime, HoodieCompactionPlan compactionPlan) throws IOException {
     HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
-    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, Option.of(compactionPlan));
     currentInstantTime = instantTime;
     return this;
   }

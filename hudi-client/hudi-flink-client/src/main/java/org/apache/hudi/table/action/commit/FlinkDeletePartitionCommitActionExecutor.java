@@ -26,8 +26,8 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieDeletePartitionException;
@@ -88,7 +88,7 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
                 .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
                 .build();
         table.getMetaClient().getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant,
-            TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+            Option.of(requestedReplaceMetadata));
       }
 
       this.saveWorkloadProfileMetadataToInflight(

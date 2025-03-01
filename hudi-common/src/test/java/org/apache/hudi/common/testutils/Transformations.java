@@ -21,7 +21,11 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieInstantWriter;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -78,5 +82,15 @@ public final class Transformations {
 
   public static List<HoodieKey> randomSelectAsHoodieKeys(List<HoodieRecord> records, int n) {
     return randomSelect(recordsToHoodieKeys(records), n);
+  }
+
+  public static byte[] writeInstantContentToBytes(HoodieInstantWriter writer) {
+    try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+      writer.writeToStream(outputStream);
+      outputStream.flush();
+      return outputStream.toByteArray();
+    } catch (IOException ex) {
+      throw new HoodieIOException("Failed to convert to bytes", ex);
+    }
   }
 }
