@@ -93,7 +93,7 @@
     <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
     <maven-docker-plugin.version>0.45.0</maven-docker-plugin.version>
 
-    <java.version>8</java.version>
+    <java.version>11</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
     <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
@@ -182,7 +182,7 @@
     <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
     <scala.binary.version>2.12</scala.binary.version>
     <apache-rat-plugin.version>0.16.1</apache-rat-plugin.version>
-    <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
+    <scala-maven-plugin.version>4.8.1</scala-maven-plugin.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <!-- TODO (HUDI-9401): Need to upgrade to 3.2.18+ after removing deprecated FunSuite -->
     <scalatest.spark4.version>3.1.4</scalatest.spark4.version>
@@ -364,6 +364,10 @@
         <configuration>
           <source>${java.version}</source>
           <target>${java.version}</target>
+          <release>${java.version}</release>
+          <compilerArgs>
+            <arg>-parameters</arg>
+          </compilerArgs>
         </configuration>
       </plugin>
       <plugin>
@@ -546,6 +550,22 @@
           <version>${scala-maven-plugin.version}</version>
           <configuration>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
+            <scalaVersion>${scala.version}</scalaVersion>
+            <jvmArgs>
+              <jvmArg>-Xss4m</jvmArg>
+            </jvmArgs>
+            <args>
+              <arg>-target:11</arg>
+              <arg>-release</arg>
+              <arg>11</arg>
+              <arg>-feature</arg>
+            </args>
+            <javacArgs>
+              <javacArg>-source</javacArg>
+              <javacArg>11</javacArg>
+              <javacArg>-target</javacArg>
+              <javacArg>11</javacArg>
+            </javacArgs>
           </configuration>
         </plugin>
         <plugin>
