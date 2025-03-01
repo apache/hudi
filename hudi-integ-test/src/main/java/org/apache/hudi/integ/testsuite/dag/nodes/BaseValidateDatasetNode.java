@@ -24,7 +24,6 @@ import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -200,7 +199,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
   private Option<String> getLatestCheckpoint(HoodieTimeline timeline) {
     return (Option<String>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
-        HoodieCommitMetadata commitMetadata = timeline.loadInstantContent(instant, HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
           return Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
         } else {

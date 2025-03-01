@@ -154,7 +154,7 @@ public class HoodieTestSuiteJob {
       HoodieTimeline timeline = new ActiveTimelineV2(metaClient).getCommitsTimeline();
       // Pickup the schema version from nth commit from last (most recent insert/upsert will be rolled back).
       HoodieInstant prevInstant = timeline.nthFromLastInstant(nthCommit).get();
-      HoodieCommitMetadata commit = timeline.loadInstantContent(prevInstant, HoodieCommitMetadata.class);
+      HoodieCommitMetadata commit = timeline.readCommitMetadata(prevInstant);
       Map<String, String> extraMetadata = commit.getExtraMetadata();
       String avroSchemaStr = extraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY);
       Schema avroSchema = new Schema.Parser().parse(avroSchemaStr);
