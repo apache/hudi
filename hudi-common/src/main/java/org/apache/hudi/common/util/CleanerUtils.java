@@ -60,6 +60,7 @@ public class CleanerUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(CleanerUtils.class);
   public static final String SAVEPOINTED_TIMESTAMPS = "savepointed_timestamps";
+  public static final String EARLIEST_COMMIT_TO_NOT_ARCHIVE = "earliest_commit_to_not_archive";
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanMetadataV1MigrationHandler.VERSION;
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanMetadataV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_METADATA_VERSION = CLEAN_METADATA_VERSION_2;

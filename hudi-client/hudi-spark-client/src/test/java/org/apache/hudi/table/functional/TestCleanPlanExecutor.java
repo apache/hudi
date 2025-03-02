@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.functional;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -29,13 +30,17 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -45,12 +50,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -58,6 +66,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
@@ -732,5 +741,109 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
     } finally {
       testTable.close();
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testEmptyCleansAddedAfterThreshold(boolean secondCommitAfterThreshold) throws Exception {
+    boolean enableIncrementalClean = true;
+    boolean enableBootstrapSourceClean = false;
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withIncrementalCleaningMode(enableIncrementalClean)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withCleanBootstrapBaseFileEnabled(enableBootstrapSourceClean)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS).cleanerNumHoursRetained(2)
+            .build())
+        .withMaxDurationToCreateEmptyClean(TimeUnit.MINUTES.toMillis(60))
+        .build();
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    try  {
+      String p0 = "2020/01/01";
+
+      String file1P0C0 = UUID.randomUUID().toString();
+      Instant instant = Instant.now();
+      ZonedDateTime commitDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
+      int minutesForFirstCommit = 180;
+      String firstCommitTs = HoodieInstantTimeGenerator.formatDate(Date.from(commitDateTime.minusMinutes(minutesForFirstCommit).toInstant()));
+
+      commitToTestTable(testTable, firstCommitTs, p0, file1P0C0);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // make next commit, with 1 insert & 1 update per partition
+      String file2P0C1 = UUID.randomUUID().toString();
+      int minutesForSecondCommit = 150;
+      String secondCommitTs = HoodieInstantTimeGenerator.formatDate(Date.from(commitDateTime.minusMinutes(minutesForSecondCommit).toInstant()));
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      commitToTestTable(testTable, secondCommitTs, p0, file2P0C1);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // make next commit, with 1 insert per partition
+      int minutesForThirdCommit = 90;
+      String thirdCommitTs = HoodieInstantTimeGenerator.formatDate(Date.from(commitDateTime.minusMinutes(minutesForThirdCommit).toInstant()));
+      String file3P0C2 = UUID.randomUUID().toString();
+
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      commitToTestTable(testTable, thirdCommitTs, p0, file3P0C2);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // first empty clean can be generated since earliest instant to retain will be the first commit (always keep last two instants at a minimum)
+      String firstCleanInstant = metaClient.createNewInstantTime();
+      List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config, firstCleanInstant);
+      assertEquals(0, hoodieCleanStatsThree.size(), "Must not scan any partitions and clean any files");
+      assertEquals(1, metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants().countInstants());
+
+      String file4P0C1 = UUID.randomUUID().toString();
+      int minutesForFourthCommit = 10;
+      String fourthCommitTs = HoodieInstantTimeGenerator.formatDate(Date.from(commitDateTime.minusMinutes(minutesForFourthCommit).toInstant()));
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      commitToTestTable(testTable, fourthCommitTs, p0, file4P0C1);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // add a savepoint
+      getHoodieWriteClient(config).savepoint(fourthCommitTs, "user", "comment");
+
+      Date firstCleanDate = HoodieInstantTimeGenerator.parseDateFromInstantTime(firstCleanInstant);
+      int minutesBetweenCleans = secondCommitAfterThreshold ? 70 : 30;
+      String secondCleanInstant = HoodieInstantTimeGenerator.formatDate(Date.from(firstCleanDate.toInstant().plus(minutesBetweenCleans, ChronoUnit.MINUTES)));
+      List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config, secondCleanInstant);
+      HoodieTimeline finalCompletedCleanInstants = metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants();
+      if (secondCommitAfterThreshold) {
+        // second empty clean is added
+        assertEquals(0, hoodieCleanStatsFour.size(), "Must not scan any partitions and clean any files");
+        assertEquals(2, finalCompletedCleanInstants.countInstants());
+        // Ensure that extra metadata is properly set for empty clean commits
+        HoodieCleanMetadata secondCleanMetadata = CleanerUtils.getCleanerMetadata(HoodieTableMetaClient.reload(metaClient), finalCompletedCleanInstants.lastInstant().get());
+        // new clean should have the savepoint created
+        assertEquals(fourthCommitTs, secondCleanMetadata.getExtraMetadata().get(CleanerUtils.SAVEPOINTED_TIMESTAMPS));
+        assertEquals(thirdCommitTs, secondCleanMetadata.getExtraMetadata().get(CleanerUtils.EARLIEST_COMMIT_TO_NOT_ARCHIVE));
+      } else {
+        // no cleaner commit should be added because the time since last clean threshold has not been met
+        assertEquals(1, finalCompletedCleanInstants.countInstants());
+        // Ensure that extra metadata is properly set for empty clean commits
+        HoodieCleanMetadata firstCleanMetadata = CleanerUtils.getCleanerMetadata(HoodieTableMetaClient.reload(metaClient), finalCompletedCleanInstants.lastInstant().get());
+        assertEquals(thirdCommitTs, firstCleanMetadata.getExtraMetadata().get(CleanerUtils.EARLIEST_COMMIT_TO_NOT_ARCHIVE));
+        // first clean commit happened before the savepoint so this field is expected to not be present in the map or empty string.
+        assertTrue(StringUtils.isNullOrEmpty(firstCleanMetadata.getExtraMetadata().get(CleanerUtils.SAVEPOINTED_TIMESTAMPS)));
+      }
+    } finally {
+      testTable.close();
+    }
+  }
+
+  private void commitToTestTable(HoodieTestTable testTable, String commitTimeTs, String partition, String fileId) throws Exception {
+    testTable.addInflightCommit(commitTimeTs);
+    testTable.withBaseFilesInPartition(partition, fileId);
+    HoodieCommitMetadata commitMeta = generateCommitMetadata(commitTimeTs, Collections.singletonMap(partition, Collections.singletonList(fileId)));
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTimeTs, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+        Option.of(commitMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
 }
