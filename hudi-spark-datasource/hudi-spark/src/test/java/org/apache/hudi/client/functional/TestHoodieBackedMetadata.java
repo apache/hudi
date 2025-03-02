@@ -2901,7 +2901,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         getMetadataTableBasePath(writeConfig.getBasePath()));
     assertTrue(storage.exists(metadataTablePath), "metadata table should exist.");
 
-    deleteMetadataTable(metaClient, context, false);
+    deleteMetadataTable(metaClient, false);
     assertFalse(storage.exists(metadataTablePath),
         "metadata table should not exist after being deleted.");
 
@@ -3437,7 +3437,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(client);
 
     // Execute compaction on metadata table.
-    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, client.getConfig(), context);
+    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(client.getConfig(), context);
     Properties metadataProps = ((SparkHoodieBackedTableMetadataWriter) metadataWriter).getWriteConfig().getProps();
     metadataProps.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3");
     HoodieWriteConfig metadataWriteConfig = HoodieWriteConfig.newBuilder()
@@ -3800,7 +3800,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> metadataWriter(SparkRDDWriteClient client) {
     return (HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>>) SparkHoodieBackedTableMetadataWriter
-        .create(storageConf, client.getConfig(), new HoodieSparkEngineContext(jsc));
+        .create(client.getConfig(), new HoodieSparkEngineContext(jsc));
   }
 
   private HoodieTableMetadata metadata(SparkRDDWriteClient client) {

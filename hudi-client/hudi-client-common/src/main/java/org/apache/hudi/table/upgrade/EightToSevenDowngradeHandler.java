@@ -346,21 +346,17 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
         false);
 
     // Delete partitions.
-    List<String> validPartitionPaths = deleteMetadataPartition(context, metaClient, metadataPartitions);
+    List<String> validPartitionPaths = deleteMetadataPartition(metaClient, metadataPartitions);
 
     // Clean the configuration.
     tablePropsToAdd.put(TABLE_METADATA_PARTITIONS, String.join(",", validPartitionPaths));
   }
 
-  static List<String> deleteMetadataPartition(HoodieEngineContext context,
-                                              HoodieTableMetaClient metaClient,
+  static List<String> deleteMetadataPartition(HoodieTableMetaClient metaClient,
                                               List<String> metadataPartitions) {
     metadataPartitions.stream()
         .filter(metadataPath -> !SUPPORTED_METADATA_PARTITION_PATHS.contains(metadataPath))
-        .forEach(metadataPath ->
-            HoodieTableMetadataUtil.deleteMetadataTablePartition(
-                metaClient, context, metadataPath, true)
-        );
+        .forEach(metadataPath -> HoodieTableMetadataUtil.deleteMetadataTablePartition(metaClient, metadataPath, true));
 
     return metadataPartitions.stream()
         .filter(SUPPORTED_METADATA_PARTITION_PATHS::contains)

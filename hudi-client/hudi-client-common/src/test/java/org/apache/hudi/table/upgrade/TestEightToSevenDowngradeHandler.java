@@ -104,19 +104,19 @@ class TestEightToSevenDowngradeHandler {
   void testDeleteMetadataPartition() {
     try (MockedStatic<HoodieTableMetadataUtil> mockedMetadataUtils = mockStatic(HoodieTableMetadataUtil.class)) {
       List<String> leftPartitionPaths =
-          EightToSevenDowngradeHandler.deleteMetadataPartition(context, metaClient, SAMPLE_METADATA_PATHS);
+          EightToSevenDowngradeHandler.deleteMetadataPartition(metaClient, SAMPLE_METADATA_PATHS);
 
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
-              metaClient, context, "expr_index_random", true),
+              metaClient, "expr_index_random", true),
           times(1));
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
-              metaClient, context, "secondary_index_random", true),
+              metaClient, "secondary_index_random", true),
           times(1));
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
-              metaClient, context, "partition_stats", true),
+              metaClient, "partition_stats", true),
           times(1));
 
       assertArrayEquals(new String[] {"files", "column_stats"}, leftPartitionPaths.toArray());

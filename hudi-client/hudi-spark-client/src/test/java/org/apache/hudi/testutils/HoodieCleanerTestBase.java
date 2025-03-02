@@ -220,7 +220,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
   }
 
   protected HoodieTableMetadataWriter getMetadataWriter(HoodieWriteConfig config) {
-    return SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
+    return SparkHoodieBackedTableMetadataWriter.create(config, context);
   }
 
   protected HoodieTestTable tearDownTestTableAndReinit(HoodieTestTable testTable, HoodieWriteConfig config) throws Exception {
