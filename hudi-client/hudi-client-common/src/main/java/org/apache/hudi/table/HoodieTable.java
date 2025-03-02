@@ -66,6 +66,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -155,6 +156,19 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.viewManager = getViewManager();
     this.metaClient = metaClient;
     this.taskContextSupplier = context.getTaskContextSupplier();
+  }
+
+  @VisibleForTesting
+  protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager, TaskContextSupplier supplier) {
+    this.config = config;
+    this.context = context;
+    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
+    this.instantGenerator = metaClient.getInstantGenerator();
+    this.instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
+    this.instantFileNameParser = metaClient.getInstantFileNameParser();
+    this.viewManager = viewManager;
+    this.metaClient = metaClient;
+    this.taskContextSupplier = supplier;
   }
 
   public boolean isMetadataTable() {

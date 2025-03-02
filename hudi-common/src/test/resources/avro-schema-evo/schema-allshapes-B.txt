@@ -1,0 +1,123 @@
+{
+  "type": "record",
+  "name": "ComplexRecord",
+  "namespace": "test.namespace",
+  "doc": "A complex record with all types",
+  "aliases": [
+    "OldRecord",
+    "LegacyRecord"
+  ],
+  "customProp": "customValue",
+  "fields": [
+    {
+      "name": "primitiveField",
+      "type": "string",
+      "doc": "A string field",
+      "aliases": [
+        "oldName"
+      ],
+      "customProp": "value"
+    },
+    {
+      "name": "logicalTypeField",
+      "type": {
+        "type": "int",
+        "logicalType": "date",
+        "doc": "A date field"
+      }
+    },
+    {
+      "name": "decimalField",
+      "type": {
+        "type": "fixed",
+        "name": "FixedDecimal",
+        "namespace": "test.namespace",
+        "aliases": [
+          "OldFixed"
+        ],
+        "doc": "A decimal field",
+        "size": 16,
+        "logicalType": "decimal",
+        "precision": 10,
+        "scale": 2
+      }
+    },
+    {
+      "name": "enumField",
+      "type": {
+        "type": "enum",
+        "name": "Colors",
+        "namespace": "test.namespace",
+        "doc": "Color enumeration",
+        "aliases": [
+          "OldColors"
+        ],
+        "symbols": [
+          "RED",
+          "GREEN",
+          "BLUE"
+        ],
+        "default": "RED",
+        "customProp": "value"
+      }
+    },
+    {
+      "name": "arrayField",
+      "type": {
+        "type": "array",
+        "items": "long",
+        "doc": "Array of longs",
+        "customProp": "value"
+      }
+    },
+    {
+      "name": "mapField",
+      "type": {
+        "type": "map",
+        "values": "double",
+        "doc": "Map of doubles",
+        "customProp": "value"
+      }
+    },
+    {
+      "name": "unionField",
+      "type": [
+        "null",
+        "string",
+        "int"
+      ],
+      "doc": "A union field"
+    },
+    {
+      "name": "recordField",
+      "type": {
+        "type": "record",
+        "name": "SubRecord",
+        "namespace": "test.namespace",
+        "doc": "A nested record",
+        "aliases": [
+          "OldSubRecord"
+        ],
+        "fields": [
+          {
+            "name": "subField1",
+            "type": "boolean",
+            "doc": "A boolean field",
+            "aliases": [
+              "oldSubField1"
+            ]
+          },
+          {
+            "name": "subField2",
+            "type": "bytes",
+            "doc": "A bytes field",
+            "order": "descending",
+            "aliases": [
+              "oldSubField2"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
