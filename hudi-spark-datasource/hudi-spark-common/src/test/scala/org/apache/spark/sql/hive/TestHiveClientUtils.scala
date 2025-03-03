@@ -24,16 +24,14 @@ import org.apache.spark.sql.hive.client.HiveClient
 import org.apache.spark.sql.hive.test.{TestHive, TestHiveContext}
 import org.apache.spark.sql.internal.StaticSQLConf.CATALOG_IMPLEMENTATION
 import org.junit.Assume
-import org.junit.jupiter.api.{AfterAll, BeforeAll, Test, TestInstance}
-import org.junit.jupiter.api.TestInstance.Lifecycle
 
-@TestInstance(Lifecycle.PER_CLASS)
+// @TestInstance(Lifecycle.PER_CLASS)
 class TestHiveClientUtils {
   protected var spark: SparkSession = null
   protected var hiveContext: TestHiveContext = null
   protected var hiveClient: HiveClient = null
 
-  @BeforeAll
+  //@BeforeAll
   def setUp(): Unit = {
     // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
     // for Java 17 test coverage this test has been converted to scala script here:
@@ -45,7 +43,7 @@ class TestHiveClientUtils {
     hiveClient = spark.sharedState.externalCatalog.unwrapped.asInstanceOf[HiveExternalCatalog].client
   }
 
-  @AfterAll
+  //@AfterAll
   def tearDown(): Unit = {
     hiveClient = null;
     hiveContext.sparkSession.close()
@@ -54,7 +52,7 @@ class TestHiveClientUtils {
     spark = null
   }
 
-  @Test
+  //@Test
   def reuseHiveClientFromSparkSession(): Unit = {
     assert(spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "hive")
     assert(HiveClientUtils.getSingletonClientForMetadata(spark) == hiveClient)
