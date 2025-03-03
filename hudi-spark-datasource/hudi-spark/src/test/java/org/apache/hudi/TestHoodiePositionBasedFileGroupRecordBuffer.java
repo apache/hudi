@@ -33,7 +33,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.PositionBasedHoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.HoodiePositionBasedSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark;
@@ -74,7 +74,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
   private final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF);
   private HoodieTableMetaClient metaClient;
   private Schema avroSchema;
-  private HoodiePositionBasedFileGroupRecordBuffer<InternalRow> buffer;
+  private PositionBasedHoodieFileGroupRecordBuffer<InternalRow> buffer;
   private String partitionPath;
   private HoodieReadStats readStats;
 
@@ -136,7 +136,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
     readStats = new HoodieReadStats();
-    buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
+    buffer = new PositionBasedHoodieFileGroupRecordBuffer<>(
         ctx,
         metaClient,
         mergeMode,
