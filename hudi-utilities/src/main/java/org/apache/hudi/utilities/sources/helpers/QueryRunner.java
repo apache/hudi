@@ -85,7 +85,7 @@ public class QueryRunner {
 
   public Pair<QueryInfo, Dataset<Row>> runIncrementalQuery(QueryInfo queryInfo) {
     LOG.info("Running incremental query");
-    return Pair.of(queryInfo, sparkSession.read().format("org.apache.hudi")
+    return Pair.of(queryInfo, sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType())
         .option(DataSourceReadOptions.START_COMMIT().key(), queryInfo.getStartInstant())
         .option(DataSourceReadOptions.END_COMMIT().key(), queryInfo.getEndInstant())
@@ -97,7 +97,7 @@ public class QueryRunner {
 
   public Pair<QueryInfo, Dataset<Row>> runSnapshotQuery(QueryInfo queryInfo, Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitterOption) {
     LOG.info("Running snapshot query");
-    Dataset<Row> snapshot = sparkSession.read().format("org.apache.hudi")
+    Dataset<Row> snapshot = sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType()).load(sourcePath);
     QueryInfo snapshotQueryInfo = snapshotLoadQuerySplitterOption
         .map(snapshotLoadQuerySplitter -> snapshotLoadQuerySplitter.getNextCheckpoint(snapshot, queryInfo, Option.empty()))

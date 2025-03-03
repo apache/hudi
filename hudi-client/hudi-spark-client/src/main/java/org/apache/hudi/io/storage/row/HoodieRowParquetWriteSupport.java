@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -76,6 +77,12 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
   private static class HoodieBloomFilterRowWriteSupport extends HoodieBloomFilterWriteSupport<UTF8String> {
     public HoodieBloomFilterRowWriteSupport(BloomFilter bloomFilter) {
       super(bloomFilter);
+    }
+
+    // [SPARK-46832] UTF8String compareTo would throw UnsupportedOperationException since Spark 4.0
+    @Override
+    protected int compareRecordKey(UTF8String a, UTF8String b) {
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().compareUTF8String(a, b);
     }
 
     @Override
