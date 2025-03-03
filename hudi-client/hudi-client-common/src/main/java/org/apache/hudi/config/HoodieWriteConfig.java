@@ -302,7 +302,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_SCHEMA_CONFLICT_RESOLUTION = ConfigProperty
       .key(CONCURRENCY_PREFIX + "schema.conflict.resolution.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("If turned on, we detect and abort incompatible concurrent schema evolution.");

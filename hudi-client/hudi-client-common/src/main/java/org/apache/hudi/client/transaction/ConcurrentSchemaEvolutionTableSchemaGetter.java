@@ -60,11 +60,11 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THA
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
- * Helper class to read table schema.
+ * Helper class to read table schema. ONLY USE IT FOR SimpleConcurrentFileWritesConflictResolutionStrategy.
  */
-class TableSchemaGetter {
+class ConcurrentSchemaEvolutionTableSchemaGetter {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TableSchemaGetter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ConcurrentSchemaEvolutionTableSchemaGetter.class);
 
   protected final HoodieTableMetaClient metaClient;
 
@@ -84,7 +84,7 @@ class TableSchemaGetter {
     return tableSchemaCache.get();
   }
 
-  public TableSchemaGetter(HoodieTableMetaClient metaClient) {
+  public ConcurrentSchemaEvolutionTableSchemaGetter(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
     // Unbounded sized map. Should replace with some caching library.
     this.tableSchemaCache = Lazy.lazily(ConcurrentHashMap::new);

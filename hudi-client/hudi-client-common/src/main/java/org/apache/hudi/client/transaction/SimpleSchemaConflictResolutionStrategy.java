@@ -71,11 +71,11 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
     Schema writerSchemaOfTxn = new Schema.Parser().parse(config.getWriteSchema());
     // If a writer does not come with a meaningful schema, skip the schema resolution.
     if (isSchemaNull(writerSchemaOfTxn)) {
-      return getTableSchemaAtInstant(new TableSchemaGetter(table.getMetaClient()), currTxnOwnerInstant.get());
+      return getTableSchemaAtInstant(new ConcurrentSchemaEvolutionTableSchemaGetter(table.getMetaClient()), currTxnOwnerInstant.get());
     }
 
     // Fast path: We can tell there is no schema conflict by just comparing the instants without involving table/writer schema comparison.
-    TableSchemaGetter schemaResolver = new TableSchemaGetter(table.getMetaClient());
+    ConcurrentSchemaEvolutionTableSchemaGetter schemaResolver = new ConcurrentSchemaEvolutionTableSchemaGetter(table.getMetaClient());
 
     // schema and writer schema.
     HoodieInstant lastCompletedInstantAtTxnStart = lastCompletedTxnOwnerInstant.isPresent()
@@ -100,7 +100,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
       return Option.of(writerSchemaOfTxn);
     }
 
-    TableSchemaGetter resolver = new TableSchemaGetter(table.getMetaClient());
+    ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(table.getMetaClient());
     Option<Schema> tableSchemaAtTxnValidation = getTableSchemaAtInstant(resolver, lastCompletedInstantAtTxnValidation);
     // If table schema is not defined, it's still case 1. There can be cases where there are commits but they didn't
     // write any data.
@@ -167,7 +167,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
         .findFirst());
   }
 
-  private static Option<Schema> getTableSchemaAtInstant(TableSchemaGetter schemaResolver, HoodieInstant instant) {
+  private static Option<Schema> getTableSchemaAtInstant(ConcurrentSchemaEvolutionTableSchemaGetter schemaResolver, HoodieInstant instant) {
     try {
       return schemaResolver.getTableAvroSchemaIfPresent(false, Option.of(instant));
     } catch (Exception ex) {
