@@ -32,6 +32,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.HoodieDefaultMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
@@ -166,7 +167,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         // the second batch batch2 tries to reuse the same bucket
         // and append instead of UPDATE.
         return handleInsert(fileIdHint, recordItr);
-      } else if (this.writeHandle instanceof HoodieMergeHandle) {
+      } else if (this.writeHandle instanceof HoodieDefaultMergeHandle) {
         return handleUpdate(partitionPath, fileIdHint, recordItr);
       } else {
         switch (bucketType) {
@@ -196,13 +197,26 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates
-    return handleUpdateInternal(upsertHandle, fileId);
+    HoodieDefaultMergeHandle<?, ?, ?, ?> mergeHandle = (HoodieDefaultMergeHandle<?, ?, ?, ?>) this.writeHandle;
+    return handleUpdateInternal(mergeHandle, fileId);
   }
 
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String fileId)
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieDefaultMergeHandle<?, ?, ?, ?> mergeHandle, String fileId)
       throws IOException {
-    table.runMerge(upsertHandle, instantTime, fileId);
-    return upsertHandle.getWriteStatusesAsIterator();
+    if (mergeHandle.getOldFilePath() == null) {
+      throw new HoodieUpsertException(
+          "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
+    } else {
+      HoodieMergeHelper.newInstance().runMerge(table, mergeHandle);
+    }
+
+    // TODO(vc): This needs to be revisited
+    if (mergeHandle.getPartitionPath() == null) {
+      LOG.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", "
+          + mergeHandle.getWriteStatuses());
+    }
+
+    return Collections.singletonList(mergeHandle.getWriteStatuses()).iterator();
   }
 
   @Override

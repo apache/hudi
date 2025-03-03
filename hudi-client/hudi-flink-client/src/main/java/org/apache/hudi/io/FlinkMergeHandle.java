@@ -41,7 +41,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * A {@link HoodieMergeHandle} that supports MERGE write incrementally(small data buffers).
+ * A {@link HoodieDefaultMergeHandle} that supports MERGE write incrementally(small data buffers).
  *
  * <p>For a new data buffer, it initializes and set up the next file path to write,
  * and closes the file path when the data buffer write finish. When next data buffer
@@ -52,7 +52,7 @@ import java.util.List;
  * @see FlinkMergeAndReplaceHandle
  */
 public class FlinkMergeHandle<T, I, K, O>
-    extends HoodieMergeHandle<T, I, K, O>
+    extends HoodieDefaultMergeHandle<T, I, K, O>
     implements MiniBatchHandle {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkMergeHandle.class);

@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
+import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -42,7 +43,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieDefaultMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -58,12 +59,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -261,9 +264,9 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     Pair<String, String> partitionAndBaseFilePaths = getPartitionAndBaseFilePathsFromLatestCommitMetadata(metaClient);
     HoodieBaseFile baseFile = new HoodieBaseFile(partitionAndBaseFilePaths.getRight());
 
-    HoodieMergeHandle handle = null;
+    HoodieDefaultMergeHandle handle = null;
     try {
-      handle = new HoodieMergeHandle(config, instantTime, table, new HashMap<>(),
+      handle = new HoodieDefaultMergeHandle(config, instantTime, table, new HashMap<>(),
           partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())));
@@ -281,7 +284,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       config.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
       HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
       // does the handle need to be closed to clean up the writer it contains?
-      handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
+      handle = new HoodieDefaultMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
           partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())));
@@ -308,7 +311,49 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
    */
   @Test
   public void testInsertsPreppedWithHoodieConcatHandle() throws Exception {
-    testHoodieConcatHandle(true, true, INSTANT_GENERATOR);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
+    testHoodieConcatHandle(cfgBuilder.build(), true);
+  }
+
+  /**
+   * Test one of HoodieConcatHandle w/ {@link BaseHoodieWriteClient#insert(Object, String)} API.
+   *
+   * @param config Write Config
+   * @throws Exception in case of error
+   */
+  private void testHoodieConcatHandle(HoodieWriteConfig config, boolean isPrepped)
+      throws Exception {
+    // Force using older timeline layout
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
+        .withProps(config.getProps()).withMergeAllowDuplicateOnInserts(true).withTimelineLayoutVersion(
+            VERSION_0).build();
+    HoodieTableMetaClient.newTableBuilder()
+        .fromMetaClient(metaClient)
+        .setTimelineLayoutVersion(VERSION_0)
+        .initTable(metaClient.getStorageConf(), metaClient.getBasePath());
+
+    HoodieJavaWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
+
+    // Write 1 (only inserts)
+    String newCommitTime = "001";
+    String initCommitTime = "000";
+    int numRecords = 200;
+    insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, HoodieJavaWriteClient::insert,
+        isPrepped, true, numRecords, config.populateMetaFields(), new DefaultInstantGenerator());
+
+    // Write 2 (updates)
+    String prevCommitTime = newCommitTime;
+    newCommitTime = "004";
+    numRecords = 100;
+    String commitTimeBetweenPrevAndNew = "002";
+
+    final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+        generateWrapRecordsFn(isPrepped, hoodieWriteConfig, dataGen::generateUniqueUpdates);
+
+    writeBatch(client, newCommitTime, prevCommitTime, Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime,
+        numRecords, recordGenFunction, HoodieJavaWriteClient::insert, true, numRecords, 300,
+        2, false, config.populateMetaFields(), new DefaultInstantGenerator());
   }
 
   /**

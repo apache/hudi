@@ -40,7 +40,7 @@ import java.util.Iterator;
 
 /**
  * Handle to concatenate new records to old records w/o any merging. If Operation is set to Inserts, and if {{@link HoodieWriteConfig#allowDuplicateInserts()}}
- * is set, this handle will be used instead of {@link HoodieMergeHandle}.
+ * is set, this handle will be used instead of {@link HoodieDefaultMergeHandle}.
  *
  * Simplified Logic:
  * For every existing record
@@ -65,7 +65,7 @@ import java.util.Iterator;
  * happen and every batch should have new records to be inserted. Above example is for illustration purposes only.
  */
 @NotThreadSafe
-public class HoodieConcatHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieConcatHandle<T, I, K, O> extends HoodieDefaultMergeHandle<T, I, K, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieConcatHandle.class);
   // a representation of incoming records that tolerates duplicate keys
@@ -76,6 +76,13 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O
                             TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, Collections.emptyIterator(), partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     this.recordItr = recordItr;
+  }
+
+  public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable,
+                            Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
+                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
+    super(config, instantTime, hoodieTable, Collections.emptyMap(), partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, Option.empty());
+    this.recordItr = keyToNewRecords.values().iterator();
   }
 
   /**
@@ -89,8 +96,7 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O
       // NOTE: We're enforcing preservation of the record metadata to keep existing semantic
       writeToFile(new HoodieKey(key, partitionPath), oldRecord, oldSchema, config.getPayloadConfig().getProps(), true);
     } catch (IOException | RuntimeException e) {
-      String errMsg = String.format(
-          "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
+      String errMsg = String.format("Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
           key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
       LOG.debug("Old record is {}", oldRecord);
       throw new HoodieUpsertException(errMsg, e);

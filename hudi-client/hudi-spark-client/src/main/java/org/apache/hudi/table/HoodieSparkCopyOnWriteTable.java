@@ -31,6 +31,8 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.utils.SparkPartitionUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -44,6 +46,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
@@ -237,19 +240,47 @@ public class HoodieSparkCopyOnWriteTable<T>
       String instantTime, String partitionPath, String fileId,
       Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
-    return handleUpdateInternal(upsertHandle, instantTime, fileId);
+    HoodieMergeHandle mergeHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
+    return handleUpdateInternal(mergeHandle, instantTime, fileId);
   }
 
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime,
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> mergeHandle, String instantTime,
                                                              String fileId) throws IOException {
-    runMerge(upsertHandle, instantTime, fileId);
-    return upsertHandle.getWriteStatusesAsIterator();
+    if (mergeHandle.getOldFilePath() == null) {
+      throw new HoodieUpsertException(
+          "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
+    } else {
+      if (mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
+        Option<String[]> partitionFields = getMetaClient().getTableConfig().getPartitionFields();
+        Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, mergeHandle.getPartitionPath(),
+            getMetaClient().getTableConfig().getBootstrapBasePath().get(),
+            mergeHandle.getWriterSchema(), (Configuration) getStorageConf().unwrap());
+        mergeHandle.setPartitionFields(partitionFields);
+        mergeHandle.setPartitionValues(partitionValues);
+      }
+      mergeHandle.doMerge();
+    }
+
+    // TODO(vc): This needs to be revisited
+    if (mergeHandle.getPartitionPath() == null) {
+      LOG.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", "
+          + mergeHandle.getWriteStatuses());
+    }
+
+    return Collections.singletonList(mergeHandle.getWriteStatuses()).iterator();
   }
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
-    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
+                                              Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
+    Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
+    if (!config.populateMetaFields()) {
+      try {
+        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
+      } catch (Exception e) {
+        throw new HoodieException("Only BaseKeyGenerator (or any key generator that extends from BaseKeyGenerator) are supported when meta "
+            + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
+      }
+    }
     return HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
         dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
   }
