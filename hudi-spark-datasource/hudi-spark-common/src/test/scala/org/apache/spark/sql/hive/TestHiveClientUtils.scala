@@ -48,7 +48,7 @@ class TestHiveClientUtils {
     hiveClient = null;
     hiveContext.sparkSession.close()
     hiveContext = null
-    spark.close()
+    //spark.close()
     spark = null
   }
 
