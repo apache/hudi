@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeComm
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
-import org.apache.hadoop.fs.Path
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -123,7 +122,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
           s"""
              |merge into $newTableName t0
              |using (
-             |  select 1 as id, 'a1' as name, 12 as price, 1001 as ts, 'e0' as ext0
+             |  select 1 as id, 'a1' as name, 12 as price, 1001L as ts, 'e0' as ext0
              |) s0
              |on t0.id = s0.id
              |when matched then update set *
@@ -310,40 +309,44 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Alter Rename Table") {
+    Seq("cow", "mor").foreach { tableType =>
+      val tableName = generateTableName
+      // Create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  type = '$tableType',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+     """.stripMargin)
+
+      // alter table name.
+      val newTableName = s"${tableName}_1"
+      val oldLocation = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName)).properties.get("path")
+      spark.sql(s"alter table $tableName rename to $newTableName")
+      val newLocation = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName)).properties.get("path")
+      // only hoodieCatalog will set path to tblp
+      if (oldLocation.nonEmpty) {
+        assertResult(false)(
+          newLocation.equals(oldLocation)
+        )
+      } else {
+        assertResult(None)(newLocation)
+      }
+    }
+  }
+
+  test("Test Alter Rename Table With Location") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
-        // Create table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | tblproperties (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             | )
-       """.stripMargin)
-
-        // alter table name.
-        val newTableName = s"${tableName}_1"
-        val oldLocation = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName)).properties.get("path")
-        spark.sql(s"alter table $tableName rename to $newTableName")
-        val newLocation = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName)).properties.get("path")
-        // only hoodieCatalog will set path to tblp
-        if (oldLocation.nonEmpty) {
-          assertResult(false)(
-            newLocation.equals(oldLocation)
-          )
-        } else {
-          assertResult(None) (newLocation)
-        }
-
-
         // Create table with location
         val locTableName = s"${tableName}_loc"
         val tablePath = s"${tmp.getCanonicalPath}/$locTableName"
@@ -371,11 +374,9 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         val newLocation2 = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newLocTableName))
           .properties.get("path")
         if (oldLocation2.nonEmpty) {
-          // Remove the impact of the schema.
-          val oldLocation2Path = new Path(oldLocation2.get.stripPrefix("file:"))
-          val newLocation2Path = new Path(newLocation2.get.stripPrefix("file:"))
+          // the scheme and authority need to match as well
           assertResult(true)(
-            newLocation2Path.equals(oldLocation2Path)
+            oldLocation2.get.equals(newLocation2.get)
           )
         } else {
           assertResult(None) (newLocation2)

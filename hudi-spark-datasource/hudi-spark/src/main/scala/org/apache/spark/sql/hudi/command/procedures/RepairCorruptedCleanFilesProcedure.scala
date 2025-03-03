@@ -63,7 +63,8 @@ class RepairCorruptedCleanFilesProcedure extends BaseProcedure with ProcedureBui
           logWarning("Corruption found. Trying to remove corrupted clean instant file: " + instant)
           TimelineUtils.deleteInstantFile(metaClient.getStorage, metaClient.getTimelinePath, instant, instantFileNameGenerator)
         case ioe: IOException =>
-          if (ioe.getMessage.contains("Not an Avro data file")) {
+          if (ioe.getMessage.contains("Not an Avro data file") ||
+              Option(ioe.getCause).exists(_.getMessage.contains("Not an Avro data file"))) {
             logWarning("Corruption found. Trying to remove corrupted clean instant file: " + instant)
             TimelineUtils.deleteInstantFile(metaClient.getStorage, metaClient.getTimelinePath, instant, instantFileNameGenerator)
           } else {

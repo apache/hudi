@@ -18,24 +18,24 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.sink.common.AbstractWriteOperator;
 import org.apache.hudi.sink.common.WriteOperatorFactory;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.StreamSink;
+import org.apache.flink.table.types.logical.RowType;
 
 /**
  * Operator for {@link StreamSink}.
- *
- * @param <I> The input type
  */
-public class StreamWriteOperator<I> extends AbstractWriteOperator<I> {
+public class StreamWriteOperator extends AbstractWriteOperator<HoodieFlinkInternalRow> {
 
-  public StreamWriteOperator(Configuration conf) {
-    super(new StreamWriteFunction<>(conf));
+  public StreamWriteOperator(Configuration conf, RowType rowType) {
+    super(new StreamWriteFunction(conf, rowType));
   }
 
-  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf) {
-    return WriteOperatorFactory.instance(conf, new StreamWriteOperator<>(conf));
+  public static WriteOperatorFactory<HoodieFlinkInternalRow> getFactory(Configuration conf, RowType rowType) {
+    return WriteOperatorFactory.instance(conf, new StreamWriteOperator(conf, rowType));
   }
 }

@@ -39,7 +39,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.util.collection.Pair;
@@ -190,22 +189,52 @@ public class ClusteringUtils {
       String action = factory instanceof InstantGeneratorV2 ? HoodieTimeline.CLUSTERING_ACTION : HoodieTimeline.REPLACE_COMMIT_ACTION;
       requestedInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, action, pendingReplaceOrClusterInstant.requestedTime());
     }
-    Option<byte[]> content = Option.empty();
     try {
-      content = timeline.getInstantDetails(requestedInstant);
+      // First assume the instant file is not empty and parse it.
+      return getRequestedReplaceMetadataOption(timeline, pendingReplaceOrClusterInstant, factory, requestedInstant);
+    } catch (Exception ex) {
+      // If anything goes wrong, check if this is empty file.
+      if (isEmptyReplaceOrClusteringInstant(timeline, pendingReplaceOrClusterInstant, factory, requestedInstant)) {
+        return Option.empty();
+      }
+      // If still no luck, throw the exception.
+      throw ex;
+    }
+  }
+
+  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadataOption(
+      HoodieTimeline timeline, HoodieInstant pendingReplaceOrClusterInstant, InstantGenerator factory, HoodieInstant requestedInstant) throws IOException {
+    try {
+      return Option.of(timeline.readRequestedReplaceMetadata(requestedInstant));
     } catch (HoodieIOException e) {
       if (e.getCause() instanceof FileNotFoundException && pendingReplaceOrClusterInstant.isCompleted()) {
         // For clustering instants, completed instant is also a replace commit instant. For input replace commit instant,
         // it is not known whether requested instant is CLUSTER or REPLACE_COMMIT_ACTION. So we need to query both.
         requestedInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, pendingReplaceOrClusterInstant.requestedTime());
-        content = timeline.getInstantDetails(requestedInstant);
+        return Option.of(timeline.readRequestedReplaceMetadata(requestedInstant));
       }
+      throw e;
     }
-    if (!content.isPresent() || content.get().length == 0) {
-      // few operations create requested file without any content. Assume these are not clustering
-      return Option.empty();
+  }
+
+  private static boolean isEmptyReplaceOrClusteringInstant(HoodieTimeline timeline,
+                                                           HoodieInstant pendingReplaceOrClusterInstant,
+                                                           InstantGenerator instantGenerator,
+                                                           HoodieInstant requestedInstant) {
+    try {
+      return timeline.isEmpty(requestedInstant);
+    } catch (HoodieIOException e) {
+      if (e.getCause() instanceof FileNotFoundException && pendingReplaceOrClusterInstant.isCompleted()) {
+        // For clustering instants, completed instant is also a replace commit instant. For input replace commit instant,
+        // it is not known whether requested instant is CLUSTER or REPLACE_COMMIT_ACTION. So we need to query both.
+        requestedInstant = instantGenerator.createNewInstant(
+            HoodieInstant.State.REQUESTED,
+            HoodieTimeline.REPLACE_COMMIT_ACTION,
+            pendingReplaceOrClusterInstant.requestedTime());
+        return timeline.isEmpty(requestedInstant);
+      }
+      throw e;
     }
-    return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(content.get()));
   }
 
   /**

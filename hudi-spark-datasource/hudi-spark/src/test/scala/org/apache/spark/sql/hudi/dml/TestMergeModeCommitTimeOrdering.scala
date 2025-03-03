@@ -212,6 +212,9 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
 
             // Delete record
             spark.sql(s"delete from $tableName where id = 1")
+            if (tableType == "mor") {
+              HoodieSparkSqlTestBase.validateDeleteLogBlockPrecombineNullOrZero(tmp.getCanonicalPath)
+            }
             validateTableConfig(
               storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
             // Verify deletion

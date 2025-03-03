@@ -207,8 +207,7 @@ public class KafkaConnectUtils {
     Option<HoodieInstant> latestInstant = timeline.lastInstant();
     if (latestInstant.isPresent()) {
       try {
-        byte[] data = timeline.getInstantDetails(latestInstant.get()).get();
-        return Option.of(metaClient.getCommitMetadataSerDe().deserialize(latestInstant.get(), data, HoodieCommitMetadata.class));
+        return Option.of(timeline.readCommitMetadata(latestInstant.get()));
       } catch (Exception e) {
         throw new HoodieException("Failed to read schema from commit metadata", e);
       }

@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
@@ -218,9 +217,8 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
 
     String instance = "001";
     // get compaction plan before compaction
-    HoodieCompactionPlan plan = TimelineMetadataUtils.deserializeCompactionPlan(
-        HoodieCLI.getTableMetaClient().reloadActiveTimeline().readCompactionPlanAsBytes(
-            INSTANT_GENERATOR.getCompactionRequestedInstant(instance)).get());
+    HoodieCompactionPlan plan = HoodieCLI.getTableMetaClient().reloadActiveTimeline().readCompactionPlan(
+            INSTANT_GENERATOR.getCompactionRequestedInstant(instance));
 
     generateArchive();
 

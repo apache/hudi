@@ -19,15 +19,21 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
-import org.apache.hudi.common.config.HoodieStorageConfig
-import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecord}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.engine.HoodieLocalEngineContext
+import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.log.HoodieLogFileReader
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
+import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
+import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
 
@@ -39,13 +45,13 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageConta
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 import org.slf4j.LoggerFactory
 
 import java.io.File
-import java.util.TimeZone
+import java.util.{Collections, Optional, TimeZone}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
 
@@ -382,8 +388,50 @@ object HoodieSparkSqlTestBase {
     val metaClient = createMetaClient(spark, tablePath)
 
     val cleanInstant = metaClient.reloadActiveTimeline().getCleanerTimeline.filterCompletedInstants().lastInstant().get()
-    TimelineMetadataUtils.deserializeHoodieCleanMetadata(metaClient
-      .getActiveTimeline.getInstantDetails(cleanInstant).get)
+    metaClient.getActiveTimeline.readCleanMetadata(cleanInstant)
+  }
+
+  def getMetaClientAndFileSystemView(basePath: String):
+  (HoodieTableMetaClient, SyncableFileSystemView) = {
+    val storageConf = HoodieTestUtils.getDefaultStorageConf
+    val metaClient: HoodieTableMetaClient =
+      HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
+    val metadataConfig = HoodieMetadataConfig.newBuilder.build
+    val engineContext = new HoodieLocalEngineContext(storageConf)
+    val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
+      engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
+      HoodieCommonConfig.newBuilder.build,
+      (_: HoodieTableMetaClient) => {
+        HoodieTableMetadata.create(
+          engineContext, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
+      }
+    )
+    val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
+    (metaClient, fsView)
+  }
+
+  def validateDeleteLogBlockPrecombineNullOrZero(basePath: String): Unit = {
+    val (metaClient, fsView) = getMetaClientAndFileSystemView(basePath)
+    val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("").findFirst()
+    assertTrue(fileSlice.isPresent)
+    val logFilePathList: java.util.List[String] = HoodieTestUtils.getLogFileListFromFileSlice(fileSlice.get)
+    Collections.sort(logFilePathList)
+    var deleteLogBlockFound = false
+    val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    for (i <- 0 until logFilePathList.size()) {
+      val logReader = new HoodieLogFileReader(
+        metaClient.getStorage, new HoodieLogFile(logFilePathList.get(i)),
+        avroSchema, 1024 * 1024, false, false,
+        "id", null)
+      assertTrue(logReader.hasNext)
+      val logBlock = logReader.next()
+      if (logBlock.isInstanceOf[HoodieDeleteBlock]) {
+        val deleteLogBlock = logBlock.asInstanceOf[HoodieDeleteBlock]
+        assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue() == 0 || i.getOrderingValue() == null))
+        deleteLogBlockFound = true
+      }
+    }
+    assertTrue(deleteLogBlockFound)
   }
 
   def validateTableConfig(storage: HoodieStorage,

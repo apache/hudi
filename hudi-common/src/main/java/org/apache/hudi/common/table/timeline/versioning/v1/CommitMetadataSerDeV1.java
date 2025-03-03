@@ -24,30 +24,41 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 
-import java.io.IOException;
+import org.apache.avro.specific.SpecificRecordBase;
 
-import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.function.BooleanSupplier;
+
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
 
   @Override
-  public <T> T deserialize(HoodieInstant instant, byte[] bytes, Class<T> clazz) throws IOException {
+  public <T> T deserialize(HoodieInstant instant, InputStream inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {
     try {
-      if (bytes.length == 0) {
-        return clazz.newInstance();
+      // For commit metadata we need special case handling as they are using serialized to JSON in V1
+      if (org.apache.hudi.common.model.HoodieCommitMetadata.class.isAssignableFrom(clazz)) {
+        return JsonUtils.getObjectMapper().readValue(inputStream, clazz);
+      } else {
+        if (!SpecificRecordBase.class.isAssignableFrom(clazz)) {
+          throw new IllegalArgumentException("Class must extend SpecificRecordBase: " + clazz.getName());
+        }
+        @SuppressWarnings("unchecked")
+        Class<? extends SpecificRecordBase> avroClass = (Class<? extends SpecificRecordBase>) clazz;
+        return (T) deserializeAvroMetadata(inputStream, avroClass);
       }
-      return fromJsonString(fromUTF8Bytes(bytes), clazz);
     } catch (Exception e) {
-      throw new IOException("unable to read commit metadata for instant " + instant + " bytes length: " + bytes.length, e);
+      // Empty file does not conform to avro format, in that case we return newInstance.
+      if (isEmptyInstant.getAsBoolean()) {
+        try {
+          return clazz.newInstance();
+        } catch (Exception ex) {
+          throw new IOException("unable to read commit metadata for instant " + instant, ex);
+        }
+      }
+      throw new IOException("Unable to read commit metadata for instant " + instant, e);
     }
-  }
-
-  public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
-    if (jsonStr == null || jsonStr.isEmpty()) {
-      // For empty commit file
-      return clazz.newInstance();
-    }
-    return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
   }
 
   @Override
