@@ -147,7 +147,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
             flatMapToPairFunc.call(iterator).collect(Collectors.toList()).stream()
                 .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator()
         )
-        .reduceByKey(reduceFunc::apply)
+        .reduceByKey(reduceFunc::apply, parallelism)
         .map(e -> new ImmutablePair<>(e._1, e._2))
         .collect().stream();
   }
