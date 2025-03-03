@@ -111,7 +111,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
   }
 
   private HoodieBootstrapIndexInfo fetchBootstrapIndexInfo() throws IOException {
-    return TimelineMetadataUtils.deserializeAvroMetadata(
+    return TimelineMetadataUtils.deserializeAvroMetadataLegacy(
         partitionIndexReader().getMetaInfo(new UTF8StringKey(INDEX_INFO_KEY_STRING)).get(),
         HoodieBootstrapIndexInfo.class);
   }
@@ -176,7 +176,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
         byte[] valBytes = IOUtils.copy(
             keyValue.getBytes(), keyValue.getValueOffset(), keyValue.getValueLength());
         HoodieBootstrapPartitionMetadata metadata =
-            TimelineMetadataUtils.deserializeAvroMetadata(valBytes, HoodieBootstrapPartitionMetadata.class);
+            TimelineMetadataUtils.deserializeAvroMetadataLegacy(valBytes, HoodieBootstrapPartitionMetadata.class);
         return metadata.getFileIdToBootstrapFile().entrySet().stream()
             .map(e -> new BootstrapFileMapping(bootstrapBasePath, metadata.getBootstrapPartitionPath(),
                 partition, e.getValue(), e.getKey())).collect(Collectors.toList());
@@ -210,7 +210,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
           org.apache.hudi.io.hfile.KeyValue keyValue = reader.getKeyValue().get();
           byte[] valBytes = IOUtils.copy(
               keyValue.getBytes(), keyValue.getValueOffset(), keyValue.getValueLength());
-          HoodieBootstrapFilePartitionInfo fileInfo = TimelineMetadataUtils.deserializeAvroMetadata(valBytes,
+          HoodieBootstrapFilePartitionInfo fileInfo = TimelineMetadataUtils.deserializeAvroMetadataLegacy(valBytes,
               HoodieBootstrapFilePartitionInfo.class);
           BootstrapFileMapping mapping = new BootstrapFileMapping(bootstrapBasePath,
               fileInfo.getBootstrapPartitionPath(), fileInfo.getPartitionPath(), fileInfo.getBootstrapFileStatus(),

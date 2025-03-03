@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -64,9 +63,8 @@ public class CompactHelpers<T, I, K, O> {
       HoodieTable table, String compactionInstantTime, HoodieData<WriteStatus> writeStatuses,
       String schema) throws IOException {
     InstantGenerator instantGenerator = table.getInstantGenerator();
-    byte[] planBytes = table.getActiveTimeline().readCompactionPlanAsBytes(
-        instantGenerator.getCompactionRequestedInstant(compactionInstantTime)).get();
-    HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(planBytes);
+    HoodieCompactionPlan compactionPlan = table.getActiveTimeline().readCompactionPlan(
+        instantGenerator.getCompactionRequestedInstant(compactionInstantTime));
     List<HoodieWriteStat> updateStatusMap = writeStatuses.map(WriteStatus::getStat).collectAsList();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
     for (HoodieWriteStat stat : updateStatusMap) {

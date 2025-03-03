@@ -129,20 +129,6 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant);
 
-  /**
-   * Read rollback info from instant file.
-   * @param instant Instant to read from.
-   * @return
-   */
-  Option<byte[]> readRollbackInfoAsBytes(HoodieInstant instant);
-
-  /**
-   * Read Restore info from instant file.
-   * @param instant Instant to read from.
-   * @return
-   */
-  Option<byte[]> readRestoreInfoAsBytes(HoodieInstant instant);
-
   //-----------------------------------------------------------------
   //      BEGIN - COMPACTION RELATED META-DATA MANAGEMENT.
   //-----------------------------------------------------------------
@@ -153,13 +139,6 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @return
    */
   Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant);
-
-  /**
-   * Read Index Plan from instant file.
-   * @param instant Instant to read from.
-   * @return
-   */
-  Option<byte[]> readIndexPlanAsBytes(HoodieInstant instant);
 
   /**
    * Revert instant state from inflight to requested.

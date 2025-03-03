@@ -388,8 +388,7 @@ object HoodieSparkSqlTestBase {
     val metaClient = createMetaClient(spark, tablePath)
 
     val cleanInstant = metaClient.reloadActiveTimeline().getCleanerTimeline.filterCompletedInstants().lastInstant().get()
-    TimelineMetadataUtils.deserializeHoodieCleanMetadata(metaClient
-      .getActiveTimeline.getInstantDetails(cleanInstant).get)
+    metaClient.getActiveTimeline.readCleanMetadata(cleanInstant)
   }
 
   def getMetaClientAndFileSystemView(basePath: String):

@@ -34,7 +34,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -142,8 +141,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
     HoodieInstant instant = hoodieTable.getMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepointTimestamp);
     try {
-      return TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
-          hoodieTable.getActiveTimeline().getInstantDetails(instant).get());
+      return hoodieTable.getActiveTimeline().readSavepointMetadata(instant);
     } catch (IOException e) {
       throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTimestamp, e);
     }
@@ -183,8 +181,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     if (config.incrementalCleanerModeEnabled()) {
       Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
       if (lastClean.isPresent()) {
-        HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-                .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
+        HoodieCleanMetadata cleanMetadata = hoodieTable.getActiveTimeline().readCleanMetadata(lastClean.get());
         if ((cleanMetadata.getEarliestCommitToRetain() != null)
                 && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()
                 && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
@@ -244,13 +241,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private Stream<String> getPartitionsForInstants(HoodieInstant instant) {
     try {
       if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
-        HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-            hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        HoodieReplaceCommitMetadata replaceCommitMetadata =
+            hoodieTable.getActiveTimeline().readReplaceCommitMetadata(instant);
         return Stream.concat(replaceCommitMetadata.getPartitionToReplaceFileIds().keySet().stream(), replaceCommitMetadata.getPartitionToWriteStats().keySet().stream());
       } else {
-        HoodieCommitMetadata commitMetadata = hoodieTable.getMetaClient()
-            .getCommitMetadataSerDe().deserialize(instant, hoodieTable.getActiveTimeline().getInstantDetails(instant).get(),
-                HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata =
+            hoodieTable.getActiveTimeline().readCommitMetadata(instant);
         return commitMetadata.getPartitionToWriteStats().keySet().stream();
       }
     } catch (IOException e) {

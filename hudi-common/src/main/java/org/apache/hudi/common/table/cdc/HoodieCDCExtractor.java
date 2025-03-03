@@ -330,7 +330,7 @@ public class HoodieCDCExtractor {
       String currentLogFileName = new StoragePath(currentLogFile).getName();
       Option<Pair<String, List<String>>> fileSliceOpt =
           HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-              metaClient.getActiveTimeline().getInstantDetails(instant).get(), fgId);
+              metaClient.getActiveTimeline().getInstantContentStream(instant), fgId);
       if (fileSliceOpt.isPresent()) {
         Pair<String, List<String>> fileSlice = fileSliceOpt.get();
         try {

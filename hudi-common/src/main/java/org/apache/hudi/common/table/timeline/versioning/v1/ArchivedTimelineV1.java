@@ -50,6 +50,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.TimelineUtils.getInputStreamOptionLegacy;
+
 public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchivedTimeline, HoodieInstantReader {
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
   private static final String ACTION_TYPE_KEY = "actionType";
@@ -166,7 +168,11 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
 
   @Override
   public InputStream getContentStream(HoodieInstant instant) {
-    return new ByteArrayInputStream(getInstantDetails(instant).orElseGet(() -> new byte[0]));
+    Option<InputStream> stream = getInputStreamOptionLegacy(this, instant);
+    if (stream.isEmpty()) {
+      return new ByteArrayInputStream(new byte[]{});
+    }
+    return stream.get();
   }
 
   public static StoragePath getArchiveLogPath(StoragePath archiveFolder) {
@@ -323,6 +329,11 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   @Override
   public HoodieArchivedTimeline reload(String startTs) {
     return new ArchivedTimelineV1(metaClient, startTs);
+  }
+
+  @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    return getInstantDetails(instant).isEmpty();
   }
 
   /**

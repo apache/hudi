@@ -530,7 +530,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
     val lastCompactionInstant = compactionTimeline
       .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-        metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant, compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+        compactionTimeline.readCommitMetadata(instant)
           .getOperationType == WriteOperationType.COMPACT))
       .lastInstant()
     val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.RECORD_INDEX.getPartitionPath)

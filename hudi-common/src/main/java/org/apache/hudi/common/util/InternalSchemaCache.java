@@ -79,7 +79,7 @@ public class InternalSchemaCache {
    * first step: try to get internalSchema from hoodie commit files, we no need to add lock.
    * if we cannot get internalSchema by first step, then we try to get internalSchema from cache.
    *
-   * @param versionID schema version_id need to search
+   * @param versionID  schema version_id need to search
    * @param metaClient current hoodie metaClient
    * @return internalSchema
    */
@@ -123,8 +123,7 @@ public class InternalSchemaCache {
       if (instants.isEmpty()) {
         return Option.empty();
       }
-      byte[] data = timeline.getInstantDetails(instants.get(0)).get();
-      HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(instants.get(0), data, HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = timeline.readCommitMetadata(instants.get(0));
       String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
       return SerDeHelper.fromJson(latestInternalSchemaStr);
     } catch (Exception e) {
@@ -135,20 +134,19 @@ public class InternalSchemaCache {
   /**
    * Get internalSchema and avroSchema for compaction/cluster operation.
    *
-   * @param metaClient current hoodie metaClient
+   * @param metaClient                     current hoodie metaClient
    * @param compactionAndClusteringInstant first instant before current compaction/cluster instant
    * @return (internalSchemaStrOpt, avroSchemaStrOpt) a pair of InternalSchema/avroSchema
    */
   public static Pair<Option<String>, Option<String>> getInternalSchemaAndAvroSchemaForClusteringAndCompaction(HoodieTableMetaClient metaClient, String compactionAndClusteringInstant) {
     // try to load internalSchema to support Schema Evolution
     HoodieTimeline timelineBeforeCurrentCompaction = metaClient.getCommitsAndCompactionTimeline().findInstantsBefore(compactionAndClusteringInstant).filterCompletedInstants();
-    Option<HoodieInstant> lastInstantBeforeCurrentCompaction =  timelineBeforeCurrentCompaction.lastInstant();
+    Option<HoodieInstant> lastInstantBeforeCurrentCompaction = timelineBeforeCurrentCompaction.lastInstant();
     if (lastInstantBeforeCurrentCompaction.isPresent()) {
       // try to find internalSchema
-      byte[] data = timelineBeforeCurrentCompaction.getInstantDetails(lastInstantBeforeCurrentCompaction.get()).get();
       HoodieCommitMetadata metadata;
       try {
-        metadata = metaClient.getCommitMetadataSerDe().deserialize(lastInstantBeforeCurrentCompaction.get(), data, HoodieCommitMetadata.class);
+        metadata = timelineBeforeCurrentCompaction.readCommitMetadata(lastInstantBeforeCurrentCompaction.get());
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot read metadata from commit: %s", lastInstantBeforeCurrentCompaction.get()), e);
       }
@@ -174,13 +172,13 @@ public class InternalSchemaCache {
    * if we cannot parser internalSchema in step2  (eg: schema evolution is not enabled when we create hoodie table, however after some inserts we enable schema evolution)
    * try to convert table schema to internalSchema.
    *
-   * @param versionId    the internalSchema version to be search.
-   * @param tablePath    table path
-   * @param storage      {@link HoodieStorage} instance.
-   * @param validCommits current validate commits, use to make up the commit file path/verify the validity of the history schema files
-   * @param fileNameParser InstantFileNameParser
+   * @param versionId           the internalSchema version to be search.
+   * @param tablePath           table path
+   * @param storage             {@link HoodieStorage} instance.
+   * @param validCommits        current validate commits, use to make up the commit file path/verify the validity of the history schema files
+   * @param fileNameParser      InstantFileNameParser
    * @param commitMetadataSerDe CommitMetadataSerDe
-   * @param instantGenerator InstantGenerator
+   * @param instantGenerator    InstantGenerator
    * @return a internalSchema.
    */
   public static InternalSchema getInternalSchemaByVersionId(long versionId, String tablePath, HoodieStorage storage, String validCommits,
@@ -197,15 +195,14 @@ public class InternalSchemaCache {
         .findFirst().map(f -> new StoragePath(hoodieMetaPath, f)).orElse(null);
     if (candidateCommitFile != null) {
       try {
-        byte[] data;
+        HoodieCommitMetadata metadata;
         try (InputStream is = storage.open(candidateCommitFile)) {
-          data = FileIOUtils.readAsByteArray(is);
+          metadata = commitMetadataSerDe.deserialize(instantGenerator.createNewInstant(
+                  new StoragePathInfo(candidateCommitFile, -1, false, (short) 0, 0L, 0L)),
+              is, () -> false, HoodieCommitMetadata.class);
         } catch (IOException e) {
           throw e;
         }
-        HoodieCommitMetadata metadata = commitMetadataSerDe.deserialize(instantGenerator.createNewInstant(
-            new StoragePathInfo(candidateCommitFile, -1, false, (short)0, 0L, 0L)),
-            data, HoodieCommitMetadata.class);
         String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
         avroSchema = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
         if (latestInternalSchemaStr != null) {

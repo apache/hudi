@@ -28,7 +28,6 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.launcher.SparkLauncher;
@@ -63,8 +62,7 @@ public class RollbacksCommand {
     final List<Comparable[]> rows = new ArrayList<>();
     rollback.getInstants().forEach(instant -> {
       try {
-        HoodieRollbackMetadata metadata = TimelineMetadataUtils
-            .deserializeAvroMetadata(activeTimeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+        HoodieRollbackMetadata metadata = activeTimeline.readRollbackMetadata(instant);
         metadata.getCommitsRollback().forEach(c -> {
           Comparable[] row = new Comparable[5];
           row[0] = metadata.getStartRollbackTime();
@@ -97,9 +95,8 @@ public class RollbacksCommand {
       throws IOException {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     final List<Comparable[]> rows = new ArrayList<>();
-    HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
-        activeTimeline.getInstantDetails(HoodieCLI.getTableMetaClient().createNewInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
-        HoodieRollbackMetadata.class);
+    HoodieRollbackMetadata metadata = activeTimeline.readRollbackMetadata(
+        HoodieCLI.getTableMetaClient().createNewInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant));
     metadata.getPartitionMetadata().forEach((key, value) -> Stream
         .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
             value.getFailedDeleteFiles().stream().map(f -> Pair.of(f, false)))

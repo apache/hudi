@@ -46,8 +46,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCleanerPlan;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeHoodieCleanMetadata;
 
 public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieSavepointMetadata> {
 
@@ -79,13 +77,12 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       String lastCommitRetained = cleanInstant.map(instant -> {
         try {
           if (instant.isCompleted()) {
-            return deserializeHoodieCleanMetadata(
-                table.getActiveTimeline().getInstantDetails(instant).get())
+            return table.getActiveTimeline().readCleanMetadata(instant)
                 .getEarliestCommitToRetain();
           } else {
             // clean is pending or inflight
-            return deserializeCleanerPlan(
-                table.getActiveTimeline().getInstantDetails(instantGenerator.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime())).get())
+            return table.getActiveTimeline().readCleanerPlan(
+                    instantGenerator.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime()))
                 .getEarliestInstantToRetain().getTimestamp();
           }
         } catch (IOException e) {

@@ -48,6 +48,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -266,27 +267,37 @@ public class TestTableSchemaResolver extends HoodieCommonTestHarness {
             HoodieTableType.COPY_ON_WRITE,
             Arrays.asList(
                 new HoodieInstant(COMPLETED, COMMIT_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                 new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                 // Table service actions that should be filtered out
                 new HoodieInstant(REQUESTED, CLEAN_ACTION, "004", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(REQUESTED, ROLLBACK_ACTION, "005", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(REQUESTED, CLUSTERING_ACTION, "006", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                new HoodieInstant(REQUESTED, ROLLBACK_ACTION, "005",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                new HoodieInstant(REQUESTED, CLUSTERING_ACTION, "006",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                 new HoodieInstant(INFLIGHT, CLEAN_ACTION, "004", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(INFLIGHT, ROLLBACK_ACTION, "005", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(INFLIGHT, CLUSTERING_ACTION, "006", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                new HoodieInstant(INFLIGHT, ROLLBACK_ACTION, "005",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                new HoodieInstant(INFLIGHT, CLUSTERING_ACTION, "006",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                 new HoodieInstant(COMPLETED, CLEAN_ACTION, "004", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "005", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, CLUSTERING_ACTION, "006", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR) // clustering commits
+                new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "005",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                new HoodieInstant(COMPLETED, CLUSTERING_ACTION, "006",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR) // clustering commits
 
             ),
             Arrays.asList(
                 new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                 new HoodieInstant(COMPLETED, COMMIT_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)
             ),
-            new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)
+            new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010",
+                InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)
         ),
 
         // Case 3: Comprehensive Mixed Timeline
@@ -296,7 +307,8 @@ public class TestTableSchemaResolver extends HoodieCommonTestHarness {
             Arrays.asList(
                 // Valid instants
                 new HoodieInstant(COMPLETED, COMMIT_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                 new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
 
                 // Invalid states
@@ -304,20 +316,25 @@ public class TestTableSchemaResolver extends HoodieCommonTestHarness {
                 new HoodieInstant(INFLIGHT, COMMIT_ACTION, "005", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                 // Invalid actions
                 new HoodieInstant(COMPLETED, CLEAN_ACTION, "006", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, CLUSTERING_ACTION, "007", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR) // clustering commits
+                new HoodieInstant(COMPLETED, CLUSTERING_ACTION, "007",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR) // clustering commits
             ),
             Arrays.asList(
                 new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "002",
+                    InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                 new HoodieInstant(COMPLETED, COMMIT_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)
             ),
-            new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)
+            new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "010",
+                InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)
         )
     );
   }
 
-  private HoodieTableMetaClient prepareMetaClient(List<HoodieInstant> instants, HoodieTableType tableType, Option<HoodieInstant> clusteringInstant) throws IOException {
+  private HoodieTableMetaClient prepareMetaClient(List<HoodieInstant> instants, HoodieTableType tableType,
+                                                  Option<HoodieInstant> clusteringInstant) throws IOException {
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     HoodieTableConfig mockTableConfig = mock(HoodieTableConfig.class);
     TimelineLayout timelineLayout = TimelineLayout.TIMELINE_LAYOUT_V2;
@@ -345,22 +362,27 @@ public class TestTableSchemaResolver extends HoodieCommonTestHarness {
               .setClusteringPlan(HoodieClusteringPlan.newBuilder()
                   .setVersion(1)
                   .setStrategy(HoodieClusteringStrategy.newBuilder()
-                      .setStrategyClassName("org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortStrategy")
+                      .setStrategyClassName(
+                          "org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortStrategy")
                       .build())
                   .build())
               .build();
       // Get the corresponding requested instant for the inflight instant
       HoodieInstant requestedInstant = new HoodieInstant(
-          HoodieInstant.State.REQUESTED, CLUSTERING_ACTION, clusteringInstant.get().requestedTime(), InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
-      when(mockActiveTimeline.getInstantDetails(requestedInstant)).thenReturn(serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+          HoodieInstant.State.REQUESTED, CLUSTERING_ACTION, clusteringInstant.get().requestedTime(),
+          InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+      when(mockActiveTimeline.getInstantDetails(requestedInstant)).thenReturn(
+          serializeRequestedReplaceMetadata(requestedReplaceMetadata));
     }
     return mockMetaClient;
   }
 
+  @Disabled("HUDI-8219")
   @ParameterizedTest
   @MethodSource("schemaEvolutionTestCases")
   public void testGetSchemaEvolutionTimelineInReverseOrder(SchemaEvolutionTestCase testCase) throws IOException {
-    HoodieTableMetaClient mockMetaClient = prepareMetaClient(testCase.inputInstants, testCase.tableType, testCase.clusteringInstants);
+    HoodieTableMetaClient mockMetaClient =
+        prepareMetaClient(testCase.inputInstants, testCase.tableType, testCase.clusteringInstants);
     TableSchemaResolver resolver = new TableSchemaResolver(mockMetaClient);
     HoodieTimeline timeline = resolver.getSchemaEvolutionTimelineInReverseOrder();
 

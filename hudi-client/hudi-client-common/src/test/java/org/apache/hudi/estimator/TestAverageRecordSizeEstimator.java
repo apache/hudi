@@ -36,7 +36,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -122,10 +121,7 @@ public class TestAverageRecordSizeEstimator {
       });
       instants.add(hoodieInstant);
       try {
-        when(mockTimeline.getInstantDetails(hoodieInstant))
-            .thenReturn(org.apache.hudi.common.util.Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-        when(mockCommitMetadataSerDe.deserialize(hoodieInstant, mockTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class))
-            .thenReturn(commitMetadata);
+        when(mockTimeline.readCommitMetadata(hoodieInstant)).thenReturn(commitMetadata);
       } catch (IOException e) {
         throw new RuntimeException("Should not have failed", e);
       }
