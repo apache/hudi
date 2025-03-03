@@ -74,7 +74,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 public abstract class BaseCommitActionExecutor<T, I, K, O, R>
@@ -162,11 +161,8 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       String commitActionType = getCommitActionType();
       HoodieInstant requested = table.getMetaClient().createNewInstant(State.REQUESTED, commitActionType, instantTime);
-      activeTimeline.transitionRequestedToInflight(
-          requested,
-          serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata),
-          config.shouldAllowMultiWriteOnSameInstant());
-    } catch (IOException io) {
+      activeTimeline.transitionRequestedToInflight(requested, Option.of(metadata), config.shouldAllowMultiWriteOnSameInstant());
+    } catch (HoodieIOException io) {
       throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", io);
     }
   }
@@ -234,8 +230,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       // cannot serialize maps with null values
       metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
       activeTimeline.saveAsComplete(false,
-          table.getMetaClient().createNewInstant(State.INFLIGHT, actionType, instantTime),
-          serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata));
+          table.getMetaClient().createNewInstant(State.INFLIGHT, actionType, instantTime), Option.of(metadata));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
       // update cols to Index as applicable
@@ -244,7 +239,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
             updateColumnsToIndexForColumnStats(metaClient, columnsToIndex);
             return null;
           });
-    } catch (IOException e) {
+    } catch (HoodieIOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
     }

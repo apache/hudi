@@ -29,6 +29,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -91,7 +92,10 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     timeline.createNewInstant(hoodieInstant);
     byte[] writeContent = getUTF8Bytes(historySchemaStr);
     timeline.transitionRequestedToInflight(hoodieInstant, Option.empty());
-    timeline.saveAsComplete(false, metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.requestedTime()), Option.of(writeContent));
+    // TODO[HUDI-9094]: we should not write raw byte array directly.
+    timeline.saveAsComplete(false, metaClient.createNewInstant(
+        HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.requestedTime()),
+        Option.of(HoodieInstantWriter.convertByteArrayToWriter(writeContent)));
     LOG.info(String.format("persist history schema success on commit time: %s", instantTime));
   }
 

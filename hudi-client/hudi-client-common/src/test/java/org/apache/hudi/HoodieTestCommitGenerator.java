@@ -31,12 +31,12 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +54,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.apache.hudi.common.table.log.HoodieLogFormat.DEFAULT_WRITE_TOKEN;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 
@@ -128,7 +127,7 @@ public class HoodieTestCommitGenerator {
     String commitFilename = INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime());
     HoodieCommitMetadata commitMetadata =
         generateCommitMetadata(partitionPathToFileIdAndNameMap, Collections.emptyMap());
-    createCommitFileWithMetadata(basePath, new HadoopStorageConfiguration(true), commitFilename, serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
+    createCommitFileWithMetadata(basePath, new HadoopStorageConfiguration(true), commitFilename, commitMetadata);
     for (String partitionPath : partitionPathToFileIdAndNameMap.keySet()) {
       createPartitionMetaFile(basePath, partitionPath);
       partitionPathToFileIdAndNameMap.get(partitionPath)
@@ -169,13 +168,12 @@ public class HoodieTestCommitGenerator {
     return metadata;
   }
 
-  public static void createCommitFileWithMetadata(
-      String basePath, StorageConfiguration<?> storageConf,
-      String filename, byte[] content) throws IOException {
+  public static <T> void createCommitFileWithMetadata(
+      String basePath, StorageConfiguration<?> storageConf, String filename, T metadata) throws IOException {
     HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, storageConf);
     StoragePath commitFilePath = new StoragePath(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/" + filename);
     try (OutputStream os = storage.create(commitFilePath, true)) {
-      os.write(content);
+      COMMIT_METADATA_SER_DE.getInstantWriter(metadata).get().writeToStream(os);
     }
   }
 

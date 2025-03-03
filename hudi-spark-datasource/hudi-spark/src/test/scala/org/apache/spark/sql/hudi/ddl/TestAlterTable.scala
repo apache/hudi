@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, WriteOp
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -256,7 +255,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         val requested = hoodieTable.getInstantGenerator.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, firstInstant)
         val metadata = new HoodieCommitMetadata
         metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
-        timeLine.transitionRequestedToInflight(requested, serializeCommitMetadata(hoodieTable.getMetaClient.getTimelineLayout.getCommitMetadataSerDe, metadata))
+        timeLine.transitionRequestedToInflight(requested, org.apache.hudi.common.util.Option.of(metadata))
         // Executing ALTER TABLE
         spark.sql(s"alter table $tableName change column id id int comment 'primary id'")
         var catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName))

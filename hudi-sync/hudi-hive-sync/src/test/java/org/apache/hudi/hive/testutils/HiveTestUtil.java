@@ -58,6 +58,7 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -102,11 +103,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_NAME;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
@@ -368,15 +366,15 @@ public class HiveTestUtil {
     createMetaFile(
         basePath,
         INSTANT_FILE_NAME_GENERATOR.makeRequestedRollbackFileName(instantTime),
-        getUTF8Bytes(""));
+        Option.empty());
     createMetaFile(
         basePath,
         INSTANT_FILE_NAME_GENERATOR.makeInflightRollbackFileName(instantTime),
-        getUTF8Bytes(""));
+        Option.empty());
     createMetaFile(
         basePath,
         INSTANT_FILE_NAME_GENERATOR.makeRollbackFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        serializeRollbackMetadata(rollbackMetadata).get());
+        COMMIT_METADATA_SER_DE.getInstantWriter(rollbackMetadata));
   }
 
   public static void createCOWTableWithSchema(String instantTime, String schemaFileName)
@@ -775,14 +773,14 @@ public class HiveTestUtil {
     createMetaFile(
         basePath,
         INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
+        COMMIT_METADATA_SER_DE.getInstantWriter(commitMetadata));
   }
 
   public static void createReplaceCommitFile(HoodieReplaceCommitMetadata commitMetadata, String instantTime) throws IOException {
     createMetaFile(
         basePath,
         INSTANT_FILE_NAME_GENERATOR.makeReplaceFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
+        COMMIT_METADATA_SER_DE.getInstantWriter(commitMetadata));
   }
 
   public static void createCommitFileWithSchema(HoodieCommitMetadata commitMetadata, String instantTime, boolean isSimpleSchema) throws IOException {
@@ -795,7 +793,7 @@ public class HiveTestUtil {
     createMetaFile(
         basePath,
         INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
+        COMMIT_METADATA_SER_DE.getInstantWriter(commitMetadata));
   }
 
   private static void createDeltaCommitFile(HoodieCommitMetadata deltaCommitMetadata, String deltaCommitTime)
@@ -803,15 +801,17 @@ public class HiveTestUtil {
     createMetaFile(
         basePath,
         INSTANT_FILE_NAME_GENERATOR.makeDeltaFileName(deltaCommitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        serializeCommitMetadata(COMMIT_METADATA_SER_DE, deltaCommitMetadata).get());
+        COMMIT_METADATA_SER_DE.getInstantWriter(deltaCommitMetadata));
   }
 
-  private static void createMetaFile(String basePath, String fileName, byte[] bytes)
+  private static void createMetaFile(String basePath, String fileName, Option<HoodieInstantWriter> writer)
       throws IOException {
     Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + TIMELINEFOLDER_NAME + "/" + fileName);
-    OutputStream out = fileSystem.create(fullPath, true);
-    out.write(bytes);
-    out.close();
+    try (OutputStream fsout = fileSystem.create(fullPath, true)) {
+      if (writer.isPresent()) {
+        writer.get().writeToStream(fsout);
+      }
+    }
   }
 
   public static Set<String> getCreatedTablesSet() {

@@ -25,7 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadata;
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToAvro;
 
 /**
  * Utility methods to commit instant for test.
@@ -36,7 +36,7 @@ public class HoodieTestCommitUtilities {
    * Converter HoodieCommitMetadata to avro format and ordered by partition.
    */
   public static org.apache.hudi.avro.model.HoodieCommitMetadata convertAndOrderCommitMetadata(HoodieCommitMetadata hoodieCommitMetadata) {
-    return orderCommitMetadata(convertCommitMetadata(hoodieCommitMetadata));
+    return orderCommitMetadata(convertCommitMetadataToAvro(hoodieCommitMetadata));
   }
 
   /**

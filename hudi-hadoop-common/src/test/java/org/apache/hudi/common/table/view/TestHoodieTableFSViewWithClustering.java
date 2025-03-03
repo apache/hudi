@@ -47,7 +47,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -150,7 +149,7 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
     saveAsComplete(
         commitTimeline,
         instant1,
-        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
+        Option.of(commitMetadata));
     refreshFsView();
     assertEquals(0, roView.getLatestBaseFiles(partitionPath1)
         .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
@@ -181,17 +180,17 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
     assertEquals(actualReplacedFileIds, allReplacedFileIds);
   }
 
-  private void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
+  private <T> void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<T> metadata) {
     if (inflight.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
-      timeline.transitionCompactionInflightToComplete(true, inflight, data);
+      timeline.transitionCompactionInflightToComplete(true, inflight, metadata);
     } else {
       HoodieInstant requested = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, inflight.getAction(), inflight.requestedTime());
       timeline.createNewInstant(requested);
       timeline.transitionRequestedToInflight(requested, Option.empty());
       if (inflight.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
-        timeline.transitionClusterInflightToComplete(true, inflight, data);
+        timeline.transitionClusterInflightToComplete(true, inflight, metadata);
       } else {
-        timeline.saveAsComplete(inflight, data);
+        timeline.saveAsComplete(inflight, metadata);
       }
     }
   }

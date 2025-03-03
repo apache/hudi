@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieTimeTravelException;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -622,5 +623,16 @@ public class TimelineUtils {
       return Option.empty();
     }
     return Option.of(new ByteArrayInputStream(bytes.get()));
+  }
+
+  // TODO[HUDI-9094]: work around when caller needs to write byte array in raw. This method should be removed.
+  public static <T> Option<HoodieInstantWriter> getHoodieInstantWriterOption(HoodieTimeline timeline, Option<T> metadata) {
+    Option<HoodieInstantWriter> writerOption;
+    if (metadata.isPresent() && metadata.get() instanceof HoodieInstantWriter) {
+      writerOption = (Option<HoodieInstantWriter>) metadata;
+    } else {
+      writerOption = timeline.getInstantWriter(metadata);
+    }
+    return writerOption;
   }
 }
