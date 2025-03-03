@@ -138,7 +138,7 @@ public class CompactionTestUtils {
       HoodieCompactionPlan compactionPlan) throws IOException {
     metaClient.getActiveTimeline().saveToCompactionRequested(
         INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
-        Option.of(compactionPlan));
+        compactionPlan);
   }
 
   public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) {

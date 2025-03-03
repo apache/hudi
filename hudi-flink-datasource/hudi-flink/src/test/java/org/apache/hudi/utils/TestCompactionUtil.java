@@ -176,7 +176,7 @@ public class TestCompactionUtil {
     String instantTime = table.getMetaClient().createNewInstantTime();
     HoodieInstant compactionInstant =
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
-    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, Option.of(plan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, plan);
     table.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
     metaClient.reloadActiveTimeline();
     return instantTime;

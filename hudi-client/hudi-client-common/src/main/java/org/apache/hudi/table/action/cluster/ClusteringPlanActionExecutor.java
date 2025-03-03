@@ -102,7 +102,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseTableServicePl
           .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
           .setClusteringPlan(planOption.get())
           .build();
-      table.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, Option.of(requestedReplaceMetadata));
+      table.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, requestedReplaceMetadata);
     }
 
     return planOption;

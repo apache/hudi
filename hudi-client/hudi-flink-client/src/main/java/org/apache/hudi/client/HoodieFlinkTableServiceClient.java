@@ -136,7 +136,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
           false,
           clusteringInstant,
-          Option.of(metadata),
+          metadata,
           table.getActiveTimeline());
     } catch (HoodieIOException e) {
       throw new HoodieClusteringException(

@@ -117,7 +117,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
             .collect(Collectors.toList());
         HoodieIndexPlan indexPlan = new HoodieIndexPlan(LATEST_INDEX_PLAN_VERSION, indexPartitionInfos);
         // update data timeline with requested instant
-        table.getActiveTimeline().saveToPendingIndexAction(indexInstant, Option.of(indexPlan));
+        table.getActiveTimeline().saveToPendingIndexAction(indexInstant, indexPlan);
         return Option.of(indexPlan);
       }
     } catch (HoodieIOException e) {

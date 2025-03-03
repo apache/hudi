@@ -210,7 +210,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       final HoodieInstant cleanInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
       // Save to both aux and timeline folder
       try {
-        table.getActiveTimeline().saveToCleanRequested(cleanInstant, Option.of(cleanerPlan));
+        table.getActiveTimeline().saveToCleanRequested(cleanInstant, cleanerPlan);
         LOG.info("Requesting Cleaning with instant time " + cleanInstant);
       } catch (HoodieIOException e) {
         LOG.error("Got exception when saving cleaner requested file", e);

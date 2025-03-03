@@ -550,7 +550,7 @@ public class HoodieTestTable implements AutoCloseable {
     return savepointMetadata;
   }
 
-  public HoodieTestTable addRequestedCompaction(String instantTime) throws IOException {
+  public HoodieTestTable addRequestedCompaction(String instantTime) {
     List<FileSlice> fileSlices = new ArrayList<>();
     fileSlices.add(new FileSlice("par1", instantTime, "fg-1"));
     fileSlices.add(new FileSlice("par2", instantTime, "fg-2"));
@@ -558,19 +558,19 @@ public class HoodieTestTable implements AutoCloseable {
         .buildFromFileSlices(fileSlices.stream().map(fs -> Pair.of(fs.getPartitionPath(), fs))
             .collect(Collectors.toList()), Option.empty(), Option.empty());
     HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
-    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, Option.of(compactionPlan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, compactionPlan);
     currentInstantTime = instantTime;
     return this;
   }
 
-  public HoodieTestTable addRequestedCompaction(String instantTime, HoodieCompactionPlan compactionPlan) throws IOException {
+  public HoodieTestTable addRequestedCompaction(String instantTime, HoodieCompactionPlan compactionPlan) {
     HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
-    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, Option.of(compactionPlan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, compactionPlan);
     currentInstantTime = instantTime;
     return this;
   }
 
-  public HoodieTestTable addRequestedCompaction(String instantTime, FileSlice... fileSlices) throws IOException {
+  public HoodieTestTable addRequestedCompaction(String instantTime, FileSlice... fileSlices) {
     HoodieCompactionPlan plan = CompactionUtils
         .buildFromFileSlices(Arrays.stream(fileSlices).map(fs -> Pair.of(fs.getPartitionPath(), fs))
             .collect(Collectors.toList()), Option.empty(), Option.empty());

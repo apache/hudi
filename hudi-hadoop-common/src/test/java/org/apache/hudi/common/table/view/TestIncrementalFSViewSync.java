@@ -717,7 +717,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     long initialExpTotalFileSlices = PARTITIONS.stream().mapToLong(p -> view.getAllFileSlices(p).count()).sum();
     HoodieInstant compactionRequestedInstant = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMPACTION_ACTION, instantTime);
     HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty());
-    metaClient.getActiveTimeline().saveToCompactionRequested(compactionRequestedInstant, Option.of(plan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionRequestedInstant, plan);
 
     view.sync();
     PARTITIONS.forEach(p -> {
@@ -751,7 +751,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     long initialExpTotalFileSlices = PARTITIONS.stream().mapToLong(p -> view.getAllFileSlices(p).count()).sum();
     HoodieInstant logCompactionRequestedInstant = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, LOG_COMPACTION_ACTION, instantTime);
     HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty());
-    metaClient.getActiveTimeline().saveToLogCompactionRequested(logCompactionRequestedInstant, Option.of(plan));
+    metaClient.getActiveTimeline().saveToLogCompactionRequested(logCompactionRequestedInstant, plan);
 
     view.sync();
     PARTITIONS.forEach(p -> {
@@ -1014,7 +1014,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieInstant newRequestedInstant = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instant);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setOperationType(WriteOperationType.UNKNOWN.name()).build();
-    metaClient.getActiveTimeline().saveToPendingReplaceCommit(newRequestedInstant, Option.of(requestedReplaceMetadata));
+    metaClient.getActiveTimeline().saveToPendingReplaceCommit(newRequestedInstant, requestedReplaceMetadata);
     
     metaClient.reloadActiveTimeline();
     // transition to inflight

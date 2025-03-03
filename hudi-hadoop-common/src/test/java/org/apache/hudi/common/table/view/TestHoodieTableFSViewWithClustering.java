@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.view;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -149,7 +150,7 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
     saveAsComplete(
         commitTimeline,
         instant1,
-        Option.of(commitMetadata));
+        commitMetadata);
     refreshFsView();
     assertEquals(0, roView.getLatestBaseFiles(partitionPath1)
         .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
@@ -180,7 +181,7 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
     assertEquals(actualReplacedFileIds, allReplacedFileIds);
   }
 
-  private <T> void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<T> metadata) {
+  private void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, HoodieCommitMetadata metadata) {
     if (inflight.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
       timeline.transitionCompactionInflightToComplete(true, inflight, metadata);
     } else {
@@ -188,9 +189,9 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
       timeline.createNewInstant(requested);
       timeline.transitionRequestedToInflight(requested, Option.empty());
       if (inflight.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
-        timeline.transitionClusterInflightToComplete(true, inflight, metadata);
+        timeline.transitionClusterInflightToComplete(true, inflight, (HoodieReplaceCommitMetadata) metadata);
       } else {
-        timeline.saveAsComplete(inflight, metadata);
+        timeline.saveAsComplete(inflight, Option.of(metadata));
       }
     }
   }

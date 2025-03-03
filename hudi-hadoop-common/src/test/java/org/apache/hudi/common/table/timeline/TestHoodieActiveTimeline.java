@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -432,7 +433,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertFalse(timeline.filterPendingExcludingCompaction().containsInstant(compaction));
     assertTrue(timeline.filterPendingCompactionTimeline().containsInstant(compaction));
     assertTrue(timeline.filterPendingMajorOrMinorCompactionTimeline().containsInstant(compaction));
-    compaction = timeline.transitionCompactionInflightToComplete(false, inflight, Option.empty());
+    compaction = timeline.transitionCompactionInflightToComplete(false, inflight, new HoodieCommitMetadata());
     timeline = timeline.reload();
     assertTrue(timeline.containsInstant(compaction));
     assertFalse(timeline.containsInstant(inflight));
@@ -441,14 +442,14 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
     // transitionCleanXXXtoYYY
     HoodieInstant clean = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "4");
-    timeline.saveToCleanRequested(clean, Option.empty());
+    timeline.saveToCleanRequested(clean, new HoodieCleanerPlan());
     timeline = timeline.reload();
     assertTrue(timeline.containsInstant(clean));
-    inflight = timeline.transitionCleanRequestedToInflight(clean, Option.empty());
+    inflight = timeline.transitionCleanRequestedToInflight(clean, new HoodieCleanerPlan());
     timeline = timeline.reload();
     assertFalse(timeline.containsInstant(clean));
     assertTrue(timeline.containsInstant(inflight));
-    clean = timeline.transitionCleanInflightToComplete(true, inflight, Option.empty());
+    clean = timeline.transitionCleanInflightToComplete(true, inflight, new HoodieCleanMetadata());
     timeline = timeline.reload();
     assertTrue(timeline.containsInstant(clean));
     assertFalse(timeline.containsInstant(inflight));
@@ -655,7 +656,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     cleanerPlan.setPolicy("policy");
     cleanerPlan.setVersion(TimelineLayoutVersion.CURR_VERSION);
     cleanerPlan.setPartitionsToBeDeleted(Collections.singletonList("partition1"));
-    timeline.saveToCleanRequested(cleanInstant, Option.of(cleanerPlan));
+    timeline.saveToCleanRequested(cleanInstant, cleanerPlan);
 
     assertEquals(cleanerPlan, getCleanerPlan(metaClient, cleanInstant));
 
