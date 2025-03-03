@@ -139,8 +139,7 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
     HoodieTimeline timeline = writeClient.getHoodieTable().getActiveTimeline().getCompletedReplaceTimeline().findInstantsAfter(lastRefreshInstant);
     if (!timeline.empty()) {
       for (HoodieInstant instant : timeline.getInstants()) {
-        HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-            timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        HoodieReplaceCommitMetadata commitMetadata = timeline.readReplaceCommitMetadata(instant);
         Set<String> affectedPartitions = commitMetadata.getPartitionToReplaceFileIds().keySet();
         LOG.info("Clear up cached hashing metadata because find a new replace commit.\n Instant: {}.\n Effected Partitions: {}.",  lastRefreshInstant, affectedPartitions);
         affectedPartitions.forEach(this.partitionToIdentifier::remove);

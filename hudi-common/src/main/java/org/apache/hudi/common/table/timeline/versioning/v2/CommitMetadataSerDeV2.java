@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.table.timeline.versioning.v2;
 
-import org.apache.hudi.avro.model.HoodieCommitMetadata;
 import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
@@ -34,44 +34,62 @@ import org.apache.avro.specific.SpecificRecordBase;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.function.BooleanSupplier;
 
-import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToPojo;
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertReplaceCommitMetadataToPojo;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeReplaceCommitMetadata;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
 
+  /**
+   * Convert commit metadata from avro to pojo.
+   */
+  private HoodieCommitMetadata convertCommitMetadataToPojo(org.apache.hudi.avro.model.HoodieCommitMetadata hoodieCommitMetadata) {
+    // While it is valid to have a null key in the hash map in java, avro map could not accommodate this, so we need to remove null key explicitly before the conversion.
+    hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
+    return JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, HoodieCommitMetadata.class);
+  }
+
   @Override
-  public <T> T deserialize(HoodieInstant instant, byte[] bytes, Class<T> clazz) throws IOException {
+  public <T> T deserialize(HoodieInstant instant, InputStream inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {
     try {
-      if (bytes.length == 0) {
-        return clazz.newInstance();
-      }
       if (instant.isLegacy()) {
         // For legacy instant, delegate to legacy SerDe.
         try {
-          return new CommitMetadataSerDeV1().deserialize(instant, bytes, clazz);
+          return new CommitMetadataSerDeV1().deserialize(instant, inputStream, isEmptyInstant, clazz);
         } catch (Exception e) {
           throw new IOException("unable to read legacy commit metadata for instant " + instant, e);
         }
       }
-      // For any new commit metadata class being added, we need the corresponding logic added here
+      // For commit metadata and replace commit metadata need special case handling since it requires in memory object in POJO form.
       if (org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class.isAssignableFrom(clazz)) {
-        return (T) convertReplaceCommitMetadataToPojo(deserializeReplaceCommitMetadata(bytes));
+        return (T) convertReplaceCommitMetadataToPojo(
+            deserializeAvroMetadata(inputStream, HoodieReplaceCommitMetadata.class));
       }
-      return (T) convertCommitMetadataToPojo(deserializeCommitMetadata(bytes));
+      // For any new commit metadata class being added, we need the corresponding logic added here
+      if (org.apache.hudi.common.model.HoodieCommitMetadata.class.isAssignableFrom(clazz)) {
+        return (T) convertCommitMetadataToPojo(
+            deserializeAvroMetadata(inputStream, org.apache.hudi.avro.model.HoodieCommitMetadata.class));
+      }
+      // For all the other cases they must be SpecificRecordBase
+      if (!SpecificRecordBase.class.isAssignableFrom(clazz)) {
+        throw new IllegalArgumentException("Class must extend SpecificRecordBase: " + clazz.getName());
+      }
+      @SuppressWarnings("unchecked")
+      Class<? extends SpecificRecordBase> avroClass = (Class<? extends SpecificRecordBase>) clazz;
+      return (T) deserializeAvroMetadata(inputStream, avroClass);
     } catch (Exception e) {
-      throw new IOException("unable to read commit metadata for instant " + instant + " bytes length: " + bytes.length, e);
+      // Empty file does not conform to avro format, in that case we return newInstance.
+      if (isEmptyInstant.getAsBoolean()) {
+        try {
+          return clazz.newInstance();
+        } catch (Exception ex) {
+          throw new IOException("unable to read commit metadata for instant " + instant, ex);
+        }
+      }
+      throw new IOException("unable to read commit metadata for instant " + instant, e);
     }
-  }
-
-  public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
-    if (jsonStr == null || jsonStr.isEmpty()) {
-      // For empty commit file
-      return clazz.newInstance();
-    }
-    return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
   }
 
   @Override
@@ -79,7 +97,9 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
     if (commitMetadata instanceof org.apache.hudi.common.model.HoodieReplaceCommitMetadata) {
       return serializeAvroMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata), HoodieReplaceCommitMetadata.class);
     }
-    return serializeAvroMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata), HoodieCommitMetadata.class);
+    return serializeAvroMetadata(
+        MetadataConversionUtils.convertCommitMetadata(commitMetadata),
+        org.apache.hudi.avro.model.HoodieCommitMetadata.class);
   }
 
   public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)
