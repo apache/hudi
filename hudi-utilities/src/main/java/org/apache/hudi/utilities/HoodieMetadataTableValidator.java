@@ -73,6 +73,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -229,7 +230,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           .setBasePath(cfg.basePath)
           .setLoadActiveTimelineOnLoad(true)
           .build());
-    } catch (TableNotFoundException tbe) {
+    } catch (TableNotFoundException | InvalidTableException tbe) {
       // Suppress the TableNotFound exception, table not yet created for a new stream
       LOG.warn("Data table is not found. Skip current validation for: " + cfg.basePath);
     }
@@ -717,7 +718,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         }
       }
       return true;
-    } catch (TableNotFoundException tbe) {
+    } catch (TableNotFoundException | InvalidTableException tbe) {
       // Suppress the TableNotFound exception if Metadata table is not available to read for now
       LOG.warn("Metadata table is not found for table: {}. Skip current validation.", cfg.basePath);
       return false;
