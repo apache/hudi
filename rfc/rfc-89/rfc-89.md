@@ -209,12 +209,13 @@ The expression config will be persisted as files named as `<instant>.hashing_con
     "<instant2>": {}
 }
 ```
-Expressions will newer instant has higher priority
+Expressions has newer instant has higher priority
+
 For a specific expression like instant1 ==> Expression1 has a higher priority than expression2.
 
-Here, the config is designed to support multiple versions. During the DDL phase, users will create a `00000000000000000.hashing_config` for the first time. 
+Here, the config is designed to support multiple versions. During the DDL phase, hoodie will create a `00000000000000000.hashing_config` for the first time. 
 Subsequently, when modifying the expression through the provided `call command`(details refer to Tool ), 
-a new version of the config will be generated. The new-version config will contain all historical change records. During 
+a new version of the config will be generated. The new-version config contains all historical change records. During 
 loading stage, the latest completed instant related config will be loaded based on the active timeline.
 
 ```text
