@@ -191,8 +191,8 @@ public class FileIOUtils {
     }
   }
 
-  public static void createFileInPath(HoodieStorage fileSystem, StoragePath fullPath, Option<HoodieInstantWriter> contentWriter) {
-    createFileInPath(fileSystem, fullPath, contentWriter, false);
+  public static void createFileInPath(HoodieStorage storage, StoragePath fullPath, Option<HoodieInstantWriter> contentWriter) {
+    createFileInPath(storage, fullPath, contentWriter, false);
   }
 
   public static boolean copy(HoodieStorage srcStorage, StoragePath src,

@@ -136,7 +136,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
       }
 
       // transition requested indexInstant to inflight
-      table.getActiveTimeline().transitionIndexRequestedToInflight(indexInstant, Option.empty());
+      table.getActiveTimeline().transitionIndexRequestedToInflight(indexInstant);
       List<HoodieIndexPartitionInfo> finalIndexPartitionInfos;
       if (!firstTimeInitializingMetadataTable) {
         // start indexing for each partition

@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -514,7 +515,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   }
 
   static void addCommitToTimeline(HoodieTableMetaClient metaClient, WriteOperationType writeOperationType, String commitActiontype,
-                                  Map<String, String> extraMetadata) throws IOException {
+                                  Map<String, String> extraMetadata) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.setOperationType(writeOperationType);
     extraMetadata.forEach((k, v) -> commitMetadata.getExtraMetadata().put(k, v));
@@ -523,7 +524,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     HoodieInstant inflightInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime);
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
     if (commitActiontype.equals(HoodieTimeline.CLUSTERING_ACTION)) {
-      metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant, Option.of(commitMetadata));
+      metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant, (HoodieReplaceCommitMetadata) commitMetadata);
     } else {
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),

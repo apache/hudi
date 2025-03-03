@@ -115,8 +115,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     // create replace metadata only with replaced file Ids (no new files created)
     if (withReplace) {
       activeTimeline.saveAsComplete(instant1,
-          getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
-              newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER));
+          Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
+              newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
     } else {
       activeTimeline.transitionClusterInflightToComplete(true, instant1,
           getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
@@ -135,8 +135,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     // create replace metadata only with replaced file Ids (no new files created)
     if (withReplace) {
       activeTimeline.saveAsComplete(instant2,
-          getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
-              newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER));
+          Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
+              newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER)));
     } else {
       activeTimeline.transitionClusterInflightToComplete(true, instant2,
           getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
@@ -529,7 +529,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     return TimelineMetadataUtils.convertRollbackMetadata(commitTs, Option.empty(), rollbacks, rollbackStats);
   }
 
-  private Option<HoodieReplaceCommitMetadata> getReplaceCommitMetadata(String basePath, String commitTs, String replacePartition, int replaceCount,
+  private HoodieReplaceCommitMetadata getReplaceCommitMetadata(String basePath, String commitTs, String replacePartition, int replaceCount,
                                                                        String newFilePartition, int newFileCount, Map<String, String> extraMetadata,
                                                                        WriteOperationType operationType) {
     HoodieReplaceCommitMetadata commit = new HoodieReplaceCommitMetadata();
@@ -552,7 +552,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
       commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
     }
-    return Option.of(commit);
+    return commit;
   }
 
   private Option<HoodieCleanMetadata> getCleanMetadata(String partition, String time, boolean isPartitionDeleted) throws IOException {

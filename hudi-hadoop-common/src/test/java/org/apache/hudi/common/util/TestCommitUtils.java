@@ -199,7 +199,7 @@ public class TestCommitUtils {
         .build();
     timeline.saveToCompactionRequested(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, COMPACTION_ACTION, ts),
-        Option.of(compactionPlan)
+        compactionPlan
     );
   }
 
@@ -212,7 +212,7 @@ public class TestCommitUtils {
             .build();
     timeline.saveToPendingClusterCommit(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, CLUSTERING_ACTION, ts),
-        Option.of(requestedReplaceMetadata)
+        requestedReplaceMetadata
     );
   }
 }

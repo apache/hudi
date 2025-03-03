@@ -1660,7 +1660,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieInstant clusteringInstant = INSTANT_GENERATOR.createNewInstant(REQUESTED, CLUSTERING_ACTION, clusterTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
-    metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, Option.of(requestedReplaceMetadata));
+    metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, requestedReplaceMetadata);
     return clusteringInstant;
   }
 

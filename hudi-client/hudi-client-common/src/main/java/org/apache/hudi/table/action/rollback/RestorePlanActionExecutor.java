@@ -88,7 +88,7 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
               .collect(Collectors.toList());
 
       HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION, savepointToRestoreTimestamp);
-      table.getActiveTimeline().saveToRestoreRequested(restoreInstant, Option.of(restorePlan));
+      table.getActiveTimeline().saveToRestoreRequested(restoreInstant, restorePlan);
       table.getMetaClient().reloadActiveTimeline();
       LOG.info("Requesting Restore with instant time " + restoreInstant);
       return Option.of(restorePlan);

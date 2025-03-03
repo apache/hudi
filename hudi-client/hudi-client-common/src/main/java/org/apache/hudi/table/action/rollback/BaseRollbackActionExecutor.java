@@ -266,7 +266,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         // NOTE: no need to lock here, since !skipTimelinePublish is always true,
         // when skipLocking is false, txnManager above-mentioned should lock it.
         // when skipLocking is true, the caller should have already held the lock.
-        table.getActiveTimeline().transitionRollbackInflightToComplete(false, inflightInstant, Option.of(rollbackMetadata));
+        table.getActiveTimeline().transitionRollbackInflightToComplete(false, inflightInstant, rollbackMetadata);
         LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
       }
     } finally {

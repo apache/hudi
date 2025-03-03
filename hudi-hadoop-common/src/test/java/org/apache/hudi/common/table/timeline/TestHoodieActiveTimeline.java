@@ -432,7 +432,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertFalse(timeline.filterPendingExcludingCompaction().containsInstant(compaction));
     assertTrue(timeline.filterPendingCompactionTimeline().containsInstant(compaction));
     assertTrue(timeline.filterPendingMajorOrMinorCompactionTimeline().containsInstant(compaction));
-    compaction = timeline.transitionCompactionInflightToComplete(false, inflight, Option.empty());
+    compaction = timeline.transitionCompactionInflightToComplete(false, inflight, new HoodieCommitMetadata());
     timeline = timeline.reload();
     assertTrue(timeline.containsInstant(compaction));
     assertFalse(timeline.containsInstant(inflight));

@@ -206,14 +206,13 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds,
             Option.empty(), WriteOperationType.CLUSTER, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
 
-    saveAsComplete(commitTimeline, instant1, Option.empty());
-    saveAsComplete(commitTimeline, instant2, Option.empty());
-    saveAsCompleteCluster(commitTimeline, clusteringInstant3,
-        Option.of((HoodieReplaceCommitMetadata) commitMetadata));
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, instant2, new HoodieCommitMetadata());
+    saveAsCompleteCluster(commitTimeline, clusteringInstant3, (HoodieReplaceCommitMetadata) commitMetadata);
     saveAsCompleteCluster(
         commitTimeline,
         clusteringInstant4,
-        Option.of((HoodieReplaceCommitMetadata) commitMetadata));
+        (HoodieReplaceCommitMetadata) commitMetadata);
 
     refreshFsView();
 
@@ -258,9 +257,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieInstant deltaInstant2 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime2);
     HoodieInstant deltaInstant3 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime3);
 
-    saveAsComplete(commitTimeline, instant1, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant2, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant3, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant2, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant3, new HoodieCommitMetadata());
 
     refreshFsView();
 
@@ -352,7 +351,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
 
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime1);
-    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
     refreshFsView();
 
     List<FileSlice> fileSlices =
@@ -385,7 +384,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime1);
-    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
 
     // create 2 fileId in partition2
     String fileId3 = UUID.randomUUID().toString();
@@ -397,7 +396,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     new File(basePath + "/" + partitionPath2 + "/" + fileName4).createNewFile();
 
     HoodieInstant instant2 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime2);
-    saveAsComplete(commitTimeline, instant2, Option.empty());
+    saveAsComplete(commitTimeline, instant2, new HoodieCommitMetadata());
 
     fsView.sync();
     // invokes the stateless API first then the normal API, assert the result equality with different file group objects
@@ -444,7 +443,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime1);
-    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
 
     // create 2 fileId in partition2
     String fileId3 = UUID.randomUUID().toString();
@@ -456,7 +455,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     new File(basePath + "/" + partitionPath2 + "/" + fileName4).createNewFile();
 
     HoodieInstant instant2 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime2);
-    saveAsComplete(commitTimeline, instant2, Option.empty());
+    saveAsComplete(commitTimeline, instant2, new HoodieCommitMetadata());
 
     fsView.sync();
 
@@ -512,9 +511,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieInstant deltaInstant2 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);
     HoodieInstant deltaInstant3 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime2);
 
-    saveAsComplete(commitTimeline, instant1, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant2, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant3, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant2, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant3, new HoodieCommitMetadata());
 
     refreshFsView();
 
@@ -592,9 +591,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     // delta instant 3 starts but finishes in the last
     metaClient.getActiveTimeline().createNewInstant(deltaInstant3);
 
-    saveAsComplete(commitTimeline, instant1, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant1, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant2, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant1, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant2, new HoodieCommitMetadata());
 
     refreshFsView();
     List<FileSlice> fileSlices = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
@@ -619,7 +618,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     Paths.get(basePath, partitionPath, compactionFile1).toFile().createNewFile();
     HoodieInstant compactionInstant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime1);
     HoodieInstant requested = INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstant.requestedTime());
-    commitTimeline.saveToCompactionRequested(requested, Option.of(compactionPlan));
+    commitTimeline.saveToCompactionRequested(requested, compactionPlan);
     commitTimeline.transitionCompactionRequestedToInflight(requested);
 
     // check the view immediately
@@ -634,7 +633,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(0, logFiles.size(), "Correct number of log-files shows up in file-slice");
 
     // now finished the compaction
-    saveAsComplete(commitTimeline, compactionInstant, Option.empty());
+    saveAsComplete(commitTimeline, compactionInstant, new HoodieCommitMetadata());
 
     refreshFsView();
     fileSlices = rtView.getAllFileSlices(partitionPath).collect(Collectors.toList());
@@ -701,7 +700,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime1);
 
-    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
     refreshFsView();
 
     // Assert that no base files are returned without the partitions being loaded
@@ -731,7 +730,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime1);
 
-    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
     refreshFsView();
 
     // Assert that no base files are returned without the partitions being loaded
@@ -809,8 +808,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieInstant deltaInstant2 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);
 
     // just commit instant1 and deltaInstant2, keep deltaInstant3 inflight
-    saveAsComplete(commitTimeline, instant1, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant2, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant2, new HoodieCommitMetadata());
     refreshFsView(preTableVersion8);
 
     // getLatestFileSlices should return just 1 log file due to deltaInstant2
@@ -919,9 +918,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         writer.finish();
       }
     }
-    saveAsComplete(commitTimeline, instant1, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant2, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant3, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant2, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant3, new HoodieCommitMetadata());
 
     refreshFsView(preTableVersion8);
 
@@ -951,11 +950,11 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
           compactionRequestedTime);
       HoodieInstant requested =
           INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstant.requestedTime());
-      commitTimeline.saveToCompactionRequested(requested, Option.of(compactionPlan));
+      commitTimeline.saveToCompactionRequested(requested, compactionPlan);
       commitTimeline.transitionCompactionRequestedToInflight(requested);
     } else {
       compactionInstant = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionRequestedTime);
-      commitTimeline.saveToCompactionRequested(compactionInstant, Option.of(compactionPlan));
+      commitTimeline.saveToCompactionRequested(compactionInstant, compactionPlan);
     }
 
     // View immediately after scheduling compaction
@@ -984,8 +983,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     new File(basePath + "/" + partitionPath + "/" + fileName4).createNewFile();
     HoodieInstant deltaInstant4 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime4);
     HoodieInstant deltaInstant5 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime5);
-    saveAsComplete(commitTimeline, deltaInstant4, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant5, Option.empty());
+    saveAsComplete(commitTimeline, deltaInstant4, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant5, new HoodieCommitMetadata());
 
     refreshFsView(preTableVersion8);
 
@@ -1258,7 +1257,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     // Make this commit safe
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime1);
-    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
     refreshFsView();
     assertEquals(fileName1, roView.getLatestBaseFiles(partitionPath)
         .filter(dfile -> dfile.getFileId().equals(fileId)).findFirst().get().getFileName());
@@ -1273,7 +1272,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     // Make it safe
     HoodieInstant instant2 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime2);
-    saveAsComplete(commitTimeline, instant2, Option.empty());
+    saveAsComplete(commitTimeline, instant2, new HoodieCommitMetadata());
     refreshFsView();
     assertEquals(fileName2, roView.getLatestBaseFiles(partitionPath)
         .filter(dfile -> dfile.getFileId().equals(fileId)).findFirst().get().getFileName());
@@ -1755,9 +1754,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieInstant deltaInstant4 =
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime4);
 
-    saveAsComplete(commitTimeline, instant1, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant3, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant4, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant3, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant4, new HoodieCommitMetadata());
 
     // Now we list all partitions
     List<StoragePath> list = new ArrayList<>();
@@ -1806,7 +1805,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION,
             compactionRequestedTime);
     HoodieInstant requested = INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstant.requestedTime());
-    metaClient.getActiveTimeline().saveToCompactionRequested(requested, Option.of(compactionPlan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(requested, compactionPlan);
     metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(requested);
 
     // Fake delta-ingestion after compaction-requested
@@ -1825,8 +1824,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieInstant deltaInstant5 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime5);
     HoodieInstant deltaInstant7 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime7);
-    saveAsComplete(commitTimeline, deltaInstant5, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant7, Option.empty());
+    saveAsComplete(commitTimeline, deltaInstant5, new HoodieCommitMetadata());
+    saveAsComplete(commitTimeline, deltaInstant7, new HoodieCommitMetadata());
     refreshFsView(preTableVersion8);
 
     // Test Data Files
@@ -1890,18 +1889,18 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(fileIdsInCompaction.contains(fileId));
   }
 
-  private <T> void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<T> metadata) {
+  private void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, HoodieCommitMetadata metadata) {
     if (inflight.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
       timeline.transitionCompactionInflightToComplete(true, inflight, metadata);
     } else {
       HoodieInstant requested = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, inflight.getAction(), inflight.requestedTime());
       timeline.createNewInstant(requested);
       timeline.transitionRequestedToInflight(requested, Option.empty());
-      timeline.saveAsComplete(inflight, metadata);
+      timeline.saveAsComplete(inflight, Option.of(metadata));
     }
   }
 
-  private <T> void saveAsCompleteCluster(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<T> metadata) {
+  private <T> void saveAsCompleteCluster(HoodieActiveTimeline timeline, HoodieInstant inflight, HoodieCommitMetadata metadata) {
     assertEquals(HoodieTimeline.CLUSTERING_ACTION, inflight.getAction());
     HoodieInstant clusteringInstant = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, inflight.getAction(), inflight.requestedTime());
     HoodieClusteringPlan plan = new HoodieClusteringPlan();
@@ -1915,9 +1914,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         .setExtraMetadata(Collections.emptyMap())
         .setClusteringPlan(plan)
         .build();
-    timeline.saveToPendingClusterCommit(clusteringInstant, Option.of(requestedReplaceMetadata));
+    timeline.saveToPendingClusterCommit(clusteringInstant, requestedReplaceMetadata);
     timeline.transitionRequestedToInflight(clusteringInstant, Option.empty());
-    timeline.transitionClusterInflightToComplete(true, inflight, metadata);
+    timeline.transitionClusterInflightToComplete(true, inflight, (HoodieReplaceCommitMetadata) metadata);
   }
 
   @Test
@@ -1941,7 +1940,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime1);
-    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
     refreshFsView();
     assertEquals(1, roView.getLatestBaseFiles(partitionPath1)
         .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
@@ -1967,10 +1966,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
             HoodieTimeline.REPLACE_COMMIT_ACTION);
     commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant2 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime2);
-    saveAsComplete(
-        commitTimeline,
-        instant2,
-        Option.of(commitMetadata));
+    saveAsComplete(commitTimeline, instant2, commitMetadata);
 
     //make sure view doesn't include fileId1
     refreshFsView();
@@ -2057,10 +2053,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime1);
-    saveAsComplete(
-        commitTimeline,
-        instant1,
-        Option.of(commitMetadata));
+    saveAsComplete(commitTimeline, instant1, commitMetadata);
     refreshFsView();
     assertEquals(0, roView.getLatestBaseFiles(partitionPath1)
         .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
@@ -2108,7 +2101,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime1);
-    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, instant1, new HoodieCommitMetadata());
     refreshFsView();
     assertEquals(1, roView.getLatestBaseFiles(partitionPath1)
         .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
@@ -2130,7 +2123,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieInstant instant2 = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusterTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(plan).setOperationType(WriteOperationType.CLUSTER.name()).build();
-    metaClient.getActiveTimeline().saveToPendingClusterCommit(instant2, Option.of(requestedReplaceMetadata));
+    metaClient.getActiveTimeline().saveToPendingClusterCommit(instant2, requestedReplaceMetadata);
 
     //make sure view doesn't include fileId1
     refreshFsView();
@@ -2229,10 +2222,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieCommitMetadata commitMetadata1 =
         CommitUtils.buildMetadata(writeStats1, new HashMap<>(), Option.empty(), WriteOperationType.INSERT, "", HoodieTimeline.COMMIT_ACTION);
-    saveAsComplete(
-        commitTimeline,
-        instant1,
-        Option.of(commitMetadata1));
+    saveAsComplete(commitTimeline, instant1, commitMetadata1);
     commitTimeline.reload();
 
     // replace commit
@@ -2258,7 +2248,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsCompleteCluster(
         commitTimeline,
         instant2,
-        Option.of(commitMetadata2));
+        commitMetadata2);
 
     // another insert commit
     String commitTime3 = "3";
@@ -2274,10 +2264,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     List<HoodieWriteStat> writeStats3 = buildWriteStats(partitionToFile3, commitTime3);
     HoodieCommitMetadata commitMetadata3 =
         CommitUtils.buildMetadata(writeStats3, new HashMap<>(), Option.empty(), WriteOperationType.INSERT, "", HoodieTimeline.COMMIT_ACTION);
-    saveAsComplete(
-        commitTimeline,
-        instant3,
-        Option.of(commitMetadata3));
+    saveAsComplete(commitTimeline, instant3, commitMetadata3);
 
     metaClient.reloadActiveTimeline();
     refreshFsView();
@@ -2419,7 +2406,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsComplete(
         commitTimeline,
         instant1,
-        Option.of(commitMetadata));
+        commitMetadata);
 
     SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline(), true);
 
@@ -2441,7 +2428,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsComplete(
         commitTimeline,
         instant2,
-        Option.of(commitMetadata));
+        commitMetadata);
 
     // Verify file system view after 2nd commit.
     verifyFileSystemView(partitionPath, expectedState, fileSystemView);
@@ -2459,8 +2446,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieInstant compactionInstant =
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, commitTime3);
     HoodieInstant compactionRequested = INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstant.requestedTime());
-    metaClient.getActiveTimeline().saveToCompactionRequested(compactionRequested,
-        Option.of(compactionPlan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionRequested, compactionPlan);
     metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(compactionRequested);
 
     // Verify file system view after 3rd commit which is compaction.requested.
@@ -2477,8 +2463,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieInstant logCompactionInstant =
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, commitTime4);
     HoodieInstant logCompactionRequested = INSTANT_GENERATOR.getLogCompactionRequestedInstant(logCompactionInstant.requestedTime());
-    metaClient.getActiveTimeline().saveToLogCompactionRequested(logCompactionRequested,
-        Option.of(logCompactionPlan));
+    metaClient.getActiveTimeline().saveToLogCompactionRequested(logCompactionRequested, logCompactionPlan);
     metaClient.getActiveTimeline().transitionLogCompactionRequestedToInflight(logCompactionRequested);
 
     // Verify file system view after 4th commit which is logcompaction.requested.

@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -122,7 +123,7 @@ public class ClusteringUtils {
    * action type. After HUDI-7905, the new clustering commits are written with clustering action.
    */
   public static <T> void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
-                                                                         Option<T> metadata, HoodieActiveTimeline activeTimeline) {
+                                                                         HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline) {
     if (clusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
       activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, metadata);
     } else {

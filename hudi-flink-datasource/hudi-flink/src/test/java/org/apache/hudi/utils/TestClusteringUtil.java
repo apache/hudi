@@ -135,7 +135,7 @@ public class TestClusteringUtil {
     String instantTime = table.getMetaClient().createNewInstantTime();
     HoodieInstant clusteringInstant =
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, instantTime);
-    metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, Option.of(metadata));
+    metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, metadata);
     table.getActiveTimeline().transitionClusterRequestedToInflight(clusteringInstant, Option.empty());
     metaClient.reloadActiveTimeline();
     return instantTime;
