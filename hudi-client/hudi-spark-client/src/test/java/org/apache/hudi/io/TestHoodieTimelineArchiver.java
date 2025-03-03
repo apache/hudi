@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
@@ -41,7 +42,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
@@ -81,6 +81,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -111,6 +112,7 @@ import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadata;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -736,7 +738,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     assertTrue(planDetailsList.stream().allMatch(Option::isPresent), "All the compaction instants should have plan details.");
     // parse the compaction plan for each instant
     for (Option<byte[]> planDetails : planDetailsList) {
-      assertDoesNotThrow(() -> TimelineMetadataUtils.deserializeCompactionPlan(planDetails.get()));
+      assertDoesNotThrow(() -> deserializeAvroMetadata(new ByteArrayInputStream(planDetails.get()), HoodieCompactionPlan.class));
     }
   }
 
@@ -855,7 +857,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   }
 
   private static Stream<Arguments> archiveCommitSavepointNoHoleParams() {
-    return Arrays.stream(new Boolean[][] {
+    return Arrays.stream(new Boolean[][]{
         {true, true},
         {false, true},
         {true, false},
@@ -1360,7 +1362,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     metaClient.getArchivedTimeline().loadCompletedInstantDetailsInMemory();
     HoodieInstant firstInstant = metaClient.reloadActiveTimeline().firstInstant().get();
     expectedArchivedInstants = expectedArchivedInstants.stream()
-        .filter(entry ->  compareTimestamps(entry.requestedTime(), LESSER_THAN, firstInstant.requestedTime()
+        .filter(entry -> compareTimestamps(entry.requestedTime(), LESSER_THAN, firstInstant.requestedTime()
         )).collect(Collectors.toList());
     expectedArchivedInstants.forEach(entry -> assertTrue(metaClient.getArchivedTimeline().containsInstant(entry)));
   }

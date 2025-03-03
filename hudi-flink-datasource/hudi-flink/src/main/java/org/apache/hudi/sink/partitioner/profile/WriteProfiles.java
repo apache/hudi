@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -173,9 +172,7 @@ public class WriteProfiles {
       HoodieInstant instant,
       HoodieTimeline timeline) {
     try {
-      byte[] data = timeline.getInstantDetails(instant).get();
-      TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
-      return Option.of(layout.getCommitMetadataSerDe().deserialize(instant, data, HoodieCommitMetadata.class));
+      return Option.of(timeline.readCommitMetadata(instant));
     } catch (FileNotFoundException fe) {
       // make this fail safe.
       LOG.warn("Instant {} was deleted by the cleaner, ignore", instant.requestedTime());
