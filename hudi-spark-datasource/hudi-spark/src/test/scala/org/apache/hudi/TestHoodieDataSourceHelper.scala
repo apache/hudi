@@ -18,21 +18,21 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.testutils.HoodieSparkClientTestHarness
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 
 import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.sources.Filter
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Test
 
-class TestHoodieDataSourceHelper extends HoodieSparkClientTestHarness with SparkAdapterSupport {
+class TestHoodieDataSourceHelper {
 
   def checkCondition(filter: Option[Filter], outputSet: Set[String], expected: Any): Unit = {
     val actual = HoodieDataSourceHelper.extractPredicatesWithinOutputSet(filter.get, outputSet)
     assertEquals(expected, actual)
   }
 
-  @Disabled("HUDI-9086")
+  @Test
   def testExtractPredicatesWithinOutputSet() : Unit = {
     val dataColsWithNoPartitionCols = Set("id", "extra_col")
 
@@ -52,5 +52,4 @@ class TestHoodieDataSourceHelper extends HoodieSparkClientTestHarness with Spark
     val expectedExpr4 = sparkAdapter.translateFilter(expr("not(id=1)").expr)
     checkCondition(expr4, dataColsWithNoPartitionCols, expectedExpr4)
   }
-
 }
