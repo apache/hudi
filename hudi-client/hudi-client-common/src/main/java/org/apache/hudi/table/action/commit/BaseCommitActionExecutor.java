@@ -52,6 +52,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -300,7 +301,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     try {
       schema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchemaIfPresent(false);
     } catch (Exception ex) {
-      throw new RuntimeException(ex);
+      throw new HoodieSchemaException(ex);
     }
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = (
         (ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>)

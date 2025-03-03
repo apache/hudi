@@ -239,10 +239,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
               tableSchemaAtInstant.putIfAbsent(s, tableSchemaCache.get().get(s));
               return true;
             }
-            HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(
-                s,
-                metaClient.getActiveTimeline().getInstantDetails(s).get(),
-                HoodieCommitMetadata.class);
+            HoodieCommitMetadata metadata = metaClient.getActiveTimeline().readCommitMetadata(s);
             String schemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
             boolean validSchemaStr = !StringUtils.isNullOrEmpty(schemaStr);
             if (validSchemaStr) {
