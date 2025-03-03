@@ -112,7 +112,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     // read HoodieIndexPlan
     HoodieIndexPlan indexPlan;
     try {
-      indexPlan = TimelineMetadataUtils.deserializeIndexPlan(table.getActiveTimeline().readIndexPlanAsBytes(indexInstant).get());
+      indexPlan = table.getActiveTimeline().readIndexPlan(indexInstant);
     } catch (IOException e) {
       throw new HoodieIndexException("Failed to read the index plan for instant: " + indexInstant);
     }
