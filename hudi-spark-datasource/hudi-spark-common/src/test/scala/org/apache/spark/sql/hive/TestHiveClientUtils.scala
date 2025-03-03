@@ -48,9 +48,9 @@ class TestHiveClientUtils {
   @AfterAll
   def tearDown(): Unit = {
     hiveClient = null;
-    hiveContext.sparkSession.close()
+    //hiveContext.sparkSession.close()
     hiveContext = null
-    spark.close()
+    // spark.close()
     spark = null
   }
 
