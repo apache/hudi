@@ -17,38 +17,18 @@
  * under the License.
  */
 
-package org.apache.hudi.io.compress;
+package org.apache.hudi.io.hfile;
 
-/**
- * Available compression codecs.
- * There should not be any assumption on the ordering or ordinal of the defined enums.
- */
-public enum CompressionCodec {
-  NONE("none"),
-  BZIP2("bz2"),
-  GZIP("gz"),
-  LZ4("lz4"),
-  LZO("lzo"),
-  SNAPPY("snappy"),
-  ZSTD("zstd");
+import java.io.Closeable;
+import java.io.IOException;
 
-  private final String name;
+public interface HFileWriter extends Closeable {
+  // Append a key-value pair into a data block.
+  void append(byte[] key, byte[] value) throws IOException;
 
-  CompressionCodec(final String name) {
-    this.name = name;
-  }
+  // Append a piece of file info.
+  void appendFileInfo(String name, byte[] value);
 
-  public String getName() {
-    return name;
-  }
-
-  public static CompressionCodec findCodecByName(String name) {
-    for (CompressionCodec v : CompressionCodec.values()) {
-      if (v.getName().equals(name.toLowerCase())) {
-        return v;
-      }
-    }
-    throw new IllegalArgumentException(
-        "Cannot find compression codec: " + name);
-  }
+  // Append a piece of meta info.
+  void appendMetaInfo(String name, byte[] value);
 }
