@@ -380,8 +380,7 @@ public class HoodieIncrSource extends RowSource {
           .option(START_COMMIT().key(), queryInfo.getStartInstant())
           .option(END_COMMIT().key(), queryInfo.getEndInstant())
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-              props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-                  INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
+              props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(), "false"))
           .option(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), handlingMode.name())
           .load(srcPath);
     } else {

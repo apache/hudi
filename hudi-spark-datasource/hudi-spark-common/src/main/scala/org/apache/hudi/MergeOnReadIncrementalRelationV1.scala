@@ -199,9 +199,7 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
   //   2. the end commit is archived
   //   3. there are files in metadata be deleted
   protected lazy val fullTableScan: Boolean = {
-    val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key,
-      DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.defaultValue).toBoolean
-
+    val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key, "false").toBoolean
     fallbackToFullTableScan && (startInstantArchived || endInstantArchived
       || affectedFilesInCommits.asScala.exists(fileStatus => !metaClient.getStorage.exists(fileStatus.getPath)))
   }

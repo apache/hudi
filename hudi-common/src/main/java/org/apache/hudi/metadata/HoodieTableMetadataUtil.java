@@ -1007,6 +1007,7 @@ public class HoodieTableMetadataUtil {
           .withBitCaskDiskMapCompressionEnabled(storageConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
           .withRecordMerger(recordMerger)
           .withTableMetaClient(datasetMetaClient)
+          .withAllowInflightInstants(true)
           .build();
       return mergedLogRecordScanner.getRecords();
     }

@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -111,8 +112,13 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   private boolean usesCustomPayload(HoodieTableMetaClient metaClient) {
-    return metaClient.getTableConfig().getRecordMergeMode().equals(RecordMergeMode.CUSTOM)
-        && metaClient.getTableConfig().getRecordMergeStrategyId().equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (tableConfig.contains(HoodieTableConfig.RECORD_MERGE_MODE)
+        && tableConfig.contains(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID)) {
+      return tableConfig.getRecordMergeMode().equals(RecordMergeMode.CUSTOM)
+          && tableConfig.getRecordMergeStrategyId().equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+    }
+    return false;
   }
 
   private void prepareHiveAvroSerializer() {
