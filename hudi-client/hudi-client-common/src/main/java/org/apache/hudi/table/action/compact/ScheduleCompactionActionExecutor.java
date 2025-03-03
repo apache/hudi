@@ -104,11 +104,6 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
           return Option.empty();
         }
       }
-      // Committed and pending compaction instants should have strictly lower timestamps
-      List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
-          .getWriteTimeline().filterCompletedAndCompactionInstants().getInstantsAsStream()
-          .filter(instant -> compareTimestamps(instant.requestedTime(), GREATER_THAN_OR_EQUALS, instantTime))
-          .collect(Collectors.toList());
     }
 
     HoodieCompactionPlan plan = scheduleCompaction();
