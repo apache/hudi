@@ -34,7 +34,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -61,6 +60,7 @@ import java.util.UUID;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_PARSER;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -138,7 +138,7 @@ public class TestCleanActionExecutor {
     when(activeTimeline.getCleanerTimeline()).thenReturn(cleanTimeline);
     when(cleanTimeline.getInstants()).thenReturn(Collections.singletonList(cleanInstant));
     when(activeTimeline.readCleanerPlan(cleanInstant)).thenReturn(cleanerPlan);
-    when(activeTimeline.readCleanerInfoAsBytes(cleanInstant)).thenReturn(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+    when(activeTimeline.readCleanerInfoAsBytes(cleanInstant)).thenReturn(Option.of(convertMetadataToByteArray(cleanerPlan)));
 
     when(mockHoodieTable.getCleanTimeline()).thenReturn(cleanTimeline);
     when(mockHoodieTable.getInstantGenerator()).thenReturn(INSTANT_GENERATOR);

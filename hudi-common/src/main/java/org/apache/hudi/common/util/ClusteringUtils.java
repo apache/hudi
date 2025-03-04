@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -121,12 +122,12 @@ public class ClusteringUtils {
    * Transitions the provided clustering instant fron inflight to complete based on the clustering
    * action type. After HUDI-7905, the new clustering commits are written with clustering action.
    */
-  public static void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
-                                                                     Option<byte[]> commitMetadata, HoodieActiveTimeline activeTimeline) {
+  public static <T> void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
+                                                                         HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline) {
     if (clusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
-      activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, commitMetadata);
+      activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, metadata);
     } else {
-      activeTimeline.transitionReplaceInflightToComplete(shouldLock, clusteringInstant, commitMetadata);
+      activeTimeline.transitionReplaceInflightToComplete(shouldLock, clusteringInstant, metadata);
     }
   }
 
@@ -134,12 +135,12 @@ public class ClusteringUtils {
    * Transitions the provided clustering instant fron requested to inflight based on the clustering
    * action type. After HUDI-7905, the new clustering commits are written with clustering action.
    */
-  public static void transitionClusteringOrReplaceRequestedToInflight(HoodieInstant requestedClusteringInstant, Option<byte[]> data,
-                                                                      HoodieActiveTimeline activeTimeline) {
+  public static <T> void transitionClusteringOrReplaceRequestedToInflight(
+      HoodieInstant requestedClusteringInstant, Option<T> metadata, HoodieActiveTimeline activeTimeline) {
     if (requestedClusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
-      activeTimeline.transitionClusterRequestedToInflight(requestedClusteringInstant, data);
+      activeTimeline.transitionClusterRequestedToInflight(requestedClusteringInstant, metadata);
     } else {
-      activeTimeline.transitionReplaceRequestedToInflight(requestedClusteringInstant, data);
+      activeTimeline.transitionReplaceRequestedToInflight(requestedClusteringInstant, metadata);
     }
   }
 

@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -35,7 +34,6 @@ import org.apache.hudi.table.action.BaseActionExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -90,13 +88,13 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
               .collect(Collectors.toList());
 
       HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION, savepointToRestoreTimestamp);
-      table.getActiveTimeline().saveToRestoreRequested(restoreInstant, TimelineMetadataUtils.serializeRestorePlan(restorePlan));
+      table.getActiveTimeline().saveToRestoreRequested(restoreInstant, restorePlan);
       table.getMetaClient().reloadActiveTimeline();
       LOG.info("Requesting Restore with instant time " + restoreInstant);
       return Option.of(restorePlan);
-    } catch (IOException e) {
+    } catch (HoodieIOException e) {
       LOG.error("Got exception when saving restore requested file", e);
-      throw new HoodieIOException(e.getMessage(), e);
+      throw e;
     }
   }
 }

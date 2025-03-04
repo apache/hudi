@@ -40,6 +40,8 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.specific.SpecificRecordBase;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -49,6 +51,7 @@ import java.nio.ByteBuffer;
  * Helper class to convert between different action related payloads and {@link HoodieArchivedMetaEntry}.
  */
 public class MetadataConversionUtils {
+  private static final Logger LOG = LoggerFactory.getLogger(MetadataConversionUtils.class);
 
   public static HoodieArchivedMetaEntry createMetaWrapper(HoodieInstant hoodieInstant, HoodieTableMetaClient metaClient) {
     try {
@@ -69,13 +72,13 @@ public class MetadataConversionUtils {
         }
         case HoodieTimeline.COMMIT_ACTION: {
           getCommitMetadata(metaClient, hoodieInstant, HoodieCommitMetadata.class)
-              .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata)));
+              .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadataToAvro(commitMetadata)));
           archivedMetaWrapper.setActionType(ActionType.commit.name());
           break;
         }
         case HoodieTimeline.DELTA_COMMIT_ACTION: {
           getCommitMetadata(metaClient, hoodieInstant, HoodieCommitMetadata.class)
-              .ifPresent(deltaCommitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(deltaCommitMetadata)));
+              .ifPresent(deltaCommitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadataToAvro(deltaCommitMetadata)));
           archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
           break;
         }
@@ -83,14 +86,14 @@ public class MetadataConversionUtils {
         case HoodieTimeline.CLUSTERING_ACTION: {
           if (hoodieInstant.isCompleted()) {
             getCommitMetadata(metaClient, hoodieInstant, HoodieReplaceCommitMetadata.class)
-                .ifPresent(replaceCommitMetadata -> archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadataToAvro(replaceCommitMetadata)));
+                .ifPresent(replaceCommitMetadata -> archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertCommitMetadataToAvro(replaceCommitMetadata)));
           } else if (hoodieInstant.isInflight()) {
             // inflight replacecommit files have the same metadata body as HoodieCommitMetadata
             // so we could re-use it without further creating an inflight extension.
             // Or inflight replacecommit files are empty under clustering circumstance
             Option<HoodieCommitMetadata> inflightCommitMetadata = getCommitMetadata(metaClient, hoodieInstant, HoodieCommitMetadata.class);
             if (inflightCommitMetadata.isPresent()) {
-              archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadata(inflightCommitMetadata.get()));
+              archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadataToAvro(inflightCommitMetadata.get()));
             }
           } else {
             // we may have cases with empty HoodieRequestedReplaceMetadata e.g. insert_overwrite_table or insert_overwrite
@@ -184,7 +187,7 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.COMMIT_ACTION: {
         getCommitMetadata(metaClient, hoodieInstant, HoodieCommitMetadata.class)
-            .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata)));
+            .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadataToAvro(commitMetadata)));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
 
         if (planBytes.isPresent()) {
@@ -196,7 +199,7 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.DELTA_COMMIT_ACTION: {
         getCommitMetadata(metaClient, hoodieInstant, HoodieCommitMetadata.class)
-            .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata)));
+            .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadataToAvro(commitMetadata)));
         archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
 
         if (planBytes.isPresent()) {
@@ -209,14 +212,14 @@ public class MetadataConversionUtils {
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
       case HoodieTimeline.CLUSTERING_ACTION: {
         getCommitMetadata(metaClient, hoodieInstant, HoodieReplaceCommitMetadata.class)
-            .ifPresent(replaceCommitMetadata -> archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadataToAvro(replaceCommitMetadata)));
+            .ifPresent(replaceCommitMetadata -> archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertCommitMetadataToAvro(replaceCommitMetadata)));
 
         // inflight replacecommit files have the same metadata body as HoodieCommitMetadata
         // so we could re-use it without further creating an inflight extension.
         // Or inflight replacecommit files are empty under clustering circumstance
         Option<HoodieCommitMetadata> inflightCommitMetadata = getCommitMetadata(metaClient, hoodieInstant, HoodieCommitMetadata.class);
         if (inflightCommitMetadata.isPresent()) {
-          archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadata(inflightCommitMetadata.get()));
+          archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadataToAvro(inflightCommitMetadata.get()));
         }
         archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
         break;
@@ -352,19 +355,35 @@ public class MetadataConversionUtils {
   /**
    * Convert commit metadata from json to avro.
    */
-  public static <T extends SpecificRecordBase> T convertCommitMetadata(HoodieCommitMetadata hoodieCommitMetadata) {
+  public static <T extends SpecificRecordBase> T convertCommitMetadataToAvro(HoodieCommitMetadata hoodieCommitMetadata) {
+    removeNullKeyFromMapMembersForCommitMetadata(hoodieCommitMetadata);
     if (hoodieCommitMetadata instanceof HoodieReplaceCommitMetadata) {
-      return (T) convertReplaceCommitMetadataToAvro((HoodieReplaceCommitMetadata) hoodieCommitMetadata);
+      return (T) JsonUtils.getObjectMapper().convertValue(
+          hoodieCommitMetadata, org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class);
     }
-    org.apache.hudi.avro.model.HoodieCommitMetadata avroMetaData = JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
+    org.apache.hudi.avro.model.HoodieCommitMetadata avroMetaData = JsonUtils.getObjectMapper().convertValue(
+        hoodieCommitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
     return (T) avroMetaData;
   }
 
-  /**
-   * Convert replacecommit metadata from pojo to avro.
-   */
-  private static org.apache.hudi.avro.model.HoodieReplaceCommitMetadata convertReplaceCommitMetadataToAvro(HoodieReplaceCommitMetadata replaceCommitMetadata) {
-    return JsonUtils.getObjectMapper().convertValue(replaceCommitMetadata, org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class);
+  public static <T> void removeNullKeyFromMapMembersForCommitMetadata(T metadata) {
+    if (metadata instanceof HoodieReplaceCommitMetadata) {
+      HoodieReplaceCommitMetadata hoodieCommitMetadata = (HoodieReplaceCommitMetadata) metadata;
+      if (hoodieCommitMetadata.getPartitionToWriteStats().containsKey(null)) {
+        LOG.info("partition path is null for {}", hoodieCommitMetadata.getPartitionToWriteStats().get(null));
+        hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
+      }
+      if (hoodieCommitMetadata.getPartitionToReplaceFileIds().containsKey(null)) {
+        LOG.info("partition path is null for {}", hoodieCommitMetadata.getPartitionToReplaceFileIds().get(null));
+        hoodieCommitMetadata.getPartitionToReplaceFileIds().remove(null);
+      }
+    } else if (metadata instanceof HoodieCommitMetadata) {
+      HoodieCommitMetadata hoodieCommitMetadata = (HoodieCommitMetadata) metadata;
+      if (hoodieCommitMetadata.getPartitionToWriteStats().containsKey(null)) {
+        LOG.info("partition path is null for {}", hoodieCommitMetadata.getPartitionToWriteStats().get(null));
+        hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
+      }
+    }
   }
 
   /**

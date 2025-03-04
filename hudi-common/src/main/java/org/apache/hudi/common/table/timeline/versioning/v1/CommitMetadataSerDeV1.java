@@ -19,20 +19,26 @@
 package org.apache.hudi.common.table.timeline.versioning.v1;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.HoodieInstantWriter;
 
 import org.apache.avro.specific.SpecificRecordBase;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.function.BooleanSupplier;
 
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.removeNullKeyFromMapMembersForCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
+  private static final Logger LOG = LoggerFactory.getLogger(CommitMetadataSerDeV1.class);
 
   @Override
   public <T> T deserialize(HoodieInstant instant, InputStream inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {
@@ -62,7 +68,22 @@ public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
   }
 
   @Override
-  public Option<byte[]> serialize(HoodieCommitMetadata commitMetadata) throws IOException {
-    return Option.ofNullable(commitMetadata.toJsonString().getBytes());
+  public <T> Option<HoodieInstantWriter> getInstantWriter(T metadata) {
+    // If it is hoodie commit metadata, write json string.
+    removeNullKeyFromMapMembersForCommitMetadata(metadata);
+
+    if (metadata instanceof HoodieReplaceCommitMetadata) {
+      return Option.of(outputStream -> JsonUtils.getObjectMapper().writerFor(HoodieReplaceCommitMetadata.class)
+          .withDefaultPrettyPrinter().writeValue(outputStream, metadata));
+    }
+    if (metadata instanceof HoodieCommitMetadata) {
+      return Option.of(outputStream -> JsonUtils.getObjectMapper().writerFor(HoodieCommitMetadata.class)
+          .withDefaultPrettyPrinter().writeValue(outputStream, metadata));
+    }
+
+    // For others, write avro format.
+    @SuppressWarnings("unchecked")
+    SpecificRecordBase avroMetadata = (SpecificRecordBase) metadata;
+    return CommitMetadataSerDe.getInstantWriter(Option.of(avroMetadata));
   }
 }

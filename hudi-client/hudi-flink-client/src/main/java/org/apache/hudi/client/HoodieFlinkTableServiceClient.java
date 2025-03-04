@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
@@ -50,12 +51,9 @@ import org.apache.hudi.util.FlinkClientUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.text.ParseException;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClient<List<HoodieRecord<T>>, List<WriteStatus>, List<WriteStatus>> {
 
@@ -138,9 +136,9 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
           false,
           clusteringInstant,
-          serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata),
+          metadata,
           table.getActiveTimeline());
-    } catch (IOException e) {
+    } catch (HoodieIOException e) {
       throw new HoodieClusteringException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);
     } finally {

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -44,8 +45,6 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -81,7 +80,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testSerDe() {
+  public void testSerDe() throws IOException {
     // check if this object is serialized and de-serialized, we are able to read from the file system
     HoodieTableMetaClient deserializedMetaClient =
         HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
@@ -89,24 +88,27 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieActiveTimeline commitTimeline = deserializedMetaClient.getActiveTimeline();
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createNewInstant(instant);
-    commitTimeline.saveAsComplete(instant, Option.of(getUTF8Bytes("test-detail")));
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata("key", "val");
+    commitTimeline.saveAsComplete(instant, Option.of(metadata));
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = commitTimeline.getInstantsAsStream().findFirst().get();
     assertTrue(completedInstant.isCompleted());
     assertEquals(completedInstant.requestedTime(), instant.requestedTime());
-    assertArrayEquals(getUTF8Bytes("test-detail"), commitTimeline.getInstantDetails(completedInstant).get(),
-        "Commit value should be \"test-detail\"");
+    assertEquals("val", metaClient.getActiveTimeline().readCommitMetadata(completedInstant).getExtraMetadata().get("key"));
   }
 
   @Test
-  public void testCommitTimeline() {
+  public void testCommitTimeline() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1");
     activeTimeline.createNewInstant(instant);
-    activeTimeline.saveAsComplete(instant, Option.of(getUTF8Bytes("test-detail")));
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata("key", "val");
+    activeTimeline.saveAsComplete(instant, Option.of(metadata));
 
     // Commit timeline should not auto-reload every time getActiveCommitTimeline(), it should be cached
     activeTimeline = metaClient.getActiveTimeline();
@@ -119,8 +121,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
     assertTrue(completedInstant.isCompleted());
     assertTrue(completedInstant.requestedTime().equals(instant.requestedTime()));
-    assertArrayEquals(getUTF8Bytes("test-detail"), activeCommitTimeline.getInstantDetails(completedInstant).get(),
-        "Commit value should be \"test-detail\"");
+    assertEquals("val", metaClient.getActiveTimeline().readCommitMetadata(completedInstant).getExtraMetadata().get("key"));
   }
 
   @Test
@@ -206,7 +207,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
     HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
-        .initTable(this.metaClient.getStorageConf(),basePath);
+        .initTable(this.metaClient.getStorageConf(), basePath);
 
     HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.builder()
         .setConf(this.metaClient.getStorageConf())
