@@ -127,25 +127,6 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
   private static Schema SCHEMA_WITH_METADATA = addMetadataFields(SCHEMA_WITHOUT_METADATA, false);
   private static Schema SCHEMA_WITH_PARTITION_COLUMN = new Schema.Parser().parse(SCHEMA_WITH_PARTITION_COLUMN_STR);
 
-  /**
-   * Pads a string number with leading zeros until it reaches the specified length.
-   *
-   * @param number The string number to pad
-   * @param length The desired total length after padding
-   * @return The padded string number
-   * @throws IllegalArgumentException if the input number is longer than the desired length
-   */
-  public static String padWithLeadingZeros(String number, int length) {
-    if (number == null) {
-      throw new IllegalArgumentException("Input number cannot be null");
-    }
-    if (number.length() > length) {
-      throw new IllegalArgumentException("Input number length " + number.length()
-          + " is greater than desired length " + length);
-    }
-    return String.format("%0" + length + "d", Long.parseLong(number));
-  }
-
   @BeforeEach
   public void setUp() throws Exception {
     if (basePath == null) {
@@ -179,10 +160,10 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     initMetaClient(enableMetadata, tableType);
     testTable = HoodieTestTable.of(metaClient);
 
-    String commitTime1 = "001";
+    String requestTime1 = "0010";
     if (type.equals("commitOrDeltaCommit")) {
       // Case 1: Regular commit
-      addCommitOrDeltaCommitWithSchema(tableType, commitTime1, SCHEMA_WITH_METADATA.toString());
+      addCommitOrDeltaCommitWithSchema(tableType, requestTime1, SCHEMA_WITH_METADATA.toString());
     } else if (type.equals("replacementCommit")) {
       // Case 2: Replacement commit
       HoodieClusteringGroup group = new HoodieClusteringGroup();
@@ -198,7 +179,8 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
           plan,
           Collections.emptyMap(),
           1);
-      testTable.addReplaceCommit(commitTime1,
+      testTable.addReplaceCommit(requestTime1,
+          Option.of(incTimestampStrByOne(requestTime1)),
           Option.of(requestedMetadata),
           Option.empty(),
           (HoodieReplaceCommitMetadata)(buildMetadata(
@@ -224,15 +206,17 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     initMetaClient(false, HoodieTableType.MERGE_ON_READ);
     testTable = HoodieTestTable.of(metaClient);
 
-    String commitTime1 = "001";
-    String commitTime2 = "002";
+    String requestTime1 = "0010";
+    String requestTime2 = "0020";
+    String commitTime1 = "0040";
+    String commitTime2 = "0030";
     // 001 |------------------| s1
     // 002    |------| s2
     // We should use completion time based ordering and get s2.
-    createRequestedDeltaCommit(metaClient, commitTime1);
-    createInflightDeltaCommit(metaClient, commitTime1);
+    createRequestedDeltaCommit(metaClient, requestTime1);
+    createInflightDeltaCommit(metaClient, requestTime1);
 
-    testTable.addDeltaCommit(commitTime2, buildMetadata(
+    testTable.addDeltaCommit(requestTime2, Option.of(commitTime2), buildMetadata(
         Collections.emptyList(),
         Collections.emptyMap(),
         Option.empty(),
@@ -240,7 +224,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
         SCHEMA_WITHOUT_METADATA2.toString(),
         DELTA_COMMIT_ACTION));
 
-    createDeltaCommit(metaClient, metaClient.getCommitMetadataSerDe(), commitTime1, buildMetadata(
+    createDeltaCommit(metaClient, metaClient.getCommitMetadataSerDe(), commitTime1, Option.of(commitTime1), buildMetadata(
         Collections.emptyList(),
         Collections.emptyMap(),
         Option.empty(),
@@ -256,9 +240,9 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     assertEquals(SCHEMA_WITHOUT_METADATA, schemaOption.get());
   }
 
-  private void addCommitOrDeltaCommitWithSchema(HoodieTableType tableType, String commitTime1, String schemaStr) throws Exception {
+  private void addCommitOrDeltaCommitWithSchema(HoodieTableType tableType, String requestTime1, String schemaStr) throws Exception {
     if (tableType == HoodieTableType.COPY_ON_WRITE) {
-      testTable.addCommit(commitTime1, Option.of(buildMetadata(
+      testTable.addCommit(requestTime1, Option.of(incTimestampStrByOne(requestTime1)), Option.of(buildMetadata(
           Collections.emptyList(),
           Collections.emptyMap(),
           Option.empty(),
@@ -266,7 +250,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
           schemaStr,
           COMMIT_ACTION)));
     } else {
-      testTable.addDeltaCommit(commitTime1, buildMetadata(
+      testTable.addDeltaCommit(requestTime1, Option.of(incTimestampStrByOne(requestTime1)), buildMetadata(
           Collections.emptyList(),
           Collections.emptyMap(),
           Option.empty(),
@@ -278,19 +262,16 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
 
   private static Stream<Arguments> commonTableConfigTestDimension() {
     return Stream.of(
-      // version 6 or 8, tableType
-      Arguments.of(true, HoodieTableType.COPY_ON_WRITE),
-      Arguments.of(true, HoodieTableType.MERGE_ON_READ),
-      Arguments.of(false, HoodieTableType.COPY_ON_WRITE),
-      Arguments.of(false, HoodieTableType.MERGE_ON_READ)
+      Arguments.of(HoodieTableType.COPY_ON_WRITE),
+      Arguments.of(HoodieTableType.MERGE_ON_READ)
     );
   }
 
   @ParameterizedTest
   @MethodSource("commonTableConfigTestDimension")
-  void testGetTableAvroSchemaInternalNoSchemaFoundEmptyTimeline(boolean enableMetadata, HoodieTableType tableType) throws IOException {
+  void testGetTableAvroSchemaInternalNoSchemaFoundEmptyTimeline(HoodieTableType tableType) throws IOException {
     // Don't set any schema in commit metadata or table config
-    initMetaClient(enableMetadata, tableType);
+    initMetaClient(false, tableType);
     testTable = HoodieTestTable.of(metaClient);
     metaClient.reloadActiveTimeline();
 
@@ -304,14 +285,14 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
   // we will only use that and ignore the other instants.
   @ParameterizedTest
   @MethodSource("commonTableConfigTestDimension")
-  void testGetTableAvroSchemaInternalNoSchemaFoundDisqualifiedInstant(boolean preTableVersion8, HoodieTableType tableType) throws Exception {
+  void testGetTableAvroSchemaInternalNoSchemaFoundDisqualifiedInstant(HoodieTableType tableType) throws Exception {
     // Don't set any schema in commit metadata or table config
-    initMetaClient(preTableVersion8, tableType);
+    initMetaClient(false, tableType);
     testTable = HoodieTestTable.of(metaClient);
-    int startCommitTime = 1;
+    int startCommitTime = 10;
 
     // Create instants that won't show up in the schema evolution timeline.
-    startCommitTime = createExhaustiveDisqualifiedInstants(startCommitTime, tableType);
+    createExhaustiveDisqualifiedInstants(startCommitTime, tableType);
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
@@ -321,55 +302,60 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
 
   private int createExhaustiveDisqualifiedInstants(int startCommitTime, HoodieTableType tableType) throws Exception {
     if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
-      testTable.addCompaction(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH),
+      String requestTime = padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH);
+      testTable.addCompaction(requestTime, Option.of(incTimestampStrByOne(requestTime)),
           buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.COMPACT, SCHEMA_WITH_METADATA.toString(), COMPACTION_ACTION));
     }
-    startCommitTime += 1;
+    startCommitTime += 10;
     // Clean
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""),
         "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.emptyMap());
     HoodieCleanMetadata cleanMeta = new HoodieCleanMetadata("", 0L, 0, "20", "",
         Collections.emptyMap(), metaClient.getTableConfig().getTableVersion().versionCode(), Collections.emptyMap(), Collections.singletonMap(
             HoodieCommitMetadata.SCHEMA_KEY, SCHEMA_WITH_METADATA.toString()));
-    testTable.addClean(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH), cleanerPlan, cleanMeta);
-    startCommitTime += 1;
+    String cleanTimestamp = padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH);
+    testTable.addClean(cleanTimestamp, Option.of(incTimestampStrByOne(cleanTimestamp)), cleanerPlan, cleanMeta);
+    startCommitTime += 10;
 
     // Clustering commit
     HoodieClusteringGroup group = new HoodieClusteringGroup();
     HoodieClusteringPlan plan = new HoodieClusteringPlan(Collections.singletonList(group),
         HoodieClusteringStrategy.newBuilder().build(), Collections.emptyMap(), 1, false, null);
     HoodieRequestedReplaceMetadata requestedMetadata = new HoodieRequestedReplaceMetadata(WriteOperationType.CLUSTER.name(), plan, Collections.emptyMap(), 1);
-    testTable.addReplaceCommit(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH), Option.of(requestedMetadata), Option.empty(),
+    String replaceInstantTime = padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH);
+    testTable.addReplaceCommit(replaceInstantTime, Option.of(incTimestampStrByOne(replaceInstantTime)), Option.of(requestedMetadata), Option.empty(),
             (HoodieReplaceCommitMetadata)buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UNKNOWN,
                 SCHEMA_WITH_METADATA.toString(), CLUSTERING_ACTION));
-    startCommitTime += 1;
+    startCommitTime += 10;
 
     // Inflight commits
     testTable.addInflightCommit(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH));
-    startCommitTime += 1;
+    startCommitTime += 10;
 
     testTable.addInflightDeltaCommit(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH));
-    startCommitTime += 1;
+    startCommitTime += 10;
 
     // Commits without schema in it.
-    testTable.addCommit(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH), Option.of(buildMetadata(
+    String commitTimestamp = padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH);
+    testTable.addCommit(commitTimestamp, Option.of(incTimestampStrByOne(commitTimestamp)), Option.of(buildMetadata(
         Collections.emptyList(),
         Collections.emptyMap(),
         Option.empty(),
         WriteOperationType.UNKNOWN,
         "",
         COMMIT_ACTION)));
-    startCommitTime += 1;
+    startCommitTime += 10;
 
     // Commits without schema in it.
-    testTable.addDeltaCommit(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH), buildMetadata(
+    String deltaCommitTimestamp = padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH);
+    testTable.addDeltaCommit(deltaCommitTimestamp, Option.of(deltaCommitTimestamp), buildMetadata(
         Collections.emptyList(),
         Collections.emptyMap(),
         Option.empty(),
         WriteOperationType.UNKNOWN,
         "",
         DELTA_COMMIT_ACTION));
-    startCommitTime += 1;
+    startCommitTime += 10;
 
     // Savepoint
     HoodieSavepointMetadata savepointMetadata = new HoodieSavepointMetadata();
@@ -377,8 +363,9 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     savepointMetadata.setSavepointedBy("12345");
     savepointMetadata.setComments("12345");
     savepointMetadata.setPartitionMetadata(Collections.emptyMap());
-    testTable.addSavepointCommit(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH), savepointMetadata);
-    startCommitTime += 1;
+    String savepointTimestamp = padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH);
+    testTable.addSavepointCommit(savepointTimestamp, Option.of(incTimestampStrByOne(savepointTimestamp)), savepointMetadata);
+    startCommitTime += 10;
 
     // Rollback
     testTable.addInflightRollback(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH));
@@ -402,7 +389,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
         .initTable(getDefaultStorageConf(), basePath);
     testTable = HoodieTestTable.of(metaClient);
 
-    testTable.addCommit("001", Option.of(buildMetadata(
+    testTable.addCommit("0010", Option.of(incTimestampStrByOne("0010")), Option.of(buildMetadata(
         Collections.emptyList(),
         Collections.emptyMap(),
         Option.empty(),
@@ -411,8 +398,9 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
         COMMIT_ACTION)));
 
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(includeMetadataFields, Option.empty()).get());
+    HoodieInstant instant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, "0010", "0011");
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(
-        includeMetadataFields, Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, padWithLeadingZeros(Integer.toString(1), 3)))).get());
+        includeMetadataFields, Option.of(instant)).get());
   }
 
   private static Stream<Arguments> partitionColumnSchemaTestParams() {
@@ -431,7 +419,7 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
         .initTable(getDefaultStorageConf(), basePath);
     testTable = HoodieTestTable.of(metaClient);
 
-    testTable.addCommit("001", Option.of(buildMetadata(
+    testTable.addCommit("0010", Option.of("0011"), Option.of(buildMetadata(
         Collections.emptyList(),
         Collections.emptyMap(),
         Option.empty(),
@@ -441,7 +429,8 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
 
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(false, Option.empty()).get());
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(
-        false, Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, padWithLeadingZeros(Integer.toString(1), 3)))).get());
+        false, Option.of(metaClient.getInstantGenerator().createNewInstant(
+            HoodieInstant.State.COMPLETED, COMMIT_ACTION, "0010", "0011"))).get());
   }
 
   private static Stream<Arguments> createSchemaTestParam() {
@@ -462,7 +451,8 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(includeMetadataFields, Option.empty()).get());
     // getTableAvroSchemaFromLatestCommit only cares about active timeline, since it is empty, no schema is returned.
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(
-        includeMetadataFields, Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, padWithLeadingZeros(Integer.toString(1), 3)))).get());
+        includeMetadataFields, Option.of(metaClient.getInstantGenerator().createNewInstant(
+            HoodieInstant.State.COMPLETED, COMMIT_ACTION, "0010", "0011"))).get());
   }
 
   @Test
@@ -487,50 +477,54 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
 
   @ParameterizedTest
   @MethodSource("commonTableConfigTestDimension")
-  void testGetTableAvroSchemaInternalWithSpecificInstant(boolean preTableVersion8, HoodieTableType tableType) throws Exception {
-    initMetaClient(preTableVersion8, tableType);
+  void testGetTableAvroSchemaInternalWithSpecificInstant(HoodieTableType tableType) throws Exception {
+    initMetaClient(false, tableType);
     testTable = HoodieTestTable.of(metaClient);
 
     Schema schema1 = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
     Schema schema2 = new Schema.Parser().parse(TRIP_SCHEMA);
 
     // Create two commits with different schemas
-    int startCommitTime = 1;
+    int startCommitTime = 10;
     // First commit with schema1
+    String instantTime = padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH);
     if (tableType.equals(HoodieTableType.COPY_ON_WRITE)) {
-      testTable.addCommit(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH),
+      testTable.addCommit(instantTime, Option.of(incTimestampStrByOne(instantTime)),
           Option.of(buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UNKNOWN, schema1.toString(), COMMIT_ACTION)));
     } else {
-      testTable.addDeltaCommit(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH), buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(),
+      testTable.addDeltaCommit(instantTime, Option.of(incTimestampStrByOne(instantTime)), buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(),
           WriteOperationType.UNKNOWN, schema1.toString(), DELTA_COMMIT_ACTION));
     }
-    startCommitTime += 1;
+    startCommitTime += 10;
 
     // Second commit with schema2
+    String instantTime2 = padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH);
     if (tableType.equals(HoodieTableType.COPY_ON_WRITE)) {
-      testTable.addCommit(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH), Option.of(buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(),
+      testTable.addCommit(instantTime2, Option.of(incTimestampStrByOne(instantTime2)), Option.of(buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(),
           WriteOperationType.UNKNOWN, schema2.toString(), COMMIT_ACTION)));
     } else {
-      testTable.addDeltaCommit(padWithLeadingZeros(Integer.toString(startCommitTime), REQUEST_TIME_LENGTH), buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(),
+      testTable.addDeltaCommit(instantTime2, Option.of(incTimestampStrByOne(instantTime2)), buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(),
           WriteOperationType.UNKNOWN, schema2.toString(), DELTA_COMMIT_ACTION));
     }
-    startCommitTime += 1;
+    startCommitTime += 10;
 
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
 
     // Test getting schema from first instant
+    String timestamp1 = padWithLeadingZeros(Integer.toString(10), REQUEST_TIME_LENGTH);
     Option<Schema> schema1Option = resolver.getTableAvroSchemaIfPresent(
         false,
-        Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, padWithLeadingZeros(Integer.toString(1), REQUEST_TIME_LENGTH))));
+        Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, timestamp1, incTimestampStrByOne(timestamp1))));
     assertTrue(schema1Option.isPresent());
     assertEquals(schema1.toString(), schema1Option.get().toString());
 
     // Test getting schema from second instant
+    String timestamp2 = padWithLeadingZeros(Integer.toString(20), REQUEST_TIME_LENGTH);
     Option<Schema> schema2Option = resolver.getTableAvroSchemaIfPresent(
         false,
-        Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, padWithLeadingZeros(Integer.toString(2), REQUEST_TIME_LENGTH))));
+        Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, timestamp2, incTimestampStrByOne(timestamp2))));
     assertTrue(schema2Option.isPresent());
     assertEquals(schema2.toString(), schema2Option.get().toString());
 
@@ -538,10 +532,11 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     int endCommitTime = createExhaustiveDisqualifiedInstants(startCommitTime, tableType);
     metaClient.reloadActiveTimeline();
 
-    for (int i = startCommitTime + 1; i <= endCommitTime + 1; i++) {
+    for (Integer i = startCommitTime + 10; i <= endCommitTime + 10; i += 10) {
+      String timestampI = padWithLeadingZeros(Integer.toString(i), REQUEST_TIME_LENGTH);
       schema2Option = resolver.getTableAvroSchemaIfPresent(false,
-          Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, padWithLeadingZeros(Integer.toString(i), REQUEST_TIME_LENGTH))));
-      assertTrue(schema2Option.isPresent());
+          Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, timestampI, incTimestampStrByOne(timestampI))));
+      assertTrue(schema2Option.isPresent(), i::toString);
       assertEquals(schema2.toString(), schema2Option.get().toString());
     }
   }
@@ -557,8 +552,8 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     Schema schema2 = new Schema.Parser().parse(HoodieTestDataGenerator.SHORT_TRIP_SCHEMA);
 
     // Create a commit with schema1
-    String commitTime1 = "001";
-    testTable.addCommit(commitTime1, Option.of(buildMetadata(
+    String commitTime1 = "0010";
+    testTable.addCommit(commitTime1, Option.of(incTimestampStrByOne(commitTime1)), Option.of(buildMetadata(
         Collections.emptyList(),
         Collections.emptyMap(),
         Option.empty(),
@@ -566,8 +561,8 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
         schema1.toString(),
         COMMIT_ACTION)));
     // Create a commit with schema1
-    String commitTime2 = "002";
-    testTable.addCommit(commitTime2, Option.of(buildMetadata(
+    String commitTime2 = "0020";
+    testTable.addCommit(commitTime2, Option.of(incTimestampStrByOne(commitTime2)), Option.of(buildMetadata(
         Collections.emptyList(),
         Collections.emptyMap(),
         Option.empty(),
@@ -615,9 +610,9 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     verify(resolver, times(2)).getLastCommitMetadataWithValidSchemaFromTimeline(any(), any());
 
     // Case 5: Call with future instant - should return the latest schema
-    String nonExistentTime = "999";
+    String nonExistentTime = "9999";
     HoodieInstant nonExistentInstant = metaClient.getInstantGenerator().createNewInstant(
-        HoodieInstant.State.COMPLETED, COMMIT_ACTION, nonExistentTime);
+        HoodieInstant.State.COMPLETED, COMMIT_ACTION, nonExistentTime, nonExistentTime);
     Option<Schema> schemaOption5 = resolver.getTableAvroSchemaFromTimelineWithCache(Option.of(nonExistentInstant));
     assertEquals(schema2, schemaOption5.get());
 

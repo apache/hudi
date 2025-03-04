@@ -114,7 +114,6 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_EVOLVED_1;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_EVOLVED_2;
@@ -1332,8 +1331,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     HoodieInstant requested = metaClient.createNewInstant(HoodieInstant.State.REQUESTED, commitActionType, nextCommitTime2);
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.setOperationType(WriteOperationType.UPSERT);
-    client.createMetaClient(true).getActiveTimeline().transitionRequestedToInflight(
-        requested, serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), metadata));
+    client.createMetaClient(true).getActiveTimeline().transitionRequestedToInflight(requested, Option.of(metadata));
   }
 
   private void createCommitWithUpserts(HoodieWriteConfig cfg, SparkRDDWriteClient client, String prevCommit,

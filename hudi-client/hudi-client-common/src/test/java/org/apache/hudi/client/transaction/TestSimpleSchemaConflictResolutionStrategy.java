@@ -57,6 +57,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_AC
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.incTimestampStrByOne;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
@@ -98,20 +99,20 @@ public class TestSimpleSchemaConflictResolutionStrategy {
         .initTable(getDefaultStorageConf(), basePath.toString());
     dummyInstantGenerator = HoodieTestTable.of(metaClient);
 
-    lastCompletedTxnOwnerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, "001", "001"));
-    tableCompactionOwnerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, "003", "003"));
-    tableClusteringOwnerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, CLUSTERING_ACTION, "003", "003"));
-    tableReplacementOwnerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, REPLACE_COMMIT_ACTION, "003", "003"));
-    nonTableCompactionInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMMIT_ACTION, "004", "004"));
+    lastCompletedTxnOwnerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, "0010", incTimestampStrByOne("0010")));
+    tableCompactionOwnerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, "0030", incTimestampStrByOne("0030")));
+    tableClusteringOwnerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, CLUSTERING_ACTION, "0030", incTimestampStrByOne("0030")));
+    tableReplacementOwnerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, REPLACE_COMMIT_ACTION, "0030", incTimestampStrByOne("0030")));
+    nonTableCompactionInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMMIT_ACTION, "0040", incTimestampStrByOne("0040")));
 
-    dummyInstantGenerator.addCommit("001", Option.of("001"), Option.of(buildMetadata(
+    dummyInstantGenerator.addCommit("0010", Option.of(incTimestampStrByOne("0010")), Option.of(buildMetadata(
         Collections.emptyList(),
         Collections.emptyMap(),
         Option.empty(),
         WriteOperationType.UNKNOWN,
         tableSchemaAtTxnStart,
         COMMIT_ACTION)));
-    dummyInstantGenerator.addCommit("002", Option.of("002"), Option.of(buildMetadata(
+    dummyInstantGenerator.addCommit("0020", Option.of(incTimestampStrByOne("0020")), Option.of(buildMetadata(
         Collections.emptyList(),
         Collections.emptyMap(),
         Option.empty(),

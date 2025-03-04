@@ -252,9 +252,9 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
-  public HoodieTestTable addSavepointCommit(String instantTime, HoodieSavepointMetadata savepointMetadata) throws IOException {
+  public HoodieTestTable addSavepointCommit(String instantTime, Option<String> completeTime, HoodieSavepointMetadata savepointMetadata) throws IOException {
     createInflightSavepoint(metaClient, instantTime);
-    createSavepointCommit(metaClient, instantTime, savepointMetadata);
+    createSavepointCommit(metaClient, instantTime, completeTime, savepointMetadata);
     return this;
   }
 
@@ -295,7 +295,7 @@ public class HoodieTestTable implements AutoCloseable {
     if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
       createCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, Option.of(metadata));
     } else {
-      createDeltaCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, metadata);
+      createDeltaCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, Option.empty(), metadata);
     }
     inflightCommits.remove(instantTime);
     currentInstantTime = instantTime;
@@ -321,7 +321,15 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addDeltaCommit(String instantTime, HoodieCommitMetadata metadata) throws Exception {
     createRequestedDeltaCommit(metaClient, instantTime);
     createInflightDeltaCommit(metaClient, instantTime);
-    createDeltaCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, metadata);
+    createDeltaCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, Option.empty(), metadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
+  public HoodieTestTable addDeltaCommit(String instantTime, Option<String> completeTime, HoodieCommitMetadata metadata) throws Exception {
+    createRequestedDeltaCommit(metaClient, instantTime);
+    createInflightDeltaCommit(metaClient, instantTime);
+    createDeltaCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, completeTime, metadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -331,9 +339,18 @@ public class HoodieTestTable implements AutoCloseable {
       Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata,
       Option<HoodieCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
+    return addReplaceCommit(instantTime, Option.empty(), requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
+  }
+
+  public HoodieTestTable addReplaceCommit(
+      String instantTime,
+      Option<String> completeTime,
+      Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata,
+      Option<HoodieCommitMetadata> inflightReplaceMetadata,
+      HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(metaClient, instantTime, requestedReplaceMetadata);
     createInflightReplaceCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
-    createReplaceCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, completeReplaceMetadata);
+    createReplaceCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, completeTime, completeReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -410,15 +427,27 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata) throws IOException {
-    return addClean(instantTime, cleanerPlan, metadata, false, false);
+    return addClean(instantTime, Option.empty(), cleanerPlan, metadata, false, false);
   }
 
-  public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata, boolean isEmptyForAll, boolean isEmptyCompleted) throws IOException {
+  public HoodieTestTable addClean(String instantTime, Option<String> completeTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata) throws IOException {
+    return addClean(instantTime, completeTime, cleanerPlan, metadata, false, false);
+  }
+
+  public HoodieTestTable addClean(
+      String instantTime, Option<String> completeTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata,
+      boolean isEmptyForAll, boolean isEmptyCompleted) throws IOException {
     createRequestedCleanFile(metaClient, instantTime, cleanerPlan, isEmptyForAll);
     createInflightCleanFile(metaClient, instantTime, cleanerPlan, isEmptyForAll);
-    createCleanFile(metaClient, instantTime, metadata, isEmptyCompleted);
+    createCleanFile(metaClient, instantTime, completeTime, metadata, isEmptyCompleted);
     currentInstantTime = instantTime;
     return this;
+  }
+
+  public HoodieTestTable addClean(
+      String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata,
+      boolean isEmptyForAll, boolean isEmptyCompleted) throws IOException {
+    return addClean(instantTime, Option.empty(), cleanerPlan, metadata, isEmptyForAll, isEmptyCompleted);
   }
 
   public HoodieTestTable addClean(String instantTime) throws IOException {
@@ -596,6 +625,13 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
+  public HoodieTestTable addCompaction(String instantTime, Option<String> completeTime, HoodieCommitMetadata commitMetadata) throws Exception {
+    addInflightCompaction(instantTime, commitMetadata);
+    this.inflightCommits.remove(instantTime);
+    createCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, completeTime, Option.of(commitMetadata));
+    return this;
+  }
+
   public HoodieTestTable addDeletePartitionCommit(String instantTime, String partition, List<String> fileIds) throws Exception {
     forReplaceCommit(instantTime);
     WriteOperationType operationType = WriteOperationType.DELETE_PARTITION;
@@ -645,8 +681,12 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addSavepoint(String instantTime, HoodieSavepointMetadata savepointMetadata) throws IOException {
+    return addSavepoint(instantTime, Option.empty(), savepointMetadata);
+  }
+
+  public HoodieTestTable addSavepoint(String instantTime, Option<String> completeTime, HoodieSavepointMetadata savepointMetadata) throws IOException {
     createInflightSavepoint(metaClient, instantTime);
-    createSavepointCommit(metaClient, instantTime, savepointMetadata);
+    createSavepointCommit(metaClient, instantTime, completeTime, savepointMetadata);
     return this;
   }
 

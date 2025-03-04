@@ -122,6 +122,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
     return getTableAvroSchemaFromTimelineWithCache(computeSchemaEvolutionTimelineInReverseOrder(), instantTime);
   }
 
+  // [HUDI-9112] simplify the logic
   Option<Schema> getTableAvroSchemaFromTimelineWithCache(Stream<HoodieInstant> reversedTimelineStream, Option<HoodieInstant> instantTime) {
     // If instantTime is empty it means read the latest one. In that case, get the cached instant if there is one.
     boolean fetchFromLastValidCommit = instantTime.isEmpty();
@@ -160,11 +161,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
     }
 
     // Finally process the computation results and return.
-    if (cachedTableSchema == null) {
-      return Option.empty();
-    }
-
-    return Option.of(cachedTableSchema);
+    return cachedTableSchema == null ? Option.empty() : Option.of(cachedTableSchema);
   }
 
   @VisibleForTesting
@@ -175,7 +172,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
     Option<HoodieInstant> instantWithTableSchema = Option.fromJavaOptional(reversedTimelineStream
         // If a completion time is specified, find the first eligible instant in the schema evolution timeline.
         // Should switch to completion time based.
-        .filter(s -> instant.isEmpty() || compareTimestamps(s.requestedTime(), LESSER_THAN_OR_EQUALS, instant.get().requestedTime()))
+        .filter(s -> instant.isEmpty() || compareTimestamps(s.getCompletionTime(), LESSER_THAN_OR_EQUALS, instant.get().getCompletionTime()))
         // Make sure the commit metadata has a valid schema inside. Same caching the result for expensive operation.
         .filter(s -> {
           try {
@@ -186,11 +183,11 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
             }
             HoodieCommitMetadata metadata = metaClient.getActiveTimeline().readCommitMetadata(s);
             String schemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
-            boolean validSchemaStr = !StringUtils.isNullOrEmpty(schemaStr);
-            if (validSchemaStr) {
+            boolean isValidSchemaStr = !StringUtils.isNullOrEmpty(schemaStr);
+            if (isValidSchemaStr) {
               tableSchemaAtInstant.putIfAbsent(s, new Schema.Parser().parse(schemaStr));
             }
-            return validSchemaStr;
+            return isValidSchemaStr;
           } catch (IOException e) {
             LOG.warn("Failed to parse commit metadata for instant {} ", s, e);
           }
