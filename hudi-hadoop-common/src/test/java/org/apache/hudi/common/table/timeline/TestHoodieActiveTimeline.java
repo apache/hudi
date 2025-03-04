@@ -69,7 +69,6 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.util.CleanerUtils.getCleanerPlan;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -217,9 +216,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1");
       timeline.createNewInstant(instant1);
 
-      byte[] data = getUTF8Bytes("commit");
       timeline.saveAsComplete(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, instant1.getAction(),
-          instant1.requestedTime()), Option.of(data));
+          instant1.requestedTime()), Option.of(new HoodieCommitMetadata()));
 
       timeline = timeline.reload();
 
@@ -434,7 +432,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertFalse(timeline.filterPendingExcludingCompaction().containsInstant(compaction));
     assertTrue(timeline.filterPendingCompactionTimeline().containsInstant(compaction));
     assertTrue(timeline.filterPendingMajorOrMinorCompactionTimeline().containsInstant(compaction));
-    compaction = timeline.transitionCompactionInflightToComplete(false, inflight, Option.empty());
+    compaction = timeline.transitionCompactionInflightToComplete(false, inflight, new HoodieCommitMetadata());
     timeline = timeline.reload();
     assertTrue(timeline.containsInstant(compaction));
     assertFalse(timeline.containsInstant(inflight));
@@ -645,7 +643,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.createNewInstant(commitInstant);
     timeline.transitionRequestedToInflight(commitInstant, Option.empty());
     HoodieInstant completeCommitInstant = metaClient.createNewInstant(State.INFLIGHT, commitInstant.getAction(), commitInstant.requestedTime());
-    timeline.saveAsComplete(completeCommitInstant, metaClient.getCommitMetadataSerDe().serialize(commitMetadata));
+    timeline.saveAsComplete(completeCommitInstant, Option.of(commitMetadata));
     HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
 
     HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
@@ -657,7 +655,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     cleanerPlan.setPolicy("policy");
     cleanerPlan.setVersion(TimelineLayoutVersion.CURR_VERSION);
     cleanerPlan.setPartitionsToBeDeleted(Collections.singletonList("partition1"));
-    timeline.saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+    timeline.saveToCleanRequested(cleanInstant, Option.of(cleanerPlan));
 
     assertEquals(cleanerPlan, getCleanerPlan(metaClient, cleanInstant));
 

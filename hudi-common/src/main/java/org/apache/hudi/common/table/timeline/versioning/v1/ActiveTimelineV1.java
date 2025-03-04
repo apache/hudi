@@ -18,8 +18,16 @@
 
 package org.apache.hudi.common.table.timeline.versioning.v1;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -27,7 +35,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -51,6 +58,8 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.timeline.TimelineUtils.getHoodieInstantWriterOption;
 
 public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTimeline {
 
@@ -134,29 +143,24 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public void createRequestedCommitWithReplaceMetadata(String instantTime, String actionType) {
-    try {
-      HoodieInstant instant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, actionType, instantTime);
-      LOG.info("Creating a new instant " + instant);
-      // Create the request replace file
-      createFileInMetaPath(instantFileNameGenerator.getFileName(instant),
-          TimelineMetadataUtils.serializeRequestedReplaceMetadata(new HoodieRequestedReplaceMetadata()), false);
-    } catch (IOException e) {
-      throw new HoodieIOException("Error create requested replace commit ", e);
-    }
+    HoodieInstant instant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, actionType, instantTime);
+    LOG.info("Creating a new instant " + instant);
+    // Create the request replace file
+    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(new HoodieRequestedReplaceMetadata()), false);
   }
 
   @Override
-  public void saveAsComplete(HoodieInstant instant, Option<byte[]> data) {
+  public <T> void saveAsComplete(HoodieInstant instant, Option<T> metadata) {
     LOG.info("Marking instant complete " + instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
-    transitionState(instant, instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime()), data);
+    transitionState(instant, instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime()), metadata);
     LOG.info("Completed " + instant);
   }
 
   @Override
-  public void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<byte[]> data) {
-    saveAsComplete(instant, data);
+  public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
+    saveAsComplete(instant, metadata);
   }
 
   @Override
@@ -359,24 +363,22 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   @Override
-  public HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant,
-                                                              Option<byte[]> data) {
+  public HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
     // Lock is not honored in 0.x mode.
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, inflightInstant.requestedTime());
-    transitionState(inflightInstant, commitInstant, data);
+    transitionState(inflightInstant, commitInstant, Option.of(metadata));
     return commitInstant;
   }
 
   @Override
-  public HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock,
-                                                                 HoodieInstant inflightInstant, Option<byte[]> data) {
+  public HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
     // Lock is not honored in 0.x mode.
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, DELTA_COMMIT_ACTION, inflightInstant.requestedTime());
-    transitionState(inflightInstant, commitInstant, data);
+    transitionState(inflightInstant, commitInstant, Option.of(metadata));
     return commitInstant;
   }
   //-----------------------------------------------------------------
@@ -384,33 +386,31 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   //-----------------------------------------------------------------
 
   @Override
-  public HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant,
-                                                         Option<byte[]> data) {
+  public HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, CLEAN_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    transitionState(inflightInstant, commitInstant, data);
+    transitionState(inflightInstant, commitInstant, metadata);
     return commitInstant;
   }
 
   @Override
-  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<HoodieCleanerPlan> metadata) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, CLEAN_ACTION, requestedInstant.requestedTime());
-    transitionState(requestedInstant, inflight, data);
+    transitionState(requestedInstant, inflight, metadata);
     return inflight;
   }
 
   @Override
-  public HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock,
-                                                            HoodieInstant inflightInstant, Option<byte[]> data) {
+  public HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, ROLLBACK_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    transitionState(inflightInstant, commitInstant, data);
+    transitionState(inflightInstant, commitInstant, Option.of(metadata));
     return commitInstant;
   }
 
@@ -434,50 +434,49 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   @Override
-  public HoodieInstant transitionReplaceRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public <T> HoodieInstant transitionReplaceRequestedToInflight(HoodieInstant requestedInstant, Option<T> metadata) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflightInstant = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, REPLACE_COMMIT_ACTION, requestedInstant.requestedTime());
     // Then write to timeline
-    transitionState(requestedInstant, inflightInstant, data);
+    transitionState(requestedInstant, inflightInstant, metadata);
     return inflightInstant;
   }
 
   @Override
-  public HoodieInstant transitionClusterRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public <T> HoodieInstant transitionClusterRequestedToInflight(HoodieInstant requestedInstant, Option<T> metadata) {
     // In 0.x, no separate clustering action, reuse replace action.
-    return transitionReplaceRequestedToInflight(requestedInstant, data);
+    return transitionReplaceRequestedToInflight(requestedInstant, metadata);
   }
 
   @Override
-  public HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock,
-                                                           HoodieInstant inflightInstant, Option<byte[]> data) {
+  public HoodieInstant transitionReplaceInflightToComplete(
+      boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    transitionState(inflightInstant, commitInstant, data);
+    transitionState(inflightInstant, commitInstant, Option.of(metadata));
     return commitInstant;
   }
 
   @Override
-  public HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<byte[]> data) {
+  public HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata) {
     // In 0.x, no separate clustering action, reuse replace action.
-    return transitionReplaceInflightToComplete(shouldLock, inflightInstant, data);
+    return transitionReplaceInflightToComplete(shouldLock, inflightInstant, metadata);
   }
 
-  private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
-    transitionState(fromInstant, toInstant, data, false);
+  private <T> void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {
+    transitionState(fromInstant, toInstant, metadata, false);
   }
 
-  protected void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data,
-                                 boolean allowRedundantTransitions) {
+  protected <T> void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata, boolean allowRedundantTransitions) {
     ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
     try {
       HoodieStorage storage = metaClient.getStorage();
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
         // Re-create the .inflight file by opening a new file and write the commit metadata in
-        createFileInMetaPath(instantFileNameGenerator.getFileName(fromInstant), data, allowRedundantTransitions);
+        createFileInMetaPath(instantFileNameGenerator.getFileName(fromInstant), metadata, allowRedundantTransitions);
         StoragePath fromInstantPath = getInstantFileNamePath(instantFileNameGenerator.getFileName(fromInstant));
         StoragePath toInstantPath = getInstantFileNamePath(instantFileNameGenerator.getFileName(toInstant));
         boolean success = storage.rename(fromInstantPath, toInstantPath);
@@ -490,9 +489,9 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
             "File " + getInstantFileNamePath(instantFileNameGenerator.getFileName(fromInstant)) + " does not exist!");
         // Use Write Once to create Target File
         if (allowRedundantTransitions) {
-          FileIOUtils.createFileInPath(storage, getInstantFileNamePath(instantFileNameGenerator.getFileName(toInstant)), data);
+          FileIOUtils.createFileInPath(storage, getInstantFileNamePath(instantFileNameGenerator.getFileName(toInstant)), getHoodieInstantWriterOption(this, metadata));
         } else {
-          storage.createImmutableFileInPath(getInstantFileNamePath(instantFileNameGenerator.getFileName(toInstant)), data.map(HoodieInstantWriter::convertByteArrayToWriter));
+          storage.createImmutableFileInPath(getInstantFileNamePath(instantFileNameGenerator.getFileName(toInstant)), getHoodieInstantWriterOption(this, metadata));
         }
         LOG.info("Create new file for toInstant ?" + getInstantFileNamePath(instantFileNameGenerator.getFileName(toInstant)));
       }
@@ -548,127 +547,101 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   @Override
-  public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content) {
-    transitionRequestedToInflight(requested, content, false);
+  public <T> void transitionRequestedToInflight(HoodieInstant requested, Option<T> metadata) {
+    transitionRequestedToInflight(requested, metadata, false);
   }
 
   @Override
-  public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content,
-                                            boolean allowRedundantTransitions) {
+  public <T> void transitionRequestedToInflight(
+      HoodieInstant requested, Option<T> metadata, boolean allowRedundantTransitions) {
     HoodieInstant inflight = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, requested.getAction(), requested.requestedTime());
     ValidationUtils.checkArgument(requested.isRequested(), "Instant " + requested + " in wrong state");
-    transitionState(requested, inflight, content, allowRedundantTransitions);
+    transitionState(requested, inflight, metadata, allowRedundantTransitions);
   }
 
   @Override
-  public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content) {
-    saveToCompactionRequested(instant, content, false);
+  public void saveToCompactionRequested(HoodieInstant instant, HoodieCompactionPlan metadata) {
+    saveToCompactionRequested(instant, metadata, false);
   }
 
   @Override
-  public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
+  public void saveToCompactionRequested(HoodieInstant instant, HoodieCompactionPlan metadata, boolean overwrite) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
-    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), content, overwrite);
+    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(metadata), overwrite);
   }
 
   @Override
-  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content) {
-    saveToLogCompactionRequested(instant, content, false);
+  public void saveToLogCompactionRequested(HoodieInstant instant, HoodieCompactionPlan metadata) {
+    saveToLogCompactionRequested(instant, metadata, false);
   }
 
   @Override
-  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
+  public void saveToLogCompactionRequested(HoodieInstant instant, HoodieCompactionPlan metadata, boolean overwrite) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
-    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), content, overwrite);
+    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(metadata), overwrite);
   }
 
   @Override
-  public void saveToPendingReplaceCommit(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToPendingReplaceCommit(HoodieInstant instant, HoodieRequestedReplaceMetadata metadata) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
-    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), content, false);
+    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(metadata), false);
   }
 
   @Override
-  public void saveToPendingClusterCommit(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToPendingClusterCommit(HoodieInstant instant, HoodieRequestedReplaceMetadata metadata) {
     // In 0.x, no separate clustering action, reuse replace action.
-    saveToPendingReplaceCommit(instant, content);
+    saveToPendingReplaceCommit(instant, metadata);
   }
 
   @Override
-  public void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToCleanRequested(HoodieInstant instant, Option<HoodieCleanerPlan> metadata) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(HoodieInstant.State.REQUESTED));
     // Plan is stored in meta path
-    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), content, false);
+    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), metadata, false);
   }
 
   @Override
-  public void saveToRollbackRequested(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToRollbackRequested(HoodieInstant instant, HoodieRollbackPlan metadata) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(HoodieInstant.State.REQUESTED));
     // Plan is stored in meta path
-    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), content, false);
+    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(metadata), false);
   }
 
   @Override
-  public void saveToRestoreRequested(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToRestoreRequested(HoodieInstant instant, HoodieRestorePlan metadata) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.RESTORE_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(HoodieInstant.State.REQUESTED));
     // Plan is stored in meta path
-    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), content, false);
+    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(metadata), false);
   }
 
   @Override
-  public HoodieInstant transitionIndexRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public HoodieInstant transitionIndexRequestedToInflight(HoodieInstant requestedInstant) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
         String.format("%s is not equal to %s action", requestedInstant.getAction(), INDEXING_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested(),
         String.format("Instant %s not in requested state", requestedInstant.requestedTime()));
     HoodieInstant inflightInstant = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, INDEXING_ACTION, requestedInstant.requestedTime());
-    transitionState(requestedInstant, inflightInstant, data);
+    transitionState(requestedInstant, inflightInstant, Option.empty());
     return inflightInstant;
   }
 
   @Override
-  public HoodieInstant transitionIndexInflightToComplete(boolean shouldLock,
-                                                         HoodieInstant inflightInstant, Option<byte[]> data) {
-    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
-        String.format("%s is not equal to %s action", inflightInstant.getAction(), INDEXING_ACTION));
-    ValidationUtils.checkArgument(inflightInstant.isInflight(),
-        String.format("Instant %s not inflight", inflightInstant.requestedTime()));
-    HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, INDEXING_ACTION, inflightInstant.requestedTime());
-    transitionState(inflightInstant, commitInstant, data);
-    return commitInstant;
-  }
-
-  @Override
-  public HoodieInstant revertIndexInflightToRequested(HoodieInstant inflightInstant) {
-    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
-        String.format("%s is not equal to %s action", inflightInstant.getAction(), INDEXING_ACTION));
-    ValidationUtils.checkArgument(inflightInstant.isInflight(),
-        String.format("Instant %s not inflight", inflightInstant.requestedTime()));
-    HoodieInstant requestedInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, INDEXING_ACTION, inflightInstant.requestedTime());
-    if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
-      transitionState(inflightInstant, requestedInstant, Option.empty());
-    } else {
-      deleteInflight(inflightInstant);
-    }
-    return requestedInstant;
-  }
-
-  @Override
-  public void saveToPendingIndexAction(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToPendingIndexAction(HoodieInstant instant, HoodieIndexPlan metadata) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
         String.format("%s is not equal to %s action", instant.getAction(), INDEXING_ACTION));
-    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), content, false);
+    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(metadata), false);
   }
 
-  public void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
+  public <T> void createFileInMetaPath(String filename, Option<T> metadata, boolean allowOverwrite) {
     StoragePath fullPath = getInstantFileNamePath(filename);
+    Option<HoodieInstantWriter> writerOption = getHoodieInstantWriterOption(this, metadata);
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
-      FileIOUtils.createFileInPath(metaClient.getStorage(metaClient.getTimelinePath()), fullPath, content);
+      FileIOUtils.createFileInPath(metaClient.getStorage(metaClient.getTimelinePath()), fullPath, writerOption);
     } else {
-      metaClient.getStorage(metaClient.getTimelinePath()).createImmutableFileInPath(fullPath, content.map(HoodieInstantWriter::convertByteArrayToWriter));
+      metaClient.getStorage(metaClient.getTimelinePath()).createImmutableFileInPath(fullPath, writerOption);
     }
   }
 

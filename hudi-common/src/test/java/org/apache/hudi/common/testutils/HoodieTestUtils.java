@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.DefaultCommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantComparator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
@@ -390,6 +391,10 @@ public class HoodieTestUtils {
   public static StoragePath getCompleteInstantPath(HoodieStorage storage, StoragePath parent,
                                                    String instantTime, String action) {
     return getCompleteInstantFileInfo(storage, parent, instantTime, action).getPath();
+  }
+
+  public static <T> byte[] convertMetadataToByteArray(T metadata) {
+    return TimelineMetadataUtils.convertMetadataToByteArray(metadata, COMMIT_METADATA_SER_DE);
   }
 
   private static StoragePathInfo getCompleteInstantFileInfo(HoodieStorage storage,

@@ -30,10 +30,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -80,7 +80,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -630,14 +629,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   private static void createMetadataFile(String f, String basePath, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
-    try {
-      createMetadataFile(f, basePath, configuration, serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
-    } catch (IOException e) {
-      throw new HoodieIOException(e.getMessage(), e);
-    }
+    createMetadataFile(f, basePath, configuration, COMMIT_METADATA_SER_DE.getInstantWriter(commitMetadata).get());
   }
 
-  private static void createMetadataFile(String f, String basePath, StorageConfiguration<?> configuration, byte[] content) {
+  private static void createMetadataFile(String f, String basePath, StorageConfiguration<?> configuration, HoodieInstantWriter writer) {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME
             + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/" + f);
     OutputStream os = null;
@@ -645,7 +640,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
       os = storage.create(new StoragePath(commitFile.toUri()), true);
       // Write empty commit metadata
-      os.write(content);
+      writer.writeToStream(os);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     } finally {
@@ -716,7 +711,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     try (OutputStream os = storage.create(new StoragePath(commitFile.toUri()), true)) {
       HoodieCompactionPlan workload = HoodieCompactionPlan.newBuilder().setVersion(1).build();
       // Write empty commit metadata
-      os.write(TimelineMetadataUtils.serializeCompactionPlan(workload).get());
+      COMMIT_METADATA_SER_DE.getInstantWriter(workload).get().writeToStream(os);
     }
   }
 
@@ -729,7 +724,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     try (OutputStream os = storage.create(new StoragePath(commitFile.toUri()), true)) {
       HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
       // Write empty commit metadata
-      os.write(serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
+      COMMIT_METADATA_SER_DE.getInstantWriter(commitMetadata).get().writeToStream(os);
     }
   }
 
