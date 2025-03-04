@@ -99,7 +99,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
       TaskContextSupplier taskContextSupplier) throws IOException {
     BloomFilter filter = createBloomFilter(config);
     HoodieHFileConfig hfileConfig = new HoodieHFileConfig(
-        storage.getConf().unwrapAs(Configuration.class),
+        storage.getConf(),
         CompressionCodec.findCodecByName(
             config.getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME)),
         config.getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE),
