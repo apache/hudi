@@ -80,7 +80,7 @@ import static org.mockito.Mockito.verify;
 /**
  * Tests {@link ConcurrentSchemaEvolutionTableSchemaGetter}.
  */
-public class TestTableSchemaGetter extends HoodieCommonTestHarness {
+public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommonTestHarness {
 
   public static final int REQUEST_TIME_LENGTH = 4;
   HoodieTestTable testTable;
@@ -213,7 +213,7 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(false);
+    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(false, Option.empty());
     assertTrue(schemaOption.isPresent());
     assertEquals(SCHEMA_WITHOUT_METADATA, schemaOption.get());
   }
@@ -251,7 +251,7 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(false);
+    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(false, Option.empty());
     assertTrue(schemaOption.isPresent());
     assertEquals(SCHEMA_WITHOUT_METADATA, schemaOption.get());
   }
@@ -295,7 +295,7 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(true);
+    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(true, Option.empty());
     assertFalse(schemaOption.isPresent());
   }
 
@@ -315,7 +315,7 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(true);
+    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(true, Option.empty());
     assertTrue(schemaOption.isEmpty());
   }
 
@@ -410,11 +410,7 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
         inputSchema.toString(),
         COMMIT_ACTION)));
 
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchema(includeMetadataFields));
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(includeMetadataFields).get());
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(includeMetadataFields).get());
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(includeMetadataFields, Option.empty()).get());
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaFromLatestCommit(includeMetadataFields).get());
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(
         includeMetadataFields, Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, padWithLeadingZeros(Integer.toString(1), 3)))).get());
   }
@@ -443,11 +439,7 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
         SCHEMA_WITHOUT_METADATA.toString(),
         COMMIT_ACTION)));
 
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchema(false));
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(false).get());
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(false).get());
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(false, Option.empty()).get());
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaFromLatestCommit(false).get());
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(
         false, Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, padWithLeadingZeros(Integer.toString(1), 3)))).get());
   }
@@ -467,12 +459,8 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
         .initTable(getDefaultStorageConf(), basePath);
     testTable = HoodieTestTable.of(metaClient);
 
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchema(includeMetadataFields));
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(includeMetadataFields).get());
-    assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(includeMetadataFields).get());
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(includeMetadataFields, Option.empty()).get());
     // getTableAvroSchemaFromLatestCommit only cares about active timeline, since it is empty, no schema is returned.
-    assertFalse(new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaFromLatestCommit(includeMetadataFields).isPresent());
     assertEquals(expectedSchema, new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient).getTableAvroSchemaIfPresent(
         includeMetadataFields, Option.of(metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, padWithLeadingZeros(Integer.toString(1), 3)))).get());
   }
@@ -489,7 +477,7 @@ public class TestTableSchemaGetter extends HoodieCommonTestHarness {
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(true);
+    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresent(true, Option.empty());
 
     assertTrue(schemaOption.isPresent());
     Schema resultSchema = schemaOption.get();

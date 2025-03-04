@@ -18,9 +18,6 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.HoodieSchemaNotFoundException;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -36,6 +33,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.util.Lazy;
+
+import org.apache.avro.JsonProperties;
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,13 +73,6 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
 
   private Option<HoodieInstant> latestCommitWithValidSchema = Option.empty();
 
-  // If we want to compute based on the latest state of metaClient, purge all cached state so no cached result
-  // would be returned.
-  public void purgeAllCachedStates() {
-    tableSchemaCache.get().clear();
-    latestCommitWithValidSchema = Option.empty();
-  }
-
   @VisibleForTesting
   public ConcurrentHashMap<HoodieInstant, Schema> getTableSchemaCache() {
     return tableSchemaCache.get();
@@ -88,53 +82,6 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
     this.metaClient = metaClient;
     // Unbounded sized map. Should replace with some caching library.
     this.tableSchemaCache = Lazy.lazily(ConcurrentHashMap::new);
-  }
-
-  /**
-   * Gets full schema (user + metadata) for a hoodie table in Avro format.
-   *
-   * @return Avro schema for this table
-   * @throws Exception
-   */
-  public Schema getTableAvroSchema() throws Exception {
-    return getTableAvroSchemaIfPresent(metaClient.getTableConfig().populateMetaFields(), Option.empty()).orElseThrow(schemaNotFoundError());
-  }
-
-  /**
-   * Gets schema for a hoodie table in Avro format, can choose if include metadata fields.
-   *
-   * @param includeMetadataFields choice if include metadata fields
-   * @return Avro schema for this table
-   * @throws Exception
-   */
-  public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
-    return getTableAvroSchemaIfPresent(includeMetadataFields, Option.empty()).orElseThrow(schemaNotFoundError());
-  }
-
-  /**
-   * Fetches tables schema in Avro format as of the given instant
-   *
-   * @param timestamp as of which table's schema will be fetched
-   */
-  public Schema getTableAvroSchema(String timestamp) throws Exception {
-    Option<HoodieInstant> instant = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants()
-        .findInstantsBeforeOrEquals(timestamp)
-        .lastInstant();
-    return getTableAvroSchemaIfPresent(metaClient.getTableConfig().populateMetaFields(), instant).orElseThrow(schemaNotFoundError());
-  }
-
-  /**
-   * Fetches tables schema in Avro format as of the given instant
-   *
-   * @param instant as of which table's schema will be fetched
-   */
-  public Schema getTableAvroSchema(HoodieInstant instant, boolean includeMetadataFields) throws Exception {
-    return getTableAvroSchemaIfPresent(includeMetadataFields, Option.of(instant)).orElseThrow(schemaNotFoundError());
-  }
-
-  public Option<Schema> getTableAvroSchemaIfPresent(boolean includeMetadataFields) {
-    return getTableAvroSchemaIfPresent(includeMetadataFields, Option.empty());
   }
 
   /**
@@ -259,19 +206,6 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
     return Option.of(Pair.of(instantWithTableSchema.get(), tableSchemaAtInstant.get(instantWithTableSchema.get())));
   }
 
-  /**
-   * Returns table's latest Avro {@link Schema} iff table is non-empty (ie there's at least
-   * a single commit)
-   * <p>
-   * This method differs from {@link #getTableAvroSchema(boolean)} in that it won't fallback
-   * to use table's schema used at creation
-   */
-  public Option<Schema> getTableAvroSchemaFromLatestCommit(boolean includeMetadataFields) {
-    return getTableAvroSchemaFromTimelineWithCache(computeSchemaEvolutionTimelineInReverseOrder(), Option.empty())
-        .map(tableSchema -> includeMetadataFields ? HoodieAvroUtils.addMetadataFields(tableSchema, false) : HoodieAvroUtils.removeMetadataFields(tableSchema))
-        .map(this::handlePartitionColumnsIfNeeded);
-  }
-
   public static Schema appendPartitionColumns(Schema dataSchema, Option<String[]> partitionFields) {
     // In cases when {@link DROP_PARTITION_COLUMNS} config is set true, partition columns
     // won't be persisted w/in the data files, and therefore we need to append such columns
@@ -300,10 +234,6 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
     }
 
     return dataSchema;
-  }
-
-  private Supplier<Exception> schemaNotFoundError() {
-    return () -> new HoodieSchemaNotFoundException("No schema found for table at " + metaClient.getBasePath());
   }
 
   /**
