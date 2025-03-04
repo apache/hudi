@@ -41,14 +41,14 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.OutputStream;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -71,12 +71,12 @@ public class HFileUtils extends FileFormatUtils {
    * @param paramsMap parameter map containing the compression codec config.
    * @return the {@link Compression.Algorithm} Enum.
    */
-  public static Compression.Algorithm getHFileCompressionAlgorithm(Map<String, String> paramsMap) {
-    String algoName = paramsMap.get(HFILE_COMPRESSION_ALGORITHM_NAME.key());
-    if (StringUtils.isNullOrEmpty(algoName)) {
-      return Compression.Algorithm.GZ;
+  public static CompressionCodec getHFileCompressionAlgorithm(Map<String, String> paramsMap) {
+    String codecName = paramsMap.get(HFILE_COMPRESSION_ALGORITHM_NAME.key());
+    if (StringUtils.isNullOrEmpty(codecName)) {
+      return CompressionCodec.GZIP;
     }
-    return Compression.Algorithm.valueOf(algoName.toUpperCase());
+    return CompressionCodec.findCodecByName(codecName);
   }
 
   @Override
@@ -164,7 +164,7 @@ public class HFileUtils extends FileFormatUtils {
                                            String keyFieldName,
                                            Map<String, String> paramsMap) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    FSDataOutputStream ostream = new FSDataOutputStream(baos, null);
+    OutputStream ostream = new DataOutputStream(baos);
 
     // Use simple incrementing counter as a key
     boolean useIntegerKey = !getRecordKey(records.get(0), readerSchema, keyFieldName).isPresent();
@@ -200,7 +200,7 @@ public class HFileUtils extends FileFormatUtils {
     HFileWriter writer = new HFileWriterImpl(context, ostream);
     sortedRecordsMap.forEach((recordKey, recordBytes) -> {
       try {
-        writer.append(recordKey.getBytes(StandardCharsets.UTF_8), recordBytes);
+        writer.append(recordKey, recordBytes);
       } catch (IOException e) {
         throw new HoodieIOException("IOException serializing records", e);
       }
