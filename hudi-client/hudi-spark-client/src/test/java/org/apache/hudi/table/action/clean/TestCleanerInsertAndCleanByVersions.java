@@ -36,7 +36,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -169,7 +168,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
       String compactionTime = instantTimes.get(0);
       table.getActiveTimeline().saveToCompactionRequested(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionTime),
-          TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+          compactionPlan);
 
       instantTimes = instantTimes.subList(1, instantTimes.size());
       // Keep doing some writes and clean inline. Make sure we have expected number of files

@@ -18,8 +18,13 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.HoodieInstantWriter;
+
+import org.apache.avro.file.DataFileWriter;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.specific.SpecificDatumWriter;
+import org.apache.avro.specific.SpecificRecordBase;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,5 +38,18 @@ public interface CommitMetadataSerDe extends Serializable {
 
   <T> T deserialize(HoodieInstant instant, InputStream instantStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException;
 
-  Option<byte[]> serialize(HoodieCommitMetadata commitMetadata) throws IOException;
+  <T> Option<HoodieInstantWriter> getInstantWriter(T commitMetadata);
+
+  static <T extends SpecificRecordBase> Option<HoodieInstantWriter> getInstantWriter(Option<T> metadata) {
+    if (metadata.isEmpty()) {
+      return Option.empty();
+    }
+    return Option.of(outputStream -> {
+      DatumWriter<T> datumWriter = (DatumWriter<T>) new SpecificDatumWriter(metadata.get().getClass());
+      try (DataFileWriter<T> fileWriter = new DataFileWriter<>(datumWriter)) {
+        fileWriter.create(metadata.get().getSchema(), outputStream);
+        fileWriter.append(metadata.get());
+      }
+    });
+  }
 }

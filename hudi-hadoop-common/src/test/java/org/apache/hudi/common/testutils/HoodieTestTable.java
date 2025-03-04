@@ -338,14 +338,15 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
-  public HoodieTestTable addPendingReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+  public HoodieTestTable addPendingReplace(
+      String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(metaClient, instantTime, requestedReplaceMetadata);
     createInflightReplaceCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
-  public HoodieTestTable addPendingCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+  public HoodieTestTable addPendingCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata) throws Exception {
     createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
     createInflightClusterCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
@@ -358,7 +359,7 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
-  public HoodieTestTable addInflightCluster(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+  public HoodieTestTable addInflightCluster(String instantTime, Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata) throws Exception {
     createInflightClusterCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
@@ -367,7 +368,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addCluster(
       String instantTime,
       HoodieRequestedReplaceMetadata requestedReplaceMetadata,
-      Option<HoodieCommitMetadata> inflightReplaceMetadata,
+      Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
     createInflightClusterCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
@@ -379,7 +380,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addCluster(
       String instantTime,
       HoodieRequestedReplaceMetadata requestedReplaceMetadata,
-      Option<HoodieCommitMetadata> inflightReplaceMetadata,
+      Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata,
       String completionTime) throws Exception {
     createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
@@ -458,7 +459,7 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
-  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata,HoodieRollbackPlan rollbackPlan) throws IOException {
+  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata, HoodieRollbackPlan rollbackPlan) throws IOException {
     return addRollback(instantTime, rollbackMetadata, false, rollbackPlan);
   }
 
@@ -547,7 +548,7 @@ public class HoodieTestTable implements AutoCloseable {
     return savepointMetadata;
   }
 
-  public HoodieTestTable addRequestedCompaction(String instantTime) throws IOException {
+  public HoodieTestTable addRequestedCompaction(String instantTime) {
     List<FileSlice> fileSlices = new ArrayList<>();
     fileSlices.add(new FileSlice("par1", instantTime, "fg-1"));
     fileSlices.add(new FileSlice("par2", instantTime, "fg-2"));
@@ -555,21 +556,19 @@ public class HoodieTestTable implements AutoCloseable {
         .buildFromFileSlices(fileSlices.stream().map(fs -> Pair.of(fs.getPartitionPath(), fs))
             .collect(Collectors.toList()), Option.empty(), Option.empty());
     HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
-    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, compactionPlan);
     currentInstantTime = instantTime;
     return this;
   }
 
-  public HoodieTestTable addRequestedCompaction(String instantTime, HoodieCompactionPlan compactionPlan) throws IOException {
+  public HoodieTestTable addRequestedCompaction(String instantTime, HoodieCompactionPlan compactionPlan) {
     HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
-    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, compactionPlan);
     currentInstantTime = instantTime;
     return this;
   }
 
-  public HoodieTestTable addRequestedCompaction(String instantTime, FileSlice... fileSlices) throws IOException {
+  public HoodieTestTable addRequestedCompaction(String instantTime, FileSlice... fileSlices) {
     HoodieCompactionPlan plan = CompactionUtils
         .buildFromFileSlices(Arrays.stream(fileSlices).map(fs -> Pair.of(fs.getPartitionPath(), fs))
             .collect(Collectors.toList()), Option.empty(), Option.empty());

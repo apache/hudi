@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -139,7 +138,7 @@ public class CompactionTestUtils {
       HoodieCompactionPlan compactionPlan) throws IOException {
     metaClient.getActiveTimeline().saveToCompactionRequested(
         INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+        compactionPlan);
   }
 
   public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) {

@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -165,8 +164,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       }
       // Overwrite compaction plan with updated info
       metaClient.getActiveTimeline().saveToCompactionRequested(
-          metaClient.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()),
-          TimelineMetadataUtils.serializeCompactionPlan(newPlan), true);
+          metaClient.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()), newPlan, true);
     }
     return new ArrayList<>();
   }
@@ -194,7 +192,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
   private static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
     return metaClient.getActiveTimeline().readCompactionPlan(
-                    metaClient.getInstantGenerator().getCompactionRequestedInstant(compactionInstant));
+        metaClient.getInstantGenerator().getCompactionRequestedInstant(compactionInstant));
   }
 
   /**

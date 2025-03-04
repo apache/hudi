@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -298,7 +299,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
       HoodieInstant instant4 = activeTimeline
           .filter(instant -> instant.requestedTime().equals(inserts.get(4).getInstantTime())).firstInstant().get();
-      Option<byte[]> instant4CommitData = activeTimeline.getInstantDetails(instant4);
+      HoodieCommitMetadata instant4CommitData = metaClient.reloadActiveTimeline().readCommitMetadata(instant4);
       activeTimeline.revertToInflight(instant4);
       metaClient.reloadActiveTimeline();
 
@@ -346,7 +347,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
       activeTimeline.reload().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant4.getAction(), inserts.get(4).getInstantTime()),
-          instant4CommitData);
+          Option.of(instant4CommitData));
 
       // find instant4's new completion time
       String instant4CompletionTime = activeTimeline.reload().getInstantsAsStream()
