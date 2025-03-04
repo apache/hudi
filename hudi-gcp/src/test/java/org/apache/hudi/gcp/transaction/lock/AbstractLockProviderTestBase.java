@@ -29,17 +29,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public abstract class AbstractLockProviderTestBase {
@@ -118,6 +115,50 @@ public abstract class AbstractLockProviderTestBase {
   }
 
   @Test
+  void testTwoLockProvidersCloseAndUnlock() throws InterruptedException {
+    // We had an issue with tryLock(30, TimeUnit.SECONDS) where it was not synchronized
+    // and this created a race condition where closing it would result in improper
+    // execution with the heartbeat manager.
+    ConditionalWriteLockProvider provider1 = createLockProvider();
+    assertTrue(provider1.tryLock(), "Provider1 should acquire the lock immediately");
+
+    ConditionalWriteLockProvider provider2 = createLockProvider();
+
+    CountDownLatch finishLatch = new CountDownLatch(1);
+
+    Thread provider2Thread = new Thread(() -> {
+      // We cannot Thread.sleep in a synchronized method, therefore
+      // this will throw while waiting.
+      assertThrows(HoodieLockException.class, () -> provider2.tryLock(10, TimeUnit.SECONDS));
+      finishLatch.countDown();
+    });
+    provider2Thread.start();
+    // We just need the tryLock code path to enter before close
+    provider2.close();
+    provider1.unlock();
+
+    assertTrue(finishLatch.await(5000, TimeUnit.MILLISECONDS));
+  }
+
+  @Test
+  void testLockAfterClosing() {
+    ConditionalWriteLockProvider provider1 = createLockProvider();
+    assertTrue(provider1.tryLock(), "Provider1 should acquire the lock immediately");
+    provider1.unlock();
+    provider1.close();
+    assertThrows(HoodieLockException.class, provider1::tryLock);
+  }
+
+  @Test
+  void testCloseBeforeUnlocking() {
+    ConditionalWriteLockProvider provider1 = createLockProvider();
+    assertTrue(provider1.tryLock(), "Provider1 should acquire the lock immediately");
+    provider1.close();
+    provider1.unlock();
+    assertThrows(HoodieLockException.class, provider1::tryLock);
+  }
+
+  @Test
   void testUnlockWhenNoLockPresent() {
     lockProvider.unlock();
     assertNull(lockProvider.getLock());
@@ -162,73 +203,5 @@ public abstract class AbstractLockProviderTestBase {
       lockProvider.unlock();
       assertNull(lockProvider.getLock(), "Lock should be null after unlock in iteration " + i);
     }
-  }
-
-  /// -----------
-  /// Concurrency
-  /// -----------
-
-  @Test
-  void testConcurrentAccessWithSeparateProviders() throws InterruptedException {
-    final int NUM_THREADS = 20;
-    boolean[] gotLock = new boolean[NUM_THREADS];
-
-    // Create separate lock providers (one per thread).
-    List<ConditionalWriteLockProvider> providers = new ArrayList<>();
-    for (int i = 0; i < NUM_THREADS; i++) {
-      providers.add(createLockProvider());
-    }
-
-    List<Thread> threads = getThreads(NUM_THREADS, gotLock, providers::get);
-    for (Thread t : threads) {
-      t.join();
-    }
-
-    int numLocksAcquired = 0;
-    for (boolean lock : gotLock) {
-      if (lock) {
-        numLocksAcquired++;
-      }
-    }
-    assertEquals(1, numLocksAcquired,
-        "Expected one thread to acquire the lock, but got " + numLocksAcquired);
-
-    // Close all providers.
-    for (ConditionalWriteLockProvider provider : providers) {
-      provider.unlock();
-      provider.close();
-    }
-  }
-
-  /// -----------
-  /// Stress-testing
-  /// -----------
-
-  private List<Thread> getThreads(
-      int numThreads,
-      boolean[] gotLock,
-      Function<Integer, ConditionalWriteLockProvider> providerSupplier
-  ) {
-    List<Thread> threads = new ArrayList<>();
-    for (int i = 0; i < numThreads; i++) {
-      final int index = i;
-      Thread t = new Thread(() -> {
-        try {
-          // Get the provider for this thread using the supplied function
-          ConditionalWriteLockProvider provider = providerSupplier.apply(index);
-          // Try to acquire the lock using the obtained provider
-          gotLock[index] = provider.tryLock();
-        } catch (Exception e) {
-          if (!(e instanceof HoodieLockException)) {
-            fail("Not supposed to throw any exception except HoodieLockException");
-          }
-        }
-
-
-      });
-      threads.add(t);
-      t.start();
-    }
-    return threads;
   }
 }

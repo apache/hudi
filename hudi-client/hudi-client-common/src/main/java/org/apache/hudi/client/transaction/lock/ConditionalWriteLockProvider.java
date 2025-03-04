@@ -90,6 +90,9 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
   // Provide a place to store the "current lock object".
   @GuardedBy("this")
   private ConditionalWriteLockFile currentLockObj = null;
+  // Ensures we do not try to lock after being closed.
+  @GuardedBy("this")
+  private boolean isClosed = false;
 
   private synchronized void setLock(ConditionalWriteLockFile lockObj) {
     if (lockObj != null && !Objects.equals(lockObj.getOwner(), this.ownerId)) {
@@ -207,6 +210,11 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
   @Override
   public synchronized void close() {
     try {
+      this.unlock();
+    } catch (Exception e) {
+      logger.error("Owner {}: Failed to unlock current lock.", ownerId, e);
+    }
+    try {
       this.lockService.close();
     } catch (Exception e) {
       logger.error("Owner {}: Lock service failed to close.", ownerId, e);
@@ -216,6 +224,8 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
     } catch (Exception e) {
       logger.error("Owner {}: Heartbeat manager failed to close.", ownerId, e);
     }
+
+    this.isClosed = true;
   }
 
   private synchronized boolean isLockStillValid(ConditionalWriteLockFile lock) {
@@ -229,6 +239,7 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
   @Override
   public synchronized boolean tryLock() {
     assertHeartBeatManagerExists();
+    assertUnclosed();
     logger.debug(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), ACQUIRING);
     if (actuallyHoldsLock()) {
       // Supports reentrant locks
@@ -366,6 +377,12 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
     if (heartbeatManager == null) {
       // broken function precondition.
       throw new HoodieLockException("Unexpected null heartbeatManager");
+    }
+  }
+
+  private void assertUnclosed() {
+    if (this.isClosed) {
+      throw new HoodieLockException("Lock provider already closed");
     }
   }
 

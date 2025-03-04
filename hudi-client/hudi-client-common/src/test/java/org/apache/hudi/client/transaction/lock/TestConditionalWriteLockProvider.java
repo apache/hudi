@@ -380,6 +380,21 @@ class TestConditionalWriteLockProvider {
   }
 
   @Test
+  void testCloseFailsToStopHeartbeat() {
+    when(mockLockService.getCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
+    ConditionalWriteLockData data = new ConditionalWriteLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    ConditionalWriteLockFile realLockFile = new ConditionalWriteLockFile(data, "v1");
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull())).thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(false);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true);
+    // Should wrap the exception and log error.
+    lockProvider.close();
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
+  }
+
+  @Test
   void testRenewLockReturnsFalseWhenNoLockHeld() {
     doReturn(null).when(lockProvider).getLock();
     assertFalse(lockProvider.renewLock());
