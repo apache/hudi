@@ -24,11 +24,20 @@ import org.apache.spark.sql.hive.client.HiveClient
 import org.apache.spark.sql.hive.test.{TestHive, TestHiveContext}
 import org.apache.spark.sql.internal.StaticSQLConf.CATALOG_IMPLEMENTATION
 import org.junit.Assume
-import org.junit.jupiter.api.{AfterAll, BeforeAll, Test, TestInstance}
-import org.junit.jupiter.api.TestInstance.Lifecycle
+import org.junit.jupiter.api.{AfterAll, BeforeAll, Test}
 
-@TestInstance(Lifecycle.PER_CLASS)
 class TestHiveClientUtils {
+
+  @Test
+  def reuseHiveClientFromSparkSession(): Unit = {
+    if (getJavaVersion != 11 && getJavaVersion != 17) {
+      assert(TestHiveClientUtils.spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "hive")
+      assert(HiveClientUtils.getSingletonClientForMetadata(TestHiveClientUtils.spark) == TestHiveClientUtils.hiveClient)
+    }
+  }
+}
+
+object TestHiveClientUtils {
   protected var spark: SparkSession = null
   protected var hiveContext: TestHiveContext = null
   protected var hiveClient: HiveClient = null
@@ -50,16 +59,5 @@ class TestHiveClientUtils {
     hiveClient = null
     hiveContext = null
     spark = null
-  }
-
-  @Test
-  def reuseHiveClientFromSparkSession(): Unit = {
-    if (getJavaVersion != 11 && getJavaVersion != 17) {
-      assert(spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "hive")
-      assert(HiveClientUtils.getSingletonClientForMetadata(spark) == hiveClient)
-      hiveClient = null
-      hiveContext = null
-      spark = null
-    }
   }
 }
