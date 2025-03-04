@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.avro.AvroSchemaComparatorForSchemaEvolution;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -27,6 +26,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +36,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.avro.HoodieAvroUtils.isSchemaNull;
 import static org.apache.hudi.client.transaction.SchemaConflictResolutionStrategy.throwConcurrentSchemaEvolutionException;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
@@ -56,8 +56,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
     // If this is compaction table service, skip schema evolution check as it does not evolve schema.
     if (!currTxnOwnerInstant.isPresent()
         || currTxnOwnerInstant.get().getAction().equals(COMPACTION_ACTION)
-        || (currTxnOwnerInstant.get().getAction().equals(REPLACE_COMMIT_ACTION)
-        && ClusteringUtils.isClusteringInstant(table.getMetaClient().getActiveTimeline(), currTxnOwnerInstant.get(), table.getMetaClient().getInstantGenerator()))) {
+        || ClusteringUtils.isClusteringInstant(table.getMetaClient().getActiveTimeline(), currTxnOwnerInstant.get(), table.getMetaClient().getInstantGenerator())) {
       return Option.empty();
     }
 
@@ -70,17 +69,17 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
 
     Schema writerSchemaOfTxn = new Schema.Parser().parse(config.getWriteSchema());
     // If a writer does not come with a meaningful schema, skip the schema resolution.
+    ConcurrentSchemaEvolutionTableSchemaGetter schemaResolver = new ConcurrentSchemaEvolutionTableSchemaGetter(table.getMetaClient());
     if (isSchemaNull(writerSchemaOfTxn)) {
-      return getTableSchemaAtInstant(new ConcurrentSchemaEvolutionTableSchemaGetter(table.getMetaClient()), currTxnOwnerInstant.get());
+      return getTableSchemaAtInstant(schemaResolver, currTxnOwnerInstant.get());
     }
 
     // Fast path: We can tell there is no schema conflict by just comparing the instants without involving table/writer schema comparison.
-    ConcurrentSchemaEvolutionTableSchemaGetter schemaResolver = new ConcurrentSchemaEvolutionTableSchemaGetter(table.getMetaClient());
 
     // schema and writer schema.
     HoodieInstant lastCompletedInstantAtTxnStart = lastCompletedTxnOwnerInstant.isPresent()
         ? getInstantInTimelineImmediatelyPriorToTimestamp(
-        lastCompletedTxnOwnerInstant.get().requestedTime(), schemaResolver.computeSchemaEvolutionTimelineInReverseOrder()).orElse(null)
+        lastCompletedTxnOwnerInstant.get().getCompletionTime(), schemaResolver.computeSchemaEvolutionTimelineInReverseOrder()).orElse(null)
         : null;
     // If lastCompletedInstantAtTxnValidation is null there are 2 possibilities:
     // - No committed txn at validation starts
@@ -100,8 +99,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
       return Option.of(writerSchemaOfTxn);
     }
 
-    ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(table.getMetaClient());
-    Option<Schema> tableSchemaAtTxnValidation = getTableSchemaAtInstant(resolver, lastCompletedInstantAtTxnValidation);
+    Option<Schema> tableSchemaAtTxnValidation = getTableSchemaAtInstant(schemaResolver, lastCompletedInstantAtTxnValidation);
     // If table schema is not defined, it's still case 1. There can be cases where there are commits but they didn't
     // write any data.
     if (!tableSchemaAtTxnValidation.isPresent()) {
@@ -125,7 +123,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
       throwConcurrentSchemaEvolutionException(
           Option.empty(), tableSchemaAtTxnValidation, writerSchemaOfTxn, lastCompletedTxnOwnerInstant, currTxnOwnerInstant);
     }
-    Option<Schema> tableSchemaAtTxnStart = getTableSchemaAtInstant(resolver, lastCompletedInstantAtTxnStart);
+    Option<Schema> tableSchemaAtTxnStart = getTableSchemaAtInstant(schemaResolver, lastCompletedInstantAtTxnStart);
     // If no table schema is defined, fall back to case 3.
     if (!tableSchemaAtTxnStart.isPresent()) {
       throwConcurrentSchemaEvolutionException(
@@ -163,7 +161,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
   private Option<HoodieInstant> getInstantInTimelineImmediatelyPriorToTimestamp(
       String timestamp, Stream<HoodieInstant> reverseOrderTimeline) {
     return Option.fromJavaOptional(reverseOrderTimeline
-        .filter(s -> compareTimestamps(s.requestedTime(), LESSER_THAN_OR_EQUALS, timestamp))
+        .filter(s -> compareTimestamps(s.getCompletionTime(), LESSER_THAN_OR_EQUALS, timestamp))
         .findFirst());
   }
 
