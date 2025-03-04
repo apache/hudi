@@ -72,5 +72,4 @@ public class HoodieHFileConfig {
   public String getKeyFieldName() {
     return keyFieldName;
   }
-
 }
