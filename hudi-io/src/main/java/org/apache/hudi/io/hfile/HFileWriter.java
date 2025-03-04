@@ -24,7 +24,7 @@ import java.io.IOException;
 
 public interface HFileWriter extends Closeable {
   // Append a key-value pair into a data block.
-  void append(byte[] key, byte[] value) throws IOException;
+  void append(String key, byte[] value) throws IOException;
 
   // Append a piece of file info.
   void appendFileInfo(String name, byte[] value);

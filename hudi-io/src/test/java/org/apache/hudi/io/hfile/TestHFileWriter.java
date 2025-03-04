@@ -68,9 +68,9 @@ public class TestHFileWriter {
         DataOutputStream outputStream =
              new DataOutputStream(Files.newOutputStream(Paths.get(TEST_FILE)));
         HFileWriter writer = new HFileWriterImpl(CONTEXT, outputStream)) {
-      writer.append("key1".getBytes(), "value1".getBytes());
-      writer.append("key2".getBytes(), "value2".getBytes());
-      writer.append("key3".getBytes(), "value3".getBytes());
+      writer.append("key1", "value1".getBytes());
+      writer.append("key2", "value2".getBytes());
+      writer.append("key3", "value3".getBytes());
     }
   }
 
