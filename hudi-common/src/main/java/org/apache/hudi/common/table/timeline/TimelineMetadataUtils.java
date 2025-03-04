@@ -18,23 +18,16 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
-import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
-import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
-import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.file.DataFileReader;
@@ -63,6 +56,18 @@ import java.util.stream.Collectors;
 public class TimelineMetadataUtils {
 
   private static final Integer DEFAULT_VERSION = 1;
+
+  // Legacy method to handle cases where byte [] is still used as opposed to leveraging HoodieInstantWriter.
+  @Deprecated
+  public static <T> byte[] convertMetadataToByteArray(T metadata, CommitMetadataSerDe serDe) {
+    try {
+      ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+      serDe.getInstantWriter(metadata).get().writeToStream(outputStream);
+      return outputStream.toByteArray();
+    } catch (Exception ex) {
+      throw new HoodieException(ex);
+    }
+  }
 
   public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime,
                                                              long durationInMs,
@@ -102,55 +107,6 @@ public class TimelineMetadataUtils {
     }
     return new HoodieSavepointMetadata(user, System.currentTimeMillis(), comment,
         Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
-  }
-
-  public static Option<byte[]> serializeCompactionPlan(HoodieCompactionPlan compactionWorkload) throws IOException {
-    return serializeAvroMetadata(compactionWorkload, HoodieCompactionPlan.class);
-  }
-
-  public static Option<byte[]> serializeCleanerPlan(HoodieCleanerPlan cleanPlan) throws IOException {
-    return serializeAvroMetadata(cleanPlan, HoodieCleanerPlan.class);
-  }
-
-  public static Option<byte[]> serializeRollbackPlan(HoodieRollbackPlan rollbackPlan) throws IOException {
-    return serializeAvroMetadata(rollbackPlan, HoodieRollbackPlan.class);
-  }
-
-  public static Option<byte[]> serializeRestorePlan(HoodieRestorePlan restorePlan) throws IOException {
-    return serializeAvroMetadata(restorePlan, HoodieRestorePlan.class);
-  }
-
-  public static Option<byte[]> serializeCleanMetadata(HoodieCleanMetadata metadata) throws IOException {
-    return serializeAvroMetadata(metadata, HoodieCleanMetadata.class);
-  }
-
-  public static Option<byte[]> serializeSavepointMetadata(HoodieSavepointMetadata metadata) throws IOException {
-    return serializeAvroMetadata(metadata, HoodieSavepointMetadata.class);
-  }
-
-  public static Option<byte[]> serializeRollbackMetadata(HoodieRollbackMetadata rollbackMetadata) throws IOException {
-    return serializeAvroMetadata(rollbackMetadata, HoodieRollbackMetadata.class);
-  }
-
-  public static Option<byte[]> serializeRestoreMetadata(HoodieRestoreMetadata restoreMetadata) throws IOException {
-    return serializeAvroMetadata(restoreMetadata, HoodieRestoreMetadata.class);
-  }
-
-  public static Option<byte[]> serializeRequestedReplaceMetadata(HoodieRequestedReplaceMetadata clusteringPlan) throws IOException {
-    return serializeAvroMetadata(clusteringPlan, HoodieRequestedReplaceMetadata.class);
-  }
-
-  public static Option<byte[]> serializeIndexPlan(HoodieIndexPlan indexPlan) throws IOException {
-    return serializeAvroMetadata(indexPlan, HoodieIndexPlan.class);
-  }
-
-  public static Option<byte[]> serializeIndexCommitMetadata(HoodieIndexCommitMetadata indexCommitMetadata) throws IOException {
-    return serializeAvroMetadata(indexCommitMetadata, HoodieIndexCommitMetadata.class);
-  }
-
-  public static Option<byte[]> serializeCommitMetadata(CommitMetadataSerDe commitMetadataSerDe,
-                                                       org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata) throws IOException {
-    return commitMetadataSerDe.serialize(commitMetadata);
   }
 
   public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)

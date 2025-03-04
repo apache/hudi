@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.storage.HoodieInstantWriter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -350,6 +351,14 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * @return New instance of HoodieTimeline with just completed instants
    */
   HoodieTimeline filterCompletedInstants();
+
+  default <T> Option<HoodieInstantWriter> getInstantWriter(Option<T> metadata) {
+    if (metadata.isEmpty()) {
+      return Option.empty();
+    }
+    TimelineLayout layout = TimelineLayout.fromVersion(getTimelineLayoutVersion());
+    return layout.getCommitMetadataSerDe().getInstantWriter(metadata.get());
+  }
 
   // TODO: Check if logcompaction also needs to be included in this API.
 

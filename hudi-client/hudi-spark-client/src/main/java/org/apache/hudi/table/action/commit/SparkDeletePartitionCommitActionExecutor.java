@@ -25,7 +25,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -85,8 +84,7 @@ public class SparkDeletePartitionCommitActionExecutor<T>
                 .setOperationType(WriteOperationType.DELETE_PARTITION.name())
                 .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
                 .build();
-        table.getMetaClient().getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant,
-            TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+        table.getMetaClient().getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant, requestedReplaceMetadata);
       }
 
       this.saveWorkloadProfileMetadataToInflight(

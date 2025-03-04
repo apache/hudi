@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
@@ -143,12 +144,11 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
       table.getActiveTimeline()
           .saveAsComplete(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime),
-              TimelineMetadataUtils.serializeSavepointMetadata(metadata));
+              Option.of(metadata));
       LOG.info("Savepoint " + instantTime + " created");
       return metadata;
-    } catch (IOException e) {
+    } catch (HoodieIOException e) {
       throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
     }
   }
-
 }

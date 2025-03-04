@@ -50,6 +50,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -299,16 +300,14 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     boolean success = true;
     if (instant.getAction().equals(COMMIT_ACTION) || instant.getAction().equals(DELTA_COMMIT_ACTION)
         || ((instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) && instant.isCompleted())) {
-      Option<byte[]> data;
+      Option<HoodieInstantWriter> instantWriterOption;
       if (instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) {
-        data = commitMetadataSerDeV1.serialize(
-            metaClient.getActiveTimeline().readReplaceCommitMetadata(instant));
+        instantWriterOption = commitMetadataSerDeV1.getInstantWriter(metaClient.getActiveTimeline().readReplaceCommitMetadata(instant));
       } else {
-        data = commitMetadataSerDeV1.serialize(
-            metaClient.getActiveTimeline().readCommitMetadata(instant));
+        instantWriterOption = commitMetadataSerDeV1.getInstantWriter(metaClient.getActiveTimeline().readCommitMetadata(instant));
       }
       String toPathStr = toPath.toUri().toString();
-      activeTimelineV1.createFileInMetaPath(toPathStr, data, true);
+      activeTimelineV1.createFileInMetaPath(toPathStr, instantWriterOption, true);
       /*
         When we downgrade the table from 1.0 to 0.x, it is important to set the modification
         timestamp of the 0.x completed instant to match the completion time of the

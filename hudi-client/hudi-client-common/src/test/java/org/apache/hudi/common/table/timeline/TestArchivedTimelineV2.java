@@ -42,6 +42,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -100,7 +101,7 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
       String completionTime = String.valueOf(instantTimeTs + 10);
       HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime);
       HoodieCommitMetadata metadata  = testTable.createCommitMetadata(instantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
-      byte[] serializedMetadata = TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), metadata).get();
+      byte[] serializedMetadata = convertMetadataToByteArray(metadata);
       instantBuffer.add(new DummyActiveAction(instant, serializedMetadata));
       if (i % batchSize == 0) {
         // archive 10 instants each time

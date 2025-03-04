@@ -26,14 +26,13 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.BaseTestCommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
-import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestCommitMetadataSerDeV2 extends BaseTestCommitMetadataSerDe {
 
@@ -65,9 +64,8 @@ public class TestCommitMetadataSerDeV2 extends BaseTestCommitMetadataSerDe {
 
 
     // Serialize and deserialize
-    Option<byte[]> serialized = serDeV1.serialize(metadata);
-    assertTrue(serialized.isPresent());
-    HoodieCommitMetadata deserialized = getSerDe().deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> false, HoodieCommitMetadata.class);
+    byte[] serialized = convertMetadataToByteArray(metadata, serDeV1);
+    HoodieCommitMetadata deserialized = getSerDe().deserialize(instant, new ByteArrayInputStream(serialized), () -> false, HoodieCommitMetadata.class);
     verifyCommitMetadata(deserialized);
     verifyWriteStat(deserialized.getPartitionToWriteStats().get(TEST_PARTITION_PATH).get(0));
   }

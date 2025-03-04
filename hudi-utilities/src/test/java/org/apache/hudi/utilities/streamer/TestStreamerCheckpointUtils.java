@@ -211,8 +211,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     HoodieInstant instant = new HoodieInstant(HoodieInstant.State.INFLIGHT,
         HoodieTimeline.COMMIT_ACTION, commitTime, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     timeline.createNewInstant(instant);
-    timeline.saveAsComplete(instant,
-        Option.of(HoodieCommonTestHarness.getCommitMetadata(metaClient, basePath(), "partition1", commitTime, 2, extraMetadata)));
+    timeline.saveAsComplete(instant, HoodieCommonTestHarness.getCommitMetadata(metaClient, basePath(), "partition1", commitTime, 2, extraMetadata));
     metaClient.reloadActiveTimeline();
   }
 
@@ -318,8 +317,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     HoodieInstant instant = new HoodieInstant(HoodieInstant.State.INFLIGHT,
         HoodieTimeline.DELTA_COMMIT_ACTION, deltaCommitTime, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     timeline.createNewInstant(instant);
-    timeline.saveAsComplete(instant,
-        Option.of(HoodieCommonTestHarness.getCommitMetadata(metaClient, basePath(), "partition1", deltaCommitTime, 2, extraMetadata)));
+    timeline.saveAsComplete(instant, HoodieCommonTestHarness.getCommitMetadata(metaClient, basePath(), "partition1", deltaCommitTime, 2, extraMetadata));
     metaClient.reloadActiveTimeline();
   }
 

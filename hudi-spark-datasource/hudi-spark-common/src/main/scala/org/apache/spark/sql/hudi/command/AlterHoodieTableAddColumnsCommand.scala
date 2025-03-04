@@ -21,8 +21,7 @@ import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils,
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
-import org.apache.hudi.common.util.CommitUtils
+import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
 import org.apache.hudi.table.HoodieSparkTable
 
@@ -119,7 +118,7 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport with Loggin
     val requested = hoodieTable.getInstantGenerator.createNewInstant(State.REQUESTED, commitActionType, instantTime)
     val metadata = new HoodieCommitMetadata
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
-    timeLine.transitionRequestedToInflight(requested, serializeCommitMetadata(hoodieTable.getMetaClient.getTimelineLayout.getCommitMetadataSerDe, metadata))
+    timeLine.transitionRequestedToInflight(requested, Option.of(metadata))
 
     client.commit(instantTime, jsc.emptyRDD)
   }

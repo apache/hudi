@@ -354,6 +354,5 @@
       <artifactId>tally-core</artifactId>
       <version>${tally.version}</version>
     </dependency>
-
   </dependencies>
 </project>
