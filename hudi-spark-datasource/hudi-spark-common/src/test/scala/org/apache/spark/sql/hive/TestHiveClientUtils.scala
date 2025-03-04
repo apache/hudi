@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hive
 
 import org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hive.client.HiveClient
 import org.apache.spark.sql.hive.test.{TestHive, TestHiveContext}
@@ -56,8 +57,8 @@ class TestHiveClientUtils {
     if (getJavaVersion != 11 && getJavaVersion != 17) {
       assert(spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "hive")
       assert(HiveClientUtils.getSingletonClientForMetadata(spark) == hiveClient)
-      // tear down
       hiveClient = null
+      hiveContext = null
       spark = null
     }
   }
