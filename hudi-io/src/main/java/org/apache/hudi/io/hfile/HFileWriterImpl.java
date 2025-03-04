@@ -36,6 +36,7 @@ import com.google.protobuf.CodedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,7 +54,7 @@ import java.util.Map;
  *   2. support given compression codec.
  */
 public class HFileWriterImpl implements HFileWriter {
-  private final DataOutputStream outputStream;
+  private final OutputStream outputStream;
   private final HFileContext context;
   // Flushed data blocks.
   private final List<DataBlock> dataBlocks = new ArrayList<>();
@@ -71,7 +72,7 @@ public class HFileWriterImpl implements HFileWriter {
   private long loadOnOpenSectionOffset;
   private final int blockSize;
 
-  public HFileWriterImpl(HFileContext context, DataOutputStream outputStream) {
+  public HFileWriterImpl(HFileContext context, OutputStream outputStream) {
     this.outputStream = outputStream;
     this.context = context;
     this.blockSize = this.context.getBlockSize();
@@ -86,13 +87,14 @@ public class HFileWriterImpl implements HFileWriter {
   }
 
   // Append a data kv pair.
-  public void append(byte[] key, byte[] value) throws IOException {
-    if (uncompressedBytes + key.length + value.length + 9 > blockSize) {
+  public void append(String key, byte[] value) throws IOException {
+    byte[] keyBytes = StringUtils.getUTF8Bytes(key);
+    if (uncompressedBytes + keyBytes.length + value.length + 9 > blockSize) {
       flushCurrentDataBlock();
       uncompressedBytes = 0;
     }
-    currentDataBlock.add(key, value);
-    int uncompressedKeyValueSize = key.length + value.length;
+    currentDataBlock.add(keyBytes, value);
+    int uncompressedKeyValueSize = keyBytes.length + value.length;
     uncompressedBytes += uncompressedKeyValueSize + 9;
     totalUncompressedBytes += uncompressedKeyValueSize + 9;
   }
@@ -237,11 +239,11 @@ public class HFileWriterImpl implements HFileWriter {
   public static void main(String[] args) throws Exception {
     String fileName = "test.hfile";
     HFileContext context = HFileContext.builder().build();
-    try (DataOutputStream outputStream = new DataOutputStream(
+    try (OutputStream outputStream = new DataOutputStream(
         Files.newOutputStream(Paths.get(fileName)));
          HFileWriterImpl writer = new HFileWriterImpl(context, outputStream)) {
-      writer.append("key1".getBytes(), "value1".getBytes());
-      writer.append("key2".getBytes(), "value2".getBytes());
+      writer.append("key1", "value1".getBytes());
+      writer.append("key2", "value2".getBytes());
     }
 
     Path file = Paths.get("test.hfile");
