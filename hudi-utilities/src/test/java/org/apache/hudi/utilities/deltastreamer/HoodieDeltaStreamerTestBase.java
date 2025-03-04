@@ -516,7 +516,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   static void addCommitToTimeline(HoodieTableMetaClient metaClient, WriteOperationType writeOperationType, String commitActiontype,
                                   Map<String, String> extraMetadata) {
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    HoodieCommitMetadata commitMetadata = commitActiontype.equals(HoodieTimeline.CLUSTERING_ACTION)
+        ? new HoodieReplaceCommitMetadata() : new HoodieCommitMetadata();
     commitMetadata.setOperationType(writeOperationType);
     extraMetadata.forEach((k, v) -> commitMetadata.getExtraMetadata().put(k, v));
     String commitTime = metaClient.createNewInstantTime();
