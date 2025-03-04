@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieUpsertException
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
