@@ -42,7 +42,7 @@ the Architecture, the more error-prone it is and the greater operation and maint
 
 In this regard, we could upgrade the traditional Bucket Index to implement a Partition-Level Bucket Index, so that users
 can set a specific number of buckets for different partitions through a rule engine (such as regular expression matching).
-On the other hand, for a certain existing partitions, an off-line command is provided to reorganized the data using insert
+On the other hand, for a certain existing partitions, an off-line command is provided to reorganize the data using insert
 overwrite(need to stop the data writing of the current partition).
 
 More importantly, the existing Bucket Index table can be upgraded to Partition-Level Bucket Index smoothly and seamlessly.
@@ -51,7 +51,7 @@ More importantly, the existing Bucket Index table can be upgraded to Partition-L
 The following is the core read-write process of the Flink/Spark engine based on Simple Bucket Index
 ### Flink Write Using Simple Bucket Index
 **Step 1**: re-partition input records based on `BucketIndexPartitioner`, BucketIndexPartitioner has **a fixed bucketNumber** for all partition path.
-For each record key, compute a fixed data partition number, doing re-partition works.
+For each record key, compute a fixed data partition number and dispatch the record to its corresponding partition.
 
 ```java
 /**
@@ -140,36 +140,33 @@ The read-write process of Spark based on Bucket Index is also similar.
 
 ## Design
 ### Workflow
-The core process of writing to the Partition Level Bucket Index is shown in the figure below. First, the Bucket Identifier 
+The core process of writing to the Partition Level Bucket Index is shown in the figure below. First of all, the Bucket Identifier 
 loads the partition bucket count information from the metadata as a cache. During the Partitioner and Writer stages, when 
-using the Identifier for shuffling and tagging, it will first attempt to find the bucketNumber of the corresponding 
+using the Identifier for shuffling and tagging, it will firstly attempt to find the bucketNumber of the corresponding 
 partition from the cache. If the cache was missed, it will calculate the corresponding value based on the user's expression, 
 and then submit it to the metadata during the commit stage.
 ![workflow.jpg](workflow.jpg)
 The design details of each part are as follows.
 
 ### Config
-Add new Config `hoodie.bucket.index.partition.rule` default `regex`
+Add new Config `hoodie.bucket.index.partition.rule.type`
 
-Add new config `hoodie.bucket.index.partition.expressions` default null
+Add new config `hoodie.bucket.index.partition.expressions`
 
 Re-use existed config `hoodie.bucket.index.num.buckets` as default partition bucket number
 
 The above parameters are table-level parameters and need to be declared in the DDL. Users can't change this config through
 runtime options like Flink /*+ OPTIONS(...) */
 
-#### hoodie.bucket.index.partition.rule
-`hoodie.bucket.index.partition.rule` 
+| Config                                 | type   | Description | Description                                                                                                                                                                                                                                                     |
+|----------------------------------------|--------|-------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| hoodie.bucket.index.partition.rule.type | string | regex       | Set rule parser for expressions.                                                                                                                                                                                                                                |
+| hoodie.bucket.index.partition.expressions | string | null        | Users can use this parameter to specify expression and the corresponding bucket numbers (separated by commas).Multiple rules are separated by semicolons like `hoodie.bucket.index.partition.expressions=expression1,bucket-number1;expression2,bucket-number2` |
+| hoodie.bucket.index.num.buckets        | int    | 4           | Hudi bucket number per partition.                                                                                                                                                                                                                               |
+| hoodie.bucket.index.cache.maxSize             | int    | -1          | The maximum size of the partitionToBucketNumber cache, -1 for no limit                                                                                                                                                                                          |
 
-It is used to set the rule parser. By default, it is a regular expression parser. 
-In the future, more parsers will be provided, such as range expression parsers and hybrid parsers. 
-Here, an interface-based capability will be offered, allowing users to customize parsers.
-
-#### hoodie.bucket.index.partition.expressions
-`hoodie.bucket.index.partition.expressions`
-
-Users can use this parameter to specify expression and the corresponding bucket numbers (separated by commas). 
-Multiple rules are separated by semicolons like `hoodie.bucket.index.partition.expressions=expression1,bucket-number1;expression2,bucket-number2`
+Note: In the future, more parsers will be provided, such as range expression parsers and hybrid parsers.
+Here, the parser is designed to be extensible, allowing users to customize parsers.
 
 #### Demo
 ```sql
@@ -316,6 +313,12 @@ Writer like `BucketStreamWriteFunction` in Flink also use this new `SimpleBucket
 
 NOTE：We need to get hashing_meta instant and hashing_config `instant` at the beginning(JM or Driver) and pass it to each operator, 
 ensure the consistency of loading and avoid unnecessary listing action.
+
+#### Eviction Strategy For This Map Cache
+If the user sets the parameter `hoodie.bucket.index.cache.maxSize`, we would use `org.apache.commons.collections.map.LRUMap` to cache partitionToBucketNumber
+which could take good care of cache eviction.
+
+By default use HashMap directly.
 
 ### BucketCalculator
 The BucketCalculator calculates the bucket numbers for different partitions based on the different rules set by users.
