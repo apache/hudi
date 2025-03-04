@@ -30,20 +30,16 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.hadoop.HoodieHFileUtils;
 import org.apache.hudi.io.hfile.HFileContext;
 import org.apache.hudi.io.hfile.HFileWriter;
 import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsPermission;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
@@ -56,7 +52,6 @@ import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.f
 import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.getFileGroupKey;
 import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.getPartitionKey;
 import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.partitionIndexPath;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
   private static final Logger LOG = LoggerFactory.getLogger(HFileBootstrapIndexWriter.class);
@@ -113,7 +108,7 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
               m.getBootstrapFileStatus())).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
       Option<byte[]> bytes = TimelineMetadataUtils.serializeAvroMetadata(bootstrapPartitionMetadata, HoodieBootstrapPartitionMetadata.class);
       if (bytes.isPresent()) {
-        indexByPartitionWriter.append(getUTF8Bytes(getPartitionKey(partitionPath)), bytes.get());
+        indexByPartitionWriter.append(getPartitionKey(partitionPath), bytes.get());
         numPartitionKeysAdded++;
       }
     } catch (IOException e) {
@@ -133,7 +128,7 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
       srcFilePartitionInfo.setBootstrapPartitionPath(mapping.getBootstrapPartitionPath());
       srcFilePartitionInfo.setBootstrapFileStatus(mapping.getBootstrapFileStatus());
       indexByFileIdWriter.append(
-          getUTF8Bytes(getFileGroupKey(mapping.getFileGroupId())),
+          getFileGroupKey(mapping.getFileGroupId()),
           TimelineMetadataUtils.serializeAvroMetadata(
               srcFilePartitionInfo, HoodieBootstrapFilePartitionInfo.class).get());
       numFileIdKeysAdded++;
@@ -195,13 +190,12 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
   public void begin() {
     try {
       HFileContext context = HFileContext.builder().build();
-      FsPermission fsPermission = FsPermission.getFileDefault();
-      FileSystem fs = (FileSystem) metaClient.getStorage().getFileSystem();
-      FSDataOutputStream outputStreamForPartitionWriter = HoodieHFileUtils.create(
-          fs, new Path(indexByPartitionPath.toUri()), fsPermission, true);
-      this.indexByPartitionWriter = new HFileWriterImpl(context, outputStreamForPartitionWriter);
-      FSDataOutputStream outputStreamForFileIdWriter = HoodieHFileUtils.create(
-          fs, new Path(indexByFileIdPath.toUri()), fsPermission, true);
+      OutputStream outputStreamForPartitionWriter =
+          metaClient.getStorage().create(indexByPartitionPath);
+      this.indexByPartitionWriter = new HFileWriterImpl(
+          context, outputStreamForPartitionWriter);
+      OutputStream outputStreamForFileIdWriter =
+          metaClient.getStorage().create(indexByFileIdPath);
       this.indexByFileIdWriter = new HFileWriterImpl(context, outputStreamForFileIdWriter);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
