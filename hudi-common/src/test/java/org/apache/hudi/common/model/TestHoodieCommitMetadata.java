@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.isSchemaCompatible;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -180,7 +181,7 @@ public class TestHoodieCommitMetadata {
     // Case: Reading 0.x written commit metadata
     HoodieInstant legacyInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "1", "1", true);
     CommitMetadataSerDe v1SerDe = new CommitMetadataSerDeV1();
-    byte[] v1Bytes = v1SerDe.serialize(commitMetadata1).get();
+    byte[] v1Bytes = convertMetadataToByteArray(commitMetadata1, v1SerDe);
     System.out.println(new String(v1Bytes));
     org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata2 =
         COMMIT_METADATA_SER_DE.deserialize(legacyInstant, new ByteArrayInputStream(v1Bytes), () -> false, org.apache.hudi.common.model.HoodieCommitMetadata.class);

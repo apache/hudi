@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
@@ -211,11 +210,11 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       final HoodieInstant cleanInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
       // Save to both aux and timeline folder
       try {
-        table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+        table.getActiveTimeline().saveToCleanRequested(cleanInstant, Option.of(cleanerPlan));
         LOG.info("Requesting Cleaning with instant time " + cleanInstant);
-      } catch (IOException e) {
+      } catch (HoodieIOException e) {
         LOG.error("Got exception when saving cleaner requested file", e);
-        throw new HoodieIOException(e.getMessage(), e);
+        throw e;
       }
       option = Option.of(cleanerPlan);
     }

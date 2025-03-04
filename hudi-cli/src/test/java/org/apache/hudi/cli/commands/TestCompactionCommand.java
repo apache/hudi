@@ -27,6 +27,7 @@ import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -35,7 +36,6 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -157,7 +157,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     // Create six commits
     Arrays.asList("001", "003", "005", "007").forEach(timestamp -> {
       activeTimeline.transitionCompactionInflightToComplete(true,
-          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), Option.empty());
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), new HoodieCommitMetadata());
     });
     // Simulate a compaction commit in metadata table timeline
     // so the archival in data table can happen

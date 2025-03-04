@@ -136,7 +136,7 @@ public class TestConflictResolutionStrategyUtil {
     String fileId1 = "file-1";
     String fileId2 = "file-2";
 
-    HoodieCommitMetadata inflightReplaceMetadata = new HoodieCommitMetadata();
+    HoodieReplaceCommitMetadata inflightReplaceMetadata = new HoodieReplaceCommitMetadata();
     inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setFileId("file-1");
@@ -307,7 +307,7 @@ public class TestConflictResolutionStrategyUtil {
   }
 
   public static void createClusterInflight(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {
-    Option<HoodieCommitMetadata> inflightReplaceMetadata = Option.empty();
+    Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata = Option.empty();
     if (WriteOperationType.INSERT_OVERWRITE.equals(writeOperationType)) {
       inflightReplaceMetadata = Option.of(createReplaceCommitMetadata(WriteOperationType.INSERT_OVERWRITE));
     }

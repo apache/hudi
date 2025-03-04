@@ -26,13 +26,10 @@ import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.HoodieInstantWriter;
 
-import org.apache.avro.file.DataFileWriter;
-import org.apache.avro.io.DatumWriter;
-import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecordBase;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.function.BooleanSupplier;
@@ -93,23 +90,10 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
   }
 
   @Override
-  public Option<byte[]> serialize(org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata) throws IOException {
-    if (commitMetadata instanceof org.apache.hudi.common.model.HoodieReplaceCommitMetadata) {
-      return serializeAvroMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata), HoodieReplaceCommitMetadata.class);
+  public <T> Option<HoodieInstantWriter> getInstantWriter(T metadata) {
+    if (metadata instanceof org.apache.hudi.common.model.HoodieCommitMetadata) {
+      return CommitMetadataSerDe.getInstantWriter(Option.of(MetadataConversionUtils.convertCommitMetadataToAvro((HoodieCommitMetadata) metadata)));
     }
-    return serializeAvroMetadata(
-        MetadataConversionUtils.convertCommitMetadata(commitMetadata),
-        org.apache.hudi.avro.model.HoodieCommitMetadata.class);
-  }
-
-  public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)
-      throws IOException {
-    DatumWriter<T> datumWriter = new SpecificDatumWriter<>(clazz);
-    DataFileWriter<T> fileWriter = new DataFileWriter<>(datumWriter);
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    fileWriter.create(metadata.getSchema(), baos);
-    fileWriter.append(metadata);
-    fileWriter.flush();
-    return Option.of(baos.toByteArray());
+    return CommitMetadataSerDe.getInstantWriter(Option.of((SpecificRecordBase) metadata));
   }
 }
