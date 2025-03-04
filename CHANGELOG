@@ -644,3 +644,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-22655][INTERNAL] MDT validator can configure if we need log truncation (#1213)
 [ENG-22592][HUDI-8361] Fixing getLatestFileSlice calls to getLatestMergedFileSlice in MDT writer (#1231)
 [AUDIT-1071]: Changelog for release-v1.96.0 (#1228)
+
+--- [2025-03-04 16:53:08] [release-v1.98.0] ---
+[ENG-22647][INTERNAL] Lock provider tiny synchronization issue (#1244)
+[AUDIT-1071]: Changelog for release-v1.97.0 (#1234)
