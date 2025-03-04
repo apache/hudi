@@ -28,7 +28,6 @@ import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.file.DataFileReader;
@@ -49,7 +48,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -58,11 +56,10 @@ import java.util.stream.Collectors;
 public class TimelineMetadataUtils {
 
   private static final Integer DEFAULT_VERSION = 1;
-  private static final Map<Class<?>, DatumWriter<?>> DATUM_WRITERS = new ConcurrentHashMap<>();
 
   // Legacy method to handle cases where byte [] is still used as opposed to leveraging HoodieInstantWriter.
   @Deprecated
-  public static <T> byte[] convertMetadataToBytArray(T metadata, CommitMetadataSerDe serDe) {
+  public static <T> byte[] convertMetadataToByteArray(T metadata, CommitMetadataSerDe serDe) {
     try {
       ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
       serDe.getInstantWriter(metadata).get().writeToStream(outputStream);
@@ -139,18 +136,5 @@ public class TimelineMetadataUtils {
       ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
       return fileReader.next();
     }
-  }
-
-  public static <T extends SpecificRecordBase> Option<HoodieInstantWriter> getInstantWriter(Option<T> metadata) {
-    if (metadata.isEmpty()) {
-      return Option.empty();
-    }
-    return Option.of(outputStream -> {
-      DatumWriter<T> datumWriter = (DatumWriter<T>) DATUM_WRITERS.computeIfAbsent(metadata.get().getClass(), SpecificDatumWriter::new);
-      try (DataFileWriter<T> fileWriter = new DataFileWriter<>(datumWriter)) {
-        fileWriter.create(metadata.get().getSchema(), outputStream);
-        fileWriter.append(metadata.get());
-      }
-    });
   }
 }

@@ -33,7 +33,7 @@ import org.apache.hudi.metaserver.client.HoodieMetaserverClientProxy;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToBytArray;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 
 /**
  * Active timeline for hoodie table whose metadata is stored in the hoodie meta server instead of file system.
@@ -63,14 +63,14 @@ public class HoodieMetaserverBasedTimeline extends ActiveTimelineV2 {
   protected <T> void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {
     ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()));
     metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant,
-        metadata.map(m -> convertMetadataToBytArray(m, metadataSerDeV2)));
+        metadata.map(m -> convertMetadataToByteArray(m, metadataSerDeV2)));
   }
 
   @Override
   public <T> void transitionPendingState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata, boolean allowRedundantTransitions) {
     ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()));
     metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant,
-        metadata.map(m -> convertMetadataToBytArray(m, metadataSerDeV2)));
+        metadata.map(m -> convertMetadataToByteArray(m, metadataSerDeV2)));
   }
 
   @Override
@@ -79,7 +79,7 @@ public class HoodieMetaserverBasedTimeline extends ActiveTimelineV2 {
     HoodieInstant instant = instantGenerator.createNewInstant(pathInfo);
     ValidationUtils.checkArgument(instant.getState().equals(HoodieInstant.State.REQUESTED));
     metaserverClient.createNewInstant(databaseName, tableName, instant,
-        metadata.map(m -> convertMetadataToBytArray(m, metadataSerDeV2)));
+        metadata.map(m -> convertMetadataToByteArray(m, metadataSerDeV2)));
   }
 
   @Override

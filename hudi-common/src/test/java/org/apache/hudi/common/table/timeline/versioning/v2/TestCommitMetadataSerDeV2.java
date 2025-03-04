@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToBytArray;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 
 public class TestCommitMetadataSerDeV2 extends BaseTestCommitMetadataSerDe {
@@ -64,7 +64,7 @@ public class TestCommitMetadataSerDeV2 extends BaseTestCommitMetadataSerDe {
 
 
     // Serialize and deserialize
-    byte[] serialized = convertMetadataToBytArray(metadata, serDeV1);
+    byte[] serialized = convertMetadataToByteArray(metadata, serDeV1);
     HoodieCommitMetadata deserialized = getSerDe().deserialize(instant, new ByteArrayInputStream(serialized), () -> false, HoodieCommitMetadata.class);
     verifyCommitMetadata(deserialized);
     verifyWriteStat(deserialized.getPartitionToWriteStats().get(TEST_PARTITION_PATH).get(0));

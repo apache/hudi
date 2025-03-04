@@ -57,7 +57,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToBytArray;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -111,7 +111,7 @@ public class LegacyArchivedMetaEntryReader {
                 () -> instantBytes.length == 0,
                 org.apache.hudi.common.model.HoodieCommitMetadata.class);
             // convert to avro bytes.
-            return convertMetadataToBytArray(commitMetadata, metaClient.getCommitMetadataSerDe());
+            return convertMetadataToByteArray(commitMetadata, metaClient.getCommitMetadataSerDe());
           } catch (IOException e) {
             throw new RuntimeException(e);
           }

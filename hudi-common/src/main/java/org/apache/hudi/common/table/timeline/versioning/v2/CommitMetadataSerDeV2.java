@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
@@ -93,8 +92,8 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
   @Override
   public <T> Option<HoodieInstantWriter> getInstantWriter(T metadata) {
     if (metadata instanceof org.apache.hudi.common.model.HoodieCommitMetadata) {
-      return TimelineMetadataUtils.getInstantWriter(Option.of(MetadataConversionUtils.convertCommitMetadataToAvro((HoodieCommitMetadata) metadata)));
+      return CommitMetadataSerDe.getInstantWriter(Option.of(MetadataConversionUtils.convertCommitMetadataToAvro((HoodieCommitMetadata) metadata)));
     }
-    return TimelineMetadataUtils.getInstantWriter(Option.of((SpecificRecordBase) metadata));
+    return CommitMetadataSerDe.getInstantWriter(Option.of((SpecificRecordBase) metadata));
   }
 }

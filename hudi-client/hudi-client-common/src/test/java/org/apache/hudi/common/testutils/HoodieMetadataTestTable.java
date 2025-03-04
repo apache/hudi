@@ -183,8 +183,8 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   }
 
   @Override
-  public <T> HoodieTestTable addCluster(
-      String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<T> inflightReplaceMetadata,
+  public HoodieTestTable addCluster(
+      String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     super.addCluster(instantTime, requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
     if (writer != null) {

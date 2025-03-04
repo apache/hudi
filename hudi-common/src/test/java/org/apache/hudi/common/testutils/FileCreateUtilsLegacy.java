@@ -86,8 +86,7 @@ public class FileCreateUtilsLegacy extends FileCreateUtilsBase {
 
   private static <T> void createMetaFile(String basePath, String instantTime, String suffix, Option<T> metadata) throws IOException {
     createMetaFile(getTimelinePath(new StoragePath(basePath)).toUri().getPath(), instantTime,
-        InProcessTimeGenerator::createNewInstantTime, suffix,
-        metadata.isEmpty() ? Option.empty() : COMMIT_METADATA_SER_DE.getInstantWriter(metadata.get()));
+        InProcessTimeGenerator::createNewInstantTime, suffix, metadata.flatMap(COMMIT_METADATA_SER_DE::getInstantWriter));
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix, HoodieInstantWriter writer) throws IOException {

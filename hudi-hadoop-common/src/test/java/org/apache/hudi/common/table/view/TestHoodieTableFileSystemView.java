@@ -1900,7 +1900,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     }
   }
 
-  private <T> void saveAsCompleteCluster(HoodieActiveTimeline timeline, HoodieInstant inflight, HoodieCommitMetadata metadata) {
+  private void saveAsCompleteCluster(HoodieActiveTimeline timeline, HoodieInstant inflight, HoodieCommitMetadata metadata) {
     assertEquals(HoodieTimeline.CLUSTERING_ACTION, inflight.getAction());
     HoodieInstant clusteringInstant = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, inflight.getAction(), inflight.requestedTime());
     HoodieClusteringPlan plan = new HoodieClusteringPlan();

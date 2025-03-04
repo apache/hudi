@@ -143,14 +143,10 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public void createRequestedCommitWithReplaceMetadata(String instantTime, String actionType) {
-    try {
-      HoodieInstant instant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, actionType, instantTime);
-      LOG.info("Creating a new instant " + instant);
-      // Create the request replace file
-      createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(new HoodieRequestedReplaceMetadata()), false);
-    } catch (HoodieIOException e) {
-      throw e;
-    }
+    HoodieInstant instant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, actionType, instantTime);
+    LOG.info("Creating a new instant " + instant);
+    // Create the request replace file
+    createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(new HoodieRequestedReplaceMetadata()), false);
   }
 
   @Override

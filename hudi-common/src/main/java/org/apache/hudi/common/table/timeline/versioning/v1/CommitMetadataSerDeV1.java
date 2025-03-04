@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.HoodieInstantWriter;
@@ -85,6 +84,6 @@ public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
     // For others, write avro format.
     @SuppressWarnings("unchecked")
     SpecificRecordBase avroMetadata = (SpecificRecordBase) metadata;
-    return TimelineMetadataUtils.getInstantWriter(Option.of(avroMetadata));
+    return CommitMetadataSerDe.getInstantWriter(Option.of(avroMetadata));
   }
 }

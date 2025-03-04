@@ -43,10 +43,12 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.URI;
@@ -190,8 +192,8 @@ public class FileCreateUtils extends FileCreateUtilsBase {
         Option.of(requestedReplaceMetadata));
   }
 
-  public static <T> void createInflightClusterCommit(HoodieTableMetaClient metaClient, CommitMetadataSerDe commitMetadataSerDe,
-                                                     String instantTime, Option<T> inflightReplaceMetadata)
+  public static void createInflightClusterCommit(HoodieTableMetaClient metaClient, CommitMetadataSerDe commitMetadataSerDe,
+                                                     String instantTime, Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata)
       throws IOException {
     if (inflightReplaceMetadata.isPresent()) {
       createMetaFile(metaClient, instantTime, HoodieTimeline.INFLIGHT_CLUSTERING_COMMIT_EXTENSION, inflightReplaceMetadata);
@@ -313,7 +315,7 @@ public class FileCreateUtils extends FileCreateUtilsBase {
           if (writer.isEmpty()) {
             Files.createFile(metaFilePath);
           } else {
-            Files.write(metaFilePath, writer.map(Transformations::writeInstantContentToBytes).get());
+            Files.write(metaFilePath, writer.map(FileCreateUtils::writeInstantContentToBytes).get());
           }
         }
       } else {
@@ -331,7 +333,7 @@ public class FileCreateUtils extends FileCreateUtilsBase {
             if (writer.isEmpty()) {
               Files.createFile(metaFilePath);
             } else {
-              Files.write(metaFilePath, writer.map(Transformations::writeInstantContentToBytes).get());
+              Files.write(metaFilePath, writer.map(FileCreateUtils::writeInstantContentToBytes).get());
             }
           }
         }
@@ -519,5 +521,16 @@ public class FileCreateUtils extends FileCreateUtilsBase {
                                            HoodieStorage storage) throws IOException {
     deleteMetaFile(metaClient, instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION, storage);
     deleteMetaFile(metaClient, instantTime, HoodieTimeline.SAVEPOINT_EXTENSION, storage);
+  }
+
+  @Deprecated
+  private static byte[] writeInstantContentToBytes(HoodieInstantWriter writer) {
+    try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+      writer.writeToStream(outputStream);
+      outputStream.flush();
+      return outputStream.toByteArray();
+    } catch (IOException ex) {
+      throw new HoodieIOException("Failed to convert to bytes", ex);
+    }
   }
 }

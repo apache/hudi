@@ -68,7 +68,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -348,7 +347,7 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
-  public HoodieTestTable addPendingCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+  public HoodieTestTable addPendingCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata) throws Exception {
     createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
     createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
@@ -361,16 +360,16 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
-  public HoodieTestTable addInflightCluster(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+  public HoodieTestTable addInflightCluster(String instantTime, Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata) throws Exception {
     createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
-  public <T> HoodieTestTable addCluster(
+  public HoodieTestTable addCluster(
       String instantTime,
       HoodieRequestedReplaceMetadata requestedReplaceMetadata,
-      Option<T> inflightReplaceMetadata,
+      Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
     createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, inflightReplaceMetadata);
@@ -382,7 +381,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addCluster(
       String instantTime,
       HoodieRequestedReplaceMetadata requestedReplaceMetadata,
-      Option<HoodieInstantWriter> inflightReplaceMetadata,
+      Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata,
       String completionTime) throws Exception {
     createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);

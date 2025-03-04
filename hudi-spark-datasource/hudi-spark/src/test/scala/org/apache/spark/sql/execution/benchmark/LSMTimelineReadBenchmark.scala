@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieCommitMetadata, Ho
 import org.apache.hudi.common.table.timeline.{ActiveAction, HoodieInstant, LSMTimeline}
 import org.apache.hudi.common.table.timeline.versioning.v2.CompletionTimeQueryViewV2
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
-import org.apache.hudi.common.testutils.HoodieTestUtils.{convertMetadataToBytArray, INSTANT_GENERATOR, TIMELINE_FACTORY}
+import org.apache.hudi.common.testutils.HoodieTestUtils.{convertMetadataToByteArray, INSTANT_GENERATOR, TIMELINE_FACTORY}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.table.HoodieJavaTable
@@ -72,7 +72,7 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
         val action = if (i % 2 == 0) "delta_commit" else "commit"
         val instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime)
         val metadata: HoodieCommitMetadata = HoodieTestTable.of(metaClient).createCommitMetadata(instantTime, WriteOperationType.INSERT, util.Arrays.asList("par1", "par2"), 10, false)
-        instantBuffer.add(new DummyActiveAction(instant, convertMetadataToBytArray(metadata)))
+        instantBuffer.add(new DummyActiveAction(instant, convertMetadataToByteArray(metadata)))
         if (i % batchSize == 0) {
           // archive 10 instants each time
           writer.write(instantBuffer, org.apache.hudi.common.util.Option.empty(), org.apache.hudi.common.util.Option.empty())

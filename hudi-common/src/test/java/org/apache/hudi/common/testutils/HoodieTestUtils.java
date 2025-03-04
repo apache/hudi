@@ -393,8 +393,8 @@ public class HoodieTestUtils {
     return getCompleteInstantFileInfo(storage, parent, instantTime, action).getPath();
   }
 
-  public static <T> byte[] convertMetadataToBytArray(T metadata) {
-    return TimelineMetadataUtils.convertMetadataToBytArray(metadata, COMMIT_METADATA_SER_DE);
+  public static <T> byte[] convertMetadataToByteArray(T metadata) {
+    return TimelineMetadataUtils.convertMetadataToByteArray(metadata, COMMIT_METADATA_SER_DE);
   }
 
   private static StoragePathInfo getCompleteInstantFileInfo(HoodieStorage storage,

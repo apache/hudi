@@ -45,7 +45,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToBytArray;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -81,7 +81,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     HoodieInstant instant = createTestInstant("commit", "001");
 
     // Serialize
-    byte[] serialized = convertMetadataToBytArray(emptyMetadata, serDe);
+    byte[] serialized = convertMetadataToByteArray(emptyMetadata, serDe);
 
     // Deserialize
     HoodieCommitMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized), () -> false, HoodieCommitMetadata.class);
@@ -111,7 +111,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     HoodieInstant instant = createTestInstant("commit", "001");
 
     // Serialize and deserialize
-    byte[] serialized = convertMetadataToBytArray(metadata, serDe);
+    byte[] serialized = convertMetadataToByteArray(metadata, serDe);
     HoodieCommitMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized), () -> false, HoodieCommitMetadata.class);
 
     // Verify
@@ -142,7 +142,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     HoodieInstant instant = createTestInstant("replacecommit", "001");
 
     // Serialize and deserialize
-    byte[] serialized = convertMetadataToBytArray(metadata, serDe);
+    byte[] serialized = convertMetadataToByteArray(metadata, serDe);
     HoodieReplaceCommitMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized), () -> false, HoodieReplaceCommitMetadata.class);
 
     // Verify
@@ -186,7 +186,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     HoodieInstant instant = createTestInstant("rollback", "002");
 
     // Serialize and deserialize
-    byte[] serialized = convertMetadataToBytArray(metadata, serDe);
+    byte[] serialized = convertMetadataToByteArray(metadata, serDe);
     HoodieRollbackMetadata deserialized = serDe.deserialize(instant, new ByteArrayInputStream(serialized), () -> false, HoodieRollbackMetadata.class);
 
     // Verify
