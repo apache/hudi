@@ -103,8 +103,8 @@ public class HoodieAvroHFileWriter
     this.populateMetaFields = populateMetaFields;
 
     HFileContext context = new HFileContext.Builder()
-        .withBlockSize(hfileConfig.getBlockSize())
-        .withCompressionCodec(hfileConfig.getCompressionCodec())
+        .blockSize(hfileConfig.getBlockSize())
+        .compressionCodec(hfileConfig.getCompressionCodec())
         .build();
 
     conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY,
@@ -162,7 +162,7 @@ public class HoodieAvroHFileWriter
     if (!isRecordSerialized) {
       value = HoodieAvroUtils.avroToBytes((GenericRecord) record);
     }
-    writer.append(getUTF8Bytes(recordKey), value);
+    writer.append(recordKey, value);
 
     if (hfileConfig.useBloomFilter()) {
       hfileConfig.getBloomFilter().add(recordKey);

@@ -61,12 +61,12 @@ public class HFileContext {
     public Builder() {
     }
 
-    public Builder withBlockSize(int blockSize) {
+    public Builder blockSize(int blockSize) {
       this.blockSize = blockSize;
       return this;
     }
 
-    public Builder withCompressionCodec(CompressionCodec compressionCodec) {
+    public Builder compressionCodec(CompressionCodec compressionCodec) {
       this.compressionCodec = compressionCodec;
       return this;
     }
