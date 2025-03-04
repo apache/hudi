@@ -321,7 +321,12 @@ test_cli_bundle() {
 
     # Verify commit history
     if ! grep -q "CommitTime" $CLI_TEST_DIR/output.txt; then
-        echo "::error::validate.sh CLI bundle validation failed - 'commits show' command did not execute successfully. No commit history found."
+        echo "::error::validate.sh CLI bundle validation failed - 'commits show' command did not execute successfully."
+        return 1
+    fi
+
+    if grep -q "(empty)" $CLI_TEST_DIR/output.txt; then
+        echo "::error::validate.sh CLI bundle validation failed - No commit history found."
         return 1
     fi
 
@@ -332,6 +337,13 @@ test_cli_bundle() {
 ############################
 # Execute tests
 ############################
+
+echo "::warning::validate.sh validating spark & hadoop-mr bundle"
+test_spark_hadoop_mr_bundles
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
 if [[ $SPARK_HOME == *"spark-3.5"* ]]
 then
@@ -344,13 +356,6 @@ then
 else
   echo "::warning::validate.sh skip validating cli bundle for non-spark3.5 build"
 fi
-
-echo "::warning::validate.sh validating spark & hadoop-mr bundle"
-test_spark_hadoop_mr_bundles
-if [ "$?" -ne 0 ]; then
-    exit 1
-fi
-echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
 if [[ $SPARK_HOME == *"spark-3.5"* ]]
 then
