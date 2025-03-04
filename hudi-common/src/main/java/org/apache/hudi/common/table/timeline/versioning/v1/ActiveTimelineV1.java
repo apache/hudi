@@ -547,7 +547,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   @Override
-  public <T>  void transitionRequestedToInflight(HoodieInstant requested, Option<T> metadata) {
+  public <T> void transitionRequestedToInflight(HoodieInstant requested, Option<T> metadata) {
     transitionRequestedToInflight(requested, metadata, false);
   }
 
