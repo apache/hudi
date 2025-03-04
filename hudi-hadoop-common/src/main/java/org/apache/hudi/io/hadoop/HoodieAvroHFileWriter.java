@@ -32,22 +32,24 @@ import org.apache.hudi.io.hfile.HFileWriter;
 import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -113,8 +115,9 @@ public class HoodieAvroHFileWriter
     conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY,
         String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
 
-    FsPermission fsPermission = FsPermission.getFileDefault();
-    FSDataOutputStream outputStream = HoodieHFileUtils.create(fs, this.file, fsPermission, true);
+    StorageConfiguration<Configuration> storageConf = new HadoopStorageConfiguration(conf);
+    StoragePath filePath = new StoragePath(this.file.toUri());
+    OutputStream outputStream =  HoodieStorageUtils.getStorage(filePath, storageConf).create(filePath);
     this.writer = new HFileWriterImpl(context, outputStream);
 
     this.prevRecordKey = "";

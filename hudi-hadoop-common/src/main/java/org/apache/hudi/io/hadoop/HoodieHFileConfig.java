@@ -22,6 +22,7 @@ package org.apache.hudi.io.hadoop;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.CellComparator;
@@ -46,11 +47,11 @@ public class HoodieHFileConfig {
   private final CellComparator hfileComparator;
   private final String keyFieldName;
 
-  public HoodieHFileConfig(Configuration hadoopConf, CompressionCodec compressionCodec,
+  public HoodieHFileConfig(StorageConfiguration storageConf, CompressionCodec compressionCodec,
                            int blockSize, long maxFileSize, String keyFieldName,
                            boolean prefetchBlocksOnOpen, boolean cacheDataInL1, boolean dropBehindCacheCompaction,
                            BloomFilter bloomFilter, CellComparator hfileComparator) {
-    this.hadoopConf = hadoopConf;
+    this.hadoopConf = (Configuration) storageConf.unwrapAs(Configuration.class);
     this.compressionCodec = compressionCodec;
     this.blockSize = blockSize;
     this.maxFileSize = maxFileSize;

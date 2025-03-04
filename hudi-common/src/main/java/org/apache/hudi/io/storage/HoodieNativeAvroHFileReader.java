@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -128,17 +127,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   @Override
   public BloomFilter readBloomFilter() {
     try (HFileReader reader = newHFileReader()) {
-      // 1. Position points to the offset of first key-value pair.
       ByteBuffer byteBuffer = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).get();
-      // 2. Try to get the bytes for value only.
-      int keyLength = 10 + StringUtils.getUTF8Bytes(KEY_BLOOM_FILTER_META_BLOCK).length;
-      int valueLength = byteBuffer.limit() - keyLength - 1 - byteBuffer.position();
-      byte[] bloomFilterBytes = new byte[valueLength];
-      byteBuffer.position(keyLength + byteBuffer.position());
-      byteBuffer.get(bloomFilterBytes, 0, valueLength);
-      // 3. Deserialize value bytes into bloom filter.
-      return BloomFilterFactory.fromByteBuffer(
-          ByteBuffer.wrap(bloomFilterBytes),
+      return BloomFilterFactory.fromByteBuffer(byteBuffer,
           fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(KEY_BLOOM_FILTER_TYPE_CODE)).get()));
     } catch (IOException e) {
       throw new HoodieException("Could not read bloom filter from " + path, e);
