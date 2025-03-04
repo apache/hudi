@@ -29,6 +29,7 @@ JAVA_RUNTIME_VERSION=$1
 SCALA_PROFILE=$2
 DEFAULT_JAVA_HOME=${JAVA_HOME}
 WORKDIR=/opt/bundle-validation
+echo $WORKDIR
 JARS_DIR=${WORKDIR}/jars
 # link the jar names to easier to use names
 ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
@@ -292,16 +293,35 @@ test_cli_bundle() {
 
     # Execute with debug output
     echo "Executing Hudi CLI commands..."
-    $WORKDIR/cli/hudi-cli-with-bundle.sh < $WORKDIR/cli/commands.txt 2>&1 | tee $CLI_TEST_DIR/output.txt
+    $WORKDIR/docker-test/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh < $WORKDIR/cli/commands.txt 2>&1 | tee $CLI_TEST_DIR/output.txt
 
-    # Verify table was created
-    if [ ! -d "/tmp/hudi-bundles/tests/table/.hoodie" ]; then
-        echo "::error::validate.sh CLI bundle validation failed - Table directory not created"
+    # Verify CLI started successfully
+    if ! grep -q "hudi->" $CLI_TEST_DIR/output.txt; then
+        echo "::error::validate.sh CLI bundle validation failed - CLI did not start successfully"
         return 1
     fi
 
+    # Verify table was created
+    if [ ! -d "/tmp/hudi-bundles/tests/table/.hoodie" ]; then
+        echo "::error::validate.sh CLI bundle validation failed - 'create' command did not execute successfully. Table directory not created."
+        return 1
+    fi
+
+    # Verify table connection
     if ! grep -q "Metadata for table trips loaded" $CLI_TEST_DIR/output.txt; then
-        echo "::error::validate.sh CLI bundle validation failed - Table connection failed"
+        echo "::error::validate.sh CLI bundle validation failed - 'connect' command did not execute successfully. Table connection failed."
+        return 1
+    fi
+
+    # Verify table description
+    if ! grep -q "hoodie.table.name.*trips" $CLI_TEST_DIR/output.txt; then
+        echo "::error::validate.sh CLI bundle validation failed - 'desc' command did not execute successfully. Table properties are missing."
+        return 1
+    fi
+
+    # Verify commit history
+    if ! grep -q "CommitTime" $CLI_TEST_DIR/output.txt; then
+        echo "::error::validate.sh CLI bundle validation failed - 'commits show' command did not execute successfully. No commit history found."
         return 1
     fi
 

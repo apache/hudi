@@ -133,7 +133,6 @@ if [ -z "$STAGING_REPO_NUM" ] && [ -z "$MAVEN_BASE_URL" ]; then
   echo 'Adding built bundle jars for validation'
   if [[ "$SCALA_PROFILE" != 'scala-2.13' ]]; then
     # For Scala 2.13, Flink is not support, so skipping the Flink bundle validation
-    cp ${GITHUB_WORKSPACE}/packaging/hudi-cli-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
     cp ${GITHUB_WORKSPACE}/packaging/hudi-flink-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
     cp ${GITHUB_WORKSPACE}/packaging/hudi-kafka-connect-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
     cp ${GITHUB_WORKSPACE}/packaging/hudi-metaserver-server-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
@@ -147,7 +146,6 @@ if [ -z "$STAGING_REPO_NUM" ] && [ -z "$MAVEN_BASE_URL" ]; then
 else
   echo 'Adding environment variables for bundles in the release candidate or artifact'
 
-  HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle
   HUDI_HADOOP_MR_BUNDLE_NAME=hudi-hadoop-mr-bundle
   HUDI_KAFKA_CONNECT_BUNDLE_NAME=hudi-kafka-connect-bundle
   HUDI_METASERVER_SERVER_BUNDLE_NAME=hudi-metaserver-server-bundle
