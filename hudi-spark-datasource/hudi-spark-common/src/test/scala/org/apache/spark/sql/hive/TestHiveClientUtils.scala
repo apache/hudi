@@ -20,6 +20,7 @@ package org.apache.spark.sql.hive
 import org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion
 
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.hive.TestHiveClientUtils.{hiveClient, hiveContext, spark}
 import org.apache.spark.sql.hive.client.HiveClient
 import org.apache.spark.sql.hive.test.{TestHive, TestHiveContext}
 import org.apache.spark.sql.internal.StaticSQLConf.CATALOG_IMPLEMENTATION
@@ -30,11 +31,14 @@ class TestHiveClientUtils {
 
   @Test
   def reuseHiveClientFromSparkSession(): Unit = {
-    if (getJavaVersion != 11 && getJavaVersion != 17) {
-      assert(TestHiveClientUtils.spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "hive")
-      assert(HiveClientUtils.getSingletonClientForMetadata(TestHiveClientUtils.spark) == TestHiveClientUtils.hiveClient)
-    }
+    assert(TestHiveClientUtils.spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "hive")
+    assert(HiveClientUtils.getSingletonClientForMetadata(TestHiveClientUtils.spark) == TestHiveClientUtils.hiveClient)
+    hiveClient = null
+    hiveContext = null
+    spark.close()
+    spark = null
   }
+
 }
 
 object TestHiveClientUtils {
@@ -58,6 +62,9 @@ object TestHiveClientUtils {
   def tearDown(): Unit = {
     hiveClient = null
     hiveContext = null
-    spark = null
+    if (spark != null ) {
+      spark.close()
+      spark = null
+    }
   }
 }
