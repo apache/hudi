@@ -53,7 +53,6 @@ public class HFileContext {
     return new Builder();
   }
 
-  // TODO: Add all necessary fileds as HBASE HFileContext.
   public static class Builder {
     private CompressionCodec compressionCodec = CompressionCodec.NONE;
     private int blockSize = 1024 * 1024;
