@@ -20,7 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.HoodieReaderConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieUpsertException
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -74,6 +74,7 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
       option(TABLE_TYPE.key, tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key, "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key, "false").
+      option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key, "true").
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
@@ -87,13 +88,33 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
       )
     } else {
       // Write data.
-      insertsWithDup.write.format("hudi").options(opts).mode(SaveMode.Append).save(basePath)
+      insertsWithDup.write.format("hudi").
+        option(HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key, "true").
+        option(HoodieMetadataConfig.SECONDARY_INDEX_NAME.key, "idx_rider").
+        option(HoodieMetadataConfig.SECONDARY_INDEX_COLUMN.key, "rider").
+        options(opts).
+        mode(SaveMode.Append).
+        save(basePath)
       // Validate the data.
       val df = spark.read.format("hudi").options(opts).load(basePath)
       val finalDf = df.select("ts", "key", "rider", "driver", "fare", "number").sort("key")
       val expected = if (dedupPolicy.equals(DROP_INSERT_DUP_POLICY)) expectedForDrop else expectedForNone
       val expectedDf = spark.createDataFrame(expected).toDF(columns: _*).sort("key")
       TestInsertDedupPolicy.validate(expectedDf, finalDf)
+
+      // Validate data with record key filter
+      // RLI will be used with record key filter
+      val recordKeyFilterDf = df.filter("key = '5'").select("ts", "key", "rider", "driver", "fare", "number").sort("key")
+      val expectedRecordKeyFilter = if (dedupPolicy.equals(DROP_INSERT_DUP_POLICY)) expectedForDrop.filter(_._2 == "5") else expectedForNone.filter(_._2 == "5")
+      val expectedRecordKeyFilterDf = spark.createDataFrame(expectedRecordKeyFilter).toDF(columns: _*).sort("key")
+      TestInsertDedupPolicy.validate(expectedRecordKeyFilterDf, recordKeyFilterDf)
+
+      // Validate data with secondary key filter
+      // Secondary index will be used with secondary key filter
+      val secondaryKeyFilterDf = df.filter("rider = 'rider-C'").select("ts", "key", "rider", "driver", "fare", "number").sort("key")
+      val expectedSecondaryKeyFilter = if (dedupPolicy.equals(DROP_INSERT_DUP_POLICY)) expectedForDrop.filter(_._3 == "rider-C") else expectedForNone.filter(_._3 == "rider-C")
+      val expectedSecondaryKeyFilterDf = spark.createDataFrame(expectedSecondaryKeyFilter).toDF(columns: _*).sort("key")
+      TestInsertDedupPolicy.validate(expectedSecondaryKeyFilterDf, secondaryKeyFilterDf)
     }
   }
 }
