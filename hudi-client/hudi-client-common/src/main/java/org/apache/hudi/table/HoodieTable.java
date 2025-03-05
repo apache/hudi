@@ -157,6 +157,18 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.taskContextSupplier = context.getTaskContextSupplier();
   }
 
+  protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager, TaskContextSupplier supplier) {
+    this.config = config;
+    this.context = context;
+    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
+    this.instantGenerator = metaClient.getInstantGenerator();
+    this.instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
+    this.instantFileNameParser = metaClient.getInstantFileNameParser();
+    this.viewManager = viewManager;
+    this.metaClient = metaClient;
+    this.taskContextSupplier = supplier;
+  }
+
   public boolean isMetadataTable() {
     return isMetadataTable;
   }

@@ -300,6 +300,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Schema string representing the latest schema of the table. Hudi passes this to "
           + "implementations of evolution of schema");
 
+  public static final ConfigProperty<Boolean> ENABLE_SCHEMA_CONFLICT_RESOLUTION = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "schema.conflict.resolution.enable")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("If turned on, we detect and abort incompatible concurrent schema evolution.");
+
   public static final ConfigProperty<String> AVRO_SCHEMA_VALIDATE_ENABLE = ConfigProperty
       .key("hoodie.avro.schema.validate")
       .defaultValue("false")
