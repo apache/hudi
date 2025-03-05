@@ -144,10 +144,10 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
       SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
     return javaSparkContext.parallelize(data.collect(Collectors.toList()), parallelism)
         .mapPartitionsToPair((PairFlatMapFunction<Iterator<I>, K, V>) iterator ->
-            flatMapToPairFunc.call(iterator).collect(Collectors.toList()).stream()
+            flatMapToPairFunc.call(iterator)
                 .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator()
         )
-        .reduceByKey(reduceFunc::apply)
+        .reduceByKey(reduceFunc::apply, parallelism)
         .map(e -> new ImmutablePair<>(e._1, e._2))
         .collect().stream();
   }
