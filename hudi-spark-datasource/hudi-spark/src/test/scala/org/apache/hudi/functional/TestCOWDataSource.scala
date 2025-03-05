@@ -30,7 +30,7 @@ import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPU
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
@@ -1158,9 +1158,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       concat(col("driver"), lit("/"), col("rider"), lit("/"), udf_date_format(col("current_ts")))).count() == 0)
   }
 
-  @Test
-  def testPartitionPruningForTimestampBasedKeyGenerator(): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(HoodieRecordType.AVRO, enableFileIndex = true)
+  @ParameterizedTest
+  @CsvSource(value = Array("6", "8"))
+  def testPartitionPruningForTimestampBasedKeyGenerator(tableVersion: Int): Unit = {
+    var (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(HoodieRecordType.AVRO, enableFileIndex = true)
+    writeOpts = writeOpts + (HoodieTableConfig.VERSION.key() -> tableVersion.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
     val writer = getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName, writeOpts)
     writer.partitionBy("current_ts")
       .option(TIMESTAMP_TYPE_FIELD.key, "EPOCHMILLISECONDS")
@@ -1832,9 +1835,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieInstant.State], names = Array("REQUESTED", "INFLIGHT", "COMPLETED"))
-  def testInsertOverwriteCluster(firstClusteringState: HoodieInstant.State): Unit = {
-    val (writeOpts, _) = getWriterReaderOpts()
+  @CsvSource(value = Array("REQUESTED,6", "REQUESTED,8", "INFLIGHT,6", "INFLIGHT,8", "COMPLETED,6", "COMPLETED,8"))
+  def testInsertOverwriteCluster(firstClusteringState: String, tableVersion: Int): Unit = {
+    var (writeOpts, _) = getWriterReaderOpts()
+    writeOpts = writeOpts + (HoodieTableConfig.VERSION.key() -> tableVersion.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
 
     // Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
@@ -1896,8 +1901,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
           .withPath(basePath)
           .withProps(optsWithCluster.asJava)
           .build()
-        if (firstClusteringState == HoodieInstant.State.INFLIGHT
-          || firstClusteringState == HoodieInstant.State.REQUESTED) {
+        if (firstClusteringState == HoodieInstant.State.INFLIGHT.name()
+          || firstClusteringState == HoodieInstant.State.REQUESTED.name()) {
           // Move the clustering to inflight for testing
           storage.deleteFile(new StoragePath(metaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant)))
           val inflightClustering = metaClient.reloadActiveTimeline.lastInstant.get
@@ -1906,7 +1911,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             inflightClustering,
             metaClient.getActiveTimeline.getLastClusteringInstant.get)
         }
-        if (firstClusteringState == HoodieInstant.State.REQUESTED) {
+        if (firstClusteringState == HoodieInstant.State.REQUESTED.name()) {
           val table = HoodieSparkTable.create(writeConfig, context)
           table.rollbackInflightClustering(
             metaClient.getActiveTimeline.getLastClusteringInstant.get,
