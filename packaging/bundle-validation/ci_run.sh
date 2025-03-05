@@ -137,6 +137,7 @@ if [ -z "$STAGING_REPO_NUM" ] && [ -z "$MAVEN_BASE_URL" ]; then
     cp ${GITHUB_WORKSPACE}/packaging/hudi-kafka-connect-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
     cp ${GITHUB_WORKSPACE}/packaging/hudi-metaserver-server-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
   fi
+  cp ${GITHUB_WORKSPACE}/packaging/hudi-cli-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
   cp ${GITHUB_WORKSPACE}/packaging/hudi-hadoop-mr-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
   cp ${GITHUB_WORKSPACE}/packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
   cp ${GITHUB_WORKSPACE}/packaging/hudi-utilities-bundle/target/hudi-*-$HUDI_VERSION.jar $TMP_JARS_DIR/
@@ -150,22 +151,27 @@ else
   HUDI_METASERVER_SERVER_BUNDLE_NAME=hudi-metaserver-server-bundle
 
   if [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
+    HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.3-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   elif [[ ${SPARK_PROFILE} == 'spark3.4' ]]; then
+    HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.4-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   elif [[ ${SPARK_PROFILE} == 'spark3.5' && ${SCALA_PROFILE} == 'scala-2.12' ]]; then
+    HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.5-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   elif [[ ${SPARK_PROFILE} == 'spark3.5' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
+    HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.13
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.5-bundle_2.13
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13
   elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
+    HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.12
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
@@ -188,6 +194,7 @@ else
   fi
 
   echo "Downloading bundle jars from base URL - $REPO_BASE_URL ..."
+  wget -q $REPO_BASE_URL/$HUDI_CLI_BUNDLE_NAME/$HUDI_VERSION/$HUDI_CLI_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
   wget -q $REPO_BASE_URL/$HUDI_FLINK_BUNDLE_NAME/$HUDI_VERSION/$HUDI_FLINK_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
   wget -q $REPO_BASE_URL/$HUDI_HADOOP_MR_BUNDLE_NAME/$HUDI_VERSION/$HUDI_HADOOP_MR_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/
   wget -q $REPO_BASE_URL/$HUDI_KAFKA_CONNECT_BUNDLE_NAME/$HUDI_VERSION/$HUDI_KAFKA_CONNECT_BUNDLE_NAME-$HUDI_VERSION.jar -P $TMP_JARS_DIR/

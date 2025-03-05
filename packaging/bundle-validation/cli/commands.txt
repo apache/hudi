@@ -1,0 +1,5 @@
+create --path file:///tmp/hudi-bundles/tests/table --tableName trips --tableType COPY_ON_WRITE
+connect --path file:///tmp/hudi-bundles/tests/trips
+desc
+commits show
+exit
