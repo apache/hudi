@@ -126,6 +126,34 @@ public class HoodieCommonTestHarness {
   }
 
   /**
+   * Pads a string number with leading zeros until it reaches the specified length.
+   *
+   * @param number The string number to pad
+   * @param length The desired total length after padding
+   * @return The padded string number
+   * @throws IllegalArgumentException if the input number is longer than the desired length
+   */
+  protected static String padWithLeadingZeros(String number, int length) {
+    if (number == null) {
+      throw new IllegalArgumentException("Input number cannot be null");
+    }
+    if (number.length() > length) {
+      throw new IllegalArgumentException("Input number length " + number.length()
+          + " is greater than desired length " + length);
+    }
+    return String.format("%0" + length + "d", Long.parseLong(number));
+  }
+
+  /**
+   * Given a timestamp string, plus one numerically and convert it back to string with the same prefix 0 padding
+   * to ensure the string length remains the same.
+   * Example: 0010 -> 0011.
+   * */
+  public static String incTimestampStrByOne(String timestamp) {
+    return padWithLeadingZeros(Integer.toString(Integer.parseInt(timestamp) + 1), timestamp.length());
+  }
+
+  /**
    * Initializes a test data generator which used to generate test data.
    */
   protected void initTestDataGenerator() {
@@ -159,10 +187,14 @@ public class HoodieCommonTestHarness {
   }
 
   protected void initMetaClient(boolean preTableVersion8) throws IOException {
+    initMetaClient(preTableVersion8, getTableType());
+  }
+
+  protected void initMetaClient(boolean preTableVersion8, HoodieTableType tableType) throws IOException {
     if (basePath == null) {
       initPath();
     }
-    metaClient = HoodieTestUtils.init(basePath, getTableType(), "", false, null, "datestr",
+    metaClient = HoodieTestUtils.init(basePath, tableType, "", false, null, "datestr",
         preTableVersion8 ? Option.of(HoodieTableVersion.SIX) : Option.of(HoodieTableVersion.current()));
   }
 
