@@ -29,6 +29,7 @@ JAVA_RUNTIME_VERSION=$1
 SCALA_PROFILE=$2
 DEFAULT_JAVA_HOME=${JAVA_HOME}
 WORKDIR=/opt/bundle-validation
+echo $WORKDIR
 JARS_DIR=${WORKDIR}/jars
 # link the jar names to easier to use names
 ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
@@ -42,6 +43,7 @@ ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
+ln -sf $JARS_DIR/hudi-cli-bundle*.jar $JARS_DIR/cli.jar
 
 ##
 # Function to change Java runtime version by changing JAVA_HOME
@@ -268,6 +270,69 @@ test_metaserver_bundle () {
     kill $DERBY_PID $HIVE_PID $METASEVER_PID
 }
 
+##
+# Function to test the hudi-cli bundle.
+# It creates a test table and connects to it using CLI commands
+#
+# env vars
+#   SPARK_HOME: path to the spark directory
+#   CLI_BUNDLE_JAR: path to the hudi cli bundle jar
+#   SPARK_BUNDLE_JAR: path to the hudi spark bundle jar
+##
+test_cli_bundle() {
+    echo "::warning::validate.sh setting up CLI bundle validation"
+
+    # Create a temporary directory for CLI commands output
+    CLI_TEST_DIR="/tmp/hudi-bundles/tests/log"
+    mkdir -p $CLI_TEST_DIR
+
+    # Set required environment variables
+    export SPARK_HOME=$SPARK_HOME
+    export CLI_BUNDLE_JAR=$JARS_DIR/cli.jar
+    export SPARK_BUNDLE_JAR=$JARS_DIR/spark.jar
+
+    # Execute with debug output
+    echo "Executing Hudi CLI commands..."
+    $WORKDIR/docker-test/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh < $WORKDIR/cli/commands.txt 2>&1 | tee $CLI_TEST_DIR/output.txt
+
+    # Verify CLI started successfully
+    if ! grep -q "hudi->" $CLI_TEST_DIR/output.txt; then
+        echo "::error::validate.sh CLI bundle validation failed - CLI did not start successfully"
+        return 1
+    fi
+
+    # Verify table was created
+    if [ ! -d "/tmp/hudi-bundles/tests/table/.hoodie" ]; then
+        echo "::error::validate.sh CLI bundle validation failed - 'create' command did not execute successfully. Table directory not created."
+        return 1
+    fi
+
+    # Verify table connection
+    if ! grep -q "Metadata for table trips loaded" $CLI_TEST_DIR/output.txt; then
+        echo "::error::validate.sh CLI bundle validation failed - 'connect' command did not execute successfully. Table connection failed."
+        return 1
+    fi
+
+    # Verify table description
+    if ! grep -q "hoodie.table.name.*trips" $CLI_TEST_DIR/output.txt; then
+        echo "::error::validate.sh CLI bundle validation failed - 'desc' command did not execute successfully. Table properties are missing."
+        return 1
+    fi
+
+    # Verify commit history
+    if ! grep -q "CommitTime" $CLI_TEST_DIR/output.txt; then
+        echo "::error::validate.sh CLI bundle validation failed - 'commits show' command did not execute successfully."
+        return 1
+    fi
+
+    if grep -q "(empty)" $CLI_TEST_DIR/output.txt; then
+        echo "::error::validate.sh CLI bundle validation failed - No commit history found."
+        return 1
+    fi
+
+    echo "::warning::validate.sh CLI bundle validation was successful"
+    return 0
+}
 
 ############################
 # Execute tests
@@ -280,7 +345,19 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
-if [[  $SPARK_HOME == *"spark-3.5"* ]]
+if [[ $SPARK_HOME == *"spark-3.5"* ]]
+then
+  echo "::warning::validate.sh validating cli bundle"
+  test_cli_bundle
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done validating cli bundle"
+else
+  echo "::warning::validate.sh skip validating cli bundle for non-spark3.5 build"
+fi
+
+if [[ $SPARK_HOME == *"spark-3.5"* ]]
 then
   echo "::warning::validate.sh validating utilities bundle"
   test_utilities_bundle $JARS_DIR/utilities.jar
