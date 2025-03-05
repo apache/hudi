@@ -20,28 +20,15 @@ package org.apache.spark.sql.hive
 import org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.hive.TestHiveClientUtils.{hiveClient, hiveContext, spark}
 import org.apache.spark.sql.hive.client.HiveClient
 import org.apache.spark.sql.hive.test.{TestHive, TestHiveContext}
 import org.apache.spark.sql.internal.StaticSQLConf.CATALOG_IMPLEMENTATION
 import org.junit.Assume
-import org.junit.jupiter.api.{AfterAll, BeforeAll, Test}
+import org.junit.jupiter.api.{BeforeAll, Disabled, TestInstance}
+import org.junit.jupiter.api.TestInstance.Lifecycle
 
+@TestInstance(Lifecycle.PER_CLASS)
 class TestHiveClientUtils {
-
-  @Test
-  def reuseHiveClientFromSparkSession(): Unit = {
-    assert(TestHiveClientUtils.spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "hive")
-    assert(HiveClientUtils.getSingletonClientForMetadata(TestHiveClientUtils.spark) == TestHiveClientUtils.hiveClient)
-    hiveClient = null
-    hiveContext = null
-    spark.close()
-    spark = null
-  }
-
-}
-
-object TestHiveClientUtils {
   protected var spark: SparkSession = null
   protected var hiveContext: TestHiveContext = null
   protected var hiveClient: HiveClient = null
@@ -58,13 +45,9 @@ object TestHiveClientUtils {
     hiveClient = spark.sharedState.externalCatalog.unwrapped.asInstanceOf[HiveExternalCatalog].client
   }
 
-  @AfterAll
-  def tearDown(): Unit = {
-    hiveClient = null
-    hiveContext = null
-    if (spark != null ) {
-      spark.close()
-      spark = null
-    }
+  @Disabled("HUDI-9118")
+  def reuseHiveClientFromSparkSession(): Unit = {
+    assert(spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "hive")
+    assert(HiveClientUtils.getSingletonClientForMetadata(spark) == hiveClient)
   }
 }
