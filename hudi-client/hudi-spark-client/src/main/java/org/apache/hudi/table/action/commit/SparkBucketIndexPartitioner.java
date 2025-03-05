@@ -131,7 +131,7 @@ public class SparkBucketIndexPartitioner<T> extends
     } else {
       // Always write into log file instead of base file if using NB-CC
       if (isNonBlockingConcurrencyControl) {
-        String fileId = BucketIdentifier.newBucketFileIdForNBCC(bucketNumber);
+        String fileId = BucketIdentifier.newBucketFileIdForNBCC(bucketNumber % numBuckets);
         return new BucketInfo(BucketType.UPDATE, fileId, partitionPath);
       }
       String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucketNumber % numBuckets);
