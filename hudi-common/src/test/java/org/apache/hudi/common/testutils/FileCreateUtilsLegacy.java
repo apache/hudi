@@ -66,9 +66,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_S
 public class FileCreateUtilsLegacy extends FileCreateUtilsBase {
 
   public static StoragePath getTimelinePath(StoragePath basePath) throws IOException {
-    return new StoragePath(
-        new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME),
-        HoodieTableMetaClient.TIMELINEFOLDER_NAME);
+    return new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
   }
 
   private static StoragePath getMetaPath(String basePath) {
