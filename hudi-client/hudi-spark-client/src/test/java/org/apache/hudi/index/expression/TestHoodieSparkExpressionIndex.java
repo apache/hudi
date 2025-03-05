@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.spark.sql.functions.col;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -69,6 +70,7 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
     HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(
         "yearIndex",
         "year",
+        PARTITION_NAME_COLUMN_STATS,
         Arrays.asList("timestampColumn"),
         new HashMap<>()
     );
@@ -103,6 +105,7 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
     HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(
         "hourIndex",
         "hour",
+        PARTITION_NAME_COLUMN_STATS,
         Arrays.asList("timestampColumn"),
         new HashMap<>()
     );
@@ -127,6 +130,7 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
     HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(
         "yearIndex",
         "year",
+        PARTITION_NAME_COLUMN_STATS,
         Arrays.asList("timestampColumn", "extraColumn"),
         Collections.emptyMap()
     );
