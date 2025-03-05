@@ -40,10 +40,10 @@ import java.io.IOException;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -67,7 +67,7 @@ public class TestStreamerUtil {
     // Validate the partition fields & preCombineField in hoodie.properties.
     HoodieTableMetaClient metaClient1 = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
     assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});
-    assertNull(metaClient1.getTableConfig().getKeyGeneratorClassName());
+    assertNotNull(metaClient1.getTableConfig().getKeyGeneratorClassName());
     assertEquals(HoodieTableVersion.SIX, metaClient1.getTableConfig().getTableVersion());
   }
 
