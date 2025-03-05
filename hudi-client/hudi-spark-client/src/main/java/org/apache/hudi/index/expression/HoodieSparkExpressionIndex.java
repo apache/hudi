@@ -33,6 +33,7 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
 
   private String indexName;
   private String indexFunction;
+  private String indexType;
   private List<String> orderedSourceFields;
   private Map<String, String> options;
   private ExpressionIndexSparkFunctions.SparkFunction sparkFunction;
@@ -40,9 +41,10 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
   public HoodieSparkExpressionIndex() {
   }
 
-  public HoodieSparkExpressionIndex(String indexName, String indexFunction, List<String> orderedSourceFields, Map<String, String> options) {
+  public HoodieSparkExpressionIndex(String indexName, String indexFunction, String indexType, List<String> orderedSourceFields, Map<String, String> options) {
     this.indexName = indexName;
     this.indexFunction = indexFunction;
+    this.indexType = indexType;
     this.orderedSourceFields = orderedSourceFields;
     this.options = options;
 
@@ -73,7 +75,7 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
     if (orderedSourceValues.size() != orderedSourceFields.size()) {
       throw new IllegalArgumentException("Mismatch in number of source values and fields in the expression");
     }
-    sparkFunction.validateOptions(options);
+    sparkFunction.validateOptions(options, indexType);
     return sparkFunction.apply(orderedSourceValues, options);
   }
 

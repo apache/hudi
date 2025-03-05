@@ -27,7 +27,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkMetadataWriterUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -1776,7 +1776,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |""".stripMargin)
 
         // create index using bloom filters on city column with upper() function
-        spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper')")
+        spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper', fpp='0.01')")
 
         // Pruning takes place only if query uses upper function on city
         checkAnswer(s"select id, rider from $tableName where upper(city) in ('sunnyvale', 'sg')")()
@@ -2161,7 +2161,13 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     df = df.withColumn(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION, lit("c/d"))
       .withColumn(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_RELATIVE_FILE_PATH, lit("c/d/123141ab-701b-4ba4-b60b-e6acd9e9103e-0_329-224134-258390_2131313124.parquet"))
       .withColumn(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_FILE_SIZE, lit(100))
-    val bloomFilterRecords = SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(df, "c5", HoodieWriteConfig.newBuilder().withPath("a/b").build(), "", "random")
+    val indexOptions = Map(
+      "fpp"-> "0.01",
+      "numEntries" -> "1000"
+    )
+    val bloomFilterRecords = SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(df, "c5",
+      HoodieWriteConfig.newBuilder().withPath("a/b").build(), "",
+        HoodieIndexDefinition.newBuilder().withIndexName("random").withIndexOptions(JavaConverters.mapAsJavaMapConverter(indexOptions).asJava).build())
       .getExpressionIndexRecords
     // Since there is only one partition file pair there is only one bloom filter record
     assertEquals(1, bloomFilterRecords.collectAsList().size())

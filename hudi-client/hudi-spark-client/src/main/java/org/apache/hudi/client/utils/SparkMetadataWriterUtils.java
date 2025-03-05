@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
@@ -204,8 +205,11 @@ public class SparkMetadataWriterUtils {
         : new ExpressionIndexComputationMetadata(colStatRecords);
   }
 
-  public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex,
-                                                                                             HoodieWriteConfig metadataWriteConfig, String instantTime, String indexName) {
+  public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex, HoodieWriteConfig metadataWriteConfig, String instantTime,
+                                                                                             HoodieIndexDefinition indexDefinition) {
+    String indexName = indexDefinition.getIndexName();
+    setBloomFilterProps(metadataWriteConfig, indexDefinition);
+
     // Group data using expression index metadata and then create bloom filter on the group
     Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
         // row.get(1) refers to partition path value and row.get(2) refers to file name.
@@ -224,6 +228,21 @@ public class SparkMetadataWriterUtils {
           return Collections.singletonList(bloomFilterRecord).iterator();
         }), Encoders.kryo(HoodieRecord.class));
     return new ExpressionIndexComputationMetadata(HoodieJavaRDD.of(bloomFilterRecords.javaRDD()));
+  }
+
+  private static void setBloomFilterProps(HoodieWriteConfig metadataWriteConfig, HoodieIndexDefinition indexDefinition) {
+    if (indexDefinition.getIndexOptions().containsKey(HoodieExpressionIndex.FALSE_POSITIVE_RATE)) {
+      metadataWriteConfig.getProps().setProperty(HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE.key(),
+          indexDefinition.getIndexOptions().get(HoodieExpressionIndex.FALSE_POSITIVE_RATE));
+    }
+    if (indexDefinition.getIndexOptions().containsKey(HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES)) {
+      metadataWriteConfig.getProps().setProperty(HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE.key(),
+          indexDefinition.getIndexOptions().get(HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES));
+    }
+    if (indexDefinition.getIndexOptions().containsKey(HoodieExpressionIndex.BLOOM_FILTER_TYPE)) {
+      metadataWriteConfig.getProps().setProperty(HoodieStorageConfig.BLOOM_FILTER_TYPE.key(),
+          indexDefinition.getIndexOptions().get(HoodieExpressionIndex.BLOOM_FILTER_TYPE));
+    }
   }
 
   public static List<Row> readRecordsAsRows(StoragePath[] paths, SQLContext sqlContext,
@@ -328,7 +347,8 @@ public class SparkMetadataWriterUtils {
 
     // Apply expression index and generate the column to index
     HoodieExpressionIndex<Column, Column> expressionIndex =
-        new HoodieSparkExpressionIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
+        new HoodieSparkExpressionIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getIndexType(), indexDefinition.getSourceFields(),
+            indexDefinition.getIndexOptions());
     Column indexedColumn = expressionIndex.apply(Collections.singletonList(rowDataset.col(columnToIndex)));
     rowDataset = rowDataset.withColumn(columnToIndex, indexedColumn);
 
@@ -336,7 +356,7 @@ public class SparkMetadataWriterUtils {
     if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
       return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, partitionRecordsFunctionOpt);
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-      return getExpressionIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, metadataWriteConfig, instantTime, indexDefinition.getIndexName());
+      return getExpressionIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, metadataWriteConfig, instantTime, indexDefinition);
     } else {
       throw new UnsupportedOperationException(indexDefinition.getIndexType() + " is not yet supported");
     }
@@ -387,9 +407,9 @@ public class SparkMetadataWriterUtils {
       HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
       Schema tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema)
           .orElseThrow(() -> new IllegalStateException(String.format("Expected writer schema in commit metadata %s", commitMetadata)));
-      List<Pair<String,Schema>> columnsToIndexSchemaMap = columnsToIndex.stream()
-          .map(columnToIndex -> Pair.of(columnToIndex, HoodieAvroUtils.getSchemaForField(tableSchema, columnToIndex).getValue().schema())).collect(
-          Collectors.toList());
+      List<Pair<String, Schema>> columnsToIndexSchemaMap = columnsToIndex.stream()
+          .map(columnToIndex -> Pair.of(columnToIndex, HoodieAvroUtils.getSchemaForField(tableSchema, columnToIndex).getValue().schema()))
+          .collect(Collectors.toList());
       // filter for supported types
       final List<String> validColumnsToIndex = columnsToIndexSchemaMap.stream()
           .filter(colSchemaPair -> HoodieTableMetadataUtil.SUPPORTED_META_FIELDS_PARTITION_STATS.contains(colSchemaPair.getKey())
