@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -40,7 +40,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
 
-import java.util.Collections
+import java.util.{Collections, Properties}
 import java.util.concurrent.Executors
 
 import scala.collection.JavaConverters._
@@ -228,9 +228,20 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIWithDelete(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+  @CsvSource(value = Array(
+    "COPY_ON_WRITE,6", "COPY_ON_WRITE,8", "MERGE_ON_READ,6", "MERGE_ON_READ,8"
+  ))
+  def testRLIWithDelete(tableType: String, tableVersion: Int): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      HoodieTableConfig.VERSION.key() -> tableVersion.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
+    val props = new Properties()
+    for ((k, v) <- hudiOpts) {
+      props.put(k, v)
+    }
+    initMetaClient(HoodieTableType.valueOf(tableType), props)
+
     val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
@@ -408,13 +419,22 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIWithDTClustering(tableType: HoodieTableType): Unit = {
+  @CsvSource(value = Array(
+    "COPY_ON_WRITE,6", "COPY_ON_WRITE,8", "MERGE_ON_READ,6", "MERGE_ON_READ,8"
+  ))
+  def testRLIWithDTClustering(tableType: String, tableVersion: Int): Unit = {
     val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString,
+      HoodieTableConfig.VERSION.key() -> tableVersion.toString,
       HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
       HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2"
     )
+    val props = new Properties()
+    for ((k, v) <- hudiOpts) {
+      props.put(k, v)
+    }
+    initMetaClient(HoodieTableType.valueOf(tableType), props)
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
