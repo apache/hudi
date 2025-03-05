@@ -34,7 +34,7 @@ import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, Hoodie
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists, PARTITION_NAME_SECONDARY_INDEX_PREFIX}
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
@@ -50,6 +50,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
 import java.util.function.Consumer
+import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 
@@ -462,9 +463,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testPayloadDelete(recordType: HoodieRecordType) {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @CsvSource(value = Array("AVRO,6", "AVRO,8", "SPARK,6", "SPARK,8"))
+  def testPayloadDelete(recordType: HoodieRecordType, tableVersion: Int) {
+    var (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    writeOpts = writeOpts + (HoodieTableConfig.VERSION.key() -> tableVersion.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
 
     // First Operation:
     // Producing parquet files to three default partitions.
@@ -539,10 +542,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testPrunedFiltered(recordType: HoodieRecordType) {
-
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+  @CsvSource(value = Array("AVRO,6", "AVRO,8", "SPARK,6", "SPARK,8"))
+  def testPrunedFiltered(recordType: HoodieRecordType, tableVersion: Int) {
+    var (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    writeOpts = writeOpts + (HoodieTableConfig.VERSION.key() -> tableVersion.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
 
     // First Operation:
     // Producing parquet files to three default partitions.
@@ -604,7 +608,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commit2CompletionTime)
+      .option(DataSourceReadOptions.START_COMMIT.key, if (tableVersion == 6) commit1Time else commit2CompletionTime)
       .load(basePath)
 
     // filter first commit and only read log records
@@ -1427,6 +1431,69 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(
       1000L,
       roDf.where(col(recordKeyField) === 0).select(dataField).collect()(0).getLong(0))
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = Array("true,6", "true,8", "false,6", "false,8"))
+//  @ValueSource(booleans = Array(true, false))
+  def testSnapshotQueryAfterInflightDeltaCommit(enableFileIndex: Boolean, tableVersion: Int): Unit = {
+    val (tableName, tablePath) = ("hoodie_mor_snapshot_read_test_table", s"${basePath}_mor_test_table")
+    val precombineField = "col3"
+    val recordKeyField = "key"
+    val dataField = "age"
+
+    val options = Map[String, String](
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
+      DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> precombineField,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieWriteConfig.TBL_NAME.key -> tableName,
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1")
+    val pathForQuery = getPathForROQuery(tablePath, !enableFileIndex, 0)
+
+    var (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options, enableFileIndex)
+    writeOpts = writeOpts ++ Map(
+      HoodieTableConfig.VERSION.key() -> tableVersion.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
+
+    val firstDf = spark.range(0, 10).toDF(recordKeyField)
+      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(dataField, expr(recordKeyField + " + 1000"))
+    firstDf.write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Overwrite)
+      .save(tablePath)
+
+    val secondDf = spark.range(0, 10).toDF(recordKeyField)
+      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(dataField, expr(recordKeyField + " + 2000"))
+    secondDf.write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append).save(tablePath)
+
+    // Snapshot query on MOR
+    val snapshotDf = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(pathForQuery)
+
+    // Delete last completed instant
+    metaClient = createMetaClient(spark, tablePath)
+    val files = storage.listDirectEntries(metaClient.getTimelinePath).stream()
+      .filter(f => f.getPath.getName.contains(metaClient.getActiveTimeline.lastInstant().get().requestedTime())
+        && !f.getPath.getName.contains("inflight")
+        && !f.getPath.getName.contains("requested"))
+      .collect(Collectors.toList[StoragePathInfo]).asScala
+    assertEquals(1, files.size)
+    storage.deleteFile(files.head.getPath)
+
+    // verify snapshot query returns data written using firstDf
+    assertEquals(10, snapshotDf.count())
+    assertEquals(
+      1000L,
+      snapshotDf.where(col(recordKeyField) === 0).select(dataField).collect()(0).getLong(0))
   }
 
   @ParameterizedTest

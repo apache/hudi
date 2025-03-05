@@ -103,7 +103,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
                                          InternalSchema internalSchema,
                                          Option<String> keyFieldOverride,
                                          boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
-                                         Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
+                                         Option<HoodieTableMetaClient> hoodieTableMetaClientOption,
+                                         boolean allowInflightInstants) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
         hoodieTableMetaClientOption);
@@ -113,6 +114,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
       this.scannedPrefixes = new HashSet<>();
+      this.allowInflightInstants = allowInflightInstants;
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -342,6 +344,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     // By default, we're doing a full-scan
     private boolean forceFullScan = true;
     private boolean enableOptimizedLogBlocksScan = false;
+    protected boolean allowInflightInstants = false;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
     protected HoodieTableMetaClient hoodieTableMetaClient;
 
@@ -466,6 +469,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       return this;
     }
 
+    public Builder withAllowInflightInstants(boolean allowInflightInstants) {
+      this.allowInflightInstants = allowInflightInstants;
+      return this;
+    }
+
     @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
@@ -479,7 +487,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
           Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger,
-          Option.ofNullable(hoodieTableMetaClient));
+          Option.ofNullable(hoodieTableMetaClient), allowInflightInstants);
     }
   }
 }
