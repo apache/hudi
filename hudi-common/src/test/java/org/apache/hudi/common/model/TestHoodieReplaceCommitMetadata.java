@@ -20,7 +20,6 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

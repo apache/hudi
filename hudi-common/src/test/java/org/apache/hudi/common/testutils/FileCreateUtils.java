@@ -84,7 +84,13 @@ public class FileCreateUtils extends FileCreateUtilsBase {
   }
 
   private static void createMetaFile(HoodieTableMetaClient metaClient, String instantTime, String suffix) throws IOException {
-    createMetaFile(metaClient, instantTime, suffix, Option.empty());
+    createMetaFile(metaClient, instantTime, Option.empty(), suffix, Option.empty());
+  }
+
+  private static <T> void createMetaFile(
+      HoodieTableMetaClient metaClient, String instantTime, Option<String> completeTime, String suffix, Option<T> metadata) throws IOException {
+    createMetaFileInTimelinePath(metaClient, instantTime, completeTime.isEmpty() ? InProcessTimeGenerator::createNewInstantTime : completeTime::get, suffix,
+        metadata.flatMap(m -> metaClient.getCommitMetadataSerDe().getInstantWriter(m)));
   }
 
   private static <T> void createMetaFile(HoodieTableMetaClient metaClient, String instantTime, String suffix, Option<T> metadata) throws IOException {
@@ -114,10 +120,10 @@ public class FileCreateUtils extends FileCreateUtilsBase {
     }
   }
 
-  public static void createSavepointCommit(HoodieTableMetaClient metaClient, String instantTime,
+  public static void createSavepointCommit(HoodieTableMetaClient metaClient, String instantTime, Option<String> completeTime,
                                            HoodieSavepointMetadata savepointMetadata)
       throws IOException {
-    createMetaFile(metaClient, instantTime, HoodieTimeline.SAVEPOINT_EXTENSION, Option.of(savepointMetadata));
+    createMetaFile(metaClient, instantTime, completeTime, HoodieTimeline.SAVEPOINT_EXTENSION, Option.of(savepointMetadata));
   }
 
   public static void createCommit(HoodieTableMetaClient metaClient, String instantTime)
@@ -133,9 +139,9 @@ public class FileCreateUtils extends FileCreateUtilsBase {
     createMetaFile(metaClient, instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
   }
 
-  public static void createDeltaCommit(HoodieTableMetaClient metaClient, CommitMetadataSerDe commitMetadataSerDe, String instantTime,
+  public static void createDeltaCommit(HoodieTableMetaClient metaClient, CommitMetadataSerDe commitMetadataSerDe, String instantTime, Option<String> completeTime,
                                        HoodieCommitMetadata metadata) throws IOException {
-    createMetaFile(metaClient, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, Option.of(metadata));
+    createMetaFile(metaClient, instantTime, completeTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, Option.of(metadata));
   }
 
   public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) throws IOException {
@@ -173,8 +179,14 @@ public class FileCreateUtils extends FileCreateUtilsBase {
   }
 
   public static void createReplaceCommit(HoodieTableMetaClient metaClient, CommitMetadataSerDe commitMetadataSerDe,
+                                         String instantTime, Option<String> completeTime, HoodieReplaceCommitMetadata metadata) throws IOException {
+    createMetaFile(metaClient, instantTime, completeTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION,
+        Option.of(metadata));
+  }
+
+  public static void createReplaceCommit(HoodieTableMetaClient metaClient, CommitMetadataSerDe commitMetadataSerDe,
                                          String instantTime, HoodieReplaceCommitMetadata metadata) throws IOException {
-    createMetaFile(metaClient, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION,
+    createMetaFile(metaClient, instantTime, Option.empty(), HoodieTimeline.REPLACE_COMMIT_EXTENSION,
         Option.of(metadata));
   }
 
@@ -235,10 +247,10 @@ public class FileCreateUtils extends FileCreateUtilsBase {
         Option.of(metadata));
   }
 
-  public static void createCleanFile(HoodieTableMetaClient metaClient, String instantTime,
+  public static void createCleanFile(HoodieTableMetaClient metaClient, String instantTime, Option<String> completeTime,
                                      HoodieCleanMetadata metadata, boolean isEmpty)
       throws IOException {
-    createMetaFile(metaClient, instantTime, HoodieTimeline.CLEAN_EXTENSION,
+    createMetaFile(metaClient, instantTime, completeTime, HoodieTimeline.CLEAN_EXTENSION,
         isEmpty ? Option.empty() : Option.of(metadata));
   }
 

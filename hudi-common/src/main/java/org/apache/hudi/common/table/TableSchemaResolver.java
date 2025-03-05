@@ -32,8 +32,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -60,21 +58,14 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
@@ -185,43 +176,32 @@ public class TableSchemaResolver {
     return getTableAvroSchemaInternal(includeMetadataFields, Option.empty());
   }
 
-  Option<Schema> getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt) {
-    return (instantOpt.isPresent()
-        ? getTableSchemaFromCommitMetadata(instantOpt.get(), includeMetadataFields)
-        : getTableSchemaFromLatestCommitMetadata(includeMetadataFields))
-        .or(() -> getTableCreateSchemaWithMetadata(includeMetadataFields))
-        .or(() -> getSchemaFromDataFileIfPresent(includeMetadataFields))
-        .map(this::handlePartitionColumnsIfNeeded);
-  }
+  private Option<Schema> getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt) {
+    Option<Schema> schema =
+        (instantOpt.isPresent()
+            ? getTableSchemaFromCommitMetadata(instantOpt.get(), includeMetadataFields)
+            : getTableSchemaFromLatestCommitMetadata(includeMetadataFields))
+            .or(() ->
+                metaClient.getTableConfig().getTableCreateSchema()
+                    .map(tableSchema ->
+                        includeMetadataFields
+                            ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get())
+                            : tableSchema)
+            )
+            .or(() -> {
+              Option<Schema> schemaFromDataFile = getTableAvroSchemaFromDataFileInternal();
+              return includeMetadataFields
+                  ? schemaFromDataFile
+                  : schemaFromDataFile.map(HoodieAvroUtils::removeMetadataFields);
+            });
 
-  /**
-   * Retrieves the table creation schema with metadata fields and partition columns handled.
-   *
-   * @param includeMetadataFields whether to include metadata fields in the schema
-   * @return Option containing the fully processed schema if available, empty Option otherwise
-   */
-  public Option<Schema> getTableCreateSchemaWithMetadata(boolean includeMetadataFields) {
-    return metaClient.getTableConfig().getTableCreateSchema()
-        .map(tableSchema ->
-            includeMetadataFields
-                ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get())
-                : tableSchema)
-        .map(this::handlePartitionColumnsIfNeeded);
-  }
-
-  /**
-   * Handles partition column logic for a given schema.
-   *
-   * @param schema the input schema to process
-   * @return the processed schema with partition columns handled appropriately
-   */
-  private Schema handlePartitionColumnsIfNeeded(Schema schema) {
-    if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
+    // TODO partition columns have to be appended in all read-paths
+    if (metaClient.getTableConfig().shouldDropPartitionColumns() && schema.isPresent()) {
       return metaClient.getTableConfig().getPartitionFields()
-          .map(partitionFields -> appendPartitionColumns(schema, Option.ofNullable(partitionFields)))
-          .or(() -> Option.of(schema))
-          .get();
+          .map(partitionFields -> appendPartitionColumns(schema.get(), Option.ofNullable(partitionFields)))
+          .or(() -> schema);
     }
+
     return schema;
   }
 
@@ -240,48 +220,6 @@ public class TableSchemaResolver {
     } else {
       return Option.empty();
     }
-  }
-
-  // [HUDI-8219]: needs to be cleaned up when the jira is fully implemented.
-  public Option<Schema> getTableAvroSchemaForClustering(boolean includeMetadataFields) {
-    return getTableSchemaFromLatestCommitMetadataForClustering(includeMetadataFields)
-      .or(() -> getTableCreateSchemaWithMetadata(includeMetadataFields))
-      .or(() -> getSchemaFromDataFileIfPresent(includeMetadataFields))
-        .map(this::handlePartitionColumnsIfNeeded);
-  }
-
-  private Option<Schema> getSchemaFromDataFileIfPresent(boolean includeMetadataFields) {
-    Option<Schema> schemaFromDataFile = getTableAvroSchemaFromDataFileInternal();
-    return (includeMetadataFields
-        ? schemaFromDataFile
-        : schemaFromDataFile.map(HoodieAvroUtils::removeMetadataFields));
-  }
-
-  private Option<Schema> getTableSchemaFromLatestCommitMetadataForClustering(boolean includeMetadataFields) {
-    HoodieTimeline reversedTimeline = getSchemaEvolutionTimelineInReverseOrder();
-    // To find the table schema given an instant time, need to walk backwards from the latest instant in
-    // the timeline finding a completed instant containing a valid schema.
-    Option<HoodieInstant> instantWithTableSchema = Option.fromJavaOptional(reversedTimeline.getInstantsAsStream()
-        // Make sure the commit metadata has a valid schema inside. Same caching the result for expensive operation.
-        .filter(s -> {
-          try {
-            return !StringUtils.isNullOrEmpty(reversedTimeline.readCommitMetadata(s)
-                .getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
-        })
-        .findFirst());
-
-    if (instantWithTableSchema.isPresent()) {
-      // If there is a qualified instant, parse the table schema out of it.
-      try {
-        return Option.of(getTableAvroSchema(instantWithTableSchema.get(), includeMetadataFields));
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-    return Option.empty();
   }
 
   private Option<Schema> getTableSchemaFromCommitMetadata(HoodieInstant instant, boolean includeMetadataFields) {
@@ -574,52 +512,5 @@ public class TableSchemaResolver {
 
   private Supplier<Exception> schemaNotFoundError() {
     return () -> new HoodieSchemaNotFoundException("No schema found for table at " + metaClient.getBasePath());
-  }
-
-  /**
-   * WARNING: This method should be only used as part of HUDI-8438 before the jira owner fully accommodate all existing use
-   * cases.
-   *
-   * Get timeline in REVERSE order that only contains completed instants which POTENTIALLY evolve the table schema.
-   * For types of instants that are included and not reflecting table schema at their instant completion time please refer
-   * comments inside the code.
-   * */
-  HoodieTimeline getSchemaEvolutionTimelineInReverseOrder() {
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
-    Stream<HoodieInstant> timelineStream = timeline.getInstantsAsStream();
-    final Set<String> actions;
-    switch (metaClient.getTableType()) {
-      case COPY_ON_WRITE: {
-        actions = new HashSet<>(Arrays.asList(COMMIT_ACTION, REPLACE_COMMIT_ACTION));
-        break;
-      }
-      case MERGE_ON_READ: {
-        actions = new HashSet<>(Arrays.asList(DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION));
-        break;
-      }
-      default:
-        throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
-    }
-
-    // We only care committed instant when it comes to table schema.
-    TimelineLayout timelineLayout = metaClient.getTimelineLayout();
-    Comparator<HoodieInstant> reversedComparator = timelineLayout.getInstantComparator().requestedTimeOrderedComparator().reversed();
-
-    // The timeline still contains DELTA_COMMIT_ACTION/COMMIT_ACTION which might not contain a valid schema
-    // field in their commit metadata.
-    // Since the operations of filtering them out are expensive, we should do on-demand stream based
-    // filtering when we actually need the table schema.
-    Stream<HoodieInstant> reversedTimelineWithTableSchema = timelineStream
-        // Only focuses on those who could potentially evolve the table schema.
-        .filter(instant -> actions.contains(instant.getAction()))
-        // Further filtering out clustering operations as it does not evolve table schema.
-        .filter(instant -> !ClusteringUtils.isClusteringInstant(timeline, instant, metaClient.getInstantGenerator()))
-        .filter(HoodieInstant::isCompleted)
-        // We reverse the order as the operation against this timeline would be very efficient if
-        // we always start from the tail.
-        .sorted(reversedComparator);
-    return timelineLayout.getTimelineFactory().createDefaultTimeline(
-        reversedTimelineWithTableSchema,
-        metaClient.getActiveTimeline());
   }
 }

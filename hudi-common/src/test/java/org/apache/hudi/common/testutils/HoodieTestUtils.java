@@ -197,7 +197,7 @@ public class HoodieTestUtils {
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
-    return init(storageConf, basePath, tableType, properties, databaseName);
+    return getMetaClientBuilder(tableType, properties, databaseName).initTable(storageConf.newInstance(), basePath);
   }
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
@@ -219,12 +219,10 @@ public class HoodieTestUtils {
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            Properties properties) throws IOException {
-    return init(storageConf, basePath, tableType, properties, null);
+    return getMetaClientBuilder(tableType, properties, null).initTable(storageConf.newInstance(), basePath);
   }
 
-  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
-                                           Properties properties, String databaseName)
-      throws IOException {
+  public static HoodieTableMetaClient.TableBuilder getMetaClientBuilder(HoodieTableType tableType, Properties properties, String databaseName) {
     HoodieTableMetaClient.TableBuilder builder =
         HoodieTableMetaClient.newTableBuilder()
             .setDatabaseName(databaseName)
@@ -240,9 +238,8 @@ public class HoodieTestUtils {
         && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
       builder.setPartitionFields("some_nonexistent_field");
     }
-
-    return builder.fromProperties(properties)
-        .initTable(storageConf.newInstance(), basePath);
+    builder.fromProperties(properties);
+    return builder;
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat, String keyGenerator) throws IOException {
