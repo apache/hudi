@@ -191,7 +191,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
         writeSchemaWithMetaFields,
         internalSchemaOption,
         hoodieTable.getMetaClient(),
-        hoodieTable.getMetaClient().getTableConfig().getProps(),
+        config.getProps(),
         0,
         Long.MAX_VALUE,
         usePosition)) {
