@@ -10,7 +10,7 @@ Once hudi has been built, the shell can be fired by via  `cd hudi-cli-with-bundl
 ### Hudi CLI Bundle setup
 In release `0.13.0` we have now added another way of launching the `hudi cli`, which is using the `hudi-cli-bundle`.
 
-#### **Note:** The traditional `hudi-cli.sh` script has been deprecated and replaced with `hudi-cli-with-bundle.sh` from this release onwards. Users should migrate to the new bundled CLI script `hudi-cli-with-bundle.sh` for better compatibility and ease of use.
+#### Note: The traditional `hudi-cli.sh` script has been deprecated and replaced with `hudi-cli-with-bundle.sh` from this release onwards. Users should migrate to the new bundled CLI script `hudi-cli-with-bundle.sh` for better compatibility and ease of use.
 
 
 There are a couple of requirements when using this approach such as having `spark` installed locally on your machine. 
