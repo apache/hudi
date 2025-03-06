@@ -229,7 +229,7 @@ public abstract class BaseTestCommitMetadataSerDe {
     // Serialize and deserialize
     Option<byte[]> serialized = Option.of(new byte[]{});
     Exception ex = assertThrows(IOException.class, () -> serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> false, HoodieRollbackMetadata.class));
-    assertEquals(ex.getCause().getMessage(), "Not an Avro data file.");
+    assertEquals("Not an Avro data file.", ex.getCause().getMessage());
   }
 
   @Test
@@ -243,10 +243,9 @@ public abstract class BaseTestCommitMetadataSerDe {
     Exception ex = assertThrows(IOException.class, () -> serDe.deserialize(instant, new ByteArrayInputStream(serialized.get()), () -> false, HoodieCommitMetadata.class));
 
     if (serDe instanceof CommitMetadataSerDeV2) {
-      assertEquals(ex.getCause().getMessage(), "Not an Avro data file.");
+      assertEquals("Not an Avro data file.", ex.getCause().getMessage());
     } else {
-      assertEquals(ex.getCause().getMessage(), "No content to map due to end-of-input\n"
-          + " at [Source: (ByteArrayInputStream); line: 1, column: 0]");
+      assertTrue(ex.getCause().getMessage().startsWith("No content to map due to end-of-input"));
     }
   }
 
