@@ -25,7 +25,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestDataSourceUtils extends HoodieClientTestBase {
 
-  @Disabled("HUDI-9086")
+  @Test
   void testDeduplicationAgainstRecordsAlreadyInTable() {
     HoodieWriteConfig config = getConfig();
     config.getProps().setProperty("path", config.getBasePath());
