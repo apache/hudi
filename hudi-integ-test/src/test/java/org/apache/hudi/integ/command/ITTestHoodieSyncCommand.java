@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Disabled("HUDI-8274")
 public class ITTestHoodieSyncCommand extends HoodieTestHiveBase {
 
-  private static final String HUDI_CLI_TOOL = HOODIE_WS_ROOT + "/hudi-cli/hudi-cli.sh";
+  private static final String HUDI_CLI_TOOL = HOODIE_WS_ROOT + "/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh";
   private static final String SYNC_VALIDATE_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/sync-validate.commands";
 
   @Test
