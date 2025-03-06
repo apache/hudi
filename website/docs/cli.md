@@ -5,10 +5,13 @@ last_modified_at: 2021-08-18T15:59:57-04:00
 ---
 
 ### Local set up
-Once hudi has been built, the shell can be fired by via  `cd hudi-cli && ./hudi-cli.sh`.
+Once hudi has been built, the shell can be fired by via  `cd hudi-cli-with-bundle.sh && ./hudi-cli-with-bundle.sh`.
 
 ### Hudi CLI Bundle setup
 In release `0.13.0` we have now added another way of launching the `hudi cli`, which is using the `hudi-cli-bundle`.
+
+#### **Note:** The traditional `hudi-cli.sh` script has been deprecated and replaced with `hudi-cli-with-bundle.sh` from this release onwards. Users should migrate to the new bundled CLI script `hudi-cli-with-bundle.sh` for better compatibility and ease of use.
+
 
 There are a couple of requirements when using this approach such as having `spark` installed locally on your machine. 
 It is required to use a spark distribution with hadoop dependencies packaged such as `spark-3.3.1-bin-hadoop2.tgz` from https://archive.apache.org/dist/spark/.
@@ -73,7 +76,7 @@ export CLIENT_JAR=/lib/spark-3.2.0-bin-hadoop3.2/jars/aws-java-sdk-bundle-1.12.4
 ```
 Once these are set, you are good to launch hudi-cli and access S3 dataset. 
 ```
-./hudi-cli/hudi-cli.sh
+./packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh
 ```
 ### Using hudi-cli on Google Dataproc
 [Dataproc](https://cloud.google.com/dataproc) is Google's managed service for running Apache Hadoop, Apache Spark, 
