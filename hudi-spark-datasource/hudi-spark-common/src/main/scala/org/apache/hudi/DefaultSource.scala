@@ -304,8 +304,9 @@ object DefaultSource {
         Option(schema)
       }
 
-      val useNewParquetFileFormat = !metaClient.isMetadataTable && (globPaths == null || globPaths.isEmpty) &&
-        HoodieReaderConfig.isFileGroupReaderEnabled(metaClient.getTableConfig.getTableVersion, parameters.asJava)
+      val useNewParquetFileFormat = parameters.getOrElse(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
+        HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean &&
+        !metaClient.isMetadataTable && (globPaths == null || globPaths.isEmpty)
       if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
         new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
       } else if (isCdcQuery) {
