@@ -75,7 +75,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   private static final String DEMO_CONTAINER_SCRIPT = HOODIE_WS_ROOT + "/docker/demo/setup_demo_container.sh";
   private static final String MIN_COMMIT_TIME_COW_SCRIPT = HOODIE_WS_ROOT + "/docker/demo/get_min_commit_time_cow.sh";
   private static final String MIN_COMMIT_TIME_MOR_SCRIPT = HOODIE_WS_ROOT + "/docker/demo/get_min_commit_time_mor.sh";
-  private static final String HUDI_CLI_TOOL = HOODIE_WS_ROOT + "/hudi-cli/hudi-cli.sh";
+  private static final String HUDI_CLI_TOOL = HOODIE_WS_ROOT + "/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh";
   private static final String COMPACTION_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/compaction.commands";
   private static final String COMPACTION_BOOTSTRAP_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/compaction-bootstrap.commands";
   private static final String SPARKSQL_BS_PREP_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/sparksql-bootstrap-prep-source.commands";
