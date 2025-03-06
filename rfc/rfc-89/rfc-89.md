@@ -21,8 +21,8 @@
 
 ## Approvers
 - @danny0405
-- @codope
 - @xiarixiaoyao
+- @LinMingQiang
 
 ## Status
 
@@ -139,50 +139,47 @@ The read-write process of Spark based on Bucket Index is also similar.
 - Use `BucketIndexSupport` to Bucket Index pruning during reading.
 
 ## Design
-### Workflow
-The core process of writing to the Partition Level Bucket Index is shown in the figure below. First of all, the Bucket Identifier 
-loads the partition bucket count information from the metadata as a cache. During the Partitioner and Writer stages, when 
-using the Identifier for shuffling and tagging, it will firstly attempt to find the bucketNumber of the corresponding 
-partition from the cache. If the cache was missed, it will calculate the corresponding value based on the user's expression, 
-and then submit it to the metadata during the commit stage.
+### Overview
+Implement a partition-level Bucket Index capability where users can set the calculation expression for the partition 
+bucket number via `hoodie.bucket.index.partition.expressions`. For historical partitions, provide a `CALL command (call partitionBucketIndexManager(...)`
+to support bucket rescaling which is a replace-commit.
+
+Note: When users invoke the CALL command to modify the expression and resize historical partitions' bucket number, 
+they must follow THREE STEPS
+1. Firstly, stop all ingestion Jobs
+2. Then, trigger call command and wait for bucket rescaling completed
+3. Finally, restart all ingestion Jobs
+
+This STEPS ensures that all writers load the same expression config, maintaining consistency between the expression and the data.
+
 ![workflow.jpg](workflow.jpg)
-The design details of each part are as follows.
 
-### Config
-Add new Config `hoodie.bucket.index.partition.rule.type`
+Next will introduce the implementation details.
 
-Add new config `hoodie.bucket.index.partition.expressions`
+### New Config
 
-Re-use existed config `hoodie.bucket.index.num.buckets` as default partition bucket number
+| Config                                    | type   | default | Description                                                                                                                                                                                                                                                     |
+|-------------------------------------------|--------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| hoodie.bucket.index.partition.rule.type   | string | regex   | Set rule parser for expressions.                                                                                                                                                                                                                                |
+| hoodie.bucket.index.partition.expressions | string | null    | Users can use this parameter to specify expression and the corresponding bucket numbers (separated by commas).Multiple rules are separated by semicolons like `hoodie.bucket.index.partition.expressions=expression1,bucket-number1;expression2,bucket-number2` |
+| hoodie.bucket.index.num.buckets           | int    | 4       | Hudi bucket number per partition.                                                                                                                                                                                                                               |
 
-The above parameters are table-level parameters and need to be declared in the DDL. Users can't change this config through
+The above parameters are at table-level which need to be declared in the DDL. Users can't change this config through
 runtime options like Flink /*+ OPTIONS(...) */
 
-| Config                                 | type   | Description | Description                                                                                                                                                                                                                                                     |
-|----------------------------------------|--------|-------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| hoodie.bucket.index.partition.rule.type | string | regex       | Set rule parser for expressions.                                                                                                                                                                                                                                |
-| hoodie.bucket.index.partition.expressions | string | null        | Users can use this parameter to specify expression and the corresponding bucket numbers (separated by commas).Multiple rules are separated by semicolons like `hoodie.bucket.index.partition.expressions=expression1,bucket-number1;expression2,bucket-number2` |
-| hoodie.bucket.index.num.buckets        | int    | 4           | Hudi bucket number per partition.                                                                                                                                                                                                                               |
-| hoodie.bucket.index.cache.maxSize             | int    | -1          | The maximum size of the partitionToBucketNumber cache, -1 for no limit                                                                                                                                                                                          |
-
-Note: In the future, more parsers will be provided, such as range expression parsers and hybrid parsers.
-Here, the parser is designed to be extensible, allowing users to customize parsers.
-
-#### Demo
 ```sql
 CREATE TABLE hudi_table(
   id BIGINT,
   name STRING,
   price DOUBLE
-)
-WITH (
+) WITH (
 'connector' = 'hudi',
 'path' = 'file:///tmp/hudi_table',
 'table.type' = 'MERGE_ON_READ',
 'index.type' = 'BUCKET',
 'hoodie.bucket.index.partition.expressions' = '\\d{4}-(06-(01|17|18)|11-(01|10|11)),256',
 'hoodie.bucket.index.num.buckets' = '10'
-);
+)
 ```
 
 For the dates of 06-01, 06-17, 06-18 in June and 01-11, 10-11, 11-11 in
@@ -190,94 +187,97 @@ November of each year (in the format of yyyy-MM-dd), the corresponding bucket nu
 
 For common partitions use 10 as partition bucket number
 
+### Hashing Config And Management
 
-#### Config Management
-
-The expression config will be persisted as files named as `<instant>.hashing_config` for current table, it stores in
-`.hoodie/.simple_hashing/config` directory and contains the following information in json format
+The expression config will be persisted as `<instant>.hashing_config` for current table, it stores in
+`.hoodie/.hashing_meta` directory and contains the following information in json format
 
 ```json
 {
-    "<instant1>": {
-       "expression": "expression1,bucket-number1;expression2,bucket-number2",
-       "rule": "rule-engine",
-       "default": "default-bucket-number"
-    },
-    "<instant2>": {}
+   "rule": "rule-engine",
+   "expressions": "expression1,bucket-number1;expression2,bucket-number2",
+   "default_bucket_number": "default-bucket-number"
 }
 ```
-Expressions has newer instant has higher priority
+#### Multi-version for <instant>.hashing_config
 
-For a specific expression like instant1 ==> Expression1 has a higher priority than expression2.
+Apache Hudi natively supports multi-versioning and version rollback capabilities. For Bucket Rescale operation, 
+we must also support Bucket Rescale rollbacks, even rolling back multiple completed Bucket Rescale operations at once. 
+This requires tracking the instant and corresponding config version for each Bucket Rescale action. 
+During rollback, both the data and config must be reverted to ensure consistency between the configuration and the data state.
 
-Here, the config is designed to support multiple versions. During the DDL phase, hoodie will create a `00000000000000000.hashing_config` for the first time. 
-Subsequently, when modifying the expression through the provided `call command`(details refer to Tool ), 
-a new version of the config will be generated. The new-version config contains all historical change records. During 
-loading stage, the latest completed instant related config will be loaded based on the active timeline.
+So that we need to maintain config versions alongside commit instants which is multiple versions of hashing_config (multi-versioned configs). 
+This necessitates implementing mechanisms for config creation, update, rollback, cleanup and loading
+
+About Hashing_Config Creation
+
+The initial version *must and can only* be created via DDL. During the DDL phase, hoodie will create a 
+`00000000000000000.hashing_config` for the first time.
+
+About Hashing_Config Update
+
+A new version can only be updated via `call partitionBucketIndexManager(overwrite => 'new-expressions', dry-run => 'false')`, which is 
+a replace-commit operation. 
+
+The transactional relationship between the replace-commit operation and hashing_config updates will be explained in the 
+PartitionBucketIndexManager section later.
+
+*Note:* Before updating the hashing_config, users must manually stop all ingestion jobs.
 
 ```text
-.hoodie/.simple_hashing/config/00000000000000000.hashing_config
-.hoodie/.simple_hashing/config/20250303095546020.hashing_config
-```
-
-Using Archive Service to clean up expired config versions, keeping up to 5 historical versions
-
-### Hashing Metadata
-Here, the Hashing Metadata is designed to support multiple versions, new versions contains all the info in old versions.
-
-The hashing metadata will be persisted as files named as `<instant>.hashing_meta` for current table, it stores in
-`.hoodie/.simple_hashing/meta` directory and contains the following information
-
-```avro schema
+Firstly DDL phase creates initial version 
+ls .hoodie/.hashing_meta/
+.hoodie/.hashing_meta/00000000000000000.hashing_config
 {
-   "namespace":"org.apache.hudi.avro.model",
-   "type":"record",
-   "doc": "hashing meta for current table using partition level simple bucket index",
-   "name":"SimpleHashMeta",
-   "fields":[
-     {
-       "name":"version",
-       "type":["int", "null"],
-       "default": 1
-     },
-     {
-       "name": "partitionMeta",
-       "type": [
-         "null", {
-           "type":"map",
-           "values": {
-             "type": "record",
-             "name": "PartitionHashInfo",
-             "fields": [
-               {
-                 "name": "bucketNumber",
-                 "type": ["null", "int"],
-                 "default": null
-               },
-               {
-                 "name": "instant",
-                 "type":["null","string"],
-                 "default": null
-               }
-             ]
-           }}],
-       "default" : null
-     }
-   ]
+   "rule": "rule-engine",
+   "expressions": "expression1,bucket-number1;expression2,bucket-number2",
+   "default_bucket_number": "default-bucket-number"
+}
+
+Secondly call PartitionBucketIndexManager(overwrite => 'expression3,bucket-number3;expression1,bucket-number1;expression2,bucket-number2', 'dry-run' = 'false')
+ls .hoodie/.hashing_meta/
+.hoodie/.hashing_meta/00000000000000000.hashing_config (deprecated)
+.hoodie/.hashing_meta/20250303095546020.hashing_config (used)
+{
+   "rule": "rule-engine",
+   "expressions": "expression3,bucket-number3;expression1,bucket-number1;expression2,bucket-number2",
+   "default_bucket_number": "default-bucket-number"
 }
 ```
-We will write <instant>.hashing_meta during commit action (at pre-commit stage):
-1. Get latest complete T1.hashing_meta
-2. Merging T1.hashing_meta with new written partitions as T2.hashing_meta also do partition conflict detection
-   1. For example, current write write partition1 with 20 buckets but there is already defined partition1 with 10 bucket numbers, which means there is 
-another writer that uses the latest expression to pre-determine the bucket number of the current partition. In order to ensure data consistency, it is necessary to abort the current writer.
-3. If conflict detection is passed AND **new partitions are added** then write T2.hashing_meta into .hoodie folder
-   1. Here, a new hashing_meta will only be written when a new partition is added to avoid unnecessary I/O overhead.
-4. Do commit action
 
-Using Archive Service to clean up expired hashing meta, keeping up to 10 historical hashing meta
+The expression written at the front has a higher priority, and the expression has a higher priority than the default_bucket_number.
+
+About Hashing_Config Rollback
+
+The Bucket Rescale operation is essentially an insert overwrite action and can seamlessly integrate with Hudi's rollback mechanism. 
+One simplification here is that when rolling back a Bucket Rescale, the corresponding replace-commit.hashing_config is not immediately deleted. 
+Instead, its cleanup is deferred to the version cleanup process (discussed later).
+
+This approach achieves two goals:
+1. Minimizes modifications to the rollback service logic.
+2. Lazy cleanup does not impact config loading, as Hudi always loads the latest hashing_config associated with committed replace commit.
+
+About Hashing_Config Cleanup
+
+The cleanup of hashing_config versions (retaining the latest three) will be handled within the Archive Table Service, 
+as illustrated in the following diagram.
+
+![cleanup.jpg](cleanup.jpg)
+
+**Key Points: Uncommitted hashing_config are identified via diff based on activeTimeline and cleaned up. This ensures that 
+hashing_configs, which instants are before activeTimeline start, are all valid.**
+
+About Loading Hashing_Config
+
+loading hash_config steps:
+1. List all version and get related replace-commit instants as instant group1
+2. Get latest completed instant as `instant2` in instant group1 based on activeTimeline 
+   1. If get empty after Step2, get instants(as instant group2) before activeTimeline start in instant group1 
+   2. Get latest instant as `instant2` in instant group2
+3. Loading instant2 related hashing_config
 
 ### SimpleBucketIdentifier
+
 ```java
 public class SimpleBucketIdentifier extends BucketIdentifier {
   // use expressionEvaluator to compute bucket number for given partition path
@@ -290,18 +290,21 @@ public class SimpleBucketIdentifier extends BucketIdentifier {
     int numBuckets = getBucketNumber(partitionPath);
     return getBucketId(getHashKeys(recordKey, indexKeyFields), numBuckets);
   }
-  ...
+  // ...
   
   public int getBucketNumber(String partitionPath) {
-    return calculator.calculateBucketNumber(partitionPath);
+     return partition2BucketNumber.computeIfAbsent(partitionPath, calculator::calculateBucketNumber);
   }
 }
 ```
 **WorkFlow for SimpleBucketIdentifier**
-1. Get and Cache partition2BucketNumber 
-2. For the partition of the given data, try to get its corresponding bucket number from the cache. If the cache missed, 
-   1. Calculate the expression through the Bucket Calculator to obtain the corresponding Bucket Number.
-   2. Put Calculated bucket number into cache
+
+For the partition of the given data, try to get its corresponding bucket number from the cache. If the cache missed,
+1. Calculate the expression through the Bucket Calculator to obtain the corresponding Bucket Number.
+2. Put Calculated bucket number into cache
+
+we would use `org.apache.commons.collections.map.LRUMap` (max-size 500,000 about 200M at most)to cache partitionToBucketNumber 
+which could take good care of cache eviction.
 
 Using SimpleBucketIdentifier to get `BucketNumber` or `BucketID` based on given partitionPath and corresponding expression
 
@@ -311,32 +314,60 @@ For new Partitioner:
 For Writer:
 Writer like `BucketStreamWriteFunction` in Flink also use this new `SimpleBucketIdentifier` to compute bucketID
 
-NOTE：We need to get hashing_meta instant and hashing_config `instant` at the beginning(JM or Driver) and pass it to each operator, 
+NOTE：We need to get hashing_config `instant` at the beginning(JM or Driver) and pass it to each operator,
 ensure the consistency of loading and avoid unnecessary listing action.
-
-#### Eviction Strategy For This Map Cache
-If the user sets the parameter `hoodie.bucket.index.cache.maxSize`, we would use `org.apache.commons.collections.map.LRUMap` to cache partitionToBucketNumber
-which could take good care of cache eviction.
-
-By default use HashMap directly.
 
 ### BucketCalculator
 The BucketCalculator calculates the bucket numbers for different partitions based on the different rules set by users.
-Here, the types of supported Rules are extensible. In the first phase, regular expressions are mainly supported.
+Here, the types of supported Rules are extensible. In the first phase, regex expressions are mainly supported.
 
-### Bucket Rescale Tool
-We provide a Spark call command `run_bucket_rescale` to perform the bucket scale operation. Internally, it encapsulates 
-an `insert overwrite` operation, which is a replace commit. This bucket rescale is divided into metadata modification and metadata + data modification.
-Use `--type` 
+### Call PartitionBucketIndexManager
 
-1. `--type meta-only`, Only modify the metadata, that is, update the `.hoodie/.simple_hashing/config/` to generate 
-a new version. At this time, an empty replace commit (insert-overwrite) will be generated. Modifications at the metadata
-level do not affect the normal writing of jobs, but the latest configuration can only be loaded by restarting the jobs.
-2. `--type data`, It will identify and rewrite the data of the corresponding partitions according to the new rules. 
-Similarly, a new version of the config will also be generated. It should be noted that all write operations need to be stopped for this operation.
-3. `--type hashing_config` show the latest hashing_config for users
-4. `--type hashing_meta` show the latest hashing_meta for users
-5. `--type rollback, --instant instant-time` rollback instant which is a bucket rescale action, if the scaling size does not meet the expectations, a rollback is required.
+| Config        | type    | default | Description                                                                                                         |
+|---------------|---------|---------|---------------------------------------------------------------------------------------------------------------------|
+| overwrite     | string  | null    | Create a new version of hashing_config with new expression, also trigger bucket rescale action if necessary         |
+| bucket-number | int     | -1      | Set default bucket number for current expression, if not set will reuse last hashing_config's default bucket number |
+| add           | string  | null    | Update hashing_config with adding a new expression, also trigger bucket rescale action if necessary                 |
+| dry-run       | boolean | true    | Just show which partitions need to be rescale and how many files need to be resizing instead of IO                  |
+| rollback      | string  | null    | Rollback specific bucket rescale action                                                                             |
+| show-config   | boolean | false   | Show all the committed hashing_config in order                                                                      |
+
+Before proceeding, it is recommended to set dry-run to true to preview the impact of the current operation.
+
+#### overwrite
+**Note that all Ingestion tasks for the current table must be stopped before performing this operation.**
+
+```sql
+call partitionBucketIndexManager(overwrite => 'new-expressions', dry-run => 'false')
+call partitionBucketIndexManager(overwrite => 'new-expressions', bucket-number => 'new-default-bucket-number', dry-run => 'false')
+```
+![rescale.jpg](rescale.jpg)
+
+`do insert overwrite`, `create a new version of hashing_config with current replace-commit instant` and `do replace-commit 
+commit action` are within a single transaction.
+
+Avoid modifying the default bucket number casually, as it may trigger unexpected partition data reprocessing.
+
+#### dry-run
+![dry-run.jpg](dry-run.jpg)
+
+Just show which partitions need to be rescale and how many files need to be resizing instead of doing IO actually
+
+#### rollback
+**Note that all Ingestion tasks for the current table must be stopped before performing this operation.**
+
+Rollback specific bucket rescale action
+
+#### show-config
+
+Show all the committed hashing_config in order
+
+## Original Bucket Index upgrade
+
+Users can use followed command to upgrade simple bucket index into partition level bucket index
+```sql
+call partitionBucketIndexManager(overwrite => 'new-expressions', bucket-number => 'original-bucket-number', dry-run => 'false')
+```
 
 ## Rollout/Adoption Plan
 - First, support writing with Flink, and perform the Bucket rescale operation with Spark.
