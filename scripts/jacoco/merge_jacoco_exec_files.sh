@@ -21,4 +21,17 @@
 shopt -s globstar
 echo "Jacoco CLI jar: $1"
 echo "Hudi source directory: $2"
-java -jar $1 merge $2/**/jacoco-agent/**/*.exec --destfile merged-jacoco.exec
+retry_count=0
+while [[ $retry_count -lt 3 ]]; do
+  ls -l $2/**/jacoco-agent/**/*.exec
+  java -jar $1 merge $2/**/jacoco-agent/**/*.exec --destfile merged-jacoco.exec
+  exit_status=$?
+
+  if [[ $exit_status -eq 0 ]]; then
+    echo "Jacoco merge succeeded on attempt $((retry_count + 1))"
+    exit 0
+  fi
+
+  retry_count=$((retry_count + 1))
+  sleep 10
+done
