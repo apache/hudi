@@ -1776,7 +1776,16 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |""".stripMargin)
 
         // create index using bloom filters on city column with upper() function
-        spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper', fpp='0.01')")
+        spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper', fpp='0.01', filterType='SIMPLE', numEntries='1000')")
+        var metaClient = createMetaClient(spark, basePath)
+        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(s"expr_index_idx_bloom_$tableName"))
+        assertTrue(metaClient.getIndexMetadata.isPresent)
+        assertEquals(2, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
+        val indexDefinition: HoodieIndexDefinition = metaClient.getIndexMetadata.get.getIndexDefinitions.get(s"expr_index_idx_bloom_$tableName")
+        // validate index options
+        assertEquals("0.01", indexDefinition.getIndexOptions.get("fpp"))
+        assertEquals("SIMPLE", indexDefinition.getIndexOptions.get("filterType"))
+        assertEquals("1000", indexDefinition.getIndexOptions.get("numEntries"))
 
         // Pruning takes place only if query uses upper function on city
         checkAnswer(s"select id, rider from $tableName where upper(city) in ('sunnyvale', 'sg')")()
@@ -1785,7 +1794,6 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           Seq("trip2", "rider-C")
         )
         // verify file pruning
-        var metaClient = createMetaClient(spark, basePath)
         val opts = Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
         val cityColumn = AttributeReference("city", StringType)()
         val upperCityExpr = Upper(cityColumn) // Apply the `upper` function to the city column
