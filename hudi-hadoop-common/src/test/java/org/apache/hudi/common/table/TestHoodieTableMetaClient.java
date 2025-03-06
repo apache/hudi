@@ -21,6 +21,7 @@ package org.apache.hudi.common.table;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -39,10 +40,13 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_TIME_FORMATTER;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -121,6 +125,36 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertTrue(completedInstant.requestedTime().equals(instant.requestedTime()));
     assertArrayEquals(getUTF8Bytes("test-detail"), activeCommitTimeline.getInstantDetails(completedInstant).get(),
         "Commit value should be \"test-detail\"");
+  }
+
+  @Test
+  public void testCreateNewInstantTimes() throws IOException {
+    List<String> instantTimesSoFar = new ArrayList<>();
+    // explicitly set timezone to UTC and generate timestamps
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.TIMELINE_TIMEZONE.key(), "UTC");
+    metaClient = HoodieTestUtils.init(metaClient.getStorageConf(), basePath, HoodieTableType.MERGE_ON_READ, properties);
+
+    // run for few iterations
+    for (int j = 0; j < 5; j++) {
+      instantTimesSoFar.clear();
+      // Generate an instant time in UTC and validate that all instants generated using metaClient are within few seconds apart.
+      String newCommitTimeInUTC = getNewInstantTimeInUTC();
+
+      // new instant that we generate below should be within few seconds apart compared to above time we generated. If not, the time zone is not honored
+      for (int i = 0; i < 10; i++) {
+        String newInstantTime = metaClient.createNewInstantTime(false);
+        assertTrue(!instantTimesSoFar.contains(newInstantTime));
+        instantTimesSoFar.add(newInstantTime);
+        assertTrue((Long.parseLong(newInstantTime) - Long.parseLong(newCommitTimeInUTC)) < 10000L);
+      }
+    }
+  }
+
+  private String getNewInstantTimeInUTC() {
+    Date d = new Date(System.currentTimeMillis());
+    return d.toInstant().atZone(HoodieTimelineTimeZone.UTC.getZoneId())
+        .toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
   }
 
   @Test
@@ -206,7 +240,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
     HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
-        .initTable(this.metaClient.getStorageConf(),basePath);
+        .initTable(this.metaClient.getStorageConf(), basePath);
 
     HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.builder()
         .setConf(this.metaClient.getStorageConf())
