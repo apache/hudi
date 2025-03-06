@@ -42,7 +42,7 @@ the Architecture, the more error-prone it is and the greater operation and maint
 
 In this regard, we could upgrade the traditional Bucket Index to implement a Partition-Level Bucket Index, so that users
 can set a specific number of buckets for different partitions through a rule engine (such as regular expression matching).
-On the other hand, for a certain existing partitions, an off-line command is provided to reorganize the data using insert
+On the other hand, for a certain existing partitions, an offline command is provided to reorganize the data using insert
 overwrite(need to stop the data writing of the current partition).
 
 More importantly, the existing Bucket Index table can be upgraded to Partition-Level Bucket Index smoothly and seamlessly.
@@ -50,7 +50,7 @@ More importantly, the existing Bucket Index table can be upgraded to Partition-L
 ## Background
 The following is the core read-write process of the Flink/Spark engine based on Simple Bucket Index
 ### Flink Write Using Simple Bucket Index
-**Step 1**: re-partition input records based on `BucketIndexPartitioner`, BucketIndexPartitioner has **a fixed bucketNumber** for all partition path.
+**Step 1**: repartition input records based on `BucketIndexPartitioner`, BucketIndexPartitioner has **a fixed bucketNumber** for all partition path.
 For each record key, compute a fixed data partition number and dispatch the record to its corresponding partition.
 
 ```java
@@ -141,7 +141,7 @@ The read-write process of Spark based on Bucket Index is also similar.
 ## Design
 ### Overview
 Implement a partition-level Bucket Index capability where users can set the calculation expression for the partition 
-bucket number via `hoodie.bucket.index.partition.expressions`. For historical partitions, provide a `CALL command (call partitionBucketIndexManager(...)`
+bucket number via `hoodie.bucket.index.partition.expressions`. For historical partitions, provide a CALL command `call partitionBucketIndexManager(...)`
 to support bucket rescaling which is a replace-commit.
 
 Note: When users invoke the CALL command to modify the expression and resize historical partitions' bucket number, 
