@@ -41,7 +41,7 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.Map;
 
-public class UnmergedHoodieFileGroupRecordBuffer<T> extends BaseHoodieFileGroupRecordBuffer<T> {
+public class UnmergedHoodieFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   // Used to order the records in the record map.
   private Long putIndex = 0L;
   private Long getIndex = 0L;

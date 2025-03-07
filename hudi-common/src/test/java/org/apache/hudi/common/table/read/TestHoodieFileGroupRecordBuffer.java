@@ -53,7 +53,7 @@ import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RE
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
-import static org.apache.hudi.common.table.read.BaseHoodieFileGroupRecordBuffer.getOrderingValue;
+import static org.apache.hudi.common.table.read.FileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -63,7 +63,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests {@link BaseHoodieFileGroupRecordBuffer}
+ * Tests {@link FileGroupRecordBuffer}
  */
 public class TestHoodieFileGroupRecordBuffer {
   private String schemaString = "{"
@@ -185,8 +185,8 @@ public class TestHoodieFileGroupRecordBuffer {
 
   @Test
   void testHasCustomDeleteConfigs() {
-    KeyBasedHoodieFileGroupRecordBuffer keyBasedBuffer =
-        new KeyBasedHoodieFileGroupRecordBuffer(
+    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
+        new KeyBasedFileGroupRecordBuffer(
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
@@ -212,8 +212,8 @@ public class TestHoodieFileGroupRecordBuffer {
     record.put("ts", System.currentTimeMillis());
     record.put("op", "d");
 
-    KeyBasedHoodieFileGroupRecordBuffer keyBasedBuffer =
-        new KeyBasedHoodieFileGroupRecordBuffer(
+    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
+        new KeyBasedFileGroupRecordBuffer(
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
@@ -226,7 +226,7 @@ public class TestHoodieFileGroupRecordBuffer {
 
     props.setProperty(DELETE_KEY, "op");
     props.setProperty(DELETE_MARKER, "d");
-    keyBasedBuffer = new KeyBasedHoodieFileGroupRecordBuffer(
+    keyBasedBuffer = new KeyBasedFileGroupRecordBuffer(
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
@@ -247,8 +247,8 @@ public class TestHoodieFileGroupRecordBuffer {
     record.put("ts", System.currentTimeMillis());
     record.put("op", "d");
 
-    KeyBasedHoodieFileGroupRecordBuffer keyBasedBuffer =
-        new KeyBasedHoodieFileGroupRecordBuffer(
+    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
+        new KeyBasedFileGroupRecordBuffer(
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
