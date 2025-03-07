@@ -47,6 +47,10 @@ public interface HoodieExpressionIndex<S, T> extends Serializable {
   String DAYS_OPTION = "days";
   String FORMAT_OPTION = "format";
   String IDENTITY_TRANSFORM = "identity";
+  // Bloom filter options
+  String BLOOM_FILTER_TYPE = "filterType";
+  String BLOOM_FILTER_NUM_ENTRIES = "numEntries";
+  String FALSE_POSITIVE_RATE = "fpp";
 
   /**
    * Get the name of the index.
