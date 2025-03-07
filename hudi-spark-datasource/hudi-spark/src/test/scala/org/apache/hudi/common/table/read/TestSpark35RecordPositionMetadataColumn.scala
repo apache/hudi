@@ -30,8 +30,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.util.CloseableInternalRowIterator
-
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -92,7 +92,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
     assertFalse(allBaseFiles.isEmpty)
 
     val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema,
-      new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty).supportsParquetRowIndex)
+      new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, HoodieTableVersion.EIGHT).supportsParquetRowIndex)
 
     // Confirm if the schema is as expected.
     if (HoodieSparkUtils.gteqSpark3_5) {

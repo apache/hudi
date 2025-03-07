@@ -34,6 +34,7 @@ import org.apache.hudi.util.CloseableInternalRowIterator
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -59,9 +60,8 @@ import scala.collection.mutable
  * @param filters           spark filters that might be pushed down into the reader
  * @param requiredFilters   filters that are required and should always be used, even in merging situations
  */
-class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
-                                              filters: Seq[Filter],
-                                              requiredFilters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
+class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader, filters: Seq[Filter],
+                                              requiredFilters: Seq[Filter], tableVersion: HoodieTableVersion) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
@@ -69,7 +69,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   private lazy val allFilters = filters ++ requiredFilters
 
   override def supportsParquetRowIndex: Boolean = {
-    HoodieSparkUtils.gteqSpark3_5
+    HoodieSparkUtils.gteqSpark3_5 && tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
   }
 
   override def getFileRecordIterator(filePath: StoragePath,
