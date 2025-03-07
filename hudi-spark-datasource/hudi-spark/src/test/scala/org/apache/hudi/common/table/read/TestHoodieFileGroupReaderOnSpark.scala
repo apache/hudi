@@ -25,12 +25,13 @@ import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLE
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE
+import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.storage.StorageConfiguration
+
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, HoodieUnsafeUtils, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -43,6 +44,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.mockito.Mockito
 
 import java.util
+
 import scala.collection.JavaConverters._
 
 /**

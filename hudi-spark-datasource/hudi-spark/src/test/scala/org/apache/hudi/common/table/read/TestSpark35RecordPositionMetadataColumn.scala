@@ -23,6 +23,7 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils, SparkFileForma
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
@@ -30,8 +31,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.util.CloseableInternalRowIterator
+
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.junit.jupiter.api.{BeforeEach, Test}
