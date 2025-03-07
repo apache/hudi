@@ -47,8 +47,9 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
   protected HoodieJavaTableServiceClient(HoodieEngineContext context,
                                          HoodieWriteConfig clientConfig,
                                          Option<EmbeddedTimelineService> timelineService,
-                                         Functions.Function2<String, HoodieTableMetaClient, Option<HoodieTableMetadataWriter>> getMetadataWriterFunc) {
-    super(context, clientConfig, timelineService, getMetadataWriterFunc, (Functions.Function1<String, Void>) val1 -> null);
+                                         Functions.Function2<String, HoodieTableMetaClient, Option<HoodieTableMetadataWriter>> getMetadataWriterFunc,
+                                         Functions.Function1<String, Void> cleanUpMetadataWriterInstance) {
+    super(context, clientConfig, timelineService, getMetadataWriterFunc, cleanUpMetadataWriterInstance);
   }
 
   @Override

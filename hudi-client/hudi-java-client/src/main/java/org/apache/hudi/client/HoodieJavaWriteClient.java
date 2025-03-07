@@ -61,7 +61,23 @@ public class HoodieJavaWriteClient<T> extends
       public Option<HoodieTableMetadataWriter> apply(String val1, HoodieTableMetaClient metaClient) {
         return getMetadataWriter(val1, metaClient);
       }
-    });
+    },
+        new Functions.Function1<String, Void>() {
+          @Override
+          public Void apply(String val1) {
+            if (metadataWriterMap.containsKey(val1)) {
+              if (metadataWriterMap.get(val1).isPresent()) {
+                try {
+                  metadataWriterMap.get(val1).get().close();
+                } catch (Exception e) {
+                  throw new HoodieException("Failed to close MetadataWriter for " + val1);
+                }
+              }
+              metadataWriterMap.remove(val1);
+            }
+            return null;
+          }
+        });
   }
 
   @Override
@@ -79,6 +95,21 @@ public class HoodieJavaWriteClient<T> extends
       @Override
       public Option<HoodieTableMetadataWriter> apply(String val1, HoodieTableMetaClient metaClient) {
         return getMetadataWriter(val1, metaClient);
+      }
+    }, new Functions.Function1<String, Void>() {
+      @Override
+      public Void apply(String val1) {
+        if (metadataWriterMap.containsKey(val1)) {
+          if (metadataWriterMap.get(val1).isPresent()) {
+            try {
+              metadataWriterMap.get(val1).get().close();
+            } catch (Exception e) {
+              throw new HoodieException("Failed to close MetadataWriter for " + val1);
+            }
+          }
+          metadataWriterMap.remove(val1);
+        }
+        return null;
       }
     });
   }
