@@ -29,7 +29,7 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTabl
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.TableNotFoundException
+import org.apache.hudi.exception.InvalidTableException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase, HoodieSparkDeleteRecordMerger}
 
@@ -228,8 +228,8 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
         success = true
       }
     } catch {
-      case _: TableNotFoundException =>
-        log.info("Got table not found exception. Retrying")
+      case _: InvalidTableException =>
+        log.info("Got invalid table exception. Retrying")
     } finally {
       if (!success) {
         Thread.sleep(sleepSecsAfterEachRun * 1000)
@@ -455,8 +455,8 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
         success = true
       }
     } catch {
-      case _: TableNotFoundException =>
-        log.info("Got table not found exception. Retrying")
+      case _: InvalidTableException =>
+        log.info("Got invalid table exception. Retrying")
     } finally {
       Thread.sleep(sleepSecsAfterEachRun * 1000)
       currTime = System.currentTimeMillis

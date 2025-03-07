@@ -26,7 +26,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
@@ -266,7 +266,7 @@ public class HoodieJavaStreamingApp {
         }
         HoodieTableMetaClient metaClient = createMetaClient(new HadoopStorageConfiguration(fs.getConf()), tablePath);
         System.out.println("Instants :" + metaClient.getActiveTimeline().getInstants());
-      } catch (TableNotFoundException te) {
+      } catch (InvalidTableException te) {
         LOG.info("Got table not found exception. Retrying");
       } finally {
         Thread.sleep(sleepSecsAfterEachRun * 1000);
