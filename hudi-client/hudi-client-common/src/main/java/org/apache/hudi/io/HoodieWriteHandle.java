@@ -52,7 +52,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
@@ -83,6 +85,10 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   private boolean closed = false;
 
+  private boolean shouldDropPartition = false;
+
+  private Option<String[]> partitionFields;
+
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, partitionPath, fileId, hoodieTable,
@@ -95,7 +101,14 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
-    this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
+    this.shouldDropPartition = hoodieTable.getMetaClient().getTableConfig().shouldDropPartitionColumns();
+    this.partitionFields = hoodieTable.getMetaClient().getTableConfig().getPartitionFields();
+    Schema schema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
+    if (shouldDropPartition) {
+      this.writeSchema = HoodieAvroUtils.removeFields(schema, new HashSet<>(Arrays.asList(partitionFields.get())));
+    } else {
+      this.writeSchema = schema;
+    }
     this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     this.timer = HoodieTimer.start();
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
