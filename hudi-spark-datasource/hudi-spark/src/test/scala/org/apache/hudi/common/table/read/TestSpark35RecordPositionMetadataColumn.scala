@@ -23,6 +23,7 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils, SparkFileForma
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
@@ -92,7 +93,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
     assertFalse(allBaseFiles.isEmpty)
 
     val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema,
-      new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty).supportsParquetRowIndex)
+      new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, HoodieTableVersion.EIGHT).supportsParquetRowIndex)
 
     // Confirm if the schema is as expected.
     if (HoodieSparkUtils.gteqSpark3_5) {

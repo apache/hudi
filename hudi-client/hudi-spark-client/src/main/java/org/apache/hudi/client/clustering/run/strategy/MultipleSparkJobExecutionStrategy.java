@@ -371,7 +371,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                 Schema tableSchemaWithMetaFields) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream()
         .map(ClusteringOperation::create).collect(Collectors.toList());
-    boolean canUseFileGroupReaderBasedClustering = HoodieReaderConfig.isFileGroupReaderEnabled(getHoodieTable().getMetaClient().getTableConfig().getTableVersion(), getWriteConfig())
+    boolean canUseFileGroupReaderBasedClustering = getWriteConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && getWriteConfig().getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
         && clusteringOps.stream().allMatch(slice -> StringUtils.isNullOrEmpty(slice.getBootstrapFilePath()));
 
