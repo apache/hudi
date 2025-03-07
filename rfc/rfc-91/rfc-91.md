@@ -51,7 +51,7 @@ Each `LockProvider` must implement `tryLock()` and `unlock()` however we also ne
 `tryLock()`
 - No Existing Lock: If the lock file doesn’t exist, a new lock file is created with the current instance’s details using a conditional write that only succeeds if the file is absent.
 - Existing Lock – Not Expired: If a valid (non-expired) lock exists, the process refrains from taking the lock.
-- Existing Lock – Expired: If the lock file exists but is expired, a new lock file is conditionally written. This write uses a precondition based on the current file’s unique tag from cloud storage to ensure that no other process has updated it in the meantime.
+- Existing Lock – Expired: If the lock file exists but is expired, this is overwritten with a new lock file payload using conditional writes. This write has a precondition based on the current file’s unique tag from cloud storage to ensure the write succeeds only if no other process has updated it in the meantime. If another process manages to overwrite the lock file first, a 412 precondition failure will return and the lock will not be acquired.
 
 `renewLock()`
 - Purpose: Periodically extend the lock’s expiration (the heartbeat).
@@ -59,7 +59,7 @@ Each `LockProvider` must implement `tryLock()` and `unlock()` however we also ne
 
 `unlock()`
 - Purpose: Safely release the lock.
-- Mechanism: Update the lock file to mark it as expired. This update is performed with a conditional write that ensures the operation is only executed if the file’s unique tag still matches the one held by the lock owner.
+- Mechanism: Update the existing lock file to mark it as expired. This update is performed with a conditional write that ensures the operation is only executed if the file’s unique tag still matches the one held by the lock owner. We do not delete the current lock file, this is an unnecessary operation.
 
 ### Heartbeat Manager
 
@@ -68,7 +68,7 @@ Once a lock is acquired, a dedicated heartbeat task periodically calls renewLock
 ### Edge cases
 - If the thread which acquired the lock dies, we stop the heartbeat.
 - If the renewal fails past the expiration, we log an error, and stop the heartbeat. Other Hudi lock provider implementations are susceptible to this behavior. If a writer somehow loses access to Zookeeper, there is no way to tell the writer to exit gracefully.
-- If we are unable to start the heartbeat (renewal) we throw exception.
+- If we are unable to start the heartbeat (renewal) we throw HoodieLockException and the lock is immediately released.
 - Clock drift: we allow for a maximum of 500ms of clock drift between nodes. A requirement of this lock provider is that all writers competing for the same lock must be writing from the same cloud provider (AWS/Azure/GCP).
 
 ### New Hudi configs
