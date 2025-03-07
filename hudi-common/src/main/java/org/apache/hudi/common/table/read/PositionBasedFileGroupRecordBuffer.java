@@ -63,8 +63,8 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
  * Here the position means that record position in the base file. The records from the base file is accessed from an iterator object. These records are merged when the
  * {@link #hasNext} method is called.
  */
-public class PositionBasedHoodieFileGroupRecordBuffer<T> extends KeyBasedHoodieFileGroupRecordBuffer<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(PositionBasedHoodieFileGroupRecordBuffer.class);
+public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
+  private static final Logger LOG = LoggerFactory.getLogger(PositionBasedFileGroupRecordBuffer.class);
 
   private static final String ROW_INDEX_COLUMN_NAME = "row_index";
   public static final String ROW_INDEX_TEMPORARY_COLUMN_NAME = "_tmp_metadata_" + ROW_INDEX_COLUMN_NAME;
@@ -72,14 +72,14 @@ public class PositionBasedHoodieFileGroupRecordBuffer<T> extends KeyBasedHoodieF
   private long nextRecordPosition = 0L;
   private boolean needToDoHybridStrategy = false;
 
-  public PositionBasedHoodieFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                  HoodieTableMetaClient hoodieTableMetaClient,
-                                                  RecordMergeMode recordMergeMode,
-                                                  Option<String> partitionNameOverrideOpt,
-                                                  Option<String[]> partitionPathFieldOpt,
-                                                  String baseFileInstantTime,
-                                                  TypedProperties props,
-                                                  HoodieReadStats readStats) {
+  public PositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+                                            HoodieTableMetaClient hoodieTableMetaClient,
+                                            RecordMergeMode recordMergeMode,
+                                            Option<String> partitionNameOverrideOpt,
+                                            Option<String[]> partitionPathFieldOpt,
+                                            String baseFileInstantTime,
+                                            TypedProperties props,
+                                            HoodieReadStats readStats) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
     this.baseFileInstantTime = baseFileInstantTime;
   }
