@@ -190,12 +190,9 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
   public void begin() {
     try {
       HFileContext context = HFileContext.builder().build();
-      OutputStream outputStreamForPartitionWriter =
-          metaClient.getStorage().create(indexByPartitionPath);
-      this.indexByPartitionWriter = new HFileWriterImpl(
-          context, outputStreamForPartitionWriter);
-      OutputStream outputStreamForFileIdWriter =
-          metaClient.getStorage().create(indexByFileIdPath);
+      OutputStream outputStreamForPartitionWriter = metaClient.getStorage().create(indexByPartitionPath);
+      this.indexByPartitionWriter = new HFileWriterImpl(context, outputStreamForPartitionWriter);
+      OutputStream outputStreamForFileIdWriter = metaClient.getStorage().create(indexByFileIdPath);
       this.indexByFileIdWriter = new HFileWriterImpl(context, outputStreamForFileIdWriter);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
