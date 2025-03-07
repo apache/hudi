@@ -182,8 +182,8 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     }
     TypedProperties props = new TypedProperties();
-    hoodieTable.getMetaClient().getTableConfig().getProps().forEach((key, value) -> props.putIfAbsent(key, value));
-    config.getProps().forEach((key, value) -> props.putIfAbsent(key, value));
+    hoodieTable.getMetaClient().getTableConfig().getProps().forEach(props::putIfAbsent);
+    config.getProps().forEach(props::putIfAbsent);
     // Initializes file group reader
     try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         readerContext,
