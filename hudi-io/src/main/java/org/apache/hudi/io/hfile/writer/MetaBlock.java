@@ -23,8 +23,6 @@ import org.apache.hudi.io.hfile.HFileBlockType;
 
 import java.nio.ByteBuffer;
 
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
-
 public class MetaBlock extends DataBlock {
   public MetaBlock(int blockSize) {
     super(HFileBlockType.META.getMagic(), blockSize);
@@ -40,7 +38,8 @@ public class MetaBlock extends DataBlock {
   public ByteBuffer getPayload() {
     ByteBuffer dataBuf = ByteBuffer.allocate(blockSize);
     // Rule 1: there must be only one key-value entry.
-    assert(1 == entries.size());
+    assert (1 == entries.size())
+        : "only 1 value is allowed in meta block";
     // Rule 2: only value should be store in the block.
     // The key is stored in the meta index block.
     dataBuf.put(entries.get(0).value);
