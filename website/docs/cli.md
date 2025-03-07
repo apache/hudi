@@ -5,16 +5,15 @@ last_modified_at: 2021-08-18T15:59:57-04:00
 ---
 
 ### Local set up
-Once hudi has been built, the shell can be fired by via  `cd hudi-cli-with-bundle.sh && ./hudi-cli-with-bundle.sh`.
+Once hudi has been built, the shell can be fired by via  `cd packaging/hudi-cli-bundle && hudi-cli-with-bundle.sh` or `packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh`.
 
-### Hudi CLI Bundle setup
-In release `0.13.0` we have now added another way of launching the `hudi cli`, which is using the `hudi-cli-bundle`.
+### Hudi CLI setup
+In release `0.13.0` we have now added new way of launching the `hudi cli`, which is using the `hudi-cli-bundle` script.
 
-#### Note: The traditional `hudi-cli.sh` script has been deprecated and replaced with `hudi-cli-with-bundle.sh` from this release onwards. Users should migrate to the new bundled CLI script `hudi-cli-with-bundle.sh` for better compatibility and ease of use.
+#### Note: The traditional `hudi-cli.sh` script has been deprecated and replaced with `hudi-cli-with-bundle.sh` from `1.1.0` release onwards. Users should migrate to the new bundled CLI script `hudi-cli-with-bundle.sh` for better compatibility and ease of use.
 
-
-There are a couple of requirements when using this approach such as having `spark` installed locally on your machine. 
-It is required to use a spark distribution with hadoop dependencies packaged such as `spark-3.3.1-bin-hadoop2.tgz` from https://archive.apache.org/dist/spark/.
+There are a couple of requirements such as having `spark` installed locally on your machine. 
+It is required to use a spark distribution with hadoop dependencies packaged such as `spark-3.5.4-bin-hadoop3.tgz` from https://archive.apache.org/dist/spark/.
 We also recommend you set an env variable `$SPARK_HOME` to the path of where spark is installed on your machine. 
 One important thing to note is that the `hudi-spark-bundle` should also be present when using the `hudi-cli-bundle`.  
 To provide the locations of these bundle jars you can set them in your shell like so:
@@ -51,28 +50,32 @@ we would need this location in order to connect to a Hudi table. Hudi library ef
 If you are using hudi that comes packaged with AWS EMR, you can find instructions to use hudi-cli [here](https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-hudi-cli.html).
 If you are not using EMR, or would like to use latest hudi-cli from master, you can follow the below steps to access S3 dataset in your local environment (laptop).  
 
-Build Hudi with corresponding Spark version, for eg, -Dspark3.1.x
+Build Hudi with corresponding Spark version, for eg, -Dspark3.5
 
 Set the following environment variables. 
 ```
 export AWS_REGION=us-east-2
 export AWS_ACCESS_KEY_ID=<key_id>
 export AWS_SECRET_ACCESS_KEY=<secret_key>
+
 export SPARK_HOME=<spark_home>
+export CLI_BUNDLE_JAR=<cli-bundle-jar-to-use>
+export SPARK_BUNDLE_JAR=<spark-bundle-jar-to-use>
 ```
-Ensure you set the SPARK_HOME to your local spark home compatible to compiled hudi spark version above.
+Ensure you set the SPARK_HOME to your local spark home compatible to compiled hudi spark version above. One important thing to note is that the `hudi-spark-bundle` should also be present when using the `hudi-cli-bundle`.
+
 
 Apart from these, we might need to add aws jars to class path so that accessing S3 is feasible from local. 
 We need two jars, namely, aws-java-sdk-bundle jar and hadoop-aws jar which you can find online.
 For eg:
 ```
-wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.2.0/hadoop-aws-3.2.0.jar -o /lib/spark-3.2.0-bin-hadoop3.2/jars/hadoop-aws-3.2.0.jar
-wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.11.375/aws-java-sdk-bundle-1.11.375.jar -o /lib/spark-3.2.0-bin-hadoop3.2/jars/aws-java-sdk-bundle-1.11.375.jar
+wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar -o /lib/spark-3.5.4-bin-hadoop3/jars/hadoop-aws-3.3.4.jar
+wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar -o /lib/spark-3.5.4-bin-hadoop3/jars/aws-java-sdk-bundle-1.12.262.jar
 ```
 
-#### Note: These AWS jar versions below are specific to Spark 3.2.0
+#### Note: These AWS jar versions below are specific to Spark 3.5.4 and Hadoop 3.3.4
 ```
-export CLIENT_JAR=/lib/spark-3.2.0-bin-hadoop3.2/jars/aws-java-sdk-bundle-1.12.48.jar:/lib/spark-3.2.0-bin-hadoop3.2/jars/hadoop-aws-3.3.1.jar
+export CLIENT_JAR=/lib/spark-3.5.4-bin-hadoop3/jars/aws-java-sdk-bundle-1.12.262.jar:/lib/spark-3.5.4-bin-hadoop3/jars/hadoop-aws-3.3.4.jar
 ```
 Once these are set, you are good to launch hudi-cli and access S3 dataset. 
 ```
@@ -83,7 +86,7 @@ Once these are set, you are good to launch hudi-cli and access S3 dataset.
 Apache Flink, Presto and many other frameworks, including Hudi. If you want to run the Hudi CLI on a Dataproc node 
 which has not been launched with Hudi support enabled, you can use the steps below:  
 
-These steps use Hudi version 0.13.0. If you want to use a different version you will have to edit the below commands 
+These steps use Hudi version 1.1.0. If you want to use a different version you will have to edit the below commands 
 appropriately:  
 1. Once you've started the Dataproc cluster, you can ssh into it as follows:
 ```
@@ -92,22 +95,22 @@ $ gcloud compute ssh --zone "YOUR_ZONE" "HOSTNAME_OF_MASTER_NODE"  --project "YO
 
 2. Download the Hudi CLI bundle
 ```
-wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-cli-bundle_2.12/0.13.0/hudi-cli-bundle_2.12-0.13.0.jar  
+wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-cli-bundle_2.12/1.1.0/hudi-cli-bundle_2.12-1.1.0.jar  
 ```
 
 3. Download the Hudi Spark bundle
 ```
-wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-spark-bundle_2.12/0.13.0/hudi-spark-bundle_2.12-0.13.0.jar
+wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-spark-bundle_2.12/1.1.0/hudi-spark-bundle_2.12-1.1.0.jar
 ```     
 
 4. Download the shell script that launches Hudi CLI bundle
 ```
-wget https://raw.githubusercontent.com/apache/hudi/release-0.13.0/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh
+wget https://raw.githubusercontent.com/apache/hudi/release-1.1.0/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh
 ```    
 
 5. Launch Hudi CLI bundle with appropriate environment variables as follows:
 ``` 
-CLIENT_JAR=$DATAPROC_DIR/lib/gcs-connector.jar CLI_BUNDLE_JAR=hudi-cli-bundle_2.12-0.13.0.jar SPARK_BUNDLE_JAR=hudi-spark-bundle_2.12-0.13.0.jar ./hudi-cli-with-bundle.sh  
+CLIENT_JAR=$DATAPROC_DIR/lib/gcs-connector.jar CLI_BUNDLE_JAR=hudi-cli-bundle_2.12-1.1.0.jar SPARK_BUNDLE_JAR=hudi-spark-bundle_2.12-1.1.0.jar ./hudi-cli-with-bundle.sh  
 ```
 
 6. hudi->connect --path gs://path_to_some_table  
