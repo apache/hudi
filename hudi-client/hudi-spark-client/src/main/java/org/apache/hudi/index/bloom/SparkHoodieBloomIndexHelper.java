@@ -173,10 +173,8 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
           .map(Tuple2::_1)
           .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
     } else if (config.isBloomIndexFileGroupIdKeySortingEnabled()) {
-      long totalComparisons = fileComparisonsRDD.count();
-      int parallelismForSortPartitioner = (int) Math.max(1L, totalComparisons / config.getBloomIndexKeysPerBucket());
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(fileGroupAndRecordKey -> new Tuple2<>(fileGroupAndRecordKey, false))
-          .sortByKey(new FileGroupIdAndRecordKeyComparator(), true, parallelismForSortPartitioner)
+          .sortByKey(new FileGroupIdAndRecordKeyComparator(), true, targetParallelism)
           .map(Tuple2::_1)
           .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
     } else {
