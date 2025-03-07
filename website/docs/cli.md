@@ -64,7 +64,6 @@ export SPARK_BUNDLE_JAR=<spark-bundle-jar-to-use>
 ```
 Ensure you set the SPARK_HOME to your local spark home compatible to compiled hudi spark version above. One important thing to note is that the `hudi-spark-bundle` should also be present when using the `hudi-cli-bundle`.
 
-
 Apart from these, we might need to add aws jars to class path so that accessing S3 is feasible from local. 
 We need two jars, namely, aws-java-sdk-bundle jar and hadoop-aws jar which you can find online.
 For eg:
