@@ -81,7 +81,7 @@ import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
-public abstract class BaseHoodieFileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
+public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
   protected final Option<String> orderingFieldName;
@@ -103,13 +103,13 @@ public abstract class BaseHoodieFileGroupRecordBuffer<T> implements HoodieFileGr
   protected String customDeleteMarkerKey;
   protected String customDeleteMarkerValue;
 
-  protected BaseHoodieFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                            HoodieTableMetaClient hoodieTableMetaClient,
-                                            RecordMergeMode recordMergeMode,
-                                            Option<String> partitionNameOverrideOpt,
-                                            Option<String[]> partitionPathFieldOpt,
-                                            TypedProperties props,
-                                            HoodieReadStats readStats) {
+  protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+                                  HoodieTableMetaClient hoodieTableMetaClient,
+                                  RecordMergeMode recordMergeMode,
+                                  Option<String> partitionNameOverrideOpt,
+                                  Option<String[]> partitionPathFieldOpt,
+                                  TypedProperties props,
+                                  HoodieReadStats readStats) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.partitionNameOverrideOpt = partitionNameOverrideOpt;

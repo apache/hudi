@@ -51,15 +51,15 @@ import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RE
  * The records from the base file is accessed from an iterator object. These records are merged when the
  * {@link #hasNext} method is called.
  */
-public class KeyBasedHoodieFileGroupRecordBuffer<T> extends BaseHoodieFileGroupRecordBuffer<T> {
+public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
-  public KeyBasedHoodieFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                             HoodieTableMetaClient hoodieTableMetaClient,
-                                             RecordMergeMode recordMergeMode,
-                                             Option<String> partitionNameOverrideOpt,
-                                             Option<String[]> partitionPathFieldOpt,
-                                             TypedProperties props,
-                                             HoodieReadStats readStats) {
+  public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+                                       HoodieTableMetaClient hoodieTableMetaClient,
+                                       RecordMergeMode recordMergeMode,
+                                       Option<String> partitionNameOverrideOpt,
+                                       Option<String[]> partitionPathFieldOpt,
+                                       TypedProperties props,
+                                       HoodieReadStats readStats) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
   }
 
