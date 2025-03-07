@@ -78,7 +78,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // Length of bytes to read from the base file
   private final long length;
   // Core structure to store and process records.
-  private final HoodieFileGroupRecordBuffer<T> recordBuffer;
+  private final FileGroupRecordBuffer<T> recordBuffer;
   private ClosableIterator<T> baseFileIterator;
   private final Option<UnaryOperator<T>> outputConverter;
   private final HoodieReadStats readStats;
@@ -139,26 +139,26 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   /**
    * Initialize correct record buffer
    */
-  private static HoodieFileGroupRecordBuffer getRecordBuffer(HoodieReaderContext readerContext,
-                                                             HoodieTableMetaClient hoodieTableMetaClient,
-                                                             RecordMergeMode recordMergeMode,
-                                                             TypedProperties props,
-                                                             Option<HoodieBaseFile> baseFileOption,
-                                                             boolean hasNoLogFiles,
-                                                             boolean isSkipMerge,
-                                                             boolean shouldUseRecordPosition,
-                                                             HoodieReadStats readStats) {
+  private static FileGroupRecordBuffer getRecordBuffer(HoodieReaderContext readerContext,
+                                                       HoodieTableMetaClient hoodieTableMetaClient,
+                                                       RecordMergeMode recordMergeMode,
+                                                       TypedProperties props,
+                                                       Option<HoodieBaseFile> baseFileOption,
+                                                       boolean hasNoLogFiles,
+                                                       boolean isSkipMerge,
+                                                       boolean shouldUseRecordPosition,
+                                                       HoodieReadStats readStats) {
     if (hasNoLogFiles) {
       return null;
     } else if (isSkipMerge) {
       return new UnmergedHoodieFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
-      return new PositionBasedHoodieFileGroupRecordBuffer<>(
+      return new PositionBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(),
           Option.empty(), baseFileOption.get().getCommitTime(), props, readStats);
     } else {
-      return new KeyBasedHoodieFileGroupRecordBuffer<>(
+      return new KeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats);
     }
   }
