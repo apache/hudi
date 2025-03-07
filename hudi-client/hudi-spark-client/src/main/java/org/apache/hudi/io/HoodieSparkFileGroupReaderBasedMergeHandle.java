@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -180,6 +181,9 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     }
+    TypedProperties props = new TypedProperties();
+    hoodieTable.getMetaClient().getTableConfig().getProps().forEach((key, value) -> props.putIfAbsent(key, value));
+    config.getProps().forEach((key, value) -> props.putIfAbsent(key, value));
     // Initializes file group reader
     try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         readerContext,
@@ -191,7 +195,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
         writeSchemaWithMetaFields,
         internalSchemaOption,
         hoodieTable.getMetaClient(),
-        config.getProps(),
+        props,
         0,
         Long.MAX_VALUE,
         usePosition)) {
