@@ -119,7 +119,8 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
       return Option.of(new SparkFileFormatInternalRowReaderContext(
           sparkParquetReader,
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
-          JavaConverters.asScalaBufferConverter(filters).asScala().toSeq()));
+          JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
+          metaClient.getTableConfig().getTableVersion()));
     } else {
       throw new HoodieException("Cannot get the broadcast Spark Parquet reader.");
     }
