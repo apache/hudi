@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -162,9 +163,13 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                     listBaseFilesToBeDeleted(instantToRollback.requestedTime(), baseFileExtension, partitionPath, metaClient.getStorage())));
               } else {
                 // if this is part of a restore operation, we should rollback/delete entire file slice.
-                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
-                    listAllFilesSinceCommit(instantToRollback.requestedTime(), baseFileExtension, partitionPath,
-                        metaClient)));
+                if (metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
+                  hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
+                } else {
+                  hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
+                      listAllFilesSinceCommit(instantToRollback.requestedTime(), baseFileExtension, partitionPath,
+                          metaClient)));
+                }
               }
               break;
             case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -175,7 +180,34 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               // delete all files for the corresponding failed commit, if present (same as COW)
               hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
               if (metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
-                hoodieRollbackRequests.addAll(getRollbackRequestToAppendForVersionSix(partitionPath, instantToRollback, commitMetadataOptional.get(), table));
+
+                // --------------------------------------------------------------------------------------------------
+                // (A) The following cases are possible if index.canIndexLogFiles and/or index.isGlobal
+                // --------------------------------------------------------------------------------------------------
+                // (A.1) Failed first commit - Inserts were written to log files and HoodieWriteStat has no entries. In
+                // this scenario we would want to delete these log files.
+                // (A.2) Failed recurring commit - Inserts/Updates written to log files. In this scenario,
+                // HoodieWriteStat will have the baseCommitTime for the first log file written, add rollback blocks.
+                // (A.3) Rollback triggered for first commit - Inserts were written to the log files but the commit is
+                // being reverted. In this scenario, HoodieWriteStat will be `null` for the attribute prevCommitTime
+                // and hence will end up deleting these log files. This is done so there are no orphan log files
+                // lying around.
+                // (A.4) Rollback triggered for recurring commits - Inserts/Updates are being rolled back, the actions
+                // taken in this scenario is a combination of (A.2) and (A.3)
+                // ---------------------------------------------------------------------------------------------------
+                // (B) The following cases are possible if !index.canIndexLogFiles and/or !index.isGlobal
+                // ---------------------------------------------------------------------------------------------------
+                // (B.1) Failed first commit - Inserts were written to base files and HoodieWriteStat has no entries.
+                // In this scenario, we delete all the base files written for the failed commit.
+                // (B.2) Failed recurring commits - Inserts were written to base files and updates to log files. In
+                // this scenario, perform (A.1) and for updates written to log files, write rollback blocks.
+                // (B.3) Rollback triggered for first commit - Same as (B.1)
+                // (B.4) Rollback triggered for recurring commits - Same as (B.2) plus we need to delete the log files
+                // as well if the base file gets deleted.
+                HoodieCommitMetadata commitMetadata = TimelineUtils.getCommitMetadata(instantToRollback, table.getMetaClient().getCommitsTimeline());
+                if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
+                  hoodieRollbackRequests.addAll(getRollbackRequestToAppendForVersionSix(partitionPath, instantToRollback, commitMetadataOptional.get(), table));
+                }
               }
               break;
             default:
