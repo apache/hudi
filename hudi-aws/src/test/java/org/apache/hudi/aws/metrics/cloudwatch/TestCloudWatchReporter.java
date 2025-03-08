@@ -16,13 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.aws.cloudwatch;
+package org.apache.hudi.aws.metrics.cloudwatch;
 
-import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
-import software.amazon.awssdk.services.cloudwatch.model.Dimension;
-import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
-import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataRequest;
-import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataResponse;
 import com.codahale.metrics.Clock;
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.ExponentiallyDecayingReservoir;
@@ -42,6 +37,11 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
+import software.amazon.awssdk.services.cloudwatch.model.Dimension;
+import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
+import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataRequest;
+import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataResponse;
 
 import java.util.List;
 import java.util.SortedMap;
@@ -49,10 +49,10 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_COUNT_TYPE_VALUE;
-import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_GAUGE_TYPE_VALUE;
-import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_METRIC_TYPE_KEY;
-import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_TABLE_NAME_KEY;
+import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_COUNT_TYPE_VALUE;
+import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_GAUGE_TYPE_VALUE;
+import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_METRIC_TYPE_KEY;
+import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_TABLE_NAME_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ExtendWith(MockitoExtension.class)

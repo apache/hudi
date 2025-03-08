@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.aws.cloudwatch;
+package org.apache.hudi.aws.metrics.cloudwatch;
 
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.common.util.Option;
@@ -195,17 +195,17 @@ public class CloudWatchReporter extends ScheduledReporter {
 
     for (Map.Entry<String, Histogram> entry : histograms.entrySet()) {
       processCounter(entry.getKey(), entry.getValue(), timestampMilliSec, metricsData);
-      //TODO: Publish other Histogram metrics to cloud watch
+      // TODO: Publish other Histogram metrics to cloud watch
     }
 
     for (Map.Entry<String, Meter> entry : meters.entrySet()) {
       processCounter(entry.getKey(), entry.getValue(), timestampMilliSec, metricsData);
-      //TODO: Publish other Meter metrics to cloud watch
+      // TODO: Publish other Meter metrics to cloud watch
     }
 
     for (Map.Entry<String, Timer> entry : timers.entrySet()) {
       processCounter(entry.getKey(), entry.getValue(), timestampMilliSec, metricsData);
-      //TODO: Publish other Timer metrics to cloud watch
+      // TODO: Publish other Timer metrics to cloud watch
     }
 
     report(metricsData);
@@ -235,6 +235,9 @@ public class CloudWatchReporter extends ScheduledReporter {
       } catch (final Exception ex) {
         LOG.error("Error reporting metrics to CloudWatch. The data in this CloudWatch request "
             + "may have been discarded, and not made it to CloudWatch.", ex);
+        if (ex instanceof InterruptedException) {
+          Thread.currentThread().interrupt();
+        }
       }
     }
   }

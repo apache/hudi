@@ -16,9 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.metrics.cloudwatch;
+package org.apache.hudi.aws.metrics.cloudwatch;
 
-import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricsReporter;
