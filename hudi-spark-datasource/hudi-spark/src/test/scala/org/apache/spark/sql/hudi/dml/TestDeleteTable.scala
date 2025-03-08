@@ -175,8 +175,9 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
 
         // delete data from table
         spark.sql(s"delete from $tableName where id = 1")
-        checkAnswer(s"select count(1) from $tableName")(
-          Seq(2)
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(2, "a2", 20.0, 1000),
+          Seq(3, "a2", 30.0, 1000)
         )
       }
     }
