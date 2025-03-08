@@ -33,6 +33,7 @@ import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
@@ -49,6 +50,7 @@ import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
@@ -389,7 +391,6 @@ trait ProvidesHoodieConfig extends Logging {
 
   def buildHoodieDeleteTableConfig(hoodieCatalogTable: HoodieCatalogTable,
                                    sparkSession: SparkSession): Map[String, String] = {
-    val path = hoodieCatalogTable.tableLocation
     val tableConfig = hoodieCatalogTable.tableConfig
     val tableSchema = hoodieCatalogTable.tableSchema
     val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase(Locale.ROOT))
@@ -549,6 +550,7 @@ object ProvidesHoodieConfig {
     val tableConfig = hoodieCatalogTable.tableConfig
     val baseOpts = Map(
       "path" -> hoodieCatalogTable.tableLocation,
+      TABLE_NAME.key -> tableConfig.getTableName,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
       PARTITIONPATH_FIELD.key -> getPartitionPathFieldWriteConfig(
