@@ -648,3 +648,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-03-04 16:53:08] [release-v1.98.0] ---
 [ENG-22647][INTERNAL] Lock provider tiny synchronization issue (#1244)
 [AUDIT-1071]: Changelog for release-v1.97.0 (#1234)
+
+--- [2025-03-08 16:03:33] [release-v1.99.0] ---
+[ENG-23113][INTERNAL] Refactor hudi-aws to not be imported by hudi-client-common (#1240)
+[AUDIT-1206]: Changelog for release-v1.98.0 (#1246)
