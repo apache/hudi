@@ -41,7 +41,7 @@ import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{filterHoodieConfigs, isUsingHiveCatalog}
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{buildOverridingOpts, combineOptions, getPartitionPathFieldWriteConfig}
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{buildOverridingOpts, buildOverridingOptsForDelete, combineOptions, getPartitionPathFieldWriteConfig}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.PARTITION_OVERWRITE_MODE
@@ -411,7 +411,7 @@ trait ProvidesHoodieConfig extends Logging {
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     )
 
-    val overridingOpts = buildOverridingOpts(hoodieCatalogTable)
+    val overridingOpts = buildOverridingOptsForDelete(hoodieCatalogTable)
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
@@ -539,7 +539,7 @@ object ProvidesHoodieConfig {
     )
   }
 
-  private def buildOverridingOpts(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
+  private def buildOverridingOptsForDelete(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
     buildCommonOverridingOpts(hoodieCatalogTable) ++ Map(
       OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL
     )
