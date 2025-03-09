@@ -128,7 +128,7 @@ for more details.
 
 ## Doris
 Copy on Write Tables in Hudi version 0.10.0 can be queried via Doris external tables starting from Doris version 1.1. 
-Please refer to [Doris Hudi external table](https://doris.apache.org/docs/ecosystem/external-table/hudi-external-table/ )
+Please refer to [Doris Hudi Catalog](https://doris.apache.org/docs/lakehouse/datalake-analytics/hudi/)
 for more details on the setup. 
 
 :::note
