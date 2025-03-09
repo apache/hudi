@@ -98,9 +98,9 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation(HoodieCleaningPolicy.class)
       .markAdvanced()
       .withInferFunction(cfg -> {
-        boolean isCommitsRetainedConfigured = cfg.contains(CLEANER_COMMITS_RETAINED.key()) || CLEANER_COMMITS_RETAINED.getAlternatives().stream().anyMatch(cfg::contains);
-        boolean isHoursRetainedConfigured = cfg.contains(CLEANER_HOURS_RETAINED.key()) || CLEANER_HOURS_RETAINED.getAlternatives().stream().anyMatch(cfg::contains);
-        boolean isFileVersionsRetainedConfigured = cfg.contains(CLEANER_FILE_VERSIONS_RETAINED.key()) || CLEANER_FILE_VERSIONS_RETAINED.getAlternatives().stream().anyMatch(cfg::contains);
+        boolean isCommitsRetainedConfigured = cfg.contains(CLEANER_COMMITS_RETAINED) || CLEANER_COMMITS_RETAINED.getAlternatives().stream().anyMatch(cfg::contains);
+        boolean isHoursRetainedConfigured = cfg.contains(CLEANER_HOURS_RETAINED) || CLEANER_HOURS_RETAINED.getAlternatives().stream().anyMatch(cfg::contains);
+        boolean isFileVersionsRetainedConfigured = cfg.contains(CLEANER_FILE_VERSIONS_RETAINED) || CLEANER_FILE_VERSIONS_RETAINED.getAlternatives().stream().anyMatch(cfg::contains);
 
         // If the cleaner policy is not configured, the cleaner policy is inferred only when one
         // of the following configs are explicitly configured by the user:
