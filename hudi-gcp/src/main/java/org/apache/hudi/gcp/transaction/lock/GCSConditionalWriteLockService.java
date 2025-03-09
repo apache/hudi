@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.channels.Channels;
+import java.util.Properties;
 import java.util.function.Supplier;
 
 import org.apache.hudi.client.transaction.lock.LockUpdateResult;
@@ -67,11 +68,13 @@ public class GCSConditionalWriteLockService implements ConditionalWriteLockServi
    * @param ownerId The owner id.
    * @param bucketName The name of the bucket.
    * @param lockFilePath The path within the bucket where to write lock files.
+   * @param props The properties for the lock config, can be used to customize client.
    */
   public GCSConditionalWriteLockService(
       String ownerId,
       String bucketName,
-      String lockFilePath) {
+      String lockFilePath,
+      Properties props) {
     this(ownerId, bucketName, lockFilePath, StorageOptions.newBuilder()
         .build()
         .getService(), DEFAULT_LOGGER);

@@ -55,6 +55,10 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAppendSupported("tos"));
     assertTrue(StorageSchemes.isAppendSupported("cfs"));
 
+    assertTrue(StorageSchemes.isConditionalWritesSupported("s3"));
+    assertTrue(StorageSchemes.isConditionalWritesSupported("s3a"));
+    assertTrue(StorageSchemes.isConditionalWritesSupported("gs"));
+
     assertTrue(StorageSchemes.isAtomicCreationSupported("file"));
     assertTrue(StorageSchemes.isAtomicCreationSupported("hdfs"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("afs"));

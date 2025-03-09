@@ -151,9 +151,15 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
       <scope>provided</scope>
     </dependency>
     <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-client-common</artifactId>
+      <version>${project.version}</version>
+      <classifier>tests</classifier>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers</artifactId>
-      <version>${testcontainers.version}</version>
       <scope>test</scope>
     </dependency>
 

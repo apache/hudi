@@ -23,6 +23,7 @@ import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockFile;
 import org.apache.hudi.client.transaction.lock.models.HeartbeatManager;
 import org.apache.hudi.client.transaction.lock.models.LockProviderHeartbeatManager;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -30,8 +31,10 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.hadoop.conf.Configuration;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +43,10 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -67,11 +73,19 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
   private static final long LOCK_UPSERT_RETRY_COUNT = 5;
 
   private static final String GCS_LOCK_SERVICE_CLASS_NAME = "org.apache.hudi.gcp.transaction.lock.GCSConditionalWriteLockService";
+  private static final String S3_LOCK_SERVICE_CLASS_NAME = "org.apache.hudi.aws.transaction.lock.S3ConditionalWriteLockService";
 
   // The static logger to be shared across contexts
   private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(ConditionalWriteLockProvider.class);
   private static final String LOCK_STATE_LOGGER_MSG = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}";
   private static final String LOCK_STATE_LOGGER_MSG_WITH_INFO = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}, {}";
+
+  private static final Map<String, String> SUPPORTED_LOCK_SERVICE_IMPLEMENTATIONS = new HashMap<>();
+  static {
+    SUPPORTED_LOCK_SERVICE_IMPLEMENTATIONS.put(StorageSchemes.GCS.getScheme(), GCS_LOCK_SERVICE_CLASS_NAME);
+    SUPPORTED_LOCK_SERVICE_IMPLEMENTATIONS.put(StorageSchemes.S3A.getScheme(), S3_LOCK_SERVICE_CLASS_NAME);
+    SUPPORTED_LOCK_SERVICE_IMPLEMENTATIONS.put(StorageSchemes.S3.getScheme(), S3_LOCK_SERVICE_CLASS_NAME);
+  }
 
   @VisibleForTesting
   Logger logger;
@@ -111,9 +125,11 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
     heartbeatIntervalMs = config.getHeartbeatPollMs();
     lockValidityMs = config.getLockValidityTimeoutMs();
 
-    // Extract and print the bucket (or container) and path
+    // Extract the scheme, bucket (or container), and path
+    String scheme;
     try {
       URI uri = new URI(config.getLocksLocation());
+      scheme = uri.getScheme();
       bucketName = uri.getHost(); // For most schemes, the bucket/container is the host
       String pathName = uri.getPath(); // Path after the bucket/container
       lockFilePath = buildLockObjectPath(pathName, slugifyLockFolderFromBasePath(config.getHudiTableBasePath()));
@@ -129,24 +145,24 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
         this::renewLock
     );
 
-    String lockServiceClassName;
-    if (config.getLocksLocation().startsWith("gs://") || config.getLocksLocation().startsWith("https://storage.googleapis.com")) {
-      // Create GCS service
-      lockServiceClassName = GCS_LOCK_SERVICE_CLASS_NAME;
-    } else {
-      throw new HoodieLockException("No implementation of ConditionalWriteLockService supports this lock storage location");
-    }
-
     try {
       this.lockService = ReflectionUtils.loadClass(
-          lockServiceClassName,
-          new Class<?>[] {String.class, String.class, String.class},
-          new Object[] {ownerId, bucketName, lockFilePath});
+          getLockServiceClassName(scheme),
+          new Class<?>[] {String.class, String.class, String.class, Properties.class },
+          new Object[] {ownerId, bucketName, lockFilePath, lockConfiguration.getConfig()});
     } catch (Throwable e) {
       throw new HoodieLockException("Failed to load and initialize ConditionalWriteLockService", e);
     }
 
     logger.debug("Instantiated new Conditional Write LP, owner: {}", ownerId);
+  }
+
+  private static @NotNull String getLockServiceClassName(String scheme) {
+    if (SUPPORTED_LOCK_SERVICE_IMPLEMENTATIONS.containsKey(scheme) && StorageSchemes.isConditionalWritesSupported(scheme)) {
+      return SUPPORTED_LOCK_SERVICE_IMPLEMENTATIONS.get(scheme);
+    } else {
+      throw new HoodieNotSupportedException("No implementation of ConditionalWriteLockService supports this scheme: " + scheme);
+    }
   }
 
   @VisibleForTesting

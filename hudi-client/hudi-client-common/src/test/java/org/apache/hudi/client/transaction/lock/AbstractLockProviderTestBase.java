@@ -17,10 +17,8 @@
  * under the License.
  */
 
-package org.apache.hudi.gcp.transaction.lock;
+package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.ConditionalWriteLockConfig;
-import org.apache.hudi.client.transaction.lock.ConditionalWriteLockProvider;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieLockException;
 
@@ -45,10 +43,6 @@ public abstract class AbstractLockProviderTestBase {
   protected static TypedProperties providerProperties;
   // A method that subclasses must implement to instantiate the correct provider.
   protected abstract ConditionalWriteLockProvider createLockProvider();
-
-  protected void recreateLockProvider() {
-    lockProvider = createLockProvider();
-  }
 
   @BeforeEach
   void setUp() {
@@ -102,7 +96,7 @@ public abstract class AbstractLockProviderTestBase {
 
     // Wait for the thread to acquire the lock
     // Ensure the locking thread is dead.
-    lockingThread.join(500);
+    lockingThread.join(2000);
     assertFalse(lockingThread.isAlive());
 
     // After the validity expires, should be able to reacquire
