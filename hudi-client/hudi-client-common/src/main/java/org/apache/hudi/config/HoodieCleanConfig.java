@@ -49,8 +49,11 @@ import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_FILE
 public class HoodieCleanConfig extends HoodieConfig {
 
   private static final String CLEANER_COMMITS_RETAINED_KEY = "hoodie.clean.commits.retained";
+  private static final String CLEANER_COMMITS_RETAINED_ALTERNATIVE_KEY = "hoodie.cleaner.commits.retained";
   private static final String CLEANER_HOURS_RETAINED_KEY = "hoodie.clean.hours.retained";
+  private static final String CLEANER_HOURS_RETAINED_ALTERNATIVE_KEY = "hoodie.cleaner.hours.retained";
   private static final String CLEANER_FILE_VERSIONS_RETAINED_KEY = "hoodie.clean.fileversions.retained";
+  private static final String CLEANER_FILE_VERSIONS_RETAINED_ALTERNATIVE_KEY = "hoodie.cleaner.fileversions.retained";
 
   public static final ConfigProperty<String> AUTO_CLEAN = ConfigProperty
       .key("hoodie.clean.automatic")
@@ -77,9 +80,9 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation(HoodieCleaningPolicy.class)
       .markAdvanced()
       .withInferFunction(cfg -> {
-        boolean isCommitsRetainedConfigured = cfg.contains(CLEANER_COMMITS_RETAINED_KEY);
-        boolean isHoursRetainedConfigured = cfg.contains(CLEANER_HOURS_RETAINED_KEY);
-        boolean isFileVersionsRetainedConfigured = cfg.contains(CLEANER_FILE_VERSIONS_RETAINED_KEY);
+        boolean isCommitsRetainedConfigured = cfg.contains(CLEANER_COMMITS_RETAINED_KEY) || cfg.contains(CLEANER_COMMITS_RETAINED_ALTERNATIVE_KEY);
+        boolean isHoursRetainedConfigured = cfg.contains(CLEANER_HOURS_RETAINED_KEY) || cfg.contains(CLEANER_HOURS_RETAINED_ALTERNATIVE_KEY);
+        boolean isFileVersionsRetainedConfigured = cfg.contains(CLEANER_FILE_VERSIONS_RETAINED_KEY) || cfg.contains(CLEANER_FILE_VERSIONS_RETAINED_ALTERNATIVE_KEY);
 
         // If the cleaner policy is not configured, the cleaner policy is inferred only when one
         // of the following configs are explicitly configured by the user:
@@ -101,13 +104,16 @@ public class HoodieCleanConfig extends HoodieConfig {
   public static final ConfigProperty<String> CLEANER_COMMITS_RETAINED = ConfigProperty
       .key(CLEANER_COMMITS_RETAINED_KEY)
       .defaultValue("10")
+      .withAlternatives(CLEANER_COMMITS_RETAINED_ALTERNATIVE_KEY)
       .withDocumentation("When " + KEEP_LATEST_COMMITS.name() + " cleaning policy is used, the number of commits to retain, without cleaning. "
           + "This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much "
           + "data retention the table supports for incremental queries.");
 
-  public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty.key(CLEANER_HOURS_RETAINED_KEY)
+  public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty
+      .key(CLEANER_HOURS_RETAINED_KEY)
       .defaultValue("24")
       .markAdvanced()
+      .withAlternatives(CLEANER_HOURS_RETAINED_ALTERNATIVE_KEY)
       .withDocumentation("When " + KEEP_LATEST_BY_HOURS.name() + " cleaning policy is used, the number of hours for which commits need to be retained. "
           + "This config provides a more flexible option as compared to number of commits retained for cleaning service. Setting this property ensures "
           + "all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
@@ -116,6 +122,7 @@ public class HoodieCleanConfig extends HoodieConfig {
       .key(CLEANER_FILE_VERSIONS_RETAINED_KEY)
       .defaultValue("3")
       .markAdvanced()
+      .withAlternatives(CLEANER_FILE_VERSIONS_RETAINED_ALTERNATIVE_KEY)
       .withDocumentation("When " + KEEP_LATEST_FILE_VERSIONS.name() + " cleaning policy is used, "
           + "the minimum number of file slices to retain in each file group, during cleaning.");
 
