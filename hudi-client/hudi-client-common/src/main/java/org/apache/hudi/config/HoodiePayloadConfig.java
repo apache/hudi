@@ -60,7 +60,7 @@ public class HoodiePayloadConfig extends HoodieConfig {
   @Deprecated
   public static final ConfigProperty<String> ORDERING_FIELD = ConfigProperty
       .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
-      .defaultValue("ts")
+      .noDefaultValue()
       .markAdvanced()
       .withDocumentation("Table column/field name to order records that have the same key, before "
           + "merging and writing to storage.");

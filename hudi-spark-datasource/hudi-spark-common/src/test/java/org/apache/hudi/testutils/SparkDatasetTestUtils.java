@@ -141,6 +141,7 @@ public class SparkDatasetTestUtils {
    */
   public static Row getRandomValue(String partitionPath, boolean isError, String commitTime) {
     // order commit time, seq no, record key, partition path, file name
+    String recordKey = UUID.randomUUID().toString();
     Object[] values = new Object[9];
     values[0] = commitTime; //commit time
     if (!isError) {
@@ -148,10 +149,10 @@ public class SparkDatasetTestUtils {
     } else {
       values[1] = RANDOM.nextLong();
     }
-    values[2] = UUID.randomUUID().toString();
+    values[2] = recordKey;
     values[3] = partitionPath;
     values[4] = ""; // filename
-    values[5] = UUID.randomUUID().toString();
+    values[5] = recordKey;
     values[6] = partitionPath;
     values[7] = RANDOM.nextInt();
     if (!isError) {
@@ -180,7 +181,7 @@ public class SparkDatasetTestUtils {
     values[2] = key.getRecordKey();
     values[3] = key.getPartitionPath();
     values[4] = ""; // filename
-    values[5] = UUID.randomUUID().toString();
+    values[5] = key.getRecordKey();
     values[6] = key.getPartitionPath();
     values[7] = RANDOM.nextInt();
     if (!isError) {
