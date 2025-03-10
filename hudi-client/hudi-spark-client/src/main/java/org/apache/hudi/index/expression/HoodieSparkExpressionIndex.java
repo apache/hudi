@@ -20,6 +20,7 @@
 package org.apache.hudi.index.expression;
 
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 
@@ -41,12 +42,12 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
   public HoodieSparkExpressionIndex() {
   }
 
-  public HoodieSparkExpressionIndex(String indexName, String indexFunction, String indexType, List<String> orderedSourceFields, Map<String, String> options) {
-    this.indexName = indexName;
-    this.indexFunction = indexFunction;
-    this.indexType = indexType;
-    this.orderedSourceFields = orderedSourceFields;
-    this.options = options;
+  public HoodieSparkExpressionIndex(HoodieIndexDefinition indexDefinition) {
+    this.indexName = indexDefinition.getIndexName();
+    this.indexFunction = indexDefinition.getIndexFunction();
+    this.indexType = indexDefinition.getIndexType();
+    this.orderedSourceFields = indexDefinition.getSourceFields();
+    this.options = indexDefinition.getIndexOptions();
 
     // Check if the function from the expression exists in our map
     this.sparkFunction = ExpressionIndexSparkFunctions.SparkFunction.getSparkFunction(indexFunction);

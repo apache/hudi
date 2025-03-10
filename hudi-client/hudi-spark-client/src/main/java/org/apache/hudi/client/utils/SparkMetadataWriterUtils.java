@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
@@ -87,6 +86,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
@@ -101,6 +101,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.BLOOM_FILTER_CONFIG_MAPPING;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT;
@@ -208,7 +209,7 @@ public class SparkMetadataWriterUtils {
   public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex, HoodieWriteConfig metadataWriteConfig, String instantTime,
                                                                                              HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
-    setBloomFilterProps(metadataWriteConfig, indexDefinition);
+    setBloomFilterProps(metadataWriteConfig, indexDefinition.getIndexOptions());
 
     // Group data using expression index metadata and then create bloom filter on the group
     Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
@@ -230,19 +231,12 @@ public class SparkMetadataWriterUtils {
     return new ExpressionIndexComputationMetadata(HoodieJavaRDD.of(bloomFilterRecords.javaRDD()));
   }
 
-  private static void setBloomFilterProps(HoodieWriteConfig metadataWriteConfig, HoodieIndexDefinition indexDefinition) {
-    if (indexDefinition.getIndexOptions().containsKey(HoodieExpressionIndex.FALSE_POSITIVE_RATE)) {
-      metadataWriteConfig.getProps().setProperty(HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE.key(),
-          indexDefinition.getIndexOptions().get(HoodieExpressionIndex.FALSE_POSITIVE_RATE));
-    }
-    if (indexDefinition.getIndexOptions().containsKey(HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES)) {
-      metadataWriteConfig.getProps().setProperty(HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE.key(),
-          indexDefinition.getIndexOptions().get(HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES));
-    }
-    if (indexDefinition.getIndexOptions().containsKey(HoodieExpressionIndex.BLOOM_FILTER_TYPE)) {
-      metadataWriteConfig.getProps().setProperty(HoodieStorageConfig.BLOOM_FILTER_TYPE.key(),
-          indexDefinition.getIndexOptions().get(HoodieExpressionIndex.BLOOM_FILTER_TYPE));
-    }
+  private static void setBloomFilterProps(HoodieWriteConfig metadataWriteConfig, Map<String, String> indexOptions) {
+    BLOOM_FILTER_CONFIG_MAPPING.forEach((sourceKey, targetKey) -> {
+      if (indexOptions.containsKey(sourceKey)) {
+        metadataWriteConfig.getProps().setProperty(targetKey, indexOptions.get(sourceKey));
+      }
+    });
   }
 
   public static List<Row> readRecordsAsRows(StoragePath[] paths, SQLContext sqlContext,
@@ -346,9 +340,7 @@ public class SparkMetadataWriterUtils {
     Dataset<Row> rowDataset = sparkEngineContext.getSqlContext().createDataFrame(HoodieJavaRDD.getJavaRDD(rowData).rdd(), structType);
 
     // Apply expression index and generate the column to index
-    HoodieExpressionIndex<Column, Column> expressionIndex =
-        new HoodieSparkExpressionIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getIndexType(), indexDefinition.getSourceFields(),
-            indexDefinition.getIndexOptions());
+    HoodieExpressionIndex<Column, Column> expressionIndex = new HoodieSparkExpressionIndex(indexDefinition);
     Column indexedColumn = expressionIndex.apply(Collections.singletonList(rowDataset.col(columnToIndex)));
     rowDataset = rowDataset.withColumn(columnToIndex, indexedColumn);
 

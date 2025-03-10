@@ -31,11 +31,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.BLOOM_FILTER_TYPE;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.BLOOM_FILTER_CONFIG_MAPPING;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.DAYS_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.FALSE_POSITIVE_RATE;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.FORMAT_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.LENGTH_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.PATTERN_OPTION;
@@ -111,7 +109,7 @@ public class ExpressionIndexSparkFunctions {
       Set<String> validOptions = new HashSet<>(getValidOptions());
       // add bloom filters options if index type is bloom_filters
       if (indexType.equals(PARTITION_NAME_BLOOM_FILTERS)) {
-        validOptions.addAll(Arrays.asList(BLOOM_FILTER_TYPE, BLOOM_FILTER_NUM_ENTRIES, FALSE_POSITIVE_RATE));
+        validOptions.addAll(BLOOM_FILTER_CONFIG_MAPPING.keySet());
       }
       Set<String> invalidOptions = new HashSet<>(options.keySet());
       invalidOptions.removeAll(validOptions);
