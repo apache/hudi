@@ -282,7 +282,7 @@ The archive logic is triggered when invoking `call partitionBucketIndexManager(o
 Once the number of active hashing configs exceeds 5, the oldest expression’s metadata is automatically merged into `archived.hashing_config`. 
 The workflow is as follows:
 
-![img.png](img.png)
+![archive.jpg](archive.jpg)
 
 **we always create a new temp file and rename it to archived.hashing_config**
 
