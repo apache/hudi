@@ -424,8 +424,10 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           }
           Comparable oldOrderingValue = readerContext.getOrderingValue(
               older, olderInfoMap, readerSchema, orderingFieldName);
-          if (!isDeleteRecordWithNaturalOrder(older, oldOrderingValue)
-              && oldOrderingValue.compareTo(newOrderingValue) > 0) {
+          boolean choosePrev = !oldOrderingValue.equals(0)
+              && ReflectionUtils.isSameClass(oldOrderingValue, newOrderingValue)
+              && oldOrderingValue.compareTo(newOrderingValue) > 0;
+          if (!isDeleteRecordWithNaturalOrder(older, oldOrderingValue) && choosePrev) {
             return isDeleteRecord(older, readerContext.getSchemaFromMetadata(olderInfoMap)) ? Option.empty() : older;
           }
           return isDeleteRecord(newer, readerContext.getSchemaFromMetadata(newerInfoMap)) ? Option.empty() : newer;
