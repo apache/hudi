@@ -19,6 +19,8 @@
 
 package org.apache.hudi.index.expression;
 
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.spark.sql.Column;
@@ -36,6 +38,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.BLOOM_FILTER_TYPE;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.DYNAMIC_BLOOM_MAX_ENTRIES;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.FALSE_POSITIVE_RATE;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.spark.sql.functions.col;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -66,12 +74,14 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
     df.createOrReplaceTempView("testData");
 
     // Initialize the HoodieSparkExpressionIndex with the year function
-    HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(
-        "yearIndex",
-        "year",
-        Arrays.asList("timestampColumn"),
-        new HashMap<>()
-    );
+    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName("yearIndex")
+        .withIndexFunction("year")
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
+        .withSourceFields(Arrays.asList("timestampColumn"))
+        .withIndexOptions(new HashMap<>())
+        .build();
+    HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(indexDefinition);
 
     // Apply the function using the index
     Column yearColumn = index.apply(Arrays.asList(col("timestampColumn")));
@@ -100,12 +110,14 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
     df.createOrReplaceTempView("testData");
 
     // Initialize the HoodieSparkExpressionIndex with the hour function
-    HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(
-        "hourIndex",
-        "hour",
-        Arrays.asList("timestampColumn"),
-        new HashMap<>()
-    );
+    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName("hourIndex")
+        .withIndexFunction("hour")
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
+        .withSourceFields(Arrays.asList("timestampColumn"))
+        .withIndexOptions(new HashMap<>())
+        .build();
+    HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(indexDefinition);
 
     // Apply the function using the index
     Column hourColumn = index.apply(Arrays.asList(col("timestampColumn")));
@@ -124,12 +136,54 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
   public void testApplyYearFunctionWithWrongNumberOfArguments() {
     // Setup index with the wrong number of source fields
     List<Column> sourceColumns = Arrays.asList(col("timestampColumn"), col("extraColumn"));
-    HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(
-        "yearIndex",
-        "year",
-        Arrays.asList("timestampColumn", "extraColumn"),
-        Collections.emptyMap()
-    );
+    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName("yearIndex")
+        .withIndexFunction("year")
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
+        .withSourceFields(Arrays.asList("timestampColumn", "extraColumn"))
+        .withIndexOptions(Collections.emptyMap())
+        .build();
+    HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(indexDefinition);
     assertThrows(IllegalArgumentException.class, () -> index.apply(sourceColumns));
+  }
+
+  @Test
+  public void testUpperFunctionWithBloomFilters() {
+    // Create a test DataFrame with name column
+    Dataset<Row> df = sparkSession.createDataFrame(Arrays.asList(
+        RowFactory.create("John Doe"),
+        RowFactory.create("Jane Smith")
+    ), DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("name", DataTypes.StringType, false)
+    )));
+    // Register the DataFrame as a temp view so we can query it
+    df.createOrReplaceTempView("testData");
+
+    // Initialize the HoodieSparkExpressionIndex with the upper function
+    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName("upperIndex")
+        .withIndexFunction("upper")
+        .withIndexType(PARTITION_NAME_BLOOM_FILTERS)
+        .withSourceFields(Arrays.asList("name"))
+        .withIndexOptions(new HashMap<String, String>() {
+          {
+            put(BLOOM_FILTER_TYPE, BloomFilterTypeCode.DYNAMIC_V0.name());
+            put(BLOOM_FILTER_NUM_ENTRIES, "10000");
+            put(FALSE_POSITIVE_RATE, "0.01");
+            put(DYNAMIC_BLOOM_MAX_ENTRIES, "100000");
+          }
+        })
+        .build();
+
+    // Apply the function using the index
+    HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(indexDefinition);
+    Column upperColumn = index.apply(Arrays.asList(col("name")));
+    assertEquals("upper(name)", upperColumn.toString());
+
+    // validate data
+    Dataset<Row> resultDf = df.withColumn("upper(name)", upperColumn);
+    List<Row> results = resultDf.select("upper(name)").collectAsList();
+    assertEquals("JOHN DOE", results.get(0).getAs("upper(name)").toString());
+    assertEquals("JANE SMITH", results.get(1).getAs("upper(name)").toString());
   }
 }
