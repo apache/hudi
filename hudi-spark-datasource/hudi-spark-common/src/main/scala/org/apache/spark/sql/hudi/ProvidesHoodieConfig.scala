@@ -550,7 +550,8 @@ object ProvidesHoodieConfig {
     val tableConfig = hoodieCatalogTable.tableConfig
     val baseOpts = Map(
       "path" -> hoodieCatalogTable.tableLocation,
-      TABLE_NAME.key -> tableConfig.getTableName,
+      TBL_NAME.key -> tableConfig.getTableName,
+      DATABASE_NAME.key -> hoodieCatalogTable.table.database,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
       PARTITIONPATH_FIELD.key -> getPartitionPathFieldWriteConfig(
