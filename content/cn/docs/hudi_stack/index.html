@@ -20,7 +20,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/cn/assets/css/styles.8682b225.css">
-<script src="/cn/assets/js/runtime~main.8c3cc6a6.js" defer="defer"></script>
+<script src="/cn/assets/js/runtime~main.28d5f1b1.js" defer="defer"></script>
 <script src="/cn/assets/js/main.b8c70882.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -100,7 +100,7 @@ larger ones for optimal file size management. It&#x27;s fully integrated with ot
 compaction for File Groups undergoing clustering, thereby saving on I/O.</p>
 <h4 class="anchor anchorWithStickyNavbar_LWe7" id="compaction">Compaction<a href="#compaction" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h4>
 <p>Hudi&#x27;s <a href="/cn/docs/compaction">compaction</a> service, featuring strategies like date partitioning and I/O bounding, merges Base Files with delta logs to create updated Base Files. It allows
-concurrent writes to the same File Froup, enabled by Hudi&#x27;s file grouping and flexible log merging. This facilitates non-blocking execution of deletes even during concurrent
+concurrent writes to the same File Group, enabled by Hudi&#x27;s file grouping and flexible log merging. This facilitates non-blocking execution of deletes even during concurrent
 record updates.</p>
 <h4 class="anchor anchorWithStickyNavbar_LWe7" id="cleaning">Cleaning<a href="#cleaning" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h4>
 <p><a href="http://hudi.apache.org/blog/2021/06/10/employing-right-configurations-for-hudi-cleaner" target="_blank" rel="noopener noreferrer">Cleaner</a> service works off the timeline incrementally, removing File Slices that are past the configured retention period for incremental queries,
