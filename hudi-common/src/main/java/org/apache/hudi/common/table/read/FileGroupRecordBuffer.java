@@ -72,13 +72,15 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_ME
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
-public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
+public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
   protected final Option<String> orderingFieldName;
@@ -96,14 +98,17 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected boolean enablePartialMerging = false;
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
+  protected boolean shouldCheckCustomDeleteMarker = false;
+  protected String customDeleteMarkerKey;
+  protected String customDeleteMarkerValue;
 
-  public HoodieBaseFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                         HoodieTableMetaClient hoodieTableMetaClient,
-                                         RecordMergeMode recordMergeMode,
-                                         Option<String> partitionNameOverrideOpt,
-                                         Option<String[]> partitionPathFieldOpt,
-                                         TypedProperties props,
-                                         HoodieReadStats readStats) {
+  protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+                                  HoodieTableMetaClient hoodieTableMetaClient,
+                                  RecordMergeMode recordMergeMode,
+                                  Option<String> partitionNameOverrideOpt,
+                                  Option<String[]> partitionPathFieldOpt,
+                                  TypedProperties props,
+                                  HoodieReadStats readStats) {
     this.readerContext = readerContext;
     this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
     this.partitionNameOverrideOpt = partitionNameOverrideOpt;
@@ -142,6 +147,29 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
+    this.shouldCheckCustomDeleteMarker = hasCustomDeleteConfigs(props, readerSchema);
+    if (shouldCheckCustomDeleteMarker) {
+      this.customDeleteMarkerKey = props.getProperty(DELETE_KEY);
+      this.customDeleteMarkerValue = props.getProperty(DELETE_MARKER);
+    }
+  }
+
+  protected boolean hasCustomDeleteConfigs(TypedProperties props, Schema schema) {
+    // DELETE_KEY and DELETE_MARKER both should be set.
+    if (StringUtils.isNullOrEmpty(props.getProperty(DELETE_KEY))
+        || StringUtils.isNullOrEmpty(props.getProperty(DELETE_MARKER))) {
+      return false;
+    }
+    // Schema should have the DELETE_KEY field.
+    String deleteKeyField = props.getProperty(DELETE_KEY);
+    return schema.getField(deleteKeyField) != null;
+  }
+
+  protected boolean isCustomDeleteRecord(T record) {
+    Object deleteMarkerValue =
+        readerContext.getValue(record, readerSchema, customDeleteMarkerKey);
+    return deleteMarkerValue != null
+          && customDeleteMarkerValue.equals(deleteMarkerValue.toString());
   }
 
   @Override

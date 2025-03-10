@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -51,6 +52,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
@@ -60,8 +62,8 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
  * Here the position means that record position in the base file. The records from the base file is accessed from an iterator object. These records are merged when the
  * {@link #hasNext} method is called.
  */
-public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedFileGroupRecordBuffer<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodiePositionBasedFileGroupRecordBuffer.class);
+public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
+  private static final Logger LOG = LoggerFactory.getLogger(PositionBasedFileGroupRecordBuffer.class);
 
   private static final String ROW_INDEX_COLUMN_NAME = "row_index";
   public static final String ROW_INDEX_TEMPORARY_COLUMN_NAME = "_tmp_metadata_" + ROW_INDEX_COLUMN_NAME;
@@ -69,14 +71,14 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
   private long nextRecordPosition = 0L;
   private boolean needToDoHybridStrategy = false;
 
-  public HoodiePositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                  HoodieTableMetaClient hoodieTableMetaClient,
-                                                  RecordMergeMode recordMergeMode,
-                                                  Option<String> partitionNameOverrideOpt,
-                                                  Option<String[]> partitionPathFieldOpt,
-                                                  String baseFileInstantTime,
-                                                  TypedProperties props,
-                                                  HoodieReadStats readStats) {
+  public PositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+                                            HoodieTableMetaClient hoodieTableMetaClient,
+                                            RecordMergeMode recordMergeMode,
+                                            Option<String> partitionNameOverrideOpt,
+                                            Option<String[]> partitionPathFieldOpt,
+                                            String baseFileInstantTime,
+                                            TypedProperties props,
+                                            HoodieReadStats readStats) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
     this.baseFileInstantTime = baseFileInstantTime;
   }
@@ -132,13 +134,14 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
         }
 
         long recordPosition = recordPositions.get(recordIndex++);
-
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
-        processNextDataRecord(
-            evolvedNextRecord,
-            readerContext.generateMetadataForRecord(evolvedNextRecord, schemaTransformerWithEvolvedSchema.getRight()),
-            recordPosition
-        );
+        Map<String, Object> metadata = readerContext.generateMetadataForRecord(
+            evolvedNextRecord, schemaTransformerWithEvolvedSchema.getRight());
+        if (shouldCheckCustomDeleteMarker && isCustomDeleteRecord(evolvedNextRecord)) {
+          processCustomDeleteRecord(evolvedNextRecord, metadata, recordPosition);
+        } else {
+          processNextDataRecord(evolvedNextRecord, metadata, recordPosition);
+        }
       }
     }
   }
@@ -197,6 +200,16 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
           processNextDeletedRecord(record, recordPosition);
         }
     }
+  }
+
+  protected void processCustomDeleteRecord(T record, Map<String, Object> metadata, long recordPosition) {
+    DeleteRecord deleteRecord = DeleteRecord.create(
+        new HoodieKey(
+            (String) metadata.get(INTERNAL_META_RECORD_KEY),
+            (String) metadata.get(INTERNAL_META_PARTITION_PATH)),
+        readerContext.getOrderingValue(
+            Option.of(record), metadata, readerSchema, orderingFieldName));
+    processNextDeletedRecord(deleteRecord, recordPosition);
   }
 
   @Override
