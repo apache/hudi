@@ -45,6 +45,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
@@ -53,6 +54,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -83,8 +85,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -99,6 +103,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -158,6 +163,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   // Is the MDT bootstrapped and ready to be read from
   private boolean initialized = false;
   private HoodieTableFileSystemView metadataView;
+  private MetadataWriteHandler metadataWriteHandler;
 
   /**
    * Hudi backed table metadata writer.
@@ -180,6 +186,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(storageConf.newInstance())
         .setBasePath(dataWriteConfig.getBasePath())
         .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
+    this.metadataWriteHandler = new MetadataWriteHandler(dataMetaClient.getTableConfig().getTableVersion());
     this.enabledPartitionTypes = getEnabledPartitions(dataWriteConfig.getProps(), dataMetaClient);
     if (writeConfig.isMetadataTableEnabled()) {
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
@@ -347,6 +354,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    */
   private void initializeFromFilesystem(String initializationTime, List<MetadataPartitionType> partitionsToInit) throws IOException {
     Set<String> pendingDataInstants = getPendingDataInstants(dataMetaClient);
+    if (!metadataWriteHandler.shouldInitializeFromFilesystem(pendingDataInstants)) {
+      return;
+    }
 
     // FILES partition is always required and is initialized first
     boolean filesPartitionAvailable = dataMetaClient.getTableConfig().isMetadataPartitionAvailable(FILES);
@@ -805,7 +815,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .setTableName(dataWriteConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)
         // MT version should match DT, such that same readers can read both.
         .setTableVersion(dataWriteConfig.getWriteVersion())
-        .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
+        .setArchiveLogFolder(metadataWriteHandler.getTimelineHistoryPath())
         .setPayloadClassName(HoodieMetadataPayload.class.getName())
         .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
         .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
@@ -1265,26 +1275,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    */
   @Override
   public void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
-    if (initialized && metadata != null) {
-      mayBeReinitMetadataReader();
-      // The commit which is being rolled back on the dataset
-      final String commitToRollbackInstantTime = rollbackMetadata.getCommitsRollback().get(0);
-      // The deltacommit that will be rolled back
-      HoodieInstant deltaCommitInstant = metadataMetaClient.createNewInstant(HoodieInstant.State.COMPLETED,
-          HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
-      if (metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().containsInstant(deltaCommitInstant)) {
-        validateRollback(commitToRollbackInstantTime);
-        LOG.info("Rolling back MDT deltacommit {}", commitToRollbackInstantTime);
-        if (!getWriteClient().rollback(commitToRollbackInstantTime, instantTime)) {
-          throw new HoodieMetadataException(String.format("Failed to rollback deltacommit at %s", commitToRollbackInstantTime));
-        }
-      } else {
-        // if the instant is pending on MDT or not even exists the timeline, just ignore.
-        LOG.info("Ignoring rollback of instant {} at {}. The commit to rollback is not found in MDT",
-            commitToRollbackInstantTime, instantTime);
-      }
-      closeInternal();
-    }
+    metadataWriteHandler.update(rollbackMetadata, instantTime);
   }
 
   private void validateRollback(String commitToRollbackInstantTime) {
@@ -1495,10 +1486,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // Check and run clean operations.
       cleanIfNecessary(writeClient);
       // Do timeline validation before scheduling compaction/logCompaction operations.
-      if (validateCompactionScheduling()) {
+      if (metadataWriteHandler.validateCompactionScheduling(inFlightInstantTimestamp, lastInstant.get().requestedTime())) {
         String latestDeltacommitTime = lastInstant.get().requestedTime();
         LOG.info("Latest deltacommit time found is {}, running compaction operations.", latestDeltacommitTime);
-        compactIfNecessary(writeClient);
+        metadataWriteHandler.compactIfNecessary(writeClient, latestDeltacommitTime);
       }
       writeClient.archive();
       LOG.info("All the table services operations on MDT completed successfully");
@@ -1542,50 +1533,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return ranServices ? metadataMetaClient.reloadActiveTimeline() : activeTimeline;
   }
 
-  /**
-   * Perform a compaction on the Metadata Table.
-   * <p>
-   * Cases to be handled:
-   * 1. We cannot perform compaction if there are previous inflight operations on the dataset. This is because
-   * a compacted metadata base file at time Tx should represent all the actions on the dataset till time Tx.
-   * <p>
-   * 2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
-   * deltacommit.
-   */
-  protected void compactIfNecessary(BaseHoodieWriteClient writeClient) {
-    // IMPORTANT: Trigger compaction with max instant time that is smaller than(or equals) the earliest pending instant from DT.
-    // The compaction planner will manage to filter out the log files that finished with greater completion time.
-    // see BaseHoodieCompactionPlanGenerator.generateCompactionPlan for more details.
-    HoodieTimeline metadataCompletedTimeline = metadataMetaClient.getActiveTimeline().filterCompletedInstants();
-    final String compactionInstantTime = dataMetaClient.reloadActiveTimeline()
-        // The filtering strategy is kept in line with the rollback premise, if an instant is pending on DT but completed on MDT,
-        // generates a compaction time smaller than it so that the instant could then been rolled back.
-        .filterInflightsAndRequested().filter(instant -> metadataCompletedTimeline.containsInstant(instant.requestedTime())).firstInstant()
-        // minus the pending instant time by 1 millisecond to avoid conflicts on the MDT.
-        .map(instant -> HoodieInstantTimeGenerator.instantTimeMinusMillis(instant.requestedTime(), 1L))
-        .orElse(writeClient.createNewInstantTime(false));
-
-    // we need to avoid checking compaction w/ same instant again.
-    // let's say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
-    // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
-    // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
-    if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)) {
-      LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
-    } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
-      LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-      writeClient.compact(compactionInstantTime);
-    } else if (metadataWriteConfig.isLogCompactionEnabled()) {
-      // Schedule and execute log compaction with new instant time.
-      final String logCompactionInstantTime = metadataMetaClient.createNewInstantTime(false);
-      if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(logCompactionInstantTime)) {
-        LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
-      } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
-        LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
-        writeClient.logCompact(logCompactionInstantTime);
-      }
-    }
-  }
-
   protected void cleanIfNecessary(BaseHoodieWriteClient writeClient) {
     Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.getActiveTimeline()
         .getCommitAndReplaceTimeline().filterCompletedInstants().lastInstant();
@@ -1605,26 +1552,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // metadata table.
     writeClient.clean(metadataMetaClient.createNewInstantTime(false));
     writeClient.lazyRollbackFailedIndexing();
-  }
-
-  /**
-   * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
-   */
-  protected boolean validateCompactionScheduling() {
-    // Under the log compaction scope, the sequence of the log-compaction and compaction needs to be ensured because metadata items such as RLI
-    // only has proc-time ordering semantics. For "ensured", it means the completion sequence of the log-compaction/compaction is the same as the start sequence.
-    if (metadataWriteConfig.isLogCompactionEnabled()) {
-      Option<HoodieInstant> pendingLogCompactionInstant =
-          metadataMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline().firstInstant();
-      Option<HoodieInstant> pendingCompactionInstant =
-          metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
-      if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
-        LOG.warn("Not scheduling compaction or logCompaction, since a pending compaction instant {} or logCompaction {} instant is present",
-            pendingCompactionInstant, pendingLogCompactionInstant);
-        return false;
-      }
-    }
-    return true;
   }
 
   private void fetchOutofSyncFilesRecordsFromMetadataTable(Map<String, DirectoryInfo> dirInfoMap, Map<String, Map<String, Long>> partitionFilesToAdd,
@@ -1734,4 +1661,301 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   protected abstract BaseHoodieWriteClient<?, I, ?, ?> initializeWriteClient();
+
+  private class MetadataWriteHandler implements Serializable {
+    HoodieTableVersion tableVersion;
+
+    public MetadataWriteHandler(HoodieTableVersion tableVersion) {
+      this.tableVersion = tableVersion;
+    }
+
+    public boolean shouldInitializeFromFilesystem(Set<String> pendingDataInstants) {
+      if (tableVersion.lesserThan(HoodieTableVersion.EIGHT) && !pendingDataInstants.isEmpty()) {
+        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
+        LOG.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: {}",
+            Arrays.toString(pendingDataInstants.toArray()));
+        return false;
+      } else {
+        return true;
+      }
+    }
+
+    public String getTimelineHistoryPath() {
+      return tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+          ? TIMELINE_HISTORY_PATH.defaultValue() : ARCHIVELOG_FOLDER.defaultValue();
+    }
+
+    /**
+     * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
+     */
+    protected boolean validateCompactionScheduling(Option<String> inFlightInstantTimestamp, String latestDeltaCommitTimeInMetadataTable) {
+      if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+        return validateCompactionSchedulingVersionSix(inFlightInstantTimestamp, latestDeltaCommitTimeInMetadataTable);
+      } else {
+        // Under the log compaction scope, the sequence of the log-compaction and compaction needs to be ensured because metadata items such as RLI
+        // only has proc-time ordering semantics. For "ensured", it means the completion sequence of the log-compaction/compaction is the same as the start sequence.
+        if (metadataWriteConfig.isLogCompactionEnabled()) {
+          Option<HoodieInstant> pendingLogCompactionInstant =
+              metadataMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline().firstInstant();
+          Option<HoodieInstant> pendingCompactionInstant =
+              metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
+          if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
+            LOG.warn("Not scheduling compaction or logCompaction, since a pending compaction instant {} or logCompaction {} instant is present",
+                pendingCompactionInstant, pendingLogCompactionInstant);
+            return false;
+          }
+        }
+        return true;
+      }
+    }
+
+    /**
+     * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
+     */
+    protected boolean validateCompactionSchedulingVersionSix(Option<String> inFlightInstantTimestamp, String latestDeltaCommitTimeInMetadataTable) {
+      // we need to find if there are any inflights in data table timeline before or equal to the latest delta commit in metadata table.
+      // Whenever you want to change this logic, please ensure all below scenarios are considered.
+      // a. There could be a chance that latest delta commit in MDT is committed in MDT, but failed in DT. And so findInstantsBeforeOrEquals() should be employed
+      // b. There could be DT inflights after latest delta commit in MDT and we are ok with it. bcoz, the contract is, the latest compaction instant time in MDT represents
+      // any instants before that is already synced with metadata table.
+      // c. Do consider out of order commits. For eg, c4 from DT could complete before c3. and we can't trigger compaction in MDT with c4 as base instant time, until every
+      // instant before c4 is synced with metadata table.
+      List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
+          .findInstantsBeforeOrEquals(latestDeltaCommitTimeInMetadataTable).getInstants();
+
+      if (!pendingInstants.isEmpty()) {
+        checkNumDeltaCommits(metadataMetaClient, dataWriteConfig.getMetadataConfig().getMaxNumDeltacommitsWhenPending());
+        LOG.info(String.format(
+            "Cannot compact metadata table as there are %d inflight instants in data table before latest deltacommit in metadata table: %s. Inflight instants in data table: %s",
+            pendingInstants.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstants.toArray())));
+        return false;
+      }
+
+      // Check if there are any pending compaction or log compaction instants in the timeline.
+      // If pending compact/logCompaction operations are found abort scheduling new compaction/logCompaction operations.
+      Option<HoodieInstant> pendingLogCompactionInstant =
+          metadataMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline().firstInstant();
+      Option<HoodieInstant> pendingCompactionInstant =
+          metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
+      if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
+        LOG.warn(String.format("Not scheduling compaction or logCompaction, since a pending compaction instant %s or logCompaction %s instant is present",
+            pendingCompactionInstant, pendingLogCompactionInstant));
+        return false;
+      }
+      return true;
+    }
+
+    protected void checkNumDeltaCommits(HoodieTableMetaClient metaClient, int maxNumDeltaCommitsWhenPending) {
+      final HoodieActiveTimeline activeTimeline = metaClient.reloadActiveTimeline();
+      Option<HoodieInstant> lastCompaction = activeTimeline.filterCompletedInstants()
+          .filter(s -> s.getAction().equals(COMMIT_ACTION)).lastInstant();
+      int numDeltaCommits = lastCompaction.isPresent()
+          ? activeTimeline.getDeltaCommitTimeline().findInstantsAfter(lastCompaction.get().requestedTime()).countInstants()
+          : activeTimeline.getDeltaCommitTimeline().countInstants();
+      if (numDeltaCommits > maxNumDeltaCommitsWhenPending) {
+        throw new HoodieMetadataException(String.format("Metadata table's deltacommits exceeded %d: "
+                + "this is likely caused by a pending instant in the data table. Resolve the pending instant "
+                + "or adjust `%s`, then restart the pipeline.",
+            maxNumDeltaCommitsWhenPending, HoodieMetadataConfig.METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING.key()));
+      }
+    }
+
+    /**
+     * Perform a compaction on the Metadata Table.
+     * <p>
+     * Cases to be handled:
+     * 1. We cannot perform compaction if there are previous inflight operations on the dataset. This is because
+     * a compacted metadata base file at time Tx should represent all the actions on the dataset till time Tx.
+     * <p>
+     * 2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
+     * deltacommit.
+     */
+    protected void compactIfNecessary(BaseHoodieWriteClient writeClient, String latestDeltacommitTime) {
+      if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+        compactIfNecessaryVersionSix(writeClient, latestDeltacommitTime);
+      } else {
+        // IMPORTANT: Trigger compaction with max instant time that is smaller than(or equals) the earliest pending instant from DT.
+        // The compaction planner will manage to filter out the log files that finished with greater completion time.
+        // see BaseHoodieCompactionPlanGenerator.generateCompactionPlan for more details.
+        HoodieTimeline metadataCompletedTimeline = metadataMetaClient.getActiveTimeline().filterCompletedInstants();
+        final String compactionInstantTime = dataMetaClient.reloadActiveTimeline()
+            // The filtering strategy is kept in line with the rollback premise, if an instant is pending on DT but completed on MDT,
+            // generates a compaction time smaller than it so that the instant could then been rolled back.
+            .filterInflightsAndRequested().filter(instant -> metadataCompletedTimeline.containsInstant(instant.requestedTime())).firstInstant()
+            // minus the pending instant time by 1 millisecond to avoid conflicts on the MDT.
+            .map(instant -> HoodieInstantTimeGenerator.instantTimeMinusMillis(instant.requestedTime(), 1L))
+            .orElse(writeClient.createNewInstantTime(false));
+
+        // we need to avoid checking compaction w/ same instant again.
+        // let's say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
+        // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
+        // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
+        if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)) {
+          LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
+        } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
+          LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
+          writeClient.compact(compactionInstantTime);
+        } else if (metadataWriteConfig.isLogCompactionEnabled()) {
+          // Schedule and execute log compaction with new instant time.
+          final String logCompactionInstantTime = metadataMetaClient.createNewInstantTime(false);
+          if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(logCompactionInstantTime)) {
+            LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
+          } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
+            LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
+            writeClient.logCompact(logCompactionInstantTime);
+          }
+        }
+      }
+    }
+
+    /**
+     * Perform a compaction on the Metadata Table.
+     * <p>
+     * Cases to be handled:
+     * 1. We cannot perform compaction if there are previous inflight operations on the dataset. This is because
+     * a compacted metadata base file at time Tx should represent all the actions on the dataset till time Tx.
+     * <p>
+     * 2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
+     * deltacommit.
+     */
+    protected void compactIfNecessaryVersionSix(BaseHoodieWriteClient writeClient, String latestDeltacommitTime) {
+      // Trigger compaction with suffixes based on the same instant time. This ensures that any future
+      // delta commits synced over will not have an instant time lesser than the last completed instant on the
+      // metadata table.
+      final String compactionInstantTime = createCompactionTimestamp(latestDeltacommitTime);
+
+      // we need to avoid checking compaction w/ same instant again.
+      // let's say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
+      // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
+      // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
+      if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)) {
+        LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
+      } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
+        LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
+        writeClient.compact(compactionInstantTime);
+      } else if (metadataWriteConfig.isLogCompactionEnabled()) {
+        // Schedule and execute log compaction with suffixes based on the same instant time. This ensures that any future
+        // delta commits synced over will not have an instant time lesser than the last completed instant on the
+        // metadata table.
+        final String logCompactionInstantTime = createLogCompactionTimestamp(latestDeltacommitTime);
+        if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(logCompactionInstantTime)) {
+          LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
+        } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
+          LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
+          writeClient.logCompact(logCompactionInstantTime);
+        }
+      }
+    }
+
+    /**
+     * Create the timestamp for a compaction operation on the metadata table.
+     */
+    public String createCompactionTimestamp(String timestamp) {
+      return timestamp + getCompactionOperationSuffix();
+    }
+
+    /**
+     * Create the timestamp for a compaction operation on the metadata table.
+     */
+    public String createLogCompactionTimestamp(String timestamp) {
+      return timestamp + getLogCompactionOperationSuffix();
+    }
+
+    public String createRollbackTimestamp(String timestamp) {
+      return timestamp + getRollbackOperationSuffix();
+    }
+
+    private String getCompactionOperationSuffix() {
+      return "001";
+    }
+
+    private String getLogCompactionOperationSuffix() {
+      return "005";
+    }
+
+    private String getRollbackOperationSuffix() {
+      return "006";
+    }
+
+    public void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
+      if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+        updateVersionSix(rollbackMetadata, instantTime);
+      } else {
+        if (initialized && metadata != null) {
+          mayBeReinitMetadataReader();
+          // The commit which is being rolled back on the dataset
+          final String commitToRollbackInstantTime = rollbackMetadata.getCommitsRollback().get(0);
+          // The deltacommit that will be rolled back
+          HoodieInstant deltaCommitInstant = metadataMetaClient.createNewInstant(HoodieInstant.State.COMPLETED,
+              HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
+          if (metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().containsInstant(deltaCommitInstant)) {
+            validateRollback(commitToRollbackInstantTime);
+            LOG.info("Rolling back MDT deltacommit {}", commitToRollbackInstantTime);
+            if (!getWriteClient().rollback(commitToRollbackInstantTime, instantTime)) {
+              throw new HoodieMetadataException(String.format("Failed to rollback deltacommit at %s", commitToRollbackInstantTime));
+            }
+          } else {
+            // if the instant is pending on MDT or not even exists the timeline, just ignore.
+            LOG.info("Ignoring rollback of instant {} at {}. The commit to rollback is not found in MDT",
+                commitToRollbackInstantTime, instantTime);
+          }
+          closeInternal();
+        }
+      }
+    }
+
+    private void updateVersionSix(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
+      if (initialized && metadata != null) {
+        // The commit which is being rolled back on the dataset
+        final String commitToRollbackInstantTime = rollbackMetadata.getCommitsRollback().get(0);
+        // Find the deltacommits since the last compaction
+        Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
+            CompactionUtils.getDeltaCommitsSinceLatestCompaction(metadataMetaClient.getActiveTimeline());
+
+        // This could be a compaction or deltacommit instant (See CompactionUtils.getDeltaCommitsSinceLatestCompaction)
+        HoodieInstant compactionInstant = deltaCommitsInfo.get().getValue();
+        HoodieTimeline deltacommitsSinceCompaction = deltaCommitsInfo.get().getKey();
+
+        // The deltacommit that will be rolled back
+        HoodieInstant deltaCommitInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime,
+            InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+
+        validateRollbackVersionSix(commitToRollbackInstantTime, compactionInstant, deltacommitsSinceCompaction);
+
+        // lets apply a delta commit with DT's rb instant containing following records:
+        // a. any log files as part of RB commit metadata that was added
+        // b. log files added by the commit in DT being rolled back. By rolled back, we mean, a rollback block will be added and does not mean it will be deleted.
+        // both above list should only be added to FILES partition.
+        processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
+
+        String rollbackInstantTime = createRollbackTimestamp(instantTime);
+        if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
+          LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
+          if (!getWriteClient().rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
+            throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
+          }
+        } else {
+          LOG.info("Ignoring rollback of instant {} at {}. The commit to rollback is not found in MDT",
+              commitToRollbackInstantTime, instantTime);
+        }
+        closeInternal();
+      }
+    }
+
+    protected void validateRollbackVersionSix(
+        String commitToRollbackInstantTime,
+        HoodieInstant compactionInstant,
+        HoodieTimeline deltacommitsSinceCompaction) {
+      // The commit being rolled back should not be earlier than the latest compaction on the MDT. Compaction on MDT only occurs when all actions
+      // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
+      if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
+        final String compactionInstantTime = compactionInstant.requestedTime();
+        if (compareTimestamps(commitToRollbackInstantTime, LESSER_THAN_OR_EQUALS, compactionInstantTime)) {
+          throw new HoodieMetadataException(String.format("Commit being rolled back %s is earlier than the latest compaction %s. "
+                  + "There are %d deltacommits after this compaction: %s", commitToRollbackInstantTime, compactionInstantTime,
+              deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
+        }
+      }
+    }
+  }
 }
