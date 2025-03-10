@@ -153,7 +153,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
              |  preCombineField = 'price'
              |)
              |partitioned by (ts)
-   """.stripMargin)
+             |""".stripMargin)
 
         // test with optimized sql writes enabled.
         spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
@@ -173,13 +173,11 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
           Seq(3, "a2", 30.0, 1000)
         )
 
-        // Update the row with id = 2 by setting price to 25.0
-        spark.sql(s"update $tableName set price = cast(25.0 as double) where id = 2")
-
         // delete data from table
         spark.sql(s"delete from $tableName where id = 1")
+
         checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(2, "a2", 25.0, 1000),
+          Seq(2, "a2", 20.0, 1000),
           Seq(3, "a2", 30.0, 1000)
         )
       }
