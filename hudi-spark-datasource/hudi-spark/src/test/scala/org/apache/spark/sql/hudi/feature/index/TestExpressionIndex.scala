@@ -46,7 +46,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{Column, SaveMode, functions}
+import org.apache.spark.sql.{functions, Column, SaveMode}
 import org.apache.spark.sql.Column.unapply
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, UnresolvedAttribute}
