@@ -94,7 +94,7 @@ wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-cli-bundle_2.12/1.0.0/h
 
 3. Download the Hudi Spark bundle
 ```
-wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-spark-bundle_2.12/1.0.0/hudi-spark-bundle_2.12-1.0.0.jar
+wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.0.0/hudi-spark3.5-bundle_2.12-1.0.0.jar
 ```     
 
 4. Download the shell script that launches Hudi CLI bundle
@@ -104,7 +104,7 @@ wget https://raw.githubusercontent.com/apache/hudi/release-1.0.0/packaging/hudi-
 
 5. Launch Hudi CLI bundle with appropriate environment variables as follows:
 ``` 
-CLIENT_JAR=$DATAPROC_DIR/lib/gcs-connector.jar CLI_BUNDLE_JAR=hudi-cli-bundle_2.12-1.0.0.jar SPARK_BUNDLE_JAR=hudi-spark-bundle_2.12-1.0.0.jar ./hudi-cli-with-bundle.sh  
+CLIENT_JAR=$DATAPROC_DIR/lib/gcs-connector.jar CLI_BUNDLE_JAR=hudi-cli-bundle_2.12-1.0.0.jar SPARK_BUNDLE_JAR=hudi-spark3.5-bundle_2.12-1.0.0.jar ./hudi-cli-with-bundle.sh  
 ```
 
 6. hudi->connect --path gs://path_to_some_table  
