@@ -239,11 +239,16 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
       // update cols to Index as applicable
-      HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, actionType,
-          (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
-            updateColumnsToIndexForColumnStats(metaClient, columnsToIndex);
-            return null;
-          });
+      try {
+          HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, actionType,
+                  (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
+                      updateColumnsToIndexForColumnStats(metaClient, columnsToIndex);
+                      return null;
+                  });
+      } catch (UnsupportedOperationException uoe) {
+        LOG.warn("Failed to update col stats, bootstrap doesn't support col stats", uoe);
+      }
+
     } catch (HoodieIOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
