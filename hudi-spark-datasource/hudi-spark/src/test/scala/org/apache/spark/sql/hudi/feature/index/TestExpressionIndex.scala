@@ -1791,7 +1791,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
         // validate index metadata
         val indexMetadataDf = spark.sql(s"select key, BloomFilterMetadata from hudi_metadata('$tableName') where BloomFilterMetadata is not null")
-        assertEquals(4, indexMetadataDf.count()) // corresponding to 4 riders
+        assertEquals(4, indexMetadataDf.count()) // corresponding to 4 files
         val indexMetadata = indexMetadataDf.collect()
         indexMetadata.foreach(row => {
           val bloomFilterMetadata = row.getStruct(1)
