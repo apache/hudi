@@ -160,10 +160,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected StorageConfiguration<?> storageConf;
   protected final transient HoodieEngineContext engineContext;
   protected final List<MetadataPartitionType> enabledPartitionTypes;
+  protected final MetadataWriteHandler metadataWriteHandler;
+
   // Is the MDT bootstrapped and ready to be read from
   private boolean initialized = false;
   private HoodieTableFileSystemView metadataView;
-  private MetadataWriteHandler metadataWriteHandler;
 
   /**
    * Hudi backed table metadata writer.
@@ -1662,7 +1663,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   protected abstract BaseHoodieWriteClient<?, I, ?, ?> initializeWriteClient();
 
-  private class MetadataWriteHandler implements Serializable {
+  protected class MetadataWriteHandler implements Serializable {
     HoodieTableVersion tableVersion;
 
     public MetadataWriteHandler(HoodieTableVersion tableVersion) {
