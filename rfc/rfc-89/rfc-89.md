@@ -311,7 +311,7 @@ public class demo {
       }
 
       if (StringUtils.isEmpty(instantToLoad)) {
-        instantToLoad = getLastedInstantBeforeActiveTimeline(sortedHashingConfigInstants);
+        instantToLoad = getLastedHashingInstantBeforeActiveTimeline(sortedHashingConfigInstants);
       }
       
       // load instantToLoad related hashing_config
