@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.HoodieSchemaNotFoundException;
 import org.apache.hudi.common.fs.FSUtils;
@@ -202,7 +203,7 @@ public class TableSchemaResolver {
           .or(() -> schema);
     }
 
-    return schema;
+    return schema.map(AvroSchemaCache::cacheAndGetSchema);
   }
 
   private Option<Schema> getTableSchemaFromLatestCommitMetadata(boolean includeMetadataFields) {

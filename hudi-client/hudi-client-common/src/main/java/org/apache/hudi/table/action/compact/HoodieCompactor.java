@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.compact;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
@@ -196,7 +197,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     Schema readerSchema;
     Option<InternalSchema> internalSchemaOption = Option.empty();
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
-      readerSchema = new Schema.Parser().parse(config.getSchema());
+      readerSchema = AvroSchemaUtils.parseSchemaFromStr(config.getSchema());
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
       // its safe to modify config here, since we are running in task side.
       ((HoodieTable) compactionHandler).getConfig().setDefault(config);

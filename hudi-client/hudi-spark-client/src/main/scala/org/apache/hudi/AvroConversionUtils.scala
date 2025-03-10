@@ -19,10 +19,9 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
-import org.apache.hudi.avro.AvroSchemaUtils
+import org.apache.hudi.avro.{AvroSchemaCache, AvroSchemaUtils}
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.internal.schema.HoodieSchemaException
-
 import org.apache.avro.Schema.Type
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
@@ -147,7 +146,7 @@ object AvroConversionUtils {
     try {
       val schemaConverters = sparkAdapter.getAvroSchemaConverters
       val avroSchema = schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
-      getAvroSchemaWithDefaults(avroSchema, structType)
+      AvroSchemaCache.cacheAndGetSchema(getAvroSchemaWithDefaults(avroSchema, structType))
     } catch {
       case a: AvroRuntimeException => throw new HoodieSchemaException(a.getMessage, a)
       case e: Exception => throw new HoodieSchemaException("Failed to convert struct type to avro schema: " + structType, e)

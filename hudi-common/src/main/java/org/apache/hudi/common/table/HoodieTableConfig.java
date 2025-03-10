@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -923,7 +924,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Option<Schema> getTableCreateSchema() {
     if (contains(CREATE_SCHEMA)) {
-      return Option.of(new Schema.Parser().parse(getString(CREATE_SCHEMA)));
+      return Option.of(AvroSchemaUtils.parseSchemaFromStr(getString(CREATE_SCHEMA)));
     } else {
       return Option.empty();
     }

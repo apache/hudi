@@ -20,6 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO_WRITES}
+import org.apache.hudi.avro.AvroSchemaCache
 import org.apache.hudi.avro.AvroSchemaUtils.{checkSchemaCompatible, checkValidEvolution, isCompatibleProjectionOf, isSchemaCompatible}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
@@ -97,7 +98,7 @@ object HoodieSchemaUtils {
                          latestTableSchemaOpt: Option[Schema],
                          internalSchemaOpt: Option[InternalSchema],
                          opts: Map[String, String]): Schema = {
-    latestTableSchemaOpt match {
+    val schema = latestTableSchemaOpt match {
       // If table schema is empty, then we use the source schema as a writer's schema.
       case None => AvroInternalSchemaConverter.fixNullOrdering(sourceSchema)
       // Otherwise, we need to make sure we reconcile incoming and latest table schemas
@@ -127,6 +128,7 @@ object HoodieSchemaUtils {
           deduceWriterSchemaWithoutReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, opts)
         }
     }
+    AvroSchemaCache.cacheAndGetSchema(schema)
   }
 
   /**

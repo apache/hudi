@@ -58,7 +58,7 @@ public class TestSerializableSchema {
   private void verifySchema(Schema schema) throws IOException {
     SerializableSchema serializableSchema = new SerializableSchema(schema);
     assertEquals(schema, serializableSchema.get());
-    assertTrue(schema != serializableSchema.get());
+    assertTrue(schema.equals(serializableSchema.get()));
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     ObjectOutputStream oos = new ObjectOutputStream(baos);

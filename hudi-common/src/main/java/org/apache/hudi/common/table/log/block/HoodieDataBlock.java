@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -138,7 +139,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   protected static Schema getWriterSchema(Map<HeaderMetadataType, String> logBlockHeader) {
-    return new Schema.Parser().parse(logBlockHeader.get(HeaderMetadataType.SCHEMA));
+    return AvroSchemaUtils.parseSchemaFromStr(logBlockHeader.get(HeaderMetadataType.SCHEMA));
   }
 
   /**
@@ -368,7 +369,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected Schema getSchemaFromHeader() {
     String schemaStr = getLogBlockHeader().get(HeaderMetadataType.SCHEMA);
-    SCHEMA_MAP.computeIfAbsent(schemaStr, (schemaString) -> new Schema.Parser().parse(schemaString));
+    SCHEMA_MAP.computeIfAbsent(schemaStr, AvroSchemaUtils::parseSchemaFromStr);
     return SCHEMA_MAP.get(schemaStr);
   }
 
