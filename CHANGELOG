@@ -652,3 +652,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-03-08 16:03:33] [release-v1.99.0] ---
 [ENG-23113][INTERNAL] Refactor hudi-aws to not be imported by hudi-client-common (#1240)
 [AUDIT-1206]: Changelog for release-v1.98.0 (#1246)
+
+--- [2025-03-10 02:04:45] [release-v1.100.0] ---
+[ENG-23178][HUDI-9132] Avoid empty string row key for delete and update operations (#1249)
+[ENG-23114][INTERNAL] Adds S3 lock service implementation for ConditionalWriteLockProvider (#1248)
+[AUDIT-1071]: Changelog for release-v1.99.0 (#1251)
