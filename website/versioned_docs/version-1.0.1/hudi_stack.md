@@ -97,7 +97,7 @@ compaction for File Groups undergoing clustering, thereby saving on I/O.
 
 #### Compaction
 Hudi's [compaction](./compaction) service, featuring strategies like date partitioning and I/O bounding, merges Base Files with delta logs to create updated Base Files. It allows 
-concurrent writes to the same File Froup, enabled by Hudi's file grouping and flexible log merging. This facilitates non-blocking execution of deletes even during concurrent 
+concurrent writes to the same File Group, enabled by Hudi's file grouping and flexible log merging. This facilitates non-blocking execution of deletes even during concurrent 
 record updates.
 
 #### Cleaning
