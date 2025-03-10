@@ -82,7 +82,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       assertResult(true)(Files.exists(Paths.get(s"$tablePath/$partitionVal")))
       assertResult(HoodieTableType.MERGE_ON_READ)(new HoodieTableConfig(
         HoodieStorageUtils.getStorage(tablePath, HoodieTestUtils.getDefaultStorageConf),
-        new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME), RecordMergeMode.COMMIT_TIME_ORDERING, null, null).getTableType)
+        new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME), null, null, null).getTableType)
 
       // Manually pass incremental configs to global configs to make sure Hudi query is able to load the
       // global configs
