@@ -22,12 +22,13 @@ package org.apache.spark.sql.hudi.command.index
 import org.apache.hudi.{DataSourceReadOptions, ExpressionIndexSupport, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
+import org.apache.hudi.avro.model.HoodieMetadataBloomFilter
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkMetadataWriterUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -37,7 +38,7 @@ import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.expression.HoodieExpressionIndex
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieMetadataPayload, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
@@ -1776,7 +1777,26 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |""".stripMargin)
 
         // create index using bloom filters on city column with upper() function
-        spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper')")
+        spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper', " +
+          s"${HoodieExpressionIndex.FALSE_POSITIVE_RATE}='0.01', ${HoodieExpressionIndex.BLOOM_FILTER_TYPE}='SIMPLE', ${HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES}='1000')")
+        var metaClient = createMetaClient(spark, basePath)
+        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(s"expr_index_idx_bloom_$tableName"))
+        assertTrue(metaClient.getIndexMetadata.isPresent)
+        assertEquals(2, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
+        val indexDefinition: HoodieIndexDefinition = metaClient.getIndexMetadata.get.getIndexDefinitions.get(s"expr_index_idx_bloom_$tableName")
+        // validate index options
+        assertEquals("0.01", indexDefinition.getIndexOptions.get(HoodieExpressionIndex.FALSE_POSITIVE_RATE))
+        assertEquals("SIMPLE", indexDefinition.getIndexOptions.get(HoodieExpressionIndex.BLOOM_FILTER_TYPE))
+        assertEquals("1000", indexDefinition.getIndexOptions.get(HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES))
+
+        // validate index metadata
+        val indexMetadataDf = spark.sql(s"select key, BloomFilterMetadata from hudi_metadata('$tableName') where BloomFilterMetadata is not null")
+        assertEquals(4, indexMetadataDf.count()) // corresponding to 4 files
+        val indexMetadata = indexMetadataDf.collect()
+        indexMetadata.foreach(row => {
+          val bloomFilterMetadata = row.getStruct(1)
+          assertTrue(bloomFilterMetadata.getString(0).equals("SIMPLE"))
+        })
 
         // Pruning takes place only if query uses upper function on city
         checkAnswer(s"select id, rider from $tableName where upper(city) in ('sunnyvale', 'sg')")()
@@ -1785,7 +1805,6 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           Seq("trip2", "rider-C")
         )
         // verify file pruning
-        var metaClient = createMetaClient(spark, basePath)
         val opts = Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
         val cityColumn = AttributeReference("city", StringType)()
         val upperCityExpr = Upper(cityColumn) // Apply the `upper` function to the city column
@@ -2161,11 +2180,21 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     df = df.withColumn(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION, lit("c/d"))
       .withColumn(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_RELATIVE_FILE_PATH, lit("c/d/123141ab-701b-4ba4-b60b-e6acd9e9103e-0_329-224134-258390_2131313124.parquet"))
       .withColumn(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_FILE_SIZE, lit(100))
-    val bloomFilterRecords = SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(df, "c5", HoodieWriteConfig.newBuilder().withPath("a/b").build(), "", "random")
+    val indexOptions = Map(
+      HoodieExpressionIndex.BLOOM_FILTER_TYPE -> "DYNAMIC_V0",
+      HoodieExpressionIndex.FALSE_POSITIVE_RATE -> "0.01",
+      HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES -> "1000",
+      HoodieExpressionIndex.DYNAMIC_BLOOM_MAX_ENTRIES -> "1000"
+    )
+    val bloomFilterRecords = SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(df, "c5",
+      HoodieWriteConfig.newBuilder().withPath("a/b").build(), "",
+        HoodieIndexDefinition.newBuilder().withIndexName("random").withIndexOptions(JavaConverters.mapAsJavaMapConverter(indexOptions).asJava).build())
       .getExpressionIndexRecords
     // Since there is only one partition file pair there is only one bloom filter record
-    assertEquals(1, bloomFilterRecords.collectAsList().size())
+    assertEquals(1, bloomFilterRecords.count())
     assertFalse(bloomFilterRecords.isEmpty)
+    val bloomFilter: HoodieMetadataBloomFilter = bloomFilterRecords.collectAsList().get(0).getData.asInstanceOf[HoodieMetadataPayload].getBloomFilterMetadata.get()
+    assertTrue(bloomFilter.getType.equals("DYNAMIC_V0"))
   }
 
   private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient,
