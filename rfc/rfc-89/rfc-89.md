@@ -247,34 +247,77 @@ ls .hoodie/.hashing_meta/
 
 The expression written at the front has a higher priority, and the expression has a higher priority than the default_bucket_number.
 
-About Hashing_Config Rollback
+About Hashing_Config Rollback And Cleanup
 
 The Bucket Rescale operation is essentially an insert overwrite action and can seamlessly integrate with Hudi's rollback mechanism. 
-One simplification here is that when rolling back a Bucket Rescale, the corresponding replace-commit.hashing_config is not immediately deleted. 
-Instead, its cleanup is deferred to the version cleanup process (discussed later).
 
-This approach achieves two goals:
-1. Minimizes modifications to the rollback service logic.
-2. Lazy cleanup does not impact config loading, as Hudi always loads the latest hashing_config associated with committed replace commit.
+This requires integration with Hudi's existing rollback mechanism, such that when rolling back an INSERT OVERWRITE operation, 
+the corresponding hashing_config file should be deleted if existed.
 
-About Hashing_Config Cleanup
 
-The cleanup of hashing_config versions (retaining the latest three) will be handled within the Archive Table Service, 
-as illustrated in the following diagram.
+About Hashing_Config Archive
 
-![cleanup.jpg](cleanup.jpg)
+As the number of times users modify expressions increases, the corresponding number of hashing_config files also grows. 
+To address this, we need a mechanism to archive active hashing_config files (i.e., clean up active configurations) while 
+preserving all historical hashing_config information in an archive directory to support scenarios like time travel.
 
-**Key Points: Uncommitted hashing_config are identified via diff based on activeTimeline and cleaned up. This ensures that 
-hashing_configs, which instants are before activeTimeline start, are all valid.**
+A new archived hashing config file `.hoodie/.hashing_meta/archive/archived.hashing_config`, will be created. Its schema is as follows:
+```json
+{
+  "<instant1>" : {
+     "rule": "rule-engine",
+     "expressions": "expression",
+     "default_bucket_number": "number"
+  },
+   "<instant2>" : {
+      "rule": "rule-engine",
+      "expressions": "expression",
+      "default_bucket_number": "number"
+   }
+}
+```
+
+The archive logic is triggered when invoking `call partitionBucketIndexManager(overwrite => 'new-expressions', dry-run => 'false')` to modify expressions. 
+
+Once the number of active hashing configs exceeds 5, the oldest expression’s metadata is automatically merged into `archived.hashing_config`. 
+The workflow is as follows:
+
+![img.png](img.png)
+
+**we always create a new temp file and rename it to archived.hashing_config**
 
 About Loading Hashing_Config
 
-loading hash_config steps:
-1. List all version and get related replace-commit instants as instant group1
-2. Get latest completed instant as `instant2` in instant group1 based on activeTimeline 
-   1. If get empty after Step2, get instants(as instant group2) before activeTimeline start in instant group1 
-   2. Get latest instant as `instant2` in instant group2
-3. Loading instant2 related hashing_config
+First, attempt to retrieve the latest `<replace-commit>.hashing_config` from the committed replace active timeline.
+If it does not exist, fetch the latest hashing_config from `instants before active timeline start`.
+
+The pseudocode is as follows
+
+```java
+
+public class demo {
+  
+   public String loadLatestHashingConfig() {
+      String instantToLoad;
+      HoodieActiveTimeline timeline = getCompletedReplaceActiveTimeline();
+      // The latest instants are sorted in descending order
+      List<String> sortedHashingConfigInstants = getSortedHashingConfigInstants();
+      for (String instant : sortedHashingConfigInstants) {
+         if (timeline.containsInstant(instant)) {
+            instantToLoad = instant;
+            break;
+         }
+      }
+
+      if (StringUtils.isEmpty(instantToLoad)) {
+        instantToLoad = getLastedInstantBeforeActiveTimeline(sortedHashingConfigInstants);
+      }
+      
+      // load instantToLoad related hashing_config
+      
+   }
+}
+```
 
 ### SimpleBucketIdentifier
 
