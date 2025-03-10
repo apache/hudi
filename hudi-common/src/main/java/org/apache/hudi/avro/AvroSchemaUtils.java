@@ -45,6 +45,7 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.AvroSchemaCache.cacheAndGetSchema;
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter.convert;
@@ -373,7 +374,7 @@ public class AvroSchemaUtils {
       newSchema.addProp(prop.getKey(), prop.getValue());
     }
     newSchema.setFields(fields);
-    return newSchema;
+    return cacheAndGetSchema(newSchema);
   }
 
   /**
@@ -406,7 +407,7 @@ public class AvroSchemaUtils {
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
 
-    return nonNullType;
+    return cacheAndGetSchema(nonNullType);
   }
 
   /**
@@ -444,7 +445,7 @@ public class AvroSchemaUtils {
       throw new HoodieAvroSchemaException(
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
-    return firstInnerType.getType() == Schema.Type.NULL ? secondInnerType : firstInnerType;
+    return firstInnerType.getType() == Schema.Type.NULL ? cacheAndGetSchema(secondInnerType) : cacheAndGetSchema(firstInnerType);
   }
 
   /**
@@ -457,7 +458,7 @@ public class AvroSchemaUtils {
 
   public static Schema createNullableSchema(Schema schema) {
     checkState(schema.getType() != Schema.Type.NULL);
-    return Schema.createUnion(Schema.create(Schema.Type.NULL), schema);
+    return cacheAndGetSchema(Schema.createUnion(Schema.create(Schema.Type.NULL), schema));
   }
 
   /**
@@ -626,4 +627,10 @@ public class AvroSchemaUtils {
             (change, field) -> change.updateColumnNullability(field, true));
     return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName());
   }
+
+  public static Schema parseSchemaFromStr(String schemaStr) {
+    Schema parsed = new Schema.Parser().parse(schemaStr);
+    return cacheAndGetSchema(parsed);
+  }
+
 }

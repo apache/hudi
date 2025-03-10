@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
+
 import org.apache.avro.Schema;
 
 import java.io.IOException;
@@ -36,19 +38,15 @@ public class SerializableSchema implements Serializable {
   }
 
   public SerializableSchema(String schemaStr) {
-    this.schema = new Schema.Parser().parse(schemaStr);
+    this.schema = AvroSchemaUtils.parseSchemaFromStr(schemaStr);
   }
 
   public SerializableSchema(Schema schema) {
-    this.schema = newCopy(schema);
+    this.schema = schema;
   }
 
   public SerializableSchema(SerializableSchema serializableSchema) {
     this(serializableSchema.schema);
-  }
-
-  public static Schema newCopy(Schema schemaObject) {
-    return new Schema.Parser().parse(schemaObject.toString());
   }
 
   public Schema get() {
@@ -73,7 +71,7 @@ public class SerializableSchema implements Serializable {
   // create a public read method for unit test
   public void readObjectFrom(ObjectInputStream in) throws IOException {
     try {
-      schema = new Schema.Parser().parse(in.readObject().toString());
+      schema = AvroSchemaUtils.parseSchemaFromStr(in.readObject().toString());
     } catch (ClassNotFoundException e) {
       throw new IOException("unable to parse schema", e);
     }

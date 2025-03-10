@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
@@ -103,7 +104,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   @Override
   protected byte[] serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException {
-    Schema schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+    Schema schema = AvroSchemaUtils.parseSchemaFromStr(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
     GenericDatumWriter<IndexedRecord> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try (DataOutputStream output = new DataOutputStream(baos)) {
@@ -429,7 +430,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     int schemaLength = dis.readInt();
     byte[] compressedSchema = new byte[schemaLength];
     dis.readFully(compressedSchema, 0, schemaLength);
-    Schema writerSchema = new Schema.Parser().parse(decompress(compressedSchema));
+    Schema writerSchema = AvroSchemaUtils.parseSchemaFromStr(decompress(compressedSchema));
 
     if (readerSchema == null) {
       readerSchema = writerSchema;

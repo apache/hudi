@@ -18,9 +18,9 @@
 package org.apache.hudi
 
 import org.apache.hudi.AvroConversionUtils.getAvroSchemaWithDefaults
-import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, createHFileReader, isSchemaEvolutionEnabledOnRead, metaFieldNames, projectSchema, sparkAdapter, BaseFileReader}
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, createHFileReader, isSchemaEvolutionEnabledOnRead, metaFieldNames, projectSchema, sparkAdapter}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER
@@ -48,7 +48,6 @@ import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
@@ -58,7 +57,7 @@ import org.apache.spark.SerializableWritable
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Row, SparkSession, SQLContext}
+import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{convertToCatalystExpression, generateUnsafeProjection}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -851,7 +850,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       val requiredRowSchema = requiredDataSchema.structTypeSchema
       // NOTE: Schema has to be parsed at this point, since Avro's [[Schema]] aren't serializable
       //       to be passed from driver to executor
-      val requiredAvroSchema = new Schema.Parser().parse(requiredDataSchema.avroSchemaStr)
+      val requiredAvroSchema = AvroSchemaUtils.parseSchemaFromStr(requiredDataSchema.avroSchemaStr)
       val avroToRowConverter = AvroConversionUtils.createAvroToInternalRowConverter(requiredAvroSchema, requiredRowSchema)
 
       reader.getRecordIterator(requiredAvroSchema).asScala

@@ -20,6 +20,7 @@ package org.apache.spark.sql.avro
 import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.LogicalTypes.{Date, Decimal, TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
+import org.apache.hudi.avro.AvroSchemaCache
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.types.Decimal.minBytesForPrecision
@@ -212,9 +213,9 @@ private[sql] object SchemaConverters {
     }
 
     if (nullable && catalystType != NullType && schema.getType != Schema.Type.UNION) {
-      Schema.createUnion(schema, nullSchema)
+      AvroSchemaCache.cacheAndGetSchema(Schema.createUnion(schema, nullSchema))
     } else {
-      schema
+      AvroSchemaCache.cacheAndGetSchema(schema)
     }
   }
 

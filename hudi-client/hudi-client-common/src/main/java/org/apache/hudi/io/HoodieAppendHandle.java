@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieReaderConfig;
@@ -153,7 +154,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             // When enabling writing partial updates to the data blocks in log files,
             // i.e., partial update schema is set, the writer schema is the partial
             // schema containing the updated fields only
-            ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
+            ? Option.of(AvroSchemaUtils.parseSchemaFromStr(config.getPartialUpdateSchema()))
             : Option.empty(),
         taskContextSupplier);
     this.recordItr = recordItr;

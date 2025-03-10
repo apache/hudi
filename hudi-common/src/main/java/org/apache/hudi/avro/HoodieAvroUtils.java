@@ -394,7 +394,7 @@ public class HoodieAvroUtils {
         new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
     Schema recordKeySchema = Schema.createRecord("HoodieRecordKey", "", "", false);
     recordKeySchema.setFields(Collections.singletonList(recordKeyField));
-    return recordKeySchema;
+    return AvroSchemaCache.cacheAndGetSchema(recordKeySchema);
   }
 
   public static Schema getRecordKeySchema() {
@@ -416,7 +416,7 @@ public class HoodieAvroUtils {
     toBeAddedFields.add(recordKeyField);
     toBeAddedFields.add(partitionPathField);
     recordSchema.setFields(toBeAddedFields);
-    return recordSchema;
+    return AvroSchemaCache.cacheAndGetSchema(recordSchema);
   }
 
   /**
@@ -432,7 +432,7 @@ public class HoodieAvroUtils {
       }
     }
     recordSchema.setFields(toBeAddedFields);
-    return recordSchema;
+    return AvroSchemaCache.cacheAndGetSchema(recordSchema);
   }
 
   public static GenericRecord addHoodieKeyToRecord(GenericRecord record, String recordKey, String partitionPath,
@@ -543,7 +543,7 @@ public class HoodieAvroUtils {
     Schema projectedSchema = Schema.createRecord(originalSchema.getName(), originalSchema.getDoc(),
         originalSchema.getNamespace(), originalSchema.isError());
     projectedSchema.setFields(projectedFields);
-    return projectedSchema;
+    return AvroSchemaCache.cacheAndGetSchema(projectedSchema);
   }
 
   /**

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.internal.schema.convert;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -393,7 +394,7 @@ public class AvroInternalSchemaConverter {
    */
   public static Schema buildAvroSchemaFromType(Type type, String recordName) {
     Map<Type, Schema> cache = new HashMap<>();
-    return visitInternalSchemaToBuildAvroSchema(type, cache, recordName);
+    return AvroSchemaCache.cacheAndGetSchema(visitInternalSchemaToBuildAvroSchema(type, cache, recordName));
   }
 
   /**
@@ -405,7 +406,7 @@ public class AvroInternalSchemaConverter {
    */
   public static Schema buildAvroSchemaFromInternalSchema(InternalSchema schema, String recordName) {
     Map<Type, Schema> cache = new HashMap<>();
-    return visitInternalSchemaToBuildAvroSchema(schema.getRecord(), cache, recordName);
+    return AvroSchemaCache.cacheAndGetSchema(visitInternalSchemaToBuildAvroSchema(schema.getRecord(), cache, recordName));
   }
 
   /**

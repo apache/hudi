@@ -37,11 +37,11 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.CachingIterator
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
@@ -49,7 +49,6 @@ import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.types.StructType
 
 import java.io.Closeable
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -74,7 +73,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
            tableState: HoodieTableState,
            config: Configuration) {
     this(logFiles, partitionPath, tableSchema, requiredSchema.structTypeSchema,
-      new Schema.Parser().parse(requiredSchema.avroSchemaStr), tableState, config)
+      AvroSchemaUtils.parseSchemaFromStr(requiredSchema.avroSchemaStr), tableState, config)
   }
   def this(split: HoodieMergeOnReadFileSplit,
            tableSchema: HoodieTableSchema,
@@ -97,7 +96,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
   protected override val avroSchema: Schema = requiredAvroSchema
   protected override val structTypeSchema: StructType = requiredStructTypeSchema
 
-  protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
+  protected val logFileReaderAvroSchema: Schema = AvroSchemaUtils.parseSchemaFromStr(tableSchema.avroSchemaStr)
   protected val logFileReaderStructType: StructType = tableSchema.structTypeSchema
 
   private val requiredSchemaAvroProjection: AvroProjection = AvroProjection.create(avroSchema)
@@ -201,7 +200,7 @@ class SkipMergeIterator(logFiles: List[HoodieLogFile],
            requiredSchema: HoodieTableSchema, tableState: HoodieTableState, config: Configuration) {
     this(split.logFiles, getPartitionPath(split), baseFileReader(split.dataFile.get),
       baseFileReader.schema, dataSchema, requiredSchema.structTypeSchema,
-      new Schema.Parser().parse(requiredSchema.avroSchemaStr), tableState, config)
+      AvroSchemaUtils.parseSchemaFromStr(requiredSchema.avroSchemaStr), tableState, config)
   }
 
   private val requiredSchemaProjection = generateUnsafeProjection(readerSchema, structTypeSchema)
@@ -242,7 +241,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
            tableState: HoodieTableState,
            config: Configuration) {
     this(logFiles, partitionPath, baseFileIterator, readerSchema, dataSchema, requiredSchema.structTypeSchema,
-      new Schema.Parser().parse(requiredSchema.avroSchemaStr), tableState, config)
+      AvroSchemaUtils.parseSchemaFromStr(requiredSchema.avroSchemaStr), tableState, config)
   }
   def this(split: HoodieMergeOnReadFileSplit, baseFileReader: BaseFileReader, dataSchema: HoodieTableSchema,
            requiredSchema: HoodieTableSchema, tableState: HoodieTableState, config: Configuration) {
