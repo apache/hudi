@@ -45,7 +45,7 @@ public abstract class HFileBlock {
       HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM + SIZEOF_BYTE + 2 * SIZEOF_INT32;
 
   // Each checksum value is an integer that can be stored in 4 bytes.
-  static final int CHECKSUM_SIZE = SIZEOF_INT32;
+  public static final int CHECKSUM_SIZE = SIZEOF_INT32;
 
   static class Header {
     // Format of header is:
