@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.BLOOM_FILTER_CONFIG_MAPPING;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.DAYS_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.FORMAT_OPTION;
@@ -40,6 +41,7 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.POSITION_OP
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.REGEX_GROUP_INDEX_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.REPLACEMENT_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.TRIM_STRING_OPTION;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 
 public class ExpressionIndexSparkFunctions {
 
@@ -103,8 +105,12 @@ public class ExpressionIndexSparkFunctions {
 
     Column apply(List<Column> columns, Map<String, String> options);
 
-    default void validateOptions(Map<String, String> options) {
-      Set<String> validOptions = getValidOptions();
+    default void validateOptions(Map<String, String> options, String indexType) {
+      Set<String> validOptions = new HashSet<>(getValidOptions());
+      // add bloom filters options if index type is bloom_filters
+      if (indexType.equals(PARTITION_NAME_BLOOM_FILTERS)) {
+        validOptions.addAll(BLOOM_FILTER_CONFIG_MAPPING.keySet());
+      }
       Set<String> invalidOptions = new HashSet<>(options.keySet());
       invalidOptions.removeAll(validOptions);
       ValidationUtils.checkArgument(invalidOptions.isEmpty(), String.format("Input options %s are not valid for spark function %s", invalidOptions, this));

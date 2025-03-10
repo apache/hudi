@@ -19,8 +19,13 @@
 
 package org.apache.hudi.index.expression;
 
+import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.util.CollectionUtils;
+
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Interface representing a expression index in Hudi.
@@ -47,6 +52,20 @@ public interface HoodieExpressionIndex<S, T> extends Serializable {
   String DAYS_OPTION = "days";
   String FORMAT_OPTION = "format";
   String IDENTITY_TRANSFORM = "identity";
+  // Bloom filter options
+  String BLOOM_FILTER_TYPE = "filtertype";
+  String BLOOM_FILTER_NUM_ENTRIES = "numentries";
+  String FALSE_POSITIVE_RATE = "fpp";
+  String DYNAMIC_BLOOM_MAX_ENTRIES = "maxentries";
+  static final Map<String, String> BLOOM_FILTER_CONFIG_MAPPING = CollectionUtils.createImmutableMap(
+      new HashMap<String, String>() {
+        {
+          put(BLOOM_FILTER_TYPE, HoodieStorageConfig.BLOOM_FILTER_TYPE.key());
+          put(BLOOM_FILTER_NUM_ENTRIES, HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE.key());
+          put(FALSE_POSITIVE_RATE, HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE.key());
+          put(DYNAMIC_BLOOM_MAX_ENTRIES, HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.key());
+        }
+      });
 
   /**
    * Get the name of the index.

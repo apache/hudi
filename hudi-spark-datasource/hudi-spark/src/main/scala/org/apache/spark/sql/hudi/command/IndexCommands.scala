@@ -57,7 +57,6 @@ case class CreateIndexCommand(table: CatalogTable,
 
     if (indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
       || indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)) {
-      // validate that only overwrite with latest payloads can enabled SI
       if (indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS) &&
         options.asJava.getOrDefault(EXPRESSION_OPTION, ExpressionIndexSparkFunctions.IDENTITY_FUNCTION).equals(ExpressionIndexSparkFunctions.IDENTITY_FUNCTION)) {
         throw new HoodieIndexException("Column stats index without expression on any column can be created using datasource configs. " +
