@@ -258,8 +258,9 @@ the corresponding hashing_config file should be deleted if existed.
 About Hashing_Config Archive
 
 As the number of times users modify expressions increases, the corresponding number of hashing_config files also grows. 
-To address this, we need a mechanism to archive active hashing_config files (i.e., clean up active configurations) while 
-preserving all historical hashing_config information in an archive directory to support scenarios like time travel.
+To address this, we need a mechanism to archive active hashing_config files while 
+preserving all historical hashing_config information in an archive file `archived.hashing_config` under `.hoodie/.hashing_meta/archive/` 
+to support scenarios like time travel.
 
 A new archived hashing config file `.hoodie/.hashing_meta/archive/archived.hashing_config`, will be created. Its schema is as follows:
 ```json
