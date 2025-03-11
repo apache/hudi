@@ -67,11 +67,7 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
         HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName,
         HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key -> EVENT_TIME_BASED_MERGE_STRATEGY_UUID)
     }
-    val nonExistentConfigs = if (tableVersion.toInt == 6) {
-      Seq(HoodieTableConfig.RECORD_MERGE_MODE.key)
-    } else {
-      Seq()
-    }
+    val nonExistentConfigs = Seq()
 
     test(s"Test $tableType table with EVENT_TIME_ORDERING (tableVersion=$tableVersion,"
       + s"setRecordMergeConfigs=$setRecordMergeConfigs)") {
