@@ -20,6 +20,8 @@ package org.apache.hudi.client.transaction.lock;
 
 import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockData;
 import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockFile;
+import org.apache.hudi.client.transaction.lock.models.LockGetResult;
+import org.apache.hudi.client.transaction.lock.models.LockUpdateResult;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.function.Supplier;
