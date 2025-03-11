@@ -321,11 +321,17 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     return heartbeatStillInflight;
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public synchronized boolean hasActiveHeartbeat() {
     return scheduledFuture != null;
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public synchronized void close() throws Exception {
     if (hasActiveHeartbeat()) {
