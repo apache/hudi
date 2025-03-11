@@ -70,7 +70,8 @@ public class HFileFileInfoBlock extends HFileBlock {
     return new HFileInfo(fileInfoMap);
   }
 
-  // For Writer only --------------------------------------------------------------------------
+  // ================ Below are for Write ================
+
   public HFileFileInfoBlock(HFileContext context) {
     super(context, HFileBlockType.FILE_INFO);
   }

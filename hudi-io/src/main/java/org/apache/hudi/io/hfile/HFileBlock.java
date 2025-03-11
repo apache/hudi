@@ -21,7 +21,6 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.compress.CompressionCodec;
-import org.apache.hudi.io.hfile.writer.ChecksumType;
 
 import com.google.protobuf.CodedOutputStream;
 
@@ -53,7 +52,7 @@ public abstract class HFileBlock {
       HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM + SIZEOF_BYTE + 2 * SIZEOF_INT32;
 
   // Each checksum value is an integer that can be stored in 4 bytes.
-  public static final int CHECKSUM_SIZE = SIZEOF_INT32;
+  static final int CHECKSUM_SIZE = SIZEOF_INT32;
 
   static class Header {
     // Format of header is:
@@ -185,7 +184,7 @@ public abstract class HFileBlock {
     }
   }
 
-  // For Writer Only -----------------------------------------------------------------
+  // ================ Below are for Write ================
 
   /**
    * Returns serialized "data" part of the block.

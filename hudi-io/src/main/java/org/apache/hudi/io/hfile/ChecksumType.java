@@ -17,11 +17,8 @@
  * under the License.
  */
 
-package org.apache.hudi.io.hfile.writer;
+package org.apache.hudi.io.hfile;
 
-import org.apache.yetus.audience.InterfaceAudience;
-
-@InterfaceAudience.Private
 public enum ChecksumType {
 
   NULL((byte) 0) {

@@ -19,8 +19,6 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.hfile.writer.ChecksumType;
-
 public class HFileBlockWriteAttributes {
   public static final int DEFAULT_BYTES_PER_CHECKSUM = 16 * 1024;
   public static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
