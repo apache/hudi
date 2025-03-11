@@ -20,11 +20,11 @@
 package org.apache.hudi.io.hfile.writer;
 
 public class IndexEntry {
-  final byte[] firstKey;
-  final long offset;
-  final int size;
+  public final byte[] firstKey;
+  public final long offset;
+  public final int size;
 
-  IndexEntry(byte[] firstKey, long offset, int size) {
+  public IndexEntry(byte[] firstKey, long offset, int size) {
     this.firstKey = firstKey;
     this.offset = offset;
     this.size = size;

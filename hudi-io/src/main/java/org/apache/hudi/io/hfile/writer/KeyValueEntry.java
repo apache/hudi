@@ -22,10 +22,10 @@ package org.apache.hudi.io.hfile.writer;
 import java.nio.ByteBuffer;
 
 public class KeyValueEntry implements Comparable<KeyValueEntry> {
-  final byte[] key;
-  final byte[] value;
+  public final byte[] key;
+  public final byte[] value;
 
-  KeyValueEntry(byte[] key, byte[] value) {
+  public KeyValueEntry(byte[] key, byte[] value) {
     this.key = key;
     this.value = value;
   }
