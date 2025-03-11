@@ -19,11 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.hfile.writer.KeyValueEntry;
-
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Represents a {@link HFileBlockType#META} block.
@@ -55,7 +51,6 @@ public class HFileMetaBlock extends HFileBlock {
   }
 
   // ================ Below are for Write ================
-
   public byte[] getFirstKey() {
     return entryToWrite.key;
   }

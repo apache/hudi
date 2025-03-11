@@ -21,7 +21,6 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.compress.CompressionCodec;
-import org.apache.hudi.io.hfile.writer.ChecksumType;
 
 import com.google.protobuf.CodedOutputStream;
 
@@ -35,7 +34,6 @@ import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT64;
-import static org.apache.hudi.io.hfile.HFileBlockWriteAttributes.CHECKSUM_TYPE;
 import static org.apache.hudi.io.util.IOUtils.readInt;
 
 /**
