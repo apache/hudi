@@ -18,6 +18,8 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hadoop.hbase.io.hfile.BlockCache;
+import org.apache.hadoop.hbase.io.hfile.BlockCacheFactory;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -54,8 +56,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
@@ -83,6 +87,11 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileReader.class);
 
+  // The global block cache instance used across all HFile readers
+  private static BlockCache GLOBAL_HFILE_BLOCK_CACHE;
+  // Map of filename to the filepath for opened files
+  private static Map<String, String> FILE_NAME_TO_PATH_MAP = new HashMap<>();
+
   private final Path path;
   private final FileSystem fs;
   private final Configuration hadoopConf;
@@ -101,27 +110,26 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
   private final Object sharedLock = new Object();
 
-  public HoodieAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig) throws IOException {
-    this(path, FSUtils.getFs(path.toString(), hadoopConf), hadoopConf, cacheConfig, Option.empty());
+  public HoodieAvroHFileReader(Configuration hadoopConf, Path path) throws IOException {
+    this(path, FSUtils.getFs(path.toString(), hadoopConf), hadoopConf, Option.empty());
   }
 
-  public HoodieAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig, FileSystem fs, Option<Schema> schemaOpt) throws IOException {
-    this(path, fs, hadoopConf, cacheConfig, schemaOpt);
+  public HoodieAvroHFileReader(Configuration hadoopConf, Path path, FileSystem fs, Option<Schema> schemaOpt) throws IOException {
+    this(path, fs, hadoopConf, schemaOpt);
   }
 
-  public HoodieAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig, FileSystem fs, byte[] content, Option<Schema> schemaOpt) throws IOException {
-    this(path, fs, hadoopConf, cacheConfig, schemaOpt, Option.of(content));
+  public HoodieAvroHFileReader(Configuration hadoopConf, Path path, FileSystem fs, byte[] content, Option<Schema> schemaOpt) throws IOException {
+    this(path, fs, hadoopConf, schemaOpt, Option.of(content));
   }
 
-  public HoodieAvroHFileReader(Path path, FileSystem fs, Configuration hadoopConf, CacheConfig config, Option<Schema> schemaOpt) throws IOException {
-    this(path, fs, hadoopConf, config, schemaOpt, Option.empty());
+  public HoodieAvroHFileReader(Path path, FileSystem fs, Configuration hadoopConf, Option<Schema> schemaOpt) throws IOException {
+    this(path, fs, hadoopConf, schemaOpt, Option.empty());
   }
 
-  public HoodieAvroHFileReader(Path path, FileSystem fs, Configuration hadoopConf, CacheConfig config, Option<Schema> schemaOpt, Option<byte[]> content) throws IOException {
+  public HoodieAvroHFileReader(Path path, FileSystem fs, Configuration hadoopConf, Option<Schema> schemaOpt, Option<byte[]> content) throws IOException {
     this.path = path;
     this.fs = fs;
     this.hadoopConf = hadoopConf;
-    this.config = config;
     this.content = content;
 
     // Shared reader is instantiated lazily.
@@ -129,6 +137,45 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     this.sharedScanner = Option.empty();
     this.schema = schemaOpt.map(Lazy::eagerly)
         .orElseGet(() -> Lazy.lazily(() -> fetchSchema(getSharedHFileReader())));
+
+    synchronized (HoodieAvroHFileReader.class) {
+      // HBase 2.4+ does not allocate a block cache automatically within the CacheConfig but requires a BlockCache
+      // instance to be passed in. This is different from HBase 1.x where CacheConfig allocated and used a static global
+      // BlockCache instance.
+      // https://github.com/apache/hbase/blob/branch-1.4/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/CacheConfig.java#L688
+
+      // BlockCache speeds up lookup from the HFile. To emulate the behavior of HBase 1.x, we will allocate a global
+      // static global block cache here if it is enabled. The configs for the BlockCache are described in the link
+      // below and can be passed using the hadoop configuration.
+      // https://github.com/apache/hbase/blob/master/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/BlockCacheFactory.java
+      if (GLOBAL_HFILE_BLOCK_CACHE == null) {
+        GLOBAL_HFILE_BLOCK_CACHE = BlockCacheFactory.createBlockCache(hadoopConf);
+        if (GLOBAL_HFILE_BLOCK_CACHE != null) {
+          LOG.info("Allocated a new global block cache for hfile readers " + GLOBAL_HFILE_BLOCK_CACHE);
+        }
+      }
+
+      // The BlockCache keys are based on the name of the files being cached. Within HUDI, there is a non-zero chance that
+      // two different files can have the same name. Also, when multiple datasets are being accessed in the same JVM, there
+      // could be filename conflicts from different datasets for the MDT files paths as they are not UUIDs and hence are
+      // not unique across datasets (timestamp may be same).
+      // To avoid conflicts, we will only enable BlockCache if the name of the file is unique and has not been
+      // opened before.
+      final String cacheKey = path.getName();
+      boolean enableBlockCache = false;
+      if (!FILE_NAME_TO_PATH_MAP.containsKey(cacheKey)) {
+        // Add new cache key mapping
+        FILE_NAME_TO_PATH_MAP.put(cacheKey, path.toString());
+      }
+
+      if (FILE_NAME_TO_PATH_MAP.get(cacheKey).equals(path.toString())) {
+        this.config = new CacheConfig(hadoopConf, GLOBAL_HFILE_BLOCK_CACHE);
+      } else {
+        LOG.warn("File {} with same name as {} has already been opened before. Disabling block cache for this file.",
+            FILE_NAME_TO_PATH_MAP.get(cacheKey), path);
+        this.config = new CacheConfig(hadoopConf, null);
+      }
+    }
   }
 
   @Override
