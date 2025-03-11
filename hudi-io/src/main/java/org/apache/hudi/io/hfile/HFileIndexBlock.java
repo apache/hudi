@@ -19,7 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.hfile.writer.IndexEntry;
+import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -29,7 +29,7 @@ import java.util.List;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 
 public class HFileIndexBlock extends HFileBlock {
-  protected final List<IndexEntry> entries = new ArrayList<>();
+  protected final List<BlockIndexEntry> entries = new ArrayList<>();
   protected long payloadSize = -1L;
 
   public HFileIndexBlock(HFileContext context,
@@ -45,7 +45,8 @@ public class HFileIndexBlock extends HFileBlock {
   }
 
   public void add(byte[] firstKey, long offset, int size) {
-    entries.add(new IndexEntry(firstKey, offset, size));
+    Key key = new Key(firstKey);
+    entries.add(new BlockIndexEntry(key, Option.empty(), offset, size));
   }
 
   public int getNumOfEntries() {
@@ -63,20 +64,22 @@ public class HFileIndexBlock extends HFileBlock {
   @Override
   public ByteBuffer getPayload() {
     ByteBuffer buf = ByteBuffer.allocate(context.getBlockSize() * 2);
-    for (IndexEntry entry : entries) {
-      buf.putLong(entry.offset);
-      buf.putInt(entry.size);
+    for (BlockIndexEntry entry : entries) {
+      buf.putLong(entry.getOffset());
+      buf.putInt(entry.getSize());
       // Key length + 2.
       try {
-        byte[] keyLength = getVariableLengthEncodes(entry.firstKey.length + SIZEOF_INT16);
+        byte[] keyLength = getVariableLengthEncodes(
+            entry.getFirstKey().getLength() + SIZEOF_INT16);
         buf.put(keyLength);
       } catch (IOException e) {
-        throw new RuntimeException("Failed to serialize number: " + entry.firstKey.length + SIZEOF_INT16);
+        throw new RuntimeException(
+            "Failed to serialize number: " + entry.getFirstKey().getLength() + SIZEOF_INT16);
       }
       // Key length.
-      buf.putShort((short) entry.firstKey.length);
+      buf.putShort((short) entry.getFirstKey().getLength());
       // Key.
-      buf.put(entry.firstKey);
+      buf.put(entry.getFirstKey().getBytes());
     }
     buf.flip();
 
