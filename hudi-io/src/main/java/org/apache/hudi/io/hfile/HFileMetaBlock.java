@@ -19,7 +19,11 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.io.hfile.writer.KeyValueEntry;
+
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Represents a {@link HFileBlockType#META} block.
@@ -46,7 +50,8 @@ public class HFileMetaBlock extends HFileBlock {
   public ByteBuffer readContent() {
     return ByteBuffer.wrap(
         getByteBuff(),
-        startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, uncompressedSizeWithoutHeader);
+        startOffsetInBuff + HFILEBLOCK_HEADER_SIZE,
+        uncompressedSizeWithoutHeader);
   }
 
   // ================ Below are for Write ================

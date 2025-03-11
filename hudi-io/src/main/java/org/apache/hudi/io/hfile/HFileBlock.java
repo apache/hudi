@@ -21,6 +21,7 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.compress.CompressionCodec;
+import org.apache.hudi.io.hfile.writer.ChecksumType;
 
 import com.google.protobuf.CodedOutputStream;
 
@@ -34,6 +35,7 @@ import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT64;
+import static org.apache.hudi.io.hfile.HFileBlockWriteAttributes.CHECKSUM_TYPE;
 import static org.apache.hudi.io.util.IOUtils.readInt;
 
 /**
@@ -198,15 +200,12 @@ public abstract class HFileBlock {
     }
     return (int) numChunks;
   }
-
   public HFileBlockType getBlockType() {
     return blockType;
   }
-
   public byte[] getByteBuff() {
     return byteBuff;
   }
-
   public int getOnDiskSizeWithHeader() {
     return onDiskSizeWithoutHeader + HFILEBLOCK_HEADER_SIZE;
   }
@@ -225,7 +224,11 @@ public abstract class HFileBlock {
       if (compression != CompressionCodec.NONE) {
         // Copy the block header which is not compressed
         System.arraycopy(
-            compressedByteBuff, startOffsetInCompressedBuff, byteBuff, 0, HFILEBLOCK_HEADER_SIZE);
+            compressedByteBuff,
+            startOffsetInCompressedBuff,
+            byteBuff,
+            0,
+            HFILEBLOCK_HEADER_SIZE);
         try (InputStream byteBuffInputStream = new ByteArrayInputStream(
             compressedByteBuff, startOffsetInCompressedBuff + HFILEBLOCK_HEADER_SIZE, onDiskSizeWithoutHeader)) {
           context.getCompressor().decompress(
