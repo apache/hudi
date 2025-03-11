@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -85,7 +86,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     this.records = Option.of(records);
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
-    this.readerSchema = getWriterSchema(super.getLogBlockHeader());
+    this.readerSchema = AvroSchemaCache.intern(getWriterSchema(super.getLogBlockHeader()));
     this.enablePointLookups = false;
   }
 
