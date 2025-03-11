@@ -17,33 +17,22 @@
  * under the License.
  */
 
-package org.apache.hudi.io.hfile.writer;
-
-import org.apache.hudi.io.hfile.HFileBlockType;
+package org.apache.hudi.io.hfile;
 
 import java.nio.ByteBuffer;
 
-public class MetaBlock extends DataBlock {
-  public MetaBlock(int blockSize) {
-    super(HFileBlockType.META.getMagic(), blockSize);
+public class KeyValueEntry implements Comparable<KeyValueEntry> {
+  public final byte[] key;
+  public final byte[] value;
+
+  public KeyValueEntry(byte[] key, byte[] value) {
+    this.key = key;
+    this.value = value;
   }
 
   @Override
-  public void add(byte[] key, byte[] value) {
-    KeyValueEntry kv = new KeyValueEntry(key, value);
-    add(kv, false);
-  }
-
-  @Override
-  public ByteBuffer getPayload() {
-    ByteBuffer dataBuf = ByteBuffer.allocate(blockSize);
-    // Rule 1: there must be only one key-value entry.
-    assert (1 == entries.size())
-        : "only 1 value is allowed in meta block";
-    // Rule 2: only value should be store in the block.
-    // The key is stored in the meta index block.
-    dataBuf.put(entries.get(0).value);
-    dataBuf.flip();
-    return dataBuf;
+  public int compareTo(KeyValueEntry o) {
+    return ByteBuffer.wrap(this.key)
+        .compareTo(ByteBuffer.wrap(o.key));
   }
 }

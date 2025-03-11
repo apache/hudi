@@ -20,7 +20,6 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.io.hfile.writer.KeyValueEntry;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -139,7 +138,8 @@ public class HFileDataBlock extends HFileBlock {
     return cursor.getOffset() - blockStartOffsetInFile < uncompressedContentEndRelativeOffset;
   }
 
-  // For Writer Only -------------------------------------------------------------------
+  // ================ Below are for Write ================
+
   protected final List<KeyValueEntry> entries = new ArrayList<>();
 
   public HFileDataBlock(HFileContext context) {
