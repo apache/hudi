@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -32,9 +33,13 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import scala.util.Using
+
 @Tag("functional")
 class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   val sqlTempTable = "tbl"
+  // dummy record key field
+  val defaultRecordKeyField = "_row_key"
 
   @ParameterizedTest
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
@@ -54,12 +59,18 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
       validate = false)
 
     createTempTable(hudiOpts)
-    verifyInQuery(hudiOpts)
-    verifyEqualToQuery(hudiOpts)
-    verifyNegativeTestCases(hudiOpts)
+    // verify for default record key field
+    verifyInQuery(hudiOpts, defaultRecordKeyField)
+    verifyEqualToQuery(hudiOpts, defaultRecordKeyField)
+    verifyNegativeTestCases(hudiOpts, defaultRecordKeyField)
+
+    // verify the same for _hoodie_record_key
+    verifyInQuery(hudiOpts, RECORD_KEY_METADATA_FIELD.getFieldName)
+    verifyEqualToQuery(hudiOpts, RECORD_KEY_METADATA_FIELD.getFieldName)
+    verifyNegativeTestCases(hudiOpts, RECORD_KEY_METADATA_FIELD.getFieldName)
   }
 
-  private def verifyNegativeTestCases(hudiOpts: Map[String, String]): Unit = {
+  private def verifyNegativeTestCases(hudiOpts: Map[String, String], colName: String): Unit = {
     val commonOpts = hudiOpts + ("path" -> basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     val fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
@@ -69,44 +80,43 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     assertEquals(6, spark.sql("select * from " + sqlTempTable).count())
 
     // non existing entries in EqualTo query
-    var dataFilter: Expression = EqualTo(attribute("_row_key"), Literal("xyz"))
+    var dataFilter: Expression = EqualTo(attribute(colName), Literal("xyz"))
     assertEquals(0, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
     assertEquals(0, fileIndex.listFiles(Seq.empty, Seq(dataFilter)).flatMap(s => s.files).size)
 
     // non existing entries in IN query
-    dataFilter = In(attribute("_row_key"), List.apply(Literal("xyz"), Literal("abc")))
+    dataFilter = In(attribute(colName), List.apply(Literal("xyz"), Literal("abc")))
     assertEquals(0, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
     assertEquals(0, fileIndex.listFiles(Seq.empty, Seq(dataFilter)).flatMap(s => s.files).size)
 
     // not supported GreaterThan query
-    val reckey = mergedDfList.last.limit(2).collect().map(row => row.getAs("_row_key").toString)
-    dataFilter = GreaterThan(attribute("_row_key"), Literal(reckey(0)))
+    var reckey = mergedDfList.last.limit(2).collect().map(row => row.getAs(defaultRecordKeyField).toString)
+    dataFilter = GreaterThan(attribute(colName), Literal(reckey(0)))
     assertTrue(fileIndex.listFiles(Seq.empty, Seq(dataFilter)).flatMap(s => s.files).size >= 3)
 
     // not supported OR query
-    dataFilter = Or(EqualTo(attribute("_row_key"), Literal(reckey(0))), GreaterThanOrEqual(attribute("timestamp"), Literal(0)))
+    dataFilter = Or(EqualTo(attribute(colName), Literal(reckey(0))), GreaterThanOrEqual(attribute("timestamp"), Literal(0)))
     assertEquals(6, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
     assertTrue(fileIndex.listFiles(Seq.empty, Seq(dataFilter)).flatMap(s => s.files).size >= 3)
   }
 
-  def verifyEqualToQuery(hudiOpts: Map[String, String]): Unit = {
-    val reckey = mergedDfList.last.limit(1).collect().map(row => row.getAs("_row_key").toString)
-    val dataFilter = EqualTo(attribute("_row_key"), Literal(reckey(0)))
+  def verifyEqualToQuery(hudiOpts: Map[String, String], colName: String): Unit = {
+    val reckey = mergedDfList.last.limit(1).collect().map(row => row.getAs(defaultRecordKeyField).toString)
+    val dataFilter = EqualTo(attribute(colName), Literal(reckey(0)))
     assertEquals(1, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
     verifyPruningFileCount(hudiOpts, dataFilter, 1)
   }
 
-  def verifyInQuery(hudiOpts: Map[String, String]): Unit = {
-    var reckey = mergedDfList.last.limit(1).collect().map(row => row.getAs("_row_key").toString)
-    var dataFilter = In(attribute("_row_key"), reckey.map(l => literal(l)).toList)
+  def verifyInQuery(hudiOpts: Map[String, String], colName: String): Unit = {
+    var reckey = mergedDfList.last.limit(1).collect().map(row => row.getAs(defaultRecordKeyField).toString)
+    var dataFilter = In(attribute(colName), reckey.map(l => literal(l)).toList)
     assertEquals(1, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
-    var numFiles = if (isTableMOR()) 2 else 1
-    verifyPruningFileCount(hudiOpts, dataFilter, numFiles)
+    verifyPruningFileCount(hudiOpts, dataFilter, 1)
 
-    reckey = mergedDfList.last.limit(2).collect().map(row => row.getAs("_row_key").toString)
-    dataFilter = In(attribute("_row_key"), reckey.map(l => literal(l)).toList)
+    reckey = mergedDfList.last.limit(2).collect().map(row => row.getAs(defaultRecordKeyField).toString)
+    dataFilter = In(attribute(colName), reckey.map(l => literal(l)).toList)
     assertEquals(2, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
-    numFiles = if (isTableMOR()) 2 else 2
+    val numFiles = if (isTableMOR()) 2 else 2
     verifyPruningFileCount(hudiOpts, dataFilter, numFiles)
   }
 
@@ -126,7 +136,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
     assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
-    assertEquals(filteredFilesCount, numFiles)
+    assertEquals(numFiles, filteredFilesCount)
 
     // with no data skipping
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
@@ -140,13 +150,15 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
-    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
-      .values()
-      .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
-        (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](
-          slice => totalLatestDataFiles += (if (includeLogFiles) slice.getLogFiles.count() else 0)
-            + (if (slice.getBaseFile.isPresent) 1 else 0)))))
-    totalLatestDataFiles
+    Using(getTableFileSystemView(opts)) { fsView =>
+      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+        .values()
+        .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
+          (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](
+            slice => totalLatestDataFiles += (if (includeLogFiles) slice.getLogFiles.count() else 0)
+              + (if (slice.getBaseFile.isPresent) 1 else 0)))))
+      totalLatestDataFiles
+    }.get
   }
 
   private def getTableFileSystemView(opts: Map[String, String]): HoodieTableFileSystemView = {
