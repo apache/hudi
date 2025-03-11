@@ -20,6 +20,7 @@ package org.apache.hudi.aws.cloudwatch;
 
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import com.codahale.metrics.Clock;
 import com.codahale.metrics.Counter;
@@ -274,8 +275,9 @@ public class CloudWatchReporter extends ScheduledReporter {
                                 long timestampMilliSec,
                                 List<MetricDatum> metricData) {
     String[] metricNameParts = metricName.split("\\.", 2);
+    ValidationUtils.checkArgument(metricNameParts.length >= 2,
+            "metricName doesn't follow the naming convention and doesn't contain a dot as splitter! metricName:" + metricName);
     String tableName = metricNameParts[0];
-
 
     metricData.add(MetricDatum.builder()
         .timestamp(Instant.ofEpochMilli(timestampMilliSec))
