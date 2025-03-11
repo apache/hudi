@@ -2418,6 +2418,10 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertTrue(metrics.getRegistry().getGauges().containsKey(prefix + HoodieMetadataMetrics.STAT_COUNT_LOG_FILES));
       assertTrue(metrics.getRegistry().getGauges().containsKey(prefix + HoodieMetadataMetrics.STAT_TOTAL_BASE_FILE_SIZE));
       assertTrue(metrics.getRegistry().getGauges().containsKey(prefix + HoodieMetadataMetrics.STAT_TOTAL_LOG_FILE_SIZE));
+
+      String metadataTableName = String.format("%s_metadata", writeConfig.getTableName());
+      assertTrue(metrics.getRegistry().getMetrics().containsKey(String.format("%s.%s", metadataTableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION)));
+      assertTrue(metrics.getRegistry().getMetrics().containsKey(String.format("%s.%s", metadataTableName, HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS)));
     }
   }
 

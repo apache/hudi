@@ -54,6 +54,7 @@ import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_GAUGE_
 import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_METRIC_TYPE_KEY;
 import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_TABLE_NAME_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(MockitoExtension.class)
 public class TestCloudWatchReporter {
@@ -66,7 +67,7 @@ public class TestCloudWatchReporter {
   @Mock
   MetricRegistry metricRegistry;
 
-  @Mock
+  @Mock(lenient = true)
   CloudWatchAsyncClient cloudWatchAsync;
 
   @Mock
@@ -162,6 +163,23 @@ public class TestCloudWatchReporter {
     assertEquals(PREFIX + ".timer1", metricDataBatch3.get(1).metricName());
     assertEquals(timer1.getCount(), metricDataBatch3.get(1).value().longValue());
     assertDimensions(metricDataBatch3.get(1).dimensions(), DIMENSION_COUNT_TYPE_VALUE);
+
+    reporter.stop();
+    Mockito.verify(cloudWatchAsync).close();
+  }
+
+  @Test
+  public void testReportOnMetricsWithoutTableName() {
+    SortedMap<String, Gauge> gauges = new TreeMap<>();
+    Gauge<Long> gauge1 = () -> 100L;
+    Gauge<Double> gauge2 = () -> 100.1;
+    gauges.put("gauge1", gauge1);
+    gauges.put(TABLE_NAME + ".gauge2", gauge2);
+
+    Mockito.when(metricRegistry.getGauges(MetricFilter.ALL)).thenReturn(gauges);
+
+    // should fail if metric name doesn't have at least two parts
+    assertThrows(IllegalArgumentException.class, () -> reporter.report());
 
     reporter.stop();
     Mockito.verify(cloudWatchAsync).close();
