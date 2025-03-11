@@ -19,7 +19,8 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hadoop.hbase.io.compress.Compression;
+import org.apache.hudi.io.compress.CompressionCodec;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -36,8 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 public class TestHFileUtils {
   @ParameterizedTest
-  @EnumSource(Compression.Algorithm.class)
-  public void testGetHFileCompressionAlgorithm(Compression.Algorithm algo) {
+  @EnumSource(CompressionCodec.class)
+  public void testGetHFileCompressionAlgorithm(CompressionCodec algo) {
     for (boolean upperCase : new boolean[] {true, false}) {
       Map<String, String> paramsMap = Collections.singletonMap(
           HFILE_COMPRESSION_ALGORITHM_NAME.key(),
@@ -48,12 +49,12 @@ public class TestHFileUtils {
 
   @Test
   public void testGetHFileCompressionAlgorithmWithEmptyString() {
-    assertEquals(Compression.Algorithm.GZ, getHFileCompressionAlgorithm(
+    assertEquals(CompressionCodec.GZIP, getHFileCompressionAlgorithm(
         Collections.singletonMap(HFILE_COMPRESSION_ALGORITHM_NAME.key(), "")));
   }
 
   @Test
   public void testGetDefaultHFileCompressionAlgorithm() {
-    assertEquals(Compression.Algorithm.GZ, getHFileCompressionAlgorithm(Collections.emptyMap()));
+    assertEquals(CompressionCodec.GZIP, getHFileCompressionAlgorithm(Collections.emptyMap()));
   }
 }

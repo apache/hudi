@@ -19,8 +19,6 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.hfile.writer.KeyValueEntry;
-
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +40,8 @@ public class HFileMetaBlock extends HFileBlock {
         readAttributesOpt.get().uncompressedSizeWithoutHeader);
   }
 
-  // For Writer ----------------------------------------------
+  // ================ Below are for Write ================
+
   protected final List<KeyValueEntry> entries = new ArrayList<>();
 
   public HFileMetaBlock(HFileContext context) {

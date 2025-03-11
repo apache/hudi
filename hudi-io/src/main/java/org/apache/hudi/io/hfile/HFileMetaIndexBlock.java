@@ -19,8 +19,6 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.hfile.writer.IndexEntry;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -32,19 +30,20 @@ public class HFileMetaIndexBlock extends HFileIndexBlock {
   @Override
   public ByteBuffer getPayload() {
     ByteBuffer buf = ByteBuffer.allocate(context.getBlockSize() * 2);
-    for (IndexEntry entry : entries) {
-      buf.putLong(entry.offset);
-      buf.putInt(entry.size);
+    for (BlockIndexEntry entry : entries) {
+      buf.putLong(entry.getOffset());
+      buf.putInt(entry.getSize());
       // Key length.
       try {
-        byte[] keyLength = getVariableLengthEncodes(entry.firstKey.length);
+        byte[] keyLength = getVariableLengthEncodes(entry.getFirstKey().getLength());
         buf.put(keyLength);
       } catch (IOException e) {
-        throw new RuntimeException("Failed to serialize number: " + entry.firstKey.length);
+        throw new RuntimeException(
+            "Failed to serialize number: " + entry.getFirstKey().getLength());
       }
       // Note that: NO two-bytes for encoding key length.
       // Key.
-      buf.put(entry.firstKey);
+      buf.put(entry.getFirstKey().getBytes());
     }
     buf.flip();
 
