@@ -177,15 +177,14 @@ CREATE TABLE hudi_table(
 'path' = 'file:///tmp/hudi_table',
 'table.type' = 'MERGE_ON_READ',
 'index.type' = 'BUCKET',
-'hoodie.bucket.index.partition.expressions' = '\\d{4}-(06-(01|17|18)|11-(01|10|11)),256',
-'hoodie.bucket.index.num.buckets' = '10'
+'hoodie.bucket.index.partition.expressions' = '\\d{4}-(06-(01|17|18)|11-(01|10|11)),256'
 )
 ```
 
 For the dates of 06-01, 06-17, 06-18 in June and 01-11, 10-11, 11-11 in
 November of each year (in the format of yyyy-MM-dd), the corresponding bucket number for the partition is 256
 
-For common partitions use 10 as partition bucket number
+For common partitions use 4 as partition bucket number
 
 ### Hashing Config And Management
 
@@ -289,36 +288,9 @@ The workflow is as follows:
 
 About Loading Hashing_Config
 
-First, attempt to retrieve the latest `<replace-commit>.hashing_config` from the committed replace active timeline.
-If it does not exist, fetch the latest hashing_config from `instants before active timeline start`.
-
-The pseudocode is as follows
-
-```java
-
-public class demo {
-  
-   public String loadLatestHashingConfig() {
-      String instantToLoad;
-      HoodieActiveTimeline timeline = getCompletedReplaceActiveTimeline();
-      // The latest instants are sorted in descending order
-      List<String> sortedHashingConfigInstants = getSortedHashingConfigInstants();
-      for (String instant : sortedHashingConfigInstants) {
-         if (timeline.containsInstant(instant)) {
-            instantToLoad = instant;
-            break;
-         }
-      }
-
-      if (StringUtils.isEmpty(instantToLoad)) {
-        instantToLoad = getLastedHashingInstantBeforeActiveTimeline(sortedHashingConfigInstants);
-      }
-      
-      // load instantToLoad related hashing_config
-      
-   }
-}
-```
+As for loading latest hashing_config(we always keep at least one valid active hashing_config after hashing config archived), 
+1. Attempt to retrieve the latest `<replace-commit>.hashing_config` from the committed replace active timeline.
+2. If it does not exist, fetch the latest hashing_config before `active timeline start`.
 
 ### SimpleBucketIdentifier
 
