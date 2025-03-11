@@ -18,8 +18,8 @@
 
 package org.apache.hudi.avro;
 
-import com.google.common.collect.Interner;
-import com.google.common.collect.Interners;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import org.apache.avro.Schema;
 
 /**
@@ -32,8 +32,8 @@ import org.apache.avro.Schema;
 public class AvroSchemaCache {
 
 
-  // Ensure that there is only one variable instance of the same schema within a entire JVM lifetime
-  private static final Interner<Schema> SCHEMA_INTERNER = Interners.newWeakInterner();
+  // Ensure that there is only one variable instance of the same schema within an entire JVM lifetime
+  private static final LoadingCache<Schema, Schema> SCHEMA_CACHE = Caffeine.newBuilder().maximumSize(1024).build(k -> k);
 
   /**
    * Get schema variable from global cache. If not found, put it into the cache and then return it.
@@ -41,10 +41,7 @@ public class AvroSchemaCache {
    * @return if found, return the exist schema variable, otherwise return the param itself.
    */
   public static Schema intern(Schema schema) {
-    if (schema == null) {
-      return null;
-    }
-    return SCHEMA_INTERNER.intern(schema);
+    return SCHEMA_CACHE.get(schema);
   }
 
 }
