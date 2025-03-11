@@ -23,12 +23,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
-import org.apache.hudi.io.hfile.writer.DataBlock;
-import org.apache.hudi.io.hfile.writer.FileInfoBlock;
-import org.apache.hudi.io.hfile.writer.IndexBlock;
-import org.apache.hudi.io.hfile.writer.MetaBlock;
-import org.apache.hudi.io.hfile.writer.MetaIndexBlock;
-import org.apache.hudi.io.hfile.writer.RootIndexBlock;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedOutputStream;
@@ -57,15 +51,15 @@ public class HFileWriterImpl implements HFileWriter {
   private final OutputStream outputStream;
   private final HFileContext context;
   // Flushed data blocks.
-  private final List<DataBlock> dataBlocks = new ArrayList<>();
+  private final List<HFileDataBlock> dataBlocks = new ArrayList<>();
   // Meta Info map.
   private final Map<String, byte[]> metaInfo = new HashMap<>();
   // Data block under construction.
-  private DataBlock currentDataBlock;
+  private HFileDataBlock currentDataBlock;
   // Meta block under construction.
-  private final IndexBlock rootIndexBlock;
-  private final IndexBlock metaIndexBlock;
-  private final FileInfoBlock fileInfoBlock;
+  private final HFileRootIndexBlock rootIndexBlock;
+  private final HFileMetaIndexBlock metaIndexBlock;
+  private final HFileFileInfoBlock fileInfoBlock;
   private long uncompressedBytes;
   private long totalUncompressedBytes;
   private long currentOffset;
@@ -79,10 +73,10 @@ public class HFileWriterImpl implements HFileWriter {
     this.uncompressedBytes = 0L;
     this.totalUncompressedBytes = 0L;
     this.currentOffset = 0L;
-    this.currentDataBlock = new DataBlock(blockSize);
-    this.rootIndexBlock = new RootIndexBlock(blockSize);
-    this.metaIndexBlock = new MetaIndexBlock(blockSize);
-    this.fileInfoBlock = new FileInfoBlock(blockSize);
+    this.currentDataBlock = new HFileDataBlock(context);
+    this.rootIndexBlock = new HFileRootIndexBlock(context);
+    this.metaIndexBlock = new HFileMetaIndexBlock(context);
+    this.fileInfoBlock = new HFileFileInfoBlock(context);
     initFileInfo();
   }
 
@@ -126,7 +120,7 @@ public class HFileWriterImpl implements HFileWriter {
     // Flush data block.
     ByteBuffer blockBuffer = currentDataBlock.serialize();
     // Current block offset.
-    currentDataBlock.setBlockOffset(currentOffset);
+    currentDataBlock.setStartOffsetInBuff(currentOffset);
     long blockOffset = currentOffset;
     writeBuffer(blockBuffer);
     dataBlocks.add(currentDataBlock);
@@ -134,19 +128,19 @@ public class HFileWriterImpl implements HFileWriter {
     rootIndexBlock.add(
         currentDataBlock.getFirstKey(), blockOffset, blockBuffer.limit());
     // Create a new data block.
-    currentDataBlock = new DataBlock(blockSize);
+    currentDataBlock = new HFileDataBlock(context);
   }
 
   // NOTE that: reader assumes that every meta info piece
   // should be a separate meta block.
   private void flushMetaBlocks() throws IOException {
     for (Map.Entry<String, byte[]> e : metaInfo.entrySet()) {
-      MetaBlock currentMetaBlock = new MetaBlock(blockSize);
+      HFileMetaBlock currentMetaBlock = new HFileMetaBlock(context);
       byte[] key = StringUtils.getUTF8Bytes(e.getKey());
       currentMetaBlock.add(key, e.getValue());
       ByteBuffer blockBuffer = currentMetaBlock.serialize();
       long blockOffset = currentOffset;
-      currentMetaBlock.setBlockOffset(currentOffset);
+      currentMetaBlock.setStartOffsetInBuff(currentOffset);
       writeBuffer(blockBuffer);
       metaIndexBlock.add(
           currentMetaBlock.getFirstKey(), blockOffset, blockBuffer.limit());
@@ -157,13 +151,13 @@ public class HFileWriterImpl implements HFileWriter {
     loadOnOpenSectionOffset = currentOffset;
     // Write Root Data Index
     ByteBuffer dataIndexBuffer = rootIndexBlock.serialize();
-    rootIndexBlock.setBlockOffset(currentOffset);
+    rootIndexBlock.setStartOffsetInBuff(currentOffset);
     writeBuffer(dataIndexBuffer);
     // Write Meta Data Index.
     // Note: Even this block is empty, it has to be there
     //  due to the behavior of the reader.
     ByteBuffer metaIndexBuffer = metaIndexBlock.serialize();
-    metaIndexBlock.setBlockOffset(currentOffset);
+    metaIndexBlock.setStartOffsetInBuff(currentOffset);
     writeBuffer(metaIndexBuffer);
     // Write File Info.
     if (!dataBlocks.isEmpty()) {
@@ -173,13 +167,13 @@ public class HFileWriterImpl implements HFileWriter {
       fileInfoBlock.add(
           "hfile.LASTKEY", new byte[0]);
     }
-    fileInfoBlock.setBlockOffset(currentOffset);
+    fileInfoBlock.setStartOffsetInBuff(currentOffset);
     writeBuffer(fileInfoBlock.serialize());
   }
 
   private void writeTrailer() throws IOException {
     HFileProtos.TrailerProto.Builder builder = HFileProtos.TrailerProto.newBuilder();
-    builder.setFileInfoOffset(fileInfoBlock.getBlockOffset());
+    builder.setFileInfoOffset(fileInfoBlock.getStartOffsetInBuff());
     builder.setLoadOnOpenDataOffset(loadOnOpenSectionOffset);
     builder.setUncompressedDataIndexSize(totalUncompressedBytes);
     builder.setDataIndexCount(rootIndexBlock.getNumOfEntries());
@@ -188,8 +182,8 @@ public class HFileWriterImpl implements HFileWriter {
     // TODO: support multiple levels.
     builder.setNumDataIndexLevels(1);
     if (!dataBlocks.isEmpty()) {
-      builder.setFirstDataBlockOffset(dataBlocks.get(0).getBlockOffset());
-      builder.setLastDataBlockOffset(dataBlocks.get(dataBlocks.size() - 1).getBlockOffset());
+      builder.setFirstDataBlockOffset(dataBlocks.get(0).getStartOffsetInBuff());
+      builder.setLastDataBlockOffset(dataBlocks.get(dataBlocks.size() - 1).getStartOffsetInBuff());
     }
     builder.setComparatorClassName("NA");
     builder.setCompressionCodec(2);
@@ -219,7 +213,7 @@ public class HFileWriterImpl implements HFileWriter {
 
   private long getTotalNumOfEntries() {
     long totalNumOfEntries = 0L;
-    for (DataBlock db : dataBlocks) {
+    for (HFileDataBlock db : dataBlocks) {
       totalNumOfEntries += db.getNumOfEntries();
     }
     return totalNumOfEntries;
