@@ -674,3 +674,11 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [AUDIT-1224]: Changelog for release-v1.100.1 (#1256)
 [ENG-23178][HUDI-9132] Avoid empty string row key for delete and update operations (#1253)
 [AUDIT-1224]: Changelog for release-v1.100.0 (#1252)
+
+--- [2025-03-11 16:04:21] [release-v1.102.0] ---
+[AUDIT-1228]: Changelog for release-v1.100.3 (#1259)
+[AUDIT-1228]: Changelog for release-v1.100.2 (#1257)
+[ENG-23478][HUDI-7993] Apply record index if _hoodie_record_key meta field in filter (#1254)
+[AUDIT-1224]: Changelog for release-v1.100.1 (#1256)
+[ENG-23178][HUDI-9132] Avoid empty string row key for delete and update operations (#1253)
+[AUDIT-1224]: Changelog for release-v1.100.0 (#1252)
