@@ -280,6 +280,8 @@ A new archived hashing config file `.hoodie/.hashing_meta/archive/archived.hashi
 The archive logic is triggered when invoking `call partitionBucketIndexManager(overwrite => 'new-expressions', dry-run => 'false')` to modify expressions. 
 
 Once the number of active hashing configs exceeds 5, the oldest expression’s metadata is automatically merged into `archived.hashing_config`. 
+And we always keep at least one valid active hashing_config
+
 The workflow is as follows:
 
 ![archive.jpg](archive.jpg)
