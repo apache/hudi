@@ -284,7 +284,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
       // Otherwise, we use the timestamp of the latest completed action.
       String initializationTime = dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-      initializeFromFilesystem(initializationTime, metadataPartitionsToInit, inflightInstantTimestamp);
+      if (!initializeFromFilesystem(initializationTime, metadataPartitionsToInit, inflightInstantTimestamp)) {
+        LOG.error("Failed to initialize MDT from filesystem");
+        return false;
+      }
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
       return true;
     } catch (IOException e) {
@@ -354,11 +357,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param partitionsToInit         - List of MDT partitions to initialize
    * @param inflightInstantTimestamp - Current action instant responsible for this initialization
    */
-  private void initializeFromFilesystem(String initializationTime, List<MetadataPartitionType> partitionsToInit, Option<String> inflightInstantTimestamp) throws IOException {
+  private boolean initializeFromFilesystem(String initializationTime, List<MetadataPartitionType> partitionsToInit, Option<String> inflightInstantTimestamp) throws IOException {
     Set<String> pendingDataInstants = getPendingDataInstants(dataMetaClient);
     if (!metadataWriteHandler.shouldInitializeFromFilesystem(pendingDataInstants, inflightInstantTimestamp)) {
-      initMetadataReader();
-      return;
+      return false;
     }
 
     // FILES partition is always required and is initialized first
@@ -509,6 +511,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       long totalInitTime = partitionInitTimer.endTimer();
       LOG.info("Initializing {} index in metadata table took {} in ms", partitionTypeName, totalInitTime);
     }
+    return true;
   }
 
   /**
@@ -1851,36 +1854,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       }
     }
 
-    /**
-     * Create the timestamp for a compaction operation on the metadata table.
-     */
-    public String createCompactionTimestamp(String timestamp) {
-      return timestamp + getCompactionOperationSuffix();
-    }
-
-    /**
-     * Create the timestamp for a compaction operation on the metadata table.
-     */
-    public String createLogCompactionTimestamp(String timestamp) {
-      return timestamp + getLogCompactionOperationSuffix();
-    }
-
-    public String createRollbackTimestamp(String timestamp) {
-      return timestamp + getRollbackOperationSuffix();
-    }
-
-    private String getCompactionOperationSuffix() {
-      return "001";
-    }
-
-    private String getLogCompactionOperationSuffix() {
-      return "005";
-    }
-
-    private String getRollbackOperationSuffix() {
-      return "006";
-    }
-
     public void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
       if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
         updateVersionSix(rollbackMetadata, instantTime);
@@ -1960,6 +1933,36 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
         }
       }
+    }
+
+    /**
+     * Create the timestamp for a compaction operation on the metadata table.
+     */
+    public String createCompactionTimestamp(String timestamp) {
+      return timestamp + getCompactionOperationSuffix();
+    }
+
+    /**
+     * Create the timestamp for a compaction operation on the metadata table.
+     */
+    public String createLogCompactionTimestamp(String timestamp) {
+      return timestamp + getLogCompactionOperationSuffix();
+    }
+
+    public String createRollbackTimestamp(String timestamp) {
+      return timestamp + getRollbackOperationSuffix();
+    }
+
+    private String getCompactionOperationSuffix() {
+      return "001";
+    }
+
+    private String getLogCompactionOperationSuffix() {
+      return "005";
+    }
+
+    private String getRollbackOperationSuffix() {
+      return "006";
     }
   }
 }
