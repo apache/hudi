@@ -20,7 +20,13 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.hfile.writer.KeyValueEntry;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_IN_RANGE;
 import static org.apache.hudi.io.hfile.KeyValue.KEY_OFFSET;
@@ -43,8 +49,9 @@ public class HFileDataBlock extends HFileBlock {
                            int startOffsetInBuff) {
     super(context, HFileBlockType.DATA, byteBuff, startOffsetInBuff);
 
-    this.uncompressedContentEndRelativeOffset =
-        this.uncompressedEndOffset - this.sizeCheckSum - this.startOffsetInBuff;
+    this.uncompressedContentEndRelativeOffset = this.readAttributesOpt.get().uncompressedEndOffset
+        - this.readAttributesOpt.get().sizeCheckSum
+        - this.readAttributesOpt.get().startOffsetInBuff;
   }
 
   /**
@@ -110,7 +117,7 @@ public class HFileDataBlock extends HFileBlock {
    * @return the {@link KeyValue} instance.
    */
   public KeyValue readKeyValue(int offset) {
-    return new KeyValue(byteBuff, offset);
+    return new KeyValue(readAttributesOpt.get().byteBuff, offset);
   }
 
   /**
@@ -130,5 +137,76 @@ public class HFileDataBlock extends HFileBlock {
     cursor.increment((long) KEY_OFFSET + (long) keyValue.get().getKeyLength()
         + (long) keyValue.get().getValueLength() + ZERO_TS_VERSION_BYTE_LENGTH);
     return cursor.getOffset() - blockStartOffsetInFile < uncompressedContentEndRelativeOffset;
+  }
+
+  // For Writer Only -------------------------------------------------------------------
+  protected final List<KeyValueEntry> entries = new ArrayList<>();
+
+  public HFileDataBlock(HFileContext context) {
+    super(context, HFileBlockType.DATA);
+    // This is not used for write.
+    uncompressedContentEndRelativeOffset = -1;
+  }
+
+  public List<KeyValueEntry> getEntries() {
+    return entries;
+  }
+
+  public boolean isEmpty() {
+    return entries.isEmpty();
+  }
+
+  public void add(byte[] key, byte[] value) {
+    KeyValueEntry kv = new KeyValueEntry(key, value);
+    add(kv, true);
+  }
+
+  public int getNumOfEntries() {
+    return entries.size();
+  }
+
+  protected void add(KeyValueEntry kv, boolean sorted) {
+    entries.add(kv);
+    if (sorted) {
+      entries.sort(KeyValueEntry::compareTo);
+    }
+  }
+
+  public byte[] getFirstKey() {
+    return entries.get(0).key;
+  }
+
+  // Note: HFileReaderImpl assumes that:
+  //   The last key should contain the content length bytes.
+  public byte[] getLastKey() {
+    if (entries.isEmpty()) {
+      return new byte[0];
+    }
+    byte[] key = entries.get(entries.size() - 1).key;
+    ByteBuffer byteBuffer = ByteBuffer.allocate(key.length + SIZEOF_INT16);
+    byteBuffer.putShort((short) key.length);
+    byteBuffer.put(key);
+    return byteBuffer.array();
+  }
+
+  @Override
+  public ByteBuffer getPayload() {
+    ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize());
+    for (KeyValueEntry kv : entries) {
+      // Length of key + length of a short variable indicating length of key;
+      dataBuf.putInt(kv.key.length + SIZEOF_INT16);
+      // Length of value;
+      dataBuf.putInt(kv.value.length);
+      // Key content length;
+      dataBuf.putShort((short)kv.key.length);
+      // Key.
+      dataBuf.put(kv.key);
+      // Value.
+      dataBuf.put(kv.value);
+      // MVCC.
+      dataBuf.put((byte)0);
+    }
+    dataBuf.flip();
+    return dataBuf;
   }
 }
