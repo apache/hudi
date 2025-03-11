@@ -320,7 +320,8 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final Set<String> CONFIGS_REQUIRED_FOR_OLDER_VERSIONED_TABLES = new HashSet<>(Arrays.asList(
       KEY_GENERATOR_CLASS_NAME.key(),
-      KEY_GENERATOR_TYPE.key()
+      KEY_GENERATOR_TYPE.key(),
+      RECORD_MERGE_MODE.key()
   ));
 
   public static final ConfigProperty<String> TABLE_CHECKSUM = ConfigProperty

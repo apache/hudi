@@ -112,7 +112,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           mergeStrategyId, null, tableConfig.getTableVersion());
       recordMergeMode = triple.getLeft();
       mergeStrategyId = triple.getRight();
-      tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE.key(), recordMergeMode.name());
     }
     readerContext.setRecordMerger(readerContext.getRecordMerger(
         recordMergeMode, mergeStrategyId,
