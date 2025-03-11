@@ -159,8 +159,7 @@ object HoodieCreateRecordUtils {
       case HoodieRecord.HoodieRecordType.SPARK =>
         val dataFileSchema = AvroSchemaCache.intern(new Schema.Parser().parse(dataFileSchemaStr))
         val dataFileStructType = HoodieInternalRowUtils.getCachedSchema(dataFileSchema)
-        val reusedWriterSchema = AvroSchemaCache.intern(writerSchema)
-        val writerStructType = HoodieInternalRowUtils.getCachedSchema(reusedWriterSchema)
+        val writerStructType = HoodieInternalRowUtils.getCachedSchema(AvroSchemaCache.intern(writerSchema))
         val sourceStructType = df.schema
 
         df.queryExecution.toRdd.mapPartitions { it =>

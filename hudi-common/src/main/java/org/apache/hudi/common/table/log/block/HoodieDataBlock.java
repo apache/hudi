@@ -109,9 +109,9 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
         // When the data block contains partial updates, we need to strictly use the writer schema
         // from the log block header, as we need to use the partial schema to indicate which
         // fields are updated during merging.
-        ? getWriterSchema(super.getLogBlockHeader())
+        ? AvroSchemaCache.intern(getWriterSchema(super.getLogBlockHeader()))
         // If no reader-schema has been provided assume writer-schema as one
-        : readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
+        : AvroSchemaCache.intern(readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader())));
     this.enablePointLookups = enablePointLookups;
   }
 

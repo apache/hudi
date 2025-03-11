@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -93,9 +94,9 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     this.needsMORMerge = readerContext.getHasLogFiles();
     this.recordMerger = readerContext.getRecordMerger();
     this.dataSchema = dataSchema;
-    this.requestedSchema = requestedSchema;
+    this.requestedSchema = AvroSchemaCache.intern(requestedSchema);
     this.hoodieTableConfig = hoodieTableConfig;
-    this.requiredSchema = prepareRequiredSchema();
+    this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema());
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
     readerContext.setNeedsBootstrapMerge(this.needsBootstrapMerge);
