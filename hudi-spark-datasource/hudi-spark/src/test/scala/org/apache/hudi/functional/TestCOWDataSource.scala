@@ -114,6 +114,63 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
   }
 
+  @Test
+  def testWriteTimestampLogicalType(): Unit = {
+    val avroSchemaStr =
+      """
+        |{
+        |  "type": "record",
+        |  "name": "HudiRecord",
+        |  "fields": [
+        |    {"name": "id", "type": "int"},
+        |    {"name": "name", "type": ["null", "string"]},
+        |    {"name": "ts_millis", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+        |    {"name": "value", "type": ["null", "double"]},
+        |    {"name": "category", "type": ["null", "string"]}
+        |  ]
+        |}
+        |""".stripMargin
+    spark.sql("DROP TABLE IF EXISTS source").show(false)
+    spark.sql(
+      s"""
+         |CREATE TABLE IF NOT EXISTS source (
+         |  id INT,
+         |  name STRING,
+         |  ts_millis BIGINT,
+         |  value DOUBLE,
+         |  category STRING
+         |)
+         |USING parquet
+         |""".stripMargin).show(false)
+    spark.sql(
+      """
+        |INSERT INTO source values
+        | (1, "Alice", 1678886400000L, 10.5, "A"),
+        | (2, "Bob", 1678886401000L, 20.2, "B"),
+        | (3, "Charlie", 1678886402000L, 15.8, "A"),
+        | (4, "David", 1678886403000L, 25.9, "C"),
+        | (5, "Eve", 1678886404000L, 12.1, "B")
+        |""".stripMargin).show(false)
+    val df = spark.sql("select id, name, ts_millis, value, category from source")
+    //spark.conf.set("spark.sql.parquet.outputTimestampType", "TIMESTAMP_MILLIS")
+    //spark.conf.set("spark.sql.legacy.parquet.datetimeRebaseModeInWrite", "LEGACY")
+    df.write.format("hudi")
+      .option("hoodie.table.name", "test_table")
+      .option("hoodie.write.schema", avroSchemaStr)
+      .option("hoodie.datasource.write.recordkey.field", "id")
+      .option("hoodie.datasource.write.precombine.field", "ts_millis")
+      .mode(SaveMode.Overwrite)
+      .save("/tmp/hudi_table_test3")
+    df.printSchema()
+  }
+
+  @Test
+  def testReadTimestampLogicalType(): Unit = {
+    spark.read.format("hudi")
+      .load("/tmp/hudi_table_test3")
+      .show(false)
+  }
+
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testNoPrecombine(recordType: HoodieRecordType) {

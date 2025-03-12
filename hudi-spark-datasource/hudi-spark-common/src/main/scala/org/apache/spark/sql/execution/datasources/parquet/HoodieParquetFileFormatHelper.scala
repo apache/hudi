@@ -19,7 +19,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.hadoop.metadata.FileMetaData
-import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, LongType, MapType, StructField, StructType, TimestampType}
 
 object HoodieParquetFileFormatHelper {
 
@@ -45,6 +45,8 @@ object HoodieParquetFileFormatHelper {
   }
 
   def isDataTypeEqual(requiredType: DataType, fileType: DataType): Boolean = (requiredType, fileType) match {
+    case (LongType, TimestampType) => true
+
     case (requiredType, fileType) if requiredType == fileType => true
 
     case (ArrayType(rt, _), ArrayType(ft, _)) =>

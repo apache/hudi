@@ -457,6 +457,32 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getUrlEncodePartitioning()));
   }
 
+  @Test
+  public void testBootstrap() throws IOException {
+    HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
+    String newDatasetBasePath = "/Users/ethan/Work/tmp/20250311-orc-bootstrap/tmp2/hudi_table";
+    cfg.runBootstrap = true;
+    cfg.tableType = "COPY_ON_WRITE";
+    cfg.targetTableName = "bootstrap_table";
+    cfg.baseFileFormat = "orc";
+    cfg.configs.add(String.format("hoodie.bootstrap.base.path=%s", "/Users/ethan/Work/tmp/20250311-orc-bootstrap/tmp2/orc_input"));
+    //cfg.configs.add("hoodie.datasource.write.partitionpath.field=");
+    cfg.configs.add("hoodie.datasource.write.recordkey.field=uuid");
+    cfg.configs.add("hoodie.datasource.write.precombine.field=ts");
+    cfg.configs.add("hoodie.datasource.write.partitionpath.field=city");
+    cfg.configs.add(String.format("hoodie.datasource.write.keygenerator.class=%s", SimpleKeyGenerator.class.getName()));
+    cfg.configs.add("hoodie.datasource.write.hive_style_partitioning=true");
+    cfg.configs.add("hoodie.bootstrap.mode.selector.regex.mode=METADATA_ONLY");
+    cfg.configs.add("hoodie.table.base.file.format=orc");
+    cfg.configs.add("hoodie.bootstrap.parallelism=5");
+    cfg.targetBasePath = newDatasetBasePath;
+    try {
+      new HoodieDeltaStreamer(cfg, jsc).sync();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testBulkInsertsAndUpsertsWithBootstrap(HoodieRecordType recordType) throws Exception {

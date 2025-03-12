@@ -97,6 +97,16 @@ public class HoodieClientTestUtils {
         .setMaster("local[4]")
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+        //.set("spark.sql.avro.datetimeRebaseModeInRead", "LEGACY")
+        //.set("spark.sql.avro.datetimeRebaseModeInWrite", "LEGACY")
+        //.set("spark.sql.legacy.avro.datetimeRebaseModeInWrite", "LEGACY")
+        //.set("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "LEGACY")
+        //.set("spark.sql.legacy.parquet.datetimeRebaseModeInWrite", "LEGACY")
+        //.set("spark.sql.legacy.parquet.int96RebaseModeInRead", "LEGACY")
+        //.set("spark.sql.legacy.parquet.int96RebaseModeInWrite", "LEGACY")
+        //.set("spark.sql.parquet.datetimeRebaseModeInRead", "LEGACY")
+        //.set("spark.sql.parquet.datetimeRebaseModeInWrite", "LEGACY")
+        //.set("spark.sql.parquet.writeLegacyFormat", "true")
         .set("spark.sql.shuffle.partitions", "4")
         .set("spark.default.parallelism", "4");
 

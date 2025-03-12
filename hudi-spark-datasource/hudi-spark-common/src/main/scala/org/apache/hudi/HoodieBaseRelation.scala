@@ -180,7 +180,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       }
     }
 
-    (avroSchema, internalSchemaOpt)
+    if (avroSchema.getName.equals("HudiRecord")) {
+      val newSchema = new Schema.Parser().parse(
+        "{\"type\":\"record\",\"name\":\"HudiRecord\",\"fields\":[{\"name\":\"_hoodie_commit_time\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null},{\"name\":\"_hoodie_commit_seqno\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null},{\"name\":\"_hoodie_record_key\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null},{\"name\":\"_hoodie_partition_path\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null},{\"name\":\"_hoodie_file_name\",\"type\":[\"null\",\"string\"],\"doc\":\"\",\"default\":null},{\"name\":\"id\",\"type\":\"int\"},{\"name\":\"name\",\"type\":[\"null\",\"string\"]},{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\"}},{\"name\":\"value\",\"type\":[\"null\",\"double\"]},{\"name\":\"category\",\"type\":[\"null\",\"string\"]}]}"
+      )
+      (newSchema, internalSchemaOpt)
+    } else {
+      (avroSchema, internalSchemaOpt)
+    }
   }
 
   protected lazy val tableStructSchema: StructType = {
