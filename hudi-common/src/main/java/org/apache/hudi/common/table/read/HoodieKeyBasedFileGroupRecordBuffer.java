@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -73,11 +74,13 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
       enablePartialMerging = true;
     }
 
+    Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());
+
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
         Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-            nextRecord, recordsIteratorSchemaPair.getRight());
+            nextRecord, schema);
         String recordKey = (String) metadata.get(HoodieReaderContext.INTERNAL_META_RECORD_KEY);
         processNextDataRecord(nextRecord, metadata, recordKey);
       }

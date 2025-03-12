@@ -19,13 +19,14 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.AvroSchemaCache;
+import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -79,7 +80,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
 
   protected final boolean needsMORMerge;
 
-  private final AvroSchemaCache avroSchemaCache;
+  private final LocalAvroSchemaCache localAvroSchemaCache;
 
   public HoodieFileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
                                             Schema dataSchema,
@@ -93,13 +94,13 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     this.needsMORMerge = readerContext.getHasLogFiles();
     this.recordMerger = readerContext.getRecordMerger();
     this.dataSchema = dataSchema;
-    this.requestedSchema = requestedSchema;
+    this.requestedSchema = AvroSchemaCache.intern(requestedSchema);
     this.hoodieTableConfig = hoodieTableConfig;
-    this.requiredSchema = prepareRequiredSchema();
+    this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema());
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
     readerContext.setNeedsBootstrapMerge(this.needsBootstrapMerge);
-    this.avroSchemaCache = AvroSchemaCache.getInstance();
+    this.localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
   }
 
   public Schema getDataSchema() {

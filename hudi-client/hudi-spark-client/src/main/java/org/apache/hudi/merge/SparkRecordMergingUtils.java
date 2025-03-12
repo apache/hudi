@@ -20,6 +20,7 @@
 package org.apache.hudi.merge;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -218,8 +219,8 @@ public class SparkRecordMergingUtils {
             }
           }
           StructType mergedStructType = new StructType(mergedFieldList.toArray(new StructField[0]));
-          Schema mergedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
-              mergedStructType, readerSchema.getName(), readerSchema.getNamespace());
+          Schema mergedSchema = AvroSchemaCache.intern(AvroConversionUtils.convertStructTypeToAvroSchema(
+              mergedStructType, readerSchema.getName(), readerSchema.getNamespace()));
           return Pair.of(mergedMapping, Pair.of(mergedStructType, mergedSchema));
         });
   }

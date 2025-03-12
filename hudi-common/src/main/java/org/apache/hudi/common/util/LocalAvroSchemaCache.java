@@ -34,20 +34,20 @@ import java.util.Map;
  * A map of {version_id, schema} is maintained.
  */
 @NotThreadSafe
-public class AvroSchemaCache implements Closeable {
-  private static final Logger LOG = LoggerFactory.getLogger(AvroSchemaCache.class);
+public class LocalAvroSchemaCache implements Closeable {
+  private static final Logger LOG = LoggerFactory.getLogger(LocalAvroSchemaCache.class);
   private final Map<Integer, Schema> versionIdToSchema; // the mapping from version_id -> schema
   private final Map<Schema, Integer> schemaToVersionId; // the mapping from schema -> version_id
 
   private int nextVersionId = 0;
 
-  private AvroSchemaCache() {
+  private LocalAvroSchemaCache() {
     this.versionIdToSchema = new HashMap<>();
     this.schemaToVersionId = new HashMap<>();
   }
 
-  public static AvroSchemaCache getInstance() {
-    return new AvroSchemaCache();
+  public static LocalAvroSchemaCache getInstance() {
+    return new LocalAvroSchemaCache();
   }
 
   public Integer cacheSchema(Schema schema) {
