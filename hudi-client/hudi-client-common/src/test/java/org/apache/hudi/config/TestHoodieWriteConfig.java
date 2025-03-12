@@ -511,7 +511,7 @@ public class TestHoodieWriteConfig {
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BLOOM)
             .bloomIndexFileGroupIdKeySortPartitioner(true).build())
         .build();
-    assertTrue(writeConfig.useBloomIndexFileGroupIdKeySortPartitioner());
+    assertTrue(writeConfig.isBloomIndexFileGroupIdKeySortingEnabled());
   }
 
   @Test

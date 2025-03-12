@@ -2059,8 +2059,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING);
   }
 
-  public boolean useBloomIndexFileGroupIdKeySortPartitioner() {
-    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_FILE_GROUP_ID_KEY_SORT_PARTITIONER);
+  public boolean isBloomIndexFileGroupIdKeySortingEnabled() {
+    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_FILE_GROUP_ID_KEY_SORTING);
   }
 
   public boolean isMetadataBloomFilterIndexEnabled() {
