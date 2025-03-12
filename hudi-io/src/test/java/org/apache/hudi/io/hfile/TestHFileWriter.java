@@ -22,6 +22,7 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +44,8 @@ public class TestHFileWriter {
   private static final String TEST_FILE = "test.hfile";
   private static final HFileContext CONTEXT = HFileContext.builder().build();
 
-  public static void main(String[] args) throws Exception {
+  @Test
+  void testOverflow() throws Exception {
     try {
       // 1. Write data.
       writeTestFile();
@@ -60,6 +62,104 @@ public class TestHFileWriter {
       LOG.info("All validations passed!");
     } finally {
       Files.deleteIfExists(Paths.get(TEST_FILE));
+    }
+  }
+
+  @Test
+  void testSameKeyLocation() throws IOException {
+    // 50 bytes for data part limit.
+    HFileContext context = new HFileContext.Builder().blockSize(50).build();
+    String testFile = "test_data.hfile";
+    try (DataOutputStream outputStream =
+             new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
+        HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
+      writer.append("key1", "value1".getBytes());
+      writer.append("key1", "value2".getBytes());
+      writer.append("key1", "value3".getBytes());
+      writer.append("key2", "value4".getBytes());
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+
+    // Validate.
+    try (FileChannel channel = FileChannel.open(Paths.get(testFile), StandardOpenOption.READ)) {
+      ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+      // Point to the first data block.
+      buf.position(0);
+
+      // Validate magic.
+      byte[] dataBlockMagic = new byte[8];
+      buf.get(dataBlockMagic);
+      assertArrayEquals("DATABLK*".getBytes(), dataBlockMagic);
+
+      // Skip header.
+      buf.position(buf.position() + 25);
+      // Validate data.
+      // Each record is about 20 bytes.
+      // The first block should contain 3 pairs, and the second one contains 1.
+      validateKeyValue(buf, "key1", "value1");
+      validateKeyValue(buf, "key1", "value2");
+      validateKeyValue(buf, "key1", "value3");
+
+      // Validate magic.
+      buf.get(dataBlockMagic);
+      assertArrayEquals("DATABLK*".getBytes(), dataBlockMagic);
+
+      // Skip header.
+      buf.position(buf.position() + 25);
+      // Validate data.
+      validateKeyValue(buf, "key2", "value4");
+    } finally {
+      Files.deleteIfExists(Paths.get(testFile));
+    }
+  }
+
+  @Test
+  void testUniqueKeyLocation() throws IOException {
+    // 50 bytes for data part limit.
+    HFileContext context = new HFileContext.Builder().blockSize(50).build();
+    String testFile = "test_data.hfile";
+    try (DataOutputStream outputStream =
+             new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
+         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
+      writer.append("key1", "value1".getBytes());
+      writer.append("key2", "value2".getBytes());
+      writer.append("key3", "value3".getBytes());
+      writer.append("key4", "value4".getBytes());
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+
+    // Validate.
+    try (FileChannel channel = FileChannel.open(Paths.get(testFile), StandardOpenOption.READ)) {
+      ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+      // Point to the first data block.
+      buf.position(0);
+
+      // Validate magic.
+      byte[] dataBlockMagic = new byte[8];
+      buf.get(dataBlockMagic);
+      assertArrayEquals("DATABLK*".getBytes(), dataBlockMagic);
+
+      // Skip header.
+      buf.position(buf.position() + 25);
+      // Validate data.
+      // Each record is about 20 bytes.
+      // The first block should contain 2 pairs, and the second contains 2.
+      validateKeyValue(buf, "key1", "value1");
+      validateKeyValue(buf, "key2", "value2");
+
+      // Validate magic.
+      buf.get(dataBlockMagic);
+      assertArrayEquals("DATABLK*".getBytes(), dataBlockMagic);
+
+      // Skip header.
+      buf.position(buf.position() + 25);
+      // Validate data.
+      validateKeyValue(buf, "key3", "value3");
+      validateKeyValue(buf, "key4", "value4");
+    } finally {
+      Files.deleteIfExists(Paths.get(testFile));
     }
   }
 
