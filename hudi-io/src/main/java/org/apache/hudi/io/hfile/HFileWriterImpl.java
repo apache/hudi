@@ -36,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -83,7 +84,9 @@ public class HFileWriterImpl implements HFileWriter {
   // Append a data kv pair.
   public void append(String key, byte[] value) throws IOException {
     byte[] keyBytes = StringUtils.getUTF8Bytes(key);
-    if (uncompressedBytes + keyBytes.length + value.length + 9 > blockSize) {
+    // Records with the same key must be put into the same block.
+    if (!Arrays.equals(currentDataBlock.getLastKeyContent(), keyBytes)
+        && uncompressedBytes + keyBytes.length + value.length + 9 > blockSize) {
       flushCurrentDataBlock();
       uncompressedBytes = 0;
     }
