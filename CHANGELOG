@@ -682,3 +682,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [AUDIT-1224]: Changelog for release-v1.100.1 (#1256)
 [ENG-23178][HUDI-9132] Avoid empty string row key for delete and update operations (#1253)
 [AUDIT-1224]: Changelog for release-v1.100.0 (#1252)
+
+--- [2025-03-12 16:04:19] [release-v1.103.0] ---
+[ENG-23515][INTERNAL] Rename Bloom Index FileId Sorting Config (#1255)
+[AUDIT-1071]: Changelog for release-v1.102.0 (#1261)
