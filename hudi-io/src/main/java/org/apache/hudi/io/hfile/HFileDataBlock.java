@@ -206,9 +206,16 @@ public class HFileDataBlock extends HFileBlock {
     return byteBuffer.array();
   }
 
+  public byte[] getLastKeyContent() {
+    if (entries.isEmpty()) {
+      return new byte[0];
+    }
+    return entries.get(entries.size() - 1).key;
+  }
+
   @Override
   public ByteBuffer getPayload() {
-    ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize());
+    ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize() * 2);
     for (KeyValueEntry kv : entries) {
       // Length of key + length of a short variable indicating length of key;
       dataBuf.putInt(kv.key.length + SIZEOF_INT16);
