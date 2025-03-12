@@ -60,7 +60,9 @@ import scala.collection.mutable
  */
 class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) extends Logging {
 
-  checkArgument(table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi", s" ${table.qualifiedName} is not a Hudi table")
+  checkArgument(table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
+    || table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "org.apache.hudi",
+    s" ${table.qualifiedName} is not a Hudi table")
 
   private val storageConf = HadoopFSUtils.getStorageConfWithCopy(spark.sessionState.newHadoopConf)
 
