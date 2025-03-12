@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -103,11 +104,13 @@ public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
       throw new HoodieException("Partial update is not supported for unmerged record read");
     }
 
+    Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());
+
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
         Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-            nextRecord, recordsIteratorSchemaPair.getRight());
+            nextRecord, schema);
         processNextDataRecord(nextRecord, metadata, putIndex++);
       }
     }
