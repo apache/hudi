@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
-import org.apache.hudi.common.util.AvroSchemaCache;
+import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
@@ -69,7 +69,7 @@ public abstract class HoodieReaderContext<T> implements Closeable {
   private Boolean shouldMergeUseRecordPosition = null;
 
   // for encoding and decoding schemas to the spillable map
-  private final AvroSchemaCache avroSchemaCache = AvroSchemaCache.getInstance();
+  private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
   // Getter and Setter for schemaHandler
   public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
@@ -397,7 +397,7 @@ public abstract class HoodieReaderContext<T> implements Closeable {
    * Encodes the given avro schema for efficient serialization.
    */
   private Integer encodeAvroSchema(Schema schema) {
-    return this.avroSchemaCache.cacheSchema(schema);
+    return this.localAvroSchemaCache.cacheSchema(schema);
   }
 
   /**
@@ -405,13 +405,13 @@ public abstract class HoodieReaderContext<T> implements Closeable {
    */
   @Nullable
   private Schema decodeAvroSchema(Object versionId) {
-    return this.avroSchemaCache.getSchema((Integer) versionId).orElse(null);
+    return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
   }
 
   @Override
   public void close() {
-    if (this.avroSchemaCache != null) {
-      this.avroSchemaCache.close();
+    if (this.localAvroSchemaCache != null) {
+      this.localAvroSchemaCache.close();
     }
   }
 }

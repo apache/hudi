@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -93,8 +94,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     paramsMap.put(PARQUET_COMPRESSION_CODEC_NAME.key(), compressionCodecName.get());
     paramsMap.put(PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(expectedCompressionRatio.get()));
     paramsMap.put(PARQUET_DICTIONARY_ENABLED.key(), String.valueOf(useDictionaryEncoding.get()));
-    Schema writerSchema = new Schema.Parser().parse(
-        super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
+    Schema writerSchema = AvroSchemaCache.intern(new Schema.Parser().parse(
+        super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA)));
 
     return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(PARQUET)
         .serializeRecordsToLogBlock(
