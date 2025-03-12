@@ -33,7 +33,7 @@ public class AvroSchemaCache {
 
 
   // Ensure that there is only one variable instance of the same schema within an entire JVM lifetime
-  private static final LoadingCache<Schema, Schema> SCHEMA_CACHE = Caffeine.newBuilder().maximumSize(1024).build(k -> k);
+  private static final LoadingCache<Schema, Schema> SCHEMA_CACHE = Caffeine.newBuilder().weakValues().build(k -> k);
 
   /**
    * Get schema variable from global cache. If not found, put it into the cache and then return it.
