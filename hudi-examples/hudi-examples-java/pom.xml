@@ -154,5 +154,9 @@
             <version>${parquet.version}</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+        </dependency>
     </dependencies>
 </project>

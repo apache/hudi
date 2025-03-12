@@ -21,27 +21,25 @@ package org.apache.hudi.common.fs.inline;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.hadoop.fs.inline.InMemoryFileSystem;
+import org.apache.hudi.io.hfile.HFileContext;
+import org.apache.hudi.io.hfile.HFileWriter;
+import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.KeyValue;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.io.hfile.HFileContext;
-import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.hadoop.hbase.CellComparatorImpl.COMPARATOR;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.FILE_SCHEME;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.getPhantomFile;
@@ -89,18 +87,12 @@ public abstract class TestInLineFileSystemHFileInLiningBase {
     Path outerInMemFSPath = getRandomOuterInMemPath();
     Path outerPath = new Path(FILE_SCHEME + outerInMemFSPath.toString().substring(outerInMemFSPath.toString().indexOf(':')));
     generatedPath = outerPath;
-    CacheConfig cacheConf = new CacheConfig(inMemoryConf);
-    FSDataOutputStream fout = createFSOutput(outerInMemFSPath, inMemoryConf);
-    HFileContext meta = new HFileContextBuilder()
-        .withBlockSize(MIN_BLOCK_BYTES).withCellComparator(COMPARATOR)
-        .build();
-    HFile.Writer writer = HFile.getWriterFactory(inMemoryConf, cacheConf)
-        .withOutputStream(fout)
-        .withFileContext(meta)
-        .create();
+    DataOutputStream out = createFSOutput(outerInMemFSPath, inMemoryConf);
+    HFileContext context = new HFileContext.Builder().build();
+    HFileWriter writer = new HFileWriterImpl(context, out);
 
     writeRecords(writer);
-    fout.close();
+    out.close();
 
     byte[] inlineBytes = getBytesToInline(outerInMemFSPath);
     long startOffset = generateOuterFile(outerPath, inlineBytes);
@@ -134,19 +126,16 @@ public abstract class TestInLineFileSystemHFileInLiningBase {
     return name.getFileSystem(conf).create(name);
   }
 
-  private void writeRecords(HFile.Writer writer) throws IOException {
+  private void writeRecords(HFileWriter writer) throws IOException {
     writeSomeRecords(writer);
     writer.close();
   }
 
-  private void writeSomeRecords(HFile.Writer writer)
+  private void writeSomeRecords(HFileWriter writer)
       throws IOException {
-    KeyValue kv;
     for (int i = 0; i < (maxRows); i++) {
       String key = String.format(LOCAL_FORMATTER, i);
-      kv = new KeyValue(getUTF8Bytes(key), getUTF8Bytes("family"), getUTF8Bytes("qual"),
-          getUTF8Bytes(VALUE_PREFIX + key));
-      writer.append(kv);
+      writer.append(key, getUTF8Bytes(VALUE_PREFIX + key));
     }
   }
 

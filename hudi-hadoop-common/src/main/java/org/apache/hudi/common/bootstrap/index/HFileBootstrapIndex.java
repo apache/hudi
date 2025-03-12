@@ -19,8 +19,6 @@
 
 package org.apache.hudi.common.bootstrap.index;
 
-import org.apache.hadoop.hbase.CellComparatorImpl;
-
 /**
  * WARNING: DO NOT DO ANYTHING TO THIS CLASS INCLUDING CHANGING THE PACKAGE
  *          OR YOU COULD BREAK BACKWARDS COMPATIBILITY!!!
@@ -31,7 +29,7 @@ public class HFileBootstrapIndex {
    * This class is explicitly used as Key Comparator to workaround hard coded
    * legacy format class names inside HBase. Otherwise we will face issues with shading.
    */
-  public static class HoodieKVComparator extends CellComparatorImpl {
+  public static class HoodieKVComparator {
   }
 }
 

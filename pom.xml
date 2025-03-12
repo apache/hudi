@@ -187,7 +187,6 @@
     <javalin.version>4.6.7</javalin.version>
     <jetty.version>9.4.57.v20241219</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
-    <hbase.version>2.4.13</hbase.version>
     <h2.version>1.4.199</h2.version>
     <awaitility.version>3.1.2</awaitility.version>
     <skipTests>false</skipTests>
@@ -425,9 +424,6 @@
                   </excludes>
                   <includes>
                     <include>org.slf4j:slf4j-simple:*:*:test</include>
-                    <include>org.apache.hbase:hbase-common:${hbase.version}</include>
-                    <include>org.apache.hbase:hbase-client:${hbase.version}</include>
-                    <include>org.apache.hbase:hbase-server:${hbase.version}</include>
                     <!--To upgrade snappy because pre 1.1.8.2 does not work on m1 mac-->
                     <include>org.xerial.snappy:snappy-java:${snappy.version}</include>
                   </includes>
@@ -464,21 +460,6 @@
               <include>org.apache.httpcomponents:httpclient</include>
               <include>org.apache.httpcomponents:httpcore</include>
               <include>org.apache.httpcomponents:fluent-hc</include>
-              <!-- hbase -->
-              <include>org.apache.hbase:hbase-client</include>
-              <include>org.apache.hbase:hbase-common</include>
-              <include>org.apache.hbase:hbase-hadoop-compat</include>
-              <include>org.apache.hbase:hbase-hadoop2-compat</include>
-              <include>org.apache.hbase:hbase-metrics</include>
-              <include>org.apache.hbase:hbase-metrics-api</include>
-              <include>org.apache.hbase:hbase-protocol</include>
-              <include>org.apache.hbase:hbase-protocol-shaded</include>
-              <include>org.apache.hbase:hbase-server</include>
-              <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
-              <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
-              <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
-              <include>org.apache.hbase.thirdparty:hbase-unsafe</include>
-              <include>org.apache.htrace:htrace-core4</include>
               <!-- roaring bitmap -->
               <include>org.roaringbitmap:RoaringBitmap</include>
               <!-- afterburner module for jackson performance -->
@@ -493,22 +474,6 @@
             <relocation>
               <pattern>org.apache.http.</pattern>
               <shadedPattern>org.apache.hudi.org.apache.http.</shadedPattern>
-            </relocation>
-            <!-- hbase -->
-            <relocation>
-              <pattern>org.apache.hadoop.hbase.</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
-              <excludes>
-                <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
-              </excludes>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hbase.</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.htrace.</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
             </relocation>
             <!-- hbase
                  The classes below in org.apache.hadoop.metrics2 package come from
@@ -869,6 +834,11 @@
         <artifactId>jul-to-slf4j</artifactId>
         <version>${slf4j.version}</version>
         <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>javax.xml.bind</groupId>
+        <artifactId>jaxb-api</artifactId>
+        <version>2.3.1</version>
       </dependency>
 
       <!-- Fasterxml -->
@@ -2309,7 +2279,6 @@
                 <link>https://docs.spring.io/spring-shell/docs/1.2.0.RELEASE</link>
                 <link>https://fasterxml.github.io/jackson-databind/javadoc/2.6</link>
                 <link>https://hadoop.apache.org/docs/r${hadoop.version}/api</link>
-                <link>https://hbase.apache.org/2.4/apidocs</link>
                 <link>https://hive.apache.org/javadocs/r2.3.6/api</link>
                 <link>https://javadoc.io/static/io.javalin/javalin/2.3.0</link>
                 <link>https://javadoc.io/doc/org.apache.parquet/parquet-avro/${parquet.version}</link>

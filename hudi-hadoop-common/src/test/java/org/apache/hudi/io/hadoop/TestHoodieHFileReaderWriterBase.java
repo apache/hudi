@@ -19,7 +19,6 @@
 
 package org.apache.hudi.io.hadoop;
 
-import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -30,10 +29,10 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -97,7 +96,6 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   protected abstract void verifyHFileReader(byte[] content,
                                             String hfileName,
                                             boolean mayUseDefaultComparator,
-                                            Class<?> expectedComparatorClazz,
                                             int count) throws IOException;
 
   protected static Stream<Arguments> populateMetaFieldsAndTestAvroWithMeta() {
@@ -144,7 +142,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   protected void verifySchema(HoodieStorage storage, String schemaPath) throws IOException {
     try (HoodieAvroFileReader reader = createReader(storage)) {
       assertEquals(
-          getSchemaFromResource(TestHoodieHBaseHFileReaderWriter.class, schemaPath),
+          getSchemaFromResource(HFileReaderImpl.class, schemaPath),
           reader.getSchema());
     } catch (Exception e) {
       throw new RuntimeException(e);
@@ -485,7 +483,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
     FileSystem fs = HadoopFSUtils.getFs(getFilePath().toString(), new Configuration());
     byte[] content = readHFileFromResources(simpleHFile);
     verifyHFileReader(
-        content, hfilePrefix, true, HoodieHBaseKVComparator.class, NUM_RECORDS_FIXTURE);
+        content, hfilePrefix, true, NUM_RECORDS_FIXTURE);
 
     HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
     try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content)) {
@@ -497,7 +495,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
 
     content = readHFileFromResources(complexHFile);
     verifyHFileReader(
-        content, hfilePrefix, true, HoodieHBaseKVComparator.class, NUM_RECORDS_FIXTURE);
+        content, hfilePrefix, true, NUM_RECORDS_FIXTURE);
     try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content)) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
@@ -507,7 +505,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
 
     content = readHFileFromResources(bootstrapIndexFile);
     verifyHFileReader(
-        content, hfilePrefix, false, HFileBootstrapIndex.HoodieKVComparator.class, 4);
+        content, hfilePrefix, false, 4);
   }
 
   private Set<String> getRandomKeys(int count, List<String> keys) {
