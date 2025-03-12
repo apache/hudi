@@ -44,8 +44,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,6 +65,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 public class HoodieAvroHFileWriter
     implements HoodieAvroFileWriter {
   private static final AtomicLong RECORD_INDEX_COUNT = new AtomicLong(1);
+  public static final String PREFETCH_BLOCKS_ON_OPEN_KEY = "hbase.rs.prefetchblocksonopen";
+  public static final String CACHE_DATA_IN_L1 = "CACHE_DATA_IN_L1";
   private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileWriter.class);
   private final Path file;
   private final HoodieHFileConfig hfileConfig;
@@ -110,9 +110,9 @@ public class HoodieAvroHFileWriter
         .compressionCodec(hfileConfig.getCompressionCodec())
         .build();
 
-    conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY,
+    conf.set(PREFETCH_BLOCKS_ON_OPEN_KEY,
         String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
-    conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
+    conf.set(CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
     conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY,
         String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
 

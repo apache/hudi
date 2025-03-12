@@ -40,7 +40,6 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,10 +65,10 @@ public class HFileUtils extends FileFormatUtils {
   private static final Logger LOG = LoggerFactory.getLogger(HFileUtils.class);
 
   /**
-   * Gets the {@link Compression.Algorithm} Enum based on the {@link CompressionCodec} name.
+   * Gets the {@link CompressionCodec} Enum based on the {@link CompressionCodec} name.
    *
    * @param paramsMap parameter map containing the compression codec config.
-   * @return the {@link Compression.Algorithm} Enum.
+   * @return the {@link CompressionCodec} Enum.
    */
   public static CompressionCodec getHFileCompressionAlgorithm(Map<String, String> paramsMap) {
     String codecName = paramsMap.get(HFILE_COMPRESSION_ALGORITHM_NAME.key());

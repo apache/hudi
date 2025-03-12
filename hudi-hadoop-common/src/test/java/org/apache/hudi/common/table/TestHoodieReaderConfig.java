@@ -21,7 +21,6 @@ package org.apache.hudi.common.table;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -52,14 +51,5 @@ public class TestHoodieReaderConfig {
     map.put(FILE_GROUP_READER_ENABLED.key(), "false");
     // tbl version 8 does not allow file group reader when config is set to false
     assertFalse(HoodieReaderConfig.isFileGroupReaderEnabled(HoodieTableVersion.EIGHT, map));
-
-    Configuration conf = new Configuration();
-    // tbl version 8 by default allows file group reader
-    assertTrue(HoodieReaderConfig.isFileGroupReaderEnabled(HoodieTableVersion.EIGHT, conf));
-    // tbl version 6 does not allow file group reader
-    assertFalse(HoodieReaderConfig.isFileGroupReaderEnabled(HoodieTableVersion.SIX, conf));
-    conf.set(FILE_GROUP_READER_ENABLED.key(), "false");
-    // tbl version 8 does not allow file group reader when config is set to false
-    assertFalse(HoodieReaderConfig.isFileGroupReaderEnabled(HoodieTableVersion.EIGHT, conf));
   }
 }

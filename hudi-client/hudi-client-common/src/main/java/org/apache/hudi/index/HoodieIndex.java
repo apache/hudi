@@ -159,12 +159,6 @@ public abstract class HoodieIndex<I, O> implements Serializable {
       + "for the location in the existing table. Default is SIMPLE on Spark engine, and INMEMORY "
       + "on Flink and Java engines.")
   public enum IndexType {
-
-    @EnumFieldDescription("uses an external managed Apache HBase table to store record key to "
-        + "location mapping. HBase index is a global index, enforcing key uniqueness across all "
-        + "partitions in the table.")
-    HBASE,
-
     @EnumFieldDescription("Uses in-memory hashmap in Spark and Java engine and Flink in-memory "
         + "state in Flink for indexing.")
     INMEMORY,
