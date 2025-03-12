@@ -513,7 +513,7 @@ object HoodieFileIndex extends Logging {
     schema.fieldNames.filter { colName => refs.exists(r => resolver.apply(colName, r.name)) }
   }
 
-  def getConfigProperties(spark: SparkSession, options: Map[String, String], tableConfig: HoodieTableConfig) = {
+  def getConfigProperties(spark: SparkSession, options: Map[String, String], tableConfig: HoodieTableConfig): TypedProperties = {
     val sqlConf: SQLConf = spark.sessionState.conf
     val properties = TypedProperties.fromMap(options.filter(p => p._2 != null).asJava)
 
@@ -538,10 +538,11 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
 
       // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS
-      val dataBase = Some(tableConfig.getDatabaseName)
+      val database = getDatabaseName(tableConfig)
       val tableName = tableConfig.getTableName
-      if (spark.catalog.tableExists(dataBase.getOrElse("default"), tableName)) {
-        val tableIdentifier = TableIdentifier(tableName, dataBase)
+
+      if (spark.catalog.tableExists(database, tableName)) {
+        val tableIdentifier = TableIdentifier(tableName, Some(database))
         val table = HoodieCatalogTable(spark, tableIdentifier)
         table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
       }
@@ -611,5 +612,14 @@ object HoodieFileIndex extends Logging {
     }
 
     paths.map(new StoragePath(_))
+  }
+
+  // if database name is not set, fall back to use 'default' instead of failing
+  def getDatabaseName(tableConfig: HoodieTableConfig)  = {
+    if (StringUtils.isNullOrEmpty(tableConfig.getDatabaseName)) {
+      "default"
+    } else {
+      tableConfig.getDatabaseName
+    }
   }
 }
