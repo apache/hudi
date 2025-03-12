@@ -23,12 +23,10 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 
 import com.codahale.metrics.Timer;
 
-import java.io.Serializable;
-
 /**
  * For reporting metrics related to ingesting data via {@link HoodieIngestionService}.
  */
-public abstract class HoodieIngestionMetrics implements Serializable {
+public abstract class HoodieIngestionMetrics {
 
   protected final HoodieMetricsConfig writeConfig;
 
