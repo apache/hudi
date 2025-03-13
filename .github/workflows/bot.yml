@@ -502,7 +502,7 @@ jobs:
             flinkAvroVersion: '1.11.1'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
-          - scalaProfile: 'scala-2.13'
+          - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.18'
             flinkAvroVersion: '1.11.1'
             sparkProfile: 'spark3.5'
