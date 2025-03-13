@@ -70,7 +70,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
         HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key -> COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)
     }
     val nonExistentConfigs = if (tableVersion.toInt == 6) {
-      Seq(HoodieTableConfig.RECORD_MERGE_MODE.key, HoodieTableConfig.PRECOMBINE_FIELD.key)
+      Seq(HoodieTableConfig.PRECOMBINE_FIELD.key)
     } else {
       if (setRecordMergeConfigs) {
         Seq()

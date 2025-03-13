@@ -69,7 +69,6 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.lib.CombineFileSplit;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.slf4j.Logger;
@@ -93,7 +92,6 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
-import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 
 public class HoodieInputFormatUtils {
 
@@ -528,39 +526,19 @@ public class HoodieInputFormatUtils {
       return realtimeSplit.getBasePath();
     } else {
       Path inputPath = ((FileSplit) split).getPath();
-      return getTablePath(jobConf, inputPath);
+      FileSystem fs = inputPath.getFileSystem(jobConf);
+      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
+      return tablePath.get().toString();
     }
-  }
-
-  private static String getTablePath(JobConf jobConf, Path inputPath) throws IOException {
-    FileSystem fs = inputPath.getFileSystem(jobConf);
-    HoodieStorage storage = new HoodieHadoopStorage(fs);
-    Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
-    return tablePath.get().toString();
   }
 
   /**
    * `schema.on.read` and skip merge not implemented
    */
-  public static boolean shouldUseFilegroupReader(final JobConf jobConf, final InputSplit split) throws IOException {
-    if (split instanceof FileSplit || split instanceof RealtimeSplit) {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(getStorageConf(jobConf)).setBasePath(getTableBasePath(split, jobConf)).build();
-      return HoodieReaderConfig.isFileGroupReaderEnabled(metaClient.getTableConfig().getTableVersion(), jobConf)
-          && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
-          && !(split instanceof BootstrapBaseFileSplit);
-    } else if (split instanceof CombineFileSplit) {
-      for (Path path : ((CombineFileSplit) split).getPaths()) {
-        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(getStorageConf(jobConf)).setBasePath(getTablePath(jobConf, path)).build();
-        boolean isFileGroupReaderEnabled = HoodieReaderConfig.isFileGroupReaderEnabled(metaClient.getTableConfig().getTableVersion(), jobConf)
-            && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
-            && !(split instanceof BootstrapBaseFileSplit);
-        if (!isFileGroupReaderEnabled) {
-          return false;
-        }
-      }
-      return true;
-    } else {
-      return false;
-    }
+  public static boolean shouldUseFilegroupReader(final JobConf jobConf, final InputSplit split) {
+    return jobConf.getBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue())
+        && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
+        && !(split instanceof BootstrapBaseFileSplit);
   }
 }
