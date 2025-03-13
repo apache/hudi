@@ -66,7 +66,7 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
   protected lazy val mandatoryFieldsForMerging: Seq[String] =
     Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
 
-  override lazy val mandatoryFields: Seq[String] = mandatoryFieldsForMerging
+  override lazy val optionalExtraFields: Seq[String] = mandatoryFieldsForMerging
 
   protected override def getFileSlices(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
     if (globPaths.isEmpty) {
@@ -84,11 +84,11 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
   protected override def composeRDD(fileSplits: Seq[FileSplit],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
-                                    requestedColumns: Array[String],
+                                    optionalSchema: HoodieTableSchema,
                                     filters: Array[Filter]): RDD[InternalRow] = {
 
     val (bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader) = getFileReaders(tableSchema,
-      requiredSchema, requestedColumns, filters)
+      optionalSchema, filters)
     new HoodieBootstrapMORRDD(
       sqlContext.sparkSession,
       config = jobConf,
