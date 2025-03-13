@@ -17,13 +17,18 @@
  * under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.io.hfile;
 
-import org.apache.hadoop.hbase.CellComparatorImpl;
+import java.io.Closeable;
+import java.io.IOException;
 
-/**
- * This class is explicitly used as Key Comparator to work around the hard coded
- * legacy format class names inside HBase. Otherwise, we will face issues with shading.
- */
-public class HoodieHBaseKVComparator extends CellComparatorImpl {
+public interface HFileWriter extends Closeable {
+  // Append a key-value pair into a data block.
+  void append(String key, byte[] value) throws IOException;
+
+  // Append a piece of file info.
+  void appendFileInfo(String name, byte[] value);
+
+  // Append a piece of meta info.
+  void appendMetaInfo(String name, byte[] value);
 }

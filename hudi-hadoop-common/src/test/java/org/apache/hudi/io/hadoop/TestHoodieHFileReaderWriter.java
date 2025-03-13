@@ -60,7 +60,6 @@ public class TestHoodieHFileReaderWriter extends TestHoodieHFileReaderWriterBase
   protected void verifyHFileReader(byte[] content,
                                    String hfileName,
                                    boolean mayUseDefaultComparator,
-                                   Class<?> expectedComparatorClazz,
                                    int count) throws IOException {
     try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(HoodieTestUtils.getStorage(hfileName), content)) {
       assertEquals(count, hfileReader.getTotalRecords());

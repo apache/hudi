@@ -17,24 +17,22 @@
  * under the License.
  */
 
-package org.apache.hudi.index.hbase;
+package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.config.HoodieWriteConfig;
+import java.nio.ByteBuffer;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
+public class KeyValueEntry implements Comparable<KeyValueEntry> {
+  public final byte[] key;
+  public final byte[] value;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
+  public KeyValueEntry(byte[] key, byte[] value) {
+    this.key = key;
+    this.value = value;
+  }
 
-@ExtendWith(MockitoExtension.class)
-public class TestHBaseIndexUsage {
-
-  @Test
-  public void testFeatureSupport() {
-    HoodieWriteConfig config = mock(HoodieWriteConfig.class);
-    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
-    assertTrue(index.canIndexLogFiles());
+  @Override
+  public int compareTo(KeyValueEntry o) {
+    return ByteBuffer.wrap(this.key)
+        .compareTo(ByteBuffer.wrap(o.key));
   }
 }
