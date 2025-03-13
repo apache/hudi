@@ -181,7 +181,8 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
   }
 
-  private static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg, TypedProperties props,
+  @VisibleForTesting
+   static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg, TypedProperties props,
                                                        Schema dataSchema, Option<HoodieRecordMerger> recordMerger) {
     if (cfg.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
       return recordMerger.get().getMandatoryFieldsForMerging(dataSchema, cfg, props);
@@ -203,9 +204,10 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       if (!StringUtils.isNullOrEmpty(preCombine)) {
         requiredFields.add(preCombine);
       }
-      if (dataSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null) {
-        requiredFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
-      }
+    }
+
+    if (dataSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null) {
+      requiredFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
     return requiredFields.toArray(new String[0]);
   }
