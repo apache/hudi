@@ -46,7 +46,7 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   }
 
   public HoodieStreamerMetrics(HoodieMetricsConfig writeConfig, HoodieStorage storage) {
-    super(writeConfig, storage);
+    super(writeConfig);
     if (writeConfig.isMetricsOn()) {
       metrics = Metrics.getInstance(writeConfig, storage);
       this.overallTimerName = getMetricsName("deltastreamer", "timer");
