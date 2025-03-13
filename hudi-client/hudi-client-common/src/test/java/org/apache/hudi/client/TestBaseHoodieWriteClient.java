@@ -61,6 +61,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
+        .withAutoCommit(true)
         .build();
     HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
@@ -85,6 +86,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
+        .withAutoCommit(true)
         .build();
     HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
@@ -100,6 +102,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
+        .withAutoCommit(true)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withStorageType(FileSystemViewStorageType.MEMORY)
             .build())
