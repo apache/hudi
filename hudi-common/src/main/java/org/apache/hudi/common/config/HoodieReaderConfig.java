@@ -20,8 +20,7 @@
 package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.table.HoodieTableVersion;
-
-import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -105,7 +104,7 @@ public class HoodieReaderConfig extends HoodieConfig {
         && Boolean.parseBoolean(parameters.getOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString()));
   }
 
-  public static boolean isFileGroupReaderEnabled(HoodieTableVersion tableVersion, Configuration conf) {
+  public static boolean isFileGroupReaderEnabled(HoodieTableVersion tableVersion, StorageConfiguration conf) {
     return tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
         && conf.getBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue());
   }
