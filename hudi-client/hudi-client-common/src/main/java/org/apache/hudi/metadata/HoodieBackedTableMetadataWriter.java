@@ -530,20 +530,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @return a unique timestamp for MDT
    */
   private String generateUniqueInstantTime(String initializationTime) {
-    // If it's initialized via Async indexer, we don't need to alter the init time.
-    // otherwise yields the timestamp on the fly.
-    // This function would be called multiple times in a single application if multiple indexes are being
-    // initialized one after the other.
-    HoodieTimeline dataIndexTimeline = dataMetaClient.getActiveTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.INDEXING_ACTION));
-    if (HoodieTableMetadataUtil.isIndexingCommit(dataIndexTimeline, initializationTime)) {
-      return initializationTime;
-    }
-    for (int offset = 0; ; ++offset) {
-      final String commitInstantTime = HoodieInstantTimeGenerator.instantTimePlusMillis(SOLO_COMMIT_TIMESTAMP, offset);
-      if (!metadataMetaClient.getCommitsTimeline().containsInstant(commitInstantTime)) {
-        return commitInstantTime;
-      }
-    }
+    return metadataWriteHandler.generateUniqueInstantTime(initializationTime);
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializePartitionStatsIndex() throws IOException {
@@ -1264,7 +1251,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // We cannot create a deltaCommit at instantTime now because a future (rollback) block has already been written to the logFiles.
       // We need to choose a timestamp which would be a validInstantTime for MDT. This is either a commit timestamp completed on the dataset
       // or a new timestamp which we use for MDT clean, compaction etc.
-      String syncCommitTime = writeClient.createNewInstantTime(false);
+      String syncCommitTime = metadataWriteHandler.createRestoreInstantTime();
       processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
           partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime));
       closeInternal();
@@ -1490,7 +1477,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         return;
       }
       // Check and run clean operations.
-      cleanIfNecessary(writeClient);
+      cleanIfNecessary(writeClient, lastInstant.get().requestedTime());
       // Do timeline validation before scheduling compaction/logCompaction operations.
       if (metadataWriteHandler.validateCompactionScheduling(inFlightInstantTimestamp, lastInstant.get().requestedTime())) {
         String latestDeltacommitTime = lastInstant.get().requestedTime();
@@ -1539,7 +1526,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return ranServices ? metadataMetaClient.reloadActiveTimeline() : activeTimeline;
   }
 
-  protected void cleanIfNecessary(BaseHoodieWriteClient writeClient) {
+  protected void cleanIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {
     Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.getActiveTimeline()
         .getCommitAndReplaceTimeline().filterCompletedInstants().lastInstant();
     if (lastCompletedCompactionInstant.isPresent()
@@ -1556,7 +1543,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // Trigger cleaning with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    writeClient.clean(metadataMetaClient.createNewInstantTime(false));
+    writeClient.clean(metadataWriteHandler.createCleanInstantTime(instantTime));
     writeClient.lazyRollbackFailedIndexing();
   }
 
@@ -1669,6 +1656,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected abstract BaseHoodieWriteClient<?, I, ?, ?> initializeWriteClient();
 
   protected class MetadataWriteHandler implements Serializable {
+    private static final int PARTITION_INITIALIZATION_TIME_SUFFIX = 10;
     HoodieTableVersion tableVersion;
 
     public MetadataWriteHandler(HoodieTableVersion tableVersion) {
@@ -1938,19 +1926,27 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     /**
      * Create the timestamp for a compaction operation on the metadata table.
      */
-    public String createCompactionTimestamp(String timestamp) {
+    private String createCompactionTimestamp(String timestamp) {
       return timestamp + getCompactionOperationSuffix();
     }
 
     /**
      * Create the timestamp for a compaction operation on the metadata table.
      */
-    public String createLogCompactionTimestamp(String timestamp) {
+    private String createLogCompactionTimestamp(String timestamp) {
       return timestamp + getLogCompactionOperationSuffix();
     }
 
-    public String createRollbackTimestamp(String timestamp) {
+    private String createRollbackTimestamp(String timestamp) {
       return timestamp + getRollbackOperationSuffix();
+    }
+
+    private String createCleanTimestamp(String timestamp) {
+      return timestamp + getCleanOperationSuffix();
+    }
+
+    private String createRestoreTimestamp(String timestamp) {
+      return timestamp + getRestoreOperationSuffix();
     }
 
     private String getCompactionOperationSuffix() {
@@ -1963,6 +1959,78 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     private String getRollbackOperationSuffix() {
       return "006";
+    }
+
+    private String getCleanOperationSuffix() {
+      return "002";
+    }
+
+    private String getRestoreOperationSuffix() {
+      return "003";
+    }
+
+    public String generateUniqueInstantTime(String initializationTime) {
+      if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+        return generateUniqueInstantTimeVersionSix(initializationTime);
+      } else {
+        // If it's initialized via Async indexer, we don't need to alter the init time.
+        // otherwise yields the timestamp on the fly.
+        // This function would be called multiple times in a single application if multiple indexes are being
+        // initialized one after the other.
+        HoodieTimeline dataIndexTimeline = dataMetaClient.getActiveTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.INDEXING_ACTION));
+        if (HoodieTableMetadataUtil.isIndexingCommit(dataIndexTimeline, initializationTime)) {
+          return initializationTime;
+        }
+        for (int offset = 0; ; ++offset) {
+          final String commitInstantTime = HoodieInstantTimeGenerator.instantTimePlusMillis(SOLO_COMMIT_TIMESTAMP, offset);
+          if (!metadataMetaClient.getCommitsTimeline().containsInstant(commitInstantTime)) {
+            return commitInstantTime;
+          }
+        }
+      }
+    }
+
+    private String generateUniqueInstantTimeVersionSix(String initializationTime) {
+      // if its initialized via Async indexer, we don't need to alter the init time
+      HoodieTimeline dataIndexTimeline = dataMetaClient.getActiveTimeline().filter(instant -> instant.getAction().equals(HoodieTimeline.INDEXING_ACTION));
+      if (HoodieTableMetadataUtil.isIndexingCommit(dataIndexTimeline, initializationTime)) {
+        return initializationTime;
+      }
+      // Add suffix to initializationTime to find an unused instant time for the next index initialization.
+      // This function would be called multiple times in a single application if multiple indexes are being
+      // initialized one after the other.
+      for (int offset = 0; ; ++offset) {
+        final String commitInstantTime = createIndexInitTimestamp(initializationTime, offset);
+        if (!metadataMetaClient.getCommitsTimeline().containsInstant(commitInstantTime)) {
+          return commitInstantTime;
+        }
+      }
+    }
+
+    /**
+     * Create the timestamp for an index initialization operation on the metadata table.
+     * <p>
+     * Since many MDT partitions can be initialized one after other the offset parameter controls generating a
+     * unique timestamp.
+     */
+    private String createIndexInitTimestamp(String timestamp, int offset) {
+      return String.format("%s%03d", timestamp, PARTITION_INITIALIZATION_TIME_SUFFIX + offset);
+    }
+
+    public String createCleanInstantTime(String instantTime) {
+      if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+        return createCleanTimestamp(instantTime);
+      } else {
+        return metadataMetaClient.createNewInstantTime(false);
+      }
+    }
+
+    public String createRestoreInstantTime() {
+      if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+        return createRestoreTimestamp(writeClient.createNewInstantTime(false));
+      } else {
+        return writeClient.createNewInstantTime(false);
+      }
     }
   }
 }

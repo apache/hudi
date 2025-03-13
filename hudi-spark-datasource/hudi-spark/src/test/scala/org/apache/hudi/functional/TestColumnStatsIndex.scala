@@ -61,6 +61,8 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 @Tag("functional")
 class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
+  val overrideOpts: Map[String, String] = Map.empty
+
   val DEFAULT_COLUMNS_TO_INDEX = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
     HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8")
 
@@ -81,7 +83,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PRECOMBINE_FIELD.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       "hoodie.compact.inline.max.delta.commits" -> "10"
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ overrideOpts
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
@@ -171,7 +173,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       shouldValidateColStats = false,
       shouldValidateManually = false))
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     validateNonExistantColumnsToIndexDefn(metaClient)
   }
 
@@ -195,7 +197,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ overrideOpts
 
     var expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
       "index/colstats/cow-table-nested-1.json"
@@ -256,7 +258,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PARTITIONPATH_FIELD.key -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "5"
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ overrideOpts
 
     // inserts
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
@@ -305,7 +307,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "index/colstats/mor-bootstrap1-column-stats-index-table.json"
     }
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().requestedTime
 
     // lets validate that we have log files generated in case of MOR table
@@ -372,7 +374,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PARTITIONPATH_FIELD.key() -> partitionCol,
       "hoodie.write.markers.type" -> "DIRECT",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ overrideOpts
 
     // inserts
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
@@ -412,7 +414,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "index/colstats/mor-bootstrap-rollback1-column-stats-index-table.json"
     }
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().requestedTime
 
     // updates a subset which are not deleted and enable col stats and validate bootstrap
@@ -426,7 +428,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
 
     validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
@@ -434,7 +436,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
   def simulateFailureForLatestCommit(tableType: HoodieTableType, partitionCol: String) : Unit = {
     // simulate failure for latest commit.
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     var baseFileName : String = null
     var logFileName : String = null
     val lastCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
@@ -495,7 +497,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PARTITIONPATH_FIELD.key() -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "5"
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ overrideOpts
 
     // inserts
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
@@ -551,7 +553,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PARTITIONPATH_FIELD.key() -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1"
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ overrideOpts
 
     // inserts
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
@@ -617,7 +619,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1",
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2"
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ overrideOpts
 
     // inserts
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
@@ -662,7 +664,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     assertTrue(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0)
   }
 
@@ -682,7 +684,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ overrideOpts
 
     val schema = StructType(StructField("c1", IntegerType, false) :: StructField("c2", StringType, true) :: Nil)
     val inputDF = spark.createDataFrame(
@@ -698,7 +700,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
@@ -734,7 +736,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PARTITIONPATH_FIELD.key() -> "c8",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true"
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ overrideOpts
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json-partition-pruning").toString
 
@@ -752,7 +754,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
@@ -829,7 +831,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PRECOMBINE_FIELD.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true"
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ overrideOpts
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
 
@@ -847,7 +849,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
@@ -896,7 +898,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         .mode(SaveMode.Append)
         .save(basePath)
 
-      metaClient = HoodieTableMetaClient.reload(metaClient)
+      metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
       val requestedColumns = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
         .getSourceFields.toSeq.filterNot(colName => colName.startsWith("_hoodie")).sorted.toSeq
@@ -942,7 +944,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ overrideOpts
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
 
@@ -960,7 +962,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))

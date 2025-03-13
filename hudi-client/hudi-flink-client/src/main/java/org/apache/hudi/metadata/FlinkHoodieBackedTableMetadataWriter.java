@@ -170,7 +170,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // reload timeline
     metadataMetaClient.reloadActiveTimeline();
-    cleanIfNecessary(writeClient);
+    metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant().ifPresent(instant -> cleanIfNecessary(writeClient, instant.requestedTime()));
     writeClient.archive();
 
     // Update total size of the metadata and count of base/log files
