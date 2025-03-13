@@ -150,7 +150,8 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(requiredSchema, internalSchema);
   }
 
-  private Schema generateRequiredSchema() {
+  @VisibleForTesting
+  Schema generateRequiredSchema() {
     //might need to change this if other queries than mor have mandatory fields
     if (!needsMORMerge) {
       return requestedSchema;
@@ -181,8 +182,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
   }
 
-  @VisibleForTesting
-   static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg, TypedProperties props,
+  private static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg, TypedProperties props,
                                                        Schema dataSchema, Option<HoodieRecordMerger> recordMerger) {
     if (cfg.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
       return recordMerger.get().getMandatoryFieldsForMerging(dataSchema, cfg, props);

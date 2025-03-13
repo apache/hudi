@@ -82,6 +82,10 @@ public class TestHoodieFileGroupRecordBuffer {
   public void testSchemaForMandatoryFields(boolean setPrecombine, boolean addHoodieIsDeleted, RecordMergeMode mergeMode) {
     HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
     when(readerContext.getHasBootstrapBaseFile()).thenReturn(false);
+    when(readerContext.getHasLogFiles()).thenReturn(true);
+    HoodieRecordMerger recordMerger = mock(HoodieRecordMerger.class);
+    when(readerContext.getRecordMerger()).thenReturn(Option.of(recordMerger));
+    when(recordMerger.isProjectionCompatible()).thenReturn(false);
 
     String preCombineField = "ts";
     List<String> dataSchemaFields = new ArrayList<>();
@@ -91,7 +95,7 @@ public class TestHoodieFileGroupRecordBuffer {
     }
 
     Schema dataSchema = getSchema(dataSchemaFields);
-    Schema requestedSchema = getSchema(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD, preCombineField));
+    Schema requestedSchema = getSchema(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
 
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(mergeMode);
@@ -103,6 +107,7 @@ public class TestHoodieFileGroupRecordBuffer {
         dataSchema, requestedSchema, Option.empty(), tableConfig, props);
     List<String> expectedFields = new ArrayList();
     expectedFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    expectedFields.add(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
     if (setPrecombine && mergeMode != RecordMergeMode.COMMIT_TIME_ORDERING) { // commit time ordering does not project ordering field.
       expectedFields.add(preCombineField);
     }
@@ -110,15 +115,13 @@ public class TestHoodieFileGroupRecordBuffer {
       expectedFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
 
-    Option<HoodieRecordMerger> recordMergerOpt = Option.empty();
-    if (mergeMode == RecordMergeMode.CUSTOM) {
-      HoodieRecordMerger hoodieRecordMerger = mock(HoodieRecordMerger.class);
-      when(hoodieRecordMerger.getMandatoryFieldsForMerging(dataSchema, tableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
-      recordMergerOpt = Option.of(hoodieRecordMerger);
+    Schema expectedSchema = dataSchema;
+    if (mergeMode != RecordMergeMode.CUSTOM) {
+      expectedSchema = getSchema(expectedFields);
     }
 
-    String[] mandatoryFields = fileGroupReaderSchemaHandler.getMandatoryFieldsForMerging(tableConfig, props, dataSchema, recordMergerOpt);
-    assertEquals(expectedFields, Arrays.asList(mandatoryFields));
+    Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema();
+    assertEquals(expectedSchema, actualSchema);
   }
 
   private Schema getSchema(List<String> fields) {
