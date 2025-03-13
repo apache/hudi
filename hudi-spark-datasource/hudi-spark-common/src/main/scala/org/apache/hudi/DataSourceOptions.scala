@@ -735,15 +735,6 @@ object DataSourceWriteOptions {
     .withDocumentation("Controls whether overwrite use dynamic or static mode, if not configured, " +
       "respect spark.sql.sources.partitionOverwriteMode")
 
-  val DELETE_RECORD_SCHEMA_PRUNING: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.delete.record.schema.pruning.enabled")
-    .defaultValue("true")
-    .withValidValues("true", "false")
-    .markAdvanced
-    .sinceVersion("1.0.0")
-    .withDocumentation("Whether to pruning the schema of delete record." +
-      "If enabled, only hoodie metadata fields, record keys, and columns involved in delete condition are required")
-
   /** @deprecated Use {@link HIVE_USE_PRE_APACHE_INPUT_FORMAT} and its methods instead */
   @Deprecated
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT.key()

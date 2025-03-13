@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.DataSourceWriteOptions.{DELETE_RECORD_SCHEMA_PRUNING, SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
+import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.table.HoodieTableConfig
 
@@ -64,13 +64,7 @@ case class DeleteHoodieTableCommand(dft: DeleteFromTable) extends HoodieLeafRunn
 
     val targetLogicalPlan = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
-      if (sparkSession.sqlContext.conf.getConfString(DELETE_RECORD_SCHEMA_PRUNING.key(),
-        DELETE_RECORD_SCHEMA_PRUNING.defaultValue()) == "true") {
-        logInfo(s"Pruning delete record schema for $tableId, required columns: ${requiredCols.mkString(",")}")
-        tryPruningDeleteRecordSchema(dft.table, requiredCols)
-      } else {
-        dft.table
-      }
+      tryPruningDeleteRecordSchema(dft.table, requiredCols)
     } else {
       stripMetaFieldAttributes(dft.table)
     }
