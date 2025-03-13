@@ -89,7 +89,7 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
 
     // add some updates so that preCombine kicks in
     val toUpdateDataset = sqlContext.createDataFrame(DataSourceTestUtils.getUniqueRows(inserts, 40), structType)
-    val updates = DataSourceTestUtils.updateRowsWithHigherTs(toUpdateDataset)
+    val updates = DataSourceTestUtils.updateRowsWithUpdatedTs(toUpdateDataset)
     val records = inserts.asScala.union(updates.asScala)
     val recordsSeq = convertRowListToSeq(records.asJava)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)

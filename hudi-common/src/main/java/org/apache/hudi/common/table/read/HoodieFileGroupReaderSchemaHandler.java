@@ -203,6 +203,9 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       if (!StringUtils.isNullOrEmpty(preCombine)) {
         requiredFields.add(preCombine);
       }
+      if (dataSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null) {
+        requiredFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
+      }
     }
     return requiredFields.toArray(new String[0]);
   }
