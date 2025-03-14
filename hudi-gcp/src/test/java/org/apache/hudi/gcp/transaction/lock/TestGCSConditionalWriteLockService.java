@@ -24,6 +24,7 @@ import org.apache.hudi.client.transaction.lock.LockUpdateResult;
 import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockData;
 import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockFile;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.ReadChannel;
@@ -112,7 +113,7 @@ public class TestGCSConditionalWriteLockService {
   }
 
   @Test
-  void testTryCreateOrUpdateLockFile_noPreviousLock_success() throws IOException {
+  void testTryCreateOrUpdateLockFile_noPreviousLock_success() {
     ConditionalWriteLockData lockData = new ConditionalWriteLockData(false, 123L, "test-owner");
 
     when(mockStorage.create(
@@ -120,8 +121,6 @@ public class TestGCSConditionalWriteLockService {
         any(byte[].class),
         any(Storage.BlobTargetOption.class))
     ).thenReturn(mockBlob);
-
-    mockBlobReaderWithLockData(mockBlob, lockData);
 
     Pair<LockUpdateResult, ConditionalWriteLockFile> result = lockService.tryCreateOrUpdateLockFile(lockData, null);
 
@@ -135,7 +134,7 @@ public class TestGCSConditionalWriteLockService {
   }
 
   @Test
-  void testTryCreateOrUpdateLockFile_withPreviousLock_success() throws IOException {
+  void testTryCreateOrUpdateLockFile_withPreviousLock_success() {
     ConditionalWriteLockData lockData = new ConditionalWriteLockData(false, 999L, "existing-owner");
     ConditionalWriteLockFile previousLockFile = new ConditionalWriteLockFile(lockData, "123"); // versionId=123
 
@@ -144,8 +143,6 @@ public class TestGCSConditionalWriteLockService {
         any(byte[].class),
         any(Storage.BlobTargetOption.class))
     ).thenReturn(mockBlob);
-
-    mockBlobReaderWithLockData(mockBlob, lockData);
 
     Pair<LockUpdateResult, ConditionalWriteLockFile> result =
         lockService.tryCreateOrUpdateLockFile(lockData, previousLockFile);
@@ -216,7 +213,7 @@ public class TestGCSConditionalWriteLockService {
   }
 
   @Test
-  void testTryCreateOrUpdateLockFileWithRetry_successWithinExpiration() throws IOException {
+  void testTryCreateOrUpdateLockFileWithRetry_successWithinExpiration() {
     ConditionalWriteLockData data = new ConditionalWriteLockData(false, 123L, "retry-owner");
     Supplier<ConditionalWriteLockData> supplier = () -> data;
     // We'll simulate a 500 error on the first call, 429 on the second, then succeed on the third.
@@ -225,7 +222,6 @@ public class TestGCSConditionalWriteLockService {
         .thenThrow(new StorageException(429, "Rate limit exceeded"))
         .thenReturn(mockBlob);
 
-    mockBlobReaderWithLockData(mockBlob, data);
     ConditionalWriteLockFile result = lockService.tryCreateOrUpdateLockFileWithRetry(supplier, null, 5).getRight();
 
     assertNotNull(result, "Should eventually succeed and return a valid file");
@@ -290,7 +286,7 @@ public class TestGCSConditionalWriteLockService {
   }
 
   @Test
-  void testTryCreateOrUpdateLockFileWithRetry_withPreviousLock_success() throws IOException {
+  void testTryCreateOrUpdateLockFileWithRetry_withPreviousLock_success() {
     ConditionalWriteLockData lockData = new ConditionalWriteLockData(false, 999L, "existing-owner");
     ConditionalWriteLockFile previousLockFile = new ConditionalWriteLockFile(lockData, "123"); // versionId=123
 
@@ -299,8 +295,6 @@ public class TestGCSConditionalWriteLockService {
         any(byte[].class),
         any(Storage.BlobTargetOption.class))
     ).thenReturn(mockBlob);
-
-    mockBlobReaderWithLockData(mockBlob, lockData);
 
     Pair<LockUpdateResult, ConditionalWriteLockFile> result =
         lockService.tryCreateOrUpdateLockFileWithRetry(() -> lockData, previousLockFile, 3);
@@ -380,6 +374,24 @@ public class TestGCSConditionalWriteLockService {
 
     assertThrows(StorageException.class, () -> lockService.getCurrentLockFile(),
         "Should rethrow unexpected errors");
+  }
+
+  @Test
+  void testGetCurrentLockFile_IOException() {
+    when(mockStorage.get(BlobId.of(BUCKET_NAME, LOCK_FILE_PATH))).thenReturn(mockBlob);
+    when(mockBlob.reader()).thenThrow(new HoodieIOException("IO Error"));
+
+    assertThrows(HoodieIOException.class, () -> lockService.getCurrentLockFile());
+  }
+
+  @Test
+  void testGetCurrentLockFile_IOExceptionWrapping404() {
+    when(mockStorage.get(BlobId.of(BUCKET_NAME, LOCK_FILE_PATH))).thenReturn(mockBlob);
+    when(mockBlob.reader()).thenThrow(new HoodieIOException("IO Error", new IOException(new StorageException(404, "storage 404"))));
+
+    Pair<LockGetResult, ConditionalWriteLockFile> result = lockService.getCurrentLockFile();
+    assertEquals(LockGetResult.UNKNOWN_ERROR, result.getLeft());
+    assertNull(result.getRight(), "Should return null on IO exception wrapping 404 error");
   }
 
   @Test

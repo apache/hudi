@@ -43,6 +43,7 @@ import java.util.function.Supplier;
 
 import org.apache.hudi.client.transaction.lock.LockUpdateResult;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -109,8 +110,8 @@ public class GCSConditionalWriteLockService implements ConditionalWriteLockServi
         blobInfo,
         ConditionalWriteLockFile.toByteArray(lockData),
         Storage.BlobTargetOption.generationMatch(generationNumber));
-    return ConditionalWriteLockFile.createFromStream(
-        Channels.newInputStream(updatedBlob.reader()),
+    return new ConditionalWriteLockFile(
+        lockData,
         String.valueOf(updatedBlob.getGeneration()));
   }
 
@@ -189,6 +190,31 @@ public class GCSConditionalWriteLockService implements ConditionalWriteLockServi
     return Pair.of(LockUpdateResult.UNKNOWN_ERROR, null);
   }
 
+  /**
+   * Handling storage exception for GET request
+   * @param e The error to handle.
+   * @param ignore404 Whether to ignore 404 as a valid exception.
+   *                  When we read from stream we might see this, and
+   *                  it should not be counted as NOT_EXISTS.
+   * @return A pair of the result type and the file, if we were able to create it.
+   */
+  private Pair<LockGetResult, ConditionalWriteLockFile> handleGetStorageException(StorageException e, boolean ignore404) {
+    if (e.getCode() == NOT_FOUND_ERROR_CODE) {
+      if (ignore404) {
+        logger.info("OwnerId: {}, GCS stream read failure detected: {}", ownerId, lockFilePath);
+        return Pair.of(LockGetResult.UNKNOWN_ERROR, null);
+      }
+      logger.info("OwnerId: {}, Object not found in the path: {}", ownerId, lockFilePath);
+      return Pair.of(LockGetResult.NOT_EXISTS, null);
+    } else if (e.getCode() == RATE_LIMIT_ERROR_CODE) {
+      logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFilePath);
+    } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
+      logger.warn("OwnerId: {}, GCS returned internal server error code for lock file: {}", ownerId, lockFilePath, e);
+    } else {
+      throw e;
+    }
+    return Pair.of(LockGetResult.UNKNOWN_ERROR, null);
+  }
 
   /**
    * {@inheritDoc}
@@ -202,19 +228,17 @@ public class GCSConditionalWriteLockService implements ConditionalWriteLockServi
       }
       return getLockFileFromBlob(blob);
     } catch (StorageException e) {
-      if (e.getCode() == NOT_FOUND_ERROR_CODE) {
-        logger.info("OwnerId: {}, Object not found in the path: {}", ownerId, lockFilePath);
-        return Pair.of(LockGetResult.NOT_EXISTS, null);
-      } else if (e.getCode() == RATE_LIMIT_ERROR_CODE) {
-        logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFilePath);
-      } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-        logger.warn("OwnerId: {}, GCS returned internal server error code for lock file: {}", ownerId, lockFilePath, e);
-      } else {
-        // All other storage exceptions we should throw and fail fast.
-        throw e;
+      return handleGetStorageException(e, false);
+    } catch (HoodieIOException e) {
+      // GCS will throw IOException wrapping 404 when reading from stream for file that has been modified in between calling gcsClient.get
+      // and ConditionalWriteLockFile.createFromStream. People have complained that this is not being strongly consistent, however
+      // we have to handle this case. https://stackoverflow.com/q/66759993
+      Throwable cause = e.getCause();
+      if (cause instanceof IOException && cause.getCause() instanceof StorageException) {
+        return handleGetStorageException((StorageException) cause.getCause(), true);
       }
+      throw e;
     }
-    return Pair.of(LockGetResult.UNKNOWN_ERROR, null);
   }
 
   private @NotNull Pair<LockGetResult, ConditionalWriteLockFile> getLockFileFromBlob(Blob blob) {

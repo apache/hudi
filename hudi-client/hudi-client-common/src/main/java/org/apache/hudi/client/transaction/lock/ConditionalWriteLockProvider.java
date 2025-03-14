@@ -270,7 +270,7 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
 
     Pair<LockGetResult, ConditionalWriteLockFile> latestLock = this.lockService.getCurrentLockFile();
     if (latestLock.getLeft() == LockGetResult.UNKNOWN_ERROR) {
-      logger.warn(
+      logger.info(
           LOCK_STATE_LOGGER_MSG_WITH_INFO,
           ownerId,
           lockFilePath,

@@ -137,7 +137,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
                                       Supplier<Boolean> heartbeatFuncToExec) {
     this(
         ownerId,
-        createDaemonThreadScheduler((ownerId != null && ownerId.length() >= 6) ? ownerId.substring(0, 6) : ""),
+        createThreadScheduler((ownerId != null && ownerId.length() >= 6) ? ownerId.substring(0, 6) : ""),
         heartbeatTimeMs,
         DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
         heartbeatFuncToExec,
@@ -163,14 +163,11 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
   }
 
   /**
-   * Creates a new daemon thread scheduler for heartbeat execution.
+   * Creates a new thread scheduler for heartbeat execution.
    */
-  private static ScheduledExecutorService createDaemonThreadScheduler(String shortUuid) {
-    return Executors.newSingleThreadScheduledExecutor(r -> {
-      Thread t = new Thread(r, "LockProvider-HeartbeatManager-Thread-" + shortUuid);
-      t.setDaemon(true);
-      return t;
-    });
+  private static ScheduledExecutorService createThreadScheduler(String shortUuid) {
+    return Executors.newSingleThreadScheduledExecutor(
+        r -> new Thread(r, "LockProvider-HeartbeatManager-Thread-" + shortUuid));
   }
 
   /**

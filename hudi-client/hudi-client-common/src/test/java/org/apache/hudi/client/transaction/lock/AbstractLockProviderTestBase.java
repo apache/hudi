@@ -27,9 +27,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -196,6 +200,87 @@ public abstract class AbstractLockProviderTestBase {
       assertNotNull(lockProvider.getLock(), "Lock should be held after acquisition in iteration " + i);
       lockProvider.unlock();
       assertNull(lockProvider.getLock(), "Lock should be null after unlock in iteration " + i);
+    }
+  }
+
+  @Test
+  void testMultipleLockProvidersContention() throws InterruptedException {
+    final int NUM_THREADS = 10;
+    List<ConditionalWriteLockProvider> providers = new ArrayList<>();
+    List<Thread> threads = new ArrayList<>();
+    AtomicBoolean stopFlag = new AtomicBoolean(false);
+    CountDownLatch startLatch = new CountDownLatch(1);
+    CountDownLatch threadsCompleteLatch = new CountDownLatch(NUM_THREADS);
+    
+    // Shared ArrayList that will detect concurrent modifications
+    ArrayList<Integer> sharedList = new ArrayList<>();
+    // Pre-populate the list to allow modifications
+    for (int i = 0; i < 1000; i++) {
+      sharedList.add(i);
+    }
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+      providers.add(createLockProvider());
+    }
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+      final ConditionalWriteLockProvider provider = providers.get(i);
+      final int threadId = i;
+      Thread t = new Thread(() -> {
+        try {
+          startLatch.await();
+          while (!stopFlag.get()) {
+            if (provider.tryLock()) {
+              // Leveraging java arraylist built in best effort concurrent modification detection
+              // mechanism, if lock failed to process the list, there is a chance of throwing concurrent modification
+              // exception.
+              try {
+                // Multiple operations on ArrayList that must be atomic
+                sharedList.removeIf(val -> val % (threadId + 1) == 0);
+                
+                // Add numbers back based on threadId
+                for (int j = 0; j < 1000; j++) {
+                  if (j % (threadId + 1) == 0) {
+                    sharedList.add(j);
+                  }
+                }
+                
+                // Sort the list - this will fail if another thread modifies the list
+                sharedList.sort(Integer::compareTo);
+                
+              } finally {
+                provider.unlock();
+              }
+            }
+            Thread.yield();
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new RuntimeException(e);
+        }
+        threadsCompleteLatch.countDown();
+      }, "LockProviderThread-" + i);
+      threads.add(t);
+    }
+
+    threads.forEach(Thread::start);
+    startLatch.countDown();
+
+    // Run for 3 seconds
+    Thread.sleep(3000);
+    stopFlag.set(true);
+
+    for (Thread t : threads) {
+      t.join();
+    }
+
+    providers.forEach(ConditionalWriteLockProvider::close);
+    assertTrue(threadsCompleteLatch.await(6, TimeUnit.SECONDS));
+    
+    // Validate the invariant of the list.
+    assertEquals(1000, sharedList.size(), "List should contain 1000 elements");
+    for (int i = 0; i < 1000; i++) {
+      assertEquals(i, sharedList.get(i), "List should contain all numbers 0 to 999 in order");
     }
   }
 }
