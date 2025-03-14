@@ -368,7 +368,7 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
     if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
       new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
         sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-        metaClient.getTableConfig.getTableName, queryTimestamp.get, mandatoryFields, false, false, Seq.empty)
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, false, false, Seq.empty)
     } else {
       new HoodieFileGroupReaderBasedParquetFileFormat(
         basePath.toString, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
