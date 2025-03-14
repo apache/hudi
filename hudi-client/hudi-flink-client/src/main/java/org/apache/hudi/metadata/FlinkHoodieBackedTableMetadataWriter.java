@@ -133,7 +133,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
     }
 
-    metadataWriteHandler.compactIfNecessary(writeClient, "");
+    metadataWriteHandler.compactIfNecessaryVersionEight(writeClient);
 
     if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
       // if this is a new commit being applied to metadata for the first time
