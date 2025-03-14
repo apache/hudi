@@ -28,22 +28,25 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedParquetFileFormat.getRequestedSchema
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
+import scala.collection.mutable.ArrayBuffer
+import scala.jdk.CollectionConverters._
 
 trait HoodieFormatTrait {
 
@@ -145,7 +148,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val fixedPartitionIndexes = fixedPartitionIndexesArr.toSet
 
     // schema that we want fg reader to output to us
-    val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
+    val requestedSchema = getRequestedSchema(options, dataSchema, partitionSchema, requiredSchema, mandatoryFields)
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
     val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(supportBatchResult,
@@ -314,5 +317,58 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
 
   private def getFixedPartitionValues(allPartitionValues: InternalRow, partitionSchema: StructType, fixedPartitionIndexes: Set[Int]): InternalRow = {
     InternalRow.fromSeq(allPartitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
+  }
+}
+
+object HoodieFileGroupReaderBasedParquetFileFormat {
+  /**
+   * Returns RequestedSchema that includes output columns and ordering field.
+   * When requiredSchema is empty, it means all columns should be output.
+   * When requiredSchema is not empty, orderingField must be added if not yet.
+   */
+  def getRequestedSchema(options: Map[String, String],
+                         dataSchema: StructType,
+                         partitionSchema: StructType,
+                         requiredSchema: StructType,
+                         mandatoryFields: Seq[String]): StructType = {
+    val orderingField = getOrderingField(options, dataSchema)
+    val fields = getRequestedSchemaFields(
+      requiredSchema, partitionSchema, mandatoryFields, orderingField)
+    StructType(fields)
+  }
+
+  /**
+   * Returns the fields for RequiredSchema.
+   */
+  def getRequestedSchemaFields(requiredSchema: StructType,
+                               partitionSchema: StructType,
+                               mandatoryFields: Seq[String],
+                               orderingField: StructField): Seq[StructField] = {
+    val fields = ArrayBuffer[StructField]()
+    fields ++= requiredSchema.fields
+    fields ++= partitionSchema.fields.filter(f => mandatoryFields.contains(f.name))
+    if (orderingField != null && !fields.contains(orderingField)) {
+      fields.append(orderingField)
+    }
+    fields
+  }
+
+  /**
+   * Returns OrderingField field based on read options.
+   */
+  def getOrderingField(options: Map[String, String],
+                      dataSchema: StructType): StructField = {
+    val orderingFieldName = getOrderingFieldName(options)
+    if (orderingFieldName != null && orderingFieldName.nonEmpty) {
+      dataSchema.fields.find(_.name == orderingFieldName).orNull
+    } else null
+  }
+
+  /**
+   * Returns OrderingField name from read options.
+   */
+  def getOrderingFieldName(options: Map[String, String]): String = {
+    val props = TypedProperties.fromMap(options.asJava)
+    ConfigUtils.getOrderingField(props)
   }
 }
