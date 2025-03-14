@@ -210,8 +210,7 @@ This necessitates implementing mechanisms for config creation, update, rollback,
 
 About Hashing_Config Creation
 
-The initial version *must and can only* be created via DDL. During the DDL phase, hoodie will create a 
-`00000000000000000.hashing_config` for the first time.
+During the DDL phase, hoodie will create a `00000000000000000.hashing_config` for the first time.
 
 About Hashing_Config Update
 
