@@ -541,7 +541,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     try {
       return doMetadataTableValidation();
     } catch (Throwable e) {
-      LOG.error("Metadata table validation failed to HoodieValidationException {} {}", taskLabels, e);
+      LOG.error("Metadata table validation failed to HoodieValidationException {}", taskLabels, e);
       if (!cfg.ignoreFailed) {
         throw e;
       }
@@ -615,12 +615,12 @@ public class HoodieMetadataTableValidator implements Serializable {
          HoodieMetadataValidationContext fsBasedContext =
              new HoodieMetadataValidationContext(engineContext, props, metaClient, false, cfg.viewStorageTypeForFSListing)) {
       Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
-      List<Pair<Boolean, ? extends Exception>> result = new ArrayList<>(
+      List<Pair<Boolean, HoodieValidationException>> result = new ArrayList<>(
           engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
             try {
               validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
               LOG.info("Metadata table validation succeeded for partition {} (partition {})", partitionPath, taskLabels);
-              return Pair.<Boolean, Exception>of(true, null);
+              return Pair.<Boolean, HoodieValidationException>of(true, null);
             } catch (HoodieValidationException e) {
               LOG.error("Metadata table validation failed for partition {} due to HoodieValidationException (partition {})",
                   partitionPath, taskLabels, e);
@@ -656,10 +656,10 @@ public class HoodieMetadataTableValidator implements Serializable {
         handleValidationException(e, result, "Metadata table validation failed due to HoodieValidationException in partition stats validation");
       }
 
-      for (Pair<Boolean, ? extends Exception> res : result) {
+      for (Pair<Boolean, HoodieValidationException> res : result) {
         finalResult &= res.getKey();
         if (res.getKey().equals(false)) {
-          LOG.error("Metadata Validation failed for table: {} with error: {}", cfg.basePath, res.getValue());
+          LOG.error("Metadata Validation failed for table: {}", cfg.basePath, res.getValue());
           if (res.getRight() != null) {
             throwables.add(res.getRight());
           }
@@ -688,7 +688,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
-  private void handleValidationException(HoodieValidationException e, List<Pair<Boolean, ? extends Exception>> result, String errorMsg) {
+  private void handleValidationException(HoodieValidationException e, List<Pair<Boolean, HoodieValidationException>> result, String errorMsg) {
     LOG.error("{} for table: {} ", errorMsg, cfg.basePath, e);
     if (!cfg.ignoreFailed) {
       throw e;
