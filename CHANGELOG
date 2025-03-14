@@ -686,3 +686,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-03-12 16:04:19] [release-v1.103.0] ---
 [ENG-23515][INTERNAL] Rename Bloom Index FileId Sorting Config (#1255)
 [AUDIT-1071]: Changelog for release-v1.102.0 (#1261)
+
+--- [2025-03-14 16:03:57] [release-v1.104.0] ---
+[ENG-86dw8572h][MINOR] Improve error logs on metadata table validation job (#1270)
+[AUDIT-1071]: Changelog for release-v1.103.0 (#1265)
