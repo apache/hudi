@@ -21,6 +21,7 @@ package org.apache.spark.execution.datasources.parquet
 
 import org.apache.hudi.common.model.HoodiePayloadProps
 import org.apache.hudi.common.table.HoodieTableConfig
+
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedParquetFileFormat
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
 import org.scalatest.funsuite.AnyFunSuite
