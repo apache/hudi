@@ -235,7 +235,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
       // update cols to Index as applicable
-      HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata,
+      HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, actionType,
           (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
             updateColumnsToIndexForColumnStats(metaClient, columnsToIndex);
             return null;

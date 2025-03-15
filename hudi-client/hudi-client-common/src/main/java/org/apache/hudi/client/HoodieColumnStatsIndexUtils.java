@@ -19,17 +19,15 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
@@ -47,32 +45,27 @@ public class HoodieColumnStatsIndexUtils {
    * @param dataTable {@link HoodieTable} of interest.
    * @param config {@link HoodieWriteConfig} of interest.
    * @param commitMetadata commit metadata of interest.
-   * @param updateColSatsFunc function to assist with updating columns to index.
+   * @param commitActionType commit action type to include interested actions.
+   * @param updateColStatsFunc function to assist with updating columns to index.
    */
   @VisibleForTesting
-  public static void updateColsToIndex(HoodieTable dataTable, HoodieWriteConfig config, HoodieCommitMetadata commitMetadata,
-                                Functions.Function2<HoodieTableMetaClient, List<String>, Void> updateColSatsFunc) {
-    if (config.getMetadataConfig().isColumnStatsIndexEnabled()) {
+  public static void updateColsToIndex(HoodieTable dataTable,
+                                       HoodieWriteConfig config,
+                                       HoodieCommitMetadata commitMetadata,
+                                       String commitActionType,
+                                       Functions.Function2<HoodieTableMetaClient, List<String>, Void> updateColStatsFunc) {
+    if (config.isMetadataTableEnabled()                            // this is a data table
+        && config.getMetadataConfig().isColumnStatsIndexEnabled()  // the col_stats is enabled
+        && ActionType.isCommitActionType(commitActionType)) {      // with interested actions
       dataTable.getMetaClient().reloadTableConfig();
-      if (dataTable.getMetaClient().getTableConfig().getMetadataPartitions().contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
-        try {
-          HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-              .setStorage(dataTable.getStorage())
-              .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(dataTable.getMetaClient().getBasePath()))
-              .build();
-          HoodieInstant latestInstant = mdtMetaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant().get();
-          final HoodieCommitMetadata mdtCommitMetadata =
-              mdtMetaClient.getActiveTimeline().readCommitMetadata(latestInstant);
-          if (mdtCommitMetadata.getPartitionToWriteStats().containsKey(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
-            // update data table's table config for list of columns indexed.
-            List<String> columnsToIndex = new ArrayList(HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig(),
-                Option.of(config.getRecordMerger().getRecordType())).keySet());
-            // if col stats is getting updated, lets also update list of columns indexed if changed.
-            updateColSatsFunc.apply(dataTable.getMetaClient(), columnsToIndex);
-          }
-        } catch (Exception e) {
-          throw new HoodieException("Updating data table config to latest set of columns indexed with col stats failed ", e);
-        }
+      try {
+        // update data table's table config for list of columns indexed.
+        List<String> columnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig(),
+            Option.of(config.getRecordMerger().getRecordType())).keySet());
+        // if col stats is getting updated, lets also update list of columns indexed if changed.
+        updateColStatsFunc.apply(dataTable.getMetaClient(), columnsToIndex);
+      } catch (Exception e) {
+        throw new HoodieException("Updating data table config to latest set of columns indexed with col stats failed ", e);
       }
     }
   }

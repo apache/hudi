@@ -28,7 +28,6 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
@@ -208,6 +207,6 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
 
   @Override
   protected void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-    throw new HoodieNotSupportedException("Col stats with flink is not yet supported");
+    // no-op
   }
 }
