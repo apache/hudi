@@ -207,7 +207,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
             .withPreCombineField("ts").build();
     List<Row> inserts = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> toUpdateDataset = sqlContext.createDataFrame(inserts.subList(0, 5), structType);
-    List<Row> updates = DataSourceTestUtils.updateRowsWithHigherTs(toUpdateDataset);
+    List<Row> updates = DataSourceTestUtils.updateRowsWithUpdatedTs(toUpdateDataset);
     List<Row> rows = new ArrayList<>();
     rows.addAll(inserts);
     rows.addAll(updates);
