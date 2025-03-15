@@ -47,6 +47,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -401,57 +402,29 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   private HoodieTableConfig(HoodieStorage storage, StoragePath metaPath) {
-    this(storage, metaPath, null, null, null, false);
+    this(storage, metaPath, null, null, null);
   }
 
   public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
                            String recordMergeStrategyId) {
-    this(storage, metaPath, recordMergeMode, payloadClassName, recordMergeStrategyId, true);
-  }
-
-  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
-                           String recordMergeStrategyId, boolean autoUpdate) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
-    LOG.info("Loading table properties from " + propertyPath);
+    LOG.info("Loading table properties from {}", propertyPath);
     try {
       this.props = fetchConfigs(storage, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
-      if (autoUpdate) {
-        autoUpdateHoodieProperties(storage, metaPath, recordMergeMode, payloadClassName, recordMergeStrategyId);
-      }
+      validateMergeModeProperties(recordMergeMode, payloadClassName, recordMergeStrategyId);
     } catch (IOException e) {
       throw new HoodieIOException("Could not load properties from " + propertyPath, e);
     }
   }
 
-  private void autoUpdateHoodieProperties(HoodieStorage storage, StoragePath metaPath,
-                                          RecordMergeMode recordMergeMode, String payloadClassName,
-                                          String recordMergeStrategyId) {
-    StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
-    try {
-      boolean needStore = false;
-      if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
-          && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
-        setValue(PAYLOAD_CLASS_NAME, payloadClassName);
-        needStore = true;
-      }
-      if (contains(RECORD_MERGE_MODE) && recordMergeMode != null
-          && !recordMergeMode.equals(RecordMergeMode.getValue(getString(RECORD_MERGE_MODE)))) {
-        setValue(RECORD_MERGE_MODE, recordMergeMode.name());
-        needStore = true;
-      }
-      if (contains(RECORD_MERGE_STRATEGY_ID) && recordMergeStrategyId != null
-          && !getString(RECORD_MERGE_STRATEGY_ID).equals(recordMergeStrategyId)) {
-        setValue(RECORD_MERGE_STRATEGY_ID, recordMergeStrategyId);
-        needStore = true;
-      }
-      if (needStore) {
-        try (OutputStream outputStream = storage.create(propertyPath)) {
-          storeProperties(props, outputStream);
-        }
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not store properties in " + propertyPath, e);
+  private void validateMergeModeProperties(RecordMergeMode recordMergeMode, String payloadClassName,
+                                                      String recordMergeStrategyId) {
+    if ((recordMergeMode != null && !recordMergeMode.equals(RecordMergeMode.getValue(getString(RECORD_MERGE_MODE))))
+        || (recordMergeStrategyId != null && !recordMergeStrategyId.equals(getString(RECORD_MERGE_STRATEGY_ID)))
+        || (payloadClassName != null && !payloadClassName.equals(getString(PAYLOAD_CLASS_NAME)))) {
+      throw new HoodieValidationException(
+          "The merge mode and payload configs should not change in the table configs after table creation");
     }
   }
 
