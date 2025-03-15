@@ -852,6 +852,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
   @ValueSource(booleans = Array(true, false))
   def testDeletePartitionsV2(usePartitionsToDeleteConfig: Boolean): Unit = {
     var (df1, fooTableModifier) = deletePartitionSetup()
+    validateDataAndPartitionStats(df1)
     var recordsToDelete = spark.emptyDataFrame
     if (usePartitionsToDeleteConfig) {
       fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(),
@@ -867,11 +868,45 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
 
     fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, recordsToDelete)
-    val snapshotDF3 = spark.read.format("org.apache.hudi").load(tempBasePath)
+    validateDataAndPartitionStats(recordsToDelete, isDeletePartition = true)
+    val snapshotDF3 = spark.read.format("hudi").load(tempBasePath)
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
       !partitionPath.equals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
     }).count())
+  }
+
+  private def validateDataAndPartitionStats(inputDf: DataFrame = spark.emptyDataFrame, isDeletePartition: Boolean = false): Unit = {
+    val metaClient = createMetaClient(spark, tempBasePath)
+    val partitionStatsIndex = new PartitionStatsIndexSupport(
+      spark,
+      inputDf.schema,
+      HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexPartitionStats(true).build(),
+      metaClient)
+    val partitionStats = partitionStatsIndex.loadColumnStatsIndexRecords(List("partition", "ts"), shouldReadInMemory = true).collectAsList()
+    partitionStats.forEach(stat => {
+      assertTrue(stat.getColumnName.equals("partition") || stat.getColumnName.equals("ts"))
+    })
+    if (isDeletePartition) {
+      assertEquals(2, partitionStats.size())
+      // validate that each stat record has only DEFAULT_THIRD_PARTITION_PATH because the other two partitions were deleted
+      partitionStats.forEach(stat => {
+        assertEquals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, stat.getFileName)
+      })
+    } else {
+      // 3 partitions * 2 columns = 6 records
+      assertEquals(6, partitionStats.size())
+      partitionStats.forEach(stat => {
+        assertTrue(stat.getFileName.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH) ||
+          stat.getFileName.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH) ||
+          stat.getFileName.equals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH))
+      })
+      // validate that there 2 records for each partition
+      val partitionStatsGrouped = partitionStats.asScala.groupBy(_.getFileName)
+      partitionStatsGrouped.foreach { case (_, stats) =>
+        assertEquals(2, stats.size)
+      }
+    }
   }
 
   /**
