@@ -32,6 +32,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.Spliterators;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -55,7 +56,7 @@ public final class RocksDbDiskMap<T extends Serializable, R> extends DiskMap<T, 
   public RocksDbDiskMap(String rocksDbStoragePath, CustomSerializer<R> valueSerializer) throws IOException {
     super(rocksDbStoragePath, ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
     this.valueSerializer = valueSerializer;
-    this.keySet = new HashSet<>();
+    this.keySet = ConcurrentHashMap.newKeySet();
   }
 
   @Override
