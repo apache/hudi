@@ -57,7 +57,7 @@ public class KafkaConnectControlAgent implements KafkaControlAgent {
   private static final long KAFKA_POLL_TIMEOUT_MS = 100;
   private static final int EXEC_SHUTDOWN_TIMEOUT_MS = 5000;
 
-  private static KafkaConnectControlAgent agent;
+  private static volatile KafkaConnectControlAgent agent;
   private final String bootstrapServers;
   private final String controlTopicName;
   private final ExecutorService executorService;
