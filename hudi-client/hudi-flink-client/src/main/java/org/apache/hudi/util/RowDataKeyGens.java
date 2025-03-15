@@ -16,11 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.bulk;
+package org.apache.hudi.util;
 
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.util.List;
@@ -29,16 +29,18 @@ import java.util.List;
  * Factory class for all kinds of {@link RowDataKeyGen}.
  */
 public class RowDataKeyGens {
-
   /**
    * Creates a {@link RowDataKeyGen} with given configuration.
    */
-  public static RowDataKeyGen instance(Configuration conf, RowType rowType, int taskId, String instantTime) {
-    String recordKeys = conf.getString(FlinkOptions.RECORD_KEY_FIELD);
+  public static RowDataKeyGen instance(
+      TypedProperties properties,
+      RowType rowType,
+      int taskId, String instantTime) {
+    String recordKeys = properties.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
     if (hasRecordKey(recordKeys, rowType.getFieldNames())) {
-      return RowDataKeyGen.instance(conf, rowType);
+      return RowDataKeyGen.instance(properties, rowType);
     } else {
-      return AutoRowDataKeyGen.instance(conf, rowType, taskId, instantTime);
+      return AutoRowDataKeyGen.instance(properties, rowType, taskId, instantTime);
     }
   }
 

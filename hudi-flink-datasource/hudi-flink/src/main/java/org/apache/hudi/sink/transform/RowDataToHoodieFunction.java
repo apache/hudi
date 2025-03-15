@@ -20,7 +20,8 @@ package org.apache.hudi.sink.transform;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.util.RowDataKeyGen;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.configuration.Configuration;
@@ -35,7 +36,7 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieFlinkInt
   RowDataKeyGen keyGen;
 
   public RowDataToHoodieFunction(RowType rowType, Configuration config) {
-    this.keyGen = RowDataKeyGen.instance(config, rowType);
+    this.keyGen = RowDataKeyGen.instance(StreamerUtil.flinkConf2TypedProperties(config), rowType);
   }
 
   @Override

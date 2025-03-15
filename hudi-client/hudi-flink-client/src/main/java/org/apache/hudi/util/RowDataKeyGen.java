@@ -16,19 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.bulk;
+package org.apache.hudi.util;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
-import org.apache.hudi.util.RowDataProjection;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -127,19 +125,26 @@ public class RowDataKeyGen implements Serializable {
     this.keyGenOpt = keyGenOpt;
   }
 
-  public static RowDataKeyGen instance(Configuration conf, RowType rowType) {
+  public static RowDataKeyGen instance(TypedProperties props, RowType rowType) {
     Option<TimestampBasedAvroKeyGenerator> keyGeneratorOpt = Option.empty();
-    if (TimestampBasedAvroKeyGenerator.class.getName().equals(conf.getString(FlinkOptions.KEYGEN_CLASS_NAME))) {
+    if (TimestampBasedAvroKeyGenerator.class.getName().equals(props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), null))) {
       try {
-        keyGeneratorOpt = Option.of(new TimestampBasedAvroKeyGenerator(StreamerUtil.flinkConf2TypedProperties(conf)));
+        keyGeneratorOpt = Option.of(new TimestampBasedAvroKeyGenerator(props));
       } catch (IOException e) {
         throw new HoodieKeyException("Initialize TimestampBasedAvroKeyGenerator error", e);
       }
     }
-    boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
-    return new RowDataKeyGen(Option.of(conf.getString(FlinkOptions.RECORD_KEY_FIELD)), conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
-        rowType, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING),
-        consistentLogicalTimestampEnabled, keyGeneratorOpt);
+    boolean consistentLogicalTimestampEnabled = props.getBoolean(
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+    return new RowDataKeyGen(
+        Option.of(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())),
+        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()),
+        rowType,
+        props.getBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key()),
+        props.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key()),
+        consistentLogicalTimestampEnabled,
+        keyGeneratorOpt);
   }
 
   public HoodieKey getHoodieKey(RowData rowData) {

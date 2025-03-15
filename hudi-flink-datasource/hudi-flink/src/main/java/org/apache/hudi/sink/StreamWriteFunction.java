@@ -29,11 +29,12 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.HoodieRecordUtils;
-import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
+import org.apache.hudi.sink.buffer.BufferSizeDetector;
+import org.apache.hudi.sink.buffer.TotalSizeTracer;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.PayloadCreation;
@@ -63,7 +64,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Random;
 import java.util.function.BiFunction;
 
 /**
@@ -266,80 +266,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     public void reset() {
       this.records.clear();
       this.detector.reset();
-    }
-  }
-
-  /**
-   * Tool to detect if to flush out the existing buffer.
-   * Sampling the record to compute the size with 0.01 percentage.
-   */
-  private static class BufferSizeDetector {
-    private final Random random = new Random(47);
-    private static final int DENOMINATOR = 100;
-
-    private final double batchSizeBytes;
-
-    private long lastRecordSize = -1L;
-    private long totalSize = 0L;
-
-    BufferSizeDetector(double batchSizeMb) {
-      this.batchSizeBytes = batchSizeMb * 1024 * 1024;
-    }
-
-    boolean detect(Object record) {
-      if (lastRecordSize == -1 || sampling()) {
-        lastRecordSize = ObjectSizeCalculator.getObjectSize(record);
-      }
-      totalSize += lastRecordSize;
-      return totalSize > this.batchSizeBytes;
-    }
-
-    boolean sampling() {
-      // 0.01 sampling percentage
-      return random.nextInt(DENOMINATOR) == 1;
-    }
-
-    void reset() {
-      this.lastRecordSize = -1L;
-      this.totalSize = 0L;
-    }
-  }
-
-  /**
-   * Tool to trace the total buffer size. It computes the maximum buffer size,
-   * if current buffer size is greater than the maximum buffer size, the data bucket
-   * flush triggers.
-   */
-  private static class TotalSizeTracer {
-    private long bufferSize = 0L;
-    private final double maxBufferSize;
-
-    TotalSizeTracer(Configuration conf) {
-      long mergeReaderMem = 100; // constant 100MB
-      long mergeMapMaxMem = conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY);
-      this.maxBufferSize = (conf.getDouble(FlinkOptions.WRITE_TASK_MAX_SIZE) - mergeReaderMem - mergeMapMaxMem) * 1024 * 1024;
-      final String errMsg = String.format("'%s' should be at least greater than '%s' plus merge reader memory(constant 100MB now)",
-          FlinkOptions.WRITE_TASK_MAX_SIZE.key(), FlinkOptions.WRITE_MERGE_MAX_MEMORY.key());
-      ValidationUtils.checkState(this.maxBufferSize > 0, errMsg);
-    }
-
-    /**
-     * Trace the given record size {@code recordSize}.
-     *
-     * @param recordSize The record size
-     * @return true if the buffer size exceeds the maximum buffer size
-     */
-    boolean trace(long recordSize) {
-      this.bufferSize += recordSize;
-      return this.bufferSize > this.maxBufferSize;
-    }
-
-    void countDown(long size) {
-      this.bufferSize -= size;
-    }
-
-    public void reset() {
-      this.bufferSize = 0;
     }
   }
 

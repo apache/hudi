@@ -36,7 +36,6 @@ import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
 import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
-import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;
@@ -53,6 +52,8 @@ import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.util.RowDataKeyGen;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -123,7 +124,7 @@ public class Pipelines {
       int numBuckets = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
 
       BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(numBuckets, indexKeys);
-      RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
+      RowDataKeyGen keyGen = RowDataKeyGen.instance(StreamerUtil.flinkConf2TypedProperties(conf), rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
       boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
@@ -148,7 +149,7 @@ public class Pipelines {
         // see BatchExecutionUtils#applyBatchExecutionSettings for details.
         Partitioner<String> partitioner = (key, channels) -> KeyGroupRangeAssignment.assignKeyToParallelOperator(key,
             KeyGroupRangeAssignment.computeDefaultMaxParallelism(PARALLELISM_VALUE), channels);
-        RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+        RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(StreamerUtil.flinkConf2TypedProperties(conf), rowType);
         dataStream = dataStream.partitionCustom(partitioner, rowDataKeyGen::getPartitionPath);
       }
 
@@ -282,7 +283,7 @@ public class Pipelines {
       Configuration conf,
       RowType rowType,
       DataStream<RowData> dataStream) {
-    final RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+    final RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(StreamerUtil.flinkConf2TypedProperties(conf), rowType);
     // shuffle by partition keys
     dataStream = dataStream
         .keyBy(rowDataKeyGen::getPartitionPath);

@@ -506,7 +506,7 @@ public class ParquetRowDataWriter {
     private void doWrite(ArrayData arrayData) {
       recordConsumer.startGroup();
       if (arrayData.size() > 0) {
-        final String repeatedGroup = "array";
+        final String repeatedGroup = "list";
         recordConsumer.startField(repeatedGroup, 0);
         if (elementWriter instanceof RowWriter) {
           for (int i = 0; i < arrayData.size(); i++) {

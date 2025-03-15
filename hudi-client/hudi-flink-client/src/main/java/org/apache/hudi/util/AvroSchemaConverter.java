@@ -359,13 +359,20 @@ public class AvroSchemaConverter {
       keyType = multisetType.getElementType();
       valueType = new IntType();
     }
-    if (!DataTypeUtils.isFamily(keyType, LogicalTypeFamily.CHARACTER_STRING)) {
+    if (!isFamily(keyType, LogicalTypeFamily.CHARACTER_STRING)) {
       throw new UnsupportedOperationException(
           "Avro format doesn't support non-string as key type of map. "
               + "The key type is: "
               + keyType.asSummaryString());
     }
     return valueType;
+  }
+
+  /**
+   * Returns whether the given logical type belongs to the family.
+   */
+  public static boolean isFamily(LogicalType logicalType, LogicalTypeFamily family) {
+    return logicalType.getTypeRoot().getFamilies().contains(family);
   }
 
   /**

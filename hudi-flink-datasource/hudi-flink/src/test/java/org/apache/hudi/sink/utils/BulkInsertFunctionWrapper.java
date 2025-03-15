@@ -26,12 +26,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.BulkInsertWriteFunction;
-import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperator;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.RowDataKeyGen;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.ExecutionConfig;
@@ -213,7 +213,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   private void setupMapFunction() {
-    RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
+    RowDataKeyGen keyGen = RowDataKeyGen.instance(StreamerUtil.flinkConf2TypedProperties(conf), rowType);
     String indexKeys = OptionsResolver.getIndexKeyField(conf);
     int numBuckets = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
