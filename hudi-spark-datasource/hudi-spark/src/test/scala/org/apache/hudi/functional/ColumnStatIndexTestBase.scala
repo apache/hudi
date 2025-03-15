@@ -125,7 +125,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .save(basePath)
     dfList = dfList :+ inputDF
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
     if (params.shouldValidateColStats) {
       // Currently, routine manually validating the column stats (by actually reading every column of every file)
@@ -292,7 +292,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
       .build()
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
     val tableSchema = schemaUtil.getTableAvroSchema(false)
     val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
