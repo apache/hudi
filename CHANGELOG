@@ -690,3 +690,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-03-14 16:03:57] [release-v1.104.0] ---
 [ENG-86dw8572h][MINOR] Improve error logs on metadata table validation job (#1270)
 [AUDIT-1071]: Changelog for release-v1.103.0 (#1265)
+
+--- [2025-03-15 16:15:10] [release-v1.105.0] ---
+[ENG-23823][HUDI-9187] Use thread safe data structures in ExternalSpillableMap (#1277)
+[ENG-23460][INTERNAL] Handle 404 exception properly in GCS lock provider (#1275)
+[AUDIT-1071]: Changelog for release-v1.104.0 (#1276)
