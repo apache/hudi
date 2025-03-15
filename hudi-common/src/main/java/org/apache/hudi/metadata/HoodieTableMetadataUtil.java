@@ -174,7 +174,6 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSIN
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
-import static org.apache.hudi.metadata.MetadataPartitionType.isNewExpressionIndexDefinitionRequired;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewSecondaryIndexDefinitionRequired;
 
 /**
@@ -577,42 +576,8 @@ public class HoodieTableMetadataUtil {
     });
   }
 
-  /**
-   * Convert the clean action to metadata records.
-   */
-  public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext engineContext,
-                                                                               HoodieCleanMetadata cleanMetadata,
-                                                                               String instantTime,
-                                                                               HoodieTableMetaClient dataMetaClient,
-                                                                               HoodieMetadataConfig metadataConfig,
-                                                                               List<MetadataPartitionType> enabledPartitionTypes,
-                                                                               int bloomIndexParallelism,
-                                                                               Option<HoodieRecordType> recordTypeOpt) {
-    final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
-    final HoodieData<HoodieRecord> filesPartitionRecordsRDD = engineContext.parallelize(
-        convertMetadataToFilesPartitionRecords(cleanMetadata, instantTime), 1);
-    partitionToRecordsMap.put(MetadataPartitionType.FILES.getPartitionPath(), filesPartitionRecordsRDD);
-    if (enabledPartitionTypes.contains(MetadataPartitionType.BLOOM_FILTERS)) {
-      final HoodieData<HoodieRecord> metadataBloomFilterRecordsRDD =
-          convertMetadataToBloomFilterRecords(cleanMetadata, engineContext, instantTime, bloomIndexParallelism);
-      partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath(), metadataBloomFilterRecordsRDD);
-    }
-
-    if (enabledPartitionTypes.contains(MetadataPartitionType.COLUMN_STATS)) {
-      final HoodieData<HoodieRecord> metadataColumnStatsRDD =
-          convertMetadataToColumnStatsRecords(cleanMetadata, engineContext,
-              dataMetaClient, metadataConfig, recordTypeOpt);
-      partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
-    }
-    if (enabledPartitionTypes.contains(MetadataPartitionType.EXPRESSION_INDEX)) {
-      convertMetadataToExpressionIndexRecords(engineContext, cleanMetadata, instantTime, dataMetaClient, metadataConfig, bloomIndexParallelism, partitionToRecordsMap,
-          recordTypeOpt);
-    }
-
-    return partitionToRecordsMap;
-  }
-
-  private static void convertMetadataToExpressionIndexRecords(HoodieEngineContext engineContext, HoodieCleanMetadata cleanMetadata,
+  public static void convertMetadataToExpressionIndexRecords(HoodieEngineContext engineContext,
+                                                             HoodieCleanMetadata cleanMetadata,
                                                               String instantTime, HoodieTableMetaClient dataMetaClient,
                                                               HoodieMetadataConfig metadataConfig, int bloomIndexParallelism,
                                                               Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap,
@@ -2411,7 +2376,7 @@ public class HoodieTableMetadataUtil {
     });
   }
 
-  public static Schema getProjectedSchemaForExpressionIndex(HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
+  public static Schema getProjectedSchemaForExpressionIndex(HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) {
     Schema tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
     List<String> partitionFields = metaClient.getTableConfig().getPartitionFields()
         .map(Arrays::asList)
@@ -2852,19 +2817,6 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  public static Set<String> getExpressionIndexPartitionsToInit(MetadataPartitionType partitionType, HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
-    return getIndexPartitionsToInit(
-        partitionType,
-        metadataConfig,
-        dataMetaClient,
-        () -> isNewExpressionIndexDefinitionRequired(metadataConfig, dataMetaClient),
-        metadataConfig::getExpressionIndexColumn,
-        metadataConfig::getExpressionIndexName,
-        PARTITION_NAME_EXPRESSION_INDEX_PREFIX,
-        metadataConfig.getExpressionIndexType()
-    );
-  }
-
   public static Set<String> getSecondaryIndexPartitionsToInit(MetadataPartitionType partitionType, HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
     return getIndexPartitionsToInit(
         partitionType,
@@ -2894,7 +2846,7 @@ public class HoodieTableMetadataUtil {
    * @param indexType           The type of index being initialized (e.g., expression index, secondary index).
    * @return A set of index partitions that require initialization, or an empty set if none are required.
    */
-  private static Set<String> getIndexPartitionsToInit(MetadataPartitionType partitionType,
+  public static Set<String> getIndexPartitionsToInit(MetadataPartitionType partitionType,
                                                       HoodieMetadataConfig metadataConfig,
                                                       HoodieTableMetaClient dataMetaClient,
                                                       Supplier<Boolean> isNewIndexRequired,
@@ -3010,24 +2962,24 @@ public class HoodieTableMetadataUtil {
       }
     }
 
-    String getRelativePath() {
+    public String getRelativePath() {
       return relativePath;
     }
 
-    int getTotalFiles() {
+    public int getTotalFiles() {
       return filenameToSizeMap.size();
     }
 
-    boolean isHoodiePartition() {
+    public boolean isHoodiePartition() {
       return isHoodiePartition;
     }
 
-    List<StoragePath> getSubDirectories() {
+    public List<StoragePath> getSubDirectories() {
       return subDirectories;
     }
 
     // Returns a map of filenames mapped to their lengths
-    Map<String, Long> getFileNameToSizeMap() {
+    public Map<String, Long> getFileNameToSizeMap() {
       return filenameToSizeMap;
     }
   }
