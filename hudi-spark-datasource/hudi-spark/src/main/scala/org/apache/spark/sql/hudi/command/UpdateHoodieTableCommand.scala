@@ -30,6 +30,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, Project,
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport with ProvidesHoodieConfig {
@@ -62,7 +63,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     fields.foreach(field => if (assignments.exists {
       case (attr, _) => resolver(attr.name, field)
     }) {
-      throw new AnalysisException(s"Detected disallowed assignment clause in UPDATE statement for $fieldType " +
+      throw new HoodieAnalysisException(s"Detected disallowed assignment clause in UPDATE statement for $fieldType " +
         s"`$field` for table `$tableId`. Please remove the assignment clause to avoid the error.")
     })
   }
