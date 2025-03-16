@@ -570,9 +570,23 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .load(basePath)
     assertEquals(400, hudiSnapshotDF1.count())
 
-    // ingest batch2 with mix of updates and deletes. some of them are updating same partition, some of them are moving to new partition.
-    // some are having higher ts and some are having lower ts.
-    ingestNewBatch(HoodieTableType.MERGE_ON_READ, 200, structType, inserts.subList(0, 200), writeOpts)
+    // ingest a batch with mix of updates and deletes, but having lower ordering value. Both should not be honored.
+    val toUpdate = sqlContext.createDataFrame(DataSourceTestUtils.getUniqueRows(inserts, 100), structType).collectAsList()
+    val updateToDiffPartitionLowerTs = sqlContext.createDataFrame(toUpdate, structType)
+    val rowsToUpdate = DataSourceTestUtils.updateRowsWithUpdatedTs(updateToDiffPartitionLowerTs, true, true)
+    val updates = rowsToUpdate.subList(0, 50)
+    val updateDf = spark.createDataFrame(spark.sparkContext.parallelize(convertRowListToSeq(updates)), structType)
+    val deletes = rowsToUpdate.subList(50, 100)
+    val deleteDf = spark.createDataFrame(spark.sparkContext.parallelize(convertRowListToSeq(deletes)), structType)
+    val batch = deleteDf.withColumn("_hoodie_is_deleted",lit(true)).union(updateDf)
+    batch.cache()
+
+    batch.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, HoodieTableType.MERGE_ON_READ.name())
+      .mode(SaveMode.Append)
+      .save(basePath)
 
     val hudiSnapshotDF2 = spark.read.format("hudi")
       .options(readOpts)
@@ -584,26 +598,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // querying subset of column. even if not including _hoodie_is_deleted, snapshot read should return right data.
     assertEquals(400, spark.read.format("org.apache.hudi")
       .options(readOpts).option("hoodie.metadata.enable","false").load(basePath).select("_hoodie_record_key", "_hoodie_partition_path").count())
-  }
-
-  def ingestNewBatch(tableType: HoodieTableType, recordsToUpdate: Integer, structType: StructType, inserts: java.util.List[Row],
-                     writeOpts : Map[String, String]) : Unit = {
-    val toUpdate = sqlContext.createDataFrame(DataSourceTestUtils.getUniqueRows(inserts, recordsToUpdate), structType).collectAsList()
-    val updateToDiffPartitionLowerTs = sqlContext.createDataFrame(toUpdate.subList(recordsToUpdate*3/4, recordsToUpdate), structType)
-    val rowsToUpdate = DataSourceTestUtils.updateRowsWithUpdatedTs(updateToDiffPartitionLowerTs, true, true)
-    val updates = rowsToUpdate.subList(0, recordsToUpdate/8)
-    val updateDf = spark.createDataFrame(spark.sparkContext.parallelize(convertRowListToSeq(updates)), structType)
-    val deletes = rowsToUpdate.subList(recordsToUpdate/8, recordsToUpdate/4)
-    val deleteDf = spark.createDataFrame(spark.sparkContext.parallelize(convertRowListToSeq(deletes)), structType)
-    val batch = deleteDf.withColumn("_hoodie_is_deleted",lit(true)).union(updateDf)
-    batch.cache()
-
-    batch.write.format("hudi")
-    .options(writeOpts)
-    .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-    .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
-    .mode(SaveMode.Append)
-    .save(basePath)
   }
 
   @ParameterizedTest

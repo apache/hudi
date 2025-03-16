@@ -1766,11 +1766,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected BaseHoodieWriteClient<?, I, ?, ?> getWriteClient() {
     if (writeClient == null) {
       writeClient = initializeWriteClient();
-      writeClient = initializeWriteClient();
     }
     return writeClient;
   }
 
   protected abstract BaseHoodieWriteClient<?, I, ?, ?> initializeWriteClient();
-
 }
