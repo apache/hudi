@@ -151,6 +151,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
         .withProps(writeConfigs)
         .withPath(getBasePath())
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withAutoCommit(true)
         .build();
 
     HoodieJavaClientTestHarness.TestJavaTaskContextSupplier taskContextSupplier = new HoodieJavaClientTestHarness.TestJavaTaskContextSupplier();
