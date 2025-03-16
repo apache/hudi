@@ -56,10 +56,10 @@ trait HoodieFormatTrait {
  * This class utilizes {@link HoodieFileGroupReader} and its related classes to support reading
  * from Parquet formatted base files and their log files.
  */
-class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
+class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                                                   tableSchema: HoodieTableSchema,
                                                   tableName: String,
-                                                  mergeType: String,
+                                                  queryTimestamp: String,
                                                   mandatoryFields: Seq[String],
                                                   isMOR: Boolean,
                                                   isBootstrap: Boolean,
@@ -164,14 +164,14 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val readerContext = new SparkFileFormatInternalRowReaderContext(parquetFileReader.value, filters, requiredFilters)
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
-                .builder().setConf(storageConf).setBasePath(tableState.tablePath).build
+                .builder().setConf(storageConf).setBasePath(tablePath).build
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               val reader = new HoodieFileGroupReader[InternalRow](
                 readerContext,
                 new HoodieHadoopStorage(metaClient.getBasePath, storageConf),
-                tableState.tablePath,
-                tableState.latestCommitTimestamp.get,
+                tablePath,
+                queryTimestamp,
                 fileSlice,
                 dataAvroSchema,
                 requestedAvroSchema,
@@ -208,7 +208,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
 
   private def setSchemaEvolutionConfigs(conf: StorageConfiguration[Configuration]): Unit = {
     if (internalSchemaOpt.isPresent) {
-      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tableState.tablePath)
+      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
       conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
   }
@@ -223,7 +223,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     props.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, tableName)
     val cdcSchema = CDCRelation.FULL_CDC_SPARK_SCHEMA
     val metaClient = HoodieTableMetaClient.builder
-      .setBasePath(tableState.tablePath).setConf(storageConf.newInstance()).build()
+      .setBasePath(tablePath).setConf(storageConf.newInstance()).build()
     new CDCFileGroupIterator(
       cdcFileGroupSplit,
       metaClient,
