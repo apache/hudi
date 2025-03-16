@@ -68,6 +68,7 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
 
   private HoodieJavaWriteClient<RawTripTestPayload> getWriteClient() {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withAutoCommit(true)
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
         .withSchema(SCHEMA.toString())
