@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, SparkDatasetMixin}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, SparkDatasetMixin}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -42,6 +42,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
+import org.apache.spark.sql.types.{BooleanType, StructType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
@@ -537,6 +538,72 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath)
     assertEquals(0, hudiSnapshotDF3.count()) // 100 records were deleted, 0 record to load
+  }
+
+  @Test
+  def testDeletesWithLowerOrderingValue() : Unit = {
+    var (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+    writeOpts = writeOpts + (HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "8",
+      HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME -> HoodieTableType.MERGE_ON_READ.name(),
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      "hoodie.write.record.merge.mode" -> RecordMergeMode.EVENT_TIME_ORDERING.name(),
+      "hoodie.index.type" -> "RECORD_INDEX",
+      "hoodie.metadata.record.index.enable" -> "true",
+      "hoodie.record.index.update.partition.path" -> "true",
+      "hoodie.parquet.small.file.limit" -> "0")
+
+    // generate the inserts
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val inserts = DataSourceTestUtils.generateRandomRows(400)
+    val df = spark.createDataFrame(spark.sparkContext.parallelize(convertRowListToSeq(inserts)), structType)
+
+    df.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+    .mode(SaveMode.Overwrite)
+    .save(basePath)
+
+    val hudiSnapshotDF1 = spark.read.format("hudi")
+      .options(readOpts)
+      .load(basePath)
+    assertEquals(400, hudiSnapshotDF1.count())
+
+    // ingest batch2 with mix of updates and deletes. some of them are updating same partition, some of them are moving to new partition.
+    // some are having higher ts and some are having lower ts.
+    ingestNewBatch(HoodieTableType.MERGE_ON_READ, 200, structType, inserts.subList(0, 200), writeOpts)
+
+    val hudiSnapshotDF2 = spark.read.format("hudi")
+      .options(readOpts)
+      .option("hoodie.metadata.enable","false")
+      .load(basePath)
+    // since deletes are ingested w/ lower ordering value, it should not be honored.
+    assertEquals(400, hudiSnapshotDF2.count())
+
+    // querying subset of column. even if not including _hoodie_is_deleted, snapshot read should return right data.
+    assertEquals(400, spark.read.format("org.apache.hudi")
+      .options(readOpts).option("hoodie.metadata.enable","false").load(basePath).select("_hoodie_record_key", "_hoodie_partition_path").count())
+  }
+
+  def ingestNewBatch(tableType: HoodieTableType, recordsToUpdate: Integer, structType: StructType, inserts: java.util.List[Row],
+                     writeOpts : Map[String, String]) : Unit = {
+    val toUpdate = sqlContext.createDataFrame(DataSourceTestUtils.getUniqueRows(inserts, recordsToUpdate), structType).collectAsList()
+    val updateToDiffPartitionLowerTs = sqlContext.createDataFrame(toUpdate.subList(recordsToUpdate*3/4, recordsToUpdate), structType)
+    val rowsToUpdate = DataSourceTestUtils.updateRowsWithUpdatedTs(updateToDiffPartitionLowerTs, true, true)
+    val updates = rowsToUpdate.subList(0, recordsToUpdate/8)
+    val updateDf = spark.createDataFrame(spark.sparkContext.parallelize(convertRowListToSeq(updates)), structType)
+    val deletes = rowsToUpdate.subList(recordsToUpdate/8, recordsToUpdate/4)
+    val deleteDf = spark.createDataFrame(spark.sparkContext.parallelize(convertRowListToSeq(deletes)), structType)
+    val batch = deleteDf.withColumn("_hoodie_is_deleted",lit(true)).union(updateDf)
+    batch.cache()
+
+    batch.write.format("hudi")
+    .options(writeOpts)
+    .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+    .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
+    .mode(SaveMode.Append)
+    .save(basePath)
   }
 
   @ParameterizedTest
@@ -1697,4 +1764,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertTrue(metadataPartitionExists(basePath, context, PARTITION_NAME_SECONDARY_INDEX_PREFIX + secondaryIndexName2))
     assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_NAME_SECONDARY_INDEX_PREFIX + secondaryIndexName2))
   }
+
+  def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
+    asScalaIteratorConverter(inputList.iterator).asScala.toSeq
 }

@@ -71,6 +71,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -415,10 +416,6 @@ public class HoodieTableMetadataUtil {
       final HoodieData<HoodieRecord> partitionStatsRDD = convertMetadataToPartitionStatRecords(commitMetadata, context,
           dataMetaClient, tableMetadata, metadataConfig, recordTypeOpt, isDeletePartition);
       partitionToRecordsMap.put(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), partitionStatsRDD);
-    }
-    if (enabledPartitionTypes.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
-      partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), convertMetadataToRecordIndexRecords(context, commitMetadata, metadataConfig,
-          dataMetaClient, writesFileIdEncoding, instantTime, engineType));
     }
     return partitionToRecordsMap;
   }
@@ -799,7 +796,8 @@ public class HoodieTableMetadataUtil {
                                                                              HoodieTableMetaClient dataTableMetaClient,
                                                                              int writesFileIdEncoding,
                                                                              String instantTime,
-                                                                             EngineType engineType) {
+                                                                             EngineType engineType,
+                                                                             HoodieTableFileSystemView fsView) {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     // Return early if there are no write stats, or if the operation is a compaction.
@@ -824,6 +822,7 @@ public class HoodieTableMetadataUtil {
       Option<Schema> finalWriterSchemaOpt = writerSchemaOpt;
       HoodieData<HoodieRecord> recordIndexRecords = engineContext.parallelize(new ArrayList<>(writeStatsByFileId.entrySet()), parallelism)
           .flatMap(writeStatsByFileIdEntry -> {
+            String partition = writeStatsByFileIdEntry.getValue().get(0).getPartitionPath();
             String fileId = writeStatsByFileIdEntry.getKey();
             List<HoodieWriteStat> writeStats = writeStatsByFileIdEntry.getValue();
             // Partition the write stats into base file and log file write stats
@@ -841,43 +840,62 @@ public class HoodieTableMetadataUtil {
               return baseFileWriteStats.stream()
                   .flatMap(writeStat -> {
                     HoodieStorage storage = HoodieStorageUtils.getStorage(new StoragePath(writeStat.getPath()), storageConfiguration);
-                    return CollectionUtils.toStream(BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage));
+                    return CollectionUtils.toStream(RecordIndexRecordKeyParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage));
                   })
                   .iterator();
             }
             // Process log file write stats
             if (!logFileWriteStats.isEmpty()) {
-              String partitionPath = logFileWriteStats.get(0).getPartitionPath();
-              List<String> currentLogFilePaths = logFileWriteStats.stream()
-                  .map(writeStat -> new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath()).toString())
-                  .collect(Collectors.toList());
-              List<String> allLogFilePaths = logFileWriteStats.stream()
-                  .flatMap(writeStat -> {
-                    checkState(writeStat instanceof HoodieDeltaWriteStat, "Log file should be associated with a delta write stat");
-                    List<String> currentLogFiles = ((HoodieDeltaWriteStat) writeStat).getLogFiles().stream()
-                        .map(logFile -> new StoragePath(new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPartitionPath()), logFile).toString())
-                        .collect(Collectors.toList());
-                    return currentLogFiles.stream();
-                  })
-                  .collect(Collectors.toList());
-              // Extract revived and deleted keys
-              Pair<Set<String>, Set<String>> revivedAndDeletedKeys =
-                  getRevivedAndDeletedKeysFromMergedLogs(dataTableMetaClient, instantTime, engineType, allLogFilePaths, finalWriterSchemaOpt, currentLogFilePaths);
-              Set<String> revivedKeys = revivedAndDeletedKeys.getLeft();
-              Set<String> deletedKeys = revivedAndDeletedKeys.getRight();
-              // Process revived keys to create updates
-              List<HoodieRecord> revivedRecords = revivedKeys.stream()
-                  .map(recordKey -> HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partitionPath, fileId, instantTime, writesFileIdEncoding))
-                  .collect(Collectors.toList());
-              // Process deleted keys to create deletes
-              List<HoodieRecord> deletedRecords = deletedKeys.stream()
-                  .map(HoodieMetadataPayload::createRecordIndexDelete)
-                  .collect(Collectors.toList());
-              // Combine all records into one list
+              FileSlice previousFileSliceForFileId = fsView.getLatestFileSlice(partition, fileId).orElse(null);
+              FileSlice latestFileSlicesIncludingInflight = new FileSlice(previousFileSliceForFileId);
+              logFileWriteStats.forEach(logFileWriteStat -> {
+                latestFileSlicesIncludingInflight.addLogFile(new HoodieLogFile(new StoragePath(logFileWriteStat.getPath())));
+              });
+
+              Set<String> prevSliceRecordKeys = new HashSet<>();
+              if (!previousFileSliceForFileId.hasLogFiles()) {
+                // if previous slice only contains base file, directly read base file by projecting just record key instead of going via FileGroupReader
+                prevSliceRecordKeys =  new HashSet<>(RecordIndexRecordKeyParsingUtils.getRecordKeyStatuses(dataTableMetaClient.getBasePath().toString(), partition,
+                    previousFileSliceForFileId.getBaseFile().get().getFileName(), null, dataTableMetaClient.getStorage(), Collections.singleton(RecordIndexRecordKeyParsingUtils.RecordStatus.INSERT))
+                  .get(RecordIndexRecordKeyParsingUtils.RecordStatus.INSERT));
+              } else {
+                prevSliceRecordKeys = getValidRecordKeysForFileSlice(dataTableMetaClient, engineType,
+                    previousFileSliceForFileId.getLogFiles().map(entry -> basePath + "/" + entry.getPath().toString()).collect(toList()),
+                    tryResolveSchemaForTable(dataTableMetaClient), partition, previousFileSliceForFileId.getBaseFile().map(entry -> new StoragePath(entry.getPath())),
+                    instantTime);
+              }
+
+              Set<String> latestSliceRecordKeys = getValidRecordKeysForFileSlice(dataTableMetaClient, engineType,
+                  latestFileSlicesIncludingInflight.getLogFiles().map(entry -> basePath + "/" + entry.getPath().toString()).collect(toList()),
+                  tryResolveSchemaForTable(dataTableMetaClient), partition, previousFileSliceForFileId.getBaseFile().map(entry -> new StoragePath(entry.getPath())),
+                  instantTime);
+
+              // find inserts and deleted record keys for this file slice.
               List<HoodieRecord> allRecords = new ArrayList<>();
-              allRecords.addAll(revivedRecords);
-              allRecords.addAll(deletedRecords);
-              return allRecords.iterator();
+              if (prevSliceRecordKeys.isEmpty()) {
+                // everything is in INSERT
+                latestSliceRecordKeys.forEach(latestSliceRecordKey -> {
+                  allRecords.add((HoodieRecord) HoodieMetadataPayload.createRecordIndexUpdate(latestSliceRecordKey, partition, fileId,
+                      instantTime, writesFileIdEncoding));
+                });
+              } else {
+                prevSliceRecordKeys.forEach(prevSliceRecordKey -> {
+                  if (!latestSliceRecordKeys.contains(prevSliceRecordKey)) {
+                    // deleted
+                    allRecords.add(HoodieMetadataPayload.createRecordIndexDelete(prevSliceRecordKey));
+                  }
+                });
+
+                Set<String> finalPrevSliceRecordKeys = prevSliceRecordKeys;
+                latestSliceRecordKeys.forEach(latestSliceRecordKey -> {
+                  if (!finalPrevSliceRecordKeys.contains(latestSliceRecordKey)) {
+                    // insert.
+                    allRecords.add((HoodieRecord) HoodieMetadataPayload.createRecordIndexUpdate(latestSliceRecordKey, partition, fileId,
+                        instantTime, writesFileIdEncoding));
+                  }
+                });
+                return allRecords.iterator();
+              }
             }
             LOG.warn("No base file or log file write stats found for fileId: {}", fileId);
             return Collections.emptyIterator();
@@ -901,6 +919,53 @@ public class HoodieTableMetadataUtil {
     } catch (Exception e) {
       throw new HoodieException("Failed to generate RLI records for metadata table", e);
     }
+  }
+
+  static Set<String> getValidRecordKeysForFileSlice(HoodieTableMetaClient metaClient,
+                                                    EngineType engineType, List<String> logFilePaths,
+                                                    Option<Schema> tableSchema, String partition,
+                                                    Option<StoragePath> dataFilePath,
+                                                    String instantTime) throws Exception {
+    final String basePath = metaClient.getBasePath().toString();
+    final StorageConfiguration<?> storageConf = metaClient.getStorageConf();
+
+    HoodieRecordMerger recordMerger = HoodieRecordUtils.createRecordMerger(
+        basePath,
+        engineType,
+        Collections.emptyList(),
+        metaClient.getTableConfig().getRecordMergeStrategyId());
+
+    HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
+        .withStorage(metaClient.getStorage())
+        .withBasePath(metaClient.getBasePath())
+        .withLogFilePaths(logFilePaths)
+        .withReaderSchema(tableSchema.get())
+        .withLatestInstantTime(instantTime)
+        .withReverseReader(false)
+        .withMaxMemorySizeInBytes(storageConf.getLong(MAX_MEMORY_FOR_COMPACTION.key(), DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES))
+        .withBufferSize(HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue())
+        .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath())
+        .withPartition(partition)
+        .withOptimizedLogBlocksScan(storageConf.getBoolean("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN, false))
+        .withDiskMapType(storageConf.getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()))
+        .withBitCaskDiskMapCompressionEnabled(storageConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
+        .withRecordMerger(recordMerger)
+        .withTableMetaClient(metaClient)
+        .build();
+
+    Option<HoodieFileReader> baseFileReader = Option.empty();
+    if (dataFilePath.isPresent()) {
+      baseFileReader = Option.of(HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType()).getFileReader(getReaderConfigs(storageConf), dataFilePath.get()));
+    }
+    HoodieFileSliceReader fileSliceReader = new HoodieFileSliceReader(baseFileReader, mergedLogRecordScanner, tableSchema.get(), metaClient.getTableConfig().getPreCombineField(), recordMerger,
+        metaClient.getTableConfig().getProps(), Option.empty(), Option.empty());
+    // Collect the records from the iterator in a map by record key to secondary key
+    Set<String> recordKeys = new HashSet<>();
+    while (fileSliceReader.hasNext()) {
+      HoodieRecord record = (HoodieRecord) fileSliceReader.next();
+      recordKeys.add(record.getRecordKey());
+    }
+    return recordKeys;
   }
 
   /**
@@ -3071,3 +3136,4 @@ public class HoodieTableMetadataUtil {
     }
   }
 }
+

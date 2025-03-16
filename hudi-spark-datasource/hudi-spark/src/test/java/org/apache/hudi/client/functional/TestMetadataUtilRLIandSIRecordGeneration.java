@@ -46,7 +46,8 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.RecordIndexRecordKeyParsingUtils;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -126,7 +127,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
         }
 
         // poll into generateRLIMetadataHoodieRecordsForBaseFile to fetch MDT RLI records for inserts and deletes.
-        Iterator<HoodieRecord> rliRecordsItr = BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(),
+        Iterator<HoodieRecord> rliRecordsItr = RecordIndexRecordKeyParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(),
             writeStatus.getStat(), writeConfig.getWritesFileIdEncoding(), finalCommitTime, metaClient.getStorage());
         while (rliRecordsItr.hasNext()) {
           HoodieRecord rliRecord = rliRecordsItr.next();
@@ -230,7 +231,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
         }
 
         // poll into generateRLIMetadataHoodieRecordsForBaseFile to fetch MDT RLI records for inserts and deletes.
-        Iterator<HoodieRecord> rliRecordsItr = BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(),
+        Iterator<HoodieRecord> rliRecordsItr = RecordIndexRecordKeyParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(),
             writeStatus.getStat(), writeConfig.getWritesFileIdEncoding(), finalCommitTime, metaClient.getStorage());
         while (rliRecordsItr.hasNext()) {
           HoodieRecord rliRecord = rliRecordsItr.next();
@@ -281,9 +282,16 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       assertTrue(compactionInstantOpt.isPresent());
       HoodieWriteMetadata compactionWriteMetadata = client.compact(compactionInstantOpt.get());
       HoodieCommitMetadata compactionCommitMetadata = (HoodieCommitMetadata) compactionWriteMetadata.getCommitMetadata().get();
-      // no RLI records should be generated for compaction operation.
-      assertTrue(convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
-          metaClient, writeConfig.getWritesFileIdEncoding(), compactionInstantOpt.get(), EngineType.SPARK).isEmpty());
+
+      HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true);
+      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata, metaClient, metaClient.getActiveTimeline());
+      try {
+        // no RLI records should be generated for compaction operation.
+        assertTrue(convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
+            metaClient, writeConfig.getWritesFileIdEncoding(), compactionInstantOpt.get(), EngineType.SPARK, fsView).isEmpty());
+      } finally {
+        fsView.close();
+      }
     }
   }
 
@@ -652,7 +660,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
           assertEquals(writeStatus.getStat().getPrevBaseFile(), fileIdToFileNameMapping.get(writeStatFileId));
         }
 
-        Iterator<HoodieRecord> rliRecordsItr = BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStatus.getStat(),
+        Iterator<HoodieRecord> rliRecordsItr = RecordIndexRecordKeyParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStatus.getStat(),
             writeConfig.getWritesFileIdEncoding(), commitTime, metaClient.getStorage());
         while (rliRecordsItr.hasNext()) {
           HoodieRecord rliRecord = rliRecordsItr.next();
@@ -681,21 +689,21 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
         String partition = writeStatus.getStat().getPartitionPath();
         String latestFileName = FSUtils.getFileNameFromPath(writeStatus.getStat().getPath());
 
-        Set<BaseFileRecordParsingUtils.RecordStatus> recordStatusSet = new HashSet<>();
-        recordStatusSet.add(BaseFileRecordParsingUtils.RecordStatus.INSERT);
-        recordStatusSet.add(BaseFileRecordParsingUtils.RecordStatus.UPDATE);
-        recordStatusSet.add(BaseFileRecordParsingUtils.RecordStatus.DELETE);
+        Set<RecordIndexRecordKeyParsingUtils.RecordStatus> recordStatusSet = new HashSet<>();
+        recordStatusSet.add(RecordIndexRecordKeyParsingUtils.RecordStatus.INSERT);
+        recordStatusSet.add(RecordIndexRecordKeyParsingUtils.RecordStatus.UPDATE);
+        recordStatusSet.add(RecordIndexRecordKeyParsingUtils.RecordStatus.DELETE);
 
-        Map<BaseFileRecordParsingUtils.RecordStatus, List<String>> recordKeyMappings = BaseFileRecordParsingUtils.getRecordKeyStatuses(metaClient.getBasePath().toString(), partition, latestFileName,
-            writeStatus.getStat().getPrevBaseFile(), storage, recordStatusSet);
-        if (recordKeyMappings.containsKey(BaseFileRecordParsingUtils.RecordStatus.INSERT)) {
-          actualInserts.addAll(recordKeyMappings.get(BaseFileRecordParsingUtils.RecordStatus.INSERT));
+        Map<RecordIndexRecordKeyParsingUtils.RecordStatus, List<String>> recordKeyMappings = RecordIndexRecordKeyParsingUtils.getRecordKeyStatuses(metaClient.getBasePath().toString(),
+            partition, latestFileName, writeStatus.getStat().getPrevBaseFile(), storage, recordStatusSet);
+        if (recordKeyMappings.containsKey(RecordIndexRecordKeyParsingUtils.RecordStatus.INSERT)) {
+          actualInserts.addAll(recordKeyMappings.get(RecordIndexRecordKeyParsingUtils.RecordStatus.INSERT));
         }
-        if (recordKeyMappings.containsKey(BaseFileRecordParsingUtils.RecordStatus.UPDATE)) {
-          actualUpdates.addAll(recordKeyMappings.get(BaseFileRecordParsingUtils.RecordStatus.UPDATE));
+        if (recordKeyMappings.containsKey(RecordIndexRecordKeyParsingUtils.RecordStatus.UPDATE)) {
+          actualUpdates.addAll(recordKeyMappings.get(RecordIndexRecordKeyParsingUtils.RecordStatus.UPDATE));
         }
-        if (recordKeyMappings.containsKey(BaseFileRecordParsingUtils.RecordStatus.DELETE)) {
-          actualDeletes.addAll(recordKeyMappings.get(BaseFileRecordParsingUtils.RecordStatus.DELETE));
+        if (recordKeyMappings.containsKey(RecordIndexRecordKeyParsingUtils.RecordStatus.DELETE)) {
+          actualDeletes.addAll(recordKeyMappings.get(RecordIndexRecordKeyParsingUtils.RecordStatus.DELETE));
         }
       }
     });

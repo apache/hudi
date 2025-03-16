@@ -33,7 +33,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hadoop.fs.Path;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -41,12 +40,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
 
-public class BaseFileRecordParsingUtils {
+public class RecordIndexRecordKeyParsingUtils {
 
   /**
    * Generates RLI Metadata records for base files.
@@ -89,27 +86,6 @@ public class BaseFileRecordParsingUtils {
     }
 
     return hoodieRecords.iterator();
-  }
-
-  /**
-   * Fetch list of record keys deleted or updated in file referenced in the {@link HoodieWriteStat} passed.
-   *
-   * @param basePath  base path of the table.
-   * @param writeStat {@link HoodieWriteStat} instance of interest.
-   * @param storage   {@link HoodieStorage} instance of interest.
-   * @return list of record keys deleted or updated.
-   */
-  @VisibleForTesting
-  public static List<String> getRecordKeysDeletedOrUpdated(String basePath,
-                                                           HoodieWriteStat writeStat,
-                                                           HoodieStorage storage) {
-    String latestFileName = FSUtils.getFileNameFromPath(writeStat.getPath());
-    Set<RecordStatus> recordStatuses = new HashSet<>();
-    recordStatuses.add(RecordStatus.UPDATE);
-    recordStatuses.add(RecordStatus.DELETE);
-    // for secondary index, we are interested in UPDATES and DELETES.
-    return getRecordKeyStatuses(basePath, writeStat.getPartitionPath(), latestFileName, writeStat.getPrevBaseFile(), storage,
-        recordStatuses).values().stream().flatMap((Function<List<String>, Stream<String>>) Collection::stream).collect(toList());
   }
 
   /**
