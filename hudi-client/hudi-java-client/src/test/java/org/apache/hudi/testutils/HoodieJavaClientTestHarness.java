@@ -1036,6 +1036,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withAutoCommit(true)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withEngineType(EngineType.JAVA)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
