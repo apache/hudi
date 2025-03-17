@@ -52,7 +52,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  */
 public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends HoodieBackedTableMetadataWriter<I> {
 
-  private final static int PARTITION_INITIALIZATION_TIME_SUFFIX = 10;
+  private static final int PARTITION_INITIALIZATION_TIME_SUFFIX = 10;
 
   /**
    * Hudi backed table metadata writer.

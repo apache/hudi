@@ -285,7 +285,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         LOG.error("Failed to initialize MDT from filesystem");
         return false;
       }
-      metrics .ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
+      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
       return true;
     } catch (IOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);
