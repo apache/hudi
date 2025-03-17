@@ -18,6 +18,8 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.io.storage.row.HoodieFlinkIOFactory;
 import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -51,6 +53,8 @@ public class HadoopConfigurations {
     org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
     Map<String, String> options = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
     options.forEach(hadoopConf::set);
+    // Always use flink io factory
+    hadoopConf.set(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(), HoodieFlinkIOFactory.class.getName());
     return hadoopConf;
   }
 

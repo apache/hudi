@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.model.HoodieRecord;
+
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
@@ -167,4 +169,73 @@ public class DataTypeUtils {
     return DataTypes.ROW(fields.stream().toArray(DataTypes.Field[]::new)).notNull();
   }
 
+  /**
+   * Adds the Hoodie metadata fields to the given row type.
+   */
+  public static RowType addMetadataFields(
+      RowType rowType,
+      boolean withOperationField) {
+    return addMetadataFields(rowType, true, true, withOperationField);
+  }
+
+  /**
+   * Adds the Hoodie metadata fields to the given row type.
+   */
+  public static RowType addMetadataFields(
+      RowType rowType,
+      boolean isPopulateMetaFields,
+      boolean includeInstant,
+      boolean withOperationField) {
+    if (!isPopulateMetaFields && !withOperationField) {
+      return rowType;
+    }
+    List<RowType.RowField> mergedFields = new ArrayList<>();
+    LogicalType metadataFieldType = DataTypes.STRING().getLogicalType();
+
+    if (isPopulateMetaFields) {
+      RowType.RowField commitTimeField =
+          new RowType.RowField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, metadataFieldType, "commit time");
+      RowType.RowField commitSeqnoField =
+          new RowType.RowField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, metadataFieldType, "commit seqno");
+      RowType.RowField recordKeyField =
+          new RowType.RowField(HoodieRecord.RECORD_KEY_METADATA_FIELD, metadataFieldType, "record key");
+      RowType.RowField partitionPathField =
+          new RowType.RowField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, metadataFieldType, "partition path");
+      RowType.RowField fileNameField =
+          new RowType.RowField(HoodieRecord.FILENAME_METADATA_FIELD, metadataFieldType, "field name");
+
+      if (includeInstant) {
+        mergedFields.add(commitTimeField);
+      }
+      mergedFields.add(commitSeqnoField);
+      mergedFields.add(recordKeyField);
+      mergedFields.add(partitionPathField);
+      mergedFields.add(fileNameField);
+    }
+
+    if (withOperationField) {
+      RowType.RowField operationField =
+          new RowType.RowField(HoodieRecord.OPERATION_METADATA_FIELD, metadataFieldType, "operation");
+      mergedFields.add(operationField);
+    }
+
+    mergedFields.addAll(rowType.getFields());
+
+    return new RowType(false, mergedFields);
+  }
+
+  /**
+   * Check whether the given row type contains nested complex type, for example, Array of Row and Map of Row.
+   *
+   * @param rowType row type of record
+   * @return true if there exists any field with nested complex type.
+   */
+  public static boolean containsNestedComplexType(RowType rowType) {
+    return rowType.getFields().stream().anyMatch(
+        // the root type of the field is complex type
+        f -> f.getType().getTypeRoot().getFamilies().contains(LogicalTypeFamily.CONSTRUCTED)
+            // the inside element type is also complex type
+            && f.getType().getChildren().stream().anyMatch(
+                element -> element.getTypeRoot().getFamilies().contains(LogicalTypeFamily.CONSTRUCTED)));
+  }
 }
