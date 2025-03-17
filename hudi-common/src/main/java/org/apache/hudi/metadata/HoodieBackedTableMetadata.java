@@ -65,6 +65,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -824,7 +825,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return Collections.emptyMap();
     }
 
-    return getRecordsByKeys(keys, partitionName).values().stream().map(
+    return getAllRecordsByKeys(keys, partitionName).values().stream().flatMap(Collection::stream)
+        .map(
             record -> {
               if (!record.getData().isDeleted()) {
                 String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
