@@ -297,9 +297,9 @@ public class HoodieIndexConfig extends HoodieConfig {
       .key("hoodie.bucket.index.partition.expressions")
       .noDefaultValue()
       .markAdvanced()
-      .withDocumentation("Users can use this parameter to specify expression and the corresponding bucket " +
-          "numbers (separated by commas).Multiple rules are separated by semicolons like " +
-          "hoodie.bucket.index.partition.expressions=expression1,bucket-number1;expression2,bucket-number2");
+      .withDocumentation("Users can use this parameter to specify expression and the corresponding bucket "
+          + "numbers (separated by commas).Multiple rules are separated by semicolons like "
+          + "hoodie.bucket.index.partition.expressions=expression1,bucket-number1;expression2,bucket-number2");
 
   public static final ConfigProperty<String> BUCKET_INDEX_MAX_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.max.num.buckets")

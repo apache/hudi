@@ -360,14 +360,14 @@ public class TestHoodieCatalog {
         .createMetaClient(
             new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(flinkConf)), tablePathStr);
     HoodieStorage storage = metaClient.getStorage();
-    StoragePath initialHashing_config =
+    StoragePath initialHashingConfig =
         new StoragePath(metaClient.getHashingMetadataConfigPath(), SimpleBucketIndexUtils.INITIAL_HASHING_CONFIG_INSTANT + PartitionBucketIndexHashingConfig.HASHING_CONFIG_FILE_SUFFIX);
-    StoragePathInfo info = storage.getPathInfo(initialHashing_config);
-    Option<PartitionBucketIndexHashingConfig> hashing_config = SimpleBucketIndexUtils.loadHashingConfig(storage, info);
-    assertTrue(hashing_config.isPresent());
-    assertEquals(hashing_config.get().getDefaultBucketNumber(), Integer.parseInt(defaultBucketNumber));
-    assertEquals(hashing_config.get().getRule(), rule);
-    assertEquals(hashing_config.get().getExpressions(), expressions);
+    StoragePathInfo info = storage.getPathInfo(initialHashingConfig);
+    Option<PartitionBucketIndexHashingConfig> hashingConfig = SimpleBucketIndexUtils.loadHashingConfig(storage, info);
+    assertTrue(hashingConfig.isPresent());
+    assertEquals(hashingConfig.get().getDefaultBucketNumber(), Integer.parseInt(defaultBucketNumber));
+    assertEquals(hashingConfig.get().getRule(), rule);
+    assertEquals(hashingConfig.get().getExpressions(), expressions);
   }
 
   @Test

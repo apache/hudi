@@ -46,7 +46,7 @@ public class SimpleBucketIndexUtils {
                                               String expressions,
                                               String rule,
                                               int defaultBucketNumber,
-                                              String instant){
+                                              String instant) {
     if (StringUtils.isNullOrEmpty(expressions)) {
       return false;
     }

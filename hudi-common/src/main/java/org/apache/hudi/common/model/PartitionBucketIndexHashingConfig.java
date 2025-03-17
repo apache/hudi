@@ -38,7 +38,6 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
   private final String expressions;
   private final int defaultBucketNumber;
   private final String rule;
-
   private final int version;
   private final String instant;
 
@@ -70,7 +69,6 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     }
     return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
   }
-
 
   public static PartitionBucketIndexHashingConfig fromBytes(byte[] bytes) throws IOException {
     try {
