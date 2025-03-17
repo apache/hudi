@@ -89,7 +89,9 @@ public class TestHoodieFileGroupRecordBuffer {
 
     String preCombineField = "ts";
     List<String> dataSchemaFields = new ArrayList<>();
-    dataSchemaFields.addAll(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD, preCombineField));
+    dataSchemaFields.addAll(Arrays.asList(
+        HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD, preCombineField,
+        "colA", "colB", "colC", "colD"));
     if (addHoodieIsDeleted) {
       dataSchemaFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
@@ -114,12 +116,7 @@ public class TestHoodieFileGroupRecordBuffer {
     if (addHoodieIsDeleted) {
       expectedFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
-
-    Schema expectedSchema = dataSchema;
-    if (mergeMode != RecordMergeMode.CUSTOM) {
-      expectedSchema = getSchema(expectedFields);
-    }
-
+    Schema expectedSchema = mergeMode == RecordMergeMode.CUSTOM ? dataSchema : getSchema(expectedFields);
     Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema();
     assertEquals(expectedSchema, actualSchema);
   }

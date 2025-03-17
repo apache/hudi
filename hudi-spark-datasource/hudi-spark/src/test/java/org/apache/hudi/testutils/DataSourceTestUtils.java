@@ -127,7 +127,7 @@ public class DataSourceTestUtils {
       values[1] = partitions.get(RANDOM.nextInt(3));
       values[2] = new Date().getTime();
       values[3] = false;
-      values[5] = UUID.randomUUID().toString();
+      values[4] = UUID.randomUUID().toString();
       toReturn.add(RowFactory.create(values));
     }
     return toReturn;
@@ -150,7 +150,7 @@ public class DataSourceTestUtils {
       } else {
         values[1] = partition;
       }
-      values[2] = ((Long) row.getAs("ts")) + (lowerTs ? (-1 - RANDOM.nextInt(1000)) : (+1 + RANDOM.nextInt(1000)));
+      values[2] = ((Long) row.getAs("ts")) + (lowerTs ? (-1 - RANDOM.nextInt(1000)) : RANDOM.nextInt(1000));
       values[3] = false;
       rows.add(RowFactory.create(values));
     }
