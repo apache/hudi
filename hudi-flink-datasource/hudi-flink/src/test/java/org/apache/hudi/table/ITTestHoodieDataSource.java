@@ -2364,6 +2364,48 @@ public class ITTestHoodieDataSource {
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
+  @ParameterizedTest
+  @MethodSource("indexAndPartitioningParams")
+  void testWriteMultipleCommitWithLegacyAndRowDataWrite(String indexType, boolean hiveStylePartitioning) throws Exception {
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    streamTableEnv.executeSql(createSource);
+
+    // insert first batch of data with rowdata mode writing disabled
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
+        .option(FlinkOptions.INDEX_TYPE, indexType)
+        .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
+        .option(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED, false)
+        .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    streamTableEnv.executeSql("drop table t1");
+
+    // insert second batch of data with rowdata mode writing enabled
+    hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
+        .option(FlinkOptions.INDEX_TYPE, indexType)
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST)
+        .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
+        .option(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED, true)
+        .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    // reading from the earliest
+    List<Row> rows = execSelectSql(streamTableEnv, "select * from t1", 10);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
