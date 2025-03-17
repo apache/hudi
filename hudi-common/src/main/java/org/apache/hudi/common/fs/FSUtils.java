@@ -747,6 +747,11 @@ public class FSUtils {
     return pathInfoList;
   }
 
+  // Converts s3a to s3a
+  public static String s3aToS3(String s3aUrl) {
+    return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
+  }
+
   /**
    * Serializable function interface.
    *

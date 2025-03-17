@@ -86,7 +86,7 @@ public class MetricsReporterFactory {
         reporter = new ConsoleMetricsReporter(registry);
         break;
       case CLOUDWATCH:
-        reporter = (MetricsReporter) ReflectionUtils.loadClass("org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter",
+        reporter = (MetricsReporter) ReflectionUtils.loadClass("org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter",
             new Class[]{HoodieMetricsConfig.class, MetricRegistry.class}, metricsConfig, registry);
         break;
       case M3:
