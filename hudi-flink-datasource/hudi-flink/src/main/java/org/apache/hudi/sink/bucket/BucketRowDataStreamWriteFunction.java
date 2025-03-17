@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
-import org.apache.hudi.sink.StreamWriteFunction;
+import org.apache.hudi.sink.RowDataStreamWriteFunction;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -41,15 +41,15 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A stream write function with simple bucket hash index.
+ * A stream write function with simple bucket hash index, and it writes flink RowData without Avro conversion.
  *
  * <p>The task holds a fresh new local index: {(partition + bucket number) &rarr fileId} mapping, this index
  * is used for deciding whether the incoming records in an UPDATE or INSERT.
  * The index is local because different partition paths have separate items in the index.
  */
-public class BucketStreamWriteFunction extends StreamWriteFunction {
+public class BucketRowDataStreamWriteFunction extends RowDataStreamWriteFunction {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BucketStreamWriteFunction.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BucketRowDataStreamWriteFunction.class);
 
   private int parallelism;
 
@@ -87,7 +87,7 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
    *
    * @param config The config options
    */
-  public BucketStreamWriteFunction(Configuration config, RowType rowType) {
+  public BucketRowDataStreamWriteFunction(Configuration config, RowType rowType) {
     super(config, rowType);
   }
 
