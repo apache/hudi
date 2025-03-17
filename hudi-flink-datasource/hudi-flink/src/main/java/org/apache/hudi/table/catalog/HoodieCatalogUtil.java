@@ -27,6 +27,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieCatalogException;
+import org.apache.hudi.index.bucket.SimpleBucketIndexUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
@@ -300,5 +301,15 @@ public class HoodieCatalogUtil {
       throw new HoodieCatalogException("Hoodie catalog does not support to alter table type and index type");
     }
     return true;
+  }
+
+  public static boolean initPartitionBucketIndexMeta(HoodieTableMetaClient metaClient, CatalogBaseTable catalogTable) {
+    Map<String, String> options = catalogTable.getOptions();
+    String expressions = options.getOrDefault(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS.key(), "");
+    String rule = options.getOrDefault(FlinkOptions.BUCKET_INDEX_PARTITION_RULE.key(), FlinkOptions.BUCKET_INDEX_PARTITION_RULE.defaultValue());
+    int bucketNumber = options.containsKey(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key()) ?
+        Integer.valueOf(options.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key())) : FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
+
+    return SimpleBucketIndexUtils.initHashingConfig(metaClient, expressions, rule, bucketNumber, null);
   }
 }

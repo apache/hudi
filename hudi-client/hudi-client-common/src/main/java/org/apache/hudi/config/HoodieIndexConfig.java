@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.bucket.HoodieSimpleBucketIndexPartitionRule;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.slf4j.Logger;
@@ -285,6 +286,20 @@ public class HoodieIndexConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
           + "and each partition is divided to N buckets.");
+
+  public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_RULE_TYPE = ConfigProperty
+      .key("hoodie.bucket.index.partition.rule.type")
+      .defaultValue(HoodieSimpleBucketIndexPartitionRule.REGEX.value)
+      .markAdvanced()
+      .withDocumentation("Rule parser for expressions when using partition level bucket index, default regex.");
+
+  public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_EXPRESSIONS = ConfigProperty
+      .key("hoodie.bucket.index.partition.expressions")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Users can use this parameter to specify expression and the corresponding bucket " +
+          "numbers (separated by commas).Multiple rules are separated by semicolons like " +
+          "hoodie.bucket.index.partition.expressions=expression1,bucket-number1;expression2,bucket-number2");
 
   public static final ConfigProperty<String> BUCKET_INDEX_MAX_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.max.num.buckets")

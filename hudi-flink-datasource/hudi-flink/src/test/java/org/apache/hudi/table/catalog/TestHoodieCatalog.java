@@ -21,6 +21,7 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -30,10 +31,14 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.index.bucket.SimpleBucketIndexUtils;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -332,6 +337,37 @@ public class TestHoodieCatalog {
         catalog.inferTablePath(catalogPathStr, nonPartitionPath));
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
+  }
+
+  @Test
+  void testCreateTableWithPartitionSimpleBucketIndex() throws TableAlreadyExistException, DatabaseNotExistException, IOException {
+    String rule = "regex";
+    String expressions = "\\d{4}-(06-(01|17|18)|11-(01|10|11)),256";
+    String defaultBucketNumber = "20";
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
+    EXPECTED_CATALOG_TABLE.getOptions().put(FlinkOptions.BUCKET_INDEX_PARTITION_RULE.key(), rule);
+    EXPECTED_CATALOG_TABLE.getOptions().put(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS.key(), expressions);
+    EXPECTED_CATALOG_TABLE.getOptions().put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), defaultBucketNumber);
+    // test create table
+    catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, true);
+
+    // test table exist
+    assertTrue(catalog.tableExists(tablePath));
+
+    String tablePathStr = catalog.inferTablePath(catalogPathStr, tablePath);
+    Configuration flinkConf = TestConfigurations.getDefaultConf(tablePathStr);
+    HoodieTableMetaClient metaClient = HoodieTestUtils
+        .createMetaClient(
+            new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(flinkConf)), tablePathStr);
+    HoodieStorage storage = metaClient.getStorage();
+    StoragePath initialHashing_config =
+        new StoragePath(metaClient.getHashingMetadataConfigPath(), SimpleBucketIndexUtils.INITIAL_HASHING_CONFIG_INSTANT + PartitionBucketIndexHashingConfig.HASHING_CONFIG_FILE_SUFFIX);
+    StoragePathInfo info = storage.getPathInfo(initialHashing_config);
+    Option<PartitionBucketIndexHashingConfig> hashing_config = SimpleBucketIndexUtils.loadHashingConfig(storage, info);
+    assertTrue(hashing_config.isPresent());
+    assertEquals(hashing_config.get().getDefaultBucketNumber(), Integer.parseInt(defaultBucketNumber));
+    assertEquals(hashing_config.get().getRule(), rule);
+    assertEquals(hashing_config.get().getExpressions(), expressions);
   }
 
   @Test
