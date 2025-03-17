@@ -310,7 +310,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     "MERGE_ON_READ,8,COMMIT_TIME_ORDERING,GLOBAL_SIMPLE"))
   def testDeletesWithHoodieIsDeleted(tableType: HoodieTableType, tableVersion: Int, mergeMode: RecordMergeMode, indexType: IndexType): Unit = {
     var (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
-    writeOpts = writeOpts + ("hoodie.write.table.version" -> tableVersion.toString,
+    writeOpts = writeOpts ++ Map("hoodie.write.table.version" -> tableVersion.toString,
       "hoodie.datasource.write.table.type" -> tableType.name(),
       "hoodie.datasource.write.precombine.field" -> "ts",
       "hoodie.write.record.merge.mode" -> mergeMode.name(),
