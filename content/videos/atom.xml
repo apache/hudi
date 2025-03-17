@@ -2,11 +2,23 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/videos</id>
     <title>Apache Hudi Blog</title>
-    <updated>2025-01-26T00:00:00.000Z</updated>
+    <updated>2025-03-14T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/videos"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Metadata and Schema of Hudi Table]]></title>
+        <id>https://hudi.apache.org/videos/2025/03/14/metadata-and-schema-of-hudi-table</id>
+        <link href="https://hudi.apache.org/videos/2025/03/14/metadata-and-schema-of-hudi-table"/>
+        <updated>2025-03-14T00:00:00.000Z</updated>
+        <author>
+            <name>Ketan Keshri</name>
+        </author>
+        <category label="guide" term="guide"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="beginner" term="beginner"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Create your first Apache HUDI table in 5 simple steps]]></title>
         <id>https://hudi.apache.org/videos/2025/01/26/create-your-first-apache-hudi-table-in-5-simple-steps</id>
@@ -284,20 +296,5 @@
         <category label="deltastreamer" term="deltastreamer"/>
         <category label="hudi streamer" term="hudi streamer"/>
         <category label="joins" term="joins"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Learn How to use Cloudwatch metrics with Hudi AWS Glue Jobs]]></title>
-        <id>https://hudi.apache.org/videos/2024/05/18/Learn-How-to-use-Cloudwatch-metrics-with-Hudi-AWS-Glue-Jobs</id>
-        <link href="https://hudi.apache.org/videos/2024/05/18/Learn-How-to-use-Cloudwatch-metrics-with-Hudi-AWS-Glue-Jobs"/>
-        <updated>2024-05-18T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="aws glue" term="aws glue"/>
-        <category label="metrics" term="metrics"/>
-        <category label="amazon cloudwatch" term="amazon cloudwatch"/>
     </entry>
 </feed>

@@ -4,10 +4,35 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 05 Mar 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Thu, 13 Mar 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>cn</language>
+        <item>
+            <title><![CDATA[Building an Amazon Sales Analytics Pipeline with Apache Hudi on Databricks]]></title>
+            <link>https://hudi.apache.org/cn/blog/2025/03/13/hudi-on-dbr</link>
+            <guid>https://hudi.apache.org/cn/blog/2025/03/13/hudi-on-dbr</guid>
+            <pubDate>Thu, 13 Mar 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.linkedin.com/pulse/building-amazon-sales-analytics-pipeline-apache-hudi-databricks-ruotf/">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>apache hudi</category>
+            <category>aws</category>
+            <category>databricks</category>
+        </item>
+        <item>
+            <title><![CDATA[From Transactional Bottlenecks to Lightning-Fast Analytics]]></title>
+            <link>https://hudi.apache.org/cn/blog/2025/03/13/lightning-fast-analytics</link>
+            <guid>https://hudi.apache.org/cn/blog/2025/03/13/lightning-fast-analytics</guid>
+            <pubDate>Thu, 13 Mar 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://aakashsankritya.medium.com/from-transactional-bottlenecks-to-lightning-fast-analytics-74e0d3fff1c0">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>apache hudi</category>
+            <category>kafka</category>
+            <category>debezium</category>
+            <category>S3</category>
+        </item>
         <item>
             <title><![CDATA[21 Unique Reasons Why Apache Hudi Should Be Your Next Data Lakehouse]]></title>
             <link>https://hudi.apache.org/cn/blog/2025/03/05/hudi-21-unique-differentiators</link>
@@ -807,34 +832,6 @@ here are some plans that improve the Hudi core features:</p>
             <category>multi-writer</category>
             <category>concurrency-control</category>
             <category>blog</category>
-        </item>
-        <item>
-            <title><![CDATA[Use open table format libraries on AWS Glue 5.0 for Apache Spark]]></title>
-            <link>https://hudi.apache.org/cn/blog/2024/12/04/use-open-table-format-libraries-on-aws-glue-5-0-for-apache-spark</link>
-            <guid>https://hudi.apache.org/cn/blog/2024/12/04/use-open-table-format-libraries-on-aws-glue-5-0-for-apache-spark</guid>
-            <pubDate>Wed, 04 Dec 2024 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://aws.amazon.com/blogs/big-data/use-open-table-format-libraries-on-aws-glue-5-0-for-apache-spark/">here</a></span>]]></content:encoded>
-            <category>announcement</category>
-            <category>blog</category>
-            <category>apache hudi</category>
-            <category>aws glue</category>
-            <category>apache spark</category>
-            <category>table format</category>
-            <category>amazon</category>
-        </item>
-        <item>
-            <title><![CDATA[Apache Iceberg vs Hudi: Key Features, Performance & Use Cases]]></title>
-            <link>https://hudi.apache.org/cn/blog/2024/12/03/apache-iceberg-vs-apache-hudi</link>
-            <guid>https://hudi.apache.org/cn/blog/2024/12/03/apache-iceberg-vs-apache-hudi</guid>
-            <pubDate>Tue, 03 Dec 2024 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://estuary.dev/apache-iceberg-vs-apache-hudi/">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>apache hudi</category>
-            <category>apache iceberg</category>
-            <category>comparison</category>
-            <category>estuary</category>
         </item>
     </channel>
 </rss>

@@ -4,10 +4,19 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/cn/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Sun, 26 Jan 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Fri, 14 Mar 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>cn</language>
+        <item>
+            <title><![CDATA[Metadata and Schema of Hudi Table]]></title>
+            <link>https://hudi.apache.org/cn/videos/2025/03/14/metadata-and-schema-of-hudi-table</link>
+            <guid>https://hudi.apache.org/cn/videos/2025/03/14/metadata-and-schema-of-hudi-table</guid>
+            <pubDate>Fri, 14 Mar 2025 00:00:00 GMT</pubDate>
+            <category>guide</category>
+            <category>apache hudi</category>
+            <category>beginner</category>
+        </item>
         <item>
             <title><![CDATA[Create your first Apache HUDI table in 5 simple steps]]></title>
             <link>https://hudi.apache.org/cn/videos/2025/01/26/create-your-first-apache-hudi-table-in-5-simple-steps</link>
@@ -228,18 +237,6 @@
             <category>deltastreamer</category>
             <category>hudi streamer</category>
             <category>joins</category>
-        </item>
-        <item>
-            <title><![CDATA[Learn How to use Cloudwatch metrics with Hudi AWS Glue Jobs]]></title>
-            <link>https://hudi.apache.org/cn/videos/2024/05/18/Learn-How-to-use-Cloudwatch-metrics-with-Hudi-AWS-Glue-Jobs</link>
-            <guid>https://hudi.apache.org/cn/videos/2024/05/18/Learn-How-to-use-Cloudwatch-metrics-with-Hudi-AWS-Glue-Jobs</guid>
-            <pubDate>Sat, 18 May 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>aws glue</category>
-            <category>metrics</category>
-            <category>amazon cloudwatch</category>
         </item>
     </channel>
 </rss>
