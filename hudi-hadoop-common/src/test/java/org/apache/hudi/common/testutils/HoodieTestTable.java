@@ -659,6 +659,7 @@ public class HoodieTestTable implements AutoCloseable {
         .setInputGroups(clusteringGroups).build());
 
     HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
+    replaceMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);
     replacedFileIds.forEach(replacedFileId -> replaceMetadata.addReplaceFileId(partition, replacedFileId));
     replaceMetadata.setOperationType(operationType);
     if (newFileId.isPresent() && !StringUtils.isNullOrEmpty(newFileId.get())) {
