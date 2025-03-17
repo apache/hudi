@@ -471,7 +471,7 @@ public enum MetadataPartitionType {
 
   public static MetadataPartitionType fromPartitionPath(String partitionPath) {
     for (MetadataPartitionType partitionType : getValidValues()) {
-      if (isPartitionType(partitionPath, partitionType.getPartitionPath())) {
+      if (partitionType.isPartitionType(partitionPath)) {
         return partitionType;
       }
     }
