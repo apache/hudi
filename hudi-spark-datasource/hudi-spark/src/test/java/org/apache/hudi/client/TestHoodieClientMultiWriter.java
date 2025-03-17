@@ -184,17 +184,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       new SimpleConcurrentFileWritesConflictResolutionStrategy(),
       new PreferWriterConflictResolutionStrategy());
 
-  private static Iterable<Object[]> providerClassResolutionStrategyAndTableType() {
-    List<Object[]> opts = new ArrayList<>();
-    for (Object providerClass : LOCK_PROVIDER_CLASSES) {
-      for (ConflictResolutionStrategy resolutionStrategy : CONFLICT_RESOLUTION_STRATEGY_CLASSES) {
-        opts.add(new Object[] {COPY_ON_WRITE, providerClass, resolutionStrategy});
-        opts.add(new Object[] {MERGE_ON_READ, providerClass, resolutionStrategy});
-      }
-    }
-    return opts;
-  }
-
   public static Stream<Arguments> concurrentAlterSchemaTestDimension() {
     Object[][] data =
         new Object[][] {
@@ -746,9 +735,27 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     }
   }
 
-  @ParameterizedTest
-  @MethodSource("providerClassResolutionStrategyAndTableType")
-  public void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType, Class<? extends LockProvider<?>> providerClass,
+  @Test
+  public void testMultiWriterWithAsyncTableServicesWithConflictCOWSimpleConflictResol() throws Exception {
+    testMultiWriterWithAsyncTableServicesWithConflict(COPY_ON_WRITE, InProcessLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
+  }
+
+  @Test
+  public void testMultiWriterWithAsyncTableServicesWithConflictCOWPreferWriterConflictResol() throws Exception {
+    testMultiWriterWithAsyncTableServicesWithConflict(COPY_ON_WRITE, InProcessLockProvider.class, new PreferWriterConflictResolutionStrategy());
+  }
+
+  @Test
+  public void testMultiWriterWithAsyncTableServicesWithConflictMORSimpleConflictResol() throws Exception {
+    testMultiWriterWithAsyncTableServicesWithConflict(MERGE_ON_READ, InProcessLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
+  }
+
+  @Test
+  public void testMultiWriterWithAsyncTableServicesWithConflictMORPreferWriterConflictResol() throws Exception {
+    testMultiWriterWithAsyncTableServicesWithConflict(MERGE_ON_READ, InProcessLockProvider.class, new PreferWriterConflictResolutionStrategy());
+  }
+
+  private void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType, Class<? extends LockProvider<?>> providerClass,
                                                                 ConflictResolutionStrategy resolutionStrategy) throws Exception {
     // create inserts X 1
     if (tableType == MERGE_ON_READ) {
@@ -812,6 +819,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     final SparkRDDWriteClient client1 = getHoodieWriteClient(cfg2);
     final SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
     final SparkRDDWriteClient client3 = getHoodieWriteClient(cfg);
+    final String upsertCommitTime = client1.createNewInstantTime(); // upsert commit time has to be lesser than compaction instant time.
+    // and w/ MOR table, during conflict resolution, we will definitely hit conflict resolution exception.
+    // if the delta commit's instant time is not guaranteed to be < compaction instant time, then delta commit will succeed w/o issues.
 
     // Test with concurrent operations could be flaky, to reduce possibility of wrong ordering some queue is added
     // For InProcessLockProvider we could wait less
@@ -820,7 +830,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Create upserts, schedule cleaning, schedule compaction in parallel
     Future future1 = executors.submit(() -> {
-      final String newCommitTime = client1.createNewInstantTime();
       final int numRecords = 100;
       final String commitTimeBetweenPrevAndNew = secondCommitTime;
 
@@ -834,11 +843,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Since the concurrent modifications went in, this upsert has
         // to fail
         assertThrows(HoodieWriteConflictException.class, () -> {
-          createCommitWithUpserts(cfg, client1, thirdCommitTime, Option.of(commitTimeBetweenPrevAndNew), newCommitTime, numRecords);
+          createCommitWithUpserts(cfg, client1, thirdCommitTime, Option.of(commitTimeBetweenPrevAndNew), upsertCommitTime, numRecords);
         });
       } else {
         // We don't have the compaction for COW and so this upsert
         // has to pass
+        final String newCommitTime = client1.createNewInstantTime();
         assertDoesNotThrow(() -> {
           createCommitWithUpserts(cfg, client1, thirdCommitTime, Option.of(commitTimeBetweenPrevAndNew), newCommitTime, numRecords);
         });
