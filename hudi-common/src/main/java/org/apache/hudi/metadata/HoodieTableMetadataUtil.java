@@ -171,6 +171,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
@@ -1339,7 +1340,14 @@ public class HoodieTableMetadataUtil {
    * @param recordKey record key for which the file group index is looked up for.
    * @return An integer hash of the given string
    */
-  public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
+  public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups, String partitionName) {
+    if (MetadataPartitionType.SECONDARY_INDEX.isPartitionType(partitionName) && recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
+      return mapRecordKeyToFileGroupIndex(SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(recordKey), numFileGroups);
+    }
+    return mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
+  }
+
+  private static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
     int h = 0;
     for (int i = 0; i < recordKey.length(); ++i) {
       h = 31 * h + recordKey.charAt(i);

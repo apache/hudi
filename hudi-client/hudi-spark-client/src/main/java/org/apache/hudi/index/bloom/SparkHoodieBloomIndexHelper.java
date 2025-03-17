@@ -315,7 +315,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
       // NOTE: It's crucial that [[targetPartitions]] be congruent w/ the number of
       //       actual file-groups in the Bloom Index in MT
-      return mapRecordKeyToFileGroupIndex(bloomIndexEncodedKey, targetPartitions);
+      return mapRecordKeyToFileGroupIndex(bloomIndexEncodedKey, targetPartitions, BLOOM_FILTERS.getPartitionPath());
     }
   }
 
