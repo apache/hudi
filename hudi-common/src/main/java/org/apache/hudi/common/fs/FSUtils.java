@@ -738,6 +738,11 @@ public class FSUtils {
         ? new Path(null, path.toUri().getAuthority(), path.toUri().getPath()) : path;
   }
 
+  // Converts s3a to s3a
+  public static String s3aToS3(String s3aUrl) {
+    return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
+  }
+
   /**
    * Serializable function interface.
    *
