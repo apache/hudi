@@ -1507,10 +1507,11 @@ public class HoodieTableMetadataUtil {
     HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
 
     // NOTE: Writer schema added to commit metadata will not contain Hudi's metadata fields
-    Option<Schema> tableSchema = writerSchema.map(schema ->
-        tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
+    Option<Schema> tableSchema = writerSchema.isEmpty()
+        ? tableConfig.getTableCreateSchema() // the write schema does not set up correctly
+        : writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
 
-    return getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig,
+    return getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(tableSchema), false, recordTypeOpt);
   }
 
@@ -1576,10 +1577,10 @@ public class HoodieTableMetadataUtil {
                                                                            Option<HoodieRecordType> recordType) {
     List<String> columnsToIndex = metadataConfig.getColumnsEnabledForColumnStatsIndex();
     if (!columnsToIndex.isEmpty()) {
-      // if explicitly overriden
+      // if explicitly overridden
       if (isTableInitializing) {
         Map<String, Schema> toReturn = new LinkedHashMap<>();
-        columnsToIndex.stream().forEach(colName -> toReturn.put(colName, null));
+        columnsToIndex.forEach(colName -> toReturn.put(colName, null));
         return toReturn;
       }
       ValidationUtils.checkArgument(tableSchemaLazyOpt.get().isPresent(), "Table schema not found for the table while computing col stats");
@@ -1588,9 +1589,8 @@ public class HoodieTableMetadataUtil {
       Map<String, Schema> colsToIndexSchemaMap = new LinkedHashMap<>();
       columnsToIndex.stream().filter(fieldName -> !META_COL_SET_TO_INDEX.contains(fieldName))
           .map(colName -> Pair.of(colName, HoodieAvroUtils.getSchemaForField(tableSchema.get(), colName).getRight().schema()))
-          .filter(fieldNameSchemaPair -> {
-            return isColumnTypeSupported(fieldNameSchemaPair.getValue(), recordType);
-          }).forEach(entry -> colsToIndexSchemaMap.put(entry.getKey(), entry.getValue()));
+          .filter(fieldNameSchemaPair -> isColumnTypeSupported(fieldNameSchemaPair.getValue(), recordType))
+          .forEach(entry -> colsToIndexSchemaMap.put(entry.getKey(), entry.getValue()));
       return colsToIndexSchemaMap;
     }
     // if not overridden
@@ -1599,10 +1599,9 @@ public class HoodieTableMetadataUtil {
       tableSchemaLazyOpt.get().map(schema -> getFirstNSupportedFields(schema, metadataConfig.maxColumnsToIndexForColStats(), recordType)).orElse(Stream.empty())
           .forEach(entry -> colsToIndexSchemaMap.put(entry.getKey(), entry.getValue()));
       return colsToIndexSchemaMap;
-    } else if (isTableInitializing) {
-      return Collections.emptyMap();
     } else {
-      throw new HoodieMetadataException("Cannot initialize col stats with empty list of cols");
+      // initialize col stats index config with empty list of cols
+      return Collections.emptyMap();
     }
   }
 
