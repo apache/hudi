@@ -20,21 +20,15 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 
-import java.io.IOException;
 import java.util.Map;
 
 /**
  * A provider that used to collect Hoodie Index data like column stats after writing files.
  */
-public interface HoodieColumnMetadataProvider {
+public interface ColumnRangeMetadataProvider {
 
   /**
    * Get the column statistics, key is column name, value is the statistic for the column.
    */
   Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta();
-
-  /**
-   * Finalize the writer to ensure the column statistics can be fetched normally.
-   */
-  void finalizeWrite() throws IOException;
 }

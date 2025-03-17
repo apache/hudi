@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -313,14 +312,18 @@ public class OrcUtils extends FileFormatUtils {
                                            Schema writerSchema,
                                            Schema readerSchema,
                                            String keyFieldName,
-                                           Map<String, String> paramsMap,
-                                           HoodieDataBlock.BlockColumnMetaCollector columnMetaCollector) throws IOException {
+                                           Map<String, String> paramsMap) throws IOException {
     throw new UnsupportedOperationException("Hudi log blocks do not support ORC format yet");
   }
 
   @Override
-  public byte[] serializeRecordsToLogBlock(HoodieStorage storage, Iterator<HoodieRecord> records, HoodieRecord.HoodieRecordType recordType, Schema writerSchema, Schema readerSchema,
-                                           String keyFieldName, Map<String, String> paramsMap, HoodieDataBlock.BlockColumnMetaCollector columnMetaCollector) throws IOException {
+  public Pair<byte[], Map<String, HoodieColumnRangeMetadata<Comparable>>> serializeRecordsToLogBlock(HoodieStorage storage,
+                                                                                                     Iterator<HoodieRecord> records,
+                                                                                                     HoodieRecord.HoodieRecordType recordType,
+                                                                                                     Schema writerSchema,
+                                                                                                     Schema readerSchema,
+                                                                                                     String keyFieldName,
+                                                                                                     Map<String, String> paramsMap) throws IOException {
     throw new UnsupportedOperationException("Hudi log blocks do not support ORC format yet");
   }
 }

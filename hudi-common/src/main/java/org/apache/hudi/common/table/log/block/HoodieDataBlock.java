@@ -97,20 +97,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     this.enablePointLookups = false;
   }
 
-  public HoodieDataBlock(byte[] content,
-                         Map<HeaderMetadataType, String> header,
-                         Map<FooterMetadataType, String> footer,
-                         String keyFieldName,
-                         Map<String, HoodieColumnRangeMetadata<Comparable>> recordColumnStats) {
-    super(header, footer, Option.empty(), Option.of(content), null, false);
-    this.records = Option.empty();
-    this.keyFieldName = keyFieldName;
-    // If no reader-schema has been provided assume writer-schema as one
-    this.readerSchema = AvroSchemaCache.intern(getWriterSchema(super.getLogBlockHeader()));
-    this.enablePointLookups = false;
-    this.recordColumnStats = Option.ofNullable(recordColumnStats);
-  }
-
   /**
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
@@ -480,14 +466,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     public HoodieRecord<T> next() {
       return this.next;
     }
-  }
-
-  /**
-   * {@link BlockColumnMetaCollector} is used to collect column range metadata of data in a data block.
-   */
-  public interface BlockColumnMetaCollector {
-
-    void collectColumnMeta(Map<String, HoodieColumnRangeMetadata<Comparable>> columnMeta);
   }
 
   /**

@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -167,8 +166,7 @@ public class HFileUtils extends FileFormatUtils {
                                            Schema writerSchema,
                                            Schema readerSchema,
                                            String keyFieldName,
-                                           Map<String, String> paramsMap,
-                                           HoodieDataBlock.BlockColumnMetaCollector columnMetaCollector) throws IOException {
+                                           Map<String, String> paramsMap) throws IOException {
     Compression.Algorithm compressionAlgorithm = getHFileCompressionAlgorithm(paramsMap);
     HFileContext context = new HFileContextBuilder()
         .withBlockSize(DEFAULT_BLOCK_SIZE_FOR_LOG_FILE)
@@ -235,9 +233,15 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public byte[] serializeRecordsToLogBlock(HoodieStorage storage, Iterator<HoodieRecord> records, HoodieRecord.HoodieRecordType recordType, Schema writerSchema, Schema readerSchema,
-                                           String keyFieldName, Map<String, String> paramsMap, HoodieDataBlock.BlockColumnMetaCollector columnMetaCollector) throws IOException {
-    return new byte[0];
+  public Pair<byte[], Map<String, HoodieColumnRangeMetadata<Comparable>>> serializeRecordsToLogBlock(
+      HoodieStorage storage,
+      Iterator<HoodieRecord> records,
+      HoodieRecord.HoodieRecordType recordType,
+      Schema writerSchema,
+      Schema readerSchema,
+      String keyFieldName,
+      Map<String, String> paramsMap) throws IOException {
+    throw new UnsupportedOperationException("HFileUtils does not support serializeRecordsToLogBlock returning HoodieColumnRangeMetadata.");
   }
 
   private static Option<String> getRecordKey(HoodieRecord record, Schema readerSchema, String keyFieldName) {

@@ -26,13 +26,12 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
-import org.apache.hudi.io.storage.HoodieColumnMetadataProvider;
+import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -69,6 +68,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -389,25 +389,23 @@ public class ParquetUtils extends FileFormatUtils {
                                            Schema writerSchema,
                                            Schema readerSchema,
                                            String keyFieldName,
-                                           Map<String, String> paramsMap,
-                                           HoodieDataBlock.BlockColumnMetaCollector columnMetaCollector) throws IOException {
+                                           Map<String, String> paramsMap) throws IOException {
     if (records.size() == 0) {
       return new byte[0];
     }
     HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
     return serializeRecordsToLogBlock(storage, records.iterator(),
-        recordType, writerSchema, readerSchema, keyFieldName, paramsMap, columnMetaCollector);
+        recordType, writerSchema, readerSchema, keyFieldName, paramsMap).getLeft();
   }
 
   @Override
-  public byte[] serializeRecordsToLogBlock(HoodieStorage storage,
-                                           Iterator<HoodieRecord> recordItr,
-                                           HoodieRecord.HoodieRecordType recordType,
-                                           Schema writerSchema,
-                                           Schema readerSchema,
-                                           String keyFieldName,
-                                           Map<String, String> paramsMap,
-                                           HoodieDataBlock.BlockColumnMetaCollector columnMetaCollector) throws IOException {
+  public Pair<byte[], Map<String, HoodieColumnRangeMetadata<Comparable>>> serializeRecordsToLogBlock(HoodieStorage storage,
+                                                                                                     Iterator<HoodieRecord> recordItr,
+                                                                                                     HoodieRecord.HoodieRecordType recordType,
+                                                                                                     Schema writerSchema,
+                                                                                                     Schema readerSchema,
+                                                                                                     String keyFieldName,
+                                                                                                     Map<String, String> paramsMap) throws IOException {
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     HoodieConfig config = new HoodieConfig();
     paramsMap.entrySet().stream().forEach(entry -> config.setValue(entry.getKey(), entry.getValue()));
@@ -415,22 +413,22 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
     config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
 
-    try (HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType)) {
-      while (recordItr.hasNext()) {
-        HoodieRecord record = recordItr.next();
-        String recordKey = record.getRecordKey(readerSchema, keyFieldName);
-        parquetWriter.write(recordKey, record, writerSchema);
-      }
-      outputStream.flush();
-      // collect column range metadata if necessary.
-      if (parquetWriter instanceof HoodieColumnMetadataProvider) {
-        HoodieColumnMetadataProvider columnMetadataProvider = (HoodieColumnMetadataProvider) parquetWriter;
-        columnMetadataProvider.finalizeWrite();
-        columnMetaCollector.collectColumnMeta(columnMetadataProvider.getColumnRangeMeta());
-      }
+    HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
+        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType);
+    while (recordItr.hasNext()) {
+      HoodieRecord record = recordItr.next();
+      String recordKey = record.getRecordKey(readerSchema, keyFieldName);
+      parquetWriter.write(recordKey, record, writerSchema);
     }
-    return outputStream.toByteArray();
+    outputStream.flush();
+    parquetWriter.close();
+    // collect column range metadata if necessary.
+    Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata = Collections.emptyMap();
+    if (parquetWriter instanceof ColumnRangeMetadataProvider) {
+      ColumnRangeMetadataProvider columnMetadataProvider = (ColumnRangeMetadataProvider) parquetWriter;
+      columnRangeMetadata = columnMetadataProvider.getColumnRangeMeta();
+    }
+    return Pair.of(outputStream.toByteArray(), columnRangeMetadata);
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {
