@@ -50,7 +50,6 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import java.util.function.Consumer
 import java.util.stream.Collectors
 
-import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
 
 /**
@@ -1698,13 +1697,4 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertTrue(metadataPartitionExists(basePath, context, PARTITION_NAME_SECONDARY_INDEX_PREFIX + secondaryIndexName2))
     assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_NAME_SECONDARY_INDEX_PREFIX + secondaryIndexName2))
   }
-
-  /**
-   * Utility method for converting list of Row to list of Seq.
-   *
-   * @param inputList list of Row
-   * @return list of Seq
-   */
-  def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
-    JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
 }
