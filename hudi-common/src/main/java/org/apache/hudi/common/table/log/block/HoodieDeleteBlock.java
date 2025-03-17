@@ -23,22 +23,18 @@ import org.apache.hudi.avro.model.HoodieDeleteRecordList;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.table.log.BlockBytesConverter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.io.BinaryDecoder;
-import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumReader;
-import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
-import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumReader;
-import org.apache.avro.specific.SpecificDatumWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,27 +45,18 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far.
  */
 public class HoodieDeleteBlock extends HoodieLogBlock {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieDeleteBlock.class);
-  /**
-   * These static builders are added to avoid performance issue in Avro 1.10.
-   * You can find more details in HoodieAvroUtils, HUDI-3834, and AVRO-3048.
-   */
-  private static final Lazy<HoodieDeleteRecordList.Builder> HOODIE_DELETE_RECORD_LIST_BUILDER_STUB =
-      Lazy.lazily(HoodieDeleteRecordList::newBuilder);
-  private static final Lazy<HoodieDeleteRecord.Builder> HOODIE_DELETE_RECORD_BUILDER_STUB =
-      Lazy.lazily(HoodieDeleteRecord::newBuilder);
 
   // Records to delete, sorted based on the record position if writing record position to the log block header
   private DeleteRecord[] recordsToDelete;
@@ -79,6 +66,11 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
     addRecordPositionsIfRequired(recordsToDelete, Pair::getRight);
     this.recordsToDelete = recordsToDelete.stream().map(Pair::getLeft).toArray(DeleteRecord[]::new);
+  }
+
+  public HoodieDeleteBlock(byte[] content,
+                           Map<HeaderMetadataType, String> header) {
+    this(Option.of(content), null, false, Option.empty(), header, new HashMap<>());
   }
 
   public HoodieDeleteBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
@@ -99,13 +91,18 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
       getRecordsToDelete();
     }
 
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    DataOutputStream output = new DataOutputStream(baos);
-    output.writeInt(version);
-    byte[] bytesToWrite = (version <= 2) ? serializeV2() : serializeV3();
-    output.writeInt(bytesToWrite.length);
-    output.write(bytesToWrite);
-    return baos.toByteArray();
+    if (version <= 2) {
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      DataOutputStream output = new DataOutputStream(baos);
+      output.writeInt(version);
+      byte[] bytesToWrite = serializeV2();
+      output.writeInt(bytesToWrite.length);
+      output.write(bytesToWrite);
+      return baos.toByteArray();
+    } else {
+      Iterator<DeleteRecord> deleteRecordIterator = Arrays.stream(getRecordsToDelete()).iterator();
+      return BlockBytesConverter.getDeleteBlockSerializer().serialize(deleteRecordIterator);
+    }
   }
 
   public DeleteRecord[] getRecordsToDelete() {
@@ -133,27 +130,6 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   private byte[] serializeV2() throws IOException {
     // Serialization for log block version 2
     return SerializationUtils.serialize(getRecordsToDelete());
-  }
-
-  private byte[] serializeV3() throws IOException {
-    DatumWriter<HoodieDeleteRecordList> writer = new SpecificDatumWriter<>(HoodieDeleteRecordList.class);
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(baos, null);
-    // Serialization for log block version 3 and above
-    HoodieDeleteRecordList.Builder recordListBuilder = HOODIE_DELETE_RECORD_LIST_BUILDER_STUB.get();
-    HoodieDeleteRecord.Builder recordBuilder = HOODIE_DELETE_RECORD_BUILDER_STUB.get();
-    List<HoodieDeleteRecord> deleteRecordList = Arrays.stream(getRecordsToDelete())
-        .map(record -> HoodieDeleteRecord.newBuilder(recordBuilder)
-            .setRecordKey(record.getRecordKey())
-            .setPartitionPath(record.getPartitionPath())
-            .setOrderingVal(wrapValueIntoAvro(record.getOrderingValue()))
-            .build())
-        .collect(Collectors.toList());
-    writer.write(HoodieDeleteRecordList.newBuilder(recordListBuilder)
-        .setDeleteRecordList(deleteRecordList)
-        .build(), encoder);
-    encoder.flush();
-    return baos.toByteArray();
   }
 
   private static DeleteRecord[] deserialize(int version, byte[] data) throws IOException {

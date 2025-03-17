@@ -19,9 +19,12 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieLogFormat.WriterBuilder;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -35,8 +38,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * HoodieLogFormatWriter can be used to append blocks to a log file Use HoodieLogFormat.WriterBuilder to construct.
@@ -142,6 +148,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     long sizeWritten = 0;
     // HUDI-2655. here we wrap originalOutputStream to ensure huge blocks can be correctly written
     FSDataOutputStream outputStream = new FSDataOutputStream(originalOutputStream, new FileSystem.Statistics(storage.getScheme()), startPos);
+    List<HoodieColumnRangeMetadata<Comparable>> recordStats = new ArrayList<>();
     for (HoodieLogBlock block: blocks) {
       long startSize = outputStream.size();
 
@@ -180,6 +187,12 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
       // Fetch the size again, so it accounts also (9).
 
+      // collect record stats if there exits.
+      if (block instanceof HoodieDataBlock)  {
+        Map<String, HoodieColumnRangeMetadata<Comparable>> blockRecordStats = ((HoodieDataBlock) block).getRecordStats();
+        recordStats.addAll(blockRecordStats.values());
+      }
+
       // HUDI-2655. Check the size written to avoid log blocks whose size overflow.
       if (outputStream.size() == Integer.MAX_VALUE) {
         throw new HoodieIOException("Blocks appended may overflow. Please decrease log block size or log block amount");
@@ -189,7 +202,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     // Flush all blocks to disk
     flush();
 
-    AppendResult result = new AppendResult(logFile, startPos, sizeWritten);
+    // merge blocks column stats to get column stats of log file.
+    Map<String, HoodieColumnRangeMetadata<Comparable>> recordColumnStats =
+        new ParquetUtils().mergeColumnStats(recordStats.stream())
+            .stream().collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, e -> e));
+    AppendResult result = new AppendResult(logFile, recordColumnStats, startPos, sizeWritten);
     // roll over if size is past the threshold
     rolloverIfNeeded();
     return result;

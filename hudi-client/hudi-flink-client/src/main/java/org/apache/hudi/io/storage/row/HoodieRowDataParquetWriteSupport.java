@@ -36,12 +36,10 @@ import java.util.Map;
  */
 public class HoodieRowDataParquetWriteSupport extends RowDataParquetWriteSupport {
 
-  private final Configuration hadoopConf;
   private final Option<HoodieBloomFilterWriteSupport<String>> bloomFilterWriteSupportOpt;
 
   public HoodieRowDataParquetWriteSupport(Configuration conf, RowType rowType, BloomFilter bloomFilter) {
-    super(rowType);
-    this.hadoopConf = new Configuration(conf);
+    super(rowType, conf);
     this.bloomFilterWriteSupportOpt = Option.ofNullable(bloomFilter)
         .map(HoodieBloomFilterRowDataWriteSupport::new);
   }

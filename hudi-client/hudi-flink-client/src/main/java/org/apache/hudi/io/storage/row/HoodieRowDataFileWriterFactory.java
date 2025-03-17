@@ -20,17 +20,27 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.AvroSchemaConverter;
 
+import org.apache.avro.Schema;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.io.OutputStream;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
@@ -39,7 +49,43 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 /**
  * Factory to assist in instantiating a new {@link HoodieRowDataFileWriter}.
  */
-public class HoodieRowDataFileWriterFactory {
+public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
+
+  public HoodieRowDataFileWriterFactory(HoodieStorage storage) {
+    super(storage);
+  }
+
+  /**
+   * Create a parquet writer on a given OutputStream.
+   *
+   * @param outputStream outputStream where parquet bytes will be written into
+   * @param config hoodie config
+   * @param schema write schema
+   * @return an HoodieFileWriter for writing hoodie records.
+   */
+  @Override
+  protected HoodieFileWriter newParquetFileWriter(
+      OutputStream outputStream,
+      HoodieConfig config,
+      Schema schema) throws IOException {
+    final DataType rowDataType = AvroSchemaConverter.convertToDataType(schema);
+    final RowType rowType = (RowType) rowDataType.getLogicalType();
+    HoodieRowDataParquetWriteSupport writeSupport =
+        new HoodieRowDataParquetWriteSupport(
+            storage.getConf().unwrapAs(Configuration.class), rowType, null);
+    return new HoodieRowDataParquetStreamWriter(
+        new FSDataOutputStream(outputStream, null),
+        writeSupport,
+        new HoodieParquetConfig<>(
+            writeSupport,
+            getCompressionCodecName(config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
+            config.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
+            config.getIntOrDefault(HoodieStorageConfig.PARQUET_PAGE_SIZE),
+            config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
+            new HadoopStorageConfiguration(writeSupport.getHadoopConf()),
+            config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
+            config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED)));
+  }
 
   /**
    * Factory method to assist in instantiating an instance of {@link HoodieRowDataFileWriter}.
