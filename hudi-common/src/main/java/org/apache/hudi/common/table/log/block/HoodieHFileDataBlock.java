@@ -107,7 +107,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(HoodieFileFormat.HFILE)
         .serializeRecordsToLogBlock(
             storage, records, writerSchema, getSchema(), getKeyFieldName(),
-            Collections.singletonMap(HFILE_COMPRESSION_ALGORITHM_NAME.key(), compressionCodec.get()), columnMeta -> { });
+            Collections.singletonMap(HFILE_COMPRESSION_ALGORITHM_NAME.key(), compressionCodec.get()));
   }
 
   @Override

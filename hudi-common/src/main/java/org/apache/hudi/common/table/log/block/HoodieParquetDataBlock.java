@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
@@ -51,9 +50,9 @@ import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_RE
  */
 public class HoodieParquetDataBlock extends HoodieDataBlock {
 
-  private final Option<String> compressionCodecName;
-  private final Option<Double> expectedCompressionRatio;
-  private final Option<Boolean> useDictionaryEncoding;
+  protected final Option<String> compressionCodecName;
+  protected final Option<Double> expectedCompressionRatio;
+  protected final Option<Boolean> useDictionaryEncoding;
 
   public HoodieParquetDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                                 Option<byte[]> content,
@@ -83,20 +82,6 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     this.useDictionaryEncoding = Option.of(useDictionaryEncoding);
   }
 
-  public HoodieParquetDataBlock(byte[] content,
-                                Map<HeaderMetadataType, String> header,
-                                String keyField,
-                                String compressionCodecName,
-                                double expectedCompressionRatio,
-                                boolean useDictionaryEncoding,
-                                Map<String, HoodieColumnRangeMetadata<Comparable>> recordColumnStats) {
-    super(content, header, new HashMap<>(), keyField, recordColumnStats);
-
-    this.compressionCodecName = Option.of(compressionCodecName);
-    this.expectedCompressionRatio = Option.of(expectedCompressionRatio);
-    this.useDictionaryEncoding = Option.of(useDictionaryEncoding);
-  }
-
   @Override
   public HoodieLogBlockType getBlockType() {
     return HoodieLogBlockType.PARQUET_DATA_BLOCK;
@@ -112,14 +97,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA)));
 
     return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(PARQUET)
-        .serializeRecordsToLogBlock(
-            storage,
-            records,
-            writerSchema,
-            getSchema(),
-            getKeyFieldName(),
-            paramsMap,
-            columnMeta -> recordColumnStats = Option.of(columnMeta));
+        .serializeRecordsToLogBlock(storage, records, writerSchema, getSchema(), getKeyFieldName(), paramsMap);
   }
 
   /**

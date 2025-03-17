@@ -33,19 +33,18 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.log.AppendResult;
-import org.apache.hudi.common.table.log.BlockBytesConverter;
-import org.apache.hudi.common.table.log.BlockBytesConverter.BlockContentSerializer;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
-import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.MiniBatchHandle;
+import org.apache.hudi.io.log.block.HoodieFlinkParquetDataBlock;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -57,7 +56,6 @@ import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -71,6 +69,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED;
+import static org.apache.hudi.common.model.HoodieRecordLocation.INVALID_POSITION;
 
 /**
  * A write handle that supports creating a log file and writing records based on record Iterator.
@@ -248,7 +247,6 @@ public class RowDataLogHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> 
 
   /**
    * Build a delete log block based on the delete record iterator, and block header.
-   * Note: currently, flink do not support record merging based on record position.
    *
    * @param deleteRecordIterator delete record iterator used to build the delete block
    * @param header header for the delete block
@@ -256,15 +254,16 @@ public class RowDataLogHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> 
    */
   private HoodieLogBlock genDeleteBlock(
       Iterator<DeleteRecord> deleteRecordIterator,
-      Map<HoodieLogBlock.HeaderMetadataType, String> header) throws IOException {
-    BlockContentSerializer<DeleteRecord> deleteBlockSerializer = BlockBytesConverter.getDeleteBlockSerializer();
-    byte[] content = deleteBlockSerializer.serialize(deleteRecordIterator);
-    return new HoodieDeleteBlock(content, header);
+      Map<HoodieLogBlock.HeaderMetadataType, String> header) {
+    List<Pair<DeleteRecord, Long>> recordsToDelete = new ArrayList<>();
+    while (deleteRecordIterator.hasNext()) {
+      recordsToDelete.add(Pair.of(deleteRecordIterator.next(), INVALID_POSITION));
+    }
+    return new HoodieDeleteBlock(recordsToDelete, header);
   }
 
   /**
    * Build a data block based on the hoodie record iterator, and block header.
-   * Note: currently, flink do not support record merging based on record position.
    *
    * @param writeConfig hoodie write config
    * @param logDataBlockFormat type of the data block
@@ -278,25 +277,20 @@ public class RowDataLogHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> 
       HoodieLogBlockType logDataBlockFormat,
       Iterator<HoodieRecord> recordIterator,
       String keyField,
-      Map<HoodieLogBlock.HeaderMetadataType, String> header) throws IOException {
+      Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     switch (logDataBlockFormat) {
       case PARQUET_DATA_BLOCK:
         Map<String, String> paramsMap = new HashMap<>();
         paramsMap.put(PARQUET_COMPRESSION_CODEC_NAME.key(), writeConfig.getParquetCompressionCodec());
         paramsMap.put(PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(writeConfig.getParquetCompressionRatio()));
         paramsMap.put(PARQUET_DICTIONARY_ENABLED.key(), String.valueOf(writeConfig.parquetDictionaryEnabled()));
-        BlockContentSerializer<HoodieRecord> blockContentSerializer =
-            BlockBytesConverter.getDataBlockSerializer(
-                HoodieLogBlockType.PARQUET_DATA_BLOCK, storage, HoodieRecord.HoodieRecordType.FLINK, logWriteSchema, logWriteSchema, keyField, paramsMap);
-        byte[] blockContent = blockContentSerializer.serialize(recordIterator);
-        return new HoodieParquetDataBlock(
-            blockContent,
+        return new HoodieFlinkParquetDataBlock(
+            recordIterator,
             header,
             keyField,
             writeConfig.getParquetCompressionCodec(),
             writeConfig.getParquetCompressionRatio(),
-            writeConfig.parquetDictionaryEnabled(),
-            blockContentSerializer.getColumnStatsMeta());
+            writeConfig.parquetDictionaryEnabled());
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " is not implemented for Flink RowData append handle.");
     }

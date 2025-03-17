@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -324,8 +323,7 @@ public abstract class FileFormatUtils {
                                                     List<HoodieRecord> records,
                                                     Schema writerSchema,
                                                     Schema readerSchema, String keyFieldName,
-                                                    Map<String, String> paramsMap,
-                                                    HoodieDataBlock.BlockColumnMetaCollector columnMetaCollector) throws IOException;
+                                                    Map<String, String> paramsMap) throws IOException;
 
   /**
    * Serializes Hudi records to the log block.
@@ -336,17 +334,16 @@ public abstract class FileFormatUtils {
    * @param readerSchema schema of reader.
    * @param keyFieldName name of key field.
    * @param paramsMap    additional params for serialization.
-   * @return byte array after serialization.
+   * @return pair of byte array after serialization and column range metadata.
    * @throws IOException upon serialization error.
    */
-  public abstract byte[] serializeRecordsToLogBlock(HoodieStorage storage,
-                                                    Iterator<HoodieRecord> records,
-                                                    HoodieRecord.HoodieRecordType recordType,
-                                                    Schema writerSchema,
-                                                    Schema readerSchema,
-                                                    String keyFieldName,
-                                                    Map<String, String> paramsMap,
-                                                    HoodieDataBlock.BlockColumnMetaCollector columnMetaCollector) throws IOException;
+  public abstract Pair<byte[], Map<String, HoodieColumnRangeMetadata<Comparable>>> serializeRecordsToLogBlock(HoodieStorage storage,
+                                                                                                              Iterator<HoodieRecord> records,
+                                                                                                              HoodieRecord.HoodieRecordType recordType,
+                                                                                                              Schema writerSchema,
+                                                                                                              Schema readerSchema,
+                                                                                                              String keyFieldName,
+                                                                                                              Map<String, String> paramsMap) throws IOException;
 
   // -------------------------------------------------------------------------
   //  Inner Class

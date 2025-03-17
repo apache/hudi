@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.io.storage.HoodieColumnMetadataProvider;
+import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
 
@@ -44,9 +44,9 @@ import java.util.stream.Collectors;
  *
  * <p>{@link HoodieRowDataParquetStreamWriter} also supports collect and report column statistics based on the parquet metadata.
  */
-public class HoodieRowDataParquetStreamWriter implements HoodieRowDataFileWriter, HoodieColumnMetadataProvider {
+public class HoodieRowDataParquetStreamWriter implements HoodieRowDataFileWriter, ColumnRangeMetadataProvider {
   private final ParquetWriter writer;
-  private boolean isFinalized;
+  private boolean isClosed;
   private final HoodieRowDataParquetWriteSupport writeSupport;
 
   public HoodieRowDataParquetStreamWriter(
@@ -95,24 +95,19 @@ public class HoodieRowDataParquetStreamWriter implements HoodieRowDataFileWriter
 
   @Override
   public void close() throws IOException {
-    finalizeWrite();
+    if (isClosed) {
+      return;
+    }
+    this.writer.close();
+    isClosed = true;
   }
 
   @Override
   public Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta() {
-    ParquetUtils parquetUtils = new ParquetUtils();
-    ValidationUtils.checkArgument(isFinalized, "Column range metadata can only be fetched after the Parquet writer is closed.");
+    ValidationUtils.checkArgument(isClosed, "Column range metadata can only be fetched after the Parquet writer is closed.");
     ParquetMetadata metadata = writer.getFooter();
+    ParquetUtils parquetUtils = new ParquetUtils();
     List<HoodieColumnRangeMetadata<Comparable>> columnMetaList = parquetUtils.readColumnStatsFromMetadata(metadata, "", Option.empty());
     return columnMetaList.stream().collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, colMeta -> colMeta));
-  }
-
-  @Override
-  public void finalizeWrite() throws IOException {
-    if (isFinalized) {
-      return;
-    }
-    this.writer.close();
-    isFinalized = true;
   }
 }
