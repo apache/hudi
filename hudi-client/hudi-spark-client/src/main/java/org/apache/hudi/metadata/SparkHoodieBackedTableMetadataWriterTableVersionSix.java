@@ -60,20 +60,6 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieBackedTableMetadataWriter.class);
 
-  /**
-   * Return a Spark based implementation of {@code HoodieTableMetadataWriter} which can be used to
-   * write to the metadata table.
-   * <p>
-   * If the metadata table does not exist, an attempt is made to bootstrap it but there is no guaranteed that
-   * table will end up bootstrapping at this time.
-   *
-   * @param conf
-   * @param writeConfig
-   * @param context
-   * @param inflightInstantTimestamp Timestamp of an instant which is in-progress. This instant is ignored while
-   *                                 attempting to bootstrap the table.
-   * @return An instance of the {@code HoodieTableMetadataWriter}
-   */
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context,

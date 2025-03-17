@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -38,15 +39,20 @@ import org.apache.hudi.storage.StorageConfiguration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
+/**
+ * HoodieBackedTableMetadataWriter for tables with version 6. The class derives most of the functionality from HoodieBackedTableMetadataWriter
+ * and overrides some behaviour to make it compatible for version 6.
+ */
 public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends HoodieBackedTableMetadataWriter<I> {
 
-  private static final int PARTITION_INITIALIZATION_TIME_SUFFIX = 10;
+  private final static int PARTITION_INITIALIZATION_TIME_SUFFIX = 10;
 
   /**
    * Hudi backed table metadata writer.
@@ -63,6 +69,15 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
                                                            HoodieEngineContext engineContext,
                                                            Option<String> inflightInstantTimestamp) {
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+  }
+
+  @Override
+  List<MetadataPartitionType> getEnabledPartitions(TypedProperties writeConfigProps, HoodieTableMetaClient metaClient) {
+    return MetadataPartitionType.getEnabledPartitions(writeConfigProps, metaClient).stream()
+        .filter(partition -> !partition.equals(MetadataPartitionType.SECONDARY_INDEX))
+        .filter(partition -> !partition.equals(MetadataPartitionType.EXPRESSION_INDEX))
+        .filter(partition -> !partition.equals(MetadataPartitionType.PARTITION_STATS))
+        .collect(Collectors.toList());
   }
 
   @Override
@@ -208,7 +223,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
     }
   }
 
-  protected void validateRollbackVersionSix(
+  private void validateRollbackVersionSix(
       String commitToRollbackInstantTime,
       HoodieInstant compactionInstant,
       HoodieTimeline deltacommitsSinceCompaction) {

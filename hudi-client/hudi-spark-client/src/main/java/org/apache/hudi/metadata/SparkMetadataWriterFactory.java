@@ -26,6 +26,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 
+/**
+ * Factory class for generating SparkHoodieBackedTableMetadataWriter based on the table version.
+ */
 public class SparkMetadataWriterFactory {
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig, HoodieEngineContext context,

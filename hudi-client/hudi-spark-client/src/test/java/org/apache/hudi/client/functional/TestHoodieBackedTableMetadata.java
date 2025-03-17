@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -108,7 +109,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     initPath();
     HoodieWriteConfig config = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false)
         .build();
-    config.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
     config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
     init(tableType, config);
     doWriteInsertAndUpsert(testTable);
@@ -116,6 +116,9 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     // trigger an upsert
     doWriteOperation(testTable, "0000003");
     verifyBaseMetadataTable(reuseReaders);
+    HoodieTableVersion finalTableVersion = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+        .getTableConfig().getTableVersion();
+    assertEquals(tableVersion, finalTableVersion.versionCode());
   }
 
   /**
@@ -132,7 +135,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     initPath();
     HoodieWriteConfig config = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false)
         .build();
-    config.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
     config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
     init(tableType, config);
     testTable.doWriteOperation("000001", INSERT, emptyList(), asList("p1"), 1);
@@ -172,6 +174,11 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     executors.awaitTermination(5, TimeUnit.MINUTES);
     assertFalse(flag.get());
     assertEquals(filesNumber.get(), taskNumber);
+
+    // validate table version
+    HoodieTableVersion finalTableVersion = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+        .getTableConfig().getTableVersion();
+    assertEquals(tableVersion, finalTableVersion.versionCode());
   }
 
   private void doWriteInsertAndUpsert(HoodieTestTable testTable) throws Exception {
@@ -223,7 +230,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     initPath();
     HoodieWriteConfig config = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false)
         .build();
-    config.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
     config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
     init(tableType, config);
 
@@ -232,6 +238,11 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
     assertEquals(HoodieTableMetadataKeyGenerator.class.getCanonicalName(),
         tableMetadata.getMetadataMetaClient().getTableConfig().getKeyGeneratorClassName());
+
+    // validate table version
+    HoodieTableVersion finalTableVersion = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+        .getTableConfig().getTableVersion();
+    assertEquals(tableVersion, finalTableVersion.versionCode());
   }
 
   /**
@@ -243,7 +254,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     initPath();
     HoodieWriteConfig config = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false)
         .build();
-    config.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
     config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
     init(tableType, config);
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
@@ -251,6 +261,11 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     List<StoragePathInfo> allFilesInPartition = tableMetadata.getAllFilesInPartition(
         new StoragePath(writeConfig.getBasePath() + "dummy"));
     assertEquals(allFilesInPartition.size(), 0);
+
+    // validate table version
+    HoodieTableVersion finalTableVersion = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+        .getTableConfig().getTableVersion();
+    assertEquals(tableVersion, finalTableVersion.versionCode());
   }
 
   /**
@@ -270,7 +285,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
             .withMaxNumDeltaCommitsBeforeCompaction(3)
             .build())
         .build();
-    writeConfig.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
     writeConfig.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
     init(tableType, writeConfig);
 
@@ -319,6 +333,11 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     }, "Metadata table should have a valid base file!");
 
     validateMetadata(testTable);
+
+    // validate table version
+    HoodieTableVersion finalTableVersion = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+        .getTableConfig().getTableVersion();
+    assertEquals(tableVersion, finalTableVersion.versionCode());
   }
 
   /**
@@ -337,7 +356,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
             .withMaxNumDeltaCommitsBeforeCompaction(4)
             .build())
         .build();
-    writeConfig.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
     writeConfig.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
     init(tableType, writeConfig);
     String partition = "p1";
@@ -387,6 +405,11 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     assertEquals(1, getNumCompactions(metadataMetaClient));
     Set<String> fileSetAfterSecondCleaning = getFilePathsInPartition(partition);
     validateFilesAfterCleaning(deleteFileList, fileSetBeforeCleaning, fileSetAfterSecondCleaning);
+
+    // validate table version
+    HoodieTableVersion finalTableVersion = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+        .getTableConfig().getTableVersion();
+    assertEquals(tableVersion, finalTableVersion.versionCode());
   }
 
   private int getNumCompactions(HoodieTableMetaClient metaClient) {
