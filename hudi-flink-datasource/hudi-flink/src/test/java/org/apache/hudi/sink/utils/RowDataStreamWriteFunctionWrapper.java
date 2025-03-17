@@ -19,7 +19,7 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.sink.bucket.BucketStreamWriteFunction;
+import org.apache.hudi.sink.RowDataStreamWriteFunction;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 
 import org.apache.flink.configuration.Configuration;
@@ -28,23 +28,23 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A wrapper class to manipulate the {@link BucketStreamWriteFunction} instance for testing.
+ * A wrapper class to manipulate the {@link RowDataStreamWriteFunction} instance for testing.
  *
  * @param <I> Input type
  */
-public class BucketStreamWriteFunctionWrapper<I> extends BaseBucketWriteFunctionWrapper<I> {
+public class RowDataStreamWriteFunctionWrapper<I> extends BaseStreamWriteFunctionWrapper<I> {
 
-  public BucketStreamWriteFunctionWrapper(String tablePath, Configuration conf) throws Exception {
+  public RowDataStreamWriteFunctionWrapper(String tablePath,  Configuration conf) throws Exception {
     super(tablePath, conf);
   }
 
   @Override
   public Map<String, List<HoodieRecord>> getDataBuffer() {
-    return ((BucketStreamWriteFunction) writeFunction).getDataBuffer();
+    return ((RowDataStreamWriteFunction) writeFunction).getDataBuffer();
   }
 
   @Override
   protected AbstractStreamWriteFunction createWriteFunction() {
-    return new BucketStreamWriteFunction(conf, rowType);
+    return new RowDataStreamWriteFunction(conf, rowType);
   }
 }
