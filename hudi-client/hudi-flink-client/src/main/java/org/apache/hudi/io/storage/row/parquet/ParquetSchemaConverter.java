@@ -622,8 +622,12 @@ public class ParquetSchemaConverter {
               .named(name);
         }
       case ARRAY:
+        // align with Spark And Avro regarding the standard mode array type, see:
+        // org.apache.spark.sql.execution.datasources.parquet.ParquetSchemaConverter,
+        // org.apache.parquet.avro.AvroSchemaConverter
+        //
         // <list-repetition> group <name> (LIST) {
-        //   repeated group array {
+        //   repeated group list {
         //     <element-repetition> <element-type> element;
         //   }
         // }
@@ -641,7 +645,7 @@ public class ParquetSchemaConverter {
 
         return Types
             .buildGroup(repetition).as(OriginalType.LIST)
-            .addField(arrayGroupBuilder.named("array"))
+            .addField(arrayGroupBuilder.named("list"))
             .named(name);
       case MAP:
         // <map-repetition> group <name> (MAP) {

@@ -18,8 +18,11 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+
+import java.util.Map;
 
 /**
  * Pojo holding information on the result of a {@link org.apache.hudi.common.table.log.HoodieLogFormat.Writer#appendBlock(HoodieLogBlock)}.
@@ -27,10 +30,16 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 public class AppendResult {
 
   private final HoodieLogFile logFile;
+  private Map<String, HoodieColumnRangeMetadata<Comparable>> recordsColumnStats;
   private final long offset;
   private final long size;
 
-  public AppendResult(HoodieLogFile logFile, long offset, long size) {
+  public AppendResult(
+      HoodieLogFile logFile,
+      Map<String, HoodieColumnRangeMetadata<Comparable>> recordsColumnStats,
+      long offset,
+      long size) {
+    this.recordsColumnStats = recordsColumnStats;
     this.logFile = logFile;
     this.offset = offset;
     this.size = size;
@@ -38,6 +47,10 @@ public class AppendResult {
 
   public HoodieLogFile logFile() {
     return logFile;
+  }
+
+  public Map<String, HoodieColumnRangeMetadata<Comparable>> getRecordsStats() {
+    return recordsColumnStats;
   }
 
   public long offset() {

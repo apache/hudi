@@ -311,25 +311,42 @@ public class HoodieAvroUtils {
    * @param withOperationField Whether to include the '_hoodie_operation' field
    */
   public static Schema addMetadataFields(Schema schema, boolean withOperationField) {
-    int newFieldsSize = HoodieRecord.HOODIE_META_COLUMNS.size() + (withOperationField ? 1 : 0);
+    return addMetadataFields(schema, true, withOperationField);
+  }
+
+  /**
+   * Adds the Hoodie metadata fields to the given schema.
+   *
+   * @param schema               The schema
+   * @param isPopulateMetaFields Whether to include metadata fields
+   * @param withOperationField   Whether to include the '_hoodie_operation' field
+   */
+  public static Schema addMetadataFields(Schema schema, boolean isPopulateMetaFields, boolean withOperationField) {
+    if (!isPopulateMetaFields && !withOperationField) {
+      return schema;
+    }
+
+    int newFieldsSize = (isPopulateMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.size() : 0) + (withOperationField ? 1 : 0);
     List<Schema.Field> parentFields = new ArrayList<>(schema.getFields().size() + newFieldsSize);
 
-    Schema.Field commitTimeField =
-        new Schema.Field(HoodieRecord.COMMIT_TIME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field commitSeqnoField =
-        new Schema.Field(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field recordKeyField =
-        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field partitionPathField =
-        new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field fileNameField =
-        new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    if (isPopulateMetaFields) {
+      Schema.Field commitTimeField =
+          new Schema.Field(HoodieRecord.COMMIT_TIME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+      Schema.Field commitSeqnoField =
+          new Schema.Field(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+      Schema.Field recordKeyField =
+          new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+      Schema.Field partitionPathField =
+          new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+      Schema.Field fileNameField =
+          new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
 
-    parentFields.add(commitTimeField);
-    parentFields.add(commitSeqnoField);
-    parentFields.add(recordKeyField);
-    parentFields.add(partitionPathField);
-    parentFields.add(fileNameField);
+      parentFields.add(commitTimeField);
+      parentFields.add(commitSeqnoField);
+      parentFields.add(recordKeyField);
+      parentFields.add(partitionPathField);
+      parentFields.add(fileNameField);
+    }
 
     if (withOperationField) {
       final Schema.Field operationField =
