@@ -1546,6 +1546,23 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
   }
 
+  static HoodieActiveTimeline runPendingTableServicesOperationsAndRefreshTimeline(HoodieTableMetaClient metadataMetaClient,
+                                                                                  BaseHoodieWriteClient<?, ?, ?, ?> writeClient,
+                                                                                  boolean initialTimelineRequiresRefresh) {
+    HoodieActiveTimeline activeTimeline = initialTimelineRequiresRefresh ? metadataMetaClient.reloadActiveTimeline() : metadataMetaClient.getActiveTimeline();
+    // finish off any pending log compaction or compactions operations if any from previous attempt.
+    boolean ranServices = false;
+    if (activeTimeline.filterPendingCompactionTimeline().countInstants() > 0) {
+      writeClient.runAnyPendingCompactions();
+      ranServices = true;
+    }
+    if (activeTimeline.filterPendingLogCompactionTimeline().countInstants() > 0) {
+      writeClient.runAnyPendingLogCompactions();
+      ranServices = true;
+    }
+    return ranServices ? metadataMetaClient.reloadActiveTimeline() : activeTimeline;
+  }
+
   /**
    * Perform a compaction on the Metadata Table.
    * <p>
@@ -1590,43 +1607,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
   }
 
-  /**
-   * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
-   */
-  boolean validateCompactionScheduling(Option<String> inFlightInstantTimestamp, String latestDeltaCommitTimeInMetadataTable) {
-    // Under the log compaction scope, the sequence of the log-compaction and compaction needs to be ensured because metadata items such as RLI
-    // only has proc-time ordering semantics. For "ensured", it means the completion sequence of the log-compaction/compaction is the same as the start sequence.
-    if (metadataWriteConfig.isLogCompactionEnabled()) {
-      Option<HoodieInstant> pendingLogCompactionInstant =
-          metadataMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline().firstInstant();
-      Option<HoodieInstant> pendingCompactionInstant =
-          metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
-      if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
-        LOG.warn("Not scheduling compaction or logCompaction, since a pending compaction instant {} or logCompaction {} instant is present",
-            pendingCompactionInstant, pendingLogCompactionInstant);
-        return false;
-      }
-    }
-    return true;
-  }
-
-  static HoodieActiveTimeline runPendingTableServicesOperationsAndRefreshTimeline(HoodieTableMetaClient metadataMetaClient,
-                                                                                  BaseHoodieWriteClient<?, ?, ?, ?> writeClient,
-                                                                                  boolean initialTimelineRequiresRefresh) {
-    HoodieActiveTimeline activeTimeline = initialTimelineRequiresRefresh ? metadataMetaClient.reloadActiveTimeline() : metadataMetaClient.getActiveTimeline();
-    // finish off any pending log compaction or compactions operations if any from previous attempt.
-    boolean ranServices = false;
-    if (activeTimeline.filterPendingCompactionTimeline().countInstants() > 0) {
-      writeClient.runAnyPendingCompactions();
-      ranServices = true;
-    }
-    if (activeTimeline.filterPendingLogCompactionTimeline().countInstants() > 0) {
-      writeClient.runAnyPendingLogCompactions();
-      ranServices = true;
-    }
-    return ranServices ? metadataMetaClient.reloadActiveTimeline() : activeTimeline;
-  }
-
   protected void cleanIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {
     Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.getActiveTimeline()
         .getCommitAndReplaceTimeline().filterCompletedInstants().lastInstant();
@@ -1650,6 +1630,26 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   String createCleanInstantTime(String instantTime) {
     return metadataMetaClient.createNewInstantTime(false);
+  }
+
+  /**
+   * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
+   */
+  boolean validateCompactionScheduling(Option<String> inFlightInstantTimestamp, String latestDeltaCommitTimeInMetadataTable) {
+    // Under the log compaction scope, the sequence of the log-compaction and compaction needs to be ensured because metadata items such as RLI
+    // only has proc-time ordering semantics. For "ensured", it means the completion sequence of the log-compaction/compaction is the same as the start sequence.
+    if (metadataWriteConfig.isLogCompactionEnabled()) {
+      Option<HoodieInstant> pendingLogCompactionInstant =
+          metadataMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline().firstInstant();
+      Option<HoodieInstant> pendingCompactionInstant =
+          metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
+      if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
+        LOG.warn("Not scheduling compaction or logCompaction, since a pending compaction instant {} or logCompaction {} instant is present",
+            pendingCompactionInstant, pendingLogCompactionInstant);
+        return false;
+      }
+    }
+    return true;
   }
 
   private void fetchOutofSyncFilesRecordsFromMetadataTable(Map<String, DirectoryInfo> dirInfoMap, Map<String, Map<String, Long>> partitionFilesToAdd,
