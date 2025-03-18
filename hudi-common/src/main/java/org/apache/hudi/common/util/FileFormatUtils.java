@@ -326,7 +326,7 @@ public abstract class FileFormatUtils {
                                                     Map<String, String> paramsMap) throws IOException;
 
   /**
-   * Serializes Hudi records to the log block.
+   * Serializes Hudi records to the log block and collect column range metadata.
    *
    * @param storage      {@link HoodieStorage} instance.
    * @param records      a list of {@link HoodieRecord}.

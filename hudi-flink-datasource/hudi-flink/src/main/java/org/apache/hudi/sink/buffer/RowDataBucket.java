@@ -18,28 +18,21 @@
 
 package org.apache.hudi.sink.buffer;
 
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.action.commit.BucketInfo;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
-import org.apache.flink.types.RowKind;
 import org.apache.flink.util.MutableObjectIterator;
 
 import java.io.IOException;
 
 /**
  * RowData buffer for a specific data bucket, and the buffer is based on {@code BinaryInMemorySortBuffer}
- * from Flink, which is backed by a managed {@code MemorySegmentPool} to minimize GC influence.
- *
- * <p> A separate buffer is used to store the delete records, in case we need building record iterator and
- * delete record iterator separately, for example, they are needed for building data block and delete block
- * during writing MOR log files.
+ * from Flink, which is backed by a managed {@code MemorySegmentPool} to minimize GC costs.
  */
 public class RowDataBucket {
   private final BinaryInMemorySortBuffer dataBuffer;
-  private final Option<BinaryInMemorySortBuffer> deleteDataBuffer;
   private final BucketInfo bucketInfo;
   private final BufferSizeDetector detector;
   private final String bucketId;
@@ -47,12 +40,10 @@ public class RowDataBucket {
   public RowDataBucket(
       String bucketId,
       BinaryInMemorySortBuffer dataBuffer,
-      BinaryInMemorySortBuffer deleteDataBuffer,
       BucketInfo bucketInfo,
       Double batchSize) {
     this.bucketId = bucketId;
     this.dataBuffer = dataBuffer;
-    this.deleteDataBuffer = Option.ofNullable(deleteDataBuffer);
     this.bucketInfo = bucketInfo;
     this.detector = new BufferSizeDetector(batchSize);
   }
@@ -61,21 +52,12 @@ public class RowDataBucket {
     return dataBuffer.getIterator();
   }
 
-  public MutableObjectIterator<BinaryRowData> getDeleteDataIterator() {
-    return deleteDataBuffer.map(BinaryInMemorySortBuffer::getIterator).orElse(null);
-  }
-
   public String getBucketId() {
     return bucketId;
   }
 
   public boolean writeRow(RowData rowData) throws IOException {
-    boolean success;
-    if (rowData.getRowKind() == RowKind.DELETE && deleteDataBuffer.isPresent()) {
-      success = deleteDataBuffer.get().write(rowData);
-    } else {
-      success = dataBuffer.write(rowData);
-    }
+    boolean success = dataBuffer.write(rowData);
     if (success) {
       detector.detect(rowData);
     }
@@ -91,7 +73,7 @@ public class RowDataBucket {
   }
 
   public boolean isEmpty() {
-    return dataBuffer.isEmpty() && (!deleteDataBuffer.isPresent() || deleteDataBuffer.get().isEmpty());
+    return dataBuffer.isEmpty();
   }
 
   public boolean isFull() {
@@ -104,7 +86,6 @@ public class RowDataBucket {
 
   public void dispose() {
     dataBuffer.dispose();
-    deleteDataBuffer.ifPresent(BinaryInMemorySortBuffer::dispose);
     detector.reset();
   }
 }

@@ -28,7 +28,7 @@ import org.apache.flink.table.runtime.util.MemorySegmentPool;
  * Factory to create {@code MemorySegmentPool}, currently only heap based memory pool {@code HeapMemorySegmentPool}
  * is supported.
  *
- * <p> todo support pool based on flink managed memory, currently support heap pool only, see HUDI-9189
+ * <p> todo support memory segment pool based on flink managed memory, currently support heap pool only, see HUDI-9189.
  */
 public class MemorySegmentPoolFactory {
   public static MemorySegmentPool createMemorySegmentPool(Configuration conf) {

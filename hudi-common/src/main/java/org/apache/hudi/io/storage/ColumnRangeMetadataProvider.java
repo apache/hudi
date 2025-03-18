@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import java.util.Map;
 
 /**
- * A provider that used to collect Hoodie Index data like column stats after writing files.
+ * A provider that used to collect column statistics like column range metadata.
  */
 public interface ColumnRangeMetadataProvider {
 

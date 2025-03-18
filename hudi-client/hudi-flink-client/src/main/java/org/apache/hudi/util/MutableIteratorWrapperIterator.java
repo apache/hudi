@@ -33,17 +33,14 @@ import java.util.function.Supplier;
  */
 public class MutableIteratorWrapperIterator<T> implements Iterator<T> {
   private final MutableObjectIterator<T> innerItr;
+  // todo BinaryRowData wrapper can be used if there is no delete records in iterator, HUDI-9195
   private final Supplier<T> rowSupplier;
   // if there is no caching operation for the iterator, it's safe to use a singleton reused row.
-  private final boolean reuseEnabled;
-  private T reusedRow;
   private T curRow;
 
   public MutableIteratorWrapperIterator(
       MutableObjectIterator<T> innerItr,
-      Supplier<T> rowSupplier,
-      boolean reuseEnabled) {
-    this.reuseEnabled = reuseEnabled;
+      Supplier<T> rowSupplier) {
     this.innerItr = innerItr;
     this.rowSupplier = rowSupplier;
   }
@@ -54,7 +51,7 @@ public class MutableIteratorWrapperIterator<T> implements Iterator<T> {
       return true;
     }
     try {
-      curRow = innerItr.next(getRowWrapper());
+      curRow = innerItr.next(rowSupplier.get());
       return curRow != null;
     } catch (IOException e) {
       throw new HoodieException("Failed to get next record from inner iterator.", e);
@@ -66,12 +63,5 @@ public class MutableIteratorWrapperIterator<T> implements Iterator<T> {
     T result = curRow;
     curRow = null;
     return result;
-  }
-
-  private T getRowWrapper() {
-    if (!reuseEnabled || reusedRow == null) {
-      reusedRow = rowSupplier.get();
-    }
-    return reusedRow;
   }
 }

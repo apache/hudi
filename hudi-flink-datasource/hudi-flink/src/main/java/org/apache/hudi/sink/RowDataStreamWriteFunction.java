@@ -18,11 +18,9 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -36,7 +34,6 @@ import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.v2.HandleRecords;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.buffer.RowDataBucket;
@@ -55,13 +52,9 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
-import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.binary.BinaryRowData;
-import org.apache.flink.table.data.utils.JoinedRowData;
-import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -80,7 +73,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Sink function to write the data to the underneath filesystem.
@@ -149,10 +141,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
   protected transient MemorySegmentPool memorySegmentPool;
 
-  private transient FlinkTaskContextSupplier taskContextSupplier;
-
-  private static final AtomicLong RECORD_COUNTER = new AtomicLong(1);
-
   /**
    * Constructs a StreamingSinkFunction.
    *
@@ -168,7 +156,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
   @Override
   public void open(Configuration parameters) throws IOException {
     this.tracer = new TotalSizeTracer(this.config);
-    this.taskContextSupplier = new FlinkTaskContextSupplier(getRuntimeContext());
     initBuffer();
     initWriteFunction();
     initMergeClass();
@@ -216,10 +203,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     this.memorySegmentPool = MemorySegmentPoolFactory.createMemorySegmentPool(config);
   }
 
-  protected int getTaskId() {
-    return this.taskContextSupplier.getPartitionIdSupplier().get();
-  }
-
   private void initWriteFunction() {
     final String writeOperation = this.config.get(FlinkOptions.OPERATION);
     switch (WriteOperationType.fromValue(writeOperation)) {
@@ -264,8 +247,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
       RowDataBucket bucket = this.buckets.computeIfAbsent(bucketID,
           k -> new RowDataBucket(
               bucketID,
-              createBucketBuffer(false),
-              createBucketBuffer(true),
+              BufferUtils.createBuffer(rowType, memorySegmentPool),
               getBucketInfo(record),
               this.config.get(FlinkOptions.WRITE_BATCH_SIZE)));
 
@@ -298,7 +280,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     // 1. flushing bucket for memory pool is full.
     if (!success) {
       RowDataBucket bucketToFlush = this.buckets.values().stream()
-          .max(Comparator.comparingLong(b -> b.getBufferSize()))
+          .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
           .orElseThrow(NoSuchElementException::new);
       if (flushBucket(bucketToFlush)) {
         this.tracer.countDown(bucketToFlush.getBufferSize());
@@ -331,15 +313,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
   private void disposeBucket(RowDataBucket rowDataBucket) {
     rowDataBucket.dispose();
     this.buckets.remove(rowDataBucket.getBucketId());
-  }
-
-  private BinaryInMemorySortBuffer createBucketBuffer(boolean forDelete) {
-    // for this case, all kind of rowdata are keeped as it is,
-    // delete rowdata will not be converted to DeleteRecord.
-    if (forDelete && config.get(FlinkOptions.CHANGELOG_ENABLED)) {
-      return null;
-    }
-    return BufferUtils.createBuffer(rowType, memorySegmentPool);
   }
 
   private static BucketInfo getBucketInfo(HoodieFlinkInternalRow internalRow) {
@@ -440,62 +413,24 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
       RowDataBucket rowDataBucket) {
     writeMetrics.startFileFlush();
 
-    HandleRecords.Builder builder = HandleRecords.builder();
-
     Iterator<BinaryRowData> rowItr =
         new MutableIteratorWrapperIterator<>(
-            rowDataBucket.getDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()), true);
+            rowDataBucket.getDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()));
     Iterator<HoodieRecord> recordItr = new MappingIterator<>(
-        rowItr, rowData -> convertToRecord(rowData, rowDataBucket.getBucketInfo(), instant));
-    builder.withRecordItr(deduplicateRecordsIfNeeded(recordItr));
+        rowItr, rowData -> convertToRecord(rowData, rowDataBucket.getBucketInfo()));
 
-    if (rowDataBucket.getDeleteDataIterator() != null) {
-      Iterator<BinaryRowData> deleteRowItr =
-          new MutableIteratorWrapperIterator<>(
-              rowDataBucket.getDeleteDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()), false);
-      Iterator<DeleteRecord> deleteRecordItr = new MappingIterator<>(
-          deleteRowItr, deleteRow -> convertToDeleteRecord(deleteRow, rowDataBucket.getBucketInfo()));
-      builder.withDeleteRecordItr(deleteRecordItr);
-    }
-
-    List<WriteStatus> statuses = writeFunction.write(builder.build(), rowDataBucket.getBucketInfo(), instant);
+    List<WriteStatus> statuses = writeFunction.write(deduplicateRecordsIfNeeded(recordItr), rowDataBucket.getBucketInfo(), instant);
     writeMetrics.endFileFlush();
     writeMetrics.increaseNumOfFilesWritten();
     return statuses;
   }
 
-  protected DeleteRecord convertToDeleteRecord(RowData dataRow, BucketInfo bucketInfo) {
-    String key = keyGen.getRecordKey(dataRow);
-    HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
-    Comparable<?> preCombineValue = preCombineFieldExtractor.getPreCombineField(dataRow);
-    return DeleteRecord.create(hoodieKey, preCombineValue);
-  }
-
-  protected HoodieFlinkRecord convertToRecord(RowData dataRow, BucketInfo bucketInfo, String instant) {
-    boolean isPopulateMetaFields = OptionsResolver.isPopulateMetaFields(config);
-    boolean allowOperationMetadataField = config.get(FlinkOptions.CHANGELOG_ENABLED);
+  protected HoodieFlinkRecord convertToRecord(RowData dataRow, BucketInfo bucketInfo) {
     String key = keyGen.getRecordKey(dataRow);
     Comparable<?> preCombineValue = preCombineFieldExtractor.getPreCombineField(dataRow);
     HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
     HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
-    if (!isPopulateMetaFields && !allowOperationMetadataField) {
-      return new HoodieFlinkRecord(hoodieKey, operation, preCombineValue, dataRow);
-    }
-
-    int metaArity = (isPopulateMetaFields ? 5 : 0) + (allowOperationMetadataField ? 1 : 0);
-    GenericRowData metaRow = new GenericRowData(metaArity);
-    if (isPopulateMetaFields) {
-      String seqId = HoodieRecord.generateSequenceId(instant, getTaskId(), RECORD_COUNTER.getAndIncrement());
-      metaRow.setField(0, StringData.fromString(instant));
-      metaRow.setField(1, StringData.fromString(seqId));
-      metaRow.setField(2, StringData.fromString(key));
-      metaRow.setField(3, StringData.fromString((bucketInfo.getPartitionPath())));
-      metaRow.setField(4, StringData.fromString((bucketInfo.getFileIdPrefix())));
-    }
-    if (allowOperationMetadataField) {
-      metaRow.setField(5, StringData.fromString(HoodieOperation.fromValue(dataRow.getRowKind().toByteValue()).getName()));
-    }
-    return new HoodieFlinkRecord(hoodieKey, operation, preCombineValue, new JoinedRowData(dataRow.getRowKind(), metaRow, dataRow));
+    return new HoodieFlinkRecord(hoodieKey, operation, preCombineValue, dataRow);
   }
 
   protected Iterator<HoodieRecord> deduplicateRecordsIfNeeded(Iterator<HoodieRecord> records) {
@@ -540,17 +475,9 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
       List<HoodieRecord> records = new ArrayList<>();
       Iterator<BinaryRowData> rowItr =
           new MutableIteratorWrapperIterator<>(
-              entry.getValue().getDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()), false);
+              entry.getValue().getDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()));
       while (rowItr.hasNext()) {
-        records.add(convertToRecord(rowItr.next(), entry.getValue().getBucketInfo(), ""));
-      }
-      if (entry.getValue().getDeleteDataIterator() != null) {
-        Iterator<BinaryRowData> deleteRowItr =
-            new MutableIteratorWrapperIterator<>(
-                entry.getValue().getDeleteDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()), false);
-        while (deleteRowItr.hasNext()) {
-          records.add(convertToRecord(deleteRowItr.next(), entry.getValue().getBucketInfo(), ""));
-        }
+        records.add(convertToRecord(rowItr.next(), entry.getValue().getBucketInfo()));
       }
       ret.put(entry.getKey(), records);
     }
@@ -558,6 +485,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
   }
 
   private interface WriteFunction {
-    List<WriteStatus> write(HandleRecords records, BucketInfo bucketInfo, String instant);
+    List<WriteStatus> write(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant);
   }
 }

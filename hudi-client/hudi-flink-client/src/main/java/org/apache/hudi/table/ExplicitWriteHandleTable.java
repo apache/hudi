@@ -23,9 +23,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.io.HoodieWriteHandle;
-import org.apache.hudi.io.v2.HandleRecords;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -64,7 +64,7 @@ public interface ExplicitWriteHandleTable<T> {
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
-      HandleRecords records);
+      Iterator<HoodieRecord> records);
 
   /**
    * Insert a batch of new records into Hoodie table at the supplied instantTime.

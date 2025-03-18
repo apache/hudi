@@ -18,9 +18,10 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.io.v2.HandleRecords;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.table.action.commit.BucketInfo;
 
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -38,7 +39,7 @@ public interface FlinkRowDataWriteClient {
    * @param instantTime instant time to commit the data
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  List<WriteStatus> upsert(HandleRecords records, BucketInfo bucketInfo, String instantTime);
+  List<WriteStatus> upsert(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime);
 
   /**
    * Insert a batch of new records into Hoodie table at the supplied instantTime.
@@ -48,7 +49,7 @@ public interface FlinkRowDataWriteClient {
    * @param instantTime instant time to commit the data
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  List<WriteStatus> insert(HandleRecords records, BucketInfo bucketInfo, String instantTime);
+  List<WriteStatus> insert(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime);
 
   /**
    * Replaces all the existing records and inserts the specified new records at the supplied instantTime,
@@ -59,7 +60,7 @@ public interface FlinkRowDataWriteClient {
    * @param instantTime instant time to commit the data
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  List<WriteStatus> insertOverwrite(HandleRecords records, BucketInfo bucketInfo, String instantTime);
+  List<WriteStatus> insertOverwrite(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime);
 
   /**
    * Deletes all the existing records of the Hoodie table and inserts the specified new records into Hoodie table at the supplied instantTime,
@@ -70,5 +71,5 @@ public interface FlinkRowDataWriteClient {
    * @param instantTime instant time to commit the data
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  List<WriteStatus> insertOverwriteTable(HandleRecords records, BucketInfo bucketInfo, String instantTime);
+  List<WriteStatus> insertOverwriteTable(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime);
 }

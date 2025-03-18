@@ -42,7 +42,6 @@ import org.apache.hudi.io.FlinkWriteHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.MiniBatchHandle;
 import org.apache.hudi.io.v2.FlinkRowDataHandleFactory;
-import org.apache.hudi.io.v2.HandleRecords;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -157,7 +156,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   @Override
-  public List<WriteStatus> upsert(HandleRecords records, BucketInfo bucketInfo, String instantTime) {
+  public List<WriteStatus> upsert(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
@@ -203,7 +202,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   @Override
-  public List<WriteStatus> insert(HandleRecords records, BucketInfo bucketInfo, String instantTime) {
+  public List<WriteStatus> insert(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime) {
     throw new UnsupportedOperationException("INSERT option is not supported yet.");
   }
 
@@ -229,7 +228,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   @Override
-  public List<WriteStatus> insertOverwrite(HandleRecords records, BucketInfo bucketInfo, String instantTime) {
+  public List<WriteStatus> insertOverwrite(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime) {
     throw new UnsupportedOperationException("InsertOverwrite option is not supported yet.");
   }
 
@@ -254,7 +253,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   @Override
-  public List<WriteStatus> insertOverwriteTable(HandleRecords records, BucketInfo bucketInfo, String instantTime) {
+  public List<WriteStatus> insertOverwriteTable(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime) {
     throw new UnsupportedOperationException("InsertOverwriteTable option is not supported yet.");
   }
 
