@@ -90,7 +90,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
         switch (type) {
           case MERGE:
           case CREATE:
-            return createRollbackRequestForCreateAndMerge(fileId, partitionPath, filePath, instantToRollback, filePathStr);
+            return createRollbackRequestForCreateAndMerge(fileId, partitionPath, filePath, instantToRollback);
           case APPEND:
             return createRollbackRequestForAppend(fileId, partitionPath, filePath, instantToRollback, filePathStr);
           default:
@@ -106,8 +106,10 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
     }
   }
 
-  protected HoodieRollbackRequest createRollbackRequestForCreateAndMerge(String fileId, String partitionPath, StoragePath filePath,
-                                                                         HoodieInstant instantToRollback, String filePathToRollback) {
+  protected HoodieRollbackRequest createRollbackRequestForCreateAndMerge(String fileId,
+                                                                         String partitionPath,
+                                                                         StoragePath filePath,
+                                                                         HoodieInstant instantToRollback) {
     if (table.version().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       return new HoodieRollbackRequest(partitionPath, fileId, instantToRollback.requestedTime(),
           Collections.singletonList(filePath.toString()), Collections.emptyMap());
@@ -118,7 +120,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
         fileId = baseFileToDelete.getFileId();
         baseInstantTime = baseFileToDelete.getCommitTime();
       } else if (FSUtils.isLogFile(filePath)) {
-        return createRollbackRequestForAppend(fileId, partitionPath, filePath, instantToRollback, filePathToRollback);
+        throw new HoodieRollbackException("Log files should have only APPEND as IOTypes " + filePath);
       }
       Objects.requireNonNull(fileId, "Cannot find valid fileId from path: " + filePath);
       Objects.requireNonNull(baseInstantTime, "Cannot find valid base instant from path: " + filePath);
