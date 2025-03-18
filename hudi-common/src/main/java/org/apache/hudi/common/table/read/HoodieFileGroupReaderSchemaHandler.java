@@ -197,7 +197,8 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       }
     }
 
-    if (cfg.getRecordMergeMode() == RecordMergeMode.EVENT_TIME_ORDERING) {
+    if (cfg.getRecordMergeMode() == null
+        || cfg.getRecordMergeMode() == RecordMergeMode.EVENT_TIME_ORDERING) {
       String preCombine = cfg.getPreCombineField();
       if (!StringUtils.isNullOrEmpty(preCombine)) {
         requiredFields.add(preCombine);
