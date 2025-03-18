@@ -43,6 +43,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}
@@ -53,6 +54,8 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
+import java.math.{BigInteger, BigDecimal => JBigDecimal}
+import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.stream.Collectors
 
@@ -1074,5 +1077,59 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       assertNotNull(max)
       assertTrue(r.getMinValue.asInstanceOf[Comparable[Object]].compareTo(r.getMaxValue.asInstanceOf[Object]) <= 0)
     })
+  }
+
+  @Test
+  def testDeserializeFromByteBuffer(): Unit = {
+    // Original decimal value: 123.45 (scale 2)
+    val original: JBigDecimal = new JBigDecimal("123.45")
+    // Get the unscaled value (12345) as a byte array.
+    val unscaled: BigInteger = original.unscaledValue()
+    val unscaledBytes: Array[Byte] = unscaled.toByteArray
+    val buffer: ByteBuffer = ByteBuffer.wrap(unscaledBytes)
+
+    // Create a dummy DecimalWrapper that returns a ByteBuffer.
+    val wrapper: DecimalWrapper = new DecimalWrapper(buffer)
+    // Call tryUnpackValueWrapper – it should match the DecimalWrapper case and return the ByteBuffer.
+    val unwrapped: Any = ColumnStatsIndexSupport.tryUnpackValueWrapper(wrapper)
+    assertTrue(unwrapped.isInstanceOf[ByteBuffer], "Expected a ByteBuffer")
+
+    // Now deserialize the ByteBuffer to a BigDecimal.
+    val dt = DecimalType(10, 2)
+    val deserialized: Any = ColumnStatsIndexSupport.deserialize(unwrapped, dt)
+    assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
+    assertEquals(original, deserialized.asInstanceOf[JBigDecimal], "Decimal value from ByteBuffer does not match")
+  }
+
+  @Test
+  def testDeserializeFromJavaBigDecimal(): Unit = {
+    // Original decimal value: 543.21
+    val original: JBigDecimal = new JBigDecimal("543.21")
+    // Create a dummy DecimalWrapper that returns a java.math.BigDecimal directly.
+    val wrapper: DecimalWrapper = new DecimalWrapper {
+      override def getValue: ByteBuffer = ByteBuffer.wrap(original.unscaledValue().toByteArray)
+    }
+
+    val dt = DecimalType(10, 2)
+    val deserialized: Any = ColumnStatsIndexSupport.deserialize(ColumnStatsIndexSupport.tryUnpackValueWrapper(wrapper), dt)
+    assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
+    assertEquals(original, deserialized.asInstanceOf[JBigDecimal], "Decimal value from java.math.BigDecimal does not match")
+  }
+
+  @Test
+  def testDeserializeFromScalaBigDecimal(): Unit = {
+    // Original Scala BigDecimal value
+    val original = scala.math.BigDecimal("987.65")
+    // Create an anonymous DecimalWrapper that returns a Scala BigDecimal.
+    val wrapper: DecimalWrapper = new DecimalWrapper {
+      override def getValue: ByteBuffer = ByteBuffer.wrap(original.bigDecimal.unscaledValue().toByteArray)
+    }
+    // In this case, unwrapped is a Scala BigDecimal.
+    val dt = DecimalType(10, 2)
+    val deserialized: Any = ColumnStatsIndexSupport.deserialize(ColumnStatsIndexSupport.tryUnpackValueWrapper(wrapper), dt)
+    // The deserialize method should convert a Scala BigDecimal to a java.math.BigDecimal.
+    assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
+    // Compare via string representations.
+    assertEquals(original.bigDecimal.toString, deserialized.asInstanceOf[JBigDecimal].toString, "Decimal value from Scala BigDecimal does not match")
   }
 }
