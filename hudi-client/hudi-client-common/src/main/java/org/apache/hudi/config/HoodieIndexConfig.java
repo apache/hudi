@@ -28,7 +28,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.bucket.HoodieSimpleBucketIndexPartitionRule;
+import org.apache.hudi.index.bucket.PartitionBucketIndexRule;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.slf4j.Logger;
@@ -289,9 +289,18 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_RULE_TYPE = ConfigProperty
       .key("hoodie.bucket.index.partition.rule.type")
-      .defaultValue(HoodieSimpleBucketIndexPartitionRule.REGEX.value)
+      .defaultValue(PartitionBucketIndexRule.REGEX.name)
       .markAdvanced()
       .withDocumentation("Rule parser for expressions when using partition level bucket index, default regex.");
+
+  public static final ConfigProperty<Boolean> BUCKET_INDEX_PARTITION_LEVEL_ENABLE = ConfigProperty
+      .key("hoodie.bucket.index.partition.level.enable")
+      .defaultValue(false)
+      .withDocumentation("Inner config to determine whether to enable partition level bucket index");
+  public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_LOAD_INSTANT = ConfigProperty
+      .key("hoodie.bucket.index.partition.load.instant")
+      .defaultValue("")
+      .withDocumentation("Inner config to determine which hashing_config to load when using partition level bucket index");
 
   public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_EXPRESSIONS = ConfigProperty
       .key("hoodie.bucket.index.partition.expressions")

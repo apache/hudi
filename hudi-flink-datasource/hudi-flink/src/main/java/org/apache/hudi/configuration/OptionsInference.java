@@ -18,7 +18,12 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.bucket.PartitionBucketIndexUtils;
 import org.apache.hudi.util.ClientIds;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
 import org.slf4j.Logger;
@@ -87,6 +92,18 @@ public class OptionsInference {
           String clientId = clientIds.nextId(conf);
           conf.setString(FlinkOptions.WRITE_CLIENT_ID, clientId);
         }
+      }
+    }
+  }
+
+  public static void setupIndexConfigs(Configuration conf) {
+    HoodieIndex.BucketIndexEngineType engineType = OptionsResolver.getBucketEngineType(conf);
+    if (engineType.equals(HoodieIndex.BucketIndexEngineType.SIMPLE) &&
+        PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(HadoopConfigurations.getHadoopConf(conf))) {
+      try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClientV2(conf)) {
+        HoodieTableMetaClient metaClient = writeClient.getHoodieTable().getMetaClient();
+        String hashingConfigToLoad = PartitionBucketIndexUtils.getHashingConfigInstantToLoad(metaClient);
+        conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT, hashingConfigToLoad);
       }
     }
   }

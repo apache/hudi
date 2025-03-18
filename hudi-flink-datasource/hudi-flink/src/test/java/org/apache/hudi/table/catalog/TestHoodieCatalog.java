@@ -31,7 +31,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.index.bucket.SimpleBucketIndexUtils;
+import org.apache.hudi.index.bucket.PartitionBucketIndexUtils;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -340,7 +340,7 @@ public class TestHoodieCatalog {
   }
 
   @Test
-  void testCreateTableWithPartitionSimpleBucketIndex() throws TableAlreadyExistException, DatabaseNotExistException, IOException {
+  void testCreateTableWithPartitionBucketIndex() throws TableAlreadyExistException, DatabaseNotExistException, IOException {
     String rule = "regex";
     String expressions = "\\d{4}-(06-(01|17|18)|11-(01|10|11)),256";
     String defaultBucketNumber = "20";
@@ -361,9 +361,9 @@ public class TestHoodieCatalog {
             new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(flinkConf)), tablePathStr);
     HoodieStorage storage = metaClient.getStorage();
     StoragePath initialHashingConfig =
-        new StoragePath(metaClient.getHashingMetadataConfigPath(), SimpleBucketIndexUtils.INITIAL_HASHING_CONFIG_INSTANT + PartitionBucketIndexHashingConfig.HASHING_CONFIG_FILE_SUFFIX);
+        new StoragePath(metaClient.getHashingMetadataConfigPath(), PartitionBucketIndexUtils.INITIAL_HASHING_CONFIG_INSTANT + PartitionBucketIndexHashingConfig.HASHING_CONFIG_FILE_SUFFIX);
     StoragePathInfo info = storage.getPathInfo(initialHashingConfig);
-    Option<PartitionBucketIndexHashingConfig> hashingConfig = SimpleBucketIndexUtils.loadHashingConfig(storage, info);
+    Option<PartitionBucketIndexHashingConfig> hashingConfig = PartitionBucketIndexUtils.loadHashingConfig(storage, info);
     assertTrue(hashingConfig.isPresent());
     assertEquals(hashingConfig.get().getDefaultBucketNumber(), Integer.parseInt(defaultBucketNumber));
     assertEquals(hashingConfig.get().getRule(), rule);

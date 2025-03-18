@@ -21,10 +21,12 @@ package org.apache.hudi.sink.bucket;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
 import org.apache.hudi.sink.StreamWriteFunction;
 
 import org.apache.flink.configuration.Configuration;
@@ -54,8 +56,6 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
 
   private int parallelism;
 
-  private int bucketNum;
-
   private String indexKeyFields;
 
   private boolean isNonBlockingConcurrencyControl;
@@ -76,12 +76,15 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
   /**
    * Functions for calculating the task partition to dispatch.
    */
-  private Functions.Function2<String, Integer, Integer> partitionIndexFunc;
+  private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
 
   /**
    * To prevent strings compare for each record, define this only during open()
    */
   private boolean isInsertOverwrite;
+
+  private PartitionBucketIndexCalculator calc;
+  private boolean isPartitionLevelBucketIndexEnable = false;
 
   /**
    * Constructs a BucketStreamWriteFunction.
@@ -95,15 +98,19 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-    this.bucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
     this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(config);
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     this.bucketIndex = new HashMap<>();
     this.incBucketIndex = new HashSet<>();
-    this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(bucketNum, parallelism);
+    this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(parallelism);
     this.isInsertOverwrite = OptionsResolver.isInsertOverwrite(config);
+    String hashingInstant = config.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT);
+    this.isPartitionLevelBucketIndexEnable = !StringUtils.isNullOrEmpty(hashingInstant);
+    if (isPartitionLevelBucketIndexEnable) {
+      calc = PartitionBucketIndexCalculator.getInstance(hashingInstant, metaClient);
+    }
   }
 
   @Override
@@ -132,7 +139,10 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
       bootstrapIndexIfNeed(partition);
     }
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
-    final int bucketNum = BucketIdentifier.getBucketId(record.getRecordKey(), indexKeyFields, this.bucketNum);
+
+    int numBuckets = getOrComputeNumBuckets(partition);
+
+    final int bucketNum = BucketIdentifier.getBucketId(record.getRecordKey(), indexKeyFields, numBuckets);
     final String bucketId = partition + "/" + bucketNum;
 
     final HoodieRecordLocation location;
@@ -156,7 +166,12 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
    * partitionIndex == this taskID belongs to this task.
    */
   public boolean isBucketToLoad(int bucketNumber, String partition) {
-    return this.partitionIndexFunc.apply(partition, bucketNumber) == taskID;
+    int numBuckets = getOrComputeNumBuckets(partition);
+    return this.partitionIndexFunc.apply(numBuckets, partition, bucketNumber) == taskID;
+  }
+
+  private int getOrComputeNumBuckets(String partition) {
+    return isPartitionLevelBucketIndexEnable ? calc.computeNumBuckets(partition) : config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
   }
 
   /**

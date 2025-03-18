@@ -18,12 +18,12 @@
 
 package org.apache.hudi.index.bucket;
 
-public enum HoodieSimpleBucketIndexPartitionRule {
+public enum PartitionBucketIndexRule {
   REGEX("regex");
 
-  public final String value;
+  public final String name;
 
-  HoodieSimpleBucketIndexPartitionRule(String rule) {
-    this.value = rule;
+  PartitionBucketIndexRule(String name) {
+    this.name = name;
   }
 }

@@ -41,14 +41,14 @@ object BucketPartitionUtils {
     val getPartitionKey = getPartitionKeyExtractor()
     val partitioner = new Partitioner {
 
-      private val partitionIndexFunc: Functions.Function2[String, Integer, Integer] =
-        BucketIndexUtil.getPartitionIndexFunc(bucketNum, partitionNum)
+      private val partitionIndexFunc: Functions.Function3[Integer, String, Integer, Integer] =
+        BucketIndexUtil.getPartitionIndexFunc(partitionNum)
 
       override def numPartitions: Int = partitionNum
 
       override def getPartition(value: Any): Int = {
         val partitionKeyPair = value.asInstanceOf[(String, Int)]
-        partitionIndexFunc.apply(partitionKeyPair._1, partitionKeyPair._2)
+        partitionIndexFunc.apply(bucketNum, partitionKeyPair._1, partitionKeyPair._2)
       }
     }
     // use internalRow to avoid extra convert.

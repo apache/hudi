@@ -27,7 +27,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieCatalogException;
-import org.apache.hudi.index.bucket.SimpleBucketIndexUtils;
+import org.apache.hudi.index.bucket.PartitionBucketIndexUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
@@ -310,6 +310,6 @@ public class HoodieCatalogUtil {
     int bucketNumber = options.containsKey(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key()) ?
         Integer.valueOf(options.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key())) : FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
 
-    return SimpleBucketIndexUtils.initHashingConfig(metaClient, expressions, rule, bucketNumber, null);
+    return PartitionBucketIndexUtils.initHashingConfig(metaClient, expressions, rule, bucketNumber, null);
   }
 }

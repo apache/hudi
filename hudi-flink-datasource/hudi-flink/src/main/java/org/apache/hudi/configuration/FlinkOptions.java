@@ -490,6 +490,18 @@ public class FlinkOptions extends HoodieConfig {
           + "numbers (separated by commas).Multiple rules are separated by semicolons like "
           + "hoodie.bucket.index.partition.expressions=expression1,bucket-number1;expression2,bucket-number2");
 
+  public static final ConfigOption<Boolean> BUCKET_INDEX_PARTITION_LEVEL_ENABLE = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_INDEX_PARTITION_LEVEL_ENABLE.key())
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Inner config to determine whether to enable partition level bucket index");
+
+  public static final ConfigOption<String> BUCKET_INDEX_PARTITION_LOAD_INSTANT = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key())
+      .stringType()
+      .defaultValue(HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.defaultValue())
+      .withDescription("Inner config to determine which hashing_config to load when using partition level bucket index");
+
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
       .stringType()
