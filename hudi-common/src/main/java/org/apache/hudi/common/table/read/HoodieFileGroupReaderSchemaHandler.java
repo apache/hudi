@@ -27,10 +27,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
@@ -182,8 +184,8 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
   }
 
-  private static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg, TypedProperties props,
-                                                       Schema dataSchema, Option<HoodieRecordMerger> recordMerger) {
+  static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg, TypedProperties props,
+                                               Schema dataSchema, Option<HoodieRecordMerger> recordMerger) {
     if (cfg.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
       return recordMerger.get().getMandatoryFieldsForMerging(dataSchema, cfg, props);
     }
@@ -199,8 +201,14 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       }
     }
 
-    if (cfg.getRecordMergeMode() == null
-        || cfg.getRecordMergeMode() == RecordMergeMode.EVENT_TIME_ORDERING) {
+    Triple<RecordMergeMode, String, String> mergingConfigs =
+        HoodieTableConfig.inferCorrectMergingBehavior(
+            cfg.getRecordMergeMode(),
+            cfg.getPayloadClass(),
+            cfg.getRecordMergeStrategyId(),
+            cfg.getPreCombineField(),
+            HoodieTableVersion.current());
+    if (mergingConfigs.getLeft() == RecordMergeMode.EVENT_TIME_ORDERING) {
       String preCombine = cfg.getPreCombineField();
       if (!StringUtils.isNullOrEmpty(preCombine)) {
         requiredFields.add(preCombine);
