@@ -150,7 +150,8 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(requiredSchema, internalSchema);
   }
 
-  private Schema generateRequiredSchema() {
+  @VisibleForTesting
+  Schema generateRequiredSchema() {
     //might need to change this if other queries than mor have mandatory fields
     if (!needsMORMerge) {
       return requestedSchema;
@@ -203,6 +204,10 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       if (!StringUtils.isNullOrEmpty(preCombine)) {
         requiredFields.add(preCombine);
       }
+    }
+
+    if (dataSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null) {
+      requiredFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
     return requiredFields.toArray(new String[0]);
   }
