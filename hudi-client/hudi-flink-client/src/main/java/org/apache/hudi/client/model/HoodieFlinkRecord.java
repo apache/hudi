@@ -31,11 +31,18 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
+import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.utils.JoinedRowData;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * Flink Engine-specific Implementations of `HoodieRecord`, which is expected to hold {@code RowData} as payload.
@@ -114,7 +121,12 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+    List<String> metaVals = Arrays.stream(metadataValues.getValues()).filter(Objects::nonNull).collect(Collectors.toList());
+    GenericRowData metaRow = new GenericRowData(metaVals.size());
+    for (int i = 0; i < metaVals.size(); i++) {
+      metaRow.setField(i, StringData.fromString(metaVals.get(i)));
+    }
+    return new HoodieFlinkRecord(key, operation, orderingValue, new JoinedRowData(data.getRowKind(), metaRow, data));
   }
 
   @Override

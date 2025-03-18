@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
-import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -68,7 +67,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -422,13 +420,7 @@ public class ParquetUtils extends FileFormatUtils {
     }
     outputStream.flush();
     parquetWriter.close();
-    // collect column range metadata if necessary.
-    Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata = Collections.emptyMap();
-    if (parquetWriter instanceof ColumnRangeMetadataProvider) {
-      ColumnRangeMetadataProvider columnMetadataProvider = (ColumnRangeMetadataProvider) parquetWriter;
-      columnRangeMetadata = columnMetadataProvider.getColumnRangeMeta();
-    }
-    return Pair.of(outputStream.toByteArray(), columnRangeMetadata);
+    return Pair.of(outputStream.toByteArray(), parquetWriter.getColumnRangeMeta());
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {

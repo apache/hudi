@@ -283,30 +283,4 @@ public class FlinkWriteHandleFactory {
       return new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, recordItr, contextSupplier);
     }
   }
-
-  /**
-   * Write handle factory for delta commit.
-   */
-  private static class DeltaCommitRowDataHandleFactory<T, I, K, O> implements Factory<T, I, K, O> {
-    private static final DeltaCommitRowDataHandleFactory<?, ?, ?, ?> INSTANCE = new DeltaCommitRowDataHandleFactory<>();
-
-    @SuppressWarnings("unchecked")
-    public static <T, I, K, O> DeltaCommitRowDataHandleFactory<T, I, K, O> getInstance() {
-      return (DeltaCommitRowDataHandleFactory<T, I, K, O>) INSTANCE;
-    }
-
-    @Override
-    public HoodieWriteHandle<?, ?, ?, ?> create(
-        Map<String, Path> bucketToHandles,
-        HoodieRecord<T> record,
-        HoodieWriteConfig config,
-        String instantTime,
-        HoodieTable<T, I, K, O> table,
-        Iterator<HoodieRecord<T>> recordItr) {
-      final String fileID = record.getCurrentLocation().getFileId();
-      final String partitionPath = record.getPartitionPath();
-      final TaskContextSupplier contextSupplier = table.getTaskContextSupplier();
-      return new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, recordItr, contextSupplier);
-    }
-  }
 }

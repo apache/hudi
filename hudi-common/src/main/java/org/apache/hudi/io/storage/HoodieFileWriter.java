@@ -18,12 +18,15 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.Schema;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
 
 public interface HoodieFileWriter extends AutoCloseable {
@@ -41,5 +44,9 @@ public interface HoodieFileWriter extends AutoCloseable {
 
   default void write(String recordKey, HoodieRecord record, Schema schema) throws IOException {
     write(recordKey, record, schema, new Properties());
+  }
+
+  default Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta() {
+    return Collections.emptyMap();
   }
 }

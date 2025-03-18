@@ -59,7 +59,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   // for RowData write function: to trigger buffer flush with batch size exceeded by 3 rows, each record is 48 bytes
   private static final double BATCH_SIZE_MB_V2 = 0.00013;
   // for RowData write function: to trigger buffer flush with memory pool exhausted.
-  private static final double BUFFER_SIZE_MB_V2 = 0.0004;
+  private static final double BUFFER_SIZE_MB_V2 = 0.0003;
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -524,7 +524,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testWriteExactlyOnce() throws Exception {
     // reset the config option
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
-    conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 64);
+    conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 128);
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
     preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT)

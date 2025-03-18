@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
 
@@ -44,7 +43,7 @@ import java.util.stream.Collectors;
  *
  * <p>{@link HoodieRowDataParquetStreamWriter} also supports collect and report column statistics based on the parquet metadata.
  */
-public class HoodieRowDataParquetStreamWriter implements HoodieRowDataFileWriter, ColumnRangeMetadataProvider {
+public class HoodieRowDataParquetStreamWriter implements HoodieRowDataFileWriter {
   private final ParquetWriter writer;
   private boolean isClosed;
   private final HoodieRowDataParquetWriteSupport writeSupport;

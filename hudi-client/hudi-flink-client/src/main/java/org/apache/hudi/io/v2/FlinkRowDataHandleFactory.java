@@ -63,7 +63,7 @@ public class FlinkRowDataHandleFactory {
         HoodieWriteConfig config,
         String instantTime,
         HoodieTable<T, I, K, O> table) {
-      return new RowDataLogHandle<>(
+      return new RowDataLogWriteHandle<>(
           config,
           instantTime,
           table,

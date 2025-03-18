@@ -639,6 +639,6 @@ public class TestWriteBase {
   }
 
   protected HoodieTableType getTableType() {
-    return HoodieTableType.MERGE_ON_READ;
+    return HoodieTableType.COPY_ON_WRITE;
   }
 }

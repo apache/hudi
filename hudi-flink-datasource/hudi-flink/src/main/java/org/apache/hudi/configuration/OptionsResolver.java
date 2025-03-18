@@ -83,9 +83,9 @@ public class OptionsResolver {
    * <p> support RowData append for COW, see HUDI-9149
    * <p> support RowData append for operation besides UPSERT, see HUDI-9149
    * <p> support RowData append for nested complex DataType field, see HUDI-9146, currently RowData
-   * for MOR table is not supported yet, Flink uses Avro parquet reader to read parquet data blocks in
-   * log file written by RowData writer, there exists some discrepancies between Avro parquet support
-   * and RowData parquet support regarding nested complex type, leading to failure during reading.
+   * reader for MOR table is not supported yet, Flink uses Avro parquet reader to read parquet data
+   * blocks in log file written by RowData writer, there exists some discrepancies between Avro parquet
+   * support and RowData parquet support regarding nested complex type, leading to failure during reading.
    * After the RowData reader is supported, there would be no problems.
    */
   public static boolean supportRowDataAppend(Configuration conf, RowType rowType) {

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
 
 import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
@@ -41,19 +40,14 @@ public class BufferUtils {
       // there is no enough free pages to create a binary buffer, may need flush first.
       throw new MemoryPagesExhaustedException("Free pages are not enough to create a BinaryInMemorySortBuffer.");
     }
-    Pair<NormalizedKeyComputer, RecordComparator> sortHelper = getSortHelper(rowType);
+    // currently do not need to sort records in the binary buffer.
+    NormalizedKeyComputer keyComputer = new DummyNormalizedKeyComputer();
+    RecordComparator recordComparator = new DummyRecordComparator();
     return BinaryInMemorySortBuffer.createBuffer(
-        sortHelper.getLeft(),
+        keyComputer,
         new RowDataSerializer(rowType),
         new BinaryRowDataSerializer(rowType.getFieldCount()),
-        sortHelper.getRight(),
+        recordComparator,
         memorySegmentPool);
-  }
-
-  /**
-   * Generate NormalizedKeyComputer and RecordComparator for creating BinaryInMemorySortBuffer.
-   */
-  private static Pair<NormalizedKeyComputer, RecordComparator> getSortHelper(RowType rowType) {
-    return Pair.of(new DummyNormalizedKeyComputer(), new DummyRecordComparator());
   }
 }
