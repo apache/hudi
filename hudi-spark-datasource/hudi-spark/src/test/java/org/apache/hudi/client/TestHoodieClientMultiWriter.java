@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -51,6 +52,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -183,6 +185,17 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   private static final List<ConflictResolutionStrategy> CONFLICT_RESOLUTION_STRATEGY_CLASSES = Arrays.asList(
       new SimpleConcurrentFileWritesConflictResolutionStrategy(),
       new PreferWriterConflictResolutionStrategy());
+
+  private static Iterable<Object[]> providerClassResolutionStrategyAndTableType() {
+    List<Object[]> opts = new ArrayList<>();
+    for (Object providerClass : LOCK_PROVIDER_CLASSES) {
+      for (ConflictResolutionStrategy resolutionStrategy : CONFLICT_RESOLUTION_STRATEGY_CLASSES) {
+        opts.add(new Object[] {COPY_ON_WRITE, providerClass, resolutionStrategy});
+        opts.add(new Object[] {MERGE_ON_READ, providerClass, resolutionStrategy});
+      }
+    }
+    return opts;
+  }
 
   public static Stream<Arguments> concurrentAlterSchemaTestDimension() {
     Object[][] data =
@@ -735,27 +748,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     }
   }
 
-  @Test
-  public void testMultiWriterWithAsyncTableServicesWithConflictCOWSimpleConflictResol() throws Exception {
-    testMultiWriterWithAsyncTableServicesWithConflict(COPY_ON_WRITE, InProcessLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
-  }
-
-  @Test
-  public void testMultiWriterWithAsyncTableServicesWithConflictCOWPreferWriterConflictResol() throws Exception {
-    testMultiWriterWithAsyncTableServicesWithConflict(COPY_ON_WRITE, InProcessLockProvider.class, new PreferWriterConflictResolutionStrategy());
-  }
-
-  @Test
-  public void testMultiWriterWithAsyncTableServicesWithConflictMORSimpleConflictResol() throws Exception {
-    testMultiWriterWithAsyncTableServicesWithConflict(MERGE_ON_READ, InProcessLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
-  }
-
-  @Test
-  public void testMultiWriterWithAsyncTableServicesWithConflictMORPreferWriterConflictResol() throws Exception {
-    testMultiWriterWithAsyncTableServicesWithConflict(MERGE_ON_READ, InProcessLockProvider.class, new PreferWriterConflictResolutionStrategy());
-  }
-
-  private void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType, Class<? extends LockProvider<?>> providerClass,
+  @ParameterizedTest
+  @MethodSource("providerClassResolutionStrategyAndTableType")
+  public void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType, Class<? extends LockProvider<?>> providerClass,
                                                                 ConflictResolutionStrategy resolutionStrategy) throws Exception {
     // create inserts X 1
     if (tableType == MERGE_ON_READ) {
@@ -860,6 +855,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       if (tableType == MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
           String compactionTimeStamp = client2.createNewInstantTime();
+          ValidationUtils.checkArgument(InstantComparison.compareTimestamps(compactionTimeStamp, InstantComparison.GREATER_THAN, upsertCommitTime));
           client2.scheduleTableService(compactionTimeStamp, Option.empty(), TableServiceType.COMPACT);
         });
       }
