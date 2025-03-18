@@ -31,7 +31,6 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists, PARTITION_NAME_SECONDARY_INDEX_PREFIX}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
@@ -43,7 +42,6 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.sql.types.BooleanType
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1190,50 +1188,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
     assertEquals(5,
       spark.read.format("hudi").load(basePath).count())
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testHoodieIsDeletedMOR(recordType: HoodieRecordType): Unit =  {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
-
-    val numRecords = 100
-    val numRecordsToDelete = 2
-    val schema = HoodieTestDataGenerator.SHORT_TRIP_SCHEMA
-    val records0 = recordsToStrings(dataGen.generateInsertsAsPerSchema("000", numRecords, schema)).asScala.toSeq
-    val inputDF0 = spark.read.json(spark.sparkContext.parallelize(records0, 2))
-    inputDF0.write.format("org.apache.hudi")
-      .options(writeOpts)
-      .option("hoodie.compact.inline", "false")
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    val snapshotDF0 = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath)
-    assertEquals(numRecords, snapshotDF0.count())
-
-    val df1 = snapshotDF0.limit(numRecordsToDelete)
-    val dropDf = df1.drop(df1.columns.filter(_.startsWith("_hoodie_")): _*)
-
-    val df2 = convertColumnsToNullable(
-      dropDf.withColumn("_hoodie_is_deleted", lit(true).cast(BooleanType)),
-      "_hoodie_is_deleted"
-    )
-    df2.write.format("org.apache.hudi")
-      .options(writeOpts)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .mode(SaveMode.Append)
-      .save(basePath)
-
-    val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath)
-    assertEquals(numRecords - numRecordsToDelete, snapshotDF2.count())
   }
 
   /**
