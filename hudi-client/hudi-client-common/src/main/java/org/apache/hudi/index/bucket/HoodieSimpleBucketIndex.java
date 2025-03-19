@@ -140,6 +140,10 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
     return BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, numBuckets);
   }
 
+  public int getBucketID(HoodieKey key, int numBuckets) {
+    return BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, numBuckets);
+  }
+
   @Override
   public boolean canIndexLogFiles() {
     return false;

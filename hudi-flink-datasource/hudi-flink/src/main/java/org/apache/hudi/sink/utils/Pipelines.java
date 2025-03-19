@@ -53,8 +53,9 @@ import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.util.Lazy;
 
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -122,8 +123,9 @@ public class Pipelines {
             "Consistent hashing bucket index does not work with bulk insert using FLINK engine. Use simple bucket index or Spark engine.");
       }
       String indexKeys = OptionsResolver.getIndexKeyField(conf);
-      Lazy<org.apache.hadoop.conf.Configuration> hadoopConf = Lazy.lazily(() -> HadoopConfigurations.getHadoopConf(conf));
-      BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeys, hadoopConf);
+      StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf = StringUtils.isNullOrEmpty(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT)) ?
+          null : new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
+      BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeys, storageConf);
       RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
       InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
@@ -131,7 +133,7 @@ public class Pipelines {
 
       Map<String, String> bucketIdToFileId = new HashMap<>();
       dataStream = dataStream.partitionCustom(partitioner, keyGen::getHoodieKey)
-          .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, record, indexKeys, conf, needFixedFileIdSuffix, hadoopConf), typeInfo)
+          .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, record, indexKeys, conf, needFixedFileIdSuffix, storageConf), typeInfo)
           .setParallelism(PARALLELISM_VALUE);
       if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
         SortOperatorGen sortOperatorGen = BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
@@ -341,7 +343,9 @@ public class Pipelines {
           String indexKeyFields = OptionsResolver.getIndexKeyField(conf);
           // [HUDI-9036] BucketIndexPartitioner is also used in bulk insert mode,
           // keep use of HoodieKey here in partitionCustom for now
-          BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeyFields, Lazy.lazily(() -> HadoopConfigurations.getHadoopConf(conf)));
+          StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf = StringUtils.isNullOrEmpty(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT)) ?
+              null : new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
+          BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeyFields, storageConf);
           return dataStream
               .partitionCustom(
                   partitioner,
@@ -504,6 +508,8 @@ public class Pipelines {
     return StringUtils.isNullOrEmpty(databaseName) ? conf.getString(FlinkOptions.TABLE_NAME)
         : databaseName + "." + conf.getString(FlinkOptions.TABLE_NAME);
   }
+
+
 
   /**
    * Dummy sink that does nothing.

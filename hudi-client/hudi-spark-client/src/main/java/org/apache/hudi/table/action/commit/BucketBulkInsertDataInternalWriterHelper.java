@@ -19,10 +19,12 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
 import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTable;
@@ -44,6 +46,8 @@ import java.util.Objects;
 public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInternalWriterHelper {
 
   private static final Logger LOG = LoggerFactory.getLogger(BucketBulkInsertDataInternalWriterHelper.class);
+  private final boolean isPartitionBucketIndexEnable;
+  private PartitionBucketIndexCalculator calc;
 
   private Pair<UTF8String, Integer> lastFileId; // for efficient code path
   // p -> (fileId -> handle)
@@ -66,13 +70,18 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     this.bucketNum = writeConfig.getInt(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
     this.handles = new HashMap<>();
     this.isNonBlockingConcurrencyControl = writeConfig.isNonBlockingConcurrencyControl();
+    String hashingInstantToLoad = writeConfig.getHashingConfigInstantToLoad();
+    this.isPartitionBucketIndexEnable = StringUtils.isNullOrEmpty(hashingInstantToLoad);
+    if (isPartitionBucketIndexEnable) {
+      calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, hoodieTable.getMetaClient());
+    }
   }
 
   public void write(InternalRow row) throws IOException {
     try {
       UTF8String partitionPath = extractPartitionPath(row);
       UTF8String recordKey = extractRecordKey(row);
-      int bucketId = BucketIdentifier.getBucketId(String.valueOf(recordKey), indexKeyFields, bucketNum);
+      int bucketId = BucketIdentifier.getBucketId(String.valueOf(recordKey), indexKeyFields, isPartitionBucketIndexEnable ? calc.computeNumBuckets(partitionPath.toString()) : bucketNum);
       if (lastFileId == null || !Objects.equals(lastFileId.getKey(), partitionPath) || !Objects.equals(lastFileId.getValue(), bucketId)) {
         // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
         //       a mutable underlying buffer

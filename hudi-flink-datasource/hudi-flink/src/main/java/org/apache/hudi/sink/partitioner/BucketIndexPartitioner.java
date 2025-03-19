@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
-import org.apache.hudi.util.Lazy;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
@@ -41,17 +41,16 @@ public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<
   private final Configuration conf;
   private final String indexKeyFields;
   private final String hashingInstantToLoad;
-  private org.apache.hadoop.conf.Configuration hadoopConf;
+  private StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf;
 
   private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
 
-  public BucketIndexPartitioner(Configuration conf, String indexKeyFields, Lazy<org.apache.hadoop.conf.Configuration> hadoopConf) {
+  public BucketIndexPartitioner(Configuration conf, String indexKeyFields,
+                                StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf) {
     this.conf = conf;
     this.indexKeyFields = indexKeyFields;
     this.hashingInstantToLoad = conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT);
-    if (!StringUtils.isNullOrEmpty(hashingInstantToLoad)) {
-      this.hadoopConf = hadoopConf.get();
-    }
+    this.storageConf = storageConf;
   }
 
   @Override
@@ -62,6 +61,7 @@ public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<
 
     int bucketNum;
     if (!StringUtils.isNullOrEmpty(hashingInstantToLoad)) {
+      org.apache.hadoop.conf.Configuration hadoopConf = storageConf.unwrapAs(org.apache.hadoop.conf.Configuration.class);
       PartitionBucketIndexCalculator calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, hadoopConf, conf.get(FlinkOptions.PATH));
       bucketNum = calc.computeNumBuckets(key.getPartitionPath());
     } else {

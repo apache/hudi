@@ -27,6 +27,7 @@ import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.Lazy;
 
@@ -97,13 +98,13 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
   }
 
   private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, Configuration conf, boolean needFixedFileIdSuffix,
-                                  Lazy<org.apache.hadoop.conf.Configuration> hadoopConf) {
+                                  StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf) {
     String recordKey = keyGen.getRecordKey(record);
     String partition = keyGen.getPartitionPath(record);
     final int numBuckets;
     if (!StringUtils.isNullOrEmpty(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT))) {
-      numBuckets = PartitionBucketIndexCalculator.getInstance(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT), hadoopConf.get(), conf.get(FlinkOptions.PATH))
-          .computeNumBuckets(partition);
+      numBuckets = PartitionBucketIndexCalculator.getInstance(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT),
+              storageConf.unwrapAs(org.apache.hadoop.conf.Configuration.class), conf.get(FlinkOptions.PATH)).computeNumBuckets(partition);
     } else {
       numBuckets = conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     }
@@ -113,8 +114,8 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
   }
 
   public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, Configuration conf, boolean needFixedFileIdSuffix,
-                                      Lazy<org.apache.hadoop.conf.Configuration> hadoopConf) {
-    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeys, conf, needFixedFileIdSuffix, hadoopConf);
+                                      StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf) {
+    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeys, conf, needFixedFileIdSuffix, storageConf);
     return GenericRowData.of(StringData.fromString(fileId), record);
   }
 

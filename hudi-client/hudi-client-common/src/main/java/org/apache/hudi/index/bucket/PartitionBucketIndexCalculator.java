@@ -69,12 +69,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
    */
   private PartitionBucketIndexCalculator(String instantToLoad, Configuration hadoopConf, String basePath) {
     this.instantToLoad = instantToLoad;
-    StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    StoragePath hashingBase = new StoragePath(metaPath, HoodieTableMetaClient.BUCKET_INDEX_METAFOLDER_CONFIG_FOLDER);
-    StoragePath hashingConfigPath =
-        new StoragePath(hashingBase,
-            instantToLoad + PartitionBucketIndexHashingConfig.HASHING_CONFIG_FILE_SUFFIX);
-
+    StoragePath hashingConfigPath = PartitionBucketIndexUtils.getHashingConfigPath(basePath, instantToLoad);
     try (HoodieHadoopStorage storage = new HoodieHadoopStorage(hashingConfigPath, HadoopFSUtils.getStorageConf(hadoopConf))) {
       init(storage, hashingConfigPath);
     } catch (IOException e) {

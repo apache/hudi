@@ -49,13 +49,23 @@ public class PartitionBucketIndexUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(PartitionBucketIndexUtils.class);
 
-  public static boolean isPartitionSimpleBucketIndex(Configuration conf) {
-    StoragePath storagePath = new StoragePath(HoodieTableMetaClient.PARTITION_BUCKET_INDEX_HASHING_FOLDER);
+  public static boolean isPartitionSimpleBucketIndex(Configuration conf, String basePath) {
+    StoragePath storagePath = getHashingConfigStorageFolder(basePath);
     try (HoodieHadoopStorage storage = new HoodieHadoopStorage(storagePath, HadoopFSUtils.getStorageConf(conf))) {
       return storage.exists(storagePath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to list PARTITION_BUCKET_INDEX_HASHING_FOLDER folder ", e);
     }
+  }
+
+  public static StoragePath getHashingConfigStorageFolder(String basePath) {
+    StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    return new StoragePath(metaPath, HoodieTableMetaClient.BUCKET_INDEX_METAFOLDER_CONFIG_FOLDER);
+  }
+
+  public static StoragePath getHashingConfigPath(String basePath, String instantToLoad) {
+    StoragePath hashingBase = getHashingConfigStorageFolder(basePath);
+    return new StoragePath(hashingBase, instantToLoad + PartitionBucketIndexHashingConfig.HASHING_CONFIG_FILE_SUFFIX);
   }
 
   public static boolean initHashingConfig(HoodieTableMetaClient metaClient,
@@ -104,7 +114,6 @@ public class PartitionBucketIndexUtils {
     Option<HoodieInstant> earliestInstant = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().firstInstant();
     String instantToLoad = "";
     try {
-      // 按时间降序排列
       List<String> hashingConfigInstants = metaClient.getStorage()
           .listDirectEntries(new StoragePath(metaClient.getHashingMetadataConfigPath())).stream().map(info -> {
             String instant = getHashingConfigInstant(info.getPath().getName());
@@ -115,11 +124,15 @@ public class PartitionBucketIndexUtils {
           }).sorted().collect(Collectors.toList());
 
       for (String instant : hashingConfigInstants) {
-        if (instants.contains(instant)) {
+        if (!earliestInstant.isPresent()) {
           instantToLoad = instant;
           break;
-        } else if (earliestInstant.isPresent() && instant.compareTo(earliestInstant.get().requestedTime()) < 0){
+        } else if (instants.contains(instant)) {
           instantToLoad = instant;
+          break;
+        } else if (instant.compareTo(earliestInstant.get().requestedTime()) < 0){
+          instantToLoad = instant;
+          break;
         }
       }
 
@@ -133,16 +146,11 @@ public class PartitionBucketIndexUtils {
     }
   }
 
-  public static String getHashingConfigInstant(String hashingConfig) {
-    int lastIndex = hashingConfig.lastIndexOf('/');
-    if (lastIndex == -1) {
-      return null;
-    }
-    String fileName = hashingConfig.substring(lastIndex + 1);
-    int dotIndex = fileName.indexOf('.');
+  public static String getHashingConfigInstant(String hashingConfigName) {
+    int dotIndex = hashingConfigName.indexOf('.');
     if (dotIndex == -1) {
       return null;
     }
-    return fileName.substring(0, dotIndex);
+    return hashingConfigName.substring(0, dotIndex);
   }
 }

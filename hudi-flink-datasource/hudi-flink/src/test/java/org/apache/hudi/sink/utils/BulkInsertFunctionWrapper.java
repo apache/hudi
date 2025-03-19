@@ -32,6 +32,7 @@ import org.apache.hudi.sink.bulk.sort.SortOperator;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.Lazy;
 import org.apache.hudi.util.StreamerUtil;
@@ -221,7 +222,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
     this.bucketIdToFileId = new HashMap<>();
     this.mapFunction = r -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, r, indexKeys, conf, needFixedFileIdSuffix,
-        Lazy.lazily(() -> HadoopConfigurations.getHadoopConf(conf)));
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)));
   }
 
   private void setupSortOperator() throws Exception {

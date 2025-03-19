@@ -18,7 +18,10 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
 import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.sql.BucketPartitionUtils$;
 import org.apache.spark.sql.Dataset;
@@ -31,15 +34,22 @@ public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertParti
 
   private final String indexKeyFields;
   private final int bucketNum;
+  private boolean isPartitionBucketIndexEnable = false;
+  private PartitionBucketIndexCalculator calc;
 
-  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum) {
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum, HoodieTable table) {
     this.indexKeyFields = indexKeyFields;
     this.bucketNum = bucketNum;
+    String hashingInstantToLoad = table.getConfig().getHashingConfigInstantToLoad();
+    this.isPartitionBucketIndexEnable = StringUtils.isNullOrEmpty(hashingInstantToLoad);
+    if (isPartitionBucketIndexEnable) {
+      calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, table.getMetaClient());
+    }
   }
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputPartitions) {
-    return BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, bucketNum, outputPartitions);
+    return BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, bucketNum, outputPartitions, calc, isPartitionBucketIndexEnable);
   }
 
   @Override

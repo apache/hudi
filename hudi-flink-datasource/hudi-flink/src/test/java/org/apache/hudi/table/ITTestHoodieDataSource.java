@@ -23,13 +23,16 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
 import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 import org.apache.hudi.util.StreamerUtil;
@@ -66,10 +69,12 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -89,6 +94,7 @@ import static org.apache.hudi.utils.TestData.assertRowsEquals;
 import static org.apache.hudi.utils.TestData.assertRowsEqualsUnordered;
 import static org.apache.hudi.utils.TestData.map;
 import static org.apache.hudi.utils.TestData.row;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1256,6 +1262,78 @@ public class ITTestHoodieDataSource {
         + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
         + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"bulk_insert", "upsert"})
+  void testBulkInsertWithPartitionBucketIndex(String operationType) throws IOException {
+    TableEnvironment tableEnv = batchTableEnv;
+    // csv source
+    String csvSourceDDL = TestConfigurations.getCsvSourceDDL("csv_source", "test_source_5.data");
+    tableEnv.executeSql(csvSourceDDL);
+    String catalogName = "hudi_" + operationType;
+    String hudiCatalogDDL = catalog(catalogName)
+        .catalogPath(tempFile.getAbsolutePath())
+        .end();
+
+    tableEnv.executeSql(hudiCatalogDDL);
+    String dbName = "hudi";
+    tableEnv.executeSql("create database " + catalogName + "." + dbName);
+    String basePath = tempFile.getAbsolutePath() + "/hudi/hoodie_sink";
+
+    String hoodieTableDDL = sql(catalogName + ".hudi.hoodie_sink")
+        .option(FlinkOptions.PATH, basePath)
+        .option(FlinkOptions.OPERATION, operationType)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_INPUT, true)
+        .option(FlinkOptions.INDEX_TYPE, "BUCKET")
+        .option(FlinkOptions.HIVE_STYLE_PARTITIONING, "true")
+        .option(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, "1")
+        .option(FlinkOptions.BUCKET_INDEX_PARTITION_RULE, "regex")
+        .option(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS, "partition=(par1|par2),2")
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    String insertInto = "insert into " + catalogName + ".hudi.hoodie_sink select * from csv_source";
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from " + catalogName + ".hudi.hoodie_sink").execute().collect());
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
+    // apply filters
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from " + catalogName + ".hudi.hoodie_sink where uuid > 'id5'").execute().collect());
+    assertRowsEquals(result2, "["
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(basePath, new org.apache.hadoop.conf.Configuration());
+
+    List<StoragePathInfo> allFiles = metaClient.getStorage().listDirectEntries(new StoragePath(basePath)).stream().flatMap(path -> {
+      try {
+        return metaClient.getStorage().listDirectEntries(path.getPath()).stream();
+      } catch (IOException e) {
+        return Stream.empty();
+      }
+    }).collect(Collectors.toList());
+
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), allFiles);
+    List<String> actual = fsView.getAllFileGroups().map(group -> {
+      return group.getPartitionPath() + group.getFileGroupId().getFileId().split("-")[0];
+    }).collect(Collectors.toList());
+
+    // based on expression partition=(par1|par2),2 and default bucket number 1
+    // par1 and par2 have two buckets.
+    // par3 and par4 have one bucket.
+    ArrayList<String> expected = new ArrayList<>();
+    expected.add("partition=par1" + "00000000");
+    expected.add("partition=par1" + "00000001");
+    expected.add("partition=par2" + "00000000");
+    expected.add("partition=par2" + "00000001");
+    expected.add("partition=par3" + "00000000");
+    expected.add("partition=par4" + "00000000");
+
+    assertEquals(expected.stream().sorted().collect(Collectors.toList()), actual.stream().sorted().collect(Collectors.toList()));
   }
 
   @Test

@@ -99,7 +99,7 @@ public class OptionsInference {
   public static void setupIndexConfigs(Configuration conf) {
     HoodieIndex.BucketIndexEngineType engineType = OptionsResolver.getBucketEngineType(conf);
     if (engineType.equals(HoodieIndex.BucketIndexEngineType.SIMPLE) &&
-        PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(HadoopConfigurations.getHadoopConf(conf))) {
+        PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(HadoopConfigurations.getHadoopConf(conf), conf.get(FlinkOptions.PATH))) {
       try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClientV2(conf)) {
         HoodieTableMetaClient metaClient = writeClient.getHoodieTable().getMetaClient();
         String hashingConfigToLoad = PartitionBucketIndexUtils.getHashingConfigInstantToLoad(metaClient);
