@@ -73,6 +73,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
 
   private static HoodieWriteConfig.Builder makeHoodieClientConfigBuilder(String basePath, Schema schema) {
     return HoodieWriteConfig.newBuilder()
+        .withAutoCommit(true)
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
         .withSchema(schema.toString());

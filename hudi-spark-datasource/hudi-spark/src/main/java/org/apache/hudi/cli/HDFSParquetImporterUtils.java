@@ -280,6 +280,7 @@ public class HDFSParquetImporterUtils implements Serializable {
         .orElseGet(() -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withAutoCommit(true)
             .withParallelism(parallelism, parallelism)
             .withBulkInsertParallelism(parallelism)
             .withDeleteParallelism(parallelism)

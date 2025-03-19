@@ -1860,6 +1860,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       }
       if (i == 1) {
         val writeConfig = HoodieWriteConfig.newBuilder()
+          .withAutoCommit(true)
           .forTable("hoodie_test")
           .withPath(basePath)
           .withProps(optsWithCluster.asJava)

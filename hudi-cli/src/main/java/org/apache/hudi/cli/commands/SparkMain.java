@@ -569,7 +569,7 @@ public class SparkMain {
             .setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
-    HoodieWriteConfig updatedConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps())
+    HoodieWriteConfig updatedConfig = HoodieWriteConfig.newBuilder().withAutoCommit(true).withProps(config.getProps())
         .forTable(metaClient.getTableConfig().getTableName()).build();
     try {
       new UpgradeDowngrade(metaClient, updatedConfig, new HoodieSparkEngineContext(jsc), SparkUpgradeDowngradeHelper.getInstance())
@@ -592,7 +592,7 @@ public class SparkMain {
   }
 
   private static HoodieWriteConfig getWriteConfig(String basePath, Boolean rollbackUsingMarkers, boolean lazyCleanPolicy) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath)
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withAutoCommit(true)
         .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(lazyCleanPolicy ? HoodieFailedWritesCleaningPolicy.LAZY :
             HoodieFailedWritesCleaningPolicy.EAGER).build())
