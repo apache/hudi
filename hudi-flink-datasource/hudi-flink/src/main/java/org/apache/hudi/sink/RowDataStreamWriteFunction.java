@@ -245,7 +245,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
    * <p>1. Data Bucket do not exist and there is no enough memory pages to create a new binary buffer.
    * <p>2. Data Bucket exists, but fails to request new memory pages from memory pool.
    */
-  private boolean createBucketAndWriteRow(String bucketID, HoodieFlinkInternalRow record) throws IOException {
+  private boolean doBufferRecord(String bucketID, HoodieFlinkInternalRow record) throws IOException {
     try {
       RowDataBucket bucket = this.buckets.computeIfAbsent(bucketID,
           k -> new RowDataBucket(
@@ -279,7 +279,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
         RowKind.fromByteValue(HoodieOperation.fromName(record.getOperationType()).getValue()));
     final String bucketID = getBucketID(record.getPartitionPath(), record.getFileId());
 
-    boolean success = createBucketAndWriteRow(bucketID, record);
+    boolean success = doBufferRecord(bucketID, record);
     // 1. flushing bucket for memory pool is full.
     if (!success) {
       RowDataBucket bucketToFlush = this.buckets.values().stream()
@@ -292,7 +292,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
         LOG.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
       }
       // try write row again
-      success = createBucketAndWriteRow(bucketID, record);
+      success = doBufferRecord(bucketID, record);
       if (!success) {
         throw new RuntimeException("Buffer is too small to hold a single record.");
       }

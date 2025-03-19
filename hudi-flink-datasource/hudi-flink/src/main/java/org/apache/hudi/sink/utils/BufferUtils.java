@@ -41,8 +41,8 @@ public class BufferUtils {
       throw new MemoryPagesExhaustedException("Free pages are not enough to create a BinaryInMemorySortBuffer.");
     }
     // currently do not need to sort records in the binary buffer.
-    NormalizedKeyComputer keyComputer = new DummyNormalizedKeyComputer();
-    RecordComparator recordComparator = new DummyRecordComparator();
+    NormalizedKeyComputer keyComputer = new NaturalOrderKeyComputer();
+    RecordComparator recordComparator = new NaturalOrderRecordComparator();
     return BinaryInMemorySortBuffer.createBuffer(
         keyComputer,
         new RowDataSerializer(rowType),

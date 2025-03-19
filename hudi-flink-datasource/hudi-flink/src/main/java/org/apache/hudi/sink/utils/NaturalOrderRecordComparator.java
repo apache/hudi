@@ -24,7 +24,7 @@ import org.apache.flink.table.runtime.generated.RecordComparator;
 /**
  * A dummy implementation of @{code RecordComparator} for {@code BinaryInMemorySortBuffer} in case sort is not needed.
  */
-public class DummyRecordComparator implements RecordComparator {
+public class NaturalOrderRecordComparator implements RecordComparator {
   @Override
   public int compare(RowData rowData, RowData rowData1) {
     return 0;

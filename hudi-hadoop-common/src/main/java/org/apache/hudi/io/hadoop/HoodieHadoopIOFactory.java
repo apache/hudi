@@ -79,6 +79,15 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
         } catch (Exception e) {
           throw new HoodieException("Unable to create HoodieSparkFileWriterFactory", e);
         }
+      case FLINK:
+        //TODO: remove this case [HUDI-7746]
+        try {
+          return (HoodieFileWriterFactory) ReflectionUtils
+              .loadClass("org.apache.hudi.io.storage.row.HoodieRowDataFileWriterFactory",
+                  new Class<?>[] {HoodieStorage.class}, storage);
+        } catch (Exception e) {
+          throw new HoodieException("Unable to create HoodieRowDataFileWriterFactory", e);
+        }
       default:
         throw new UnsupportedOperationException(recordType + " record type not supported");
     }

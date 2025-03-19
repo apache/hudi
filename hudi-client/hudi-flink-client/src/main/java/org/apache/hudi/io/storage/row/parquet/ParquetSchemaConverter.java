@@ -623,8 +623,7 @@ public class ParquetSchemaConverter {
         }
       case ARRAY:
         // align with Spark And Avro regarding the standard mode array type, see:
-        // org.apache.spark.sql.execution.datasources.parquet.ParquetSchemaConverter,
-        // org.apache.parquet.avro.AvroSchemaConverter
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists
         //
         // <list-repetition> group <name> (LIST) {
         //   repeated group list {

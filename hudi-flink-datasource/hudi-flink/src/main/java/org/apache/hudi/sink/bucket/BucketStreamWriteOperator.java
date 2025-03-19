@@ -35,7 +35,7 @@ public class BucketStreamWriteOperator extends AbstractWriteOperator<HoodieFlink
     super(OptionsResolver.isConsistentHashingBucketIndexType(conf)
         ? new ConsistentBucketStreamWriteFunction(conf, rowType)
         : OptionsResolver.supportRowDataAppend(conf, rowType)
-        ? new BucketRowDataStreamWriteFunction(conf, rowType) : new BucketStreamWriteFunction(conf, rowType));
+        ? new RowDataBucketStreamWriteFunction(conf, rowType) : new BucketStreamWriteFunction(conf, rowType));
   }
 
   public static WriteOperatorFactory<HoodieFlinkInternalRow> getFactory(Configuration conf, RowType rowType) {
