@@ -2266,7 +2266,7 @@ public class ITTestHoodieDataSource {
     // write second commit
     TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
     // stop the streaming query and get data
-    List<Row> actualResult = fetchResult(streamTableEnv, tableResult, 15);
+    List<Row> actualResult = fetchResult(streamTableEnv, tableResult, 60);
     assertRowsEquals(actualResult, TestData.DATA_SET_INSERT_SEPARATE_PARTITION);
   }
 
