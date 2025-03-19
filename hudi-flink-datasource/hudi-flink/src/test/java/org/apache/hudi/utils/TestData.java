@@ -33,13 +33,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
-import org.apache.hudi.sink.utils.BucketRowDataStreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.BucketStreamWriteFunctionWrapper;
+import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.BulkInsertFunctionWrapper;
 import org.apache.hudi.sink.utils.ConsistentBucketStreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.InsertFunctionWrapper;
-import org.apache.hudi.sink.utils.RowDataStreamWriteFunctionWrapper;
-import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestFunctionWrapper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -579,12 +577,10 @@ public class TestData {
       if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
         return new ConsistentBucketStreamWriteFunctionWrapper<>(basePath, conf);
       } else {
-        return OptionsResolver.supportRowDataAppend(conf)
-            ? new BucketRowDataStreamWriteFunctionWrapper<>(basePath, conf) : new BucketStreamWriteFunctionWrapper<>(basePath, conf);
+        return new BucketStreamWriteFunctionWrapper<>(basePath, conf);
       }
     } else {
-      return OptionsResolver.supportRowDataAppend(conf)
-          ? new RowDataStreamWriteFunctionWrapper<>(basePath, conf) : new StreamWriteFunctionWrapper<>(basePath, conf);
+      return new StreamWriteFunctionWrapper<>(basePath, conf);
     }
   }
 

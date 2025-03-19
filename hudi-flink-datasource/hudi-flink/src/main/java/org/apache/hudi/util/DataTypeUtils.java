@@ -175,43 +175,25 @@ public class DataTypeUtils {
   public static RowType addMetadataFields(
       RowType rowType,
       boolean withOperationField) {
-    return addMetadataFields(rowType, true, true, withOperationField);
-  }
-
-  /**
-   * Adds the Hoodie metadata fields to the given row type.
-   */
-  public static RowType addMetadataFields(
-      RowType rowType,
-      boolean isPopulateMetaFields,
-      boolean includeInstant,
-      boolean withOperationField) {
-    if (!isPopulateMetaFields && !withOperationField) {
-      return rowType;
-    }
     List<RowType.RowField> mergedFields = new ArrayList<>();
     LogicalType metadataFieldType = DataTypes.STRING().getLogicalType();
 
-    if (isPopulateMetaFields) {
-      RowType.RowField commitTimeField =
-          new RowType.RowField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, metadataFieldType, "commit time");
-      RowType.RowField commitSeqnoField =
-          new RowType.RowField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, metadataFieldType, "commit seqno");
-      RowType.RowField recordKeyField =
-          new RowType.RowField(HoodieRecord.RECORD_KEY_METADATA_FIELD, metadataFieldType, "record key");
-      RowType.RowField partitionPathField =
-          new RowType.RowField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, metadataFieldType, "partition path");
-      RowType.RowField fileNameField =
-          new RowType.RowField(HoodieRecord.FILENAME_METADATA_FIELD, metadataFieldType, "field name");
+    RowType.RowField commitTimeField =
+        new RowType.RowField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, metadataFieldType, "commit time");
+    RowType.RowField commitSeqnoField =
+        new RowType.RowField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, metadataFieldType, "commit seqno");
+    RowType.RowField recordKeyField =
+        new RowType.RowField(HoodieRecord.RECORD_KEY_METADATA_FIELD, metadataFieldType, "record key");
+    RowType.RowField partitionPathField =
+        new RowType.RowField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, metadataFieldType, "partition path");
+    RowType.RowField fileNameField =
+        new RowType.RowField(HoodieRecord.FILENAME_METADATA_FIELD, metadataFieldType, "field name");
 
-      if (includeInstant) {
-        mergedFields.add(commitTimeField);
-      }
-      mergedFields.add(commitSeqnoField);
-      mergedFields.add(recordKeyField);
-      mergedFields.add(partitionPathField);
-      mergedFields.add(fileNameField);
-    }
+    mergedFields.add(commitTimeField);
+    mergedFields.add(commitSeqnoField);
+    mergedFields.add(recordKeyField);
+    mergedFields.add(partitionPathField);
+    mergedFields.add(fileNameField);
 
     if (withOperationField) {
       RowType.RowField operationField =

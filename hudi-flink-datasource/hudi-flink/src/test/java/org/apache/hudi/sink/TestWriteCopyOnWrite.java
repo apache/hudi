@@ -448,11 +448,11 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   protected double getBatchSize() {
-    return OptionsResolver.supportRowDataAppend(conf) ? BATCH_SIZE_MB_V2 : BATCH_SIZE_MB_V1;
+    return supportRowDataAppend(conf) ? BATCH_SIZE_MB_V2 : BATCH_SIZE_MB_V1;
   }
 
   protected double getBufferSize() {
-    return OptionsResolver.supportRowDataAppend(conf) ? BUFFER_SIZE_MB_V2 : BATCH_SIZE_MB_V1;
+    return supportRowDataAppend(conf) ? BUFFER_SIZE_MB_V2 : BATCH_SIZE_MB_V1;
   }
 
   protected Map<String, String> getMiniBatchExpected() {

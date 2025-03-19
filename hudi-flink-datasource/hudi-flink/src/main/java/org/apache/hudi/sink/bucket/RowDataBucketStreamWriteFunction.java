@@ -47,9 +47,9 @@ import java.util.Set;
  * is used for deciding whether the incoming records in an UPDATE or INSERT.
  * The index is local because different partition paths have separate items in the index.
  */
-public class BucketRowDataStreamWriteFunction extends RowDataStreamWriteFunction {
+public class RowDataBucketStreamWriteFunction extends RowDataStreamWriteFunction {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BucketRowDataStreamWriteFunction.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RowDataBucketStreamWriteFunction.class);
 
   private int parallelism;
 
@@ -87,7 +87,7 @@ public class BucketRowDataStreamWriteFunction extends RowDataStreamWriteFunction
    *
    * @param config The config options
    */
-  public BucketRowDataStreamWriteFunction(Configuration config, RowType rowType) {
+  public RowDataBucketStreamWriteFunction(Configuration config, RowType rowType) {
     super(config, rowType);
   }
 

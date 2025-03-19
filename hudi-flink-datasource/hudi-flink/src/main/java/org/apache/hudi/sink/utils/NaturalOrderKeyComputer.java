@@ -26,7 +26,7 @@ import org.apache.flink.table.runtime.operators.sort.SortUtil;
 /**
  * A dummy implementation of @{code NormalizedKeyComputer} for {@code BinaryInMemorySortBuffer} in case sort is not needed.
  */
-public class DummyNormalizedKeyComputer implements NormalizedKeyComputer {
+public class NaturalOrderKeyComputer implements NormalizedKeyComputer {
   @Override
   public void putKey(RowData rowData, MemorySegment target, int offset) {
     SortUtil.minNormalizedKey(target, offset, 1);
