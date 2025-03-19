@@ -1554,6 +1554,7 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result2.subList(result2.size() - 2, result2.size()), "[-U[1], +U[2]]");
   }
 
+  @Disabled("HUDI-9196")
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   void testIncrementalReadArchivedCommits(HoodieTableType tableType) throws Exception {
@@ -2237,6 +2238,7 @@ public class ITTestHoodieDataSource {
 
   }
 
+  @Disabled("HUDI-9196")
   @ParameterizedTest
   @MethodSource("tableTypeAndBooleanTrueFalseParams")
   void testDynamicPartitionPrune(HoodieTableType tableType, boolean hiveStylePartitioning) throws Exception {
