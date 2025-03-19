@@ -1523,7 +1523,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       if (validateCompactionScheduling(inFlightInstantTimestamp, lastInstant.get().requestedTime())) {
         String latestDeltacommitTime = lastInstant.get().requestedTime();
         LOG.info("Latest deltacommit time found is {}, running compaction operations.", latestDeltacommitTime);
-        compactIfNecessary(writeClient, latestDeltacommitTime);
+        compactIfNecessary(writeClient, Option.of(latestDeltacommitTime));
       }
       writeClient.archive();
       LOG.info("All the table services operations on MDT completed successfully");
@@ -1577,7 +1577,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * 2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
    * deltacommit.
    */
-  void compactIfNecessary(BaseHoodieWriteClient<?,I,?,?> writeClient, String latestDeltacommitTime) {
+  void compactIfNecessary(BaseHoodieWriteClient<?,I,?,?> writeClient, Option<String> latestDeltaCommitTimeOpt) {
     // IMPORTANT: Trigger compaction with max instant time that is smaller than(or equals) the earliest pending instant from DT.
     // The compaction planner will manage to filter out the log files that finished with greater completion time.
     // see BaseHoodieCompactionPlanGenerator.generateCompactionPlan for more details.
