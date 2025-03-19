@@ -128,7 +128,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
    * are unknown across batches Inserts (which are new parquet files) are rolled back based on commit time. // TODO :
    * Create a new WorkloadProfile metadata file instead of using HoodieCommitMetadata
    */
-  void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime)
+  protected void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime)
       throws HoodieCommitException {
     try {
       HoodieCommitMetadata metadata = new HoodieCommitMetadata();
