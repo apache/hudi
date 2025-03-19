@@ -164,8 +164,11 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               } else {
                 // if this is part of a restore operation, we should rollback/delete entire file slice.
                 if (metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
+                  // For table version 6, the files can be directly fetched from the instant to rollback
                   hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
                 } else {
+                  // For table version 8, the files are computed based on completion time. All files completed after
+                  // the requested time of instant to rollback are included
                   hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
                       listAllFilesSinceCommit(instantToRollback.requestedTime(), baseFileExtension, partitionPath,
                           metaClient)));
@@ -204,9 +207,9 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                 // (B.3) Rollback triggered for first commit - Same as (B.1)
                 // (B.4) Rollback triggered for recurring commits - Same as (B.2) plus we need to delete the log files
                 // as well if the base file gets deleted.
-                HoodieCommitMetadata commitMetadata = TimelineUtils.getCommitMetadata(instantToRollback, table.getMetaClient().getCommitsTimeline());
+                HoodieCommitMetadata commitMetadata = commitMetadataOptional.get();
                 if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
-                  hoodieRollbackRequests.addAll(getRollbackRequestToAppendForVersionSix(partitionPath, instantToRollback, commitMetadataOptional.get(), table));
+                  hoodieRollbackRequests.addAll(getRollbackRequestToAppendForVersionSix(partitionPath, instantToRollback, commitMetadata, table));
                 }
               }
               break;

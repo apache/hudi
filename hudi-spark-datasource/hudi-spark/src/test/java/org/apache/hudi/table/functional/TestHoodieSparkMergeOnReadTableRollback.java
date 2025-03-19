@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table.functional;
 
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -31,11 +32,14 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -53,6 +57,8 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
@@ -164,6 +170,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     HoodieWriteConfig cfg = cfgBuilder.build();
     cfg.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
     cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
+    String timelineLayoutVersion = tableVersion < 8 ? String.valueOf(TimelineLayoutVersion.VERSION_1) : String.valueOf(TimelineLayoutVersion.VERSION_2);
+    cfg.setValue(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM, timelineLayoutVersion);
 
     Properties properties = CollectionUtils.copy(cfg.getProps());
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
@@ -213,6 +221,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       HoodieWriteConfig secondCfg = getHoodieWriteConfigWithSmallFileHandlingOff(true);
       secondCfg.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
       secondCfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
+      secondCfg.setValue(HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM, timelineLayoutVersion);
+
       /*
        * Write 2 (inserts + updates - testing failed delta commit)
        */
@@ -237,8 +247,31 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         // Verify there are no errors
         assertNoWriteErrors(statuses);
 
+        WriteMarkers markers = WriteMarkersFactory.get(secondCfg.getMarkersType(), hoodieTable, commitTime1);
+        IOType logFileIOType = tableVersion >= 8 ? IOType.CREATE : IOType.APPEND;
+        assertTrue(markers.allMarkerFilePaths().stream().anyMatch(name -> name.contains("log") && name.contains(logFileIOType.name())));
+
         // Test failed delta commit rollback
         secondClient.rollback(commitTime1);
+        // After rollback for table version 6, there should be new
+        metaClient = HoodieTableMetaClient.reload(metaClient);
+        HoodieInstant rollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().firstInstant().get();
+        HoodieRollbackMetadata rollbackMetadata = metaClient.getActiveTimeline().readInstantContent(rollbackInstant, HoodieRollbackMetadata.class);
+        List<StoragePathInfo> logFiles = listAllLogFilesInPath(hoodieTable);
+        if (tableVersion < HoodieTableVersion.EIGHT.versionCode()) {
+          // Ensure rollback metadata contains rollback log files for table version 6
+          assertTrue(rollbackMetadata.getPartitionMetadata().values().stream()
+              .noneMatch(rollbackPartitionMetadata -> rollbackPartitionMetadata.getRollbackLogFiles().isEmpty()));
+          // Total 3 partitions would contain 6 log files - one rollback log file and one log file with data block
+          assertEquals(6, logFiles.size());
+        } else {
+          // Ensure rollback metadata does not contain rollback log files for table version 8
+          assertFalse(rollbackMetadata.getPartitionMetadata().values().stream()
+              .noneMatch(rollbackPartitionMetadata -> rollbackPartitionMetadata.getRollbackLogFiles().isEmpty()));
+          // After rollback log files should be deleted
+          assertEquals(0, logFiles.size());
+        }
+
         allFiles = listAllBaseFilesInPath(hoodieTable);
         // After rollback, there should be no base file with the failed commit time
         List<String> remainingFiles = allFiles.stream()
