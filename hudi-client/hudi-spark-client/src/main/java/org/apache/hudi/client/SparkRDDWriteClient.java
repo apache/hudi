@@ -148,6 +148,20 @@ public class SparkRDDWriteClient<T> extends
     return postWrite(resultRDD, instantTime, table);
   }
 
+  /**
+   * For metadata table.
+   */
+  @Override
+  public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<PartitionFileIdPairsHolder> partitionFileIdPairsHolderOpt) {
+    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
+        initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
+    table.validateUpsertSchema();
+    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords), partitionFileIdPairsHolderOpt);
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+    return postWrite(resultRDD, instantTime, table);
+  }
+
   @Override
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
