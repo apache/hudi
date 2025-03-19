@@ -18,24 +18,26 @@
 
 package org.apache.hudi.sink.append;
 
-import org.apache.hudi.sink.common.AbstractWriteOperator;
-import org.apache.hudi.sink.common.WriteOperatorFactory;
+import org.apache.hudi.configuration.FlinkOptions;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
 
 /**
- * Operator for {@link AppendWriteFunction}.
- *
- * @param <I> The input type
+ * Utilities for {@link AppendWriteFunction} to handle rate limit if it was set.
  */
-public class AppendWriteOperator<I> extends AbstractWriteOperator<I> {
-
-  public AppendWriteOperator(Configuration conf, RowType rowType) {
-    super(AppendWriteFunctions.create(conf, rowType));
+public abstract class AppendWriteFunctions {
+  private AppendWriteFunctions() {
   }
 
-  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf, RowType rowType) {
-    return WriteOperatorFactory.instance(conf, new AppendWriteOperator<>(conf, rowType));
+  /**
+   * Creates a {@link AppendWriteFunction} instance based on the given configuration.
+   */
+  public static <I> AppendWriteFunction<I> create(Configuration conf, RowType rowType) {
+    if (conf.getLong(FlinkOptions.WRITE_RATE_LIMIT) > 0) {
+      return new AppendWriteFunction<>(conf, rowType);
+    } else {
+      return new AppendWriteFunctionWithRateLimit<>(rowType, conf);
+    }
   }
 }
