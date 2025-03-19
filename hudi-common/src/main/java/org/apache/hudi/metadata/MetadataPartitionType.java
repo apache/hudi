@@ -452,7 +452,7 @@ public enum MetadataPartitionType {
   /**
    * Returns the list of metadata partition types enabled based on the metadata config and table config.
    */
-  public static List<MetadataPartitionType> getEnabledPartitions(TypedProperties writeConfig, HoodieTableMetaClient metaClient) {
+  public static List<MetadataPartitionType> getEnabledIndexBuilderMap(TypedProperties writeConfig, HoodieTableMetaClient metaClient) {
     if (!getBooleanWithAltKeys(writeConfig, ENABLE)) {
       return Collections.emptyList();
     }
