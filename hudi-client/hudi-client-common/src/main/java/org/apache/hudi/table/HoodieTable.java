@@ -32,6 +32,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
+import org.apache.hudi.client.PartitionFileIdPairsHolder;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -259,6 +260,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   public abstract HoodieWriteMetadata<O> upsertPrepped(HoodieEngineContext context, String instantTime,
       I preppedRecords);
+
+  public HoodieWriteMetadata<O> upsertPrepped(HoodieEngineContext context, String instantTime,
+                                                       I preppedRecords, Option<PartitionFileIdPairsHolder> partitionFileIdPairsHolderOpt) {
+    return upsertPrepped(context, instantTime, preppedRecords);
+  }
 
   /**
    * Inserts the given prepared records into the Hoodie table, at the supplied instantTime.

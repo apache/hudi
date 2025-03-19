@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.client.PartitionFileIdPairsHolder;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -43,6 +45,7 @@ import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkMetadataTableUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.compact.HoodieSparkMergeOnReadTableCompactor;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
@@ -124,6 +127,15 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
       HoodieData<HoodieRecord<T>> preppedRecords) {
     return new SparkUpsertPreppedDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
+                                                                    HoodieData<HoodieRecord<T>> preppedRecords, Option<PartitionFileIdPairsHolder> partitionFileIdPairsHolderOpt) {
+    ValidationUtils.checkArgument(partitionFileIdPairsHolderOpt.isPresent(), "ParitionFileIdPairsHolder is expected to be present with upsert prepped for metadata table");
+    // Uses optimized upsert partitoner for metadata table when all records are upsert and locaitons are known upfront
+    return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords, 
+        partitionFileIdPairsHolderOpt.get().getPartitionFileSlices()).execute();
   }
 
   @Override
