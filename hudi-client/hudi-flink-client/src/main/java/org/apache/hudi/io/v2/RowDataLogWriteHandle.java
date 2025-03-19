@@ -305,23 +305,6 @@ public class RowDataLogWriteHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K
   }
 
   /**
-   * Build a delete log block based on the delete record iterator, and block header.
-   *
-   * @param deleteRecordIterator delete record iterator used to build the delete block
-   * @param header header for the delete block
-   * @return delete block
-   */
-  private HoodieLogBlock genDeleteBlock(
-      Iterator<DeleteRecord> deleteRecordIterator,
-      Map<HoodieLogBlock.HeaderMetadataType, String> header) {
-    List<Pair<DeleteRecord, Long>> recordsToDelete = new ArrayList<>();
-    while (deleteRecordIterator.hasNext()) {
-      recordsToDelete.add(Pair.of(deleteRecordIterator.next(), INVALID_POSITION));
-    }
-    return new HoodieDeleteBlock(recordsToDelete, header);
-  }
-
-  /**
    * Build a data block based on the hoodie record iterator, and block header.
    *
    * @param writeConfig hoodie write config

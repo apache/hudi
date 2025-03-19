@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
@@ -45,15 +46,17 @@ import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
+import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 import org.apache.hudi.util.PreCombineFieldExtractor;
+import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -448,19 +451,18 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
       // return a dummy extractor.
       return rowData -> HoodieRecord.DEFAULT_ORDERING_VALUE;
     }
-    List<String> fieldNames = rowType.getFieldNames();
-    List<LogicalType> fieldTypes = rowType.getChildren();
-    int preCombineFieldIdx = fieldNames.indexOf(preCombineField);
-    RowData.FieldGetter preCombineFieldGetter = RowData.createFieldGetter(fieldTypes.get(preCombineFieldIdx), preCombineFieldIdx);
+    int preCombineFieldIdx = rowType.getFieldNames().indexOf(preCombineField);
+    LogicalType fieldType = rowType.getChildren().get(preCombineFieldIdx);
+    RowData.FieldGetter preCombineFieldGetter = RowData.createFieldGetter(fieldType, preCombineFieldIdx);
 
-    return rowData -> {
-      Object orderVal = preCombineFieldGetter.getFieldOrNull(rowData);
-      if (orderVal instanceof TimestampData) {
-        return ((TimestampData) orderVal).toInstant().toEpochMilli();
-      } else {
-        return (Comparable<?>) orderVal;
-      }
-    };
+    // currently the log reader for flink is avro reader, and it merges records based on ordering value
+    // in form of AVRO format, so here we align the data format with reader.
+    // TODO refactor this after RowData reader is supported, HUDI-9146.
+    RowDataToAvroConverters.RowDataToAvroConverter fieldConverter =
+        RowDataToAvroConverters.createConverter(fieldType, conf.get(FlinkOptions.WRITE_UTC_TIMEZONE));
+    Schema fieldSchema = AvroSchemaConverter.convertToSchema(fieldType, preCombineField);
+    return rowData -> (Comparable<?>) HoodieAvroUtils.convertValueForSpecificDataTypes(
+        fieldSchema, fieldConverter.convert(fieldSchema, preCombineFieldGetter.getFieldOrNull(rowData)), false);
   }
 
   // -------------------------------------------------------------------------
