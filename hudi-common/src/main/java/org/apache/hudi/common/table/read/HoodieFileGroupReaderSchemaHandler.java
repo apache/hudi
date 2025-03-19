@@ -184,9 +184,16 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
   }
 
-  static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg, TypedProperties props,
+  private static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg, TypedProperties props,
                                                Schema dataSchema, Option<HoodieRecordMerger> recordMerger) {
-    if (cfg.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
+    Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
+        cfg.getRecordMergeMode(),
+        cfg.getPayloadClass(),
+        cfg.getRecordMergeStrategyId(),
+        cfg.getPreCombineField(),
+        HoodieTableVersion.current());
+
+    if (mergingConfigs.getLeft() == RecordMergeMode.CUSTOM) {
       return recordMerger.get().getMandatoryFieldsForMerging(dataSchema, cfg, props);
     }
 
@@ -201,13 +208,6 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       }
     }
 
-    Triple<RecordMergeMode, String, String> mergingConfigs =
-        HoodieTableConfig.inferCorrectMergingBehavior(
-            cfg.getRecordMergeMode(),
-            cfg.getPayloadClass(),
-            cfg.getRecordMergeStrategyId(),
-            cfg.getPreCombineField(),
-            HoodieTableVersion.current());
     if (mergingConfigs.getLeft() == RecordMergeMode.EVENT_TIME_ORDERING) {
       String preCombine = cfg.getPreCombineField();
       if (!StringUtils.isNullOrEmpty(preCombine)) {
