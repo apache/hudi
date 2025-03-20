@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, RecordMergeMode}
+import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -82,7 +82,8 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       assertResult(true)(Files.exists(Paths.get(s"$tablePath/$partitionVal")))
       assertResult(HoodieTableType.MERGE_ON_READ)(new HoodieTableConfig(
         HoodieStorageUtils.getStorage(tablePath, HoodieTestUtils.getDefaultStorageConf),
-        new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME), RecordMergeMode.COMMIT_TIME_ORDERING, null, null).getTableType)
+        new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME),
+        null, null, null, false).getTableType)
 
       // Manually pass incremental configs to global configs to make sure Hudi query is able to load the
       // global configs
