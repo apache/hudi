@@ -65,6 +65,7 @@ import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
@@ -99,6 +100,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected boolean enablePartialMerging = false;
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
+  private AtomicLong totalLogRecords = new AtomicLong(0);
 
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
@@ -215,6 +217,10 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     return records.size();
   }
 
+  public long getTotalLogRecords() {
+    return totalLogRecords.get();
+  }
+
   @Override
   public Iterator<Pair<Option<T>, Map<String, Object>>> getLogRecordIterator() {
     return records.values().iterator();
@@ -238,6 +244,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                                                                  Map<String, Object> metadata,
                                                                                  Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair)
       throws IOException {
+    totalLogRecords.incrementAndGet();
     if (existingRecordMetadataPair != null) {
       if (enablePartialMerging) {
         // TODO(HUDI-7843): decouple the merging logic from the merger
@@ -341,6 +348,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    */
   protected Option<DeleteRecord> doProcessNextDeletedRecord(DeleteRecord deleteRecord,
                                                             Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) {
+    totalLogRecords.incrementAndGet();
     if (existingRecordMetadataPair != null) {
       switch (recordMergeMode) {
         case COMMIT_TIME_ORDERING:
