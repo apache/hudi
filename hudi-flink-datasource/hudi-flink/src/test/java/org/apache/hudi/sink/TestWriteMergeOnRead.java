@@ -41,8 +41,6 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   @Override
   protected void setUp(Configuration conf) {
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-    // test legacy stream write function
-    conf.setBoolean(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED, false);
   }
 
   @Test

@@ -30,5 +30,5 @@ public interface ColumnRangeMetadataProvider {
   /**
    * Get the column statistics, key is column name, value is the statistic for the column.
    */
-  Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta();
+  Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta(String filePath);
 }

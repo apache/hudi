@@ -386,6 +386,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithSmallBufferSize() throws Exception {
     // reset the config option
+    // In rowdata write mode, BinaryInMemorySortBuffer need at least 2 memory segments for auxiliary information,
+    // the page size is tuned to 64 to make sure 3 records from 5 will trigger a mini-batch write.
     conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 64);
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200 + getBufferSize());
 

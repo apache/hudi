@@ -48,7 +48,7 @@ import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
-import org.apache.hudi.util.PreCombineFieldExtractor;
+import org.apache.hudi.util.OrderingValueExtractor;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -130,7 +130,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
   protected final RowDataKeyGen keyGen;
 
-  protected final PreCombineFieldExtractor preCombineFieldExtractor;
+  protected final OrderingValueExtractor orderingValueExtractor;
 
   /**
    * Total size tracer.
@@ -153,7 +153,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     super(config);
     this.rowType = rowType;
     this.keyGen = RowDataKeyGen.instance(config, rowType);
-    this.preCombineFieldExtractor = getPreCombineFieldExtractor(config, rowType);
+    this.orderingValueExtractor = getOrderingValueExtractor(config, rowType);
   }
 
   @Override
@@ -430,7 +430,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
   protected HoodieFlinkRecord convertToRecord(RowData dataRow, BucketInfo bucketInfo) {
     String key = keyGen.getRecordKey(dataRow);
-    Comparable<?> preCombineValue = preCombineFieldExtractor.getPreCombineField(dataRow);
+    Comparable<?> preCombineValue = orderingValueExtractor.getOrderingValue(dataRow);
     HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
     HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
     return new HoodieFlinkRecord(hoodieKey, operation, preCombineValue, dataRow);
@@ -445,7 +445,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     }
   }
 
-  private PreCombineFieldExtractor getPreCombineFieldExtractor(Configuration conf, RowType rowType) {
+  private OrderingValueExtractor getOrderingValueExtractor(Configuration conf, RowType rowType) {
     String preCombineField = OptionsResolver.getPreCombineField(conf);
     if (StringUtils.isNullOrEmpty(preCombineField)) {
       // return a dummy extractor.

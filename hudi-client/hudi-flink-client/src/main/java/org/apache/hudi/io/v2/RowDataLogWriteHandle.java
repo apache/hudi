@@ -49,6 +49,7 @@ import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.MiniBatchHandle;
 import org.apache.hudi.io.log.block.HoodieFlinkParquetDataBlock;
 import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
+import org.apache.hudi.io.storage.row.HoodieFlinkIOFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -198,6 +199,9 @@ public class RowDataLogWriteHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K
     storageConf.set(
         HoodieStorageConfig.PARQUET_WRITE_UTC_TIMEZONE.key(),
         writeConfig.getString(HoodieStorageConfig.PARQUET_WRITE_UTC_TIMEZONE.key()));
+    storageConf.set(
+        HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(),
+        HoodieFlinkIOFactory.class.getName());
   }
 
   private MetadataValues populateMetadataFields(HoodieRecord<T> hoodieRecord) {
@@ -243,9 +247,9 @@ public class RowDataLogWriteHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K
         ValidationUtils.checkArgument(dataBlock instanceof ColumnRangeMetadataProvider,
             "Log block for Flink ingestion should always be an instance of ColumnRangeMetadataProvider for collecting column stats efficiently.");
         columnRangeMetadata =
-            ((ColumnRangeMetadataProvider) dataBlock).getColumnRangeMeta().entrySet().stream()
+            ((ColumnRangeMetadataProvider) dataBlock).getColumnRangeMeta(stat.getPath()).entrySet().stream()
                 .filter(e -> columnsToIndexSet.contains(e.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().copy(stat.getPath())));
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
       }
       stat.putRecordsStats(columnRangeMetadata);
     }

@@ -59,7 +59,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A base wrapper class to manipulate the bucket stream write function instance for testing.
+ * A wrapper class to manipulate the instance of {@link BucketStreamWriteFunction} or {@link RowDataBucketStreamWriteFunction} for testing.
  *
  * @param <I> Input type
  */

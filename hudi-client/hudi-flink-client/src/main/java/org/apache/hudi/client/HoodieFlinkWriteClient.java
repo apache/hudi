@@ -203,7 +203,7 @@ public class HoodieFlinkWriteClient<T>
 
   @Override
   public List<WriteStatus> insert(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime) {
-    throw new UnsupportedOperationException("INSERT option is not supported yet.");
+    throw new UnsupportedOperationException("INSERT option is not supported for RowData writing mode yet.");
   }
 
   /**
@@ -229,7 +229,7 @@ public class HoodieFlinkWriteClient<T>
 
   @Override
   public List<WriteStatus> insertOverwrite(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime) {
-    throw new UnsupportedOperationException("InsertOverwrite option is not supported yet.");
+    throw new UnsupportedOperationException("InsertOverwrite option is not supported for RowData writing mode yet.");
   }
 
   /**
@@ -254,7 +254,7 @@ public class HoodieFlinkWriteClient<T>
 
   @Override
   public List<WriteStatus> insertOverwriteTable(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime) {
-    throw new UnsupportedOperationException("InsertOverwriteTable option is not supported yet.");
+    throw new UnsupportedOperationException("InsertOverwriteTable option is not supported for RowData writing mode yet.");
   }
 
   @Override

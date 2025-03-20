@@ -397,13 +397,13 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   @Override
-  public Pair<byte[], Map<String, HoodieColumnRangeMetadata<Comparable>>> serializeRecordsToLogBlock(HoodieStorage storage,
-                                                                                                     Iterator<HoodieRecord> recordItr,
-                                                                                                     HoodieRecord.HoodieRecordType recordType,
-                                                                                                     Schema writerSchema,
-                                                                                                     Schema readerSchema,
-                                                                                                     String keyFieldName,
-                                                                                                     Map<String, String> paramsMap) throws IOException {
+  public Pair<byte[], Object> serializeRecordsToLogBlock(HoodieStorage storage,
+                                                         Iterator<HoodieRecord> recordItr,
+                                                         HoodieRecord.HoodieRecordType recordType,
+                                                         Schema writerSchema,
+                                                         Schema readerSchema,
+                                                         String keyFieldName,
+                                                         Map<String, String> paramsMap) throws IOException {
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     HoodieConfig config = new HoodieConfig();
     paramsMap.entrySet().stream().forEach(entry -> config.setValue(entry.getKey(), entry.getValue()));
@@ -420,7 +420,7 @@ public class ParquetUtils extends FileFormatUtils {
     }
     outputStream.flush();
     parquetWriter.close();
-    return Pair.of(outputStream.toByteArray(), parquetWriter.getColumnRangeMeta());
+    return Pair.of(outputStream.toByteArray(), parquetWriter.getFormatMetadata());
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {

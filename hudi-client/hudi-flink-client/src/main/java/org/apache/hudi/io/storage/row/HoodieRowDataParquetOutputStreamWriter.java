@@ -18,9 +18,6 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
@@ -31,24 +28,20 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.api.WriteSupport;
-import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * An implementation for {@link HoodieRowDataFileWriter} which is used to write hoodie records into an {@link FSDataOutputStream}.
  *
- * <p>{@link HoodieRowDataParquetStreamWriter} also supports collect and report column statistics based on the parquet metadata.
+ * <p>{@link HoodieRowDataParquetOutputStreamWriter} also supports collect and report column statistics based on the parquet metadata.
  */
-public class HoodieRowDataParquetStreamWriter implements HoodieRowDataFileWriter {
+public class HoodieRowDataParquetOutputStreamWriter implements HoodieRowDataFileWriter {
   private final ParquetWriter writer;
   private boolean isClosed;
   private final HoodieRowDataParquetWriteSupport writeSupport;
 
-  public HoodieRowDataParquetStreamWriter(
+  public HoodieRowDataParquetOutputStreamWriter(
       FSDataOutputStream outputStream,
       HoodieRowDataParquetWriteSupport writeSupport,
       HoodieParquetConfig<HoodieRowDataParquetWriteSupport> parquetConfig) throws IOException {
@@ -102,11 +95,8 @@ public class HoodieRowDataParquetStreamWriter implements HoodieRowDataFileWriter
   }
 
   @Override
-  public Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta() {
+  public Object getFormatMetadata() {
     ValidationUtils.checkArgument(isClosed, "Column range metadata can only be fetched after the Parquet writer is closed.");
-    ParquetMetadata metadata = writer.getFooter();
-    ParquetUtils parquetUtils = new ParquetUtils();
-    List<HoodieColumnRangeMetadata<Comparable>> columnMetaList = parquetUtils.readColumnStatsFromMetadata(metadata, "", Option.empty());
-    return columnMetaList.stream().collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, colMeta -> colMeta));
+    return writer.getFooter();
   }
 }

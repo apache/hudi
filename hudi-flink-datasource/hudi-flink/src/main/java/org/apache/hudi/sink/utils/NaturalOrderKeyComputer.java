@@ -24,7 +24,8 @@ import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
 import org.apache.flink.table.runtime.operators.sort.SortUtil;
 
 /**
- * A dummy implementation of @{code NormalizedKeyComputer} for {@code BinaryInMemorySortBuffer} in case sort is not needed.
+ * An implementation of @{code NormalizedKeyComputer} for {@code BinaryInMemorySortBuffer} in case sort is not needed,
+ * and the returned iterator follows natural order as inserted.
  */
 public class NaturalOrderKeyComputer implements NormalizedKeyComputer {
   @Override
