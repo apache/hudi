@@ -419,13 +419,13 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
       table.getHoodieView().sync();
       TableFileSystemView.SliceView tableRTFileSystemView = table.getSliceView();
-
+      // get log file number from filesystem view
       long numLogFiles = 0;
       for (String partitionPath : dataGen.getPartitionPaths()) {
         List<FileSlice> allSlices = tableRTFileSystemView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
         assertEquals(0, allSlices.stream().filter(fileSlice -> fileSlice.getBaseFile().isPresent()).count());
         assertTrue(allSlices.stream().anyMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
-        long logFileCount = allSlices.stream().filter(fileSlice -> fileSlice.getLogFiles().count() > 0).count();
+        long logFileCount = allSlices.stream().mapToLong(fileSlice -> fileSlice.getLogFiles().count()).sum();
         if (logFileCount > 0) {
           // check the log versions start from the base version
           assertTrue(allSlices.stream().map(slice -> slice.getLogFiles().findFirst().get().getLogVersion())
@@ -442,8 +442,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime);
       String extension = table.getBaseFileExtension();
       Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
-      assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
-      assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());
+      assertEquals(3, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
       writeClient.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
     }
   }

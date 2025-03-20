@@ -541,7 +541,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMetadataStatsOnCommit(Boolean rollbackUsingMarkers) throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY)
+    HoodieWriteConfig cfg = getConfigBuilder(false, rollbackUsingMarkers, IndexType.BLOOM)
         .withAvroSchemaValidate(false)
         .withAllowAutoEvolutionColumnDrop(true)
         .withAutoCommit(false)
@@ -605,6 +605,10 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertEquals(0, inserts);
       assertEquals(200, upserts);
 
+      if (!rollbackUsingMarkers) {
+        // we can do listing based rollback only when commit is completed
+        assertTrue(client.commit(instant2, statuses), "Commit should succeed");
+      }
       client.rollback(instant2);
 
       // Read from commit file

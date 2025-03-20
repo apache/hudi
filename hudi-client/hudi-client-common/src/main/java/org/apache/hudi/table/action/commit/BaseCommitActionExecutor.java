@@ -226,6 +226,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     try {
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
+      metadata = appendMetadataForMissingFiles(metadata);
 
       writeTableMetadata(metadata, actionType);
       // cannot serialize maps with null values
@@ -240,10 +241,14 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
             updateColumnsToIndexForColumnStats(metaClient, columnsToIndex);
             return null;
           });
-    } catch (HoodieIOException e) {
+    } catch (HoodieIOException | IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
     }
+  }
+
+  protected HoodieCommitMetadata appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws IOException {
+    return commitMetadata;
   }
 
   /**

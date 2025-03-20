@@ -43,6 +43,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.hadoop.fs.Path;
@@ -291,6 +292,63 @@ public class FSUtils {
     }
   }
 
+  /**
+   * Get all the files in the given partition path.
+   *
+   * @param storage Hoodie Storage
+   * @param partitionPathIncludeBasePath The full partition path including the base path
+   * @param filesNamesUnderThisPartition The names of the files under this partition for which file status is needed
+   * @param ignoreMissingFiles If true, missing files will be ignored and empty Option will be added to the result list
+   * @return List of file statuses for the files under this partition
+   */
+  public static List<Option<StoragePathInfo>> getPathInfoUnderPartition(HoodieStorage storage,
+                                                                        StoragePath partitionPathIncludeBasePath,
+                                                                        Set<String> filesNamesUnderThisPartition,
+                                                                        boolean ignoreMissingFiles) {
+    String storageScheme = storage.getScheme();
+    boolean useListStatus = StorageSchemes.isListStatusFriendly(storageScheme);
+    List<Option<StoragePathInfo>> result = new ArrayList<>(filesNamesUnderThisPartition.size());
+    try {
+      if (useListStatus) {
+        List<StoragePathInfo> storagePathInfos = storage.listDirectEntries(partitionPathIncludeBasePath,
+            path -> filesNamesUnderThisPartition.contains(path.getName()));
+        Map<String, StoragePathInfo> filenameToPathInfoMap = storagePathInfos.stream()
+            .collect(Collectors.toMap(
+                storagePathInfo -> storagePathInfo.getPath().getName(),
+                storagePathInfo -> storagePathInfo
+            ));
+
+        for (String fileName : filesNamesUnderThisPartition) {
+          if (filenameToPathInfoMap.containsKey(fileName)) {
+            result.add(Option.of(filenameToPathInfoMap.get(fileName)));
+          } else {
+            if (!ignoreMissingFiles) {
+              throw new FileNotFoundException("File not found: " + new StoragePath(partitionPathIncludeBasePath.toString(), fileName));
+            }
+            result.add(Option.empty());
+          }
+        }
+      } else {
+        for (String fileName : filesNamesUnderThisPartition) {
+          StoragePath fullPath = new StoragePath(partitionPathIncludeBasePath.toString(), fileName);
+          try {
+            StoragePathInfo storagePathInfo = storage.getPathInfo(fullPath);
+            result.add(Option.of(storagePathInfo));
+          } catch (FileNotFoundException fileNotFoundException) {
+            if (ignoreMissingFiles) {
+              result.add(Option.empty());
+            } else {
+              throw new FileNotFoundException("File not found: " + fullPath.toString());
+            }
+          }
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("List files under " + partitionPathIncludeBasePath + " failed", e);
+    }
+    return result;
+  }
+
   public static String getFileExtension(String fullName) {
     Objects.requireNonNull(fullName);
     String fileName = new File(fullName).getName();
@@ -482,7 +540,7 @@ public class FSUtils {
         return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
       }).stream().filter(StoragePathInfo::isFile).collect(Collectors.toList());
     } catch (FileNotFoundException ex) {
-      // return empty FileStatus if partition does not exist already
+      // return empty StoragePathInfo list if partition does not exist already
       return Collections.emptyList();
     }
   }
@@ -584,7 +642,7 @@ public class FSUtils {
       throws IOException {
     List<StoragePathInfo> statuses = storage.globEntries(globPath);
     return statuses.stream()
-        .filter(fileStatus -> !fileStatus.getPath().toString()
+        .filter(storagePathInfo -> !storagePathInfo.getPath().toString()
             .contains(HoodieTableMetaClient.METAFOLDER_NAME))
         .collect(Collectors.toList());
   }
@@ -661,7 +719,7 @@ public class FSUtils {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(dirPath);
       List<String> subPaths = pathInfoList.stream()
           .filter(subPathPredicate)
-          .map(fileStatus -> fileStatus.getPath().toString())
+          .map(storagePathInfo -> storagePathInfo.getPath().toString())
           .collect(Collectors.toList());
       result = parallelizeFilesProcess(hoodieEngineContext, storage, parallelism, pairFunction, subPaths);
     } catch (IOException ioe) {

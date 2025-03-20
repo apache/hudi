@@ -96,6 +96,21 @@ public class RollbackUtils {
     return new HoodieRollbackStat(stat1.getPartitionPath(), successDeleteFiles, failedDeleteFiles, commandBlocksCount, logFilesFromFailedCommit);
   }
 
+  static HoodieRollbackRequest mergeRollbackRequest(HoodieRollbackRequest rollbackRequest1, HoodieRollbackRequest rollbackRequest2) {
+    checkArgument(rollbackRequest1.getPartitionPath().equals(rollbackRequest2.getPartitionPath()));
+    checkArgument((rollbackRequest1.getFileId().equals(rollbackRequest2.getFileId())));
+    checkArgument((rollbackRequest1.getLatestBaseInstant().equals(rollbackRequest2.getLatestBaseInstant())));
+    final List<String> filesToBeDeleted = new ArrayList<>();
+    final Map<String, Long> logBlocksToBeDeleted = new HashMap<>();
+    Option.ofNullable(rollbackRequest1.getFilesToBeDeleted()).ifPresent(filesToBeDeleted::addAll);
+    Option.ofNullable(rollbackRequest1.getLogBlocksToBeDeleted()).ifPresent(logBlocksToBeDeleted::putAll);
+    Option.ofNullable(rollbackRequest2.getFilesToBeDeleted()).ifPresent(filesToBeDeleted::addAll);
+    Option.ofNullable(rollbackRequest2.getLogBlocksToBeDeleted()).ifPresent(logBlocksToBeDeleted::putAll);
+
+    return new HoodieRollbackRequest(rollbackRequest1.getPartitionPath(), rollbackRequest1.getFileId(), rollbackRequest1.getLatestBaseInstant(),
+        filesToBeDeleted, logBlocksToBeDeleted);
+  }
+
   static List<HoodieRollbackRequest> groupRollbackRequestsBasedOnFileGroup(List<HoodieRollbackRequest> rollbackRequests) {
     return groupRollbackRequestsBasedOnFileGroup(rollbackRequests, e -> e,
         HoodieRollbackRequest::getPartitionPath,
