@@ -216,6 +216,19 @@ public abstract class HoodieReaderContext<T> implements Closeable {
   public abstract Object getValue(T record, Schema schema, String fieldName);
 
   /**
+   * Cast to Java boolean value.
+   * If the object is not compatible with boolean type, throws.
+   */
+  public boolean castToBoolean(Object value) {
+    if (value instanceof Boolean) {
+      return (boolean) value;
+    } else {
+      throw new IllegalArgumentException(
+          "Input value type " + value.getClass() + ", cannot be cast to boolean");
+    }
+  }
+
+  /**
    * Gets the record key in String.
    *
    * @param record The record in engine-specific type.

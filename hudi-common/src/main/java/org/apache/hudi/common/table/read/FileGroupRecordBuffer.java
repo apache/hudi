@@ -167,7 +167,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    *   1. delete key and delete markers are set properly.
    *   2. schema contains delete key column.
    */
-  protected boolean hasCustomDeleteConfigs(TypedProperties props, Schema schema) {
+  static boolean hasCustomDeleteConfigs(TypedProperties props, Schema schema) {
     String deleteKey = props.getProperty(DELETE_KEY);
     String deleteMarker = props.getProperty(DELETE_MARKER);
     boolean deleteKeyExists = !StringUtils.isNullOrEmpty(deleteKey);
@@ -208,9 +208,10 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * Check if the value of column "_hoodie_is_deleted" is true.
    */
   protected boolean isHoodieDeleteRecord(T record) {
-    Object columnValue =
-        readerContext.getValue(record, readerSchema, HOODIE_IS_DELETED_FIELD);
-    return columnValue != null && (boolean) columnValue;
+    Object columnValue = readerContext.getValue(
+        record, readerSchema, HOODIE_IS_DELETED_FIELD);
+    return columnValue != null
+        && readerContext.castToBoolean(columnValue);
   }
 
   @Override
