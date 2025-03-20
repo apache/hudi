@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.commit.BucketInfo;
 
 import java.util.Iterator;
 import java.util.List;
@@ -54,17 +55,19 @@ public interface ExplicitWriteHandleTable<T> {
   /**
    * Upsert a batch of RowData into Hoodie table at the supplied instantTime.
    *
-   * @param context
-   * @param writeHandle
-   * @param instantTime
-   * @param records
-   * @return
+   * @param context     HoodieEngineContext
+   * @param writeHandle The write handle
+   * @param bucketInfo  The bucket info for the flushing data bucket
+   * @param instantTime Instant Time for the action
+   * @param records     hoodieRecords to upsert
+   * @return HoodieWriteMetadata
    */
-  List<WriteStatus> upsert(
+  HoodieWriteMetadata<List<WriteStatus>> upsert(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      BucketInfo bucketInfo,
       String instantTime,
-      Iterator<HoodieRecord> records);
+      Iterator<HoodieRecord<T>> records);
 
   /**
    * Insert a batch of new records into Hoodie table at the supplied instantTime.

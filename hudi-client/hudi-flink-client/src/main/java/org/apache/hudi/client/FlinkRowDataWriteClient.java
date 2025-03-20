@@ -29,7 +29,7 @@ import java.util.List;
  * <p>
  * todo: add support for Insert/InsertOverwrite/InsertOverwriteTable, see HUDI-9075
  */
-public interface FlinkRowDataWriteClient {
+public interface FlinkRowDataWriteClient<T> {
 
   /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
@@ -39,7 +39,7 @@ public interface FlinkRowDataWriteClient {
    * @param instantTime instant time to commit the data
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  List<WriteStatus> upsert(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime);
+  List<WriteStatus> upsert(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime);
 
   /**
    * Insert a batch of new records into Hoodie table at the supplied instantTime.
@@ -49,7 +49,7 @@ public interface FlinkRowDataWriteClient {
    * @param instantTime instant time to commit the data
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  List<WriteStatus> insert(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime);
+  List<WriteStatus> insert(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime);
 
   /**
    * Replaces all the existing records and inserts the specified new records at the supplied instantTime,
@@ -60,7 +60,7 @@ public interface FlinkRowDataWriteClient {
    * @param instantTime instant time to commit the data
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  List<WriteStatus> insertOverwrite(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime);
+  List<WriteStatus> insertOverwrite(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime);
 
   /**
    * Deletes all the existing records of the Hoodie table and inserts the specified new records into Hoodie table at the supplied instantTime,
@@ -71,5 +71,5 @@ public interface FlinkRowDataWriteClient {
    * @param instantTime instant time to commit the data
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  List<WriteStatus> insertOverwriteTable(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instantTime);
+  List<WriteStatus> insertOverwriteTable(Iterator<HoodieRecord<T>> records, BucketInfo bucketInfo, String instantTime);
 }

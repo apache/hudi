@@ -47,7 +47,7 @@ public interface HoodieFileWriter extends AutoCloseable {
    * Return metadata from the underlying format file, for example, return {@code ParquetMetadata} for Parquet files.
    * The returned format metadata will be used to generate column statistics, like {@code HoodieColumnRangeMetadata}.
    */
-  default Object getFormatMetadata() {
+  default Object getFileFormatMetadata() {
     throw new UnsupportedOperationException("HoodieFileWriter#getFormatMetadata is unsupported by default.");
   }
 }

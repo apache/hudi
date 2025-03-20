@@ -36,8 +36,10 @@ import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.v2.RowDataLogWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.delta.FlinkUpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.commit.delta.FlinkUpsertPreppedDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.commit.delta.RowDataUpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
@@ -75,15 +77,16 @@ public class HoodieFlinkMergeOnReadTable<T>
   }
 
   @Override
-  public List<WriteStatus> upsert(
+  public HoodieWriteMetadata<List<WriteStatus>> upsert(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      BucketInfo bucketInfo,
       String instantTime,
-      Iterator<HoodieRecord> records) {
+      Iterator<HoodieRecord<T>> records) {
     ValidationUtils.checkArgument(writeHandle instanceof RowDataLogWriteHandle,
         "MOR RowData handle should always be a RowDataLogHandle");
     RowDataLogWriteHandle<?, ?, ?, ?> rowDataLogHandle = (RowDataLogWriteHandle<?, ?, ?, ?>) writeHandle;
-    return Collections.singletonList(rowDataLogHandle.appendRowData(records));
+    return new RowDataUpsertDeltaCommitActionExecutor<>(context, rowDataLogHandle, bucketInfo, config, this, instantTime, records).execute();
   }
 
   @Override

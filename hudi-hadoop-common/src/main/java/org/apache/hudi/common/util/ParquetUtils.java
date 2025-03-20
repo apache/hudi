@@ -420,7 +420,7 @@ public class ParquetUtils extends FileFormatUtils {
     }
     outputStream.flush();
     parquetWriter.close();
-    return Pair.of(outputStream.toByteArray(), parquetWriter.getFormatMetadata());
+    return Pair.of(outputStream.toByteArray(), parquetWriter.getFileFormatMetadata());
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {
