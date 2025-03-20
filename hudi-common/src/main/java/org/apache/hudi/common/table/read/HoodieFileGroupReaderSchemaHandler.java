@@ -41,9 +41,11 @@ import org.apache.avro.Schema;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -51,6 +53,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 
 /**
  * This class is responsible for handling the schema for the file group reader.
@@ -184,8 +187,10 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
   }
 
-  private static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg, TypedProperties props,
-                                               Schema dataSchema, Option<HoodieRecordMerger> recordMerger) {
+  private static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg,
+                                                       TypedProperties props,
+                                                       Schema dataSchema,
+                                                       Option<HoodieRecordMerger> recordMerger) {
     Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
         cfg.getRecordMergeMode(),
         cfg.getPayloadClass(),
@@ -197,8 +202,9 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       return recordMerger.get().getMandatoryFieldsForMerging(dataSchema, cfg, props);
     }
 
-    ArrayList<String> requiredFields = new ArrayList<>();
-
+    // Use Set to avoid duplicated fields.
+    Set<String> requiredFields = new HashSet<>();
+    // Add record key fields.
     if (cfg.populateMetaFields()) {
       requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
     } else {
@@ -207,19 +213,21 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
         requiredFields.addAll(Arrays.asList(fields.get()));
       }
     }
-
+    // Add precombine field for event time ordering merge mode.
     if (mergingConfigs.getLeft() == RecordMergeMode.EVENT_TIME_ORDERING) {
       String preCombine = cfg.getPreCombineField();
       if (!StringUtils.isNullOrEmpty(preCombine)) {
         requiredFields.add(preCombine);
       }
     }
-
+    // Add `HOODIE_IS_DELETED_FIELD` field if exists.
     if (dataSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null) {
       requiredFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
-
-    //TODO: Check if we should add custom marker field here.
+    // Add custom delete key field if exists.
+    if (FileGroupRecordBuffer.hasCustomDeleteConfigs(props, dataSchema)) {
+      requiredFields.add(props.getProperty(DELETE_KEY));
+    }
 
     return requiredFields.toArray(new String[0]);
   }
