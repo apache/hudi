@@ -94,12 +94,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testCOWToMORConvertedTableRollback(boolean rollbackUsingMarkers) throws Exception {
+  @CsvSource({"true,6", "true,8", "false,6", "false,8"})
+  void testCOWToMORConvertedTableRollback(boolean rollbackUsingMarkers, int tableVersion) throws Exception {
     // Set TableType to COW
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE);
+    Properties properties = new Properties();
+    properties.put(HoodieTableConfig.VERSION.key(), String.valueOf(tableVersion));
+    properties.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(tableVersion));
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE, properties);
 
     HoodieWriteConfig cfg = getConfig(false, rollbackUsingMarkers);
+    cfg.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
+    cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
       HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();

@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.util.HoodieTimer
-import org.apache.hudi.metadata.{HoodieTableMetadata, SparkHoodieBackedTableMetadataWriter}
+import org.apache.hudi.metadata.{HoodieTableMetadata, SparkMetadataWriterFactory}
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.Row
@@ -63,7 +63,7 @@ class CreateMetadataTableProcedure extends BaseProcedure with ProcedureBuilder w
     }
     val timer = HoodieTimer.start
     val writeConfig = getWriteConfig(basePath)
-    SparkHoodieBackedTableMetadataWriter.create(metaClient.getStorageConf, writeConfig, new HoodieSparkEngineContext(jsc))
+    SparkMetadataWriterFactory.create(metaClient.getStorageConf, writeConfig, new HoodieSparkEngineContext(jsc), metaClient.getTableConfig)
     Seq(Row("Created Metadata Table in " + metadataPath + " (duration=" + timer.endTimer / 1000.0 + "secs)"))
   }
 

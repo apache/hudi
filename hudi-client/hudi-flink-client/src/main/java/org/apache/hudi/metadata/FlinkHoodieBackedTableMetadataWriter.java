@@ -133,7 +133,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
     }
 
-    compactIfNecessary(writeClient);
+    compactIfNecessary(writeClient, Option.empty());
 
     if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
       // if this is a new commit being applied to metadata for the first time
@@ -170,7 +170,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // reload timeline
     metadataMetaClient.reloadActiveTimeline();
-    cleanIfNecessary(writeClient);
+    cleanIfNecessary(writeClient, "");
     writeClient.archive();
 
     // Update total size of the metadata and count of base/log files

@@ -37,6 +37,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH;
+
 /**
  * Wrapper for metrics-related operations.
  */
@@ -454,7 +456,12 @@ public class HoodieMetrics {
     HoodieTimeline filteredInstants = activeTimeline.filterCompletedInstants().filter(instant -> validActions.contains(instant.getAction()));
     Option<HoodieInstant> hoodieInstantOption = filteredInstants.lastInstant();
     if (hoodieInstantOption.isPresent()) {
-      updateMetric(action, metricName, Long.parseLong(hoodieInstantOption.get().requestedTime()));
+      String requestedTime = hoodieInstantOption.get().requestedTime();
+      if (hoodieInstantOption.get().requestedTime().length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
+        // If requested instant is in MDT with table version six, it can contain suffix
+        requestedTime = requestedTime.substring(0, requestedTime.length() - 3);
+      }
+      updateMetric(action, metricName, Long.parseLong(requestedTime));
     }
   }
 
