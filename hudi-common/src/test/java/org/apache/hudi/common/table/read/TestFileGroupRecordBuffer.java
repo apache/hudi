@@ -197,7 +197,9 @@ class TestFileGroupRecordBuffer {
 
     assertFalse(keyBasedBuffer.hasCustomDeleteConfigs(props, schema));
     props.setProperty(DELETE_KEY, "op");
-    assertFalse(keyBasedBuffer.hasCustomDeleteConfigs(props, schema));
+    assertThrows(
+        RuntimeException.class,
+        () -> keyBasedBuffer.hasCustomDeleteConfigs(props, schema));
     props.setProperty(DELETE_MARKER, "d");
     assertThrows(
         NullPointerException.class,
