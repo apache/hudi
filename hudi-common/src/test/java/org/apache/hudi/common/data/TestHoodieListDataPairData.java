@@ -224,6 +224,40 @@ public class TestHoodieListDataPairData {
     assertEquals(sourceList, originalListData.collectAsList());
   }
 
+  @Test
+  public void testJoin() {
+    // Prepare test data
+    List<Pair<String, String>> leftData = Arrays.asList(
+        Pair.of("a", "value1"),
+        Pair.of("b", "value2"),
+        Pair.of("c", "value3")
+    );
+
+    List<Pair<String, String>> rightData = Arrays.asList(
+        Pair.of("a", "rValue1"),
+        Pair.of("a", "rValue2"),
+        Pair.of("b", "rValue3"),
+        Pair.of("d", "rValue4")
+    );
+
+    HoodiePairData<String, String> left = new HoodieListPairData<>(leftData.stream(), true);
+    HoodiePairData<String, String> right = new HoodieListPairData<>(rightData.stream(), true);
+
+    // Execute the join
+    HoodiePairData<String, Pair<String, String>> joined = left.join(right);
+
+    // Validate the result
+    List<Pair<String, Pair<String, String>>> expected = Arrays.asList(
+        Pair.of("a", Pair.of("value1", "rValue1")),
+        Pair.of("a", Pair.of("value1", "rValue2")),
+        Pair.of("b", Pair.of("value2", "rValue3"))
+    );
+
+    List<Pair<String, Pair<String, String>>> result = joined.collectAsList();
+
+    assertEquals(expected, result, "Join result does not match expected output");
+  }
+
   private static List<Pair<String, String>> constructPairs() {
     return Arrays.asList(
         ImmutablePair.of(KEY1, STRING_VALUE1),

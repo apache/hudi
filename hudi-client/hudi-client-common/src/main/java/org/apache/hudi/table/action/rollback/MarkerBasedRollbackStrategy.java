@@ -49,20 +49,16 @@ import java.util.Objects;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
- * Performs rollback using marker files generated during the write..
+ * Performs rollback using marker files generated during the writes.
  */
 public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlanActionExecutor.RollbackStrategy {
 
   private static final Logger LOG = LoggerFactory.getLogger(MarkerBasedRollbackStrategy.class);
 
   protected final HoodieTable<?, ?, ?, ?> table;
-
   protected final transient HoodieEngineContext context;
-
   protected final HoodieWriteConfig config;
-
   protected final String basePath;
-
   protected final String instantTime;
 
   public MarkerBasedRollbackStrategy(HoodieTable<?, ?, ?, ?> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {

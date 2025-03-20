@@ -230,10 +230,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config);
-    HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
+    HoodieCommitMetadata originalMetadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HoodieInstant inflightInstant = table.getMetaClient().createNewInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
+    HoodieCommitMetadata metadata = reconcileCommitMetadata(table, commitActionType, instantTime, originalMetadata);
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
@@ -269,22 +270,27 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return true;
   }
 
+  protected HoodieCommitMetadata reconcileCommitMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata originalMetadata) {
+    return originalMetadata;
+  }
+
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
                         List<HoodieWriteStat> stats) throws IOException {
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+    HoodieCommitMetadata reconciledCommitMetadata = reconcileCommitMetadata(table, commitActionType, instantTime, metadata);
     // Finalize write
     finalizeWrite(table, instantTime, stats);
     // do save internal schema to support Implicitly add columns in write process
-    if (!metadata.getExtraMetadata().containsKey(SerDeHelper.LATEST_SCHEMA)
-        && metadata.getExtraMetadata().containsKey(SCHEMA_KEY) && table.getConfig().getSchemaEvolutionEnable()) {
-      saveInternalSchema(table, instantTime, metadata);
+    if (!reconciledCommitMetadata.getExtraMetadata().containsKey(SerDeHelper.LATEST_SCHEMA)
+        && reconciledCommitMetadata.getExtraMetadata().containsKey(SCHEMA_KEY) && table.getConfig().getSchemaEvolutionEnable()) {
+      saveInternalSchema(table, instantTime, reconciledCommitMetadata);
     }
     // update Metadata table
-    writeTableMetadata(table, instantTime, metadata);
-    activeTimeline.saveAsComplete(false, table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime), Option.of(metadata));
+    writeTableMetadata(table, instantTime, reconciledCommitMetadata);
+    activeTimeline.saveAsComplete(false, table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime), Option.of(reconciledCommitMetadata));
     // update cols to Index as applicable
-    HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, commitActionType,
+    HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, reconciledCommitMetadata, commitActionType,
         (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
           updateColumnsToIndexWithColStats(metaClient, columnsToIndex);
           return null;
@@ -292,7 +298,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   // Save internal schema
-  private void saveInternalSchema(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
+  protected final void saveInternalSchema(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());

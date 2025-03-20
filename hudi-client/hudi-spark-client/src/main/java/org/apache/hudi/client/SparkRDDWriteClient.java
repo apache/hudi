@@ -18,10 +18,11 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.utils.SparkReleaseResources;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.utils.SparkReleaseResources;
+import org.apache.hudi.client.utils.CommitMetadataUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
@@ -36,6 +37,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.index.HoodieIndex;
@@ -57,6 +59,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -92,6 +95,17 @@ public class SparkRDDWriteClient<T> extends
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
+  }
+
+  @Override
+  protected HoodieCommitMetadata reconcileCommitMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata originalMetadata) {
+    try {
+      return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, commitActionType,
+          instantTime, originalMetadata, config, context, storageConf, this.getClass().getSimpleName());
+    } catch (IOException e) {
+      throw new HoodieCommitException("Failed to fix commit metadata for spurious log files "
+          + config.getBasePath() + " at time " + instantTime, e);
+    }
   }
 
   @Override
@@ -173,7 +187,7 @@ public class SparkRDDWriteClient<T> extends
   /**
    * Removes all existing records from the partitions affected and inserts the given HoodieRecords, into the table.
    *
-   * @param records     HoodieRecords to insert
+   * @param records HoodieRecords to insert
    * @param instantTime Instant time of the commit
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
@@ -189,7 +203,7 @@ public class SparkRDDWriteClient<T> extends
   /**
    * Removes all existing records of the Hoodie table and inserts the given HoodieRecords, into the table.
    *
-   * @param records     HoodieRecords to insert
+   * @param records HoodieRecords to insert
    * @param instantTime Instant time of the commit
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
@@ -242,7 +256,7 @@ public class SparkRDDWriteClient<T> extends
   public JavaRDD<WriteStatus> deletePrepped(JavaRDD<HoodieRecord<T>> preppedRecord, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE_PREPPED, Option.ofNullable(instantTime));
     preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.deletePrepped(context,instantTime, HoodieJavaRDD.of(preppedRecord));
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.deletePrepped(context, instantTime, HoodieJavaRDD.of(preppedRecord));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }

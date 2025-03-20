@@ -25,6 +25,7 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -122,6 +123,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
 
     // Finally, remove the markers post rollback.
     WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.requestedTime())
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+    // For MOR table rollbacks, rollback command blocks might generate markers under rollback instant. So, lets clean up the markers if any.
+    WriteMarkersFactory.get(config.getMarkersType(), table, rollbackInstant.requestedTime())
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
 
     return rollbackMetadata;
@@ -241,7 +245,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
    * @return list of {@link HoodieRollbackStat}s.
    */
   protected List<HoodieRollbackStat> executeRollback(HoodieInstant instantToRollback, HoodieRollbackPlan rollbackPlan) {
-    return new BaseRollbackHelper(table.getMetaClient(), config).performRollback(context, instantToRollback, rollbackPlan.getRollbackRequests());
+    return table.version().lesserThan(HoodieTableVersion.EIGHT)
+        ? new BaseRollbackHelperTableVersionSix(table, config).performRollback(context, instantTime, instantToRollback, rollbackPlan.getRollbackRequests())
+        : new BaseRollbackHelper(table.getMetaClient(), config).performRollback(context, instantToRollback, rollbackPlan.getRollbackRequests());
   }
 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
