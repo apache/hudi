@@ -139,7 +139,8 @@ object HoodieSparkSqlWriter {
     new HoodieSparkSqlWriterInternal().bootstrap(sqlContext, mode, optParams, df, hoodieTableConfigOpt, streamingWritesParamsOpt, hoodieWriteClient)
   }
 
-  def cleanup(sqlContext: SQLContext, exitCode: Int): Unit = {
+  def cleanup(sqlContext: SQLContext,
+              exitCode: Int): Unit = {
     Metrics.shutdownAllMetrics()
     val jsc = JavaSparkContext.fromSparkContext(sqlContext.sparkContext)
     SparkAdapterSupport.sparkAdapter.stopSparkContext(jsc, exitCode)
