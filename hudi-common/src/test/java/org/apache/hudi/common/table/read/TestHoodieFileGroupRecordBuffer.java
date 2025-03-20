@@ -77,7 +77,11 @@ public class TestHoodieFileGroupRecordBuffer {
       "true, true, CUSTOM",
       "true, false, CUSTOM",
       "false, true, CUSTOM",
-      "false, false, CUSTOM"
+      "false, false, CUSTOM",
+      "true, true,",
+      "true, false,",
+      "false, true,",
+      "false, false,"
   })
   public void testSchemaForMandatoryFields(boolean setPrecombine, boolean addHoodieIsDeleted, RecordMergeMode mergeMode) {
     HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
