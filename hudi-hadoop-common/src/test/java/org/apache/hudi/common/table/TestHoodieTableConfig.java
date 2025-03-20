@@ -28,6 +28,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -122,6 +123,19 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals(8, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
     assertEquals("new_field", config.getPreCombineField());
+  }
+
+  @Test
+  public void testRecordMergeModeValidation() {
+    Exception ex = assertThrows(HoodieValidationException.class,
+        () -> new HoodieTableConfig(storage, metaPath, CUSTOM, null, null));
+    assertEquals("The merge mode and payload configs should not change in the table configs after table creation", ex.getMessage());
+    ex = assertThrows(HoodieValidationException.class,
+        () -> new HoodieTableConfig(storage, metaPath, null, "payload-class-name", null));
+    assertEquals("The merge mode and payload configs should not change in the table configs after table creation", ex.getMessage());
+    ex = assertThrows(HoodieValidationException.class,
+        () -> new HoodieTableConfig(storage, metaPath, null, null, "strategy-id"));
+    assertEquals("The merge mode and payload configs should not change in the table configs after table creation", ex.getMessage());
   }
 
   @Test
