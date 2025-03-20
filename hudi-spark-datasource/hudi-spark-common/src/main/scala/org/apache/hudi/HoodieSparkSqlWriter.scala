@@ -142,7 +142,7 @@ object HoodieSparkSqlWriter {
   def cleanup(sqlContext: SQLContext,
               exitCode: Int): Unit = {
     Metrics.shutdownAllMetrics()
-    val jsc = JavaSparkContext.fromSparkContext(sqlContext.sparkContext)
+    val jsc = new JavaSparkContext(sqlContext.sparkContext)
     SparkAdapterSupport.sparkAdapter.stopSparkContext(jsc, exitCode)
   }
 
