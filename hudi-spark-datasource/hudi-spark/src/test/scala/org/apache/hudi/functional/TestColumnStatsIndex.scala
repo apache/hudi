@@ -42,6 +42,7 @@ import org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
+import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
@@ -54,7 +55,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
-import java.math.{BigDecimal => JBigDecimal, BigInteger}
+import java.math.{BigDecimal => JBigDecimal}
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.stream.Collectors
@@ -1084,9 +1085,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     // Original decimal value: 123.45 (scale 2)
     val original: JBigDecimal = new JBigDecimal("123.45")
     // Get the unscaled value (12345) as a byte array.
-    val unscaled: BigInteger = original.unscaledValue()
-    val unscaledBytes: Array[Byte] = unscaled.toByteArray
-    val buffer: ByteBuffer = ByteBuffer.wrap(unscaledBytes)
+    val schema: Schema = DecimalWrapper.SCHEMA$.getField("value").schema()
+    val buffer: ByteBuffer = ColumnStatsIndexSupport.decConv.toBytes(original, schema, schema.getLogicalType)
 
     // Create a dummy DecimalWrapper that returns a ByteBuffer.
     val wrapper: DecimalWrapper = new DecimalWrapper(buffer)
@@ -1105,9 +1105,11 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   def testDeserializeFromJavaBigDecimal(): Unit = {
     // Original decimal value: 543.21
     val original: JBigDecimal = new JBigDecimal("543.21")
-    // Create a dummy DecimalWrapper that returns a java.math.BigDecimal directly.
+    // Create an anonymous DecimalWrapper that returns a ByteBuffer of java.math.BigDecimal directly.
     val wrapper: DecimalWrapper = new DecimalWrapper {
-      override def getValue: ByteBuffer = ByteBuffer.wrap(original.unscaledValue().toByteArray)
+      val schema: Schema = DecimalWrapper.SCHEMA$.getField("value").schema()
+
+      override def getValue: ByteBuffer = ColumnStatsIndexSupport.decConv.toBytes(original, schema, schema.getLogicalType)
     }
 
     val dt = DecimalType(10, 2)
@@ -1120,9 +1122,11 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   def testDeserializeFromScalaBigDecimal(): Unit = {
     // Original Scala BigDecimal value
     val original = scala.math.BigDecimal("987.65")
-    // Create an anonymous DecimalWrapper that returns a Scala BigDecimal.
+    // Create an anonymous DecimalWrapper that returns a ByteBuffer of Scala BigDecimal.
     val wrapper: DecimalWrapper = new DecimalWrapper {
-      override def getValue: ByteBuffer = ByteBuffer.wrap(original.bigDecimal.unscaledValue().toByteArray)
+      val schema: Schema = DecimalWrapper.SCHEMA$.getField("value").schema()
+
+      override def getValue: ByteBuffer = ColumnStatsIndexSupport.decConv.toBytes(original.bigDecimal, schema, schema.getLogicalType)
     }
     // In this case, unwrapped is a Scala BigDecimal.
     val dt = DecimalType(10, 2)
