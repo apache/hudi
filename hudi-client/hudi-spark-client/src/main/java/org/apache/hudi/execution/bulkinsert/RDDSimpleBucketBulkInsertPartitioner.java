@@ -49,7 +49,7 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSimpleBucketIndex);
     this.isNonBlockingConcurrencyControl = table.getConfig().isNonBlockingConcurrencyControl();
     String hashingInstantToLoad = table.getConfig().getHashingConfigInstantToLoad();
-    this.isPartitionBucketIndexEnable = StringUtils.isNullOrEmpty(hashingInstantToLoad);
+    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(hashingInstantToLoad);
     if (isPartitionBucketIndexEnable) {
       calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, table.getMetaClient());
     }

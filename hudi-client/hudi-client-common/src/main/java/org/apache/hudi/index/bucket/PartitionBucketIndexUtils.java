@@ -42,6 +42,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class PartitionBucketIndexUtils {
@@ -77,11 +78,14 @@ public class PartitionBucketIndexUtils {
       return false;
     }
     String hashingInstant = StringUtils.isNullOrEmpty(instant) ? INITIAL_HASHING_CONFIG_INSTANT : instant;
-    HoodieStorage storage = metaClient.getStorage();
     PartitionBucketIndexHashingConfig hashingConfig =
         new PartitionBucketIndexHashingConfig(expressions, defaultBucketNumber, rule, PartitionBucketIndexHashingConfig.CURRENT_VERSION, hashingInstant);
-    StoragePath hashingConfigPath = new StoragePath(metaClient.getHashingMetadataConfigPath(), hashingConfig.getFilename());
+    return saveHashingConfig(hashingConfig, metaClient);
+  }
 
+  public static boolean saveHashingConfig(PartitionBucketIndexHashingConfig hashingConfig, HoodieTableMetaClient metaClient) {
+    StoragePath hashingConfigPath = new StoragePath(metaClient.getHashingMetadataConfigPath(), hashingConfig.getFilename());
+    HoodieStorage storage = metaClient.getStorage();
     try {
       Option<byte []> content = Option.of(hashingConfig.toJsonString().getBytes(StandardCharsets.UTF_8));
       storage.createImmutableFileInPath(hashingConfigPath, content.map(HoodieInstantWriter::convertByteArrayToWriter));
@@ -152,5 +156,12 @@ public class PartitionBucketIndexUtils {
       return null;
     }
     return hashingConfigName.substring(0, dotIndex);
+  }
+
+  public static Map<String, Integer> getAllBucketNumbers(PartitionBucketIndexCalculator calc, List<String> partitions) {
+    for (String partition : partitions) {
+      calc.computeNumBuckets(partition);
+    }
+    return calc.getPartitionToBucket();
   }
 }

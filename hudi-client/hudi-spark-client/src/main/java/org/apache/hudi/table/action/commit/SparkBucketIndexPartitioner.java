@@ -99,7 +99,7 @@ public class SparkBucketIndexPartitioner<T> extends SparkHoodiePartitioner<T> {
               + table.getIndex().getClass().getSimpleName());
     }
     String hashingInstantToLoad = table.getConfig().getHashingConfigInstantToLoad();
-    this.isPartitionBucketIndexEnable = StringUtils.isNullOrEmpty(hashingInstantToLoad);
+    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(hashingInstantToLoad);
     if (isPartitionBucketIndexEnable) {
       calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, table.getMetaClient());
     }

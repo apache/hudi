@@ -62,6 +62,10 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
   }
 
+  public String getInstant() {
+    return this.instant;
+  }
+
   public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
     if (jsonStr == null || jsonStr.isEmpty()) {
       // For empty commit file (no data or somethings bad happen).

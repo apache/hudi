@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,7 +56,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
   private static final int CACHE_SIZE = 100_000;
   private PartitionBucketIndexHashingConfig hashingConfig;
   private int defaultBucketNumber;
-  private final String instantToLoad;
+  private String instantToLoad;
   // Cache for partition to bucket number mapping
   @SuppressWarnings("unchecked")
   private final Map<String, Integer> partitionToBucketCache = new LRUMap(CACHE_SIZE);
@@ -87,6 +88,14 @@ public class PartitionBucketIndexCalculator implements Serializable {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to initialize PartitionBucketIndexCalculator ", e);
     }
+  }
+
+  private PartitionBucketIndexCalculator(String instantToLoad, PartitionBucketIndexHashingConfig config) {
+    this.hashingConfig = config;
+    this.defaultBucketNumber = config.getDefaultBucketNumber();
+    String expressions = config.getExpressions();
+    String ruleType = config.getRule();
+    this.ruleEngine = createRuleEngine(ruleType, expressions);
   }
 
   private void init(HoodieStorage storage, StoragePath hashingConfigPath) {
@@ -121,6 +130,15 @@ public class PartitionBucketIndexCalculator implements Serializable {
         key -> {
           LOG.info("Creating new PartitionBucketIndexCalculator instance for instantToLoad: {}", key);
           return new PartitionBucketIndexCalculator(key, client);
+        });
+  }
+
+  public static PartitionBucketIndexCalculator getInstance(String instantToLoad, PartitionBucketIndexHashingConfig config) {
+    // Using instantToLoad as the key for the cache
+    return INSTANCES.computeIfAbsent(instantToLoad,
+        key -> {
+          LOG.info("Creating new PartitionBucketIndexCalculator instance for instantToLoad: {}", key);
+          return new PartitionBucketIndexCalculator(key, config);
         });
   }
 
@@ -180,6 +198,10 @@ public class PartitionBucketIndexCalculator implements Serializable {
 
   public int getCacheSize() {
     return partitionToBucketCache.size();
+  }
+
+  public Map<String, Integer> getPartitionToBucket() {
+    return new HashMap<>(partitionToBucketCache);
   }
 
   public void clearCache() {

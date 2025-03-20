@@ -71,7 +71,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     this.handles = new HashMap<>();
     this.isNonBlockingConcurrencyControl = writeConfig.isNonBlockingConcurrencyControl();
     String hashingInstantToLoad = writeConfig.getHashingConfigInstantToLoad();
-    this.isPartitionBucketIndexEnable = StringUtils.isNullOrEmpty(hashingInstantToLoad);
+    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(hashingInstantToLoad);
     if (isPartitionBucketIndexEnable) {
       calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, hoodieTable.getMetaClient());
     }
