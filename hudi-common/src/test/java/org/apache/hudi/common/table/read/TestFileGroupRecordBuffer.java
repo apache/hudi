@@ -73,7 +73,8 @@ class TestFileGroupRecordBuffer {
       + "\"fields\": ["
       + "{\"name\": \"id\", \"type\": \"string\"},"
       + "{\"name\": \"ts\", \"type\": \"long\"},"
-      + "{\"name\": \"op\", \"type\": \"string\"}"
+      + "{\"name\": \"op\", \"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\"}"
       + "]"
       + "}";
   private Schema schema = new Schema.Parser().parse(schemaString);
@@ -244,11 +245,6 @@ class TestFileGroupRecordBuffer {
 
   @Test
   void testProcessCustomDeleteRecord() {
-    GenericRecord record = new GenericData.Record(schema);
-    record.put("id", "12345");
-    record.put("ts", System.currentTimeMillis());
-    record.put("op", "d");
-
     KeyBasedFileGroupRecordBuffer keyBasedBuffer =
         new KeyBasedFileGroupRecordBuffer(
             readerContext,
@@ -258,6 +254,13 @@ class TestFileGroupRecordBuffer {
             partitionPathFieldOpt,
             props,
             readStats);
+
+    // CASE 1: With custom delete marker.
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "12345");
+    record.put("ts", System.currentTimeMillis());
+    record.put("op", "d");
+    record.put("_hoodie_is_deleted", false);
 
     Map<String, Object> metadata = new HashMap<>();
     metadata.put(INTERNAL_META_RECORD_KEY, "12345");
@@ -269,5 +272,43 @@ class TestFileGroupRecordBuffer {
         keyBasedBuffer.getLogRecords();
     assertEquals(1, records.size());
     assertEquals("12345", records.get("12345").getRight().get(INTERNAL_META_RECORD_KEY));
+
+    // CASE 2: With _hoodie_is_deleted is true.
+    GenericRecord anotherRecord = new GenericData.Record(schema);
+    anotherRecord.put("id", "54321");
+    anotherRecord.put("ts", System.currentTimeMillis());
+    anotherRecord.put("op", "i");
+    anotherRecord.put("_hoodie_is_deleted", true);
+
+    Map<String, Object> anotherMetadata = new HashMap<>();
+    anotherMetadata.put(INTERNAL_META_RECORD_KEY, "54321");
+    anotherMetadata.put(INTERNAL_META_PARTITION_PATH, "partition2");
+    when(readerContext.generateMetadataForRecord(any(), any(), any())).thenReturn(anotherMetadata);
+    keyBasedBuffer.processCustomDeleteRecord(anotherRecord, anotherMetadata);
+    records = keyBasedBuffer.getLogRecords();
+    assertEquals(2, records.size());
+    assertEquals("54321", records.get("54321").getRight().get(INTERNAL_META_RECORD_KEY));
+  }
+
+  @Test
+  void testHasHoodieDeleteField() {
+    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
+        new KeyBasedFileGroupRecordBuffer(
+            readerContext,
+            hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
+            partitionNameOverrideOpt,
+            partitionPathFieldOpt,
+            props,
+            readStats);
+
+    Schema schema = mock(Schema.class);
+    when(schema.getField(any())).thenReturn(null);
+    assertFalse(keyBasedBuffer.hasHoodieDeleteField(schema));
+
+    Schema fieldSchema = mock(Schema.class);
+    Schema.Field field = new Schema.Field("_hoodie_is_deleted", fieldSchema);
+    when(schema.getField(any())).thenReturn(field);
+    assertTrue(keyBasedBuffer.hasHoodieDeleteField(schema));
   }
 }

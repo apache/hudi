@@ -458,8 +458,6 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     Dataset<Row> df1Normalized = expectedDf.selectExpr(sortedColumnNames);
     Dataset<Row> df2Normalized = actualDf.selectExpr(sortedColumnNames);
 
-    df1Normalized.show(false);
-    df2Normalized.show(false);
     // Check for differences
     return df1Normalized.except(df2Normalized).isEmpty()
         && df2Normalized.except(df1Normalized).isEmpty();
