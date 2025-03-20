@@ -233,7 +233,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public Pair<byte[], Map<String, HoodieColumnRangeMetadata<Comparable>>> serializeRecordsToLogBlock(
+  public Pair<byte[], Object> serializeRecordsToLogBlock(
       HoodieStorage storage,
       Iterator<HoodieRecord> records,
       HoodieRecord.HoodieRecordType recordType,

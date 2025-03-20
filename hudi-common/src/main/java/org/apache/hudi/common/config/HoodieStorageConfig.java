@@ -506,11 +506,6 @@ public class HoodieStorageConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withIOFactoryClass(String ioFactoryClass) {
-      storageConfig.setValue(HOODIE_IO_FACTORY_CLASS, ioFactoryClass);
-      return this;
-    }
-
     public HoodieStorageConfig build() {
       storageConfig.setDefaults(HoodieStorageConfig.class.getName());
       return storageConfig;

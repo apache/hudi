@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
@@ -31,12 +32,14 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
+import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION;
@@ -57,7 +60,7 @@ public class HoodieFlinkParquetDataBlock extends HoodieParquetDataBlock implemen
   /**
    * Column stats for the written records, collected during serialization for efficiency.
    */
-  protected Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> columnStatsMeta = Option.empty();
+  protected ParquetMetadata parquetMetadata;
 
   public HoodieFlinkParquetDataBlock(
       List<HoodieRecord> records,
@@ -79,7 +82,7 @@ public class HoodieFlinkParquetDataBlock extends HoodieParquetDataBlock implemen
     Schema writerSchema = AvroSchemaCache.intern(new Schema.Parser().parse(
         super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA)));
 
-    Pair<byte[], Map<String, HoodieColumnRangeMetadata<Comparable>>> result =
+    Pair<byte[], Object> result =
         HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(PARQUET)
             .serializeRecordsToLogBlock(
                 storage,
@@ -89,16 +92,17 @@ public class HoodieFlinkParquetDataBlock extends HoodieParquetDataBlock implemen
                 getSchema(),
                 getKeyFieldName(),
                 paramsMap);
-    Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMeta = result.getRight();
-    ValidationUtils.checkArgument(!columnRangeMeta.isEmpty(),
-        "Column range metadata collected from Parquet metadata should not be empty.");
-    this.columnStatsMeta = Option.of(columnRangeMeta);
+    ValidationUtils.checkArgument(result.getRight() instanceof ParquetMetadata,
+        "The returned format metadata should be ParquetMetadata.");
+    this.parquetMetadata = (ParquetMetadata) result.getRight();
     return result.getLeft();
   }
 
   @Override
-  public Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta() {
-    ValidationUtils.checkArgument(columnStatsMeta.isPresent(), "`columnStatsMeta` should not be empty.");
-    return columnStatsMeta.get();
+  public Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta(String filePath) {
+    ValidationUtils.checkArgument(parquetMetadata != null, "parquetMetadata should not be null.");
+    ParquetUtils parquetUtils = new ParquetUtils();
+    List<HoodieColumnRangeMetadata<Comparable>> columnMetaList = parquetUtils.readColumnStatsFromMetadata(parquetMetadata, filePath, Option.empty());
+    return columnMetaList.stream().collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, colMeta -> colMeta));
   }
 }

@@ -73,7 +73,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
     HoodieRowDataParquetWriteSupport writeSupport =
         new HoodieRowDataParquetWriteSupport(
             storage.getConf().unwrapAs(Configuration.class), rowType, null);
-    return new HoodieRowDataParquetStreamWriter(
+    return new HoodieRowDataParquetOutputStreamWriter(
         new FSDataOutputStream(outputStream, null),
         writeSupport,
         new HoodieParquetConfig<>(

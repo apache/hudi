@@ -334,16 +334,16 @@ public abstract class FileFormatUtils {
    * @param readerSchema schema of reader.
    * @param keyFieldName name of key field.
    * @param paramsMap    additional params for serialization.
-   * @return pair of byte array after serialization and column range metadata.
+   * @return pair of byte array after serialization and format metadata.
    * @throws IOException upon serialization error.
    */
-  public abstract Pair<byte[], Map<String, HoodieColumnRangeMetadata<Comparable>>> serializeRecordsToLogBlock(HoodieStorage storage,
-                                                                                                              Iterator<HoodieRecord> records,
-                                                                                                              HoodieRecord.HoodieRecordType recordType,
-                                                                                                              Schema writerSchema,
-                                                                                                              Schema readerSchema,
-                                                                                                              String keyFieldName,
-                                                                                                              Map<String, String> paramsMap) throws IOException;
+  public abstract Pair<byte[], Object> serializeRecordsToLogBlock(HoodieStorage storage,
+                                                                  Iterator<HoodieRecord> records,
+                                                                  HoodieRecord.HoodieRecordType recordType,
+                                                                  Schema writerSchema,
+                                                                  Schema readerSchema,
+                                                                  String keyFieldName,
+                                                                  Map<String, String> paramsMap) throws IOException;
 
   // -------------------------------------------------------------------------
   //  Inner Class

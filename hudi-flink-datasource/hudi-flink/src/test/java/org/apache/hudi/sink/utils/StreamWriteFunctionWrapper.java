@@ -64,7 +64,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A base wrapper class to manipulate the instance of subclass of {@link AbstractStreamWriteFunction} for testing.
+ * A wrapper class to manipulate the instance of {@link StreamWriteFunction} or {@link RowDataStreamWriteFunction} for testing.
  *
  * @param <I> Input type
  */

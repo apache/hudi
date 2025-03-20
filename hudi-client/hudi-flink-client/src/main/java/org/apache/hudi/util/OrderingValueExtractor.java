@@ -23,8 +23,8 @@ import org.apache.flink.table.data.RowData;
 import java.io.Serializable;
 
 /**
- * Interface for extracting values for precombine fields from RowData.
+ * Interface for extracting ordering value from RowData.
  */
-public interface PreCombineFieldExtractor extends Serializable {
-  Comparable<?> getPreCombineField(RowData rowData);
+public interface OrderingValueExtractor extends Serializable {
+  Comparable<?> getOrderingValue(RowData rowData);
 }

@@ -18,15 +18,12 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.Schema;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.Map;
 import java.util.Properties;
 
 public interface HoodieFileWriter extends AutoCloseable {
@@ -46,7 +43,11 @@ public interface HoodieFileWriter extends AutoCloseable {
     write(recordKey, record, schema, new Properties());
   }
 
-  default Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta() {
-    return Collections.emptyMap();
+  /**
+   * Return metadata from the underlying format file, for example, return {@code ParquetMetadata} for Parquet files.
+   * The returned format metadata will be used to generate column statistics, like {@code HoodieColumnRangeMetadata}.
+   */
+  default Object getFormatMetadata() {
+    throw new UnsupportedOperationException("HoodieFileWriter#getFormatMetadata is unsupported by default.");
   }
 }
