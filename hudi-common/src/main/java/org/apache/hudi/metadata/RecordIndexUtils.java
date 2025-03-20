@@ -43,7 +43,7 @@ import java.util.Set;
 
 import static java.util.stream.Collectors.toList;
 
-public class RecordIndexRecordKeyParsingUtils {
+public class RecordIndexUtils {
 
   /**
    * Generates RLI Metadata records for base files.

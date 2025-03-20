@@ -1118,7 +1118,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private void updateRecordIndexRecordsIfPresent(HoodieCommitMetadata commitMetadata, String instantTime, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap) {
-    if (!RECORD_INDEX.isMetadataPartitionAvailable(dataMetaClient)) {
+    if (!getMetadataPartitionsToUpdate().contains(RECORD_INDEX.getPartitionPath())) {
       return;
     }
 

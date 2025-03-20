@@ -840,7 +840,7 @@ public class HoodieTableMetadataUtil {
               return baseFileWriteStats.stream()
                   .flatMap(writeStat -> {
                     HoodieStorage storage = HoodieStorageUtils.getStorage(new StoragePath(writeStat.getPath()), storageConfiguration);
-                    return CollectionUtils.toStream(RecordIndexRecordKeyParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage));
+                    return CollectionUtils.toStream(RecordIndexUtils.generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage));
                   })
                   .iterator();
             }
@@ -855,9 +855,9 @@ public class HoodieTableMetadataUtil {
               Set<String> prevSliceRecordKeys = new HashSet<>();
               if (!previousFileSliceForFileId.hasLogFiles()) {
                 // if previous slice only contains base file, directly read base file by projecting just record key instead of going via FileGroupReader
-                prevSliceRecordKeys =  new HashSet<>(RecordIndexRecordKeyParsingUtils.getRecordKeyStatuses(dataTableMetaClient.getBasePath().toString(), partition,
-                    previousFileSliceForFileId.getBaseFile().get().getFileName(), null, dataTableMetaClient.getStorage(), Collections.singleton(RecordIndexRecordKeyParsingUtils.RecordStatus.INSERT))
-                  .get(RecordIndexRecordKeyParsingUtils.RecordStatus.INSERT));
+                prevSliceRecordKeys =  new HashSet<>(RecordIndexUtils.getRecordKeyStatuses(dataTableMetaClient.getBasePath().toString(), partition,
+                    previousFileSliceForFileId.getBaseFile().get().getFileName(), null, dataTableMetaClient.getStorage(), Collections.singleton(RecordIndexUtils.RecordStatus.INSERT))
+                  .get(RecordIndexUtils.RecordStatus.INSERT));
               } else {
                 prevSliceRecordKeys = getValidRecordKeysForFileSlice(dataTableMetaClient, engineType,
                     previousFileSliceForFileId.getLogFiles().map(entry -> basePath + "/" + entry.getPath().toString()).collect(toList()),
