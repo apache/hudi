@@ -72,6 +72,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V1;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.SIX_TO_EIGHT_TIMELINE_ACTION_MAP;
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.getTimelineTimezone;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 /**
@@ -148,7 +149,8 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
 
     upgradeToLSMTimeline(table, context, config);
-
+    // add TIMELINE_TIMEZONE to table properties
+    tablePropsToAdd.put(HoodieTableConfig.TIMELINE_TIMEZONE, getTimelineTimezone(upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig()));
     return tablePropsToAdd;
   }
 
