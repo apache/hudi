@@ -70,7 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupReaderOnSpark {
+public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupReaderOnSpark {
   private final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF);
   private HoodieTableMetaClient metaClient;
   private Schema avroSchema;

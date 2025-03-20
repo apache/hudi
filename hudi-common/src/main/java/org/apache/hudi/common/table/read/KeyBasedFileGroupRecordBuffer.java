@@ -42,7 +42,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 
 /**
@@ -87,7 +86,8 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
             nextRecord, schema);
         String recordKey = (String) metadata.get(HoodieReaderContext.INTERNAL_META_RECORD_KEY);
 
-        if (shouldCheckCustomDeleteMarker && isCustomDeleteRecord(nextRecord)) {
+        if (shouldCheckCustomDeleteMarker && isCustomDeleteRecord(nextRecord)
+            || (shouldCheckHoodieDeleteMarker && isHoodieDeleteRecord(nextRecord))) {
           processCustomDeleteRecord(nextRecord, metadata);
         } else {
           processNextDataRecord(nextRecord, metadata, recordKey);
@@ -136,7 +136,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     DeleteRecord deleteRecord = DeleteRecord.create(
         new HoodieKey(
             (String) metadata.get(INTERNAL_META_RECORD_KEY),
-            (String) metadata.get(INTERNAL_META_PARTITION_PATH)),
+            null),
         readerContext.getOrderingValue(
             Option.of(record), metadata, readerSchema, orderingFieldName));
     processNextDeletedRecord(
