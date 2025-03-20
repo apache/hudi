@@ -50,15 +50,12 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
  * HoodieFlinkParquetDataBlock employs an HoodieRecord iterator rather than a HoodieRecord list for
  * parquet data block, aiming to better utilize the optimizations of {@code BinaryInMemorySortBuffer},
  * for example, object reusing to decrease GC costs.
- *
- * <p> todo: HoodieFlinkParquetDataBlock does not support record-position for update/delete currently,
- * and it will be supported later, see HUDI-9192.
  */
 public class HoodieFlinkParquetDataBlock extends HoodieParquetDataBlock implements ColumnRangeMetadataProvider {
 
   private final Iterator<HoodieRecord> recordIterator;
   /**
-   * Column stats for the written records, collected during serialization for efficiency.
+   * Parquet metadata collected during serializing the records, used to build column range metadata.
    */
   protected ParquetMetadata parquetMetadata;
 

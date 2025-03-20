@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.v2;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -28,6 +29,7 @@ import org.apache.hudi.table.action.commit.BucketInfo;
 
 import org.apache.hadoop.fs.Path;
 
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -62,13 +64,16 @@ public class FlinkRowDataHandleFactory {
         BucketInfo bucketInfo,
         HoodieWriteConfig config,
         String instantTime,
-        HoodieTable<T, I, K, O> table) {
+        HoodieTable<T, I, K, O> table,
+        Iterator<HoodieRecord<T>> recordIterator) {
       return new RowDataLogWriteHandle<>(
           config,
           instantTime,
           table,
+          recordIterator,
           bucketInfo.getFileIdPrefix(),
           bucketInfo.getPartitionPath(),
+          bucketInfo.getBucketType(),
           table.getTaskContextSupplier());
     }
   }
@@ -96,7 +101,8 @@ public class FlinkRowDataHandleFactory {
         BucketInfo bucketInfo,
         HoodieWriteConfig config,
         String instantTime,
-        HoodieTable<T, I, K, O> table
+        HoodieTable<T, I, K, O> table,
+        Iterator<HoodieRecord<T>> recordIterator
     );
   }
 }

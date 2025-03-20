@@ -94,11 +94,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_RECORD_SIZE = 100;
 
   // Buffer for holding records in memory before they are flushed to disk
-  private final List<HoodieRecord> recordList = new ArrayList<>();
+  protected final List<HoodieRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted), along with their position in log block, in memory before they are flushed to disk
-  private final List<Pair<DeleteRecord, Long>> recordsToDeleteWithPositions = new ArrayList<>();
+  protected final List<Pair<DeleteRecord, Long>> recordsToDeleteWithPositions = new ArrayList<>();
   // Base file instant time of the record positions
-  private final Option<String> baseFileInstantTimeOfPositions;
+  protected final Option<String> baseFileInstantTimeOfPositions;
   // Incoming records to be written to logs.
   protected Iterator<HoodieRecord<T>> recordItr;
   // Writer to log into the file group's latest slice.
@@ -157,7 +157,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             : Option.empty(),
         taskContextSupplier);
     this.recordItr = recordItr;
-    this.sizeEstimator = new DefaultSizeEstimator();
+    this.sizeEstimator = getSizeEstimator();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
     boolean shouldWriteRecordPositions = config.shouldWriteRecordPositions()
@@ -173,7 +173,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this(config, instantTime, hoodieTable, partitionPath, fileId, null, sparkTaskContextSupplier);
   }
 
-  private Option<String> getBaseFileInstantTimeOfPositions() {
+  protected SizeEstimator<HoodieRecord> getSizeEstimator() {
+    return new DefaultSizeEstimator<>();
+  }
+
+  protected Option<String> getBaseFileInstantTimeOfPositions() {
     return hoodieTable.getHoodieView().getLatestBaseFile(partitionPath, fileId)
         .map(HoodieBaseFile::getCommitTime);
   }
@@ -375,7 +379,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         : new StoragePath(partitionPath, logFile.getFileName()).toString();
   }
 
-  private void resetWriteCounts() {
+  protected void resetWriteCounts() {
     recordsWritten = 0;
     updatedRecordsWritten = 0;
     insertRecordsWritten = 0;
@@ -420,19 +424,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     runtimeStats.setTotalUpsertTime(runtimeStats.getTotalUpsertTime() + timer.endTimer());
   }
 
-  private void updateWriteStatus(HoodieDeltaWriteStat stat, AppendResult result) {
-    updateWriteStat(stat, result);
-    updateWriteCounts(stat, result);
-    updateRuntimeStats(stat);
-    statuses.add(this.writeStatus);
-  }
-
-  private void processAppendResult(AppendResult result, List<HoodieRecord> recordList) {
-    HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
-
+  protected void updateWriteStatus(AppendResult result, HoodieDeltaWriteStat stat) {
     if (stat.getPath() == null) {
       // first time writing to this log block.
-      updateWriteStatus(stat, result);
+      updateWriteStat(stat, result);
+      updateWriteCounts(stat, result);
+      updateRuntimeStats(stat);
+      statuses.add(this.writeStatus);
     } else if (stat.getPath().endsWith(result.logFile().getFileName())) {
       // append/continued writing to the same log file
       stat.setLogOffset(Math.min(stat.getLogOffset(), result.offset()));
@@ -443,8 +441,17 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // written to a newer log file, due to rollover/otherwise.
       initNewStatus();
       stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
-      updateWriteStatus(stat, result);
+
+      updateWriteStat(stat, result);
+      updateWriteCounts(stat, result);
+      updateRuntimeStats(stat);
+      statuses.add(this.writeStatus);
     }
+  }
+
+  protected void processAppendResult(AppendResult result, HoodieLogBlock dataBlock) {
+    HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
+    updateWriteStatus(result, stat);
 
     if (config.isMetadataColumnStatsIndexEnabled()) {
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
@@ -490,14 +497,15 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
+      HoodieLogBlock dataBlock = null;
       if (!recordList.isEmpty()) {
         String keyField = config.populateMetaFields()
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getDataBlock(config, pickLogDataBlockFormat(), recordList,
-            getUpdatedHeader(header, config, baseFileInstantTimeOfPositions),
-            keyField));
+        dataBlock = getDataBlock(config, pickLogDataBlockFormat(), recordList,
+            getUpdatedHeader(header, config, baseFileInstantTimeOfPositions), keyField);
+        blocks.add(dataBlock);
       }
 
       if (appendDeleteBlocks && !recordsToDeleteWithPositions.isEmpty()) {
@@ -509,7 +517,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       if (!blocks.isEmpty()) {
         AppendResult appendResult = writer.appendBlocks(blocks);
-        processAppendResult(appendResult, recordList);
+        processAppendResult(appendResult, dataBlock);
         recordList.clear();
         if (appendDeleteBlocks) {
           recordsToDeleteWithPositions.clear();
@@ -660,7 +668,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
   }
 
-  private HoodieLogBlock.HoodieLogBlockType pickLogDataBlockFormat() {
+  protected HoodieLogBlock.HoodieLogBlockType pickLogDataBlockFormat() {
     Option<HoodieLogBlock.HoodieLogBlockType> logBlockTypeOpt = config.getLogDataBlockFormat();
     if (logBlockTypeOpt.isPresent()) {
       return logBlockTypeOpt.get();
@@ -698,7 +706,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     return updatedHeader;
   }
 
-  private static HoodieLogBlock getDataBlock(HoodieWriteConfig writeConfig,
+  protected HoodieLogBlock getDataBlock(HoodieWriteConfig writeConfig,
                                              HoodieLogBlock.HoodieLogBlockType logDataBlockFormat,
                                              List<HoodieRecord> records,
                                              Map<HeaderMetadataType, String> header,

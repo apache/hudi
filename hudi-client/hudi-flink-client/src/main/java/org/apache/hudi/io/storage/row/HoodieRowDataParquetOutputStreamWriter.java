@@ -95,7 +95,7 @@ public class HoodieRowDataParquetOutputStreamWriter implements HoodieRowDataFile
   }
 
   @Override
-  public Object getFormatMetadata() {
+  public Object getFileFormatMetadata() {
     ValidationUtils.checkArgument(isClosed, "Column range metadata can only be fetched after the Parquet writer is closed.");
     return writer.getFooter();
   }
