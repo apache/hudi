@@ -494,9 +494,8 @@ object ColumnStatsIndexSupport {
       case dt: DecimalType =>
         value match {
           case buffer: ByteBuffer =>
-            // Use the DecimalType's precision and scale (instead of using the schema from DecimalWrapper)
-            val avroDecimal = LogicalTypes.decimal(dt.precision, dt.scale)
-            decConv.fromBytes(buffer, null, avroDecimal)
+            val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
+            decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
           case bd: BigDecimal =>
             // Scala BigDecimal: convert to java.math.BigDecimal and enforce the scale
             bd.bigDecimal.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
