@@ -139,8 +139,9 @@ object HoodieSparkSqlWriter {
     new HoodieSparkSqlWriterInternal().bootstrap(sqlContext, mode, optParams, df, hoodieTableConfigOpt, streamingWritesParamsOpt, hoodieWriteClient)
   }
 
-  def cleanup(): Unit = {
+  def cleanup(sqlContext: SQLContext, exitCode: Int): Unit = {
     Metrics.shutdownAllMetrics()
+    sqlContext.sparkContext.stop(exitCode)
   }
 
   def getBulkInsertRowConfig(writerSchema: org.apache.hudi.common.util.Option[Schema], hoodieConfig: HoodieConfig,
