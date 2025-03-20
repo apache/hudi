@@ -65,7 +65,7 @@ import static org.mockito.Mockito.when;
 /**
  * Tests {@link FileGroupRecordBuffer}
  */
-public class TestHoodieFileGroupRecordBuffer {
+class TestFileGroupRecordBuffer {
   private String schemaString = "{"
       + "\"type\": \"record\","
       + "\"name\": \"EventRecord\","
@@ -261,10 +261,11 @@ public class TestHoodieFileGroupRecordBuffer {
     metadata.put(INTERNAL_META_RECORD_KEY, "12345");
     metadata.put(INTERNAL_META_PARTITION_PATH, "partition1");
     when(readerContext.getOrderingValue(any(), any(), any(), any())).thenReturn(1);
+    when(readerContext.generateMetadataForRecord(any(), any(), any())).thenReturn(metadata);
     keyBasedBuffer.processCustomDeleteRecord(record, metadata);
     Map<Serializable, Pair<Option<GenericRecord>, Map<String, Object>>> records =
         keyBasedBuffer.getLogRecords();
     assertEquals(1, records.size());
-    assertTrue(records.containsKey("12345"));
+    assertEquals("12345", records.get("12345").getRight().get(INTERNAL_META_RECORD_KEY));
   }
 }

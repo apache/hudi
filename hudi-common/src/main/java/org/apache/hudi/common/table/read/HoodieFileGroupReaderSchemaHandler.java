@@ -218,6 +218,9 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     if (dataSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null) {
       requiredFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
+
+    //TODO: Check if we should add custom marker field here.
+
     return requiredFields.toArray(new String[0]);
   }
 

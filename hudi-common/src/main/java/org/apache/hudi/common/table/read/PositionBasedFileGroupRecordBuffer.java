@@ -53,7 +53,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
@@ -207,8 +206,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   protected void processCustomDeleteRecord(T record, Map<String, Object> metadata, long recordPosition) {
     DeleteRecord deleteRecord = DeleteRecord.create(
         new HoodieKey(
-            (String) metadata.get(INTERNAL_META_RECORD_KEY),
-            (String) metadata.get(INTERNAL_META_PARTITION_PATH)),
+            (String) metadata.get(INTERNAL_META_RECORD_KEY), null),
         readerContext.getOrderingValue(
             Option.of(record), metadata, readerSchema, orderingFieldName));
     processNextDeletedRecord(deleteRecord, recordPosition);

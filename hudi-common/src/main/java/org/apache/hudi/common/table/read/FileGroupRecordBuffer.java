@@ -100,6 +100,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
   protected boolean shouldCheckCustomDeleteMarker = false;
+  protected boolean shouldCheckHoodieDeleteMarker = false;
   protected String customDeleteMarkerKey;
   protected String customDeleteMarkerValue;
 
@@ -148,29 +149,68 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
+    // Initialize custom delete marker related variables.
+    initCustomDeleteConfigs();
+  }
+
+  protected void initCustomDeleteConfigs() {
     this.shouldCheckCustomDeleteMarker = hasCustomDeleteConfigs(props, readerSchema);
     if (shouldCheckCustomDeleteMarker) {
       this.customDeleteMarkerKey = props.getProperty(DELETE_KEY);
       this.customDeleteMarkerValue = props.getProperty(DELETE_MARKER);
     }
+    this.shouldCheckHoodieDeleteMarker = hasHoodieDeleteField(readerSchema);
   }
 
+  /**
+   * Check if
+   *   1. delete key and delete markers are set properly.
+   *   2. schema contains delete key column.
+   */
   protected boolean hasCustomDeleteConfigs(TypedProperties props, Schema schema) {
+    String deleteKey = props.getProperty(DELETE_KEY);
+    String deleteMarker = props.getProperty(DELETE_MARKER);
+    boolean deleteKeyExists = !StringUtils.isNullOrEmpty(deleteKey);
+    boolean deleteMarkerExists = !StringUtils.isNullOrEmpty(deleteMarker);
+
     // DELETE_KEY and DELETE_MARKER both should be set.
-    if (StringUtils.isNullOrEmpty(props.getProperty(DELETE_KEY))
-        || StringUtils.isNullOrEmpty(props.getProperty(DELETE_MARKER))) {
+    if (deleteKeyExists && deleteMarkerExists) {
+      // DELETE_KEY field exists in the schema.
+      return schema.getField(deleteKey) != null;
+    } else if (!deleteKeyExists && !deleteMarkerExists) {
+      // Normal case.
       return false;
+    } else {
+      throw new RuntimeException("Either custom delete key or marker is not specified");
     }
-    // Schema should have the DELETE_KEY field.
-    String deleteKeyField = props.getProperty(DELETE_KEY);
-    return schema.getField(deleteKeyField) != null;
   }
 
+  /**
+   * Check if "_hoodie_is_deleted" field exists.
+   * Assume the type of this column is boolean.
+   */
+  protected boolean hasHoodieDeleteField(Schema schema) {
+    return schema.getField(HOODIE_IS_DELETED_FIELD) != null;
+  }
+
+  /**
+   * Here we assume that delete marker column type is of string.
+   * This should be sufficient for most cases.
+   */
   protected boolean isCustomDeleteRecord(T record) {
     Object deleteMarkerValue =
         readerContext.getValue(record, readerSchema, customDeleteMarkerKey);
     return deleteMarkerValue != null
           && customDeleteMarkerValue.equals(deleteMarkerValue.toString());
+  }
+
+  /**
+   * Check if the value of column "_hoodie_is_deleted" is true.
+   */
+  protected boolean isHoodieDeleteRecord(T record) {
+    Object columnValue =
+        readerContext.getValue(record, readerSchema, HOODIE_IS_DELETED_FIELD);
+    return columnValue != null && (boolean) columnValue;
   }
 
   @Override
@@ -272,8 +312,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
             Comparable incomingOrderingValue = readerContext.getOrderingValue(
                 Option.of(record), metadata, readerSchema, orderingFieldName);
             if (incomingOrderingValue.compareTo(existingOrderingValue) > 0) {
-              return Option.of(Pair.of(isDeleteRecord(Option.of(record), readerContext.getSchemaFromMetadata(metadata))
-                  ? Option.empty() : Option.of(record), metadata));
+              return Option.of(Pair.of(Option.of(record), metadata));
             }
             return Option.empty();
           case CUSTOM:
@@ -291,7 +330,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                   return Option.of(Pair.of(Option.ofNullable(combinedRecordData), metadata));
                 }
               }
-
               return Option.empty();
             } else {
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
@@ -313,7 +351,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
               if (combinedRecord.getData() != existingRecordMetadataPair.getLeft().get()) {
                 return Option.of(Pair.of(Option.ofNullable(combinedRecord.getData()), metadata));
               }
-
               return Option.empty();
             }
         }
@@ -473,7 +510,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
               }
               return Option.ofNullable(readerContext.convertAvroRecord(indexedRecord));
             }
-
             return Option.empty();
           } else {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
