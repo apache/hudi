@@ -22,6 +22,7 @@ import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -103,7 +104,7 @@ public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
     initHoodieStorage();
     storage.createDirectory(new StoragePath(basePath));
     initTimelineService();
-    initMetaClient(tableType);
+    initMetaClient(tableType, writeConfig.map(conf -> conf.getProps()).orElse(new TypedProperties()));
     initTestDataGenerator();
     metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
     this.writeConfig = writeConfig.isPresent()
