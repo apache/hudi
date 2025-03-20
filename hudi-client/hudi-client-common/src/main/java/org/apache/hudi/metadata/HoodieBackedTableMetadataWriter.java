@@ -1375,7 +1375,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     Pair<HoodieData<HoodieRecord>, List<Pair<String, String>>> result = prepRecords(partitionRecordsMap);
     HoodieData<HoodieRecord> preppedRecords = result.getKey();
-    List<Pair<String, String>> partitionFileIdPairsHolder = result.getValue();
+    List<Pair<String, String>> partitionFileIdPairs = result.getValue();
     I preppedRecordInputs = convertHoodieDataToEngineSpecificData(preppedRecords);
 
     BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();
@@ -1413,8 +1413,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       bulkInsertAndCommit(writeClient, instantTime, preppedRecordInputs, bulkInsertPartitioner);
     } else {
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-      // last argument is required so that we take optimized writes flow for metadata table.
-      writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(partitionFileIdPairsHolder));
+      // last argument is required so that we take optimized writes flow for metadata table. 
+      writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(partitionFileIdPairs));
     }
 
     metadataMetaClient.reloadActiveTimeline();
