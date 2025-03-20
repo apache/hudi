@@ -25,12 +25,11 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 
-
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
+import scala.collection.{mutable, JavaConverters}
 import scala.collection.JavaConverters._
-import scala.collection.{JavaConverters, mutable}
 import scala.util.Using
 
 class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
@@ -38,7 +37,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     HoodieMetadataConfig.ENABLE.key -> "true",
     HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true"
   )
-  val commonOpts: Map[String, String] = Map(
+  def commonOpts: Map[String, String] = Map(
     PARTITIONPATH_FIELD.key -> "partition",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15"
@@ -95,7 +94,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     if (!metaClientReloaded) {
       // initialization of meta client is required again after writing data so that
       // latest table configs are picked up
-      metaClient = HoodieTableMetaClient.reload(metaClient)
+      metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
       metaClientReloaded = true
     }
 

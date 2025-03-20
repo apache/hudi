@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieWriterUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.async.AsyncClusteringService;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.async.SparkAsyncClusteringService;
@@ -120,7 +121,7 @@ public class HoodieStreamer implements Serializable {
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = STREAMER_CHECKPOINT_RESET_KEY_V1;
 
-  protected final transient Config cfg;
+  protected transient Config cfg;
 
   /**
    * NOTE: These properties are already consolidated w/ CLI provided config-overrides.
@@ -176,7 +177,8 @@ public class HoodieStreamer implements Serializable {
         cfg.runBootstrap ? null : new StreamSyncService(cfg, sparkEngineContext, fs, conf, Option.ofNullable(this.properties), sourceProfileSupplier));
   }
 
-  private static TypedProperties combineProperties(Config cfg, Option<TypedProperties> propsOverride, Configuration hadoopConf) {
+  @VisibleForTesting
+  public static TypedProperties combineProperties(Config cfg, Option<TypedProperties> propsOverride, Configuration hadoopConf) {
     HoodieConfig hoodieConfig = new HoodieConfig();
     // Resolving the properties in a consistent way:
     //   1. Properties override always takes precedence
@@ -642,10 +644,14 @@ public class HoodieStreamer implements Serializable {
       LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
 
+    int exitCode = 0;
     try {
       new HoodieStreamer(cfg, jssc).sync();
+    } catch (Throwable throwable) {
+      exitCode = 1;
+      throw new HoodieException("Failed to run HoodieStreamer ", throwable);
     } finally {
-      jssc.stop();
+      SparkAdapterSupport$.MODULE$.sparkAdapter().stopSparkContext(jssc, exitCode);
     }
   }
 

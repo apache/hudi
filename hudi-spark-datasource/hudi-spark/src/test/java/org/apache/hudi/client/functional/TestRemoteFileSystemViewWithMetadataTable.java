@@ -43,8 +43,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.timeline.service.TimelineService;
 
@@ -72,13 +70,11 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.view.FileSystemViewStorageConfig.REMOTE_PORT_NUM;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests the {@link RemoteHoodieTableFileSystemView} with metadata table enabled, using
- * {@link HoodieMetadataFileSystemView} on the timeline server.
+ * {@link org.apache.hudi.common.table.view.HoodieTableFileSystemView} on the timeline server.
  */
 public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClientTestHarness {
   private static final Logger LOG = LoggerFactory.getLogger(TestRemoteFileSystemViewWithMetadataTable.class);
@@ -116,9 +112,8 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
       timelineService = new TimelineService(localEngineContext, HadoopFSUtils.getStorageConf(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          HoodieStorageUtils.getStorage(getDefaultStorageConf()),
           FileSystemViewManager.createViewManager(
-              context, config.getViewStorageConfig(),
+              context, config.getMetadataConfig(), config.getViewStorageConfig(),
               config.getCommonConfig(),
               metaClient -> new HoodieBackedTestDelayedTableMetadata(
                   context, metaClient.getStorage(), config.getMetadataConfig(), metaClient.getBasePath().toString(), true)));
@@ -184,8 +179,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
 
     // For all the file groups compacted by the compaction commit, the file system view
     // should return the latest file slices which is written by the latest commit
-    HoodieCommitMetadata commitMetadata = COMMIT_METADATA_SER_DE.deserialize(compactionCommit,
-        timeline.getInstantDetails(compactionCommit).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(compactionCommit);
     List<Pair<String, String>> partitionFileIdPairList =
         commitMetadata.getPartitionToWriteStats().entrySet().stream().flatMap(
             entry -> {

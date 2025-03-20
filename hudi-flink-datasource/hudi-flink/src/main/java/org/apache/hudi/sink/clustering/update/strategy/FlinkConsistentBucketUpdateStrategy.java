@@ -57,8 +57,8 @@ public class FlinkConsistentBucketUpdateStrategy<T extends HoodieRecordPayload> 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkConsistentBucketUpdateStrategy.class);
 
   private boolean initialized = false;
-  private List<String> indexKeyFields;
-  private Map<String, Pair<String, ConsistentBucketIdentifier>> partitionToIdentifier;
+  private final List<String> indexKeyFields;
+  private final Map<String, Pair<String, ConsistentBucketIdentifier>> partitionToIdentifier;
   private String lastRefreshInstant = HoodieTimeline.INIT_INSTANT_TS;
 
   public FlinkConsistentBucketUpdateStrategy(HoodieFlinkWriteClient writeClient, List<String> indexKeyFields) {

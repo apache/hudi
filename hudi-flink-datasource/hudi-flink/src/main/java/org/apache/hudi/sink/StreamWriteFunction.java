@@ -19,8 +19,14 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
@@ -30,19 +36,26 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
+import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -85,10 +98,9 @@ import java.util.function.BiFunction;
  *
  * <p>Note: The function task requires the input stream be shuffled by the file IDs.
  *
- * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
-public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
+public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlinkInternalRow> {
 
   private static final long serialVersionUID = 1L;
 
@@ -102,6 +114,14 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   protected transient BiFunction<List<HoodieRecord>, String, List<WriteStatus>> writeFunction;
 
   private transient HoodieRecordMerger recordMerger;
+
+  protected final RowType rowType;
+
+  protected transient Schema avroSchema;
+
+  protected transient RowDataToAvroConverters.RowDataToAvroConverter converter;
+
+  protected transient PayloadCreation payloadCreation;
 
   /**
    * Total size tracer.
@@ -118,8 +138,9 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    *
    * @param config The config options
    */
-  public StreamWriteFunction(Configuration config) {
+  public StreamWriteFunction(Configuration config, RowType rowType) {
     super(config);
+    this.rowType = rowType;
   }
 
   @Override
@@ -129,6 +150,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     initWriteFunction();
     initMergeClass();
     registerMetrics();
+    preparePayload();
   }
 
   @Override
@@ -140,8 +162,10 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   @Override
-  public void processElement(I value, ProcessFunction<I, Object>.Context ctx, Collector<Object> out) throws Exception {
-    bufferRecord((HoodieRecord<?>) value);
+  public void processElement(HoodieFlinkInternalRow record,
+                             ProcessFunction<HoodieFlinkInternalRow, Object>.Context ctx,
+                             Collector<Object> out) throws Exception {
+    bufferRecord(record);
   }
 
   @Override
@@ -169,7 +193,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   public Map<String, List<HoodieRecord>> getDataBuffer() {
     Map<String, List<HoodieRecord>> ret = new HashMap<>();
     for (Map.Entry<String, DataBucket> entry : buckets.entrySet()) {
-      ret.put(entry.getKey(), entry.getValue().getRecords());
+      ret.put(entry.getKey(), convertToHoodieRecords(entry.getValue().getRecords()));
     }
     return ret;
   }
@@ -209,11 +233,21 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     LOG.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
   }
 
+  protected void preparePayload() {
+    this.avroSchema = StreamerUtil.getSourceSchema(this.config);
+    this.converter = RowDataToAvroConverters.createConverter(this.rowType, this.config.getBoolean(FlinkOptions.WRITE_UTC_TIMEZONE));
+    try {
+      this.payloadCreation = PayloadCreation.instance(config);
+    } catch (Exception ex) {
+      throw new HoodieException("Failed payload creation in StreamWriteFunction", ex);
+    }
+  }
+
   /**
    * Data bucket.
    */
   protected static class DataBucket {
-    private final List<HoodieRecord> records;
+    private final List<HoodieFlinkInternalRow> records;
     private final BufferSizeDetector detector;
 
     private DataBucket(Double batchSize) {
@@ -221,7 +255,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       this.detector = new BufferSizeDetector(batchSize);
     }
 
-    public List<HoodieRecord> getRecords() {
+    public List<HoodieFlinkInternalRow> getRecords() {
       return records;
     }
 
@@ -312,9 +346,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   /**
    * Returns the bucket ID with the given value {@code value}.
    */
-  private String getBucketID(HoodieRecord<?> record) {
-    final String fileId = record.getCurrentLocation().getFileId();
-    return StreamerUtil.generateBucketKey(record.getPartitionPath(), fileId);
+  private String getBucketID(String partitionPath, String fileId) {
+    return StreamerUtil.generateBucketKey(partitionPath, fileId);
   }
 
   /**
@@ -326,26 +359,26 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    * <p>Flush the max size data bucket if the total buffer size exceeds the configured
    * threshold {@link FlinkOptions#WRITE_TASK_MAX_SIZE}.
    *
-   * @param value HoodieRecord
+   * @param record HoodieFlinkInternalRow
    */
-  protected void bufferRecord(HoodieRecord<?> value) {
+  protected void bufferRecord(HoodieFlinkInternalRow record) {
     writeMetrics.markRecordIn();
-    final String bucketID = getBucketID(value);
+    final String bucketID = getBucketID(record.getPartitionPath(), record.getFileId());
 
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
         k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE)));
-    bucket.records.add(value);
+    bucket.records.add(record);
 
-    boolean flushBucket = bucket.detector.detect(value);
-    boolean flushBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
+    boolean isFullBucket = bucket.detector.detect(record);
+    boolean isFullBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
     // update buffer metrics after tracing buffer size
     writeMetrics.setWriteBufferedSize(this.tracer.bufferSize);
-    if (flushBucket) {
+    if (isFullBucket) {
       if (flushBucket(bucket)) {
         this.tracer.countDown(bucket.detector.totalSize);
         bucket.reset();
       }
-    } else if (flushBuffer) {
+    } else if (isFullBuffer) {
       // find the max size bucket and flush it out
       DataBucket bucketToFlush = this.buckets.values().stream()
           .max(Comparator.comparingLong(b -> b.detector.totalSize))
@@ -364,7 +397,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         && this.buckets.values().stream().anyMatch(bucket -> !bucket.records.isEmpty());
   }
 
-  @SuppressWarnings("unchecked, rawtypes")
   private boolean flushBucket(DataBucket bucket) {
     String instant = instantToWrite(true);
 
@@ -389,7 +421,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     return true;
   }
 
-  @SuppressWarnings("unchecked, rawtypes")
   private void flushRemaining(boolean endInput) {
     writeMetrics.startDataFlush();
     this.currentInstant = instantToWrite(hasData());
@@ -439,12 +470,38 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     writeMetrics.registerMetrics();
   }
 
-  protected List<WriteStatus> writeRecords(String instant, List<HoodieRecord> records) {
+  protected List<WriteStatus> writeRecords(String instant, List<HoodieFlinkInternalRow> records) {
     writeMetrics.startFileFlush();
-    List<WriteStatus> statuses = writeFunction.apply(deduplicateRecordsIfNeeded(records), instant);
+    List<WriteStatus> statuses = writeFunction.apply(deduplicateRecordsIfNeeded(convertToHoodieRecords(records)), instant);
     writeMetrics.endFileFlush();
     writeMetrics.increaseNumOfFilesWritten();
     return statuses;
+  }
+
+  protected  List<HoodieRecord> convertToHoodieRecords(List<HoodieFlinkInternalRow> records) {
+    List<HoodieRecord> hoodieRecords = Arrays.asList(new HoodieRecord[records.size()]);
+    for (int i = 0; i < records.size(); i++) {
+      HoodieFlinkInternalRow record = records.get(i);
+      RowData row = record.getRowData();
+      // [HUDI-8969] Analyze how to write `RowData` directly
+      GenericRecord gr = (GenericRecord) this.converter.convert(this.avroSchema, row);
+      HoodieRecordPayload payload;
+      try {
+        payload = payloadCreation.createPayload(gr);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+      HoodieRecord hoodieRecord =
+          new HoodieAvroRecord<>(
+              new HoodieKey(record.getRecordKey(), record.getPartitionPath()),
+              payload,
+              HoodieOperation.fromName(record.getOperationType()));
+      hoodieRecord.unseal();
+      hoodieRecord.setCurrentLocation(new HoodieRecordLocation(record.getInstantTime(), record.getFileId()));
+      hoodieRecord.seal();
+      hoodieRecords.set(i, hoodieRecord);
+    }
+    return hoodieRecords;
   }
 
   protected List<HoodieRecord> deduplicateRecordsIfNeeded(List<HoodieRecord> records) {

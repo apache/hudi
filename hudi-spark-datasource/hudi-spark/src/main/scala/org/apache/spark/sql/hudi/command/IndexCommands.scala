@@ -28,15 +28,17 @@ import org.apache.hudi.index.HoodieSparkIndexClient
 import org.apache.hudi.index.expression.ExpressionIndexSparkFunctions
 import org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION
 import org.apache.hudi.metadata.{HoodieTableMetadataUtil, MetadataPartitionType}
+
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
-import org.apache.spark.sql.{Row, SparkSession}
 
 import java.util
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
 
 case class CreateIndexCommand(table: CatalogTable,
@@ -55,7 +57,6 @@ case class CreateIndexCommand(table: CatalogTable,
 
     if (indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
       || indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)) {
-      // validate that only overwrite with latest payloads can enabled SI
       if (indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS) &&
         options.asJava.getOrDefault(EXPRESSION_OPTION, ExpressionIndexSparkFunctions.IDENTITY_FUNCTION).equals(ExpressionIndexSparkFunctions.IDENTITY_FUNCTION)) {
         throw new HoodieIndexException("Column stats index without expression on any column can be created using datasource configs. " +

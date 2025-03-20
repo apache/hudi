@@ -71,6 +71,7 @@ import software.amazon.awssdk.services.glue.model.GetPartitionIndexesResponse;
 import software.amazon.awssdk.services.glue.model.GetPartitionsRequest;
 import software.amazon.awssdk.services.glue.model.GetPartitionsResponse;
 import software.amazon.awssdk.services.glue.model.GetTableRequest;
+import software.amazon.awssdk.services.glue.model.KeySchemaElement;
 import software.amazon.awssdk.services.glue.model.PartitionIndex;
 import software.amazon.awssdk.services.glue.model.PartitionIndexDescriptor;
 import software.amazon.awssdk.services.glue.model.PartitionInput;
@@ -100,7 +101,7 @@ import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
+import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
 import static org.apache.hudi.common.util.MapUtils.containsAll;
 import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.ALL_PARTITIONS_READ_PARALLELISM;
@@ -690,7 +691,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       GetPartitionIndexesRequest indexesRequest = GetPartitionIndexesRequest.builder().databaseName(databaseName).tableName(tableName).build();
       GetPartitionIndexesResponse existingIdxsResp = awsGlue.getPartitionIndexes(indexesRequest).get();
       for (PartitionIndexDescriptor idsToDelete : existingIdxsResp.partitionIndexDescriptorList()) {
-        LOG.warn("Dropping partition index: " + idsToDelete.indexName());
+        LOG.warn("Dropping partition index: {}", idsToDelete.indexName());
         DeletePartitionIndexRequest idxToDelete = DeletePartitionIndexRequest.builder()
                 .databaseName(databaseName).tableName(tableName).indexName(idsToDelete.indexName()).build();
         awsGlue.deletePartitionIndex(idxToDelete).get();
@@ -712,8 +713,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       // for each existing index remove if not relevant anymore
       boolean indexesChanges = false;
       for (PartitionIndexDescriptor existingIdx: existingIdxsResp.partitionIndexDescriptorList()) {
-        List<String> idxColumns = existingIdx.keys().stream().map(key -> key.name()).collect(Collectors.toList());
-        Boolean toBeRemoved = true;
+        List<String> idxColumns = existingIdx.keys().stream().map(KeySchemaElement::name).collect(Collectors.toList());
+        boolean toBeRemoved = true;
         for (List<String> neededIdx : partitionsIndexNeeded) {
           if (neededIdx.equals(idxColumns)) {
             toBeRemoved = false;

@@ -60,7 +60,6 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.table.view.SpillableMapBasedFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
@@ -200,22 +199,21 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataTableValidator.class);
-  static final int LOG_DETAIL_MAX_LENGTH = 100_000;
 
   // Spark context
   private transient JavaSparkContext jsc;
   // config
-  private Config cfg;
+  private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
-  private TypedProperties props;
+  private final TypedProperties props;
 
-  private final HoodieTableMetaClient metaClient;
+  private Option<HoodieTableMetaClient> metaClientOpt = Option.empty();
 
   protected transient Option<AsyncMetadataTableValidateService> asyncMetadataTableValidateService;
 
   private final String taskLabels;
 
-  private List<Throwable> throwables = new ArrayList<>();
+  private final List<Throwable> throwables = new ArrayList<>();
 
   public HoodieMetadataTableValidator(JavaSparkContext jsc, Config cfg) {
     this.jsc = jsc;
@@ -225,11 +223,16 @@ public class HoodieMetadataTableValidator implements Serializable {
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
 
-    this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
-        .setBasePath(cfg.basePath)
-        .setLoadActiveTimelineOnLoad(true)
-        .build();
+    try {
+      this.metaClientOpt = Option.of(HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+          .setBasePath(cfg.basePath)
+          .setLoadActiveTimelineOnLoad(true)
+          .build());
+    } catch (TableNotFoundException tbe) {
+      // Suppress the TableNotFound exception, table not yet created for a new stream
+      LOG.warn("Data table is not found. Skip current validation for: " + cfg.basePath);
+    }
 
     this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
     this.taskLabels = generateValidationTaskLabels();
@@ -334,13 +337,13 @@ public class HoodieMetadataTableValidator implements Serializable {
         description = "Validate the number of entries in the record index, which should be equal "
             + "to the number of record keys in the latest snapshot of the table",
         required = false)
-    public boolean validateRecordIndexCount = false;
+    public boolean validateRecordIndexCount = true;
 
     @Parameter(names = {"--validate-record-index-content"},
         description = "Validate the content of the record index so that each record key should "
             + "have the correct location, and there is no additional or missing entry",
         required = false)
-    public boolean validateRecordIndexContent = false;
+    public boolean validateRecordIndexContent = true;
 
     @Parameter(names = {"--validate-secondary-index"},
         description = "Validate the entries in secondary index match the primary key for the records",
@@ -399,6 +402,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
+    @Parameter(names = {"--log-detail-max-length"}, description = "Maximum length for log details in validation messages. To avoid truncation, input a non-positive value.")
+    public int logDetailMaxLength = 100_000;
+
     @Override
     public String toString() {
       return "MetadataTableValidatorConfig {\n"
@@ -425,6 +431,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --spark-master " + sparkMaster + ", \n"
           + "   --spark-memory " + sparkMemory + ", \n"
           + "   --assumeDatePartitioning-memory " + assumeDatePartitioning + ", \n"
+          + "   --log-detail-max-length " + logDetailMaxLength + ", \n"
           + "   --props " + propsFilePath + ", \n"
           + "   --hoodie-conf " + configs
           + "\n}";
@@ -461,6 +468,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           && Objects.equals(sparkMaster, config.sparkMaster)
           && Objects.equals(sparkMemory, config.sparkMemory)
           && Objects.equals(assumeDatePartitioning, config.assumeDatePartitioning)
+          && Objects.equals(logDetailMaxLength, config.logDetailMaxLength)
           && Objects.equals(propsFilePath, config.propsFilePath)
           && Objects.equals(configs, config.configs);
     }
@@ -472,7 +480,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           validateSecondaryIndex, validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
           viewStorageTypeForFSListing, viewStorageTypeForMetadata,
           minValidateIntervalSeconds, parallelism, recordIndexParallelism, ignoreFailed,
-          sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
+          sparkMaster, sparkMemory, assumeDatePartitioning, logDetailMaxLength, propsFilePath, configs, help);
     }
   }
 
@@ -492,9 +500,6 @@ public class HoodieMetadataTableValidator implements Serializable {
     try {
       HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, cfg);
       validator.run();
-    } catch (TableNotFoundException e) {
-      LOG.warn("The Hudi data table is not found: [{}]. "
-          + "Skipping the validation of the metadata table.", cfg.basePath, e);
     } catch (Throwable throwable) {
       LOG.error("Fail to do hoodie metadata table validation for {}", cfg, throwable);
     } finally {
@@ -503,6 +508,10 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   public boolean run() {
+    if (!metaClientOpt.isPresent()) {
+      LOG.warn("Data table is not available to read for now, skip current validation for: " + cfg.basePath);
+      return true;
+    }
     boolean result = false;
     try {
       LOG.info(cfg.toString());
@@ -521,7 +530,6 @@ public class HoodieMetadataTableValidator implements Serializable {
     } catch (Exception e) {
       throw new HoodieException("Unable to do hoodie metadata table validation in " + cfg.basePath, e);
     } finally {
-
       if (asyncMetadataTableValidateService.isPresent()) {
         asyncMetadataTableValidateService.get().shutdown(true);
       }
@@ -533,7 +541,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     try {
       return doMetadataTableValidation();
     } catch (Throwable e) {
-      LOG.error("Metadata table validation failed to HoodieValidationException {} {}", taskLabels, e);
+      LOG.error("Metadata table validation failed to HoodieValidationException {}", taskLabels, e);
       if (!cfg.ignoreFailed) {
         throw e;
       }
@@ -555,6 +563,11 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   public boolean doMetadataTableValidation() {
     boolean finalResult = true;
+    if (!metaClientOpt.isPresent()) {
+      LOG.warn("Data table is not available to read for now, skip current validation.");
+      return true;
+    }
+    HoodieTableMetaClient metaClient = this.metaClientOpt.get();
     metaClient.reloadActiveTimeline();
     StoragePath basePath = metaClient.getBasePath();
     Set<String> baseFilesForCleaning = Collections.emptySet();
@@ -602,12 +615,12 @@ public class HoodieMetadataTableValidator implements Serializable {
          HoodieMetadataValidationContext fsBasedContext =
              new HoodieMetadataValidationContext(engineContext, props, metaClient, false, cfg.viewStorageTypeForFSListing)) {
       Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
-      List<Pair<Boolean, ? extends Exception>> result = new ArrayList<>(
+      List<Pair<Boolean, HoodieValidationException>> result = new ArrayList<>(
           engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
             try {
               validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
               LOG.info("Metadata table validation succeeded for partition {} (partition {})", partitionPath, taskLabels);
-              return Pair.<Boolean, Exception>of(true, null);
+              return Pair.<Boolean, HoodieValidationException>of(true, null);
             } catch (HoodieValidationException e) {
               LOG.error("Metadata table validation failed for partition {} due to HoodieValidationException (partition {})",
                   partitionPath, taskLabels, e);
@@ -643,10 +656,10 @@ public class HoodieMetadataTableValidator implements Serializable {
         handleValidationException(e, result, "Metadata table validation failed due to HoodieValidationException in partition stats validation");
       }
 
-      for (Pair<Boolean, ? extends Exception> res : result) {
+      for (Pair<Boolean, HoodieValidationException> res : result) {
         finalResult &= res.getKey();
         if (res.getKey().equals(false)) {
-          LOG.error("Metadata Validation failed for table: {} with error: {}", cfg.basePath, res.getValue());
+          LOG.error("Metadata Validation failed for table: {}", cfg.basePath, res.getValue());
           if (res.getRight() != null) {
             throwables.add(res.getRight());
           }
@@ -675,7 +688,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
-  private void handleValidationException(HoodieValidationException e, List<Pair<Boolean, ? extends Exception>> result, String errorMsg) {
+  private void handleValidationException(HoodieValidationException e, List<Pair<Boolean, HoodieValidationException>> result, String errorMsg) {
     LOG.error("{} for table: {} ", errorMsg, cfg.basePath, e);
     if (!cfg.ignoreFailed) {
       throw e;
@@ -696,7 +709,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           .build();
       int finishedInstants = mdtMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
       if (finishedInstants == 0) {
-        if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+        if (metaClientOpt.get().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
           LOG.info("There is no completed commit in both metadata table and corresponding data table: {}", taskLabels);
           return false;
         } else {
@@ -767,12 +780,12 @@ public class HoodieMetadataTableValidator implements Serializable {
       if (misMatch.get()) {
         String message = "Compare Partitions Failed! " + " Additional "
             + additionalFromFS.size() + " partitions from FS, but missing from MDT : \""
-            + toStringWithThreshold(additionalFromFS, LOG_DETAIL_MAX_LENGTH)
+            + toStringWithThreshold(additionalFromFS, cfg.logDetailMaxLength)
             + "\" and additional " + actualAdditionalPartitionsInMDT.size()
-            + "partitions from MDT, but missing from FS listing : \""
-            + toStringWithThreshold(actualAdditionalPartitionsInMDT, LOG_DETAIL_MAX_LENGTH)
+            + " partitions from MDT, but missing from FS listing : \""
+            + toStringWithThreshold(actualAdditionalPartitionsInMDT, cfg.logDetailMaxLength)
             + "\".\n All " + allPartitionPathsFromFS.size() + " partitions from FS listing "
-            + toStringWithThreshold(allPartitionPathsFromFS, LOG_DETAIL_MAX_LENGTH);
+            + toStringWithThreshold(allPartitionPathsFromFS, cfg.logDetailMaxLength);
         LOG.error(message);
         throw new HoodieValidationException(message);
       }
@@ -828,11 +841,11 @@ public class HoodieMetadataTableValidator implements Serializable {
   /**
    * Compare the file listing and index data between metadata table and fileSystem.
    * For now, validate five kinds of apis:
-   * 1. HoodieMetadataFileSystemView::getLatestFileSlices
-   * 2. HoodieMetadataFileSystemView::getLatestBaseFiles
-   * 3. HoodieMetadataFileSystemView::getAllFileGroups and HoodieMetadataFileSystemView::getAllFileSlices
-   * 4. HoodieBackedTableMetadata::getColumnStats
-   * 5. HoodieBackedTableMetadata::getBloomFilters
+   * 1. HoodieTableFileSystemView::getLatestFileSlices
+   * 2. HoodieTableFileSystemView::getLatestBaseFiles
+   * 3. HoodieTableFileSystemView::getAllFileGroups and HoodieTableFileSystemView::getAllFileSlices
+   * 4. HoodieTableFileSystemView::getColumnStats
+   * 5. HoodieTableFileSystemView::getBloomFilters
    *
    * @param metadataTableBasedContext Validation context containing information based on metadata table
    * @param fsBasedContext            Validation context containing information based on the file system
@@ -996,7 +1009,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
         AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()), metadataTableBasedContext.getMetadataConfig(),
-        metaClient, false);
+        metaClientOpt.get(), false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
         partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(
             metadataTableBasedContext.allColumnNameList).asScala().toSeq(), scala.Option.empty(), false)
@@ -1392,9 +1405,9 @@ public class HoodieMetadataTableValidator implements Serializable {
               + "MDT-based listing (%s): %s.",
           label,
           infoListFromFS.size(),
-          toStringWithThreshold(infoListFromFS, LOG_DETAIL_MAX_LENGTH),
+          toStringWithThreshold(infoListFromFS, cfg.logDetailMaxLength),
           infoListFromMetadataTable.size(),
-          toStringWithThreshold(infoListFromMetadataTable, LOG_DETAIL_MAX_LENGTH));
+          toStringWithThreshold(infoListFromMetadataTable, cfg.logDetailMaxLength));
       mismatch = true;
     } else {
       for (int i = 0; i < infoListFromMetadataTable.size(); i++) {
@@ -1431,9 +1444,9 @@ public class HoodieMetadataTableValidator implements Serializable {
               + "metadata table. File system-based listing (%s file slices): %s; "
               + "MDT-based listing (%s file slices): %s.",
           fileSliceListFromFS.size(),
-          toStringWithThreshold(fileSliceListFromFS, LOG_DETAIL_MAX_LENGTH),
+          toStringWithThreshold(fileSliceListFromFS, cfg.logDetailMaxLength),
           fileSliceListFromMetadataTable.size(),
-          toStringWithThreshold(fileSliceListFromMetadataTable, LOG_DETAIL_MAX_LENGTH));
+          toStringWithThreshold(fileSliceListFromMetadataTable, cfg.logDetailMaxLength));
       mismatch = true;
     } else if (!fileSliceListFromMetadataTable.equals(fileSliceListFromFS)) {
       // In-memory cache for the set of committed files of commits of interest
@@ -1490,11 +1503,8 @@ public class HoodieMetadataTableValidator implements Serializable {
       return baseFile1.getFileName().equals(baseFile2.getFileName()) && baseFile1.getFileId().equals(baseFile2.getFileId())
           && baseFile1.getFileSize() == baseFile2.getFileSize();
     } else {
-      if (!fileSlice1.getBaseFile().isPresent() == fileSlice2.getBaseFile().isPresent()) {
-        return false;
-      }
+      return fileSlice1.getBaseFile().isPresent() == fileSlice2.getBaseFile().isPresent();
     }
-    return true;
   }
 
   /**
@@ -1578,10 +1588,8 @@ public class HoodieMetadataTableValidator implements Serializable {
             if (!committedFilesMap.containsKey(instantTime)) {
               HoodieInstant instant =  completedInstantsTimeline.filter(i -> i.requestedTime().equals(instantTime))
                   .firstInstant().get();
-              HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
-                  instant, completedInstantsTimeline.getInstantDetails(instant).get(),
-                  HoodieCommitMetadata.class
-              );
+              HoodieCommitMetadata commitMetadata =
+                  completedInstantsTimeline.readCommitMetadata(instant);
               committedFilesMap.put(
                   instantTime,
                   commitMetadata.getWriteStats().stream()
@@ -1750,10 +1758,10 @@ public class HoodieMetadataTableValidator implements Serializable {
         FileSystemViewStorageConfig viewConf = FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();
         ValidationUtils.checkArgument(viewConf.getStorageType().name().equals(viewStorageType), "View storage type not reflected");
         HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
-        this.fileSystemView = getFileSystemView(engineContext,
-            metaClient, metadataConfig, viewConf, commonConfig);
         this.tableMetadata = HoodieTableMetadata.create(
             engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
+        this.fileSystemView = getFileSystemView(engineContext,
+            metaClient, metadataConfig, viewConf, commonConfig);
         if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
           this.allColumnNameList = getAllColumnNames();
         }
@@ -1765,18 +1773,17 @@ public class HoodieMetadataTableValidator implements Serializable {
     private HoodieTableFileSystemView getFileSystemView(HoodieEngineContext context,
                                                         HoodieTableMetaClient metaClient, HoodieMetadataConfig metadataConfig,
                                                         FileSystemViewStorageConfig viewConf, HoodieCommonConfig commonConfig) {
-      HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
       switch (viewConf.getStorageType()) {
         case SPILLABLE_DISK:
           LOG.debug("Creating Spillable Disk based Table View");
-          return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf, commonConfig);
+          break;
         case MEMORY:
           LOG.debug("Creating in-memory based Table View");
-          return FileSystemViewManager.createInMemoryFileSystemView(context,
-              metaClient, metadataConfig);
+          break;
         default:
           throw new HoodieException("Unsupported storage type " + viewConf.getStorageType() + ", used with HoodieMetadataTableValidator");
       }
+      return (HoodieTableFileSystemView) FileSystemViewManager.createViewManager(context, metadataConfig, viewConf, commonConfig, unused -> tableMetadata).getFileSystemView(metaClient);
     }
 
     public HoodieTableMetaClient getMetaClient() {
@@ -1826,7 +1833,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             .collect(Collectors.toList());
       } else {
         FileFormatUtils formatUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getFileFormatUtils(HoodieFileFormat.PARQUET);
-        return fileNames.stream().flatMap(filename -> {
+        return (List<HoodieColumnRangeMetadata<Comparable>>) fileNames.stream().flatMap(filename -> {
           if (filename.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
             return formatUtils.readColumnStatsFromMetadata(
                 metaClient.getStorage(),
@@ -1837,14 +1844,12 @@ public class HoodieMetadataTableValidator implements Serializable {
             StoragePath storagePartitionPath = new StoragePath(metaClient.getBasePath(), partitionPath);
             String filePath = new StoragePath(storagePartitionPath, filename).toString();
             try {
-              return ((List<HoodieColumnRangeMetadata<Comparable>>) getLogFileColumnRangeMetadata(filePath, metaClient, allColumnNameList, Option.of(readerSchema),
+              return getLogFileColumnRangeMetadata(filePath, metaClient, allColumnNameList, Option.of(readerSchema),
                   metadataConfig.getMaxReaderBufferSize())
                   .stream()
                   // We need to convert file path and use only the file name instead of the complete file path
                   .map(m -> (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.create(filename, m.getColumnName(), m.getMinValue(), m.getMaxValue(),
-                      m.getNullCount(), m.getValueCount(), m.getTotalSize(), m.getTotalUncompressedSize()))
-                  .collect(Collectors.toList()))
-                  .stream();
+                      m.getNullCount(), m.getValueCount(), m.getTotalSize(), m.getTotalUncompressedSize()));
             } catch (IOException e) {
               throw new HoodieIOException(String.format("Failed to get column stats for file: %s", filePath), e);
             }

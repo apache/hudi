@@ -44,9 +44,9 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFileg
  */
 public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
-  private static final transient Logger LOG = LoggerFactory.getLogger(HoodieCombineRealtimeRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCombineRealtimeRecordReader.class);
   // RecordReaders for each split
-  private List<RecordReader> recordReaders = new LinkedList<>();
+  private final List<RecordReader> recordReaders = new LinkedList<>();
   // Points to the currently iterating record reader
   private RecordReader currentRecordReader;
 
@@ -54,8 +54,8 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
 
   public HoodieCombineRealtimeRecordReader(JobConf jobConf, CombineFileSplit split,
       List<RecordReader> readers) {
-    useFileGroupReader = shouldUseFilegroupReader(jobConf, split);
     try {
+      useFileGroupReader = shouldUseFilegroupReader(jobConf, split);
       ValidationUtils.checkArgument(((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits().size() == readers
           .size(), "Num Splits does not match number of unique RecordReaders!");
       for (InputSplit rtSplit : ((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits()) {

@@ -19,10 +19,10 @@ package org.apache.hudi
 
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
-import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties}
+import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties, DataSkippingFailureMode}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
@@ -43,13 +43,14 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.text.SimpleDateFormat
-import java.util.stream.Collectors
 import javax.annotation.concurrent.NotThreadSafe
 
+import java.text.SimpleDateFormat
+import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
-import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
 
 /**
  * A file index which support partition prune for hoodie snapshot and read-optimized query.
@@ -512,7 +513,7 @@ object HoodieFileIndex extends Logging {
     schema.fieldNames.filter { colName => refs.exists(r => resolver.apply(colName, r.name)) }
   }
 
-  def getConfigProperties(spark: SparkSession, options: Map[String, String], tableConfig: HoodieTableConfig) = {
+  def getConfigProperties(spark: SparkSession, options: Map[String, String], tableConfig: HoodieTableConfig): TypedProperties = {
     val sqlConf: SQLConf = spark.sessionState.conf
     val properties = TypedProperties.fromMap(options.filter(p => p._2 != null).asJava)
 
@@ -537,10 +538,11 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
 
       // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS
-      val dataBase = Some(tableConfig.getDatabaseName)
+      val database = getDatabaseName(tableConfig)
       val tableName = tableConfig.getTableName
-      if (spark.catalog.tableExists(dataBase.getOrElse("default"), tableName)) {
-        val tableIdentifier = TableIdentifier(tableName, dataBase)
+
+      if (spark.catalog.tableExists(database, tableName)) {
+        val tableIdentifier = TableIdentifier(tableName, Some(database))
         val table = HoodieCatalogTable(spark, tableIdentifier)
         table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
       }
@@ -610,5 +612,14 @@ object HoodieFileIndex extends Logging {
     }
 
     paths.map(new StoragePath(_))
+  }
+
+  // if database name is not set, fall back to use 'default' instead of failing
+  def getDatabaseName(tableConfig: HoodieTableConfig)  = {
+    if (StringUtils.isNullOrEmpty(tableConfig.getDatabaseName)) {
+      "default"
+    } else {
+      tableConfig.getDatabaseName
+    }
   }
 }

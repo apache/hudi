@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
@@ -41,7 +42,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
@@ -66,6 +66,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -81,6 +82,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -110,8 +112,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadata;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToAvro;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
@@ -297,6 +299,10 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
             getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002")),
             getActiveCommitInstants(Arrays.asList("00000003", "00000004", "00000005", "00000006")),
             commitsAfterArchival, false);
+        if (enableMetadata) {
+          // disable metadata table in the write config but files metadata partition is still available
+          disableMetadataTable(writeConfig);
+        }
       } else if (i < 8) {
         assertEquals(originalCommits, commitsAfterArchival);
       } else if (i == 8) {
@@ -432,13 +438,11 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         }
       });
       commitMeta = generateCommitMetadata(instantTime, partToFileIds);
-      metadataWriter.performTableServices(Option.of(instantTime));
+      metadataWriter.performTableServices(Option.of(instantTime), true);
       metadataWriter.update(commitMeta, instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-          serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMeta));
-    } else {
-      commitMeta = generateCommitMetadata(instantTime, new HashMap<>());
+          Option.of(commitMeta));
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return INSTANT_GENERATOR.createNewInstant(
@@ -632,7 +636,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     // create a version pointer file with invalid version number.
     metaClient.getStorage().deleteDirectory(LSMTimeline.getVersionFilePath(metaClient.getArchivePath()));
     FileIOUtils.createFileInPath(metaClient.getStorage(),
-        LSMTimeline.getVersionFilePath(metaClient.getArchivePath()), Option.of(getUTF8Bytes("invalid_version")));
+        LSMTimeline.getVersionFilePath(metaClient.getArchivePath()),
+        Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes("invalid_version"))));
 
     // check that invalid manifest file will not block archived timeline loading.
     HoodieActiveTimeline rawActiveTimeline = TIMELINE_FACTORY.createActiveTimeline(metaClient, false);
@@ -659,7 +664,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     StoragePath damagedFile =
         new StoragePath(metaClient.getArchivePath(), "300_301_1.parquet");
     FileIOUtils.createFileInPath(
-        metaClient.getStorage(), damagedFile, Option.of(getUTF8Bytes("dummy")));
+        metaClient.getStorage(), damagedFile,
+        Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes("dummy"))));
 
     assertDoesNotThrow(() -> metaClient.getArchivedTimeline().reload(),
         "Archived timeline can skip the invalid data and manifest files smartly");
@@ -732,7 +738,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     assertTrue(planDetailsList.stream().allMatch(Option::isPresent), "All the compaction instants should have plan details.");
     // parse the compaction plan for each instant
     for (Option<byte[]> planDetails : planDetailsList) {
-      assertDoesNotThrow(() -> TimelineMetadataUtils.deserializeCompactionPlan(planDetails.get()));
+      assertDoesNotThrow(() -> deserializeAvroMetadata(new ByteArrayInputStream(planDetails.get()), HoodieCompactionPlan.class));
     }
   }
 
@@ -851,7 +857,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   }
 
   private static Stream<Arguments> archiveCommitSavepointNoHoleParams() {
-    return Arrays.stream(new Boolean[][] {
+    return Arrays.stream(new Boolean[][]{
         {true, true},
         {false, true},
         {true, false},
@@ -1136,7 +1142,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata = convertCommitMetadata(hoodieCommitMetadata);
+    org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata = convertCommitMetadataToAvro(hoodieCommitMetadata);
     assertEquals(expectedCommitMetadata.getOperationType(), WriteOperationType.INSERT.toString());
   }
 
@@ -1356,7 +1362,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     metaClient.getArchivedTimeline().loadCompletedInstantDetailsInMemory();
     HoodieInstant firstInstant = metaClient.reloadActiveTimeline().firstInstant().get();
     expectedArchivedInstants = expectedArchivedInstants.stream()
-        .filter(entry ->  compareTimestamps(entry.requestedTime(), LESSER_THAN, firstInstant.requestedTime()
+        .filter(entry -> compareTimestamps(entry.requestedTime(), LESSER_THAN, firstInstant.requestedTime()
         )).collect(Collectors.toList());
     expectedArchivedInstants.forEach(entry -> assertTrue(metaClient.getArchivedTimeline().containsInstant(entry)));
   }
@@ -1818,6 +1824,11 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
    */
   private Pair<List<HoodieInstant>, List<HoodieInstant>> archiveAndGetCommitsList(HoodieWriteConfig writeConfig) throws IOException {
     return archiveAndGetCommitsList(writeConfig, false);
+  }
+
+  private void disableMetadataTable(HoodieWriteConfig writeConfig) {
+    writeConfig.setValue(HoodieMetadataConfig.ENABLE.key(), "false");
+    writeConfig.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE.key(), "false");
   }
 
   private Pair<List<HoodieInstant>, List<HoodieInstant>> archiveAndGetCommitsList(

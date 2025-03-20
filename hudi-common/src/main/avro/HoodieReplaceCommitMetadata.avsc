@@ -32,6 +32,11 @@
          "default": null
       },
       {
+         "name":"compacted",
+         "type":["null", "boolean"],
+         "default": null
+      },
+      {
          "name":"extraMetadata",
          "type":["null", {
             "type":"map",

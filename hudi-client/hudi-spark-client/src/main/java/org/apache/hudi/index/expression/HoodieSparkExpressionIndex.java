@@ -20,6 +20,7 @@
 package org.apache.hudi.index.expression;
 
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 
@@ -33,6 +34,7 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
 
   private String indexName;
   private String indexFunction;
+  private String indexType;
   private List<String> orderedSourceFields;
   private Map<String, String> options;
   private ExpressionIndexSparkFunctions.SparkFunction sparkFunction;
@@ -40,11 +42,12 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
   public HoodieSparkExpressionIndex() {
   }
 
-  public HoodieSparkExpressionIndex(String indexName, String indexFunction, List<String> orderedSourceFields, Map<String, String> options) {
-    this.indexName = indexName;
-    this.indexFunction = indexFunction;
-    this.orderedSourceFields = orderedSourceFields;
-    this.options = options;
+  public HoodieSparkExpressionIndex(HoodieIndexDefinition indexDefinition) {
+    this.indexName = indexDefinition.getIndexName();
+    this.indexFunction = indexDefinition.getIndexFunction();
+    this.indexType = indexDefinition.getIndexType();
+    this.orderedSourceFields = indexDefinition.getSourceFields();
+    this.options = indexDefinition.getIndexOptions();
 
     // Check if the function from the expression exists in our map
     this.sparkFunction = ExpressionIndexSparkFunctions.SparkFunction.getSparkFunction(indexFunction);
@@ -73,7 +76,7 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
     if (orderedSourceValues.size() != orderedSourceFields.size()) {
       throw new IllegalArgumentException("Mismatch in number of source values and fields in the expression");
     }
-    sparkFunction.validateOptions(options);
+    sparkFunction.validateOptions(options, indexType);
     return sparkFunction.apply(orderedSourceValues, options);
   }
 

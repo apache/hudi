@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink.transform;
 
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.util.RateLimiter;
 import org.apache.hudi.configuration.FlinkOptions;
 
@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Function that transforms RowData to a HoodieRecord with RateLimit.
  */
-public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends HoodieRecord>
+public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends HoodieFlinkInternalRow>
     extends RowDataToHoodieFunction<I, O> {
   /**
    * Total rate limit per second for this job.

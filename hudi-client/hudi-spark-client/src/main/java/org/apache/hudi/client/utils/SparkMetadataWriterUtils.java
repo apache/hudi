@@ -86,6 +86,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
@@ -100,6 +101,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.BLOOM_FILTER_CONFIG_MAPPING;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT;
@@ -108,7 +110,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.createBloomFilterMe
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createColumnStatsRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
 /**
@@ -204,8 +206,11 @@ public class SparkMetadataWriterUtils {
         : new ExpressionIndexComputationMetadata(colStatRecords);
   }
 
-  public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex,
-                                                                                             HoodieWriteConfig metadataWriteConfig, String instantTime, String indexName) {
+  public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex, HoodieWriteConfig metadataWriteConfig, String instantTime,
+                                                                                             HoodieIndexDefinition indexDefinition) {
+    String indexName = indexDefinition.getIndexName();
+    setBloomFilterProps(metadataWriteConfig, indexDefinition.getIndexOptions());
+
     // Group data using expression index metadata and then create bloom filter on the group
     Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
         // row.get(1) refers to partition path value and row.get(2) refers to file name.
@@ -224,6 +229,14 @@ public class SparkMetadataWriterUtils {
           return Collections.singletonList(bloomFilterRecord).iterator();
         }), Encoders.kryo(HoodieRecord.class));
     return new ExpressionIndexComputationMetadata(HoodieJavaRDD.of(bloomFilterRecords.javaRDD()));
+  }
+
+  private static void setBloomFilterProps(HoodieWriteConfig metadataWriteConfig, Map<String, String> indexOptions) {
+    BLOOM_FILTER_CONFIG_MAPPING.forEach((sourceKey, targetKey) -> {
+      if (indexOptions.containsKey(sourceKey)) {
+        metadataWriteConfig.getProps().setProperty(targetKey, indexOptions.get(sourceKey));
+      }
+    });
   }
 
   public static List<Row> readRecordsAsRows(StoragePath[] paths, SQLContext sqlContext,
@@ -327,8 +340,7 @@ public class SparkMetadataWriterUtils {
     Dataset<Row> rowDataset = sparkEngineContext.getSqlContext().createDataFrame(HoodieJavaRDD.getJavaRDD(rowData).rdd(), structType);
 
     // Apply expression index and generate the column to index
-    HoodieExpressionIndex<Column, Column> expressionIndex =
-        new HoodieSparkExpressionIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
+    HoodieExpressionIndex<Column, Column> expressionIndex = new HoodieSparkExpressionIndex(indexDefinition);
     Column indexedColumn = expressionIndex.apply(Collections.singletonList(rowDataset.col(columnToIndex)));
     rowDataset = rowDataset.withColumn(columnToIndex, indexedColumn);
 
@@ -336,7 +348,7 @@ public class SparkMetadataWriterUtils {
     if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
       return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, partitionRecordsFunctionOpt);
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-      return getExpressionIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, metadataWriteConfig, instantTime, indexDefinition.getIndexName());
+      return getExpressionIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, metadataWriteConfig, instantTime, indexDefinition);
     } else {
       throw new UnsupportedOperationException(indexDefinition.getIndexType() + " is not yet supported");
     }
@@ -387,9 +399,9 @@ public class SparkMetadataWriterUtils {
       HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
       Schema tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema)
           .orElseThrow(() -> new IllegalStateException(String.format("Expected writer schema in commit metadata %s", commitMetadata)));
-      List<Pair<String,Schema>> columnsToIndexSchemaMap = columnsToIndex.stream()
-          .map(columnToIndex -> Pair.of(columnToIndex, HoodieAvroUtils.getSchemaForField(tableSchema, columnToIndex).getValue().schema())).collect(
-          Collectors.toList());
+      List<Pair<String, Schema>> columnsToIndexSchemaMap = columnsToIndex.stream()
+          .map(columnToIndex -> Pair.of(columnToIndex, HoodieAvroUtils.getSchemaForField(tableSchema, columnToIndex).getValue().schema()))
+          .collect(Collectors.toList());
       // filter for supported types
       final List<String> validColumnsToIndex = columnsToIndexSchemaMap.stream()
           .filter(colSchemaPair -> HoodieTableMetadataUtil.SUPPORTED_META_FIELDS_PARTITION_STATS.contains(colSchemaPair.getKey())
@@ -403,7 +415,7 @@ public class SparkMetadataWriterUtils {
       // Step 2: Compute expression index records for the modified partitions
       LOG.debug("Indexing following columns for partition stats index: {}", validColumnsToIndex);
       List<String> partitionPaths = new ArrayList<>(commitMetadata.getWritePartitionPaths());
-      HoodieTableFileSystemView fileSystemView = getFileSystemView(dataMetaClient);
+      HoodieTableFileSystemView fileSystemView = getFileSystemViewForMetadataTable(dataMetaClient);
       int parallelism = Math.max(Math.min(partitionPaths.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
       return engineContext.parallelize(partitionPaths, parallelism).mapToPair(partitionName -> {
         checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");

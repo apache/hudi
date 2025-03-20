@@ -25,8 +25,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapIndexType;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -41,7 +39,6 @@ import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineLoaderV2;
-import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -53,6 +50,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -119,12 +117,11 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
     if (!instants.isEmpty()) {
       InstantFileNameGenerator instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
-      CommitMetadataSerDeV2 commitMetadataSerDeV2 = new CommitMetadataSerDeV2();
       CommitMetadataSerDeV1 commitMetadataSerDeV1 = new CommitMetadataSerDeV1();
       ActiveTimelineV1 activeTimelineV1 = new ActiveTimelineV1(metaClient);
       context.map(instants, instant -> {
         String originalFileName = instantFileNameGenerator.getFileName(instant);
-        return downgradeActiveTimelineInstant(instant, originalFileName, metaClient, commitMetadataSerDeV2, commitMetadataSerDeV1, activeTimelineV1);
+        return downgradeActiveTimelineInstant(instant, originalFileName, metaClient, commitMetadataSerDeV1, activeTimelineV1);
       }, instants.size());
     }
     try {
@@ -272,7 +269,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     }
   }
 
-  static boolean downgradeActiveTimelineInstant(HoodieInstant instant, String originalFileName, HoodieTableMetaClient metaClient, CommitMetadataSerDeV2 commitMetadataSerDeV2,
+  static boolean downgradeActiveTimelineInstant(HoodieInstant instant, String originalFileName, HoodieTableMetaClient metaClient,
                                                 CommitMetadataSerDeV1 commitMetadataSerDeV1, ActiveTimelineV1 activeTimelineV1) {
     String replacedFileName = originalFileName;
     boolean isCompleted = instant.isCompleted();
@@ -287,7 +284,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       replacedFileName = replacedFileName.replace(instant.getAction(), EIGHT_TO_SIX_TIMELINE_ACTION_MAP.get(instant.getAction()));
     }
     try {
-      return rewriteTimelineV2InstantFileToV1Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV2, commitMetadataSerDeV1, activeTimelineV1);
+      return rewriteTimelineV2InstantFileToV1Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV1, activeTimelineV1);
     } catch (IOException e) {
       LOG.error("Can not to complete the downgrade from version eight to version seven. The reason for failure is {}", e.getMessage());
       throw new HoodieException(e);
@@ -295,7 +292,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
   }
 
   static boolean rewriteTimelineV2InstantFileToV1Format(HoodieInstant instant, HoodieTableMetaClient metaClient, String originalFileName, String replacedFileName,
-                                                        CommitMetadataSerDeV2 commitMetadataSerDeV2, CommitMetadataSerDeV1 commitMetadataSerDeV1, ActiveTimelineV1 activeTimelineV1)
+                                                        CommitMetadataSerDeV1 commitMetadataSerDeV1, ActiveTimelineV1 activeTimelineV1)
       throws IOException {
     StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePathProvider().getTimelinePath(metaClient.getTableConfig(), metaClient.getBasePath()), originalFileName);
     long modificationTime = instant.isCompleted() ? convertCompletionTimeToEpoch(instant) : -1;
@@ -303,14 +300,14 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     boolean success = true;
     if (instant.getAction().equals(COMMIT_ACTION) || instant.getAction().equals(DELTA_COMMIT_ACTION)
         || ((instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) && instant.isCompleted())) {
-      Option<byte[]> data;
+      Option<HoodieInstantWriter> instantWriterOption;
       if (instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) {
-        data = commitMetadataSerDeV1.serialize(HoodieReplaceCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class));
+        instantWriterOption = commitMetadataSerDeV1.getInstantWriter(metaClient.getActiveTimeline().readReplaceCommitMetadata(instant));
       } else {
-        data = commitMetadataSerDeV1.serialize(commitMetadataSerDeV2.deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class));
+        instantWriterOption = commitMetadataSerDeV1.getInstantWriter(metaClient.getActiveTimeline().readCommitMetadata(instant));
       }
       String toPathStr = toPath.toUri().toString();
-      activeTimelineV1.createFileInMetaPath(toPathStr, data, true);
+      activeTimelineV1.createFileInMetaPath(toPathStr, instantWriterOption, true);
       /*
         When we downgrade the table from 1.0 to 0.x, it is important to set the modification
         timestamp of the 0.x completed instant to match the completion time of the

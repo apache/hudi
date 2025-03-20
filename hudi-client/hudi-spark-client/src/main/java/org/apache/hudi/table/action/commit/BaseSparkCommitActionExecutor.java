@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
@@ -44,6 +43,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
@@ -148,26 +148,33 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords) {
+    return this.execute(inputRecords, Option.empty());
+  }
+
+  @Override
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     // Cache the tagged records, so we don't end up computing both
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
-    if (inputRDD.getStorageLevel() == StorageLevel.NONE()) {
+    if (!config.isSourceRddPersisted() || inputRDD.getStorageLevel() == StorageLevel.NONE()) {
       HoodieJavaRDD.of(inputRDD).persist(config.getTaggedRecordStorageLevel(),
           context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     } else {
-      LOG.info("RDD PreppedRecords was persisted at: " + inputRDD.getStorageLevel());
+      LOG.info("RDD PreppedRecords was persisted at: {}", inputRDD.getStorageLevel());
     }
 
     // Handle records update with clustering
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
+    LOG.info("Num spark partitions for inputRecords before triggering workload profile {}", inputRecordsWithClusteringUpdate.getNumPartitions());
 
     context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
-    HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start(); // time taken from dedup -> tag location -> building workload profile
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
-    LOG.debug("Input workload profile :" + workloadProfile);
-    long sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.endTimer();
-    LOG.info("Source read and index timer " + sourceReadAndIndexDurationMs);
-
+    LOG.debug("Input workload profile :{}", workloadProfile);
+    Long sourceReadAndIndexDurationMs = null;
+    if (sourceReadAndIndexTimer.isPresent()) {
+      sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
+      LOG.info("Source read and index timer {}", sourceReadAndIndexDurationMs);
+    }
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
     saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
@@ -176,7 +183,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     updateIndexAndCommitIfNeeded(writeStatuses, result);
-    result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
+    if (sourceReadAndIndexTimer.isPresent()) {
+      result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
+    }
     return result;
   }
 

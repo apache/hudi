@@ -102,6 +102,9 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       boolean created = false;
       while (!created) {
         try {
+          if (storage.exists(logFile.getPath())) {
+            rollOver();
+          }
           // Block size does not matter as we will always manually auto-flush
           createNewFile();
           LOG.info("Created a new log file: {}", logFile);

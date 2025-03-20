@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -63,6 +63,7 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -122,7 +123,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
-    testWriteToHoodie(conf, "cow_write", 2, EXPECTED);
+    defaultWriteAndCheckExpected(conf, "cow_write", 2);
   }
 
   @Test
@@ -138,7 +139,7 @@ public class ITTestDataStreamWrite extends TestLogger {
       }
     });
 
-    testWriteToHoodie(transformer, "cow_write_with_transformer", EXPECTED_TRANSFORMER);
+    writeWithTransformerAndCheckExpected(transformer, "cow_write_with_transformer", EXPECTED_TRANSFORMER);
   }
 
   @Test
@@ -156,7 +157,7 @@ public class ITTestDataStreamWrite extends TestLogger {
 
     ChainedTransformer chainedTransformer = new ChainedTransformer(Arrays.asList(t1, t1));
 
-    testWriteToHoodie(chainedTransformer, "cow_write_with_chained_transformer", EXPECTED_CHAINED_TRANSFORMER);
+    writeWithTransformerAndCheckExpected(chainedTransformer, "cow_write_with_chained_transformer", EXPECTED_CHAINED_TRANSFORMER);
   }
 
   @ParameterizedTest
@@ -168,20 +169,12 @@ public class ITTestDataStreamWrite extends TestLogger {
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
 
-    testWriteToHoodie(conf, "mor_write_with_compact", 1, EXPECTED);
+    defaultWriteAndCheckExpected(conf, "mor_write_with_compact", 1);
   }
 
-  @Test
-  public void testWriteCopyOnWriteWithClustering() throws Exception {
-    testWriteCopyOnWriteWithClustering(false);
-  }
-
-  @Test
-  public void testWriteCopyOnWriteWithSortClustering() throws Exception {
-    testWriteCopyOnWriteWithClustering(true);
-  }
-
-  private void testWriteCopyOnWriteWithClustering(boolean sortClusteringEnabled) throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testWriteCopyOnWriteWithClustering(boolean sortClusteringEnabled) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
     conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
@@ -190,35 +183,62 @@ public class ITTestDataStreamWrite extends TestLogger {
       conf.setString(FlinkOptions.CLUSTERING_SORT_COLUMNS, "uuid");
     }
 
-    testWriteToHoodieWithCluster(conf, "cow_write_with_cluster", 1, EXPECTED);
+    writeWithClusterAndCheckExpected(conf, "cow_write_with_cluster", 1, EXPECTED);
   }
 
-  private void testWriteToHoodie(
+  @Disabled("HUDI-9196")
+  @ParameterizedTest
+  @ValueSource(strings = {"COPY_ON_WRITE", "MERGE_ON_READ"})
+  public void testStreamWriteWithIndexBootstrap(String tableType) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
+    conf.setString(FlinkOptions.TABLE_TYPE, tableType);
+
+    writeAndCheckExpected(
+        conf,
+        Option.empty(),
+        tableType + "_index_bootstrap",
+        2,
+        true,
+        EXPECTED);
+
+    // check that there is no exceptions during the same with enabled index bootstrap
+    conf.setString(FlinkOptions.INDEX_BOOTSTRAP_ENABLED.key(), "true");
+    writeAndCheckExpected(
+        conf,
+        Option.empty(),
+        tableType + "_index_bootstrap",
+        2,
+        true,
+        EXPECTED);
+  }
+
+  private void writeWithTransformerAndCheckExpected(
       Transformer transformer,
       String jobName,
       Map<String, List<String>> expected) throws Exception {
-    testWriteToHoodie(TestConfigurations.getDefaultConf(tempFile.toURI().toString()),
-        Option.of(transformer), jobName, 2, expected);
+    writeAndCheckExpected(
+        TestConfigurations.getDefaultConf(tempFile.toURI().toString()),
+        Option.of(transformer),
+        jobName,
+        2,
+        true,
+        expected);
   }
 
-  private void testWriteToHoodie(
+  private void defaultWriteAndCheckExpected(
       Configuration conf,
       String jobName,
-      int checkpoints,
-      Map<String, List<String>> expected) throws Exception {
-    testWriteToHoodie(conf, Option.empty(), jobName, checkpoints, expected);
+      int checkpoints) throws Exception {
+    writeAndCheckExpected(
+        conf,
+        Option.empty(),
+        jobName,
+        checkpoints,
+        true,
+        EXPECTED);
   }
 
-  private void testWriteToHoodie(
-      Configuration conf,
-      Option<Transformer> transformer,
-      String jobName,
-      int checkpoints,
-      Map<String, List<String>> expected) throws Exception {
-    testWriteToHoodie(conf, transformer, jobName, checkpoints, true, expected);
-  }
-
-  private void testWriteToHoodie(
+  private void writeAndCheckExpected(
       Configuration conf,
       Option<Transformer> transformer,
       String jobName,
@@ -273,8 +293,8 @@ public class ITTestDataStreamWrite extends TestLogger {
     }
 
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+    DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
     execEnv.addOperator(pipeline.getTransformation());
 
     if (isMor) {
@@ -285,7 +305,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     TestData.checkWrittenDataCOW(tempFile, expected);
   }
 
-  private void testWriteToHoodieWithCluster(
+  private void writeWithClusterAndCheckExpected(
       Configuration conf,
       String jobName,
       int checkpoints,
@@ -538,7 +558,7 @@ public class ITTestDataStreamWrite extends TestLogger {
   public void testColumnDroppingIsNotAllowed() throws Exception {
     // Write cols: uuid, name, age, ts, partition
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
-    testWriteToHoodie(conf, "initial write", 1, EXPECTED);
+    defaultWriteAndCheckExpected(conf, "initial write", 1);
 
     // Write cols: uuid, name, ts, partition
     conf.setBoolean(AVRO_SCHEMA_VALIDATE_ENABLE.key(), false);
@@ -553,7 +573,7 @@ public class ITTestDataStreamWrite extends TestLogger {
 
     // assert job failure with schema compatibility exception
     try {
-      testWriteToHoodie(conf, Option.empty(), "failing job", 1, false, Collections.emptyMap());
+      writeAndCheckExpected(conf, Option.empty(), "failing job", 1, false, Collections.emptyMap());
     } catch (JobExecutionException e) {
       Throwable actualException = e;
       while (actualException != null) {

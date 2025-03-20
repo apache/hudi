@@ -23,27 +23,29 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
+import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config._
 import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.util.JavaConversions
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.lit
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource}
+import org.junit.jupiter.params.provider.Arguments.arguments
 
-import java.util.Collections
+import java.util.{Collections, Properties}
 import java.util.concurrent.Executors
+
 import scala.collection.JavaConverters._
-import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration.Duration
 import scala.language.postfixOps
 import scala.util.Using
 
@@ -121,6 +123,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       .save(basePath)
     val deletedDf3 = calculateMergedDf(latestBatchDf, operation, true)
     deletedDf3.cache()
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     validateDataAndRecordIndices(hudiOpts, deletedDf3)
   }
 
@@ -226,9 +229,20 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testRLIWithDelete(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+  @CsvSource(value = Array(
+    "COPY_ON_WRITE,6", "COPY_ON_WRITE,8", "MERGE_ON_READ,6", "MERGE_ON_READ,8"
+  ))
+  def testRLIWithDelete(tableType: String, tableVersion: Int): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      HoodieTableConfig.VERSION.key() -> tableVersion.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
+    val props = new Properties()
+    for ((k, v) <- hudiOpts) {
+      props.put(k, v)
+    }
+    initMetaClient(HoodieTableType.valueOf(tableType), props)
+
     val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
@@ -413,6 +427,11 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
       HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2"
     )
+    val props = new Properties()
+    for ((k, v) <- hudiOpts) {
+      props.put(k, v)
+    }
+    initMetaClient(tableType, props)
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -433,6 +452,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
 
     assertTrue(getLatestClusteringInstant().get().requestedTime.compareTo(lastClusteringInstant.get().requestedTime) > 0)
     assertEquals(getLatestClusteringInstant(), metaClient.getActiveTimeline.lastInstant())
+    validateDataAndRecordIndices(hudiOpts)
     // We are validating rollback of a DT clustering instant here
     rollbackLastInstant(hudiOpts)
     validateDataAndRecordIndices(hudiOpts)
@@ -523,12 +543,15 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
     val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable
       .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
     val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
     val lastCompactionInstant = compactionTimeline
       .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-        metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant, compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+        compactionTimeline.readCommitMetadata(instant)
           .getOperationType == WriteOperationType.COMPACT))
       .lastInstant()
     val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.RECORD_INDEX.getPartitionPath)

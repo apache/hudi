@@ -19,20 +19,21 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, SparkDatasetMixin}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.{HoodieEngineContext, HoodieLocalEngineContext}
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
-import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, SparkDatasetMixin}
+
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -111,7 +112,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     val engineContext: HoodieEngineContext = new HoodieLocalEngineContext(storageConf)
     val metadataConfig: HoodieMetadataConfig = HoodieMetadataConfig.newBuilder.build
     val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
-      engineContext, FileSystemViewStorageConfig.newBuilder.build,
+      engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
       HoodieCommonConfig.newBuilder.build,
       (mc: HoodieTableMetaClient) => HoodieTableMetadata.create(engineContext, mc.getStorage, metadataConfig, basePath))
     val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)

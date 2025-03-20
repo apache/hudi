@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -79,8 +78,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<ValidationOpResult> validateCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant,
       int parallelism) throws IOException {
     HoodieCompactionPlan plan = getCompactionPlan(metaClient, compactionInstant);
-    HoodieTableFileSystemView fsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(getEngineContext(), metaClient, metaClient.getCommitsAndCompactionTimeline());
 
     if (plan.getOperations() != null) {
       List<CompactionOperation> ops = plan.getOperations().stream()
@@ -88,7 +86,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       context.setJobStatus(this.getClass().getSimpleName(), "Validate compaction operations: " + config.getTableName());
       return context.map(ops, op -> {
         try {
-          return validateCompactionOperation(metaClient, compactionInstant, op, Option.of(fsView));
+          return validateCompactionOperation(metaClient, compactionInstant, op, fsView);
         } catch (IOException e) {
           throw new HoodieIOException(e.getMessage(), e);
         }
@@ -166,8 +164,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       }
       // Overwrite compaction plan with updated info
       metaClient.getActiveTimeline().saveToCompactionRequested(
-          metaClient.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()),
-          TimelineMetadataUtils.serializeCompactionPlan(newPlan), true);
+          metaClient.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()), newPlan, true);
     }
     return new ArrayList<>();
   }
@@ -194,9 +191,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
    */
   private static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
-    return TimelineMetadataUtils.deserializeCompactionPlan(
-            metaClient.getActiveTimeline().readCompactionPlanAsBytes(
-                    metaClient.getInstantGenerator().getCompactionRequestedInstant(compactionInstant)).get());
+    return metaClient.getActiveTimeline().readCompactionPlan(
+        metaClient.getInstantGenerator().getCompactionRequestedInstant(compactionInstant));
   }
 
   /**
@@ -225,12 +221,10 @@ public class CompactionAdminClient extends BaseHoodieClient {
    * @param metaClient Hoodie Table Meta client
    * @param compactionInstant Compaction Instant
    * @param operation Compaction Operation
-   * @param fsViewOpt File System View
+   * @param fileSystemView File System View
    */
   private ValidationOpResult validateCompactionOperation(HoodieTableMetaClient metaClient, String compactionInstant,
-      CompactionOperation operation, Option<HoodieTableFileSystemView> fsViewOpt) throws IOException {
-    HoodieTableFileSystemView fileSystemView = fsViewOpt.isPresent() ? fsViewOpt.get()
-        : new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+      CompactionOperation operation,HoodieTableFileSystemView fileSystemView) throws IOException {
     Option<HoodieInstant> lastInstant = metaClient.getCommitsAndCompactionTimeline().lastInstant();
     try {
       if (lastInstant.isPresent()) {

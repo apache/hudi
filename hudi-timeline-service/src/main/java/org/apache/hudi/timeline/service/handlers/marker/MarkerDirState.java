@@ -378,6 +378,6 @@ public class MarkerDirState implements Serializable {
       closeQuietly(bufferedWriter);
       closeQuietly(outputStream);
     }
-    LOG.debug(markersFilePath.toString() + " written in " + timer.endTimer() + " ms");
+    LOG.debug(markersFilePath + " written in " + timer.endTimer() + " ms");
   }
 }

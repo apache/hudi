@@ -197,6 +197,10 @@
       <artifactId>kafka-clients</artifactId>
       <version>${kafka.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>connect-api</artifactId>
+    </dependency>
 
     <!-- Pulsar -->
     <dependency>
@@ -369,7 +373,6 @@
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>common-utils</artifactId>
-      <version>${confluent.version}</version>
     </dependency>
     <dependency>
       <groupId>io.confluent</groupId>
@@ -380,12 +383,18 @@
       <artifactId>kafka-protobuf-serializer</artifactId>
     </dependency>
     <dependency>
+      <groupId>com.kjetland</groupId>
+      <artifactId>mbknor-jackson-jsonschema_${scala.binary.version}</artifactId>
+    </dependency>
+    <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>kafka-json-schema-serializer</artifactId>
     </dependency>
+
     <dependency>
-      <groupId>com.kjetland</groupId>
-      <artifactId>mbknor-jackson-jsonschema_${scala.binary.version}</artifactId>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-streams-test-utils</artifactId>
+      <scope>test</scope>
     </dependency>
 
     <!-- Httpcomponents -->
@@ -434,6 +443,16 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-service</artifactId>
       <version>${hive.version}</version>
+    </dependency>
+
+    <!-- Kakfa .-->
+    <dependency>
+      <groupId>io.confluent</groupId>
+      <artifactId>kafka-protobuf-provider</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.confluent</groupId>
+      <artifactId>kafka-json-schema-provider</artifactId>
     </dependency>
 
     <!-- Hoodie - Test -->
@@ -507,7 +526,7 @@
       <artifactId>sqs</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
-    
+
     <!-- Hive - Test -->
     <dependency>
       <groupId>${hive.groupid}</groupId>

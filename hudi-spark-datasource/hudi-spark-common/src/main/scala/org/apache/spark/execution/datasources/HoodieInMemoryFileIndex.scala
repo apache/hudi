@@ -17,11 +17,12 @@
 
 package org.apache.spark.execution.datasources
 
+import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.storage.StoragePath
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path, PathFilter}
 import org.apache.hadoop.mapred.{FileInputFormat, JobConf}
-import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.storage.StoragePath
 import org.apache.spark.HoodieHadoopFSUtils
 import org.apache.spark.metrics.source.HiveCatalogMetrics
 import org.apache.spark.sql.SparkSession

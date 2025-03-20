@@ -17,9 +17,11 @@
 
 package org.apache.spark.sql.adapter
 
+import org.apache.hudi.Spark35HoodieFileScanRDD
+
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.Spark35HoodieFileScanRDD
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -147,5 +149,9 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
                                        options: Map[String, String],
                                        hadoopConf: Configuration): SparkParquetReader = {
     Spark35ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+  }
+
+  override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
+    jssc.sc.stop(exitCode)
   }
 }

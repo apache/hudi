@@ -54,7 +54,7 @@ public class SortOperator extends TableStreamOperator<RowData>
   private GeneratedNormalizedKeyComputer gComputer;
   private GeneratedRecordComparator gComparator;
 
-  private Configuration conf;
+  private final Configuration conf;
 
   private transient BinaryExternalSorter sorter;
   private transient StreamRecordCollector<RowData> collector;

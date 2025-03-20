@@ -137,7 +137,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
   }
 
   public int getBucketID(HoodieKey key) {
-    return BucketIdentifier.getBucketId(key, indexKeyFields, numBuckets);
+    return BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, numBuckets);
   }
 
   @Override

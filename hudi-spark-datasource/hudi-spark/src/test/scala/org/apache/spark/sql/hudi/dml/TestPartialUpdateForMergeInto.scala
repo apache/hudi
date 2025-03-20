@@ -35,6 +35,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata
 
 import org.apache.avro.Schema
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getMetaClientAndFileSystemView
 import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
@@ -94,7 +95,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -144,7 +145,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -205,7 +206,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -219,7 +220,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         StructField("id", IntegerType, nullable = true),
         StructField("name", StringType, nullable = true),
         StructField("price", DoubleType, nullable = true),
-        StructField("_ts", LongType, nullable = true),
+        StructField("_ts", IntegerType, nullable = true),
         StructField("description", StringType, nullable = true))
 
       spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
@@ -274,7 +275,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -288,7 +289,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         StructField("id", IntegerType, nullable = true),
         StructField("name", StringType, nullable = true),
         StructField("price", DoubleType, nullable = true),
-        StructField("_ts", LongType, nullable = true),
+        StructField("_ts", IntegerType, nullable = true),
         StructField("description", StringType, nullable = true))
       spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
         "(2, 'a2', 20, 1200, 'a2: desc2'), (3, 'a3', 30, 1250, 'a3: desc3')")
@@ -444,7 +445,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -528,20 +529,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
                        expectedNumLogFile: Int,
                        changedFields: Seq[Seq[String]],
                        isPartial: Boolean): Unit = {
-    val storageConf = HoodieTestUtils.getDefaultStorageConf
-    val metaClient: HoodieTableMetaClient =
-      HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
-    val metadataConfig = HoodieMetadataConfig.newBuilder.build
-    val engineContext = new HoodieLocalEngineContext(storageConf)
-    val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
-      engineContext, FileSystemViewStorageConfig.newBuilder.build,
-      HoodieCommonConfig.newBuilder.build,
-      (v1: HoodieTableMetaClient) => {
-        HoodieTableMetadata.create(
-          engineContext, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
-      }
-    )
-    val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
+    val (metaClient, fsView) = getMetaClientAndFileSystemView(basePath)
     val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("")
       .filter((fileSlice: FileSlice) => {
         HoodieTestUtils.getLogFileListFromFileSlice(fileSlice).size() == expectedNumLogFile

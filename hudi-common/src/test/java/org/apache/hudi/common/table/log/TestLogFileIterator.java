@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -104,7 +105,9 @@ public class TestLogFileIterator {
             new DefaultSizeEstimator(),
             new HoodieRecordSizeEstimator(HoodieTestDataGenerator.AVRO_SCHEMA),
             ExternalSpillableMap.DiskMapType.BITCASK,
-            false
+            new DefaultSerializer<>(),
+            false,
+            TestLogFileIterator.class.getSimpleName()
         );
 
     // 2) Put some records in the spillable map

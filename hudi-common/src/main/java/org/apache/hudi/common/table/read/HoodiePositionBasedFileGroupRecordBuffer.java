@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -118,6 +119,8 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
 
     Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
 
+    Schema schema = AvroSchemaCache.intern(schemaTransformerWithEvolvedSchema.getRight());
+
     // TODO: Return an iterator that can generate sequence number with the record.
     //       Then we can hide this logic into data block.
     try (ClosableIterator<T> recordIterator = dataBlock.getEngineRecordIterator(readerContext)) {
@@ -136,7 +139,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
         processNextDataRecord(
             evolvedNextRecord,
-            readerContext.generateMetadataForRecord(evolvedNextRecord, schemaTransformerWithEvolvedSchema.getRight()),
+            readerContext.generateMetadataForRecord(evolvedNextRecord, schema),
             recordPosition
         );
       }
@@ -275,13 +278,8 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     }
 
     // When the record key matches with one of the keys or key prefixes, can not skip.
-    if ((isFullKey && keys.contains(recordKey))
-        || (!isFullKey && keys.stream().anyMatch(recordKey::startsWith))) {
-      return false;
-    }
-
-    // Otherwise, this record is not needed.
-    return true;
+    return (!isFullKey || !keys.contains(recordKey))
+        && (isFullKey || keys.stream().noneMatch(recordKey::startsWith));
   }
 
   /**

@@ -147,6 +147,15 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "When true, bucketized bloom filtering is enabled. "
           + "This reduces skew seen in sort based bloom index lookup");
 
+  public static final ConfigProperty<String> BLOOM_INDEX_FILE_GROUP_ID_KEY_SORTING = ConfigProperty
+      .key("hoodie.bloom.index.fileid.key.sorting.enable")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Only applies if index type is BLOOM. "
+          + "When true, the global sorting based on the fileId and key is enabled during key lookup. "
+          + "This reduces skew in the key lookup in the bloom index.");
+
   public static final ConfigProperty<String> SIMPLE_INDEX_USE_CACHING = ConfigProperty
       .key("hoodie.simple.index.use.caching")
       .defaultValue("true")
@@ -524,7 +533,7 @@ public class HoodieIndexConfig extends HoodieConfig {
   @Deprecated
   public static final String DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH = SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE.defaultValue();
 
-  private EngineType engineType;
+  private final EngineType engineType;
 
   /**
    * Use Spark engine by default.
@@ -617,6 +626,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder bloomIndexBucketizedChecking(boolean bucketizedChecking) {
       hoodieIndexConfig.setValue(BLOOM_INDEX_BUCKETIZED_CHECKING, String.valueOf(bucketizedChecking));
+      return this;
+    }
+
+    public Builder enableBloomIndexFileGroupIdKeySorting(boolean fileGroupIdKeySorting) {
+      hoodieIndexConfig.setValue(BLOOM_INDEX_FILE_GROUP_ID_KEY_SORTING, String.valueOf(fileGroupIdKeySorting));
       return this;
     }
 

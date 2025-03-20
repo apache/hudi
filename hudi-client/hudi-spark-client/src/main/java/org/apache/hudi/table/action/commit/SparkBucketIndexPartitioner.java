@@ -116,26 +116,25 @@ public class SparkBucketIndexPartitioner<T> extends
   @Override
   public BucketInfo getBucketInfo(int bucketNumber) {
     String partitionPath = partitionPaths.get(bucketNumber / numBuckets);
-    String bucketId = BucketIdentifier.bucketIdStr(bucketNumber % numBuckets);
     // Insert overwrite always generates new bucket file id
     if (isOverwrite) {
       ValidationUtils.checkArgument(!isNonBlockingConcurrencyControl,
           "Insert overwrite is not supported with non-blocking concurrency control");
-      return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketId), partitionPath);
+      return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketNumber % numBuckets), partitionPath);
     }
     Option<String> fileIdOption = Option.fromJavaOptional(updatePartitionPathFileIds
         .getOrDefault(partitionPath, Collections.emptySet()).stream()
-        .filter(e -> e.startsWith(bucketId))
+        .filter(e -> e.startsWith(BucketIdentifier.bucketIdStr(bucketNumber % numBuckets)))
         .findFirst());
     if (fileIdOption.isPresent()) {
       return new BucketInfo(BucketType.UPDATE, fileIdOption.get(), partitionPath);
     } else {
       // Always write into log file instead of base file if using NB-CC
       if (isNonBlockingConcurrencyControl) {
-        String fileId = BucketIdentifier.newBucketFileIdForNBCC(bucketNumber);
+        String fileId = BucketIdentifier.newBucketFileIdForNBCC(bucketNumber % numBuckets);
         return new BucketInfo(BucketType.UPDATE, fileId, partitionPath);
       }
-      String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucketId);
+      String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucketNumber % numBuckets);
       return new BucketInfo(BucketType.INSERT, fileIdPrefix, partitionPath);
     }
   }
@@ -152,7 +151,7 @@ public class SparkBucketIndexPartitioner<T> extends
     Option<HoodieRecordLocation> location = keyLocation._2;
     int bucketId = location.isPresent()
         ? BucketIdentifier.bucketIdFromFileId(location.get().getFileId())
-        : BucketIdentifier.getBucketId(keyLocation._1, indexKeyField, numBuckets);
+        : BucketIdentifier.getBucketId(keyLocation._1.getRecordKey(), indexKeyField, numBuckets);
     return partitionPathOffset.get(partitionPath) + bucketId;
   }
 }

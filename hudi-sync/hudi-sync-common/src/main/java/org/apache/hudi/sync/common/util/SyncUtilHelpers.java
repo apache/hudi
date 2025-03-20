@@ -38,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
@@ -119,6 +120,7 @@ public class SyncUtilHelpers {
                                                        Option<HoodieTableMetaClient> metaClient) {
     TypedProperties properties = new TypedProperties();
     properties.putAll(props);
+    properties.put(BASE_PATH.key(), targetBasePath);
     properties.put(META_SYNC_BASE_PATH.key(), targetBasePath);
     properties.put(META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
     if (properties.containsKey(META_SYNC_TABLE_NAME.key())) {

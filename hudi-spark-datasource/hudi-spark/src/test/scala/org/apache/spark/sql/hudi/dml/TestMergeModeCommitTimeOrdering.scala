@@ -28,12 +28,11 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConf
 
 class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
 
-  // TODO(HUDI-8938): add "mor,true,true,6" after the fix
   Seq(
     "cow,8,false,false", "cow,8,false,true", "cow,8,true,false",
     "cow,6,true,false", "cow,6,true,true",
     "mor,8,false,false", "mor,8,false,true", "mor,8,true,false",
-    "mor,6,true,false").foreach { args =>
+    "mor,6,true,true").foreach { args =>
     val argList = args.split(',')
     val tableType = argList(0)
     val tableVersion = argList(1)
@@ -213,6 +212,9 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
 
             // Delete record
             spark.sql(s"delete from $tableName where id = 1")
+            if (tableType == "mor") {
+              HoodieSparkSqlTestBase.validateDeleteLogBlockPrecombineNullOrZero(tmp.getCanonicalPath)
+            }
             validateTableConfig(
               storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
             // Verify deletion

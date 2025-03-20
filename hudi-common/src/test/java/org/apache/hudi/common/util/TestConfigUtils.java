@@ -20,7 +20,12 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -88,6 +93,18 @@ public class TestConfigUtils {
         " k.1.1.2 =   v1%s k.2.1.2 = v2 %sk.3.1.2 = v3", sepString, sepString);
     outMap = toMap(srcKv, separator);
     assertEquals(expectedMap, outMap);
+  }
+
+  @Test
+  void testGetRawValueWithAltKeys() {
+    TypedProperties properties = new TypedProperties();
+    DiskMapType diskMapType = ConfigUtils.getRawValueWithAltKeys(properties, HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE, true);
+    Assertions.assertEquals(DiskMapType.BITCASK, diskMapType);
+    properties.put(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), DiskMapType.ROCKS_DB);
+    diskMapType = ConfigUtils.getRawValueWithAltKeys(properties, HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE, true);
+    Assertions.assertEquals(DiskMapType.ROCKS_DB, diskMapType);
+    properties.remove(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key());
+    Assertions.assertThrows(IllegalArgumentException.class, () -> ConfigUtils.getRawValueWithAltKeys(properties, HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE, false));
   }
 
   @ParameterizedTest

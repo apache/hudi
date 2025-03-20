@@ -19,11 +19,12 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
+
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -435,5 +436,56 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         )
       }
     })
+  }
+
+  test("Test Update Partitioned Table Without Primary Key") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  preCombineField = 'price'
+             |)
+             |partitioned by (ts)
+             |""".stripMargin)
+
+        // test with optimized sql writes enabled.
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
+
+        // insert data to table
+        spark.sql(
+          s"""
+             |insert into $tableName
+             |values
+             |  (1, 'a1', cast(10.0 as double), 1000),
+             |  (2, 'a2', cast(20.0 as double), 1000),
+             |  (3, 'a2', cast(30.0 as double), 1000)
+             |""".stripMargin)
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 20.0, 1000),
+          Seq(3, "a2", 30.0, 1000)
+        )
+
+        // Update the row with id = 2 by setting price to 25.0
+        spark.sql(s"update $tableName set price = cast(25.0 as double) where id = 2")
+
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 25.0, 1000),
+          Seq(3, "a2", 30.0, 1000)
+        )
+      }
+    }
   }
 }

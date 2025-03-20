@@ -69,8 +69,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
-import scala.Tuple2;
-
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
@@ -194,7 +192,7 @@ public class HDFSParquetImporterUtils implements Serializable {
             job.getConfiguration())
         // To reduce large number of tasks.
         .coalesce(16 * this.parallelism).map(entry -> {
-          GenericRecord genericRecord = ((Tuple2<Void, GenericRecord>) entry)._2();
+          GenericRecord genericRecord = ((scala.Tuple2<Void, GenericRecord>) entry)._2();
           Object partitionField = genericRecord.get(this.partitionKey);
           if (partitionField == null) {
             throw new HoodieIOException("partition key is missing. :" + this.partitionKey);

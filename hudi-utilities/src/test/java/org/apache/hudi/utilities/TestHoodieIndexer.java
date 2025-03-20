@@ -33,7 +33,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -65,7 +64,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.reload;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS;
 import static org.apache.hudi.config.HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
@@ -292,9 +291,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieInstant indexingInstant = metaClient.getActiveTimeline()
         .filter(i -> HoodieTimeline.INDEXING_ACTION.equals(i.getAction()))
         .getInstants().get(0);
-    HoodieIndexPlan indexPlan = TimelineMetadataUtils.deserializeIndexPlan(
-        metaClient.getActiveTimeline().readIndexPlanAsBytes(indexingInstant).get());
-    String indexUptoInstantTime = indexPlan.getIndexPartitionInfos().get(0).getIndexUptoInstant();
+    HoodieIndexPlan indexPlan = metaClient.getActiveTimeline().readIndexPlan(indexingInstant);
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
         context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
@@ -335,8 +332,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertEquals(1, metadataMetaClient.getActiveTimeline().getRollbackTimeline().countInstants());
     HoodieInstant rollbackInstant = metadataMetaClient.getActiveTimeline()
         .getRollbackTimeline().firstInstant().get();
-    HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-        metadataMetaClient.getActiveTimeline().readRollbackInfoAsBytes(rollbackInstant).get());
+    HoodieRollbackMetadata rollbackMetadata =
+        metadataMetaClient.getActiveTimeline().readRollbackMetadata(rollbackInstant);
     assertEquals(mdtCommitTime, rollbackMetadata.getInstantsRollback()
         .stream().findFirst().get().getCommitTime());
   }
@@ -435,7 +432,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
-            metadataMetaClient, getFileSystemView(metadataMetaClient), COLUMN_STATS.getPartitionPath());
+            metadataMetaClient, getFileSystemViewForMetadataTable(metadataMetaClient), COLUMN_STATS.getPartitionPath());
     assertEquals(partitionFileSlices.size(), colStatsFileGroupCount);
   }
 
@@ -487,7 +484,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metaClient.getMetaPath() + "/metadata").build();
     List<FileSlice> partitionFileSlices =
         HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
-            metadataMetaClient, getFileSystemView(metadataMetaClient), COLUMN_STATS.getPartitionPath());
+            metadataMetaClient, getFileSystemViewForMetadataTable(metadataMetaClient), COLUMN_STATS.getPartitionPath());
     assertEquals(partitionFileSlices.size(), HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.defaultValue());
   }
 

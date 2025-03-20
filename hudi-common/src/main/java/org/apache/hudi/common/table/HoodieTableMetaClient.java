@@ -59,6 +59,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -107,6 +108,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableMetaClient.class);
+  public static final String METADATA_STR = "metadata";
   public static final String METAFOLDER_NAME = ".hoodie";
   public static final String TIMELINEFOLDER_NAME = "timeline";
   public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".temp";
@@ -114,7 +116,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + ".bootstrap";
   public static final String SAMPLE_WRITES_FOLDER_PATH = AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + ".sample_writes";
   public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".heartbeat";
-  public static final String METADATA_TABLE_FOLDER_PATH = METAFOLDER_NAME + StoragePath.SEPARATOR + "metadata";
+  public static final String METADATA_TABLE_FOLDER_PATH = METAFOLDER_NAME + StoragePath.SEPARATOR + METADATA_STR;
   public static final String HASHING_METADATA_FOLDER_NAME =
       ".bucket_index" + StoragePath.SEPARATOR + "consistent_hashing_metadata";
   public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH
@@ -240,8 +242,10 @@ public class HoodieTableMetaClient implements Serializable {
     }
     if (updateIndexDefn) {
       try {
-        FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
-      } catch (IOException e) {
+        // TODO[HUDI-9094]: should not write byte array directly
+        FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath),
+            Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadataOpt.get().toJson()))));
+      }  catch (IOException e) {
         throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
       }
     }
@@ -258,8 +262,10 @@ public class HoodieTableMetaClient implements Serializable {
     indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
     String indexMetaPath = getIndexDefinitionPath();
     try {
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
-    } catch (IOException e) {
+      // TODO[HUDI-9094]: should not write byte array directly
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath),
+          Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadataOpt.get().toJson()))));
+    }  catch (IOException e) {
       throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
     }
   }
@@ -286,16 +292,6 @@ public class HoodieTableMetaClient implements Serializable {
       }
     }
     return Option.empty();
-  }
-
-  public void updateIndexMetadata(HoodieIndexMetadata newExpressionIndexMetadata, String indexMetaPath) {
-    this.indexMetadataOpt = Option.of(newExpressionIndexMetadata);
-    try {
-      // update the index metadata file as well
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
-    }
   }
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
@@ -804,12 +800,10 @@ public class HoodieTableMetaClient implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieTableMetaClient{");
-    sb.append("basePath='").append(basePath).append('\'');
-    sb.append(", metaPath='").append(metaPath).append('\'');
-    sb.append(", tableType=").append(tableType);
-    sb.append('}');
-    return sb.toString();
+    return "HoodieTableMetaClient{" + "basePath='" + basePath + '\''
+        + ", metaPath='" + metaPath + '\''
+        + ", tableType=" + tableType
+        + '}';
   }
 
   public void initializeBootstrapDirsIfNotExists() throws IOException {
@@ -1024,7 +1018,7 @@ public class HoodieTableMetaClient implements Serializable {
      * Persist the configs that is written at the first time, and should not be changed.
      * Like KeyGenerator's configs.
      */
-    private Properties others = new Properties();
+    private final Properties others = new Properties();
 
     TableBuilder() {
     }
@@ -1321,6 +1315,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)) {
         setRecordKeyFields(hoodieConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.TIMELINE_TIMEZONE)) {
+        setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)));
       }
       if (hoodieConfig.contains(HoodieTableConfig.CDC_ENABLED)) {
         setCDCEnabled(hoodieConfig.getBoolean(HoodieTableConfig.CDC_ENABLED));

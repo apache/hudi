@@ -166,11 +166,7 @@ public class Predicates {
         if (right != null && !(Boolean) right) {
           return false;
         } else {
-          if (left != null && right != null) {
-            return true;
-          } else {
-            return false;
-          }
+          return left != null && right != null;
         }
       }
     }

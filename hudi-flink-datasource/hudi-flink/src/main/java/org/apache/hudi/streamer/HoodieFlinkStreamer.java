@@ -18,9 +18,9 @@
 
 package org.apache.hudi.streamer;
 
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
@@ -115,8 +115,8 @@ public class HoodieFlinkStreamer {
         Pipelines.dummySink(pipeline);
       }
     } else {
-      DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
-      pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
+      pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         Pipelines.compact(conf, pipeline);
       } else {

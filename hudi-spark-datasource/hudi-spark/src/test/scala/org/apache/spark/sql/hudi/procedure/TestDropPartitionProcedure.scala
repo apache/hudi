@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import scala.collection.JavaConverters._
@@ -60,8 +60,7 @@ class TestDropPartitionProcedure extends HoodieSparkProcedureTestBase {
         .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
         .get()
 
-      val partitions = HoodieReplaceCommitMetadata
-        .fromBytes(metaClient.getActiveTimeline.getInstantDetails(replaceCommitInstant).get(), classOf[HoodieReplaceCommitMetadata])
+      val partitions = metaClient.getActiveTimeline.readReplaceCommitMetadata(replaceCommitInstant)
         .getPartitionToReplaceFileIds
         .keySet()
 
@@ -109,8 +108,7 @@ class TestDropPartitionProcedure extends HoodieSparkProcedureTestBase {
         .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
         .get()
 
-      val partitions = HoodieReplaceCommitMetadata
-        .fromBytes(metaClient.getActiveTimeline.getInstantDetails(replaceCommitInstant).get(), classOf[HoodieReplaceCommitMetadata])
+      val partitions = metaClient.getActiveTimeline.readReplaceCommitMetadata(replaceCommitInstant)
         .getPartitionToReplaceFileIds
         .keySet()
 
@@ -157,8 +155,7 @@ class TestDropPartitionProcedure extends HoodieSparkProcedureTestBase {
         .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
         .get()
 
-      val partitions = HoodieReplaceCommitMetadata
-        .fromBytes(metaClient.getActiveTimeline.getInstantDetails(replaceCommitInstant).get(), classOf[HoodieReplaceCommitMetadata])
+      val partitions = metaClient.getActiveTimeline.readReplaceCommitMetadata(replaceCommitInstant)
         .getPartitionToReplaceFileIds
         .keySet()
 
@@ -206,8 +203,7 @@ class TestDropPartitionProcedure extends HoodieSparkProcedureTestBase {
         .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
         .get()
 
-      val partitions = HoodieReplaceCommitMetadata
-        .fromBytes(metaClient.getActiveTimeline.getInstantDetails(replaceCommitInstant).get(), classOf[HoodieReplaceCommitMetadata])
+      val partitions = metaClient.getActiveTimeline.readReplaceCommitMetadata(replaceCommitInstant)
         .getPartitionToReplaceFileIds
         .keySet()
 

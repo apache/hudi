@@ -62,6 +62,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -93,12 +94,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testCOWToMORConvertedTableRollback(boolean rollbackUsingMarkers) throws Exception {
+  @CsvSource({"true,6", "true,8", "false,6", "false,8"})
+  void testCOWToMORConvertedTableRollback(boolean rollbackUsingMarkers, int tableVersion) throws Exception {
     // Set TableType to COW
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE);
+    Properties properties = new Properties();
+    properties.put(HoodieTableConfig.VERSION.key(), String.valueOf(tableVersion));
+    properties.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(tableVersion));
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE, properties);
 
     HoodieWriteConfig cfg = getConfig(false, rollbackUsingMarkers);
+    cfg.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
+    cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
       HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
@@ -153,14 +159,16 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testRollbackWithDeltaAndCompactionCommit(boolean rollbackUsingMarkers) throws Exception {
+  @CsvSource(value = {"true,6", "false,6", "true,8", "false,8"})
+  void testRollbackWithDeltaAndCompactionCommit(boolean rollbackUsingMarkers, int tableVersion) throws Exception {
     // NOTE: First writer will have Metadata table DISABLED
     HoodieWriteConfig.Builder cfgBuilder =
         getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
 
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
+    cfg.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
+    cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
 
     Properties properties = CollectionUtils.copy(cfg.getProps());
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
@@ -207,13 +215,16 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       assertTrue(dataFilesToRead.findAny().isPresent(),
           "should list the base files we wrote in the delta commit");
 
+      HoodieWriteConfig secondCfg = getHoodieWriteConfigWithSmallFileHandlingOff(true);
+      secondCfg.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
+      secondCfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
       /*
        * Write 2 (inserts + updates - testing failed delta commit)
        */
       final String commitTime1 = "000000002";
       // WriteClient with custom config (disable small file handling)
       // NOTE: Second writer will have Metadata table ENABLED
-      try (SparkRDDWriteClient secondClient = getHoodieWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff(true));) {
+      try (SparkRDDWriteClient secondClient = getHoodieWriteClient(secondCfg);) {
         secondClient.startCommitWithTime(commitTime1);
 
         List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
@@ -254,7 +265,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
        * Write 3 (inserts + updates - testing successful delta commit)
        */
       final String commitTime2 = "000000003";
-      try (SparkRDDWriteClient thirdClient = getHoodieWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff(true));) {
+      try (SparkRDDWriteClient thirdClient = getHoodieWriteClient(secondCfg);) {
         thirdClient.startCommitWithTime(commitTime2);
 
         List<HoodieRecord> copyOfRecords = new ArrayList<>(records);

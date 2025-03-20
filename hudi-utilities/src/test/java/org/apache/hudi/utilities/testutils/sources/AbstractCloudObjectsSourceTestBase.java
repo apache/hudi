@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.testutils.sources;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -79,7 +80,7 @@ public abstract class AbstractCloudObjectsSourceTestBase extends UtilitiesTestBa
    *
    * @return A {@link Source} using DFS as the file system.
    */
-  protected abstract Source prepareCloudObjectSource();
+  protected abstract Source prepareCloudObjectSource(TypedProperties props);
 
   /**
    * Writes test data, i.e., a {@link List} of {@link HoodieRecord}, to a file on DFS.

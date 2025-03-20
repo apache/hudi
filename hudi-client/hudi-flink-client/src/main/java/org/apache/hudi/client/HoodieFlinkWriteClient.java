@@ -300,12 +300,10 @@ public class HoodieFlinkWriteClient<T> extends
 
   /**
    * Refresh the last transaction metadata,
-   * should be called before the Driver starts a new transaction.
+   * should be called before the Driver starts a new transaction with a reloaded metaclient.
    */
   public void preTxn(WriteOperationType operationType, HoodieTableMetaClient metaClient) {
     if (txnManager.isLockRequired() && config.needResolveWriteConflict(operationType)) {
-      // refresh the meta client which is reused
-      metaClient.reloadActiveTimeline();
       this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
       this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     }
@@ -462,7 +460,7 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   public HoodieFlinkTable<T> getHoodieTable() {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
+    return HoodieFlinkTable.create(config, context);
   }
 
   public Map<String, List<String>> getPartitionToReplacedFileIds(

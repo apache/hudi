@@ -19,6 +19,7 @@
 package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, WriteBuilder}

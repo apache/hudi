@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
@@ -52,7 +53,7 @@ public class HoodieCleaner {
   /**
    * Bag of properties with source, hoodie client, key generator etc.
    */
-  private TypedProperties props;
+  private final TypedProperties props;
 
   public HoodieCleaner(Config cfg, JavaSparkContext jssc) {
     this(cfg, jssc, UtilHelpers.buildProperties(jssc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs));
@@ -110,12 +111,14 @@ public class HoodieCleaner {
     String dirName = new Path(cfg.basePath).getName();
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster);
 
+    int exitCode = 0;
     try {
       new HoodieCleaner(cfg, jssc).run();
     } catch (Throwable throwable) {
+      exitCode = 1;
       throw new HoodieException("Failed to run cleaning for " + cfg.basePath, throwable);
     } finally {
-      jssc.stop();
+      SparkAdapterSupport$.MODULE$.sparkAdapter().stopSparkContext(jssc, exitCode);
     }
 
     LOG.info("Cleaner ran successfully");

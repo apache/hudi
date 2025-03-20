@@ -45,7 +45,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -184,6 +183,16 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     @Override
     public Option<String> getProperty(EngineProperty prop) {
       return Option.empty();
+    }
+
+    @Override
+    public Supplier<Integer> getTaskAttemptNumberSupplier() {
+      return () -> -1;
+    }
+
+    @Override
+    public Supplier<Integer> getStageAttemptNumberSupplier() {
+      return () -> -1;
     }
   }
 
@@ -431,7 +440,9 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       // Metadata table should automatically compact and clean
       // versions are +1 as autoClean / compaction happens end of commits
       int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
-      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
+      HoodieTableMetadata fileBasedTableMetadata = new FileSystemBackedTableMetadata(engineContext, metadataMetaClient.getTableConfig(), metadataMetaClient.getStorage(),
+          metadataMetaClient.getBasePath().toString());
+      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(fileBasedTableMetadata, metadataMetaClient, metadataMetaClient.getActiveTimeline());
       metadataTablePartitions.forEach(partition -> {
         List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
         assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).filter(Objects::nonNull).count() > 0, "Should have a single latest base file");
@@ -946,10 +957,8 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   private static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
                                                                     List<HoodieInstant> commitsToReturn) throws IOException {
     HashMap<String, String> fileIdToFullPath = new HashMap<>();
-    TimelineLayout layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion());
     for (HoodieInstant commit : commitsToReturn) {
-      HoodieCommitMetadata metadata =
-          layout.getCommitMetadataSerDe().deserialize(commit, commitTimeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = commitTimeline.readCommitMetadata(commit);
       fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new StoragePath(basePath)));
     }
     return fileIdToFullPath;

@@ -28,6 +28,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.index.bucket.BucketIdentifier
 import org.apache.hudi.keygen.KeyGenerator
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions
@@ -36,7 +37,7 @@ import org.apache.spark.sql.types.{DoubleType, FloatType}
 import org.apache.spark.util.collection.BitSet
 import org.slf4j.LoggerFactory
 
-import scala.collection.{JavaConverters, mutable}
+import scala.collection.{mutable, JavaConverters}
 
 class BucketIndexSupport(spark: SparkSession,
                          metadataConfig: HoodieMetadataConfig,
@@ -135,7 +136,7 @@ class BucketIndexSupport(spark: SparkSession,
       val record = new GenericData.Record(avroSchema)
       hashValuePairs.foreach(p => record.put(p.getKey, p.getValue))
       val hoodieKey = keyGenerator.getKey(record)
-      matchedBuckets.set(BucketIdentifier.getBucketId(hoodieKey, indexBucketHashFieldsOpt.get, numBuckets))
+      matchedBuckets.set(BucketIdentifier.getBucketId(hoodieKey.getRecordKey, indexBucketHashFieldsOpt.get, numBuckets))
     }
     matchedBuckets
   }
@@ -155,7 +156,7 @@ class BucketIndexSupport(spark: SparkSession,
       val record = new GenericData.Record(avroSchema)
       record.put(attr.name, v)
       val hoodieKey = keyGenerator.getKey(record)
-      BucketIdentifier.getBucketId(hoodieKey, indexBucketHashFieldsOpt.get, numBuckets)
+      BucketIdentifier.getBucketId(hoodieKey.getRecordKey, indexBucketHashFieldsOpt.get, numBuckets)
     }
 
     def getBucketSetFromIterable(attr: Attribute, iter: Iterable[Any]): BitSet = {

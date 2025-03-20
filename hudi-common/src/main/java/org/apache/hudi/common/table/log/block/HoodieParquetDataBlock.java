@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -93,8 +94,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     paramsMap.put(PARQUET_COMPRESSION_CODEC_NAME.key(), compressionCodecName.get());
     paramsMap.put(PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(expectedCompressionRatio.get()));
     paramsMap.put(PARQUET_DICTIONARY_ENABLED.key(), String.valueOf(useDictionaryEncoding.get()));
-    Schema writerSchema = new Schema.Parser().parse(
-        super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
+    Schema writerSchema = AvroSchemaCache.intern(new Schema.Parser().parse(
+        super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA)));
 
     return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(PARQUET)
         .serializeRecordsToLogBlock(
@@ -156,6 +157,24 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
   @Override
   protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
+    throw new UnsupportedOperationException("Should not be invoked");
+  }
+
+  /**
+   * Streaming deserialization of records.
+   *
+   * @param inputStream The input stream from which to read the records.
+   * @param contentLocation The location within the input stream where the content starts.
+   * @param bufferSize The size of the buffer to use for reading the records.
+   * @return A ClosableIterator over HoodieRecord<T>.
+   * @throws IOException If there is an error reading or deserializing the records.
+   */
+  protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(
+          SeekableDataInputStream inputStream,
+          HoodieLogBlockContentLocation contentLocation,
+          HoodieRecordType type,
+          int bufferSize
+  ) throws IOException {
     throw new UnsupportedOperationException("Should not be invoked");
   }
 

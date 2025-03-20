@@ -304,12 +304,12 @@ public abstract class HoodieStorage implements Closeable {
    * an existence check of the file is recommended.
    *
    * @param path    File path.
-   * @param content Content to be stored.
+   * @param contentWriter handles writing the content to the outputstream
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public final void createImmutableFileInPath(StoragePath path,
-                                              Option<byte[]> content) throws HoodieIOException {
-    createImmutableFileInPath(path, content, needCreateTempFile());
+                                              Option<HoodieInstantWriter> contentWriter) throws HoodieIOException {
+    createImmutableFileInPath(path, contentWriter, needCreateTempFile());
   }
 
   /**
@@ -322,31 +322,31 @@ public abstract class HoodieStorage implements Closeable {
    * an existence check of the file is recommended.
    *
    * @param path    File path.
-   * @param content Content to be stored.
+   * @param contentWriter handles writing the content to the outputstream
    * @param needTempFile Whether to create auxiliary temp file.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public final void createImmutableFileInPath(StoragePath path,
-                                              Option<byte[]> content,
+                                              Option<HoodieInstantWriter> contentWriter,
                                               boolean needTempFile) throws HoodieIOException {
     OutputStream fsout = null;
     StoragePath tmpPath = null;
 
     try {
-      if (!content.isPresent()) {
+      if (!contentWriter.isPresent()) {
         fsout = create(path, false);
       }
 
-      if (content.isPresent() && needTempFile) {
+      if (contentWriter.isPresent() && needTempFile) {
         StoragePath parent = path.getParent();
         tmpPath = new StoragePath(parent, path.getName() + "." + UUID.randomUUID());
         fsout = create(tmpPath, false);
-        fsout.write(content.get());
+        contentWriter.get().writeToStream(fsout);
       }
 
-      if (content.isPresent() && !needTempFile) {
+      if (contentWriter.isPresent() && !needTempFile) {
         fsout = create(path, false);
-        fsout.write(content.get());
+        contentWriter.get().writeToStream(fsout);
       }
     } catch (IOException e) {
       String errorMsg = "Failed to create file " + (tmpPath != null ? tmpPath : path);

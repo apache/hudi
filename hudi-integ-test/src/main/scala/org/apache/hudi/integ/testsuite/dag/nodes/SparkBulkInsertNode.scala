@@ -18,10 +18,8 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes
 
-import org.apache.hudi.client.WriteStatus
-import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.spark.rdd.RDD
+import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 
 /**
  * Spark datasource based bulk insert node

@@ -17,13 +17,14 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
 import org.apache.hudi.HoodieSparkUtils.injectSQLConf
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
@@ -48,6 +49,7 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.util.stream.Collectors
 import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.collection.mutable
 
@@ -148,8 +150,14 @@ object HoodieDatasetBulkInsertHelper
                  table: HoodieTable[_, _, _, _],
                  writeConfig: HoodieWriteConfig,
                  arePartitionRecordsSorted: Boolean,
-                 shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
-    val schema = dataset.schema
+                 shouldPreserveHoodieMetadata: Boolean,
+                 operation: WriteOperationType): HoodieData[WriteStatus] = {
+    val schema = operation match {
+      case WriteOperationType.CLUSTER =>
+        alignNotNullFields(dataset.schema, new Schema.Parser().parse(writeConfig.getSchema))
+      case _ =>
+        dataset.schema
+    }
     HoodieJavaRDD.of(
       injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
         val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier
@@ -197,6 +205,24 @@ object HoodieDatasetBulkInsertHelper
 
         writer.getWriteStatuses.asScala.iterator
       }), SQLConf.get).toJavaRDD())
+  }
+
+  private def alignNotNullFields(sourceSchema: StructType, avroSchema: Schema): StructType = {
+    val notNullFieldNames = avroSchema.getFields.asScala
+      .filter(f => !f.schema.isNullable)
+      .map(f => f.name)
+    if (notNullFieldNames.isEmpty) {
+      return sourceSchema
+    }
+
+    val copiedFields = sourceSchema.fields.map(field => {
+      if (notNullFieldNames.contains(field.name)) {
+        field.copy(nullable = false)
+      } else {
+        field.copy()
+      }
+    }).toSeq
+    StructType(copiedFields)
   }
 
   private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean, targetParallelism: Int): RDD[InternalRow] = {
