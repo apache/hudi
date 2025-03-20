@@ -283,8 +283,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       HoodieWriteMetadata compactionWriteMetadata = client.compact(compactionInstantOpt.get());
       HoodieCommitMetadata compactionCommitMetadata = (HoodieCommitMetadata) compactionWriteMetadata.getCommitMetadata().get();
       try (
-      HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true);
-      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata, metaClient, metaClient.getActiveTimeline());
+          HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true);
+          HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata, metaClient, metaClient.getActiveTimeline());
       ) {
         // no RLI records should be generated for compaction operation.
         assertTrue(convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
