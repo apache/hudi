@@ -123,6 +123,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       .save(basePath)
     val deletedDf3 = calculateMergedDf(latestBatchDf, operation, true)
     deletedDf3.cache()
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     validateDataAndRecordIndices(hudiOpts, deletedDf3)
   }
 
@@ -419,14 +420,10 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array(
-    "COPY_ON_WRITE,6", "COPY_ON_WRITE,8", "MERGE_ON_READ,6", "MERGE_ON_READ,8"
-  ))
-  def testRLIWithDTClustering(tableType: String, tableVersion: Int): Unit = {
+  @EnumSource(classOf[HoodieTableType])
+  def testRLIWithDTClustering(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString,
-      HoodieTableConfig.VERSION.key() -> tableVersion.toString,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
       HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2"
     )
@@ -434,7 +431,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     for ((k, v) <- hudiOpts) {
       props.put(k, v)
     }
-    initMetaClient(HoodieTableType.valueOf(tableType), props)
+    initMetaClient(tableType, props)
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -455,6 +452,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
 
     assertTrue(getLatestClusteringInstant().get().requestedTime.compareTo(lastClusteringInstant.get().requestedTime) > 0)
     assertEquals(getLatestClusteringInstant(), metaClient.getActiveTimeline.lastInstant())
+    validateDataAndRecordIndices(hudiOpts)
     // We are validating rollback of a DT clustering instant here
     rollbackLastInstant(hudiOpts)
     validateDataAndRecordIndices(hudiOpts)
@@ -542,6 +540,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)

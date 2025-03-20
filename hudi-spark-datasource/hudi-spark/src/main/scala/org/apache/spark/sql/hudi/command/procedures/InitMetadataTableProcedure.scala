@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.util.HoodieTimer
-import org.apache.hudi.metadata.{HoodieTableMetadata, SparkHoodieBackedTableMetadataWriter}
+import org.apache.hudi.metadata.{HoodieTableMetadata, SparkMetadataWriterFactory}
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.internal.Logging
@@ -64,7 +64,7 @@ class InitMetadataTableProcedure extends BaseProcedure with ProcedureBuilder wit
     val timer = HoodieTimer.start
     if (!readOnly) {
       val writeConfig = getWriteConfig(basePath)
-      SparkHoodieBackedTableMetadataWriter.create(metaClient.getStorageConf, writeConfig, new HoodieSparkEngineContext(jsc))
+      SparkMetadataWriterFactory.create(metaClient.getStorageConf, writeConfig, new HoodieSparkEngineContext(jsc), metaClient.getTableConfig)
     }
 
     val action = if (readOnly) "Opened" else "Initialized"
