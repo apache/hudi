@@ -1847,7 +1847,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Insert Overwrite Bucket Index Table when disable row writer") {
+  test("Test Insert Overwrite Bucket Index Table") {
     withSQLConf(
       "hoodie.datasource.write.operation" -> "bulk_insert",
       "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
