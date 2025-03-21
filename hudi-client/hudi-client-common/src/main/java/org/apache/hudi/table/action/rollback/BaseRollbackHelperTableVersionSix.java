@@ -72,6 +72,7 @@ import static org.apache.hudi.table.action.rollback.RollbackUtils.groupSerializa
 
 /**
  * Contains common methods to be used across engines for rollback operation.
+ * This class is meant to be used only for table version 6. Any table version 8 and above will be using {@link BaseRollbackHelper}.
  */
 public class BaseRollbackHelperTableVersionSix implements Serializable {
 
