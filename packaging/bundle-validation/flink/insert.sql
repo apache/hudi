@@ -17,6 +17,8 @@
  * under the License.
  */
 
+SET sql-client.execution.result-mode=TABLEAU;
+
 CREATE TABLE t1
 (
     uuid        VARCHAR(20) PRIMARY KEY NOT ENFORCED,
