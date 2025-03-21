@@ -391,9 +391,23 @@ public class ParquetUtils extends FileFormatUtils {
     if (records.size() == 0) {
       return new byte[0];
     }
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    HoodieConfig config = new HoodieConfig();
+    paramsMap.entrySet().stream().forEach(entry -> config.setValue(entry.getKey(), entry.getValue()));
+    config.setValue(PARQUET_BLOCK_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_BLOCK_SIZE));
+    config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
+    config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
     HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
-    return serializeRecordsToLogBlock(storage, records.iterator(),
-        recordType, writerSchema, readerSchema, keyFieldName, paramsMap).getLeft();
+    try (HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
+        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType)) {
+      for (HoodieRecord<?> record : records) {
+        String recordKey = record.getRecordKey(readerSchema, keyFieldName);
+        parquetWriter.write(recordKey, record, writerSchema);
+      }
+      outputStream.flush();
+    }
+    return outputStream.toByteArray();
   }
 
   @Override

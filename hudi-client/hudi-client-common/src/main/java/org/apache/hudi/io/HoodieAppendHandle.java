@@ -449,7 +449,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
   }
 
-  protected void processAppendResult(AppendResult result, HoodieLogBlock dataBlock) {
+  protected void processAppendResult(AppendResult result, Option<HoodieLogBlock> dataBlock) {
     HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
     updateWriteStatus(result, stat);
 
@@ -517,7 +517,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       if (!blocks.isEmpty()) {
         AppendResult appendResult = writer.appendBlocks(blocks);
-        processAppendResult(appendResult, dataBlock);
+        processAppendResult(appendResult, Option.ofNullable(dataBlock));
         recordList.clear();
         if (appendDeleteBlocks) {
           recordsToDeleteWithPositions.clear();
@@ -707,10 +707,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   protected HoodieLogBlock getDataBlock(HoodieWriteConfig writeConfig,
-                                             HoodieLogBlock.HoodieLogBlockType logDataBlockFormat,
-                                             List<HoodieRecord> records,
-                                             Map<HeaderMetadataType, String> header,
-                                             String keyField) {
+                                        HoodieLogBlock.HoodieLogBlockType logDataBlockFormat,
+                                        List<HoodieRecord> records,
+                                        Map<HeaderMetadataType, String> header,
+                                        String keyField) {
     switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(records, header, keyField);

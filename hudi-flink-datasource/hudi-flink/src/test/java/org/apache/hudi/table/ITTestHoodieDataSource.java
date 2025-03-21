@@ -2363,8 +2363,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("indexAndPartitioningParams")
-  void testWriteMultipleCommitWithLegacyAndRowDataWrite(String indexType, boolean hiveStylePartitioning) throws Exception {
+  @MethodSource("indexPartitioningAndRowDataModeParams")
+  void testWriteMultipleCommitWithLegacyAndRowDataWrite(String indexType, boolean hiveStylePartitioning, boolean rowDataWriteMode) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
@@ -2392,7 +2392,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST)
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
-        .option(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED, true)
+        .option(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED, rowDataWriteMode)
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
@@ -2473,6 +2473,23 @@ public class ITTestHoodieDataSource {
             {"FLINK_STATE", true},
             {"BUCKET", false},
             {"BUCKET", true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (index type, hive style partitioning).
+   */
+  private static Stream<Arguments> indexPartitioningAndRowDataModeParams() {
+    Object[][] data =
+        new Object[][] {
+            {"FLINK_STATE", false, false},
+            {"FLINK_STATE", false, true},
+            {"FLINK_STATE", true, false},
+            {"FLINK_STATE", true, true},
+            {"BUCKET", false, false},
+            {"BUCKET", false, true},
+            {"BUCKET", true, false},
+            {"BUCKET", true, true}};
     return Stream.of(data).map(Arguments::of);
   }
 

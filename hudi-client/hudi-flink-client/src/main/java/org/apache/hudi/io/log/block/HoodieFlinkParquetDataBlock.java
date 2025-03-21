@@ -57,7 +57,7 @@ public class HoodieFlinkParquetDataBlock extends HoodieParquetDataBlock implemen
   /**
    * Parquet metadata collected during serializing the records, used to build column range metadata.
    */
-  protected ParquetMetadata parquetMetadata;
+  private ParquetMetadata parquetMetadata;
 
   public HoodieFlinkParquetDataBlock(
       List<HoodieRecord> records,

@@ -30,7 +30,6 @@ import org.apache.hudi.table.action.commit.BaseFlinkCommitActionExecutor;
 import org.apache.hudi.table.action.commit.BucketInfo;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -77,10 +76,11 @@ public class RowDataUpsertDeltaCommitActionExecutor<T> extends BaseFlinkCommitAc
 
   @Override
   public HoodieWriteMetadata execute() {
-    Instant lookupBegin = Instant.now();
-    Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
+    // no need for index lookup duration from flink executor.
+    // Instant lookupBegin = Instant.now();
+    // Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
     HoodieWriteMetadata result = this.execute(inputRecords, bucketInfo);
-    result.setIndexLookupDuration(indexLookupDuration);
+    result.setIndexLookupDuration(Duration.ZERO);
     return result;
   }
 }

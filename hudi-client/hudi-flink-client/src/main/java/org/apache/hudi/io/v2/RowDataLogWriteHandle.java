@@ -116,7 +116,7 @@ public class RowDataLogWriteHandle<T, I, K, O>
   }
 
   @Override
-  protected void processAppendResult(AppendResult result, HoodieLogBlock dataBlock) {
+  protected void processAppendResult(AppendResult result, Option<HoodieLogBlock> dataBlock) {
     HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
     updateWriteStatus(result, stat);
 
@@ -128,7 +128,7 @@ public class RowDataLogWriteHandle<T, I, K, O>
               Option.of(HoodieRecord.HoodieRecordType.FLINK)).keySet());
 
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata;
-      if (dataBlock == null) {
+      if (dataBlock.isEmpty()) {
         // only delete block exists
         columnRangeMetadata = new HashMap<>();
         for (String col: columnsToIndexSet) {
@@ -136,10 +136,10 @@ public class RowDataLogWriteHandle<T, I, K, O>
               stat.getPath(), col, null, null, 0L, 0L, 0L, 0L));
         }
       } else {
-        ValidationUtils.checkArgument(dataBlock instanceof ColumnRangeMetadataProvider,
+        ValidationUtils.checkArgument(dataBlock.get() instanceof ColumnRangeMetadataProvider,
             "Log block for Flink ingestion should always be an instance of ColumnRangeMetadataProvider for collecting column stats efficiently.");
         columnRangeMetadata =
-            ((ColumnRangeMetadataProvider) dataBlock).getColumnRangeMeta(stat.getPath()).entrySet().stream()
+            ((ColumnRangeMetadataProvider) dataBlock.get()).getColumnRangeMeta(stat.getPath()).entrySet().stream()
                 .filter(e -> columnsToIndexSet.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
       }
