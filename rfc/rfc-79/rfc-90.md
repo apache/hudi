@@ -28,17 +28,14 @@ JIRA: HUDI-7946
 
 ## Abstract
 
-Clustering is a table service that assist with optimizing table/files layout in Hudi to speed up read queries. Currently
-ingestion writers that runs conrrently with clustering and having overlap with the data being touched by both the
-writers (ingestion and table service), ingestion writers are aborted. Thus the clustering table service plans can delay
-ingestion writes from updating a dataset with recent data if potential write conflicts are detected. Furthermore, a
-clustering plan that isn't executed to completion for a large amount of time (due to repeated failures, application
+Clustering is a table service useed to optimize table/files layout in HUDI in order to speed up read queries. Currently
+ingestion writers will abort if they attempt to write to the same data targetted by a pending clustering write.
+As a result, clustering table service plans can indirectly delay ingestion writes from updating a dataset with recent data. 
+Furthermore, a clustering plan that isn't executed to completion for a large amount of time (due to repeated failures, application
 misconfiguration, or insufficient resources) will degrade the read/write performance of a dataset due to delaying clean,
 archival, and metadata table compaction. This is because currently HUDI clustering plans, upon being scheduled, must be
-executed to completion. And additonally, this will prevent any ingestion write targeting the same files from succeeding
-(due to posing as a write conflict) as well as can prevent new table service plans from targeting the same files. This
-RFC proposes to support "Cancellable" Clustering plans. Support for such cancellable clustering plans will provide HUDI
-an avenue to fully cancel a clustering plan and allow other table service and ingestion writers to proceed and avoiding
+executed to completion. This RFC proposes to support "Cancellable" Clustering plans. Support for such cancellable clustering plans 
+will provide HUDI an avenue to fully cancel a clustering plan and allow other table service and ingestion writers to proceed and avoiding
 starvation based on user needs.
 
 ## Background
@@ -47,11 +44,10 @@ starvation based on user needs.
 
 As of now, the table service operations `COMPACT` and `CLUSTER` are implicitly "immutable" plans by default, meaning
 that once a plan is scheduled, it will stay as a pending instant until a caller invokes the table service execute API on
-the table service instant and successfully completes it. Specifically, if an inflight execution fails after
-transitioning the instant to inflight, the next execution attempt will implictly create and execute a rollback plan (
-which will delete all new instant/data files), but will keep the table service plan. And then the table service will be
-re-attempted. This process will repeat until the instant is completed. The below visualization captures these
-transitions at a high level
+the table service instant and successfully completes it (referred to as "executing" a table service). Specifically, if an inflight
+execution fails after transitioning the instant to inflight, the next execution attempt will implictly create and execute a rollback
+plan (which will delete all new instant/data files), but will keep the table service plan. And then the table service will be
+re-attempted. This process will repeat until the instant is completed. The below visualization captures these transitions at a high level
 
 ![table service lifecycle (1)](https://github.com/user-attachments/assets/4a656bde-4046-4d37-9398-db96144207aa)
 
@@ -60,26 +56,26 @@ transitions at a high level
 ### (A) An ingestion job should be able to cancel and ignore any inflight cancellable clustering instants targeting the same data as the ingestion writer.
 
 The current requirement of HUDI needing to execute a clustering plan to completion forces ingestion writers to abort a
-commit if a table service plan is conflicting. Becuase an ingestion writer typically determines the exact file groups it
+commit if a conflicting table service plan is present. Becuase an ingestion writer typically determines the exact file groups it
 will be updating/replacing after building a workload profile and performing record tagging, the writer may have already
 spent a lot of time and resources before realizing that it needs to abort. In the face of frequent table service plans
 or an old inflight plan, this will cause delays in adding recent upstream records to the dataset as well as
-unnecessairly take away resources (such as Spark executors in the case of the Spark engine) from other applications in
-the data lake. Making the clustering plan cancellable should avoid this situation by allowing ingestion to request all
+unnecessairly take away resources from other applications in the data lake (such as Spark executors in the case of the Spark engine).
+Making the clustering plan cancellable should avoid this situation by permitting an ingestion writer to request all
 conflicting cancellable clustering plans to be "cancelled" and ignore inflight plans that already have been requested
-for cancellation. The latter will ensure that any incomplete cancellable clustering instants that have been requested
-for cancellation but have not yet been aborted, can be ignored by ingestion writers.
+for cancellation. The latter will ensure that ingestion writers can ignore any incomplete cancellable clustering instants that have been requested
+for cancellation but have not yet been aborted.
 
 ### (B) A cancellable table service plan should be eligible for cancellation at any point before committing
 
-In conjunction with (A), any caller(ingestion writer for eg) should be able to request cancellation for an inflight
+In conjunction with (A), any caller (ingestion writer and potentially other users) should be able to request cancellation for an inflight
 cancellable clustering plan. We should not need any synchronous mechanism where in the clustering plan of interest
-should be aborted completely before which the ingestion writer can proceeed. We should have a light weight mechanism with
+should be aborted and cleaned up completely before which the ingestion writer can proceeed. We should have a light weight mechanism with
 which the ingestion writer make a cancellation request and moves on to carry out its operation with the assumption that
 the respective clustering plan will be aborted. This requirement is needed due to presence of concurrent and async
 writers for clustering execution, as another worker should not need to wait (for the respective concurrent clustering
 worker to proceed with execution or fail) before confirming that its cancellation request will be honored. Once the
-request for cancellation succeeds, all interested entities like the ingestion writer, reader, asynchronous clusteirng
+request for cancellation succeeds, all interested entities like the ingestion writer, reader, asynchronous clustering
 execution job should assume the clustering plan is cancelled.
 
 ## Design
