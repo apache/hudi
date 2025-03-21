@@ -276,26 +276,26 @@ public class ParquetUtils extends FileFormatUtils {
     Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
         metadata.getBlocks().stream().sequential().flatMap(blockMetaData ->
             blockMetaData.getColumns().stream()
-                .filter(f -> !columnList.isPresent() || columnList.get().contains(f.getPath().toDotString()))
-                .map(columnChunkMetaData -> {
-                  Statistics stats = columnChunkMetaData.getStatistics();
-                  return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
-                      filePath,
-                      columnChunkMetaData.getPath().toDotString(),
-                      convertToNativeJavaType(
-                          columnChunkMetaData.getPrimitiveType(),
-                          stats.genericGetMin()),
-                      convertToNativeJavaType(
-                          columnChunkMetaData.getPrimitiveType(),
-                          stats.genericGetMax()),
-                      // NOTE: In case when column contains only nulls Parquet won't be creating
-                      //       stats for it instead returning stubbed (empty) object. In that case
-                      //       we have to equate number of nulls to the value count ourselves
-                      stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
-                      columnChunkMetaData.getValueCount(),
-                      columnChunkMetaData.getTotalSize(),
-                      columnChunkMetaData.getTotalUncompressedSize());
-                })
+                    .filter(f -> !columnList.isPresent() || columnList.get().contains(f.getPath().toDotString()))
+                    .map(columnChunkMetaData -> {
+                      Statistics stats = columnChunkMetaData.getStatistics();
+                      return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
+                          filePath,
+                          columnChunkMetaData.getPath().toDotString(),
+                          convertToNativeJavaType(
+                              columnChunkMetaData.getPrimitiveType(),
+                              stats.genericGetMin()),
+                          convertToNativeJavaType(
+                              columnChunkMetaData.getPrimitiveType(),
+                              stats.genericGetMax()),
+                          // NOTE: In case when column contains only nulls Parquet won't be creating
+                          //       stats for it instead returning stubbed (empty) object. In that case
+                          //       we have to equate number of nulls to the value count ourselves
+                          stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
+                          columnChunkMetaData.getValueCount(),
+                          columnChunkMetaData.getTotalSize(),
+                          columnChunkMetaData.getTotalUncompressedSize());
+                    })
         );
 
     return mergeColumnStats(hoodieColumnRangeMetadataStream);
