@@ -108,20 +108,8 @@ public class HoodieFileGroupReaderTestUtils {
       props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),  basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME);
       props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
       props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
-      return new HoodieFileGroupReader<>(
-          readerContext,
-          storage,
-          basePath,
-          latestCommitTime,
-          fileSlice,
-          schema,
-          schema,
-          Option.empty(),
-          metaClient,
-          props,
-          start,
-          length,
-          shouldUseRecordPosition);
+      return new HoodieFileGroupReader<>(readerContext, storage, basePath, latestCommitTime, fileSlice,
+          schema, schema, Option.empty(), metaClient, props, start, length, shouldUseRecordPosition, false);
     }
   }
 }
