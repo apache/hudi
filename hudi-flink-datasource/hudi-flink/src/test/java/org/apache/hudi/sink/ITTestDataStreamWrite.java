@@ -41,20 +41,15 @@ import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.utils.source.ContinuousFileSource;
 
-import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.io.FilePathFilter;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
-import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.io.TextInputFormat;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.CatalogBaseTable;
@@ -63,7 +58,6 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -167,6 +161,8 @@ public class ITTestDataStreamWrite extends TestLogger {
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    // use synchronized compaction to ensure flink job finishing with compaction completed.
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
 
     defaultWriteAndCheckExpected(conf, "mor_write_with_compact", 1);
@@ -186,11 +182,12 @@ public class ITTestDataStreamWrite extends TestLogger {
     writeWithClusterAndCheckExpected(conf, "cow_write_with_cluster", 1, EXPECTED);
   }
 
-  @Disabled("HUDI-9196")
   @ParameterizedTest
   @ValueSource(strings = {"COPY_ON_WRITE", "MERGE_ON_READ"})
   public void testStreamWriteWithIndexBootstrap(String tableType) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, tableType);
 
     writeAndCheckExpected(
@@ -267,26 +264,14 @@ public class ITTestDataStreamWrite extends TestLogger {
     boolean isMor = conf.getString(FlinkOptions.TABLE_TYPE).equals(HoodieTableType.MERGE_ON_READ.name());
 
     DataStream<RowData> dataStream;
-    if (isMor) {
-      TextInputFormat format = new TextInputFormat(new Path(sourcePath));
-      format.setFilesFilter(FilePathFilter.createDefaultFilter());
-      TypeInformation<String> typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
-      format.setCharsetName("UTF-8");
 
-      dataStream = execEnv
-          // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
-          .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
-          .map(JsonDeserializationFunction.getInstance(rowType))
-          .setParallelism(1);
-    } else {
-      dataStream = execEnv
-          // use continuous file source to trigger checkpoint
-          .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), checkpoints))
-          .name("continuous_file_source")
-          .setParallelism(1)
-          .map(JsonDeserializationFunction.getInstance(rowType))
-          .setParallelism(4);
-    }
+    dataStream = execEnv
+        // use continuous file source to trigger checkpoint
+        .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), checkpoints))
+        .name("continuous_file_source")
+        .setParallelism(1)
+        .map(JsonDeserializationFunction.getInstance(rowType))
+        .setParallelism(4);
 
     if (transformer.isPresent()) {
       dataStream = transformer.get().apply(dataStream);
@@ -345,20 +330,8 @@ public class ITTestDataStreamWrite extends TestLogger {
   }
 
   public void execute(StreamExecutionEnvironment execEnv, boolean isMor, String jobName) throws Exception {
-    if (isMor) {
-      JobClient client = execEnv.executeAsync(jobName);
-      if (client.getJobStatus().get() != JobStatus.FAILED) {
-        try {
-          TimeUnit.SECONDS.sleep(35); // wait long enough for the compaction to finish
-          client.cancel();
-        } catch (Throwable var1) {
-          // ignored
-        }
-      }
-    } else {
-      // wait for the streaming job to finish
-      execEnv.execute(jobName);
-    }
+    // wait for the streaming job to finish
+    execEnv.execute(jobName);
   }
 
   @Test

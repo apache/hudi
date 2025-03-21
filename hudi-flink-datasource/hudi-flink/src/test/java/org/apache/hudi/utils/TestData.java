@@ -62,6 +62,7 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.Row;
 import org.apache.flink.types.RowKind;
+import org.apache.flink.types.RowUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -72,7 +73,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -681,8 +681,8 @@ public class TestData {
    * @param expected expected row collection
    * @param actual actual row collection
    */
-  public static void assertRowsEqualsUnordered(Collection<Row> expected, Collection<Row> actual) {
-    assertEquals(new HashSet<>(expected), new HashSet<>(actual));
+  public static void assertRowsEqualsUnordered(List<Row> expected, List<Row> actual) {
+    RowUtils.compareRows(expected, actual, true);
   }
 
   /**
