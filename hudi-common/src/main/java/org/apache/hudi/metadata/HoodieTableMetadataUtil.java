@@ -39,6 +39,7 @@ import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -131,6 +132,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -822,7 +824,7 @@ public class HoodieTableMetadataUtil {
       Option<Schema> finalWriterSchemaOpt = writerSchemaOpt;
       HoodieData<HoodieRecord> recordIndexRecords = engineContext.parallelize(new ArrayList<>(writeStatsByFileId.entrySet()), parallelism)
           .flatMap(writeStatsByFileIdEntry -> {
-            String partition = writeStatsByFileIdEntry.getValue().get(0).getPartitionPath();
+            String partitionPath = writeStatsByFileIdEntry.getValue().get(0).getPartitionPath();
             String fileId = writeStatsByFileIdEntry.getKey();
             List<HoodieWriteStat> writeStats = writeStatsByFileIdEntry.getValue();
             // Partition the write stats into base file and log file write stats
@@ -846,56 +848,8 @@ public class HoodieTableMetadataUtil {
             }
             // Process log file write stats
             if (!logFileWriteStats.isEmpty()) {
-              FileSlice previousFileSliceForFileId = fsView.getLatestFileSlice(partition, fileId).orElse(null);
-              FileSlice latestFileSlicesIncludingInflight = new FileSlice(previousFileSliceForFileId);
-              logFileWriteStats.forEach(logFileWriteStat -> {
-                latestFileSlicesIncludingInflight.addLogFile(new HoodieLogFile(new StoragePath(logFileWriteStat.getPath())));
-              });
-
-              Set<String> prevSliceRecordKeys = new HashSet<>();
-              if (!previousFileSliceForFileId.hasLogFiles()) {
-                // if previous slice only contains base file, directly read base file by projecting just record key instead of going via FileGroupReader
-                prevSliceRecordKeys =  new HashSet<>(RecordIndexUtils.getRecordKeyStatuses(dataTableMetaClient.getBasePath().toString(), partition,
-                    previousFileSliceForFileId.getBaseFile().get().getFileName(), null, dataTableMetaClient.getStorage(), Collections.singleton(RecordIndexUtils.RecordStatus.INSERT))
-                  .get(RecordIndexUtils.RecordStatus.INSERT));
-              } else {
-                prevSliceRecordKeys = getValidRecordKeysForFileSlice(dataTableMetaClient, engineType,
-                    previousFileSliceForFileId.getLogFiles().map(entry -> basePath + "/" + entry.getPath().toString()).collect(toList()),
-                    tryResolveSchemaForTable(dataTableMetaClient), partition, previousFileSliceForFileId.getBaseFile().map(entry -> new StoragePath(entry.getPath())),
-                    instantTime);
-              }
-
-              Set<String> latestSliceRecordKeys = getValidRecordKeysForFileSlice(dataTableMetaClient, engineType,
-                  latestFileSlicesIncludingInflight.getLogFiles().map(entry -> basePath + "/" + entry.getPath().toString()).collect(toList()),
-                  tryResolveSchemaForTable(dataTableMetaClient), partition, previousFileSliceForFileId.getBaseFile().map(entry -> new StoragePath(entry.getPath())),
-                  instantTime);
-
-              // find inserts and deleted record keys for this file slice.
-              List<HoodieRecord> allRecords = new ArrayList<>();
-              if (prevSliceRecordKeys.isEmpty()) {
-                // everything is in INSERT
-                latestSliceRecordKeys.forEach(latestSliceRecordKey -> {
-                  allRecords.add((HoodieRecord) HoodieMetadataPayload.createRecordIndexUpdate(latestSliceRecordKey, partition, fileId,
-                      instantTime, writesFileIdEncoding));
-                });
-              } else {
-                prevSliceRecordKeys.forEach(prevSliceRecordKey -> {
-                  if (!latestSliceRecordKeys.contains(prevSliceRecordKey)) {
-                    // deleted
-                    allRecords.add(HoodieMetadataPayload.createRecordIndexDelete(prevSliceRecordKey));
-                  }
-                });
-
-                Set<String> finalPrevSliceRecordKeys = prevSliceRecordKeys;
-                latestSliceRecordKeys.forEach(latestSliceRecordKey -> {
-                  if (!finalPrevSliceRecordKeys.contains(latestSliceRecordKey)) {
-                    // insert.
-                    allRecords.add((HoodieRecord) HoodieMetadataPayload.createRecordIndexUpdate(latestSliceRecordKey, partition, fileId,
-                        instantTime, writesFileIdEncoding));
-                  }
-                });
-                return allRecords.iterator();
-              }
+              return getRecordIndexRecordsForFileSliceWithLogFiles(dataTableMetaClient, partitionPath, fileId,
+                  fsView, logFileWriteStats, basePath, engineType, instantTime, writesFileIdEncoding, finalWriterSchemaOpt);
             }
             LOG.warn("No base file or log file write stats found for fileId: {}", fileId);
             return Collections.emptyIterator();
@@ -919,6 +873,114 @@ public class HoodieTableMetadataUtil {
     } catch (Exception e) {
       throw new HoodieException("Failed to generate RLI records for metadata table", e);
     }
+  }
+
+  private static Iterator<HoodieRecord> getRecordIndexRecordsForFileSliceWithLogFiles(HoodieTableMetaClient dataTableMetaClient, String partitionPath, String fileId,
+                                                                                      HoodieTableFileSystemView fsView, List<HoodieWriteStat> logFileWriteStats,
+                                                                                      String basePath, EngineType engineType, String instantTime, int writesFileIdEncoding,
+                                                                                      Option<Schema> finalWriterSchemaOpt) throws Exception {
+    if (dataTableMetaClient.getTableConfig().getRecordMergeMode().equals(RecordMergeMode.COMMIT_TIME_ORDERING)) {
+      // with commit time ordering, we don't need to merge log files with base files and hence could compute the record index records in an optimized manner
+      return getRecordIndexRecordsForLogFilesWithCommitTimeOrdering(dataTableMetaClient, partitionPath, fileId, logFileWriteStats, engineType, instantTime,
+          writesFileIdEncoding, finalWriterSchemaOpt);
+    } else {
+      List<HoodieRecord> allRecords = new ArrayList<>();
+      List<FileSlice> previousFileSliceForFileIdList = fsView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, instantTime)
+          .filter(fileSlice -> fileSlice.getFileId().equals(fileId)).collect(toList());
+      if (previousFileSliceForFileIdList.size() > 1) {
+        throw new HoodieException("Found two file slices for same fileId " + fileId + ", in partition " + partitionPath);
+      }
+      if (previousFileSliceForFileIdList.isEmpty()) {
+        throw new HoodieException("Cannot find the file slice for fileId " + fileId + ", in partition + " + partitionPath + ", in FileSystemView. ");
+      }
+      FileSlice previousFileSliceForFileId = previousFileSliceForFileIdList.get(0);
+      FileSlice latestFileSlicesIncludingInflight = new FileSlice(previousFileSliceForFileId);
+      logFileWriteStats.forEach(logFileWriteStat -> {
+        latestFileSlicesIncludingInflight.addLogFile(new HoodieLogFile(new StoragePath(basePath + "/" + logFileWriteStat.getPath())));
+      });
+
+      Set<String> prevSliceRecordKeys = new HashSet<>();
+      if (!previousFileSliceForFileId.hasLogFiles()) {
+        // if previous slice only contains base file, directly read base file by projecting just record key instead of going via File slice or file group reader.
+        prevSliceRecordKeys = new HashSet<>(RecordIndexUtils.getRecordKeyStatuses(dataTableMetaClient.getBasePath().toString(), partitionPath,
+                previousFileSliceForFileId.getBaseFile().get().getFileName(), null, dataTableMetaClient.getStorage(), Collections.singleton(RecordIndexUtils.RecordStatus.INSERT))
+            .get(RecordIndexUtils.RecordStatus.INSERT));
+      } else {
+        prevSliceRecordKeys = getValidRecordKeysForFileSlice(dataTableMetaClient, engineType,
+            previousFileSliceForFileId.getLogFiles().map(entry -> entry.getPath().toString()).collect(toList()),
+            tryResolveSchemaForTable(dataTableMetaClient), partitionPath, previousFileSliceForFileId.getBaseFile()
+                .map(entry -> new StoragePath(entry.getPath())), instantTime);
+      }
+
+      Set<String> latestSliceRecordKeys = getValidRecordKeysForFileSlice(dataTableMetaClient, engineType,
+          latestFileSlicesIncludingInflight.getLogFiles().map(entry -> entry.getPath().toString()).collect(toList()),
+          tryResolveSchemaForTable(dataTableMetaClient), partitionPath, previousFileSliceForFileId.getBaseFile()
+              .map(entry -> new StoragePath(entry.getPath())), instantTime);
+
+      // find inserts and deleted record keys for this file slice.
+      if (prevSliceRecordKeys.isEmpty()) {
+        LOG.warn("Did not find previous file slice for " + fileId + ", in partition " + partitionPath + ", while generating RLI records");
+        // everything is in INSERT
+        latestSliceRecordKeys.forEach(latestSliceRecordKey -> {
+          allRecords.add((HoodieRecord) HoodieMetadataPayload.createRecordIndexUpdate(latestSliceRecordKey, partitionPath, fileId,
+              instantTime, writesFileIdEncoding));
+        });
+      } else {
+        // if a record key is present in prev slice, but not in latest file slice, is considered as delete record.
+        prevSliceRecordKeys.forEach(prevSliceRecordKey -> {
+          if (!latestSliceRecordKeys.contains(prevSliceRecordKey)) {
+            // deleted
+            allRecords.add(HoodieMetadataPayload.createRecordIndexDelete(prevSliceRecordKey));
+          }
+        });
+
+        Set<String> finalPrevSliceRecordKeys = prevSliceRecordKeys;
+        // if a record key is not present in prev slice, but present in latest file slice, is considered as insert record.
+        latestSliceRecordKeys.forEach(latestSliceRecordKey -> {
+          if (!finalPrevSliceRecordKeys.contains(latestSliceRecordKey)) {
+            // insert.
+            allRecords.add((HoodieRecord) HoodieMetadataPayload.createRecordIndexUpdate(latestSliceRecordKey, partitionPath, fileId,
+                instantTime, writesFileIdEncoding));
+          }
+        });
+      }
+      return allRecords.iterator();
+    }
+  }
+
+  private static Iterator<HoodieRecord> getRecordIndexRecordsForLogFilesWithCommitTimeOrdering(HoodieTableMetaClient dataTableMetaClient, String partitionPath, String fileId,
+                                                                                      List<HoodieWriteStat> logFileWriteStats, EngineType engineType, String instantTime, int writesFileIdEncoding,
+                                                                                               Option<Schema> finalWriterSchemaOpt) throws Exception {
+    List<String> currentLogFilePaths = logFileWriteStats.stream()
+        .map(writeStat -> new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath()).toString())
+        .collect(Collectors.toList());
+    List<String> allLogFilePaths = logFileWriteStats.stream()
+        .flatMap(writeStat -> {
+          checkState(writeStat instanceof HoodieDeltaWriteStat, "Log file should be associated with a delta write stat");
+          List<String> currentLogFiles = ((HoodieDeltaWriteStat) writeStat).getLogFiles().stream()
+              .map(logFile -> new StoragePath(new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPartitionPath()), logFile).toString())
+              .collect(Collectors.toList());
+          return currentLogFiles.stream();
+        })
+        .collect(Collectors.toList());
+    // Extract revived and deleted keys
+    Pair<Set<String>, Set<String>> revivedAndDeletedKeys =
+        getRevivedAndDeletedKeysFromMergedLogs(dataTableMetaClient, instantTime, engineType, allLogFilePaths, finalWriterSchemaOpt, currentLogFilePaths);
+    Set<String> revivedKeys = revivedAndDeletedKeys.getLeft();
+    Set<String> deletedKeys = revivedAndDeletedKeys.getRight();
+    // Process revived keys to create updates
+    List<HoodieRecord> revivedRecords = revivedKeys.stream()
+        .map(recordKey -> HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partitionPath, fileId, instantTime, writesFileIdEncoding))
+        .collect(Collectors.toList());
+    // Process deleted keys to create deletes
+    List<HoodieRecord> deletedRecords = deletedKeys.stream()
+        .map(HoodieMetadataPayload::createRecordIndexDelete)
+        .collect(Collectors.toList());
+    // Combine all records into one list
+    List<HoodieRecord> allRecords = new ArrayList<>();
+    allRecords.addAll(revivedRecords);
+    allRecords.addAll(deletedRecords);
+    return allRecords.iterator();
   }
 
   static Set<String> getValidRecordKeysForFileSlice(HoodieTableMetaClient metaClient,
@@ -951,6 +1013,7 @@ public class HoodieTableMetadataUtil {
         .withBitCaskDiskMapCompressionEnabled(storageConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
         .withRecordMerger(recordMerger)
         .withTableMetaClient(metaClient)
+        .withAllowInflightInstants(true)
         .build();
 
     Option<HoodieFileReader> baseFileReader = Option.empty();
@@ -960,12 +1023,16 @@ public class HoodieTableMetadataUtil {
     HoodieFileSliceReader fileSliceReader = new HoodieFileSliceReader(baseFileReader, mergedLogRecordScanner, tableSchema.get(), metaClient.getTableConfig().getPreCombineField(), recordMerger,
         metaClient.getTableConfig().getProps(), Option.empty(), Option.empty());
     // Collect the records from the iterator in a map by record key to secondary key
-    Set<String> recordKeys = new HashSet<>();
-    while (fileSliceReader.hasNext()) {
-      HoodieRecord record = (HoodieRecord) fileSliceReader.next();
-      recordKeys.add(record.getRecordKey());
+    try {
+      Set<String> recordKeys = new HashSet<>();
+      while (fileSliceReader.hasNext()) {
+        HoodieRecord record = (HoodieRecord) fileSliceReader.next();
+        recordKeys.add(record.getRecordKey());
+      }
+      return recordKeys;
+    } finally {
+      fileSliceReader.close();
     }
-    return recordKeys;
   }
 
   /**
