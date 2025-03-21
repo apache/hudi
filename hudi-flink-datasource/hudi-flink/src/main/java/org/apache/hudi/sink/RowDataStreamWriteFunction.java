@@ -449,7 +449,12 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     String preCombineField = OptionsResolver.getPreCombineField(conf);
     if (StringUtils.isNullOrEmpty(preCombineField)) {
       // return a dummy extractor.
-      return rowData -> HoodieRecord.DEFAULT_ORDERING_VALUE;
+      return new OrderingValueExtractor() {
+        @Override
+        public Comparable<?> getOrderingValue(RowData rowData) {
+          return HoodieRecord.DEFAULT_ORDERING_VALUE;
+        }
+      };
     }
     int preCombineFieldIdx = rowType.getFieldNames().indexOf(preCombineField);
     LogicalType fieldType = rowType.getChildren().get(preCombineFieldIdx);
@@ -461,8 +466,13 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     RowDataToAvroConverters.RowDataToAvroConverter fieldConverter =
         RowDataToAvroConverters.createConverter(fieldType, conf.get(FlinkOptions.WRITE_UTC_TIMEZONE));
     Schema fieldSchema = AvroSchemaConverter.convertToSchema(fieldType, preCombineField);
-    return rowData -> (Comparable<?>) HoodieAvroUtils.convertValueForSpecificDataTypes(
-        fieldSchema, fieldConverter.convert(fieldSchema, preCombineFieldGetter.getFieldOrNull(rowData)), false);
+    return new OrderingValueExtractor() {
+      @Override
+      public Comparable<?> getOrderingValue(RowData rowData) {
+        return (Comparable<?>) HoodieAvroUtils.convertValueForSpecificDataTypes(
+            fieldSchema, fieldConverter.convert(fieldSchema, preCombineFieldGetter.getFieldOrNull(rowData)), false);
+      }
+    };
   }
 
   // -------------------------------------------------------------------------
