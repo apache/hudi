@@ -155,7 +155,7 @@ public class DirectWriteMarkers extends WriteMarkers {
     for (StoragePathInfo topLevelInfo: topLevelInfoList) {
       if (topLevelInfo.isFile()) {
         String pathStr = topLevelInfo.getPath().toString();
-        if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
+        if (pathCondition.test(pathStr)) {
           dataFiles.add(translateMarkerToDataPath(pathStr));
         }
       } else {

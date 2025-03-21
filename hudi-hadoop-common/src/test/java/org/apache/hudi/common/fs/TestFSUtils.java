@@ -700,6 +700,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   public void testGetPathInfoUnderPartition() throws IOException {
     StoragePath hoodieTempDir = getHoodieTempDir();
+    HoodieStorage storage = metaClient.getStorage();
     prepareTestDirectory(storage, hoodieTempDir);
     List<Option<StoragePathInfo>> fileStatusList = FSUtils.getPathInfoUnderPartition(
         storage,
