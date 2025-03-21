@@ -108,7 +108,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
     inputDF.write.format("hudi")
       .options(options)
-      .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
+      .option("hoodie.compact.inline", "true")
       .option("hoodie.datasource.write.operation", operation)
       .option("hoodie.datasource.write.table.type", "MERGE_ON_READ")
       .mode(if (operation.equalsIgnoreCase(WriteOperationType.INSERT.value())) SaveMode.Overwrite
