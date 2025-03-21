@@ -123,8 +123,8 @@ public class Pipelines {
             "Consistent hashing bucket index does not work with bulk insert using FLINK engine. Use simple bucket index or Spark engine.");
       }
       String indexKeys = OptionsResolver.getIndexKeyField(conf);
-      StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf = StringUtils.isNullOrEmpty(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT)) ?
-          null : new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
+      StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf = StringUtils.isNullOrEmpty(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT))
+          ? null : new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
       BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeys, storageConf);
       RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
       RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
@@ -343,8 +343,8 @@ public class Pipelines {
           String indexKeyFields = OptionsResolver.getIndexKeyField(conf);
           // [HUDI-9036] BucketIndexPartitioner is also used in bulk insert mode,
           // keep use of HoodieKey here in partitionCustom for now
-          StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf = StringUtils.isNullOrEmpty(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT)) ?
-              null : new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
+          StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf = StringUtils.isNullOrEmpty(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT))
+              ? null : new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
           BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeyFields, storageConf);
           return dataStream
               .partitionCustom(
@@ -508,8 +508,6 @@ public class Pipelines {
     return StringUtils.isNullOrEmpty(databaseName) ? conf.getString(FlinkOptions.TABLE_NAME)
         : databaseName + "." + conf.getString(FlinkOptions.TABLE_NAME);
   }
-
-
 
   /**
    * Dummy sink that does nothing.

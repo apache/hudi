@@ -141,7 +141,7 @@ public class PartitionBucketIndexUtils {
         } else if (instants.contains(instant)) {
           instantToLoad = instant;
           break;
-        } else if (instant.compareTo(earliestInstant.get().requestedTime()) < 0){
+        } else if (instant.compareTo(earliestInstant.get().requestedTime()) < 0) {
           instantToLoad = instant;
           break;
         }

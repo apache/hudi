@@ -307,8 +307,8 @@ public class HoodieCatalogUtil {
     Map<String, String> options = catalogTable.getOptions();
     String expressions = options.getOrDefault(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS.key(), "");
     String rule = options.getOrDefault(FlinkOptions.BUCKET_INDEX_PARTITION_RULE.key(), FlinkOptions.BUCKET_INDEX_PARTITION_RULE.defaultValue());
-    int bucketNumber = options.containsKey(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key()) ?
-        Integer.valueOf(options.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key())) : FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
+    int bucketNumber = options.containsKey(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key())
+        ? Integer.valueOf(options.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key())) : FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
 
     return PartitionBucketIndexUtils.initHashingConfig(metaClient, expressions, rule, bucketNumber, null);
   }

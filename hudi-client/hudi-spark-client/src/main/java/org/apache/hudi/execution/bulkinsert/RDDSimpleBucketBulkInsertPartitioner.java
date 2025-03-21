@@ -78,7 +78,7 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
         return fileIdPrefixToBucketIndex.get(fileID);
       }
 
-      private int computeNumPartitions () {
+      private int computeNumPartitions() {
         if (isPartitionBucketIndexEnable) {
           return partitionMapper.values().stream().mapToInt(Map::size).sum();
         } else {

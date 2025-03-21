@@ -34,7 +34,6 @@ import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.AvroSchemaConverter;
-import org.apache.hudi.util.Lazy;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.ExecutionConfig;
