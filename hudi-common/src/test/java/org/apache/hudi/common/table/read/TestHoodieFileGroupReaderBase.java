@@ -317,34 +317,16 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     if (shouldValidatePartialRead(fileSlice, avroSchema)) {
       assertThrows(IllegalArgumentException.class, () -> new HoodieFileGroupReader<>(
-          getHoodieReaderContext(tablePath, avroSchema, storageConf),
-          metaClient.getStorage(),
-          tablePath,
-          metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
-          fileSlice,
-          avroSchema,
-          avroSchema,
-          Option.empty(),
-          metaClient,
-          props,
-          1,
-          fileSlice.getTotalFileSize(),
-          false));
+          getHoodieReaderContext(tablePath, avroSchema, storageConf), metaClient.getStorage(),
+          tablePath, metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
+          fileSlice, avroSchema, avroSchema, Option.empty(), metaClient, props, 1,
+          fileSlice.getTotalFileSize(), false, false));
     }
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        getHoodieReaderContext(tablePath, avroSchema, storageConf),
-        metaClient.getStorage(),
-        tablePath,
-        metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
-        fileSlice,
-        avroSchema,
-        avroSchema,
-        Option.empty(),
-        metaClient,
-        props,
-        0,
-        fileSlice.getTotalFileSize(),
-        false);
+        getHoodieReaderContext(tablePath, avroSchema, storageConf), metaClient.getStorage(),
+        tablePath, metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
+        fileSlice, avroSchema, avroSchema, Option.empty(), metaClient, props, 0,
+        fileSlice.getTotalFileSize(), false, false);
     fileGroupReader.initRecordIterators();
     while (fileGroupReader.hasNext()) {
       actualRecordList.add(fileGroupReader.next());
