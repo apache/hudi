@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -30,6 +31,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -44,6 +46,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class PartitionBucketIndexUtils {
   public static final String INITIAL_HASHING_CONFIG_INSTANT = HoodieTimeline.INIT_INSTANT_TS;
@@ -51,8 +54,12 @@ public class PartitionBucketIndexUtils {
   private static final Logger LOG = LoggerFactory.getLogger(PartitionBucketIndexUtils.class);
 
   public static boolean isPartitionSimpleBucketIndex(Configuration conf, String basePath) {
+    return isPartitionSimpleBucketIndex(HadoopFSUtils.getStorageConf(conf), basePath);
+  }
+
+  public static boolean isPartitionSimpleBucketIndex(StorageConfiguration conf, String basePath) {
     StoragePath storagePath = getHashingConfigStorageFolder(basePath);
-    try (HoodieHadoopStorage storage = new HoodieHadoopStorage(storagePath, HadoopFSUtils.getStorageConf(conf))) {
+    try (HoodieHadoopStorage storage = new HoodieHadoopStorage(storagePath, conf)) {
       return storage.exists(storagePath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to list PARTITION_BUCKET_INDEX_HASHING_FOLDER folder ", e);
@@ -163,5 +170,25 @@ public class PartitionBucketIndexUtils {
       calc.computeNumBuckets(partition);
     }
     return calc.getPartitionToBucket();
+  }
+
+  /**
+   * Used for test
+   * @return all File id in current table using `partitionPath + FileId` format
+   */
+  public static List<String> getAllFileIDWithPartition(HoodieTableMetaClient metaClient) throws IOException {
+    List<StoragePathInfo> allFiles = metaClient.getStorage().listDirectEntries(metaClient.getBasePath()).stream().flatMap(path -> {
+      try {
+        return metaClient.getStorage().listDirectEntries(path.getPath()).stream();
+      } catch (IOException e) {
+        return Stream.empty();
+      }
+    }).collect(Collectors.toList());
+
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), allFiles);
+    return fsView.getAllFileGroups().map(group -> {
+      return group.getPartitionPath() + group.getFileGroupId().getFileId().split("-")[0];
+    }).collect(Collectors.toList());
   }
 }

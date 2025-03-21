@@ -18,44 +18,38 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, ENABLE_ROW_WRITER, OPERATION}
 import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieSparkSqlWriter}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.commit.DatasetBucketRescaleCommitActionExecutor
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, SerializableSchema}
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{FileSlice, PartitionBucketIndexHashingConfig, WriteOperationType}
+import org.apache.hudi.common.model.{PartitionBucketIndexHashingConfig, WriteOperationType}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.util.{Option, StringUtils}
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.common.util.{Option, ValidationUtils}
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.bucket.{PartitionBucketIndexCalculator, PartitionBucketIndexUtils}
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.utils.SerDeHelper
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.SparkBroadcastManager
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{HoodieUnsafeUtils, Row, SaveMode}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-import java.util.stream.Collectors
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-class PartitionBucketIndexManager() extends BaseProcedure
+class PartitionBucketIndexManager extends BaseProcedure
   with ProcedureBuilder
   with PredicateHelper
   with ProvidesHoodieConfig
@@ -64,12 +58,14 @@ class PartitionBucketIndexManager() extends BaseProcedure
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "overwrite", DataTypes.StringType),
-    ProcedureParameter.optional(2, "bucket-number", DataTypes.IntegerType, -1),
+    ProcedureParameter.optional(2, "bucketNumber", DataTypes.IntegerType, -1),
     ProcedureParameter.optional(3, "add", DataTypes.StringType),
     ProcedureParameter.optional(4, "dry-run", DataTypes.BooleanType, true),
     ProcedureParameter.optional(5, "rollback", DataTypes.StringType),
     ProcedureParameter.optional(6, "show-config", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(7, "rule", DataTypes.StringType, "regex")
+    ProcedureParameter.optional(7, "rule", DataTypes.StringType, "regex"),
+    // params => key=value, key2=value2
+    ProcedureParameter.optional(8, "options", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -93,6 +89,7 @@ class PartitionBucketIndexManager() extends BaseProcedure
     val rollback = getArgValueOrDefault(args, PARAMETERS(5)).orNull.asInstanceOf[String]
     val showConfig = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[Boolean]
     val rule = getArgValueOrDefault(args, PARAMETERS(7)).orNull.asInstanceOf[String]
+    val options = getArgValueOrDefault(args, PARAMETERS(8))
 
     try {
       // Get table metadata
@@ -102,6 +99,18 @@ class PartitionBucketIndexManager() extends BaseProcedure
       val writeClient = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, Map.empty,
         scala.Option.apply(table))
       val context = writeClient.getEngineContext
+      var config = buildBucketRescaleHoodieConfig(hoodieCatalogTable)
+
+      options match {
+        case Some(p) =>
+          config = config ++ HoodieCLIUtils.extractOptions(p.asInstanceOf[String])
+        case _ =>
+          logInfo("No options")
+      }
+
+      config = config ++ Map(OPERATION.key -> BULK_INSERT_OPERATION_OPT_VAL,
+        HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.BUCKET_RESCALE.value(),
+        ENABLE_ROW_WRITER.key() -> "true")
 
       // Determine which operation to perform
       if (showConfig) {
@@ -109,21 +118,21 @@ class PartitionBucketIndexManager() extends BaseProcedure
       } else if (rollback != null) {
         handleRollback(metaClient, rollback)
       } else if (overwrite != null) {
-        handleOverwrite(hoodieCatalogTable, writeClient, context, metaClient, overwrite, bucketNumber, rule, dryRun)
+        handleOverwrite(config, writeClient, context, metaClient, overwrite, bucketNumber, rule, dryRun)
       } else if (add != null) {
         handleAdd(metaClient, add, dryRun)
       } else {
         Seq(Row("ERROR", "INVALID_OPERATION", "No valid operation specified"))
       }
     } catch {
-      case e: Exception => Seq(Row("ERROR", "EXCEPTION", e.getMessage))
+      case e: Exception => throw new HoodieException(e.getMessage, e)
     }
   }
 
   /**
    * Handle the overwrite operation.
    */
-  private def handleOverwrite(catalog: HoodieCatalogTable,
+  private def handleOverwrite(config: Map[String, String],
                               writeClient: SparkRDDWriteClient[_],
                               context : HoodieEngineContext,
                               metaClient: HoodieTableMetaClient,
@@ -131,30 +140,42 @@ class PartitionBucketIndexManager() extends BaseProcedure
                               bucketNumber: Int,
                               rule: String,
                               dryRun: Boolean): Seq[Row] = {
-    val config = buildBucketRescaleHoodieConfig(catalog).asJava
     val basePath = metaClient.getBasePath
     val mdtEnable = metaClient.getStorage().exists(new StoragePath(metaClient.getBasePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH))
 
     // get all partition paths
     val allPartitions = FSUtils.getAllPartitionPaths(context, metaClient.getStorage, metaClient.getBasePath, mdtEnable)
+    val usePartitionBucketIndexBefore = PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(context.getStorageConf, basePath.toString)
 
-    // get Map<partitionPath, bucketNumber> based on latest hashing_config
-    val latestHashingConfigInstant = PartitionBucketIndexUtils.getHashingConfigInstantToLoad(metaClient)
-    val calcWithLatestInstant = PartitionBucketIndexCalculator.getInstance(latestHashingConfigInstant, metaClient)
-    val partition2BucketWithLatestHashingConfig = PartitionBucketIndexUtils.getAllBucketNumbers(calcWithLatestInstant, allPartitions)
+    var partition2BucketWithLatestHashingConfig: util.Map[String, Integer] = null
+    var calcWithLatestInstant: PartitionBucketIndexCalculator = null
 
+    if (usePartitionBucketIndexBefore) {
+      // get Map<partitionPath, bucketNumber> based on latest hashing_config
+      val latestHashingConfigInstant = PartitionBucketIndexUtils.getHashingConfigInstantToLoad(metaClient)
+      calcWithLatestInstant = PartitionBucketIndexCalculator.getInstance(latestHashingConfigInstant, metaClient)
+      partition2BucketWithLatestHashingConfig = PartitionBucketIndexUtils.getAllBucketNumbers(calcWithLatestInstant, allPartitions)
+    } else {
+      ValidationUtils.checkArgument(bucketNumber != -1)
+      partition2BucketWithLatestHashingConfig = allPartitions.asScala.map(partition => (partition, new Integer(bucketNumber))).toMap.asJava
+    }
     // get Map<partitionPath, bucketNumber> based on new given expression
     val defaultBucketNumber = if (bucketNumber != -1) {
       bucketNumber
-    } else {
+    } else if (calcWithLatestInstant != null ) {
       // reuse latest default bucket number
       calcWithLatestInstant.getHashingConfig.getDefaultBucketNumber
+    } else {
+      throw new HoodieException("Please set original bucket number before upgrade to partition bucket level bucket index")
     }
+
     val instantTime = writeClient.createNewInstantTime()
-    config.put(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS.key(), expression)
-    config.put(HoodieIndexConfig.BUCKET_INDEX_PARTITION_RULE_TYPE.key(), rule)
-    config.put(HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key(), instantTime)
-    config.put(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key(), bucketNumber.toString)
+
+    val finalConfig = config ++ Map(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS.key()->  expression,
+      HoodieIndexConfig.BUCKET_INDEX_PARTITION_RULE_TYPE.key() -> rule,
+      HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key() -> instantTime,
+      HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key() -> bucketNumber.toString
+    )
 
     val newConfig = new PartitionBucketIndexHashingConfig(expression, defaultBucketNumber, rule, PartitionBucketIndexHashingConfig.CURRENT_VERSION, instantTime)
     val calcWithNewExpression = PartitionBucketIndexCalculator.getInstance(instantTime, newConfig)
@@ -166,7 +187,9 @@ class PartitionBucketIndexManager() extends BaseProcedure
 
     // get all fileSlices need to read
     val allFilesMap = FSUtils.getFilesInPartitions(context, metaClient.getStorage(), HoodieMetadataConfig.newBuilder.enable(mdtEnable).build,
-      metaClient.getBasePath.toString, partitionsToRescale.toArray)
+      metaClient.getBasePath.toString, partitionsToRescale.map(relative => {
+        new StoragePath(basePath, relative)
+      }).map(storagePath => storagePath.toString).toArray)
     val files = allFilesMap.values().asScala.flatMap(x => x.asScala).toList
     val view = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline, files.asJava)
     val allFileSlice = partitionsToRescale.flatMap(partitionPath => {
@@ -185,42 +208,46 @@ class PartitionBucketIndexManager() extends BaseProcedure
     val broadcastManager = new SparkBroadcastManager(context, metaClient)
     broadcastManager.prepareAndBroadcast()
     val sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields)
-    val serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields)
-    val latestInstantTime = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
 
-    val res: RDD[InternalRow] = spark.sparkContext.parallelize(allFileSlice, allFileSlice.size).flatMap(fileSlice => {
-      // instantiate other supporting cast
-      val readerSchema = serializableTableSchemaWithMetaFields.get
-      val readerContextOpt = broadcastManager.retrieveFileGroupReaderContext(basePath)
-      val internalSchemaOption: Option[InternalSchema] = Option.empty()
-      // instantiate FG reader
-      val fileGroupReader = new HoodieFileGroupReader(readerContextOpt.get(),
-        metaClient.getStorage,
-        basePath.toString,
-        latestInstantTime.requestedTime(),
-        fileSlice,
-        readerSchema,
-        readerSchema,
-        internalSchemaOption, // not support evolution of schema for now
-        metaClient,
-        metaClient.getTableConfig.getProps,
-        0,
-        java.lang.Long.MAX_VALUE,
-        HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.defaultValue())
-      fileGroupReader.initRecordIterators()
-      val iterator = fileGroupReader.getClosableIterator.asInstanceOf[HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow]]
-      iterator.asScala
-    })
+    val res: RDD[InternalRow] = if (allFileSlice.isEmpty) {
+      spark.sparkContext.emptyRDD
+    } else {
+      val serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields)
+      val latestInstantTime = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
+
+      spark.sparkContext.parallelize(allFileSlice, allFileSlice.size).flatMap(fileSlice => {
+        // instantiate other supporting cast
+        val readerSchema = serializableTableSchemaWithMetaFields.get
+        val readerContextOpt = broadcastManager.retrieveFileGroupReaderContext(basePath)
+        val internalSchemaOption: Option[InternalSchema] = Option.empty()
+        // instantiate FG reader
+        val fileGroupReader = new HoodieFileGroupReader(readerContextOpt.get(),
+          metaClient.getStorage,
+          basePath.toString,
+          latestInstantTime.requestedTime(),
+          fileSlice,
+          readerSchema,
+          readerSchema,
+          internalSchemaOption, // not support evolution of schema for now
+          metaClient,
+          metaClient.getTableConfig.getProps,
+          0,
+          java.lang.Long.MAX_VALUE,
+          HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.defaultValue())
+        fileGroupReader.initRecordIterators()
+        val iterator = fileGroupReader.getClosableIterator.asInstanceOf[HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow]]
+        iterator.asScala
+      })
+    }
     val dataFrame = HoodieUnsafeUtils.createDataFrameFromRDD(sparkSession, res, sparkSchemaWithMetaFields)
-
     val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
       sparkSession.sqlContext,
-      SaveMode.Overwrite,
-      config.asScala.toMap,
+      SaveMode.Append,
+      finalConfig,
       dataFrame)
 
-    val details = s"Expression: $expression, Bucket Number: $bucketNumber, Dry Run: $dryRun"
-    Seq(Row("SUCCESS", "OVERWRITE", success))
+    val details = s"Expression: $expression, Bucket Number: $bucketNumber, Dry Run: $dryRun, Instant: $instantTime"
+    Seq(Row("SUCCESS", "OVERWRITE", details))
   }
 
   /**
@@ -277,13 +304,13 @@ class PartitionBucketIndexManager() extends BaseProcedure
     Seq(Row("SUCCESS", "SHOW_CONFIG", null))
   }
 
-  override def build: Procedure = new PartitionBucketIndexManager()
+  override def build: Procedure = new PartitionBucketIndexManager
 }
 
 object PartitionBucketIndexManager {
-  val NAME = "PartitionBucketIndexManager"
+  val NAME = "partition_bucket_index_manager"
 
-  def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
-    override def get() = new PartitionBucketIndexManager()
+  def builder : Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
+    override def get() = new PartitionBucketIndexManager
   }
 }

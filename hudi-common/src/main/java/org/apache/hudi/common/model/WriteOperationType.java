@@ -101,6 +101,8 @@ public enum WriteOperationType {
         return INDEX;
       case "alter_schema":
         return ALTER_SCHEMA;
+      case "bucket_rescale":
+        return BUCKET_RESCALE;
       case "unknown":
         return UNKNOWN;
       default:

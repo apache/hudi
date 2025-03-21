@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.index.bucket.PartitionBucketIndexUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -1307,20 +1308,7 @@ public class ITTestHoodieDataSource {
         + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(basePath, new org.apache.hadoop.conf.Configuration());
-
-    List<StoragePathInfo> allFiles = metaClient.getStorage().listDirectEntries(new StoragePath(basePath)).stream().flatMap(path -> {
-      try {
-        return metaClient.getStorage().listDirectEntries(path.getPath()).stream();
-      } catch (IOException e) {
-        return Stream.empty();
-      }
-    }).collect(Collectors.toList());
-
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), allFiles);
-    List<String> actual = fsView.getAllFileGroups().map(group -> {
-      return group.getPartitionPath() + group.getFileGroupId().getFileId().split("-")[0];
-    }).collect(Collectors.toList());
+    List<String> actual = PartitionBucketIndexUtils.getAllFileIDWithPartition(metaClient);
 
     // based on expression partition=(par1|par2),2 and default bucket number 1
     // par1 and par2 have two buckets.

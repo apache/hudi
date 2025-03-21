@@ -16,7 +16,7 @@ class TestPartitionBucketIndexManager extends HoodieSparkProcedureTestBase {
       val defaultBucketNumber = 10
       PartitionBucketIndexUtils.initHashingConfig(metaClient, expressions, rule, defaultBucketNumber, null)
 
-      spark.sql(s"""call PartitionBucketIndexManager(table => '$tableName', show-config => 'true')""").collect()
+      spark.sql(s"call PartitionBucketIndexManager(table => '$tableName', show-config => 'true')").collect()
 
     }
   }

@@ -42,7 +42,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieInternalConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, WRITE_TABLE_VERSION}
 import org.apache.hudi.exception.{HoodieException, HoodieRecordCreationException, HoodieWriteConflictException}
@@ -68,6 +68,8 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.shims.ShimLoader
+import org.apache.hudi.index.HoodieIndex
+import org.apache.hudi.index.bucket.PartitionBucketIndexUtils
 import org.apache.spark.{SPARK_VERSION, SparkContext}
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.sql._
@@ -247,7 +249,7 @@ class HoodieSparkSqlWriterInternal {
     asyncCompactionTriggerFnDefined = streamingWritesParamsOpt.map(_.asyncCompactionTriggerFn.isDefined).orElse(Some(false)).get
     asyncClusteringTriggerFnDefined = streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.isDefined).orElse(Some(false)).get
     // re-use table configs and inject defaults.
-    val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode, streamingWritesParamsOpt.isDefined)
+    var (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode, streamingWritesParamsOpt.isDefined)
     val databaseName = hoodieConfig.getStringOrDefault(HoodieTableConfig.DATABASE_NAME, "")
     val tblName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME,
       s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.").trim
@@ -329,6 +331,19 @@ class HoodieSparkSqlWriterInternal {
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
           .setMultipleBaseFileFormatsEnabled(hoodieConfig.getBoolean(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
+      }
+
+      // take care of partition level bucket index which is simple bucket index
+      if (parameters.contains(HoodieIndexConfig.INDEX_TYPE.key)
+        && parameters(HoodieIndexConfig.INDEX_TYPE.key) == HoodieIndex.IndexType.BUCKET.name
+        && (!parameters.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key)
+        || (parameters.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key)
+        && parameters(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key) == HoodieIndex.IndexType.SIMPLE.name))
+        && !parameters.contains(HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key)
+        && PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(tableMetaClient.getStorageConf, basePath.toString)) {
+        val hashingConfigToLoad: String = PartitionBucketIndexUtils.getHashingConfigInstantToLoad(tableMetaClient)
+        hoodieConfig.setValue(HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key, hashingConfigToLoad)
+        parameters = parameters ++ Map(HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key -> hashingConfigToLoad)
       }
 
       var instantTime: String = null

@@ -30,6 +30,8 @@ import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWr
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
+import org.apache.hudi.index.HoodieIndex
+import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -91,9 +93,9 @@ trait ProvidesHoodieConfig extends Logging {
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     val defaultOpts = Map[String, String](
-      OPERATION.key -> BULK_INSERT_OPERATION_OPT_VAL,
-      HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.BUCKET_RESCALE.value(),
       KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
+      HoodieIndexConfig.INDEX_TYPE.key() -> HoodieIndex.IndexType.BUCKET.name(),
+      HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key() -> BucketIndexEngineType.SIMPLE.name(),
       SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
       SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL,
       HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),

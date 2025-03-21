@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndexUtils;
@@ -156,14 +157,21 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
 
   private class SimpleBucketIndexLocationFunction implements Function<HoodieRecord, Option<HoodieRecordLocation>> {
     private final Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping;
+    private final boolean isPartitionBucketIndexEnable;
+    private PartitionBucketIndexCalculator calc;
 
     public SimpleBucketIndexLocationFunction(HoodieTable table, String partitionPath) {
       this.bucketIdToFileIdMapping = loadBucketIdToFileIdMappingForPartition(table, partitionPath);
+      String hashingInstantToLoad = table.getConfig().getHashingConfigInstantToLoad();
+      this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(hashingInstantToLoad);
+      if (isPartitionBucketIndexEnable) {
+        calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, table.getMetaClient());
+      }
     }
 
     @Override
     public Option<HoodieRecordLocation> apply(HoodieRecord record) {
-      int bucketId = getBucketID(record.getKey());
+      int bucketId = isPartitionBucketIndexEnable ? getBucketID(record.getKey(), calc.computeNumBuckets(record.getPartitionPath())) : getBucketID(record.getKey());
       return Option.ofNullable(bucketIdToFileIdMapping.get(bucketId));
     }
   }

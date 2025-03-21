@@ -66,7 +66,7 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
     return doPartition(records, new Partitioner() {
       @Override
       public int numPartitions() {
-        return index.getNumBuckets() * partitionMapper.size();
+        return computeNumPartitions();
       }
 
       @Override
@@ -76,6 +76,14 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
         int bucketID = isPartitionBucketIndexEnable ? index.getBucketID(hoodieKey, calc.computeNumBuckets(partitionPath)) : index.getBucketID(hoodieKey);
         String fileID = partitionMapper.get(partitionPath).get(bucketID);
         return fileIdPrefixToBucketIndex.get(fileID);
+      }
+
+      private int computeNumPartitions () {
+        if (isPartitionBucketIndexEnable) {
+          return partitionMapper.values().stream().mapToInt(Map::size).sum();
+        } else {
+          return index.getNumBuckets() * partitionMapper.size();
+        }
       }
     });
   }
