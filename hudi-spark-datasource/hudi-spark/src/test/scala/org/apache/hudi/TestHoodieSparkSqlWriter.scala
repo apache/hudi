@@ -634,11 +634,15 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
    */
   @ParameterizedTest
   @CsvSource(value = Array(
-    "COPY_ON_WRITE",
-    "MERGE_ON_READ"
+    "COPY_ON_WRITE,6",
+    "COPY_ON_WRITE,8",
+    "MERGE_ON_READ,6",
+    "MERGE_ON_READ,8"
   ))
-  def testSchemaEvolutionForTableType(tableType: String): Unit = {
-    val opts = getCommonParams(tempPath, hoodieFooTableName, tableType)
+  def testSchemaEvolutionForTableType(tableType: String, tableVersion: Int): Unit = {
+    var opts = getCommonParams(tempPath, hoodieFooTableName, tableType)
+    opts = opts + (HoodieTableConfig.VERSION.key() -> tableVersion.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
 
     // Create new table
     // NOTE: We disable Schema Reconciliation by default (such that Writer's

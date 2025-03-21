@@ -19,12 +19,7 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.storage.StorageConfiguration;
-
 import javax.annotation.concurrent.Immutable;
-
-import java.util.Map;
 
 /**
  * Configurations for reading a file group
@@ -94,18 +89,4 @@ public class HoodieReaderConfig extends HoodieConfig {
       "hoodie.write.record.merge.custom.implementation.classes";
   public static final String RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY =
       "hoodie.datasource.write.record.merger.impls";
-
-  public static boolean isFileGroupReaderEnabled(HoodieTableVersion tableVersion, HoodieConfig config) {
-    return tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED);
-  }
-
-  public static boolean isFileGroupReaderEnabled(HoodieTableVersion tableVersion, Map<String, String> parameters) {
-    return tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
-        && Boolean.parseBoolean(parameters.getOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString()));
-  }
-
-  public static boolean isFileGroupReaderEnabled(HoodieTableVersion tableVersion, StorageConfiguration conf) {
-    return tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
-        && conf.getBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue());
-  }
 }
