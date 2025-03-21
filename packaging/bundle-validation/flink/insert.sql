@@ -17,7 +17,7 @@
  * under the License.
  */
 
-SET sql-client.execution.result-mode=TABLEAU;
+SET 'sql-client.execution.result-mode'='TABLEAU';
 
 CREATE TABLE t1
 (
