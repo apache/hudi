@@ -22,7 +22,6 @@ package org.apache.hudi.storage.hadoop;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
 import org.apache.hudi.hadoop.fs.HoodieRetryWrapperFileSystem;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.io.SeekableDataInputStream;
@@ -150,9 +149,13 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
-  public SeekableDataInputStream openSeekable(StoragePath path, int bufferSize, boolean wrapStream) throws IOException {
-    return new HadoopSeekableDataInputStream(
-        HadoopFSUtils.getFSDataInputStream(fs, path, bufferSize, wrapStream));
+  public SeekableDataInputStream openSeekable(StoragePath path, int bufferSize) throws IOException {
+    return HadoopFSUtils.createHadoopSeekableStream(fs, path, bufferSize, true);
+  }
+
+  @Override
+  public SeekableDataInputStream openSeekable(StoragePath path) throws IOException {
+    return HadoopFSUtils.createHadoopSeekableStream(fs, path, getDefaultBufferSize(), false);
   }
 
   @Override
