@@ -19,7 +19,9 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.index.bucket.PartitionBucketIndexUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+
 import scala.collection.JavaConverters._
 
 class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
