@@ -205,19 +205,4 @@ public class DataTypeUtils {
 
     return new RowType(false, mergedFields);
   }
-
-  /**
-   * Check whether the given row type contains nested complex type, for example, Array of Row and Map of Row.
-   *
-   * @param rowType row type of record
-   * @return true if there exists any field with nested complex type.
-   */
-  public static boolean containsNestedComplexType(RowType rowType) {
-    return rowType.getFields().stream().anyMatch(
-        // the root type of the field is complex type
-        f -> f.getType().getTypeRoot().getFamilies().contains(LogicalTypeFamily.CONSTRUCTED)
-            // the inside element type is also complex type
-            && f.getType().getChildren().stream().anyMatch(
-                element -> element.getTypeRoot().getFamilies().contains(LogicalTypeFamily.CONSTRUCTED)));
-  }
 }

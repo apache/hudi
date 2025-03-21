@@ -39,7 +39,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
@@ -78,19 +77,13 @@ public class OptionsResolver {
    * <p>
    * todo:
    * <p> support RowData append for COW, see HUDI-9149
-   * <p> support RowData append for operation besides UPSERT, see HUDI-9149
-   * <p> support RowData append for nested complex DataType field, see HUDI-9146, currently RowData
-   * reader for MOR table is not supported yet, Flink uses Avro parquet reader to read parquet data
-   * blocks in log file written by RowData writer, there exists some discrepancies between Avro parquet
-   * support and RowData parquet support regarding nested complex type, leading to failure during reading.
-   * After the RowData reader is supported, there would be no problems.
+   * <p> support RowData append for operation besides UPSERT/DELETE, see HUDI-9149
    */
   public static boolean supportRowDataAppend(Configuration conf, RowType rowType) {
     return conf.get(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED)
         && HoodieTableType.valueOf(conf.get(FlinkOptions.TABLE_TYPE)) == HoodieTableType.MERGE_ON_READ
         && (WriteOperationType.valueOf(conf.get(FlinkOptions.OPERATION).toUpperCase()) == WriteOperationType.UPSERT
-            || WriteOperationType.valueOf(conf.get(FlinkOptions.OPERATION).toUpperCase()) == WriteOperationType.DELETE)
-        && !DataTypeUtils.containsNestedComplexType(rowType);
+            || WriteOperationType.valueOf(conf.get(FlinkOptions.OPERATION).toUpperCase()) == WriteOperationType.DELETE);
   }
 
   /**

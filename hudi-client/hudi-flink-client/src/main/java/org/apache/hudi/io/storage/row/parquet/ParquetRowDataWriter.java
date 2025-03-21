@@ -515,26 +515,17 @@ public class ParquetRowDataWriter {
         //   }
         // }
         final String repeatedGroup = "list";
+        final String elementField = "element";
         recordConsumer.startField(repeatedGroup, 0);
-        if (elementWriter instanceof RowWriter) {
-          for (int i = 0; i < arrayData.size(); i++) {
-            if (!arrayData.isNullAt(i)) {
-              // Only creates the element field if the current array element is not null.
-              elementWriter.write(arrayData, i);
-            }
+        for (int i = 0; i < arrayData.size(); i++) {
+          recordConsumer.startGroup();
+          if (!arrayData.isNullAt(i)) {
+            // Only creates the element field if the current array element is not null.
+            recordConsumer.startField(elementField, 0);
+            elementWriter.write(arrayData, i);
+            recordConsumer.endField(elementField, 0);
           }
-        } else {
-          final String elementField = "element";
-          for (int i = 0; i < arrayData.size(); i++) {
-            recordConsumer.startGroup();
-            if (!arrayData.isNullAt(i)) {
-              // Only creates the element field if the current array element is not null.
-              recordConsumer.startField(elementField, 0);
-              elementWriter.write(arrayData, i);
-              recordConsumer.endField(elementField, 0);
-            }
-            recordConsumer.endGroup();
-          }
+          recordConsumer.endGroup();
         }
         recordConsumer.endField(repeatedGroup, 0);
       }
