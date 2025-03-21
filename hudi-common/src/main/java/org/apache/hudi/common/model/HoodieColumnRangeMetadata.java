@@ -124,10 +124,6 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     return Objects.hash(getColumnName(), getMinValue(), getMaxValue(), getNullCount());
   }
 
-  public HoodieColumnRangeMetadata<T> copy(String filePath) {
-    return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize);
-  }
-
   @Override
   public String toString() {
     return "HoodieColumnRangeMetadata{"

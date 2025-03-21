@@ -69,8 +69,8 @@ import java.util.concurrent.CompletableFuture;
  * @param <I> Input type
  */
 public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
-  protected final Configuration conf;
-  protected final RowType rowType;
+  private final Configuration conf;
+  private final RowType rowType;
 
   private final IOManager ioManager;
   private final MockStreamingRuntimeContext runtimeContext;
