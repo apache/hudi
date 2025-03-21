@@ -35,6 +35,8 @@ import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -56,12 +58,14 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
@@ -74,10 +78,13 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getLogFileListFromFileSlice;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
@@ -145,6 +152,34 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       commitToTable(dataGen.generateUpdates("003", 100), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 2, recordMergeMode);
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(RecordMergeMode.class)
+  public void testFileGroupReaderBasedCompaction(RecordMergeMode mergeMode) throws Exception {
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(mergeMode));
+    writeConfigs.put("hoodie.compact.inline", "true");
+    writeConfigs.put("hoodie.compact.inline.max.delta.commits", "1");
+
+    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
+      // One commit; reading one file group containing a base file only
+      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
+      validateOutputFromFileGroupReader(
+          getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0, mergeMode);
+
+      // Two commits; first  compaction is triggered.
+      commitToTable(dataGen.generateUpdates("002", 100), UPSERT.value(), writeConfigs);
+      validateOutputFromFileGroupReader(
+          getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0, mergeMode);
+
+      // Three commits; second compaction is triggered.
+      commitToTable(dataGen.generateUpdates("003", 100), UPSERT.value(), writeConfigs);
+      validateOutputFromFileGroupReader(
+          getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0, mergeMode);
+
+      // Validate compaction stats.
+      validateCompactionStats(getStorageConf(), getBasePath());
     }
   }
 
@@ -248,6 +283,28 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       configMapping.put("hoodie.datasource.write.payload.class", getCustomPayload());
     }
     return configMapping;
+  }
+
+  private void validateCompactionStats(StorageConfiguration<?> storageConf,
+                                       String tablePath) {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, tablePath);
+    HoodieTimeline activeTimeline = metaClient.getActiveTimeline();
+    List<HoodieInstant> compactionInstants = activeTimeline
+        .getCommitsAndCompactionTimeline()
+        .getInstants()
+        .stream().filter(i -> i.getAction().equals(COMMIT_ACTION))
+        .collect(Collectors.toList());
+    assertFalse(compactionInstants.isEmpty());
+
+    try {
+      // Validate if total log records is updated.
+      // More validation can be added here if needed.
+      long totalLogRecords = activeTimeline
+          .readCommitMetadata(compactionInstants.get(0)).getTotalLogRecordsCompacted();
+      assertTrue(totalLogRecords > 0);
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to read the compaction metadata", e);
+    }
   }
 
   private void validateOutputFromFileGroupReader(StorageConfiguration<?> storageConf,
