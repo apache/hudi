@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -27,7 +28,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
-import org.apache.hudi.common.testutils.reader.HoodieTestReaderContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
@@ -66,9 +66,10 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
   @BeforeAll
   public static void setUp() throws IOException {
     HoodieRecordMerger merger = new OverwriteWithLatestMerger();
-    readerContext = new HoodieTestReaderContext(
+    readerContext = new HoodieAvroReaderContext(
         Option.of(merger),
-        Option.of(OverwriteWithLatestAvroPayload.class.getName()));
+        Option.of(OverwriteWithLatestAvroPayload.class.getName()),
+        HoodieFileSliceTestUtils.ROW_KEY);
     properties.setProperty("hoodie.write.record.merge.mode", RecordMergeMode.COMMIT_TIME_ORDERING.name());
 
     // -------------------------------------------------------------

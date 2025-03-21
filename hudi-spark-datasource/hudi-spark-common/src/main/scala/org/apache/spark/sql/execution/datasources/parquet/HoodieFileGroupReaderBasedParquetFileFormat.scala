@@ -167,20 +167,22 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                 .builder().setConf(storageConf).setBasePath(tablePath).build
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
-              val reader = new HoodieFileGroupReader[InternalRow](
-                readerContext,
-                new HoodieHadoopStorage(metaClient.getBasePath, storageConf),
-                tablePath,
-                queryTimestamp,
-                fileSlice,
-                dataAvroSchema,
-                requestedAvroSchema,
-                internalSchemaOpt,
-                metaClient,
-                props,
-                file.start,
-                file.length,
-                shouldUseRecordPosition)
+              val reader = HoodieFileGroupReader.newBuilder()
+                .withReaderContext(readerContext)
+                .withStorage(new HoodieHadoopStorage(metaClient.getBasePath, storageConf))
+                .withTablePath(tablePath)
+                .withLatestCommitTime(queryTimestamp)
+                .withFileSlice(fileSlice)
+                .withDataSchema(dataAvroSchema)
+                .withRequestedSchema(requestedAvroSchema)
+                .withInternalSchema(internalSchemaOpt)
+                .withHoodieTableMetaClient(metaClient)
+                .withProps(props)
+                .withStart(file.start)
+                .withLength(file.length)
+                .withShouldUseRecordPosition(shouldUseRecordPosition)
+                .build()
+
               reader.initRecordIterators()
               // Append partition values to rows and project to output schema
               appendPartitionAndProject(

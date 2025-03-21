@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common.testutils.reader;
+package org.apache.hudi.avro;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -50,17 +50,19 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
-
-public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> {
+// FIXME-vc: Need to reimplement this class properly.
+public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private Option<HoodieRecordMerger> customMerger;
   private Option<String> payloadClass;
+  private final String keyFieldName;
 
-  public HoodieTestReaderContext(
+  public HoodieAvroReaderContext(
       Option<HoodieRecordMerger> customMerger,
-      Option<String> payloadClass) {
+      Option<String> payloadClass,
+      String keyFieldName) {
     this.customMerger = customMerger;
     this.payloadClass = payloadClass;
+    this.keyFieldName = keyFieldName;
   }
 
   @Override
@@ -103,7 +105,7 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public String getRecordKey(IndexedRecord record, Schema schema) {
-    return getFieldValueFromIndexedRecord(record, schema, ROW_KEY).toString();
+    return getFieldValueFromIndexedRecord(record, schema, keyFieldName).toString();
   }
 
   @Override

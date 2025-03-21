@@ -185,20 +185,21 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     hoodieTable.getMetaClient().getTableConfig().getProps().forEach(props::putIfAbsent);
     config.getProps().forEach(props::putIfAbsent);
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        readerContext,
-        storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
-        hoodieTable.getMetaClient().getBasePath().toString(),
-        instantTime,
-        fileSlice,
-        writeSchemaWithMetaFields,
-        writeSchemaWithMetaFields,
-        internalSchemaOption,
-        hoodieTable.getMetaClient(),
-        props,
-        0,
-        Long.MAX_VALUE,
-        usePosition)) {
+    try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.newBuilder()
+        .withReaderContext(readerContext)
+        .withStorage(storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)))
+        .withTablePath(hoodieTable.getMetaClient().getBasePath().toString())
+        .withLatestCommitTime(instantTime)
+        .withFileSlice(fileSlice)
+        .withDataSchema(writeSchemaWithMetaFields)
+        .withRequestedSchema(writeSchemaWithMetaFields)
+        .withInternalSchema(internalSchemaOption)
+        .withHoodieTableMetaClient(hoodieTable.getMetaClient())
+        .withProps(props)
+        .withStart(0)
+        .withLength(Long.MAX_VALUE)
+        .withShouldUseRecordPosition(usePosition)
+        .build()) {
       fileGroupReader.initRecordIterators();
       // Reads the records from the file slice
       try (HoodieFileGroupReaderIterator<InternalRow> recordIterator

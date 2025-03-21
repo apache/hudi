@@ -91,7 +91,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   public abstract String getBasePath();
 
-  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf);
+  public abstract HoodieReaderContext getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf);
 
   public abstract String getCustomPayload();
 
@@ -316,35 +316,35 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       props.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
     }
     if (shouldValidatePartialRead(fileSlice, avroSchema)) {
-      assertThrows(IllegalArgumentException.class, () -> new HoodieFileGroupReader<>(
-          getHoodieReaderContext(tablePath, avroSchema, storageConf),
-          metaClient.getStorage(),
-          tablePath,
-          metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
-          fileSlice,
-          avroSchema,
-          avroSchema,
-          Option.empty(),
-          metaClient,
-          props,
-          1,
-          fileSlice.getTotalFileSize(),
-          false));
+      assertThrows(IllegalArgumentException.class, () -> HoodieFileGroupReader.newBuilder()
+          .withReaderContext(getHoodieReaderContext(tablePath, avroSchema, storageConf))
+          .withStorage(metaClient.getStorage())
+          .withTablePath(tablePath)
+          .withLatestCommitTime(metaClient.getActiveTimeline().lastInstant().get().requestedTime())
+          .withFileSlice(fileSlice)
+          .withDataSchema(avroSchema)
+          .withRequestedSchema(avroSchema)
+          .withHoodieTableMetaClient(metaClient)
+          .withProps(props)
+          .withStart(1)
+          .withLength(fileSlice.getTotalFileSize())
+          .withShouldUseRecordPosition(false)
+          .build());
     }
-    HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        getHoodieReaderContext(tablePath, avroSchema, storageConf),
-        metaClient.getStorage(),
-        tablePath,
-        metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
-        fileSlice,
-        avroSchema,
-        avroSchema,
-        Option.empty(),
-        metaClient,
-        props,
-        0,
-        fileSlice.getTotalFileSize(),
-        false);
+    HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.newBuilder()
+        .withReaderContext(getHoodieReaderContext(tablePath, avroSchema, storageConf))
+        .withStorage(metaClient.getStorage())
+        .withTablePath(tablePath)
+        .withLatestCommitTime(metaClient.getActiveTimeline().lastInstant().get().requestedTime())
+        .withFileSlice(fileSlice)
+        .withDataSchema(avroSchema)
+        .withRequestedSchema(avroSchema)
+        .withHoodieTableMetaClient(metaClient)
+        .withProps(props)
+        .withStart(0)
+        .withLength(fileSlice.getTotalFileSize())
+        .withShouldUseRecordPosition(false)
+        .build();
     fileGroupReader.initRecordIterators();
     while (fileGroupReader.hasNext()) {
       actualRecordList.add(fileGroupReader.next());

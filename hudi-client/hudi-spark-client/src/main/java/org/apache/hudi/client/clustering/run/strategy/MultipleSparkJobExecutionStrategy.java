@@ -473,20 +473,23 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         Configuration conf = broadcastManager.retrieveStorageConfig().get();
 
         // instantiate FG reader
-        HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-            readerContextOpt.get(),
-            getHoodieTable().getMetaClient().getStorage().newInstance(new StoragePath(basePath), new HadoopStorageConfiguration(conf)),
-            basePath,
-            instantTime,
-            fileSlice,
-            readerSchema,
-            readerSchema,
-            internalSchemaOption,
-            getHoodieTable().getMetaClient(),
-            getHoodieTable().getMetaClient().getTableConfig().getProps(),
-            0,
-            Long.MAX_VALUE,
-            usePosition);
+        HoodieStorage storage = getHoodieTable().getMetaClient().getStorage()
+            .newInstance(new StoragePath(basePath), new HadoopStorageConfiguration(conf));
+        HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.newBuilder()
+            .withReaderContext(readerContextOpt.get())
+            .withStorage(storage)
+            .withTablePath(basePath)
+            .withLatestCommitTime(instantTime)
+            .withFileSlice(fileSlice)
+            .withDataSchema(readerSchema)
+            .withRequestedSchema(readerSchema)
+            .withInternalSchema(internalSchemaOption)
+            .withHoodieTableMetaClient(getHoodieTable().getMetaClient())
+            .withProps(getHoodieTable().getMetaClient().getTableConfig().getProps())
+            .withStart(0)
+            .withLength(Long.MAX_VALUE)
+            .withShouldUseRecordPosition(usePosition)
+            .build();
         fileGroupReader.initRecordIterators();
         // read records from the FG reader
         HoodieFileGroupReader.HoodieFileGroupReaderIterator<InternalRow> recordIterator

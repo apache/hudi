@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
@@ -83,7 +84,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final Option<UnaryOperator<T>> outputConverter;
   private final HoodieReadStats readStats;
 
-  public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
+  private HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
                                HoodieStorage storage,
                                String tablePath,
                                String latestCommitTime,
@@ -348,6 +349,108 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       } finally {
         this.reader = null;
       }
+    }
+  }
+
+  public static <T> Builder<T> newBuilder() {
+    return new Builder<>();
+  }
+
+  public static class Builder<T> {
+    private HoodieReaderContext<T> readerContext;
+    private HoodieStorage storage;
+    private String tablePath;
+    private String latestCommitTime;
+    private FileSlice fileSlice;
+    private Schema dataSchema;
+    private Schema requestedSchema;
+    private Option<InternalSchema> internalSchemaOpt = Option.empty();
+    private HoodieTableMetaClient hoodieTableMetaClient;
+    private TypedProperties props;
+    private long start;
+    private long length;
+    private boolean shouldUseRecordPosition;
+
+    public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
+      this.readerContext = readerContext;
+      return this;
+    }
+
+    public Builder<T> withStorage(HoodieStorage storage) {
+      this.storage = storage;
+      return this;
+    }
+
+    public Builder<T> withTablePath(String tablePath) {
+      this.tablePath = tablePath;
+      return this;
+    }
+
+    public Builder<T> withLatestCommitTime(String latestCommitTime) {
+      this.latestCommitTime = latestCommitTime;
+      return this;
+    }
+
+    public Builder<T> withFileSlice(FileSlice fileSlice) {
+      this.fileSlice = fileSlice;
+      return this;
+    }
+
+    public Builder<T> withDataSchema(Schema dataSchema) {
+      this.dataSchema = dataSchema;
+      return this;
+    }
+
+    public Builder<T> withRequestedSchema(Schema requestedSchema) {
+      this.requestedSchema = requestedSchema;
+      return this;
+    }
+
+    public Builder<T> withInternalSchema(Option<InternalSchema> internalSchemaOpt) {
+      this.internalSchemaOpt = internalSchemaOpt;
+      return this;
+    }
+
+    public Builder<T> withHoodieTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
+      this.hoodieTableMetaClient = hoodieTableMetaClient;
+      return this;
+    }
+
+    public Builder<T> withProps(TypedProperties props) {
+      this.props = props;
+      return this;
+    }
+
+    public Builder<T> withStart(long start) {
+      this.start = start;
+      return this;
+    }
+
+    public Builder<T> withLength(long length) {
+      this.length = length;
+      return this;
+    }
+
+    public Builder<T> withShouldUseRecordPosition(boolean shouldUseRecordPosition) {
+      this.shouldUseRecordPosition = shouldUseRecordPosition;
+      return this;
+    }
+
+    public HoodieFileGroupReader<T> build() {
+      ValidationUtils.checkArgument(readerContext != null, "Reader context is required");
+      ValidationUtils.checkArgument(storage != null, "Storage is required");
+      ValidationUtils.checkArgument(tablePath != null, "Table path is required");
+      ValidationUtils.checkArgument(latestCommitTime != null, "Latest commit time is required");
+      ValidationUtils.checkArgument(fileSlice != null, "File slice is required");
+      ValidationUtils.checkArgument(dataSchema != null, "Data schema is required");
+      ValidationUtils.checkArgument(requestedSchema != null, "Requested schema is required");
+      ValidationUtils.checkArgument(hoodieTableMetaClient != null, "Hoodie table meta client is required");
+      ValidationUtils.checkArgument(props != null, "Props is required");
+
+      return new HoodieFileGroupReader<>(
+          readerContext, storage, tablePath, latestCommitTime, fileSlice,
+          dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
+          props, start, length, shouldUseRecordPosition);
     }
   }
 }
