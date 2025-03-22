@@ -69,6 +69,7 @@ import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -94,6 +95,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NA
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.testutils.Assertions.assertFileSizesEqual;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.apache.spark.sql.functions.col;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -452,15 +454,18 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     String[] sortedColumnNames = Arrays.stream(expectedDf.columns())
         .filter(validateColumns::contains).sorted().toArray(String[]::new);
 
-    // Reorder columns in both datasets
-    Dataset<Row> df1Normalized = expectedDf.selectExpr(sortedColumnNames);
-    Dataset<Row> df2Normalized = actualDf.selectExpr(sortedColumnNames);
+    Column[] sortColumns = Arrays.stream(sortedColumnNames)
+        .map(colName -> col(colName).asc())
+        .toArray(Column[]::new);
 
-    // Sort rows
-    Dataset<Row> df1Sorted = df1Normalized.sort("_row_key");
-    Dataset<Row> df2Sorted = df2Normalized.sort("_row_key");
+    // Reorder columns in both datasets
+    Dataset<Row> df1Normalized = expectedDf.selectExpr(sortedColumnNames).sort(sortColumns);
+    Dataset<Row> df2Normalized = actualDf.selectExpr(sortedColumnNames).sort(sortColumns);
+
+    df1Normalized.show(false);
+    df2Normalized.show(false);
 
     // Check for differences
-    return df1Sorted.except(df2Sorted).isEmpty() && df2Sorted.except(df1Sorted).isEmpty();
+    return df1Normalized.except(df2Normalized).isEmpty() && df2Normalized.except(df1Normalized).isEmpty();
   }
 }

@@ -178,19 +178,28 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
   }
 
   static void upgradeMergeMode(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
-    if (tableConfig.getPayloadClass() != null
-        && tableConfig.getPayloadClass().equals(OverwriteWithLatestAvroPayload.class.getName())) {
-      if (HoodieTableType.COPY_ON_WRITE == tableConfig.getTableType()) {
-        tablePropsToAdd.put(
-            HoodieTableConfig.RECORD_MERGE_MODE,
-            RecordMergeMode.COMMIT_TIME_ORDERING.name());
-      } else {
-        tablePropsToAdd.put(
-            HoodieTableConfig.PAYLOAD_CLASS_NAME,
-            DefaultHoodieRecordPayload.class.getName());
+    if (tableConfig.getPayloadClass() != null) {
+      if (tableConfig.getPayloadClass().equals(OverwriteWithLatestAvroPayload.class.getName())) {
+        if (HoodieTableType.COPY_ON_WRITE == tableConfig.getTableType()) {
+          tablePropsToAdd.put(
+              HoodieTableConfig.RECORD_MERGE_MODE,
+              RecordMergeMode.COMMIT_TIME_ORDERING.name());
+        } else {
+          tablePropsToAdd.put(
+              HoodieTableConfig.PAYLOAD_CLASS_NAME,
+              DefaultHoodieRecordPayload.class.getName());
+          tablePropsToAdd.put(
+              HoodieTableConfig.RECORD_MERGE_MODE,
+              RecordMergeMode.EVENT_TIME_ORDERING.name());
+        }
+      } else if (tableConfig.getPayloadClass().equals(DefaultHoodieRecordPayload.class.getName())) {
         tablePropsToAdd.put(
             HoodieTableConfig.RECORD_MERGE_MODE,
             RecordMergeMode.EVENT_TIME_ORDERING.name());
+      } else {
+        tablePropsToAdd.put(
+            HoodieTableConfig.RECORD_MERGE_MODE,
+            RecordMergeMode.CUSTOM.name());
       }
     }
   }
