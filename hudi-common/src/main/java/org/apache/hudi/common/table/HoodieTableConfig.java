@@ -196,7 +196,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> TIMELINE_LAYOUT_VERSION = ConfigProperty
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
-      .withDocumentation("Version of timeline used, by the table.");
+      .withDocumentation("Version of timeline used by the table.");
   
   public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
