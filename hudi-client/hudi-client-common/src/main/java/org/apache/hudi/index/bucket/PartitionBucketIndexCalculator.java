@@ -29,7 +29,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
-import org.apache.commons.collections.map.LRUMap;
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +37,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -58,8 +58,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
   private int defaultBucketNumber;
   private String instantToLoad;
   // Cache for partition to bucket number mapping
-  @SuppressWarnings("unchecked")
-  private final Map<String, Integer> partitionToBucketCache = new LRUMap(CACHE_SIZE);
+  private final Map<String, Integer> partitionToBucketCache = new LRUMap<>(CACHE_SIZE);
   private RuleEngine ruleEngine;
 
   /**
@@ -314,6 +313,44 @@ public class PartitionBucketIndexCalculator implements Serializable {
 
       // No rule matched
       return -1;
+    }
+  }
+
+  /**
+   * A fixed-capacity LRU (Least Recently Used) map implementation for String keys and Integer values.
+   * When the map reaches its capacity, the least recently accessed entry will be removed.
+   */
+  public static class LRUMap<K, V> extends LinkedHashMap<K, V> implements Serializable {
+    private final int capacity;
+
+    /**
+     * Constructs an LRU map with the specified capacity.
+     *
+     * @param capacity the maximum number of entries the map can hold
+     * @throws IllegalArgumentException if capacity is non-positive
+     */
+    public LRUMap(int capacity) {
+      // Initial capacity, load factor, and access order
+      super(capacity, 0.75f, true);
+      if (capacity <= 0) {
+        throw new IllegalArgumentException("Capacity must be positive");
+      }
+      this.capacity = capacity;
+    }
+
+    /**
+     * Returns the current capacity of the map.
+     *
+     * @return the capacity
+     */
+    public int getCapacity() {
+      return capacity;
+    }
+
+    @Override
+    protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+      // Remove the eldest entry when size exceeds capacity
+      return size() > capacity;
     }
   }
 }
