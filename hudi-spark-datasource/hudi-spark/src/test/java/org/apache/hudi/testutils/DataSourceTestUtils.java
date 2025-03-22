@@ -68,10 +68,11 @@ public class DataSourceTestUtils {
     List<Row> toReturn = new ArrayList<>();
     List<String> partitions = Arrays.asList(new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH});
     for (int i = 0; i < count; i++) {
-      Object[] values = new Object[3];
+      Object[] values = new Object[4];
       values[0] = HoodieTestDataGenerator.genPseudoRandomUUID(RANDOM).toString();
       values[1] = partitions.get(RANDOM.nextInt(3));
       values[2] = new Date().getTime();
+      values[3] = false;
       toReturn.add(RowFactory.create(values));
     }
     return toReturn;
@@ -80,10 +81,11 @@ public class DataSourceTestUtils {
   public static List<Row> generateRandomRowsByPartition(int count, String partition) {
     List<Row> toReturn = new ArrayList<>();
     for (int i = 0; i < count; i++) {
-      Object[] values = new Object[3];
+      Object[] values = new Object[4];
       values[0] = HoodieTestDataGenerator.genPseudoRandomUUID(RANDOM).toString();
       values[1] = partition;
       values[2] = new Date().getTime();
+      values[3] = false;
       toReturn.add(RowFactory.create(values));
     }
     return toReturn;
@@ -92,10 +94,11 @@ public class DataSourceTestUtils {
   public static List<Row> generateUpdates(List<Row> records, int count) {
     List<Row> toReturn = new ArrayList<>();
     for (int i = 0; i < count; i++) {
-      Object[] values = new Object[3];
+      Object[] values = new Object[4];
       values[0] = records.get(i).getString(0);
       values[1] = records.get(i).getAs(1);
       values[2] = new Date().getTime();
+      values[3] = false;
       toReturn.add(RowFactory.create(values));
     }
     return toReturn;
@@ -119,24 +122,36 @@ public class DataSourceTestUtils {
     List<Row> toReturn = new ArrayList<>();
     List<String> partitions = Arrays.asList(new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH});
     for (int i = 0; i < count; i++) {
-      Object[] values = new Object[4];
+      Object[] values = new Object[5];
       values[0] = UUID.randomUUID().toString();
       values[1] = partitions.get(RANDOM.nextInt(3));
       values[2] = new Date().getTime();
-      values[3] = UUID.randomUUID().toString();
+      values[3] = false;
+      values[4] = UUID.randomUUID().toString();
       toReturn.add(RowFactory.create(values));
     }
     return toReturn;
   }
 
-  public static List<Row> updateRowsWithHigherTs(Dataset<Row> inputDf) {
+  public static List<Row> updateRowsWithUpdatedTs(Dataset<Row> inputDf) {
+    return updateRowsWithUpdatedTs(inputDf, false, false);
+  }
+
+  public static List<Row> updateRowsWithUpdatedTs(Dataset<Row> inputDf, Boolean lowerTs, Boolean updatePartitionPath) {
     List<Row> input = inputDf.collectAsList();
     List<Row> rows = new ArrayList<>();
     for (Row row : input) {
-      Object[] values = new Object[3];
+      Object[] values = new Object[4];
       values[0] = row.getAs("_row_key");
-      values[1] = row.getAs("partition");
-      values[2] = ((Long) row.getAs("ts")) + RANDOM.nextInt(1000);
+      String partition = row.getAs("partition");
+      if (updatePartitionPath) {
+        values[1] = partition.equals(DEFAULT_FIRST_PARTITION_PATH) ? DEFAULT_SECOND_PARTITION_PATH :
+            (partition.equals(DEFAULT_SECOND_PARTITION_PATH) ? DEFAULT_THIRD_PARTITION_PATH : DEFAULT_FIRST_PARTITION_PATH);
+      } else {
+        values[1] = partition;
+      }
+      values[2] = ((Long) row.getAs("ts")) + (lowerTs ? (-1 - RANDOM.nextInt(1000)) : RANDOM.nextInt(1000));
+      values[3] = false;
       rows.add(RowFactory.create(values));
     }
     return rows;

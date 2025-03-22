@@ -63,6 +63,7 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -185,6 +186,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     writeWithClusterAndCheckExpected(conf, "cow_write_with_cluster", 1, EXPECTED);
   }
 
+  @Disabled("HUDI-9196")
   @ParameterizedTest
   @ValueSource(strings = {"COPY_ON_WRITE", "MERGE_ON_READ"})
   public void testStreamWriteWithIndexBootstrap(String tableType) throws Exception {

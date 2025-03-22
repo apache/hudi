@@ -20,6 +20,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
@@ -32,17 +33,23 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class TestMetricsReporterFactory {
+class TestMetricsReporterFactory {
 
   @Mock
   HoodieMetricsConfig metricsConfig;
@@ -68,7 +75,27 @@ public class TestMetricsReporterFactory {
   }
 
   @Test
-  public void metricsReporterFactoryShouldReturnUserDefinedReporter() {
+  void metricsReporterFactoryShouldReturnCloudWatchReporter() {
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
+
+    MetricsReporter reporterMock = mock(MetricsReporter.class);
+    try (MockedStatic<ReflectionUtils> mockedStatic = Mockito.mockStatic(ReflectionUtils.class)) {
+      mockedStatic.when(() ->
+          ReflectionUtils.loadClass(
+              eq("org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter"),
+              any(Class[].class),
+              eq(metricsConfig),
+              eq(registry)
+          )
+      ).thenReturn(reporterMock);
+
+      MetricsReporter actualReporter = MetricsReporterFactory.createReporter(metricsConfig, registry).get();
+      assertSame(reporterMock, actualReporter);
+    }
+  }
+
+  @Test
+  void metricsReporterFactoryShouldReturnUserDefinedReporter() {
     when(metricsConfig.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
 
     TypedProperties props = new TypedProperties();
@@ -82,7 +109,7 @@ public class TestMetricsReporterFactory {
   }
 
   @Test
-  public void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
+  void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
     when(metricsConfig.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
     when(metricsConfig.getProps()).thenReturn(new TypedProperties());
     assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
@@ -96,14 +123,17 @@ public class TestMetricsReporterFactory {
 
     @Override
     public void start() {
+      // no-op
     }
 
     @Override
     public void report() {
+      // no-op
     }
 
     @Override
     public void stop() {
+      // no-op
     }
   }
 
@@ -113,5 +143,3 @@ public class TestMetricsReporterFactory {
     }
   }
 }
-
-

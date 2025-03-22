@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.aws.cloudwatch;
+package org.apache.hudi.aws.metrics.cloudwatch;
 
 import com.codahale.metrics.Clock;
 import com.codahale.metrics.Counter;
@@ -49,10 +49,10 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_COUNT_TYPE_VALUE;
-import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_GAUGE_TYPE_VALUE;
-import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_METRIC_TYPE_KEY;
-import static org.apache.hudi.aws.cloudwatch.CloudWatchReporter.DIMENSION_TABLE_NAME_KEY;
+import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_COUNT_TYPE_VALUE;
+import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_GAUGE_TYPE_VALUE;
+import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_METRIC_TYPE_KEY;
+import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_TABLE_NAME_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 

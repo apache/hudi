@@ -16,24 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.functional
 
-/**
- * The supported action types.
- */
-public enum ActionType {
-  commit,
-  savepoint,
-  compaction,
-  clean,
-  rollback,
-  replacecommit,
-  deltacommit,
-  logcompaction,
-  clustering;
+import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.config.HoodieWriteConfig
 
-  public static boolean isCommitActionType(String actionTypeStr) {
-    ActionType actionType = ActionType.valueOf(actionTypeStr.toLowerCase());
-    return actionType == commit || actionType == replacecommit || actionType == deltacommit;
-  }
+class TestRecordLevelIndexTableVersionSix extends TestRecordLevelIndex {
+  override def commonOpts: Map[String, String] = super.commonOpts ++ Map(
+    HoodieTableConfig.VERSION.key() -> "6",
+    HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "6"
+  )
 }
