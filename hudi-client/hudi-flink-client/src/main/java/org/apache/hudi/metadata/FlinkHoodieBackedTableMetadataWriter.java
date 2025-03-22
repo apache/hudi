@@ -122,7 +122,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void commitInternal(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing,
                                 Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
-    HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
+    HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap).getKey();
     List<HoodieRecord> preppedRecordList = preppedRecords.collectAsList();
 
     //  Flink engine does not optimize initialCommit to MDT as bulk insert is not yet supported
