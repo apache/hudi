@@ -16,23 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.transform;
+package org.apache.hudi.sink.append;
 
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.RateLimiter;
 import org.apache.hudi.configuration.FlinkOptions;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.util.Collector;
 
 import java.util.concurrent.TimeUnit;
 
 /**
- * Function that transforms RowData to a {@code HoodieFlinkInternalRow} with RateLimit.
+ * Append write function with configurable rate limit.
  */
-public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends HoodieRecord>
-    extends RowDataToHoodieFunction<I, O> {
+public class AppendWriteFunctionWithRateLimit<I>
+    extends AppendWriteFunction<I> {
   /**
    * Total rate limit per second for this job.
    */
@@ -43,8 +42,8 @@ public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends H
    */
   private transient RateLimiter rateLimiter;
 
-  public RowDataToHoodieFunctionWithRateLimit(RowType rowType, Configuration config) {
-    super(rowType, config);
+  public AppendWriteFunctionWithRateLimit(RowType rowType, Configuration config) {
+    super(config, rowType);
     this.totalLimit = config.getLong(FlinkOptions.WRITE_RATE_LIMIT);
   }
 
@@ -56,8 +55,8 @@ public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends H
   }
 
   @Override
-  public O map(I i) throws Exception {
+  public void processElement(I value, Context ctx, Collector<Object> out) throws Exception {
     rateLimiter.acquire(1);
-    return super.map(i);
+    super.processElement(value, ctx, out);
   }
 }
