@@ -224,7 +224,6 @@ public abstract class HoodieStorage implements Closeable {
    * Sets Modification Time for the storage Path
    * @param path
    * @param modificationTimeInMillisEpoch Millis since Epoch
-   * @throws IOException
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract void setModificationTime(StoragePath path, long modificationTimeInMillisEpoch) throws IOException;
@@ -247,7 +246,7 @@ public abstract class HoodieStorage implements Closeable {
    *
    * @param oldPath source path.
    * @param newPath destination path.
-   * @return {@true} if rename is successful.
+   * @return true if rename is successful.
    * @throws IOException IO error.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
@@ -329,57 +328,47 @@ public abstract class HoodieStorage implements Closeable {
   public final void createImmutableFileInPath(StoragePath path,
                                               Option<HoodieInstantWriter> contentWriter,
                                               boolean needTempFile) throws HoodieIOException {
-    OutputStream fsout = null;
-    StoragePath tmpPath = null;
+    boolean usedTmpPath = false;
+    final StoragePath createPath;
+    if (contentWriter.isPresent() && needTempFile) {
+      StoragePath parent = path.getParent();
+      createPath = new StoragePath(parent, path.getName() + "." + UUID.randomUUID());
+      usedTmpPath = true;
+    } else {
+      createPath = path;
+    }
 
-    try {
-      if (!contentWriter.isPresent()) {
-        fsout = create(path, false);
-      }
-
-      if (contentWriter.isPresent() && needTempFile) {
-        StoragePath parent = path.getParent();
-        tmpPath = new StoragePath(parent, path.getName() + "." + UUID.randomUUID());
-        fsout = create(tmpPath, false);
-        contentWriter.get().writeToStream(fsout);
-      }
-
-      if (contentWriter.isPresent() && !needTempFile) {
-        fsout = create(path, false);
-        contentWriter.get().writeToStream(fsout);
+    try (OutputStream outputStream = create(createPath, false)) {
+      if (contentWriter.isPresent()) {
+        contentWriter.get().writeToStream(outputStream);
       }
     } catch (IOException e) {
-      String errorMsg = "Failed to create file " + (tmpPath != null ? tmpPath : path);
+      String errorMsg = "Failed to create/write file " + createPath;
       throw new HoodieIOException(errorMsg, e);
-    } finally {
+    }
+
+    // do some renaming and cleanup if we used a temp file
+    if (usedTmpPath) {
+      boolean renameSuccess = false;
+      IOException renameErr = null;
       try {
-        if (null != fsout) {
-          fsout.close();
-        }
+        renameSuccess = rename(createPath, path);
       } catch (IOException e) {
-        String errorMsg = "Failed to close file " + (needTempFile ? tmpPath : path);
-        throw new HoodieIOException(errorMsg, e);
+        renameErr = e;
       }
 
-      boolean renameSuccess = false;
-      try {
-        if (null != tmpPath) {
-          renameSuccess = rename(tmpPath, path);
+      if (!renameSuccess) {
+        try {
+          deleteFile(createPath);
+          LOG.warn("Fail to rename {} to {}, target file exists: {}", usedTmpPath, path, exists(path));
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to delete tmp file upon rename failure. " + usedTmpPath, e);
         }
-      } catch (IOException e) {
-        throw new HoodieIOException(
-            "Failed to rename " + tmpPath + " to the target " + path,
-            e);
-      } finally {
-        if (!renameSuccess && null != tmpPath) {
-          try {
-            deleteFile(tmpPath);
-            LOG.warn("Fail to rename " + tmpPath + " to " + path
-                + ", target file exists: " + exists(path));
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to delete tmp file " + tmpPath, e);
-          }
-        }
+      }
+
+      if (renameErr != null) {
+        throw new HoodieIOException("Failed to rename " + usedTmpPath + " to the target " + path,
+            renameErr);
       }
     }
   }
