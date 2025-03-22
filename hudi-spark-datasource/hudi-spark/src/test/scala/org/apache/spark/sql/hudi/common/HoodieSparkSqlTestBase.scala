@@ -74,6 +74,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
   protected lazy val spark: SparkSession = SparkSession.builder()
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
+    .config("spark.driver.bindAddress", "127.0.0.1")
     .config("spark.sql.session.timeZone", "UTC")
     .config("hoodie.insert.shuffle.parallelism", "4")
     .config("hoodie.upsert.shuffle.parallelism", "4")
@@ -100,7 +101,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   protected def withTempDir(f: File => Unit): Unit = {
     val tempDir = Utils.createTempDir()
     try f(tempDir) finally {
-      Utils.deleteRecursively(tempDir)
+//      Utils.deleteRecursively(tempDir)
     }
   }
 

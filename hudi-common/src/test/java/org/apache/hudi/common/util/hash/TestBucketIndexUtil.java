@@ -73,8 +73,8 @@ public class TestBucketIndexUtil {
   @MethodSource("partitionParams")
   void testPartition(int parallelism, int bucketNumber, boolean partitioned) {
     Map<Integer, Integer> parallelism2TaskCount = new HashMap<>();
-    final Functions.Function2<String, Integer, Integer> partitionIndexFunc =
-        BucketIndexUtil.getPartitionIndexFunc(bucketNumber, parallelism);
+    final Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc =
+        BucketIndexUtil.getPartitionIndexFunc(parallelism);
     initPartitionData(parallelism2TaskCount, bucketNumber, partitionIndexFunc);
     checkResult(parallelism2TaskCount, parallelism, bucketNumber, partitioned);
   }
@@ -83,8 +83,8 @@ public class TestBucketIndexUtil {
   @MethodSource("noPartitionParams")
   void testNoPartition(int parallelism, int bucketNumber, boolean partitioned) {
     Map<Integer, Integer> parallelism2TaskCount = new HashMap<>();
-    final Functions.Function2<String, Integer, Integer> partitionIndexFunc =
-        BucketIndexUtil.getPartitionIndexFunc(bucketNumber, parallelism);
+    final Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc =
+        BucketIndexUtil.getPartitionIndexFunc(parallelism);
     initNoPartitionData(parallelism2TaskCount, bucketNumber, partitionIndexFunc);
     checkResult(parallelism2TaskCount, parallelism, bucketNumber, partitioned);
   }
@@ -132,21 +132,21 @@ public class TestBucketIndexUtil {
   }
 
   private void initPartitionData(Map<Integer, Integer> parallelism2TaskCount, int bucketNumber,
-                                 Functions.Function2<String, Integer, Integer> partitionIndexFunc) {
+                                 Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc) {
     parallelism2TaskCount.clear();
     Arrays.asList("year=2021/month=01/day=01", "year=2021/month=01/day=02", "year=2021/month=01/day=03", "year=2021/month=01/day=04",
         "year=2021/month=01/day=05", "year=2021/month=01/day=06", "year=2021/month=01/day=07", "year=2021/month=01/day=08").forEach(partition -> {
           for (int bucketIndex = 0; bucketIndex < bucketNumber; bucketIndex++) {
-            putIndexCount(parallelism2TaskCount, partitionIndexFunc.apply(partition, bucketIndex));
+            putIndexCount(parallelism2TaskCount, partitionIndexFunc.apply(bucketNumber, partition, bucketIndex));
           }
         });
   }
 
   private void initNoPartitionData(Map<Integer, Integer> parallelism2TaskCount, int bucketNumber,
-                                   Functions.Function2<String, Integer, Integer> partitionIndexFunc) {
+                                   Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc) {
     parallelism2TaskCount.clear();
     for (int bucketIndex = 0; bucketIndex < bucketNumber; bucketIndex++) {
-      putIndexCount(parallelism2TaskCount, partitionIndexFunc.apply("", bucketIndex));
+      putIndexCount(parallelism2TaskCount, partitionIndexFunc.apply(bucketNumber, "", bucketIndex));
     }
   }
 }

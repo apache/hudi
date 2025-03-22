@@ -18,12 +18,16 @@
 
 package org.apache.hudi.sink.bucket;
 
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
 import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.flink.configuration.Configuration;
@@ -92,16 +96,25 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
     return new SortOperatorGen(rowType, new String[] {FILE_GROUP_META_FIELD});
   }
 
-  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, int numBuckets, boolean needFixedFileIdSuffix) {
+  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, Configuration conf, boolean needFixedFileIdSuffix,
+                                  StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf) {
     String recordKey = keyGen.getRecordKey(record);
     String partition = keyGen.getPartitionPath(record);
+    final int numBuckets;
+    if (!StringUtils.isNullOrEmpty(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT))) {
+      numBuckets = PartitionBucketIndexCalculator.getInstance(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT),
+              storageConf.unwrapAs(org.apache.hadoop.conf.Configuration.class), conf.get(FlinkOptions.PATH)).computeNumBuckets(partition);
+    } else {
+      numBuckets = conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
+    }
     final int bucketNum = BucketIdentifier.getBucketId(recordKey, indexKeys, numBuckets);
     String bucketId = partition + bucketNum;
     return bucketIdToFileId.computeIfAbsent(bucketId, k -> needFixedFileIdSuffix ? BucketIdentifier.newBucketFileIdForNBCC(bucketNum) : BucketIdentifier.newBucketFileIdPrefix(bucketNum));
   }
 
-  public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, int numBuckets, boolean needFixedFileIdSuffix) {
-    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeys, numBuckets, needFixedFileIdSuffix);
+  public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, Configuration conf, boolean needFixedFileIdSuffix,
+                                      StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf) {
+    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeys, conf, needFixedFileIdSuffix, storageConf);
     return GenericRowData.of(StringData.fromString(fileId), record);
   }
 

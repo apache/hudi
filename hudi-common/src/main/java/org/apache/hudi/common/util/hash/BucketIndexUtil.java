@@ -35,8 +35,8 @@ public class BucketIndexUtil {
    * @param parallelism Parallelism of the task
    * @return The partition index of this bucket.
    */
-  public static Functions.Function2<String, Integer, Integer> getPartitionIndexFunc(int bucketNum, int parallelism) {
-    return (partition, curBucket) -> {
+  public static Functions.Function3<Integer, String, Integer, Integer> getPartitionIndexFunc(int parallelism) {
+    return (bucketNum, partition, curBucket) -> {
       int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) % parallelism * bucketNum;
       int globalIndex = partitionIndex + curBucket;
       return globalIndex % parallelism;
