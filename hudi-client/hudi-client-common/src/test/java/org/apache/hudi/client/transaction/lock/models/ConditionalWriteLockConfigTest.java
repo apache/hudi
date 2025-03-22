@@ -33,7 +33,6 @@ class ConditionalWriteLockConfigTest {
   @Test
   void testDefaultValues() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/path/locks");
     props.setProperty(BASE_PATH_KEY, "s3://hudi-bucket/table/basepath");
 
     ConditionalWriteLockConfig.Builder builder = new ConditionalWriteLockConfig.Builder();
@@ -41,7 +40,7 @@ class ConditionalWriteLockConfigTest {
         .fromProperties(props)
         .build();
 
-    assertEquals("s3://bucket/path/locks", config.getLocksLocation());
+    assertEquals("", config.getLocksLocation());
     assertEquals(5 * 60 * 1000, config.getLockValidityTimeoutMs(), "Default lock validity should be 5 minutes");
     assertEquals(30 * 1000, config.getHeartbeatPollMs(), "Default heartbeat poll time should be 30 seconds");
   }
@@ -72,16 +71,14 @@ class ConditionalWriteLockConfigTest {
 
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
     assertTrue(exception.getMessage().contains(BASE_PATH_KEY));
-    props.setProperty(BASE_PATH_KEY, "s3://mybasepath");
-
-    exception = assertThrows(IllegalArgumentException.class,() -> propsBuilder.fromProperties(props));
-    assertTrue(exception.getMessage().contains(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key()));
+    props.setProperty(BASE_PATH_KEY, "s3://bucket/path/locks");
+    props.setProperty(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/path/locks");
+    assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
   }
 
   @Test
   void testTimeThresholds() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/path");
     props.setProperty(BASE_PATH_KEY, "/hudi/table/basepath");
     props.setProperty(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
     props.setProperty(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "3000");

@@ -97,8 +97,7 @@ class TestConditionalWriteLockProvider {
   @Test
   void testUnsupportedLockStorageLocation() {
     TypedProperties props = new TypedProperties();
-    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "hdfs://test-bucket/locks");
-    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "gs://bucket/lake/db/tbl-default");
+    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "hdfs://bucket/lake/db/tbl-default");
     props.put(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
     props.put(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "1000");
 
@@ -110,14 +109,37 @@ class TestConditionalWriteLockProvider {
     assertTrue(ex.getCause().getMessage().contains("No implementation of ConditionalWriteLockService supports this scheme"));
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"gs://test-bucket/locks", "s3://test-bucket/locks", "s3a://test-bucket/locks"})
-  void testNonExistentWriteService(String lockStorageLocation) {
+  @Test
+  void testValidLockStorageLocation() {
     TypedProperties props = new TypedProperties();
-    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), lockStorageLocation);
-    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "gs://bucket/lake/db/tbl-default");
-    props.put(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
-    props.put(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "1000");
+    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "s3://bucket/lake/db/tbl-default");
+    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/locks");
+
+    LockConfiguration lockConf = new LockConfiguration(props);
+    Configuration conf = new Configuration();
+
+    HoodieLockException ex = assertThrows(HoodieLockException.class,
+        () -> new ConditionalWriteLockProvider(lockConf, conf));
+    assertTrue(ex.getMessage().contains("Failed to load and initialize ConditionalWriteLockService"));
+  }
+
+  @Test
+  void testInvalidLockStorageLocation() {
+    TypedProperties props = new TypedProperties();
+    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "s3://bucket/lake/db/tbl-default");
+    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/lake/db/tbl-default/.hoodie/.metadata");
+
+    LockConfiguration lockConf = new LockConfiguration(props);
+    Configuration conf = new Configuration();
+
+    assertThrows(IllegalArgumentException.class, () -> new ConditionalWriteLockProvider(lockConf, conf));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"gs://bucket/lake/db/tbl-default", "s3://bucket/lake/db/tbl-default", "s3a://bucket/lake/db/tbl-default"})
+  void testNonExistentWriteServiceWithDefaults(String tableBasePathString) {
+    TypedProperties props = new TypedProperties();
+    props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, tableBasePathString);
 
     LockConfiguration lockConf = new LockConfiguration(props);
     Configuration conf = new Configuration();

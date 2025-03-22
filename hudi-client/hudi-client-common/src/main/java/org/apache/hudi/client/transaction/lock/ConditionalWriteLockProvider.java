@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.HashID;
@@ -34,6 +35,7 @@ import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,10 +58,12 @@ import static org.apache.hudi.common.lock.LockState.FAILED_TO_ACQUIRE;
 import static org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE;
 import static org.apache.hudi.common.lock.LockState.RELEASED;
 import static org.apache.hudi.common.lock.LockState.RELEASING;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NAME;
 
 @ThreadSafe
 public class ConditionalWriteLockProvider implements LockProvider<ConditionalWriteLockFile> {
 
+  public static final String DEFAULT_TABLE_LOCK_FILE_NAME = "table_lock";
   // How long to wait before retrying lock acquisition in blocking calls.
   private static final long DEFAULT_LOCK_ACQUISITION_BUFFER = 1000;
   // Maximum expected clock drift between two nodes.
@@ -125,18 +129,23 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
     heartbeatIntervalMs = config.getHeartbeatPollMs();
     lockValidityMs = config.getLockValidityTimeoutMs();
 
-    // Extract the scheme, bucket (or container), and path
-    String scheme;
-    try {
-      URI uri = new URI(config.getLocksLocation());
-      scheme = uri.getScheme();
-      bucketName = uri.getHost(); // For most schemes, the bucket/container is the host
-      String pathName = uri.getPath(); // Path after the bucket/container
-      lockFilePath = buildLockObjectPath(pathName, slugifyLockFolderFromBasePath(config.getHudiTableBasePath()));
-    } catch (URISyntaxException e) {
-      throw new HoodieLockException("Unable to parse locks location as a URI:" + config.getLocksLocation(), e);
-    }
+    // Determine if the provided locks location is relative.
+    String configuredLocksLocation = config.getLocksLocation();
 
+    // If using base path, recalculate the locks location as .hoodie/.locks
+    String locksLocation = StringUtils.isNullOrEmpty(configuredLocksLocation)
+        ? String.format("%s%s%s", config.getHudiTableBasePath(), Path.SEPARATOR, LOCKS_FOLDER_NAME)
+        : configuredLocksLocation;
+
+    URI uri = parseURI(locksLocation);
+    bucketName = uri.getHost(); // For most schemes, the bucket/container is the host.
+    String folderName = uri.getPath(); // Path after the bucket/container.
+
+    String fileName = StringUtils.isNullOrEmpty(configuredLocksLocation)
+        ? DEFAULT_TABLE_LOCK_FILE_NAME
+        : slugifyLockFolderFromBasePath(config.getHudiTableBasePath());
+
+    lockFilePath = buildLockObjectPath(folderName, fileName);
     ownerId = UUID.randomUUID().toString();
     this.logger = DEFAULT_LOGGER;
     this.heartbeatManager = new LockProviderHeartbeatManager(
@@ -147,14 +156,22 @@ public class ConditionalWriteLockProvider implements LockProvider<ConditionalWri
 
     try {
       this.lockService = ReflectionUtils.loadClass(
-          getLockServiceClassName(scheme),
+          getLockServiceClassName(uri.getScheme()),
           new Class<?>[] {String.class, String.class, String.class, Properties.class },
           new Object[] {ownerId, bucketName, lockFilePath, lockConfiguration.getConfig()});
     } catch (Throwable e) {
       throw new HoodieLockException("Failed to load and initialize ConditionalWriteLockService", e);
     }
 
-    logger.debug("Instantiated new Conditional Write LP, owner: {}", ownerId);
+    logger.info("Instantiated new Conditional Write LP, owner: {}, lockfilePath: {}", ownerId, lockFilePath);
+  }
+
+  private URI parseURI(String location) {
+    try {
+      return new URI(location);
+    } catch (URISyntaxException e) {
+      throw new HoodieLockException("Unable to parse locks location as a URI: " + location, e);
+    }
   }
 
   private static @NotNull String getLockServiceClassName(String scheme) {

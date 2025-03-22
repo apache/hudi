@@ -107,8 +107,7 @@ public class TestGCSConditionalWriteLockProvider
 
   @BeforeEach
   void setupLockProvider() {
-    providerProperties.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "gs://" + testBucket + "/locks");
-    providerProperties.put(BASE_PATH_KEY, "gs://bucket/lake/db/tbl-default");
+    providerProperties.put(BASE_PATH_KEY, String.format("gs://%s/lake/db/tbl-default", testBucket));
     lockProvider = createLockProvider();
   }
 
@@ -122,7 +121,6 @@ public class TestGCSConditionalWriteLockProvider
   @Test
   void testValidDefaultConstructor() {
     TypedProperties props = new TypedProperties();
-    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "gs://test-bucket/locks");
     props.put(ConditionalWriteLockConfig.BASE_PATH_KEY, "gs://bucket/lake/db/tbl-default");
     props.put(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
     props.put(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "1000");

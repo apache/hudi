@@ -23,19 +23,25 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 
+import org.apache.hadoop.fs.Path;
+
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.hudi.client.transaction.lock.ConditionalWriteLockProvider.DEFAULT_TABLE_LOCK_FILE_NAME;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NAME;
 
 public class ConditionalWriteLockConfig extends HoodieConfig {
   private static final String SINCE_VERSION_0_15_0 = "0.15.0";
   private static final String CONDITIONAL_WRITE_LOCK_PROPERTY_PREFIX = LockConfiguration.LOCK_PREFIX + "conditional_write.";
   public static final ConfigProperty<String> LOCK_INTERNAL_STORAGE_LOCATION =
           ConfigProperty.key(CONDITIONAL_WRITE_LOCK_PROPERTY_PREFIX + "locks_location")
-                  .noDefaultValue()
+                  .defaultValue("")
                   .markAdvanced()
                   .sinceVersion(SINCE_VERSION_0_15_0)
                   .withDocumentation(
-                          "For conditional write based lock provider, the valid URI where lock files are written."
-                              + "Must be a filesystem which supports conditional writes.");
+                          "For conditional write based lock provider, the optional URI where lock files are written. "
+                              + "Must be the same filesystem as the table path and should conditional writes. "
+                              + "By default, writes to " + LOCKS_FOLDER_NAME + Path.SEPARATOR + DEFAULT_TABLE_LOCK_FILE_NAME + ".json under the table base path.");
 
   public static final ConfigProperty<Long> LOCK_VALIDITY_TIMEOUT_MS =
           ConfigProperty.key(CONDITIONAL_WRITE_LOCK_PROPERTY_PREFIX + "lock_validity_timeout_ms")
@@ -67,7 +73,6 @@ public class ConditionalWriteLockConfig extends HoodieConfig {
   }
 
   public String getLocksLocation() {
-    // Required !!
     return getString(LOCK_INTERNAL_STORAGE_LOCATION);
   }
 
@@ -90,8 +95,8 @@ public class ConditionalWriteLockConfig extends HoodieConfig {
       if (Boolean.FALSE.equals(lockConfig.contains(BASE_PATH_KEY))) {
         throw new IllegalArgumentException(BASE_PATH_KEY + notExistsMsg);
       }
-      if (Boolean.FALSE.equals(lockConfig.contains(LOCK_INTERNAL_STORAGE_LOCATION.key()))) {
-        throw new IllegalArgumentException(LOCK_INTERNAL_STORAGE_LOCATION.key() + notExistsMsg);
+      if (lockConfig.getStringOrDefault(LOCK_INTERNAL_STORAGE_LOCATION).startsWith(lockConfig.getHudiTableBasePath())) {
+        throw new IllegalArgumentException(LOCK_INTERNAL_STORAGE_LOCATION.key() + " cannot start with the hudi table base path.");
       }
       if (lockConfig.getLongOrDefault(LOCK_VALIDITY_TIMEOUT_MS) < lockConfig.getLongOrDefault(HEARTBEAT_POLL_MS) * 3) {
         throw new IllegalArgumentException(LOCK_VALIDITY_TIMEOUT_MS.key() + " should be more than triple " + HEARTBEAT_POLL_MS.key());

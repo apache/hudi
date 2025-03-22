@@ -21,7 +21,6 @@
 package org.apache.hudi.aws.transaction.lock;
 
 import org.apache.hudi.client.transaction.lock.AbstractLockProviderTestBase;
-import org.apache.hudi.client.transaction.lock.ConditionalWriteLockConfig;
 import org.apache.hudi.client.transaction.lock.ConditionalWriteLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.config.HoodieAWSConfig;
@@ -122,10 +121,8 @@ public class TestS3ConditionalWriteLockProvider extends AbstractLockProviderTest
 
   @BeforeEach
   void setupLockProvider() {
-    // Provide S3 location for locks
-    providerProperties.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://" + TEST_BUCKET + "/locks");
     // Provide base path for the test
-    providerProperties.put(BASE_PATH_KEY, "s3://some-bucket/lake/db/tbl-default");
+    providerProperties.put(BASE_PATH_KEY, String.format("s3://%s/lake/db/tbl-default", TEST_BUCKET));
     providerProperties.put(HoodieAWSConfig.AWS_SECRET_KEY.key(), S3_CONTAINER.getSecretKey());
     providerProperties.put(HoodieAWSConfig.AWS_ACCESS_KEY.key(), S3_CONTAINER.getAccessKey());
     lockProvider = createLockProvider();
