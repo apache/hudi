@@ -141,10 +141,20 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       }
     }
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
-    this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(), tableBasePath,
-        latestCommitTime, getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath),
-        tableSchema, requestedSchema, Option.empty(), metaClient, props, fileSplit.getStart(),
-        fileSplit.getLength(), false);
+    this.fileGroupReader = HoodieFileGroupReader.<ArrayWritable>newBuilder()
+        .withReaderContext(readerContext)
+        .withStorage(metaClient.getStorage())
+        .withTablePath(tableBasePath)
+        .withLatestCommitTime(latestCommitTime)
+        .withFileSlice(getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath))
+        .withDataSchema(tableSchema)
+        .withRequestedSchema(requestedSchema)
+        .withHoodieTableMetaClient(metaClient)
+        .withProps(props)
+        .withStart(fileSplit.getStart())
+        .withLength(fileSplit.getLength())
+        .withShouldUseRecordPosition(false)
+        .build();
     this.fileGroupReader.initRecordIterators();
     // it expects the partition columns to be at the end
     Schema outputSchema = HoodieAvroUtils.generateProjectionSchema(tableSchema,
