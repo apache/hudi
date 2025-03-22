@@ -50,6 +50,7 @@ import java.util.regex.Pattern;
  * exists for each unique hashingInstantToLoad value.
  */
 public class PartitionBucketIndexCalculator implements Serializable {
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(PartitionBucketIndexCalculator.class);
   // Map to store singleton instances for each instantToLoad + configuration hash combination
   private static final ConcurrentMap<String, PartitionBucketIndexCalculator> INSTANCES = new ConcurrentHashMap<>();

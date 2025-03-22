@@ -242,6 +242,7 @@ class PartitionBucketIndexManager extends BaseProcedure
       })
     }
     val dataFrame = HoodieUnsafeUtils.createDataFrameFromRDD(sparkSession, res, sparkSchemaWithMetaFields)
+    logInfo("Start to do bucket rescale for " + rescalePartitionsMap)
     val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
       sparkSession.sqlContext,
       SaveMode.Append,

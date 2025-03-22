@@ -101,7 +101,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   protected def withTempDir(f: File => Unit): Unit = {
     val tempDir = Utils.createTempDir()
     try f(tempDir) finally {
-      Utils.deleteRecursively(tempDir)
+//      Utils.deleteRecursively(tempDir)
     }
   }
 

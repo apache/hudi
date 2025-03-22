@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.BucketIndexBulkInsertPartitionerWithRows;
-import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
 import org.apache.hudi.index.bucket.PartitionBucketIndexUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -32,10 +31,15 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertOverwriteCommitActionExecutor {
 
-  private final PartitionBucketIndexCalculator calc;
+  private static final long serialVersionUID = 1L;
+
+  private static final Logger LOG = LoggerFactory.getLogger(DatasetBucketRescaleCommitActionExecutor.class);
+  private final PartitionBucketIndexHashingConfig hashingConfig;
 
   public DatasetBucketRescaleCommitActionExecutor(HoodieWriteConfig config,
                                                   SparkRDDWriteClient writeClient,
@@ -45,9 +49,8 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
     String instant = config.getHashingConfigInstantToLoad();
     String rule = config.getBucketIndexPartitionRuleType();
     int bucketNumber = config.getBucketIndexNumBuckets();
-    PartitionBucketIndexHashingConfig hashingConfig = new PartitionBucketIndexHashingConfig(expression,
+    this.hashingConfig = new PartitionBucketIndexHashingConfig(expression,
         bucketNumber, rule, PartitionBucketIndexHashingConfig.CURRENT_VERSION, instant);
-    this.calc = PartitionBucketIndexCalculator.getInstance(instantTime, hashingConfig);
   }
 
   /**
@@ -59,7 +62,7 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
   @Override
   protected BulkInsertPartitioner<Dataset<Row>> getPartitioner(boolean populateMetaFields, boolean isTablePartitioned) {
     return new BucketIndexBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault(),
-        writeConfig.getBucketIndexNumBuckets(), calc);
+        writeConfig.getBucketIndexNumBuckets(), hashingConfig);
   }
 
   /**
@@ -69,9 +72,8 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
   @Override
   protected void afterExecute(HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
     super.afterExecute(result);
-
-    PartitionBucketIndexHashingConfig hashingConfig = calc.getHashingConfig();
     boolean res = PartitionBucketIndexUtils.saveHashingConfig(hashingConfig, table.getMetaClient());
     ValidationUtils.checkArgument(res);
+    LOG.info("Finish to save hashing config " + hashingConfig);
   }
 }
