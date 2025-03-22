@@ -322,11 +322,13 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             return Option.empty();
           }
           Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
-          // Checks the ordering value does not equal to 0
-          // because we use 0 as the default value which means natural order
-          boolean chooseExisting = !deleteOrderingVal.equals(0)
-              && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
-              && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
+
+          // Because the delete record from older log block, so we should deal it with three cases:
+          // 1. delete record with invalid ordering value: keep existing record because it is newer, deletion can be ignored.
+          // 2. delete record with valid ordering value and higher than existing record: keep delete record because it is newer.
+          // 3. delete record with valid ordering value and lower than existing record: keep existing record because it is newer, deletion can be ignored.
+          boolean chooseExisting = deleteOrderingVal.equals(0)
+              || (ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal) && existingOrderingVal.compareTo(deleteOrderingVal) > 0);
           if (chooseExisting) {
             // The DELETE message is obsolete if the old message has greater orderingVal.
             return Option.empty();
