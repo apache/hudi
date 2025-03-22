@@ -95,20 +95,33 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
-    HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
-
-    List<WriteStatus> writeStatuses = new LinkedList<>();
     final HoodieRecord<?> record = inputRecords.get(0);
     final String partitionPath = record.getPartitionPath();
     final String fileId = record.getCurrentLocation().getFileId();
     final BucketType bucketType = record.getCurrentLocation().getInstantTime().equals("I")
         ? BucketType.INSERT
         : BucketType.UPDATE;
+    return execute(inputRecords.iterator(), sourceReadAndIndexTimer, partitionPath, fileId, bucketType);
+  }
+
+  public HoodieWriteMetadata<List<WriteStatus>> execute(Iterator<HoodieRecord<T>> recordItr, BucketInfo bucketInfo) {
+    return execute(recordItr, Option.empty(), bucketInfo.getPartitionPath(), bucketInfo.getFileIdPrefix(), bucketInfo.getBucketType());
+  }
+
+  private HoodieWriteMetadata<List<WriteStatus>> execute(
+      Iterator<HoodieRecord<T>> recordItr,
+      Option<HoodieTimer> sourceReadAndIndexTimer,
+      String partitionPath,
+      String fileId,
+      BucketType bucketType) {
+    HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
+
+    List<WriteStatus> writeStatuses = new LinkedList<>();
     handleUpsertPartition(
         partitionPath,
         fileId,
         bucketType,
-        inputRecords.iterator())
+        recordItr)
         .forEachRemaining(writeStatuses::addAll);
     setUpWriteMetadata(writeStatuses, result);
     return result;

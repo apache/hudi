@@ -325,6 +325,26 @@ public abstract class FileFormatUtils {
                                                     Schema readerSchema, String keyFieldName,
                                                     Map<String, String> paramsMap) throws IOException;
 
+  /**
+   * Serializes Hudi records to the log block and collect column range metadata.
+   *
+   * @param storage      {@link HoodieStorage} instance.
+   * @param records      a list of {@link HoodieRecord}.
+   * @param writerSchema writer schema string from the log block header.
+   * @param readerSchema schema of reader.
+   * @param keyFieldName name of key field.
+   * @param paramsMap    additional params for serialization.
+   * @return pair of byte array after serialization and format metadata.
+   * @throws IOException upon serialization error.
+   */
+  public abstract Pair<byte[], Object> serializeRecordsToLogBlock(HoodieStorage storage,
+                                                                  Iterator<HoodieRecord> records,
+                                                                  HoodieRecord.HoodieRecordType recordType,
+                                                                  Schema writerSchema,
+                                                                  Schema readerSchema,
+                                                                  String keyFieldName,
+                                                                  Map<String, String> paramsMap) throws IOException;
+
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------

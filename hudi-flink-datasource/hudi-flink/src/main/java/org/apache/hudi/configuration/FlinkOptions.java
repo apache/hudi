@@ -383,6 +383,13 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
 
   @AdvancedConfig
+  public static final ConfigOption<Boolean> INSERT_ROWDATA_MODE_ENABLED = ConfigOptions
+      .key("write.rowdata.mode.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to enable writing RowData directly without converting to Avro.");
+
+  @AdvancedConfig
   public static final ConfigOption<Boolean> INSERT_CLUSTER = ConfigOptions
       .key("write.insert.cluster")
       .booleanType()
@@ -619,6 +626,13 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(100) // default 100 MB
       .withDescription("Max memory in MB for merge, default 100MB");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> WRITE_MEMORY_SEGMENT_PAGE_SIZE = ConfigOptions
+      .key("write.memory.segment.page.size")
+      .intType()
+      .defaultValue(32 * 1024) // default 32 KB
+      .withDescription("Page size for memory segment used for write buffer.");
 
   // this is only for internal use
   @AdvancedConfig

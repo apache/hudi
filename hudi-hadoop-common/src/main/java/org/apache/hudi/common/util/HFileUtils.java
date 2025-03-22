@@ -232,6 +232,18 @@ public class HFileUtils extends FileFormatUtils {
     return baos.toByteArray();
   }
 
+  @Override
+  public Pair<byte[], Object> serializeRecordsToLogBlock(
+      HoodieStorage storage,
+      Iterator<HoodieRecord> records,
+      HoodieRecord.HoodieRecordType recordType,
+      Schema writerSchema,
+      Schema readerSchema,
+      String keyFieldName,
+      Map<String, String> paramsMap) throws IOException {
+    throw new UnsupportedOperationException("HFileUtils does not support serializeRecordsToLogBlock returning HoodieColumnRangeMetadata.");
+  }
+
   private static Option<String> getRecordKey(HoodieRecord record, Schema readerSchema, String keyFieldName) {
     return Option.ofNullable(record.getRecordKey(readerSchema, keyFieldName));
   }

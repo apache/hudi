@@ -42,4 +42,12 @@ public interface HoodieFileWriter extends AutoCloseable {
   default void write(String recordKey, HoodieRecord record, Schema schema) throws IOException {
     write(recordKey, record, schema, new Properties());
   }
+
+  /**
+   * Return metadata from the underlying format file, for example, return {@code ParquetMetadata} for Parquet files.
+   * The returned format metadata will be used to generate column statistics, like {@code HoodieColumnRangeMetadata}.
+   */
+  default Object getFileFormatMetadata() {
+    throw new UnsupportedOperationException("HoodieFileWriter#getFormatMetadata is unsupported by default.");
+  }
 }
