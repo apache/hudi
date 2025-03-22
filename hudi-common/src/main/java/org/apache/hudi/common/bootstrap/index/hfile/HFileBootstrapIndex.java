@@ -144,7 +144,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
   @Override
   public BootstrapIndex.IndexWriter createWriter(String bootstrapBasePath) {
-    return (IndexWriter) ReflectionUtils.loadClass("org.apache.hudi.common.bootstrap.index.hfile.HBaseHFileBootstrapIndexWriter",
+    return (IndexWriter) ReflectionUtils.loadClass("org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndexWriter",
         new Class<?>[] {String.class, HoodieTableMetaClient.class},
         bootstrapBasePath, metaClient);
   }

@@ -34,11 +34,15 @@ import static org.apache.hudi.io.util.IOUtils.readVarLong;
 /**
  * Represents a {@link HFileBlockType#ROOT_INDEX} block.
  */
-public class HFileRootIndexBlock extends HFileBlock {
+public class HFileRootIndexBlock extends HFileIndexBlock {
   public HFileRootIndexBlock(HFileContext context,
                              byte[] byteBuff,
                              int startOffsetInBuff) {
     super(context, HFileBlockType.ROOT_INDEX, byteBuff, startOffsetInBuff);
+  }
+
+  public HFileRootIndexBlock(HFileContext context) {
+    super(context, HFileBlockType.ROOT_INDEX);
   }
 
   /**
@@ -50,16 +54,16 @@ public class HFileRootIndexBlock extends HFileBlock {
    */
   public TreeMap<Key, BlockIndexEntry> readBlockIndex(int numEntries, boolean contentKeyOnly) {
     TreeMap<Key, BlockIndexEntry> blockIndexEntryMap = new TreeMap<>();
-    int buffOffset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
+    int buffOffset = readAttributesOpt.get().startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
     List<Key> keyList = new ArrayList<>();
     List<Long> offsetList = new ArrayList<>();
     List<Integer> sizeList = new ArrayList();
     for (int i = 0; i < numEntries; i++) {
-      long offset = readLong(byteBuff, buffOffset);
-      int size = readInt(byteBuff, buffOffset + 8);
-      int varLongSizeOnDist = decodeVarLongSizeOnDisk(byteBuff, buffOffset + 12);
-      int keyLength = (int) readVarLong(byteBuff, buffOffset + 12, varLongSizeOnDist);
-      byte[] keyBytes = copy(byteBuff, buffOffset + 12 + varLongSizeOnDist, keyLength);
+      long offset = readLong(readAttributesOpt.get().byteBuff, buffOffset);
+      int size = readInt(readAttributesOpt.get().byteBuff, buffOffset + 8);
+      int varLongSizeOnDist = decodeVarLongSizeOnDisk(readAttributesOpt.get().byteBuff, buffOffset + 12);
+      int keyLength = (int) readVarLong(readAttributesOpt.get().byteBuff, buffOffset + 12, varLongSizeOnDist);
+      byte[] keyBytes = copy(readAttributesOpt.get().byteBuff, buffOffset + 12 + varLongSizeOnDist, keyLength);
       Key key = contentKeyOnly ? new UTF8StringKey(keyBytes) : new Key(keyBytes);
       keyList.add(key);
       offsetList.add(offset);
