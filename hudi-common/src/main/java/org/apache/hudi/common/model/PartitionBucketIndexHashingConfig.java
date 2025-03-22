@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class PartitionBucketIndexHashingConfig implements Serializable {
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(PartitionBucketIndexHashingConfig.class);
   public static final String HASHING_CONFIG_FILE_SUFFIX = ".hashing_config";
   public static final Integer CURRENT_VERSION = 1;
@@ -96,5 +97,14 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
 
   public String getExpressions() {
     return expressions;
+  }
+
+  public String toString() {
+    return "PartitionBucketIndexHashingConfig{" + "expressions='" + expressions + '\''
+        + ", defaultBucketNumber='" + defaultBucketNumber + '\''
+        + ", rule='" + rule + '\''
+        + ", version='" + version + '\''
+        + ", instant=" + instant
+        + '}';
   }
 }

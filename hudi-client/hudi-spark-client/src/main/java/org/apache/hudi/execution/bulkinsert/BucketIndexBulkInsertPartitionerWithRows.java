@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -47,11 +48,11 @@ public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertParti
     }
   }
 
-  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum, PartitionBucketIndexCalculator calc) {
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum, PartitionBucketIndexHashingConfig hashingConfig) {
     this.indexKeyFields = indexKeyFields;
     this.bucketNum = bucketNum;
     this.isPartitionBucketIndexEnable = true;
-    this.calc = calc;
+    this.calc = PartitionBucketIndexCalculator.getInstance(hashingConfig.getInstant(), hashingConfig);
   }
 
   @Override

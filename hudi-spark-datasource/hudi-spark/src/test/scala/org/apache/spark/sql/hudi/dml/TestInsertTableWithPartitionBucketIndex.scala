@@ -51,6 +51,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
         Seq("true", "false").foreach { bulkInsertAsRow =>
           withTempDir { tmp =>
             val tableName = generateTableName
+            val tablePath = tmp.getCanonicalPath + "/" + tableName
             // Create a partitioned table
             spark.sql(
               s"""
@@ -70,7 +71,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
                  | hoodie.bucket.index.num.buckets = 1,
                  | hoodie.datasource.write.row.writer.enable = '$bulkInsertAsRow')
                  | partitioned by (dt)
-                 | location '${tmp.getCanonicalPath}'
+                 | location '${tablePath}'
            """.stripMargin)
 
             // Note: Do not write the field alias, the partition field must be placed last.
@@ -112,7 +113,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
               Seq(3, "a3,3", 30.0, 3000, "2021-01-07"),
               Seq(33, "a3,3", 30.0, 3000, "2021-01-07")
             )
-            val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+            val metaClient = createMetaClient(spark, tablePath)
             val actual: List[String] = PartitionBucketIndexUtils.getAllFileIDWithPartition(metaClient).asScala.toList
             val expected: List[String] = List("dt=2021-01-05" + "00000000",
               "dt=2021-01-05" + "00000000",
@@ -121,6 +122,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
               "dt=2021-01-07" + "00000000",
               "dt=2021-01-07" + "00000001")
             assert(actual.sorted == expected.sorted)
+            spark.sparkContext.persistentRdds.foreach(rddPair => rddPair._2.unpersist(true))
           }
         }
       }
@@ -146,6 +148,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         withTempDir { tmp =>
           val tableName = generateTableName
+          val tablePath = tmp.getCanonicalPath + "/" + tableName
           // Create a partitioned table
           spark.sql(
             s"""
@@ -164,7 +167,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
                | hoodie.bucket.index.hash.field = 'id,name',
                | hoodie.bucket.index.num.buckets = 1)
                | partitioned by (dt)
-               | location '${tmp.getCanonicalPath}'
+               | location '$tablePath'
                | """.stripMargin)
 
           // Note: Do not write the field alias, the partition field must be placed last.
@@ -208,7 +211,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
             Seq(3, "a3,3", 30.0, 3000, "2021-01-07"),
             Seq(33, "a3,3", 30.0, 3000, "2021-01-07")
           )
-          val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+          val metaClient = createMetaClient(spark, tablePath)
           val actual: List[String] = PartitionBucketIndexUtils.getAllFileIDWithPartition(metaClient).asScala.toList
           val expected: List[String] = List("dt=2021-01-05" + "00000000",
             "dt=2021-01-05" + "00000000",
@@ -218,6 +221,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
             "dt=2021-01-07" + "00000001")
           // compare file group as expected
           assert(actual.sorted == expected.sorted)
+          spark.sparkContext.persistentRdds.foreach(rddPair => rddPair._2.unpersist(true))
         }
       }
     }
