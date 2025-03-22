@@ -17,6 +17,8 @@
  * under the License.
  */
 
+SET 'sql-client.execution.result-mode'='TABLEAU';
+
 CREATE TABLE t1
 (
     uuid        VARCHAR(20) PRIMARY KEY NOT ENFORCED,
@@ -36,3 +38,6 @@ WITH (
 INSERT INTO t1
 VALUES ('id1', 'Danny', 23, TIMESTAMP '1970-01-01 00:00:01', 'par1'),
        ('id8', 'Han', 56, TIMESTAMP '1970-01-01 00:00:08', 'par4');
+
+-- select data from the data
+SELECT * FROM t1 WHERE `partition` = 'par1';
