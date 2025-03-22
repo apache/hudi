@@ -20,16 +20,21 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, OPERATION, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, URL_ENCODE_PARTITIONING}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator}
-import org.apache.spark.sql.{RuntimeConfig, SQLContext, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.internal.{SQLConf, SessionState, StaticSQLConf}
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{RuntimeConfig, SQLContext, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments.arguments
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, spy, when}
 
@@ -132,6 +137,56 @@ class TestProvidesHoodieConfig {
     )
   }
 
+  @ParameterizedTest
+  @MethodSource(Array("testBuildCommonOverridingOptsParams"))
+  def testBuildCommonOverridingOpts(primaryKeys: Array[String],
+                                    preCombineField: String,
+                                    expectedOpts: Map[String, String]): Unit = {
+    val mockTableConfig = mock(classOf[HoodieTableConfig])
+    when(mockTableConfig.getTableName).thenReturn("myTable")
+    when(mockTableConfig.getHiveStylePartitioningEnable).thenReturn("true")
+    when(mockTableConfig.getUrlEncodePartitioning).thenReturn("false")
+    when(mockTableConfig.getPreCombineField).thenReturn(preCombineField)
+
+    val mockHoodieTable = mock(classOf[HoodieCatalogTable])
+    when(mockHoodieTable.tableConfig).thenReturn(mockTableConfig)
+    when(mockHoodieTable.tableLocation).thenReturn("/dummy/path")
+    when(mockHoodieTable.primaryKeys).thenReturn(primaryKeys)
+
+    val partitionPathField = "partField"
+    val result = ProvidesHoodieConfig.buildCommonOverridingOpts(mockHoodieTable, partitionPathField)
+    assert(result == expectedOpts)
+  }
+
+  @Test
+  def testBuildOverridingOptsForDelete(): Unit = {
+    val mockTableConfig = mock(classOf[HoodieTableConfig])
+    when(mockTableConfig.getTableName).thenReturn("myTable")
+    when(mockTableConfig.getHiveStylePartitioningEnable).thenReturn("true")
+    when(mockTableConfig.getUrlEncodePartitioning).thenReturn("false")
+
+    val mockHoodieTable = mock(classOf[HoodieCatalogTable])
+    when(mockHoodieTable.tableConfig).thenReturn(mockTableConfig)
+    when(mockHoodieTable.tableLocation).thenReturn("/dummy/path")
+    when(mockHoodieTable.primaryKeys).thenReturn(Array("id1", "id2"))
+
+    val partitionPathField = "partField"
+
+    val expectedOpts = Map(
+      "path" -> "/dummy/path",
+      HoodieWriteConfig.TBL_NAME.key -> "myTable",
+      HIVE_STYLE_PARTITIONING.key -> "true",
+      URL_ENCODE_PARTITIONING.key -> "false",
+      PARTITIONPATH_FIELD.key -> partitionPathField,
+      RECORDKEY_FIELD.key -> "id1,id2",
+      OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL
+    )
+
+    val result = ProvidesHoodieConfig.buildOverridingOptsForDelete(
+      mockHoodieTable, partitionPathField)
+    assert(result == expectedOpts)
+  }
+
   private def mockPartitionWriteConfigInCatalogProps(mockTable: HoodieCatalogTable,
                                                      value: Option[String]): Unit = {
     val props = if (value.isDefined) {
@@ -140,5 +195,44 @@ class TestProvidesHoodieConfig {
       Map[String, String]()
     }
     when(mockTable.catalogProperties).thenReturn(props)
+  }
+}
+
+object TestProvidesHoodieConfig {
+  def testBuildCommonOverridingOptsParams(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments(
+        Array.empty[String],
+        "",
+        Map(
+          "path" -> "/dummy/path",
+          HoodieWriteConfig.TBL_NAME.key -> "myTable",
+          HIVE_STYLE_PARTITIONING.key -> "true",
+          URL_ENCODE_PARTITIONING.key -> "false",
+          PARTITIONPATH_FIELD.key -> "partField"
+        )),
+      arguments(
+        Array("id1", "id2"),
+        "",
+        Map(
+          "path" -> "/dummy/path",
+          HoodieWriteConfig.TBL_NAME.key -> "myTable",
+          HIVE_STYLE_PARTITIONING.key -> "true",
+          URL_ENCODE_PARTITIONING.key -> "false",
+          PARTITIONPATH_FIELD.key -> "partField",
+          RECORDKEY_FIELD.key -> "id1,id2"
+        )),
+      arguments(
+        Array("id1", "id2"),
+        "ts",
+        Map(
+          "path" -> "/dummy/path",
+          HoodieWriteConfig.TBL_NAME.key -> "myTable",
+          HIVE_STYLE_PARTITIONING.key -> "true",
+          URL_ENCODE_PARTITIONING.key -> "false",
+          PARTITIONPATH_FIELD.key -> "partField",
+          RECORDKEY_FIELD.key -> "id1,id2",
+          PRECOMBINE_FIELD.key -> "ts"
+        )))
   }
 }
