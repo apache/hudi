@@ -39,6 +39,7 @@ import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 /**
  * NOTE: PLEASE READ CAREFULLY
@@ -59,7 +60,7 @@ case class HoodieSpark3ResolveReferences(spark: SparkSession) extends Rule[Logic
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     case TimeTravelRelation(ResolvesToHudiTable(table), timestamp, version) =>
       if (timestamp.isEmpty && version.nonEmpty) {
-        throw new AnalysisException("Version expression is not supported for time travel")
+        throw new HoodieAnalysisException("Version expression is not supported for time travel")
       }
 
       val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
@@ -291,7 +292,7 @@ case class HoodieSpark3ResolveReferences(spark: SparkSession) extends Rule[Logic
   }
 
   private def missingFieldError(fieldName: Seq[String], table: LogicalPlan, context: Origin): Throwable = {
-    throw new AnalysisException(
+    throw new HoodieAnalysisException(
       s"Missing field ${fieldName.mkString(".")} with schema:\n" +
         table.schema.treeString,
       context.line,
