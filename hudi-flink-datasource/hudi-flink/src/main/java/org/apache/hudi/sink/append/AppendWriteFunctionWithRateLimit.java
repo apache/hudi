@@ -28,7 +28,7 @@ import org.apache.flink.util.Collector;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Function that transforms RowData to a HoodieRecord with RateLimit.
+ * Append write function with configurable rate limit.
  */
 public class AppendWriteFunctionWithRateLimit<I>
     extends AppendWriteFunction<I> {
