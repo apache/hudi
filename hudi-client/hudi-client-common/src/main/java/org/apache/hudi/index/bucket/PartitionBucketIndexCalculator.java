@@ -34,10 +34,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,12 +53,12 @@ public class PartitionBucketIndexCalculator implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(PartitionBucketIndexCalculator.class);
   // Map to store singleton instances for each instantToLoad + configuration hash combination
   private static final ConcurrentMap<String, PartitionBucketIndexCalculator> INSTANCES = new ConcurrentHashMap<>();
-  private static final int CACHE_SIZE = 100_000;
-  private PartitionBucketIndexHashingConfig hashingConfig;
+  protected int cacheSize = 100_000;
+  protected PartitionBucketIndexHashingConfig hashingConfig;
   private int defaultBucketNumber;
   private String instantToLoad;
   // Cache for partition to bucket number mapping
-  private final SerializableLRUMap<String, Integer> partitionToBucketCache = new SerializableLRUMap<>(CACHE_SIZE);
+  protected Map<String, Integer> partitionToBucketCache = new SerializableLRUMap<>(cacheSize);
   private RuleEngine ruleEngine;
 
   /**
@@ -201,7 +200,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
   }
 
   public Map<String, Integer> getPartitionToBucket() {
-    return partitionToBucketCache.getInnerMap();
+    return new HashMap<>(partitionToBucketCache);
   }
 
   public void clearCache() {
@@ -319,13 +318,11 @@ public class PartitionBucketIndexCalculator implements Serializable {
 
   /**
    * A fixed-capacity LRU (Least Recently Used) map implementation for String keys and Integer values.
-   * This implementation is properly serializable with custom serialization methods.
+   * This implementation is serializable.
+   * When the map reaches its capacity, the least recently accessed entry will be removed.
    */
-  public static class SerializableLRUMap<K, V> implements Serializable {
+  public static class SerializableLRUMap<K, V> extends LinkedHashMap<K, V> implements Serializable {
     private static final long serialVersionUID = 1L;
-
-    // Transient to avoid serializing the LinkedHashMap directly
-    private transient LinkedHashMap<K, V> map;
     private final int capacity;
 
     /**
@@ -335,116 +332,27 @@ public class PartitionBucketIndexCalculator implements Serializable {
      * @throws IllegalArgumentException if capacity is non-positive
      */
     public SerializableLRUMap(int capacity) {
+      // Initial capacity, load factor, and access order
+      super(capacity, 0.75f, true);
       if (capacity <= 0) {
         throw new IllegalArgumentException("Capacity must be positive");
       }
       this.capacity = capacity;
-      initMap();
     }
 
     /**
-     * Initialize the internal map.
-     */
-    private void initMap() {
-      // Create a LinkedHashMap with access order
-      this.map = new LinkedHashMap<K, V>(capacity, 0.75f, true) {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-          return size() > capacity;
-        }
-      };
-    }
-
-    /**
-     * Put a key-value pair in the map.
-     */
-    public V put(K key, V value) {
-      return map.put(key, value);
-    }
-
-    /**
-     * Get a value by key.
-     */
-    public V get(K key) {
-      return map.get(key);
-    }
-
-    /**
-     * Remove a key from the map.
-     */
-    public V remove(K key) {
-      return map.remove(key);
-    }
-
-    /**
-     * Check if the map contains a key.
-     */
-    public boolean containsKey(K key) {
-      return map.containsKey(key);
-    }
-
-    /**
-     * Get the current size of the map.
-     */
-    public int size() {
-      return map.size();
-    }
-
-    /**
-     * Clear all entries from the map.
-     */
-    public void clear() {
-      map.clear();
-    }
-
-    /**
-     * Get the capacity of the map.
+     * Returns the current capacity of the map.
+     *
+     * @return the capacity
      */
     public int getCapacity() {
       return capacity;
     }
 
-    public Map<K, V> getInnerMap() {
-      return this.map;
-    }
-
-    /**
-     * Custom serialization method.
-     */
-    private void writeObject(ObjectOutputStream out) throws IOException {
-      out.defaultWriteObject(); // Write non-transient fields
-
-      // Write the size and all entries
-      out.writeInt(map.size());
-      for (Map.Entry<K, V> entry : map.entrySet()) {
-        out.writeObject(entry.getKey());
-        out.writeObject(entry.getValue());
-      }
-    }
-
-    /**
-     * Custom deserialization method.
-     */
-    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
-      in.defaultReadObject(); // Read non-transient fields
-
-      // Initialize the map
-      initMap();
-
-      // Read the size and all entries
-      int size = in.readInt();
-      for (int i = 0; i < size; i++) {
-        @SuppressWarnings("unchecked")
-        K key = (K) in.readObject();
-        @SuppressWarnings("unchecked")
-        V value = (V) in.readObject();
-        map.put(key, value);
-      }
-    }
-
     @Override
-    public String toString() {
-      return map.toString();
+    protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+      // Remove the eldest entry when size exceeds capacity
+      return size() > capacity;
     }
   }
 }
