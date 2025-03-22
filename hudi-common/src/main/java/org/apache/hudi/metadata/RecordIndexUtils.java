@@ -46,7 +46,7 @@ import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
 
-public class BaseFileRecordParsingUtils {
+public class RecordIndexUtils {
 
   /**
    * Generates RLI Metadata records for base files.

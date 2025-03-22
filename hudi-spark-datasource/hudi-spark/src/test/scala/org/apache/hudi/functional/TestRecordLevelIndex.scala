@@ -18,18 +18,22 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, DefaultSparkRecordMerger}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config._
 import org.apache.hudi.exception.HoodieWriteConflictException
+import org.apache.hudi.functional.TestRecordLevelIndex.convertRowListToSeq
+import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
+import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.util.JavaConversions
 
 import org.apache.spark.sql._
@@ -632,9 +636,105 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     executor.shutdownNow()
     validateDataAndRecordIndices(hudiOpts)
   }
+
+  @ParameterizedTest
+  @CsvSource(value = Array("MERGE_ON_READ,EVENT_TIME_ORDERING", "MERGE_ON_READ,COMMIT_TIME_ORDERING"))
+  def testDeletesWithLowerOrderingValue(tableType: HoodieTableType, mergeMode: RecordMergeMode): Unit = {
+    var (writeOpts, readOpts) = getWriterReaderOptsForRLI(HoodieRecordType.AVRO)
+    writeOpts = writeOpts + (HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "8",
+      HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME -> HoodieTableType.MERGE_ON_READ.name(),
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      "hoodie.write.record.merge.mode" -> mergeMode.name(),
+      "hoodie.index.type" -> "RECORD_INDEX",
+      "hoodie.metadata.record.index.enable" -> "true",
+      "hoodie.record.index.update.partition.path" -> "true",
+      "hoodie.parquet.small.file.limit" -> "0")
+
+    // generate the inserts
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val inserts = DataSourceTestUtils.generateRandomRows(400)
+    val df = spark.createDataFrame(spark.sparkContext.parallelize(convertRowListToSeq(inserts)), structType)
+
+    df.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val hudiSnapshotDF1 = spark.read.format("hudi")
+      .options(readOpts)
+      .load(basePath)
+    assertEquals(400, hudiSnapshotDF1.count())
+
+    // ingest a batch with mix of updates and deletes, but having lower ordering value. Both should not be honored.
+    val toUpdate = sqlContext.createDataFrame(DataSourceTestUtils.getUniqueRows(inserts, 100), structType).collectAsList()
+    val updateToDiffPartitionLowerTs = sqlContext.createDataFrame(toUpdate, structType)
+    val rowsToUpdate = DataSourceTestUtils.updateRowsWithUpdatedTs(updateToDiffPartitionLowerTs, true, true)
+    val updates = rowsToUpdate.subList(0, 50)
+    val updateDf = spark.createDataFrame(spark.sparkContext.parallelize(convertRowListToSeq(updates)), structType)
+    val deletes = rowsToUpdate.subList(50, 100)
+    val deleteDf = spark.createDataFrame(spark.sparkContext.parallelize(convertRowListToSeq(deletes)), structType)
+    val batch = deleteDf.withColumn("_hoodie_is_deleted",lit(true)).union(updateDf)
+    batch.cache()
+
+    batch.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, HoodieTableType.MERGE_ON_READ.name())
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val hudiSnapshotDF2 = spark.read.format("hudi")
+      .options(readOpts)
+      .option("hoodie.metadata.enable","false")
+      .load(basePath)
+    // since deletes are ingested w/ lower ordering value, it should not be honored.
+    val expectedTotalRecordsCount = if (mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
+      350
+    } else {
+      400
+    }
+    assertEquals(expectedTotalRecordsCount, hudiSnapshotDF2.count())
+
+    // querying subset of column. even if not including _hoodie_is_deleted, snapshot read should return right data.
+    assertEquals(expectedTotalRecordsCount, spark.read.format("org.apache.hudi")
+      .options(readOpts).option("hoodie.metadata.enable","false").load(basePath).select("_hoodie_record_key", "_hoodie_partition_path").count())
+  }
+
+  def getWriterReaderOptsForRLI(recordType: HoodieRecordType = HoodieRecordType.AVRO,
+                          opt: Map[String, String] = TestRecordLevelIndex.commonOpts,
+                          enableFileIndex: Boolean = DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.defaultValue()):
+  (Map[String, String], Map[String, String]) = {
+    val fileIndexOpt: Map[String, String] =
+      Map(DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.key -> enableFileIndex.toString)
+
+    recordType match {
+      case HoodieRecordType.SPARK => (opt ++ TestRecordLevelIndex.sparkOpts, TestRecordLevelIndex.sparkOpts ++ fileIndexOpt)
+      case _ => (opt , fileIndexOpt)
+    }
+  }
 }
 
 object TestRecordLevelIndex {
+
+  val commonOpts = Map(
+    "hoodie.insert.shuffle.parallelism" -> "4",
+    "hoodie.upsert.shuffle.parallelism" -> "4",
+    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+  )
+
+  val sparkOpts = Map(
+    HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
+    HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
+  )
+
+  def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
+    asScalaIteratorConverter(inputList.iterator).asScala.toSeq
 
   def testEnableDisableRLIParams(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
