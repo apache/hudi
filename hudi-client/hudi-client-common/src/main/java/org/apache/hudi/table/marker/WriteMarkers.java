@@ -210,6 +210,15 @@ public abstract class WriteMarkers implements Serializable {
   public abstract Set<String> createdAndMergedDataPaths(HoodieEngineContext context, int parallelism) throws IOException;
 
   /**
+   * Fetches markers for log files w/ Append IOType. Used only for table version 6.
+   * @param context {@code HoodieEngineContext} instance.
+   * @param parallelism parallelism for reading the marker files in the directory.
+   * @return all the log file paths of write IO type "APPEND"
+   * @throws IOException
+   */
+  public abstract Set<String> getAppendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException;
+
+  /**
    * @return all the marker paths
    * @throws IOException
    */

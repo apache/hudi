@@ -754,6 +754,11 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
+  //  public HoodieTestTable withLogMarkerFile(String partitionPath, String fileId, IOType ioType) throws IOException {
+  //    createLogFileMarker(basePath, partitionPath, currentInstantTime, fileId, ioType);
+  //    return this;
+  //  }
+
   /**
    * Insert one base file to each of the given distinct partitions.
    *
@@ -1291,7 +1296,7 @@ public class HoodieTestTable implements AutoCloseable {
     return commitMetadata;
   }
 
-  private Option<HoodieCommitMetadata> getMetadataForInstant(String instantTime) {
+  public Option<HoodieCommitMetadata> getMetadataForInstant(String instantTime) {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().filter(i -> i.requestedTime().equals(instantTime)).firstInstant();
