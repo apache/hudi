@@ -104,7 +104,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
   }
 
-  private HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
+  protected HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
     context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering: " + config.getTableName());
     Set<HoodieFileGroupId> fileGroupsInPendingClustering =
         table.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
@@ -155,7 +155,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     // Cache the tagged records, so we don't end up computing both
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
-    if (!config.isSourceRddPersisted() || inputRDD.getStorageLevel() == StorageLevel.NONE()) {
+    if (shouldPersistInputRecords(inputRDD)) {
       HoodieJavaRDD.of(inputRDD).persist(config.getTaggedRecordStorageLevel(),
           context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     } else {
@@ -166,18 +166,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
     LOG.info("Num spark partitions for inputRecords before triggering workload profile {}", inputRecordsWithClusteringUpdate.getNumPartitions());
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
-    WorkloadProfile workloadProfile =
-        new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
-    LOG.debug("Input workload profile :{}", workloadProfile);
+    WorkloadProfile workloadProfile = prepareWorkloadProfileAndSaveToInflight(inputRecordsWithClusteringUpdate);
     Long sourceReadAndIndexDurationMs = null;
     if (sourceReadAndIndexTimer.isPresent()) {
       sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
       LOG.info("Source read and index timer {}", sourceReadAndIndexDurationMs);
     }
-    // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
-    saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
 
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
@@ -187,6 +182,20 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
     }
     return result;
+  }
+
+  protected WorkloadProfile prepareWorkloadProfileAndSaveToInflight(HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
+    WorkloadProfile workloadProfile =
+        new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
+    LOG.debug("Input workload profile :{}", workloadProfile);
+    // partition using the insert partitioner
+    saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
+    return workloadProfile;
+  }
+
+  protected boolean shouldPersistInputRecords(JavaRDD<HoodieRecord<T>> inputRDD) {
+    return !config.isSourceRddPersisted() || inputRDD.getStorageLevel() == StorageLevel.NONE();
   }
 
   /**
@@ -237,7 +246,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
   }
 
-  private HoodieData<WriteStatus> mapPartitionsAsRDD(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
+  protected HoodieData<WriteStatus> mapPartitionsAsRDD(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
     JavaPairRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> mappedRDD = HoodieJavaPairRDD.getJavaPairRDD(
         dedupedRecords.mapToPair(record -> Pair.of(new Tuple2<>(record.getKey(), Option.ofNullable(record.getCurrentLocation())), record)));
 
