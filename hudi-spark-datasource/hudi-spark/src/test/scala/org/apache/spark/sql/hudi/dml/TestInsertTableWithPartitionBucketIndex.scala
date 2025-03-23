@@ -122,7 +122,6 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
               "dt=2021-01-07" + "00000000",
               "dt=2021-01-07" + "00000001")
             assert(actual.sorted == expected.sorted)
-            spark.sparkContext.persistentRdds.foreach(rddPair => rddPair._2.unpersist(true))
           }
         }
       }
@@ -221,7 +220,6 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
             "dt=2021-01-07" + "00000001")
           // compare file group as expected
           assert(actual.sorted == expected.sorted)
-          spark.sparkContext.persistentRdds.foreach(rddPair => rddPair._2.unpersist(true))
         }
       }
     }
