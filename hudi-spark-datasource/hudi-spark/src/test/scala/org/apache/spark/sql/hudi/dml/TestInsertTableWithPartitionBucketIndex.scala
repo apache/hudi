@@ -47,8 +47,8 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
     withSQLConf(
       "hoodie.datasource.write.operation" -> "bulk_insert",
       "hoodie.bulkinsert.shuffle.parallelism" -> "2") {
-      Seq("mor").foreach { tableType =>
-        Seq("true").foreach { bulkInsertAsRow =>
+      Seq("mor", "cow").foreach { tableType =>
+        Seq("true", "false").foreach { bulkInsertAsRow =>
           withTempDir { tmp =>
             val tableName = generateTableName
             // Create a partitioned table
@@ -121,6 +121,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
               "dt=2021-01-07" + "00000000",
               "dt=2021-01-07" + "00000001")
             assert(actual.sorted == expected.sorted)
+            spark.sparkContext.persistentRdds.foreach(rddPair => rddPair._2.unpersist(true))
           }
         }
       }
@@ -218,6 +219,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
             "dt=2021-01-07" + "00000001")
           // compare file group as expected
           assert(actual.sorted == expected.sorted)
+          spark.sparkContext.persistentRdds.foreach(rddPair => rddPair._2.unpersist(true))
         }
       }
     }
