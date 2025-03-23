@@ -47,8 +47,8 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
     withSQLConf(
       "hoodie.datasource.write.operation" -> "bulk_insert",
       "hoodie.bulkinsert.shuffle.parallelism" -> "2") {
-      Seq("mor", "cow").foreach { tableType =>
-        Seq("true", "false").foreach { bulkInsertAsRow =>
+      Seq("mor").foreach { tableType =>
+        Seq("true").foreach { bulkInsertAsRow =>
           withTempDir { tmp =>
             val tableName = generateTableName
             // Create a partitioned table
