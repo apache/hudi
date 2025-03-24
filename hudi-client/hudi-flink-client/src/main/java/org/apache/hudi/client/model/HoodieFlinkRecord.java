@@ -134,6 +134,10 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
       return true;
     }
 
+    if (HoodieOperation.isDelete(getOperation())) {
+      return true;
+    }
+
     // Use data field to decide.
     Schema.Field deleteField = recordSchema.getField(HOODIE_IS_DELETED_FIELD);
     return deleteField != null && data.getBoolean(deleteField.pos());

@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -291,23 +290,20 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
       // Whether it is an update or insert record.
       boolean isUpdateRecord = isUpdateRecord(hoodieRecord);
-      // If the format can not record the operation field, nullify the DELETE payload manually.
-      boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.allowOperationMetadataField();
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
 
-      Option<HoodieRecord> finalRecordOpt = nullifyPayload ? Option.empty() : Option.of(hoodieRecord);
+      final Option<HoodieRecord> finalRecordOpt;
       // Check for delete
-      if (finalRecordOpt.isPresent() && !finalRecordOpt.get().isDelete(schema, recordProperties)) {
-        HoodieRecord finalRecord = finalRecordOpt.get();
+      if (!hoodieRecord.isDelete(schema, recordProperties) || config.allowOperationMetadataField()) {
         // Check if the record should be ignored (special case for [[ExpressionPayload]])
-        if (finalRecord.shouldIgnore(schema, recordProperties)) {
-          return finalRecordOpt;
+        if (hoodieRecord.shouldIgnore(schema, recordProperties)) {
+          return Option.of(hoodieRecord);
         }
 
         // Prepend meta-fields into the record
-        MetadataValues metadataValues = populateMetadataFields(finalRecord);
+        MetadataValues metadataValues = populateMetadataFields(hoodieRecord);
         HoodieRecord populatedRecord =
-            finalRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+            hoodieRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
 
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
         //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
