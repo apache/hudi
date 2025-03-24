@@ -171,12 +171,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0, mergeMode);
 
       // Two commits; first  compaction is triggered.
-      commitToTable(dataGen.generateUpdates("002", 100), UPSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateUniqueUpdates("002", 100), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0, mergeMode);
 
       // Three commits; second compaction is triggered.
-      commitToTable(dataGen.generateUpdates("003", 100), UPSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateUniqueUpdates("003", 100), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0, mergeMode);
 
@@ -299,18 +299,22 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     assertFalse(compactionInstants.isEmpty());
 
     try {
-      // Validate if total log records is updated.
       // More validation can be added here if needed.
       HoodieCommitMetadata metadata = activeTimeline
           .readCommitMetadata(compactionInstants.get(0));
-      assertTrue(metadata.getTotalLogRecordsCompacted() > 0);
+      assertEquals(100, metadata.getTotalLogRecordsCompacted());
+      assertEquals(0, metadata.fetchTotalFilesInsert());
+      assertEquals(0, metadata.fetchTotalRecordsWritten());
+      assertEquals(0, metadata.fetchTotalUpdateRecordsWritten());
+      assertEquals(3, metadata.fetchTotalPartitionsWritten());
+      assertEquals(0, metadata.fetchTotalWriteErrors());
       assertTrue(metadata.getTotalScanTime() > 0);
       assertTrue(metadata.getCompacted());
       assertFalse(metadata.getPartitionToWriteStats().isEmpty());
       List<List<HoodieWriteStat>> writeStatuses = new ArrayList<>(metadata.getPartitionToWriteStats().values());
       for (List<HoodieWriteStat> writeStats : writeStatuses) {
         for (HoodieWriteStat writeStat : writeStats) {
-          assertTrue(writeStat.getTotalLogBlocks() > 0);
+          assertEquals(1, writeStat.getTotalLogBlocks());
         }
       }
 
