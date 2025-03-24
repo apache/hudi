@@ -125,6 +125,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
    * Step2: Upgrade table to partition level bucket index using `call partition_bucket_index_manager`
    * Step3: Trigger another write operation through partition level bucket index
    *
+   *
    */
   test("Test Upsert Into Partition Bucket Index Table") {
     withSQLConf(
