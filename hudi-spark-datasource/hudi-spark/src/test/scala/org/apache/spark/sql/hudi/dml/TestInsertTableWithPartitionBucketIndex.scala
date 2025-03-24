@@ -55,8 +55,8 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
              | type = 'cow',
              | preCombineField = 'ts',
              | hoodie.index.type = 'BUCKET',
-             | hoodie.bucket.index.hash.field = 'id,name',
-             | hoodie.bucket.index.num.buckets = 1
+             | hoodie.bucket.index.hash.field = 'id,name'
+             | hoodie.bucket.index.num.buckets = 1)
              | partitioned by (dt)
              | location '${tablePath}'
              | """.stripMargin)
