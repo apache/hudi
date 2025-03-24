@@ -30,7 +30,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -299,9 +301,19 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     try {
       // Validate if total log records is updated.
       // More validation can be added here if needed.
-      long totalLogRecords = activeTimeline
-          .readCommitMetadata(compactionInstants.get(0)).getTotalLogRecordsCompacted();
-      assertTrue(totalLogRecords > 0);
+      HoodieCommitMetadata metadata = activeTimeline
+          .readCommitMetadata(compactionInstants.get(0));
+      assertTrue(metadata.getTotalLogRecordsCompacted() > 0);
+      assertTrue(metadata.getTotalScanTime() > 0);
+      assertTrue(metadata.getCompacted());
+      assertFalse(metadata.getPartitionToWriteStats().isEmpty());
+      List<List<HoodieWriteStat>> writeStatuses = new ArrayList<>(metadata.getPartitionToWriteStats().values());
+      for (List<HoodieWriteStat> writeStats : writeStatuses) {
+        for (HoodieWriteStat writeStat : writeStats) {
+          assertTrue(writeStat.getTotalLogBlocks() > 0);
+        }
+      }
+
     } catch (IOException e) {
       throw new RuntimeException("Failed to read the compaction metadata", e);
     }
