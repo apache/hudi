@@ -26,7 +26,7 @@ import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
-import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
 import org.apache.hudi.sink.StreamWriteFunction;
 
 import org.apache.flink.configuration.Configuration;
@@ -106,10 +106,12 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     this.incBucketIndex = new HashSet<>();
     this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(parallelism);
     this.isInsertOverwrite = OptionsResolver.isInsertOverwrite(config);
-    String hashingInstant = config.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT);
-    this.isPartitionLevelBucketIndexEnable = !StringUtils.isNullOrEmpty(hashingInstant);
+    String expressions = config.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS);
+    int defaultBucketNumber = config.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
+    String ruleType = config.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE);
+    this.isPartitionLevelBucketIndexEnable = StringUtils.nonEmpty(expressions);
     if (isPartitionLevelBucketIndexEnable) {
-      calc = PartitionBucketIndexCalculator.getInstance(hashingInstant, metaClient);
+      calc = PartitionBucketIndexCalculator.getInstance(expressions, ruleType, defaultBucketNumber);
     }
   }
 

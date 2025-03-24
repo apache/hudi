@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.execution.bulkinsert.BucketIndexBulkInsertPartitionerWithRows;
-import org.apache.hudi.index.bucket.PartitionBucketIndexUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -49,11 +48,10 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
                                                   String instantTime) {
     super(config, writeClient, instantTime);
     String expression = config.getBucketIndexPartitionExpression();
-    String instant = config.getHashingConfigInstantToLoad();
     String rule = config.getBucketIndexPartitionRuleType();
     int bucketNumber = config.getBucketIndexNumBuckets();
     this.hashingConfig = new PartitionBucketIndexHashingConfig(expression,
-        bucketNumber, rule, PartitionBucketIndexHashingConfig.CURRENT_VERSION, instant);
+        bucketNumber, rule, PartitionBucketIndexHashingConfig.CURRENT_VERSION, instantTime);
   }
 
   /**
@@ -75,7 +73,7 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
   @Override
   protected void preExecute() {
     super.preExecute();
-    boolean res = PartitionBucketIndexUtils.saveHashingConfig(hashingConfig, table.getMetaClient());
+    boolean res = PartitionBucketIndexHashingConfig.saveHashingConfig(hashingConfig, table.getMetaClient());
     ValidationUtils.checkArgument(res);
     LOG.info("Finish to save hashing config " + hashingConfig);
   }

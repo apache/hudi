@@ -21,7 +21,6 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.adapter.CollectOutputAdapter;
 import org.apache.hudi.adapter.TestStreamConfigs;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
@@ -32,7 +31,6 @@ import org.apache.hudi.sink.bulk.sort.SortOperator;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -220,8 +218,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     int numBuckets = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
     this.bucketIdToFileId = new HashMap<>();
-    this.mapFunction = r -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, r, indexKeys, conf, needFixedFileIdSuffix,
-        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)));
+    this.mapFunction = r -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, r, indexKeys, conf, needFixedFileIdSuffix);
   }
 
   private void setupSortOperator() throws Exception {

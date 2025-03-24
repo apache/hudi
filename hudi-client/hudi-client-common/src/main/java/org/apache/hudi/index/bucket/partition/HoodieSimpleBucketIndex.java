@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index.bucket;
+package org.apache.hudi.index.bucket.partition;
 
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
@@ -30,6 +30,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.HoodieBucketIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
@@ -162,10 +164,13 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
 
     public SimpleBucketIndexLocationFunction(HoodieTable table, String partitionPath) {
       this.bucketIdToFileIdMapping = loadBucketIdToFileIdMappingForPartition(table, partitionPath);
-      String hashingInstantToLoad = table.getConfig().getHashingConfigInstantToLoad();
-      this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(hashingInstantToLoad);
+      HoodieWriteConfig writeConfig = table.getConfig();
+      int defaultBucketNumber = writeConfig.getBucketIndexNumBuckets();
+      String expression = writeConfig.getBucketIndexPartitionExpression();
+      String ruleType = writeConfig.getBucketIndexPartitionRuleType();
+      this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(expression);
       if (isPartitionBucketIndexEnable) {
-        calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, table.getMetaClient());
+        this.calc = PartitionBucketIndexCalculator.getInstance(expression, ruleType, defaultBucketNumber);
       }
     }
 

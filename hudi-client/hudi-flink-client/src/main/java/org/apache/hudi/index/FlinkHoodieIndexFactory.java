@@ -27,7 +27,7 @@ import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.bloom.ListBasedHoodieBloomIndexHelper;
 import org.apache.hudi.index.bucket.HoodieConsistentBucketIndex;
-import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
+import org.apache.hudi.index.bucket.partition.HoodieSimpleBucketIndex;
 import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.index.state.FlinkInMemoryStateIndex;

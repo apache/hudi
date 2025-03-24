@@ -30,7 +30,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.HoodieBucketIndex;
-import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -98,10 +98,13 @@ public class SparkBucketIndexPartitioner<T> extends SparkHoodiePartitioner<T> {
           " Bucket index partitioner should only be used by BucketIndex other than "
               + table.getIndex().getClass().getSimpleName());
     }
-    String hashingInstantToLoad = table.getConfig().getHashingConfigInstantToLoad();
-    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(hashingInstantToLoad);
+    HoodieWriteConfig writeConfig = table.getConfig();
+    int defaultBucketNumber = writeConfig.getBucketIndexNumBuckets();
+    String expression = writeConfig.getBucketIndexPartitionExpression();
+    String ruleType = writeConfig.getBucketIndexPartitionRuleType();
+    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(expression);
     if (isPartitionBucketIndexEnable) {
-      calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, table.getMetaClient());
+      this.calc = PartitionBucketIndexCalculator.getInstance(expression, ruleType, defaultBucketNumber);
     }
     this.numBuckets = ((HoodieBucketIndex) table.getIndex()).getNumBuckets();
     this.indexKeyField = config.getBucketIndexHashField();

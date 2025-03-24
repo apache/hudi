@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
-import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
 import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTable;
@@ -70,10 +70,12 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     this.bucketNum = writeConfig.getInt(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
     this.handles = new HashMap<>();
     this.isNonBlockingConcurrencyControl = writeConfig.isNonBlockingConcurrencyControl();
-    String hashingInstantToLoad = writeConfig.getHashingConfigInstantToLoad();
-    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(hashingInstantToLoad);
+    String expression = writeConfig.getBucketIndexPartitionExpression();
+    String ruleType = writeConfig.getBucketIndexPartitionRuleType();
+    int defaultBucketNumber = writeConfig.getBucketIndexNumBuckets();
+    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(expression);
     if (isPartitionBucketIndexEnable) {
-      calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, hoodieTable.getMetaClient());
+      calc = PartitionBucketIndexCalculator.getInstance(expression, ruleType, defaultBucketNumber);
     }
   }
 

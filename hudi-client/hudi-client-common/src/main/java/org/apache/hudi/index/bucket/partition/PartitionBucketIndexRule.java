@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index.bucket;
+package org.apache.hudi.index.bucket.partition;
 
 public enum PartitionBucketIndexRule {
   REGEX("regex");

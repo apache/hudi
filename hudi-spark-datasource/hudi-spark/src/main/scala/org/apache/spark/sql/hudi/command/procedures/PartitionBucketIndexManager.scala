@@ -31,7 +31,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.{Option, ValidationUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig}
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.index.bucket.{PartitionBucketIndexCalculator, PartitionBucketIndexUtils}
+import org.apache.hudi.index.bucket.partition.{PartitionBucketIndexCalculator, PartitionBucketIndexUtils}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.SparkBroadcastManager
@@ -120,7 +120,7 @@ class PartitionBucketIndexManager extends BaseProcedure
       } else if (rollback != null) {
         handleRollback(metaClient, rollback)
       } else if (overwrite != null) {
-        handleOverwrite(config, writeClient, context, metaClient, overwrite, bucketNumber, rule, dryRun)
+        handleOverwrite(config, context, metaClient, overwrite, bucketNumber, rule, dryRun)
       } else if (add != null) {
         handleAdd(metaClient, add, dryRun)
       } else {
@@ -135,7 +135,6 @@ class PartitionBucketIndexManager extends BaseProcedure
    * Handle the overwrite operation.
    */
   private def handleOverwrite(config: Map[String, String],
-                              writeClient: SparkRDDWriteClient[_],
                               context : HoodieEngineContext,
                               metaClient: HoodieTableMetaClient,
                               expression: String,
@@ -154,8 +153,8 @@ class PartitionBucketIndexManager extends BaseProcedure
 
     if (usePartitionBucketIndexBefore) {
       // get Map<partitionPath, bucketNumber> based on latest hashing_config
-      val latestHashingConfigInstant = PartitionBucketIndexUtils.getHashingConfigInstantToLoad(metaClient)
-      calcWithLatestInstant = PartitionBucketIndexCalculator.getInstance(latestHashingConfigInstant, metaClient)
+      val latestHashingConfig = PartitionBucketIndexHashingConfig.loadingLatestHashingConfig(metaClient)
+      calcWithLatestInstant = PartitionBucketIndexCalculator.getInstance(latestHashingConfig.getExpressions, latestHashingConfig.getRule, latestHashingConfig.getDefaultBucketNumber)
       partition2BucketWithLatestHashingConfig = PartitionBucketIndexUtils.getAllBucketNumbers(calcWithLatestInstant, allPartitions)
     } else {
       ValidationUtils.checkArgument(bucketNumber != -1)
@@ -166,21 +165,17 @@ class PartitionBucketIndexManager extends BaseProcedure
       bucketNumber
     } else if (calcWithLatestInstant != null ) {
       // reuse latest default bucket number
-      calcWithLatestInstant.getHashingConfig.getDefaultBucketNumber
+      calcWithLatestInstant.getDefaultBucketNumber
     } else {
       throw new HoodieException("Please set original bucket number before upgrade to partition bucket level bucket index")
     }
 
-    val instantTime = writeClient.createNewInstantTime()
-
     val finalConfig = config ++ Map(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS.key()->  expression,
       HoodieIndexConfig.BUCKET_INDEX_PARTITION_RULE_TYPE.key() -> rule,
-      HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key() -> instantTime,
       HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key() -> bucketNumber.toString
     )
 
-    val newConfig = new PartitionBucketIndexHashingConfig(expression, defaultBucketNumber, rule, PartitionBucketIndexHashingConfig.CURRENT_VERSION, instantTime)
-    val calcWithNewExpression = PartitionBucketIndexCalculator.getInstance(instantTime, newConfig)
+    val calcWithNewExpression = PartitionBucketIndexCalculator.getInstance(expression, rule, defaultBucketNumber)
     val partition2BucketWithNewHashingConfig = PartitionBucketIndexUtils.getAllBucketNumbers(calcWithNewExpression, allPartitions)
 
     // get partitions need to be rescaled
@@ -249,7 +244,7 @@ class PartitionBucketIndexManager extends BaseProcedure
       finalConfig,
       dataFrame)
 
-    val details = s"Expression: $expression, Bucket Number: $bucketNumber, Dry Run: $dryRun, Instant: $instantTime"
+    val details = s"Expression: $expression, Bucket Number: $bucketNumber, Dry Run: $dryRun"
     Seq(Row("SUCCESS", "OVERWRITE", details))
   }
 

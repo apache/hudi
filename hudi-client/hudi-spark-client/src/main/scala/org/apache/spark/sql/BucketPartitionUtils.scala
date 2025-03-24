@@ -21,27 +21,18 @@ package org.apache.spark.sql
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.Functions
 import org.apache.hudi.common.util.hash.BucketIndexUtil
-import org.apache.hudi.index.bucket.{BucketIdentifier, PartitionBucketIndexCalculator}
+import org.apache.hudi.index.bucket.BucketIdentifier
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator
+
 import org.apache.spark.Partitioner
 import org.apache.spark.sql.catalyst.InternalRow
 
 object BucketPartitionUtils {
-  def createDataFrame(df: DataFrame, indexKeyFields: String, bucketNum: Int, partitionNum: Int,
-                      calc: PartitionBucketIndexCalculator, isPartitionBucketIndexEnable: Boolean): DataFrame = {
-
-    def computeBucketNumber(): String => Integer = partition => {
-      val bucketNumber = if (isPartitionBucketIndexEnable) {
-        calc.computeNumBuckets(partition)
-      } else {
-        bucketNum
-      }
-      bucketNumber
-    }
-
+  def createDataFrame(df: DataFrame, indexKeyFields: String, bucketNum: Int, partitionNum: Int): DataFrame = {
     def getPartitionKeyExtractor(): InternalRow => (String, Int) = row => {
-      val partition = row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
       val kb = BucketIdentifier
-        .getBucketId(row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD), indexKeyFields, computeBucketNumber().apply(partition))
+        .getBucketId(row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD), indexKeyFields, bucketNum)
+      val partition = row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
       if (partition == null || partition.trim.isEmpty) {
         ("", kb)
       } else {
@@ -59,7 +50,40 @@ object BucketPartitionUtils {
 
       override def getPartition(value: Any): Int = {
         val partitionKeyPair = value.asInstanceOf[(String, Int)]
-        partitionIndexFunc.apply(computeBucketNumber().apply(partitionKeyPair._1), partitionKeyPair._1, partitionKeyPair._2)
+        partitionIndexFunc.apply(bucketNum, partitionKeyPair._1, partitionKeyPair._2)
+      }
+    }
+    // use internalRow to avoid extra convert.
+    val reRdd = df.queryExecution.toRdd
+      .keyBy(row => getPartitionKey(row))
+      .repartitionAndSortWithinPartitions(partitioner)
+      .values
+    df.sparkSession.internalCreateDataFrame(reRdd, df.schema)
+  }
+
+  def createDataFrameWithPartitionBucketIndex(df: DataFrame, indexKeyFields: String, partitionNum: Int, calc: PartitionBucketIndexCalculator): DataFrame = {
+    def getPartitionKeyExtractor(): InternalRow => (String, Int) = row => {
+      val partition = row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
+      val kb = BucketIdentifier
+        .getBucketId(row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD), indexKeyFields, calc.computeNumBuckets(partition))
+      if (partition == null || partition.trim.isEmpty) {
+        ("", kb)
+      } else {
+        (partition, kb)
+      }
+    }
+
+    val getPartitionKey = getPartitionKeyExtractor()
+    val partitioner = new Partitioner {
+
+      private val partitionIndexFunc: Functions.Function3[Integer, String, Integer, Integer] =
+        BucketIndexUtil.getPartitionIndexFunc(partitionNum)
+
+      override def numPartitions: Int = partitionNum
+
+      override def getPartition(value: Any): Int = {
+        val partitionKeyPair = value.asInstanceOf[(String, Int)]
+        partitionIndexFunc.apply(calc.computeNumBuckets(partitionKeyPair._1), partitionKeyPair._1, partitionKeyPair._2)
       }
     }
     // use internalRow to avoid extra convert.

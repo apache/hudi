@@ -35,6 +35,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -68,6 +69,15 @@ public class OptionsResolver {
     // 1. inline clustering is supported for COW table;
     // 2. async clustering is supported for both COW and MOR table
     return isInsertOperation(conf) && ((isCowTable(conf) && !conf.getBoolean(FlinkOptions.INSERT_CLUSTER)) || isMorTable(conf));
+  }
+
+  /**
+   * Returns whether current index is partition level simple bucket index based on given configuration {@code conf}.
+   */
+  public static Boolean isPartitionLevelSimpleBucketIndex(Configuration conf) {
+    HoodieIndex.BucketIndexEngineType engineType = OptionsResolver.getBucketEngineType(conf);
+    return engineType.equals(HoodieIndex.BucketIndexEngineType.SIMPLE)
+        && PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(HadoopConfigurations.getHadoopConf(conf), conf.get(FlinkOptions.PATH));
   }
 
   /**

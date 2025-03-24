@@ -20,7 +20,8 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 
@@ -41,10 +42,13 @@ public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertParti
   public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum, HoodieTable table) {
     this.indexKeyFields = indexKeyFields;
     this.bucketNum = bucketNum;
-    String hashingInstantToLoad = table.getConfig().getHashingConfigInstantToLoad();
-    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(hashingInstantToLoad);
+    HoodieWriteConfig writeConfig = table.getConfig();
+    String expression = writeConfig.getBucketIndexPartitionExpression();
+    String ruleType = writeConfig.getBucketIndexPartitionRuleType();
+    int defaultBucketNumber = writeConfig.getBucketIndexNumBuckets();
+    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(expression);
     if (isPartitionBucketIndexEnable) {
-      calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, table.getMetaClient());
+      calc = PartitionBucketIndexCalculator.getInstance(expression, ruleType, defaultBucketNumber);
     }
   }
 
@@ -52,12 +56,15 @@ public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertParti
     this.indexKeyFields = indexKeyFields;
     this.bucketNum = bucketNum;
     this.isPartitionBucketIndexEnable = true;
-    this.calc = PartitionBucketIndexCalculator.getInstance(hashingConfig.getInstant(), hashingConfig);
+    this.calc = PartitionBucketIndexCalculator.getInstance(hashingConfig.getExpressions(), hashingConfig.getRule(), hashingConfig.getDefaultBucketNumber());
   }
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputPartitions) {
-    return BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, bucketNum, outputPartitions, calc, isPartitionBucketIndexEnable);
+
+    return isPartitionBucketIndexEnable
+        ? BucketPartitionUtils$.MODULE$.createDataFrameWithPartitionBucketIndex(rows, indexKeyFields, outputPartitions, calc)
+        : BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, bucketNum, outputPartitions);
   }
 
   @Override

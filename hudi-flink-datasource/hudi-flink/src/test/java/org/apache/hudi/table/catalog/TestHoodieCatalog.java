@@ -31,7 +31,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.index.bucket.PartitionBucketIndexUtils;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -361,9 +360,9 @@ public class TestHoodieCatalog {
             new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(flinkConf)), tablePathStr);
     HoodieStorage storage = metaClient.getStorage();
     StoragePath initialHashingConfig =
-        new StoragePath(metaClient.getHashingMetadataConfigPath(), PartitionBucketIndexUtils.INITIAL_HASHING_CONFIG_INSTANT + PartitionBucketIndexHashingConfig.HASHING_CONFIG_FILE_SUFFIX);
+        new StoragePath(metaClient.getHashingMetadataConfigPath(), PartitionBucketIndexHashingConfig.INITIAL_HASHING_CONFIG_INSTANT + PartitionBucketIndexHashingConfig.HASHING_CONFIG_FILE_SUFFIX);
     StoragePathInfo info = storage.getPathInfo(initialHashingConfig);
-    Option<PartitionBucketIndexHashingConfig> hashingConfig = PartitionBucketIndexUtils.loadHashingConfig(storage, info);
+    Option<PartitionBucketIndexHashingConfig> hashingConfig = PartitionBucketIndexHashingConfig.loadHashingConfig(storage, info);
     assertTrue(hashingConfig.isPresent());
     assertEquals(hashingConfig.get().getDefaultBucketNumber(), Integer.parseInt(defaultBucketNumber));
     assertEquals(hashingConfig.get().getRule(), rule);

@@ -18,8 +18,10 @@
 
 package org.apache.hudi.index.bucket;
 
+import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -41,8 +43,8 @@ public class TestPartitionBucketIndexCalculator extends HoodieCommonTestHarness 
 
   void setUp(String expression, String rule, int defaultBucketNumber) throws IOException {
     initMetaClient();
-    PartitionBucketIndexUtils.initHashingConfig(metaClient, expression, rule, defaultBucketNumber, null);
-    this.calc = PartitionBucketIndexCalculator.getInstance(PartitionBucketIndexUtils.INITIAL_HASHING_CONFIG_INSTANT, metaClient);
+    PartitionBucketIndexHashingConfig.saveHashingConfig(metaClient, expression, rule, defaultBucketNumber, null);
+    this.calc = PartitionBucketIndexCalculator.getInstance(expression, rule, defaultBucketNumber);
   }
 
   /**
@@ -101,10 +103,6 @@ public class TestPartitionBucketIndexCalculator extends HoodieCommonTestHarness 
     // Different partition should increase cache size
     calc.computeNumBuckets("2023-11-10");
     assertEquals(2, calc.getCacheSize());
-
-    // Clear cache should reset size
-    calc.clearCache();
-    assertEquals(0, calc.getCacheSize());
   }
 
   /**
@@ -114,7 +112,7 @@ public class TestPartitionBucketIndexCalculator extends HoodieCommonTestHarness 
   void testMultipleRegexRulesWithPriority() throws IOException {
     String expressions = "\\d{4}-06-01,256;\\d{4}-06-\\d{2},128;\\d{4}-11-\\d{2},64";
     setUp(expressions, DEFAULT_RULE, DEFAULT_BUCKET_NUMBER);
-    PartitionBucketIndexCalculator calc = PartitionBucketIndexCalculator.getInstance(PartitionBucketIndexUtils.INITIAL_HASHING_CONFIG_INSTANT, metaClient);
+    PartitionBucketIndexCalculator calc = PartitionBucketIndexCalculator.getInstance(expressions, DEFAULT_RULE, DEFAULT_BUCKET_NUMBER);
     // Setup configuration with multiple rules
 
     // First rule should take priority

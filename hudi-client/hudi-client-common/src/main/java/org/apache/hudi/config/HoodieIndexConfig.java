@@ -28,7 +28,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.bucket.PartitionBucketIndexRule;
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexRule;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.slf4j.Logger;
@@ -294,9 +294,9 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Rule parser for expressions when using partition level bucket index, default regex.");
 
   public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_LOAD_INSTANT = ConfigProperty
-      .key("hoodie.bucket.index.partition.load.instant")
-      .defaultValue("")
-      .withDocumentation("Inner config to determine which hashing_config to load when using partition level bucket index");
+      .key(HoodieInternalConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key())
+      .defaultValue(HoodieInternalConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.defaultValue())
+      .withDocumentation(HoodieInternalConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.doc());
 
   public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_EXPRESSIONS = ConfigProperty
       .key("hoodie.bucket.index.partition.expressions")

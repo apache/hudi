@@ -19,9 +19,8 @@
 package org.apache.hudi.configuration;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.bucket.PartitionBucketIndexUtils;
 import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.FlinkWriteClients;
 
@@ -96,14 +95,21 @@ public class OptionsInference {
     }
   }
 
+  /**
+   * Set up Index related configs.
+   * For now we will add partition level bucket index related expressions and bucket number during start-up
+   * instant of loading hashing config from dfs everywhere.
+   */
   public static void setupIndexConfigs(Configuration conf) {
-    HoodieIndex.BucketIndexEngineType engineType = OptionsResolver.getBucketEngineType(conf);
-    if (engineType.equals(HoodieIndex.BucketIndexEngineType.SIMPLE)
-        && PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(HadoopConfigurations.getHadoopConf(conf), conf.get(FlinkOptions.PATH))) {
+    if (OptionsResolver.isPartitionLevelSimpleBucketIndex(conf)) {
       try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClientV2(conf)) {
         HoodieTableMetaClient metaClient = writeClient.getHoodieTable().getMetaClient();
-        String hashingConfigToLoad = PartitionBucketIndexUtils.getHashingConfigInstantToLoad(metaClient);
-        conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT, hashingConfigToLoad);
+        PartitionBucketIndexHashingConfig hashingConfig = PartitionBucketIndexHashingConfig.loadingLatestHashingConfig(metaClient);
+        conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS, hashingConfig.getExpressions());
+        conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_RULE, hashingConfig.getRule());
+        conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, hashingConfig.getDefaultBucketNumber());
+        LOG.info("Loaded Latest Hashing Config " + hashingConfig
+            + ". Reset hoodie.bucket.index.num.buckets to " + hashingConfig.getDefaultBucketNumber());
       }
     }
   }

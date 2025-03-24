@@ -25,9 +25,10 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
-import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
-import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
+import org.apache.hudi.index.bucket.partition.HoodieSimpleBucketIndex;
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.Partitioner;
@@ -48,10 +49,13 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
     super(table, null, false);
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSimpleBucketIndex);
     this.isNonBlockingConcurrencyControl = table.getConfig().isNonBlockingConcurrencyControl();
-    String hashingInstantToLoad = table.getConfig().getHashingConfigInstantToLoad();
-    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(hashingInstantToLoad);
+    HoodieWriteConfig writeConfig = table.getConfig();
+    String expression = writeConfig.getBucketIndexPartitionExpression();
+    String ruleType = writeConfig.getBucketIndexPartitionRuleType();
+    int defaultBucketNumber = writeConfig.getBucketIndexNumBuckets();
+    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(expression);
     if (isPartitionBucketIndexEnable) {
-      calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, table.getMetaClient());
+      calc = PartitionBucketIndexCalculator.getInstance(expression, ruleType, defaultBucketNumber);
     }
   }
 

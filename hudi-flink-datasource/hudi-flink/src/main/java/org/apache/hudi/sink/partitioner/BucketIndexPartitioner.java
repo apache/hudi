@@ -24,8 +24,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
-import org.apache.hudi.index.bucket.PartitionBucketIndexCalculator;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
 
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
@@ -40,17 +39,18 @@ public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<
 
   private final Configuration conf;
   private final String indexKeyFields;
-  private final String hashingInstantToLoad;
-  private StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf;
+  private final String expressions;
+  private final String rule;
+  private final int defaultBucketNumber;
 
   private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
 
-  public BucketIndexPartitioner(Configuration conf, String indexKeyFields,
-                                StorageConfiguration<org.apache.hadoop.conf.Configuration> storageConf) {
+  public BucketIndexPartitioner(Configuration conf, String indexKeyFields) {
     this.conf = conf;
     this.indexKeyFields = indexKeyFields;
-    this.hashingInstantToLoad = conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_LOAD_INSTANT);
-    this.storageConf = storageConf;
+    this.expressions = conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS);
+    this.rule = conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE);
+    this.defaultBucketNumber = conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
   }
 
   @Override
@@ -60,9 +60,8 @@ public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<
     }
 
     int bucketNum;
-    if (!StringUtils.isNullOrEmpty(hashingInstantToLoad)) {
-      org.apache.hadoop.conf.Configuration hadoopConf = storageConf.unwrapAs(org.apache.hadoop.conf.Configuration.class);
-      PartitionBucketIndexCalculator calc = PartitionBucketIndexCalculator.getInstance(hashingInstantToLoad, hadoopConf, conf.get(FlinkOptions.PATH));
+    if (!StringUtils.isNullOrEmpty(expressions)) {
+      PartitionBucketIndexCalculator calc = PartitionBucketIndexCalculator.getInstance(expressions, rule, defaultBucketNumber);
       bucketNum = calc.computeNumBuckets(key.getPartitionPath());
     } else {
       bucketNum = conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);

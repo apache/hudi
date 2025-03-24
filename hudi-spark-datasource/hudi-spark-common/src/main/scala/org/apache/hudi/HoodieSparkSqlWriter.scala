@@ -50,7 +50,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.index.HoodieIndex
-import org.apache.hudi.index.bucket.PartitionBucketIndexUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.SerDeHelper
@@ -71,6 +70,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.shims.ShimLoader
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
 import org.apache.spark.{SPARK_VERSION, SparkContext}
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.sql._
@@ -341,11 +341,15 @@ class HoodieSparkSqlWriterInternal {
         && (!parameters.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key)
         || (parameters.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key)
         && parameters(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key) == HoodieIndex.IndexType.SIMPLE.name))
-        && !parameters.contains(HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key)
+        && hoodieConfig.getString(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key()) != WriteOperationType.BUCKET_RESCALE.value()
         && PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(tableMetaClient.getStorageConf, basePath.toString)) {
-        val hashingConfigToLoad: String = PartitionBucketIndexUtils.getHashingConfigInstantToLoad(tableMetaClient)
-        hoodieConfig.setValue(HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key, hashingConfigToLoad)
-        parameters = parameters ++ Map(HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key -> hashingConfigToLoad)
+        val latestHashingConfig = PartitionBucketIndexHashingConfig.loadingLatestHashingConfig(tableMetaClient)
+        hoodieConfig.setValue(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS.key, latestHashingConfig.getExpressions)
+        hoodieConfig.setValue(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key, latestHashingConfig.getDefaultBucketNumber.toString)
+        hoodieConfig.setValue(HoodieIndexConfig.BUCKET_INDEX_PARTITION_RULE_TYPE.key, latestHashingConfig.getRule)
+        parameters = parameters ++ Map(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS.key -> latestHashingConfig.getExpressions)
+        parameters = parameters ++ Map(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> latestHashingConfig.getDefaultBucketNumber.toString)
+        parameters = parameters ++ Map(HoodieIndexConfig.BUCKET_INDEX_PARTITION_RULE_TYPE.key -> latestHashingConfig.getRule)
       }
 
       var instantTime: String = null
@@ -830,7 +834,7 @@ class HoodieSparkSqlWriterInternal {
     val overwriteOperationType = Option(hoodieConfig.getString(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE))
       .map(WriteOperationType.fromValue)
       .orNull
-    var instantTime = writeClient.createNewInstantTime()
+    val instantTime = writeClient.createNewInstantTime()
     val executor = mode match {
       case _ if overwriteOperationType == null =>
         // Don't need to overwrite
@@ -838,10 +842,8 @@ class HoodieSparkSqlWriterInternal {
       case SaveMode.Append if overwriteOperationType == WriteOperationType.INSERT_OVERWRITE =>
         // INSERT OVERWRITE PARTITION uses Append mode
         new DatasetBulkInsertOverwriteCommitActionExecutor(writeConfig, writeClient, instantTime)
-      case SaveMode.Append if overwriteOperationType == WriteOperationType.BUCKET_RESCALE => {
-        instantTime = writeConfig.getHashingConfigInstantToLoad()
+      case SaveMode.Append if overwriteOperationType == WriteOperationType.BUCKET_RESCALE =>
         new DatasetBucketRescaleCommitActionExecutor(writeConfig, writeClient, instantTime)
-    }
       case SaveMode.Overwrite if overwriteOperationType == WriteOperationType.INSERT_OVERWRITE_TABLE =>
         new DatasetBulkInsertOverwriteTableCommitActionExecutor(writeConfig, writeClient, instantTime)
       case _ =>
