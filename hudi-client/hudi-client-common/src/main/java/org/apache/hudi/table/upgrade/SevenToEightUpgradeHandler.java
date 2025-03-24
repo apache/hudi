@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -177,21 +178,52 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  static void upgradeMergeMode(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
-    if (tableConfig.getPayloadClass() != null
-        && tableConfig.getPayloadClass().equals(OverwriteWithLatestAvroPayload.class.getName())) {
-      if (HoodieTableType.COPY_ON_WRITE == tableConfig.getTableType()) {
-        tablePropsToAdd.put(
-            HoodieTableConfig.RECORD_MERGE_MODE,
-            RecordMergeMode.COMMIT_TIME_ORDERING.name());
-      } else {
-        tablePropsToAdd.put(
-            HoodieTableConfig.PAYLOAD_CLASS_NAME,
-            DefaultHoodieRecordPayload.class.getName());
+  public static void upgradeMergeMode(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+    if (tableConfig.getPayloadClass() != null) {
+      if (tableConfig.getPayloadClass().equals(OverwriteWithLatestAvroPayload.class.getName())) {
+        if (HoodieTableType.COPY_ON_WRITE == tableConfig.getTableType()) {
+          tablePropsToAdd.put(
+              HoodieTableConfig.RECORD_MERGE_MODE,
+              RecordMergeMode.COMMIT_TIME_ORDERING.name());
+          tablePropsToAdd.put(
+              HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+              HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+        } else {
+          tablePropsToAdd.put(
+              HoodieTableConfig.PAYLOAD_CLASS_NAME,
+              DefaultHoodieRecordPayload.class.getName());
+          tablePropsToAdd.put(
+              HoodieTableConfig.RECORD_MERGE_MODE,
+              RecordMergeMode.EVENT_TIME_ORDERING.name());
+          tablePropsToAdd.put(
+              HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+              HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+        }
+      } else if (tableConfig.getPayloadClass().equals(DefaultHoodieRecordPayload.class.getName())) {
         tablePropsToAdd.put(
             HoodieTableConfig.RECORD_MERGE_MODE,
             RecordMergeMode.EVENT_TIME_ORDERING.name());
+        tablePropsToAdd.put(
+            HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+            HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+      } else {
+        tablePropsToAdd.put(
+            HoodieTableConfig.RECORD_MERGE_MODE,
+            RecordMergeMode.CUSTOM.name());
+        tablePropsToAdd.put(
+            HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+            HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
       }
+    } else {
+      tablePropsToAdd.put(
+          HoodieTableConfig.PAYLOAD_CLASS_NAME,
+          DefaultHoodieRecordPayload.class.getName());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_MODE,
+          RecordMergeMode.EVENT_TIME_ORDERING.name());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+          HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
     }
   }
 

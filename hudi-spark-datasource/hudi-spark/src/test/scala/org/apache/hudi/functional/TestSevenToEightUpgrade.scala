@@ -19,17 +19,20 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.config.RecordMergeMode
+import org.apache.hudi.common.config.{ConfigProperty, RecordMergeMode}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, HoodieTableType, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.config.HoodieLockConfig
 import org.apache.hudi.keygen.constant.KeyGeneratorType
-import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
-
+import org.apache.hudi.table.upgrade.{SevenToEightUpgradeHandler, SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
+import org.mockito.Mockito
+import org.mockito.Mockito.when
+
+import scala.collection.mutable
 
 class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
 
@@ -101,5 +104,22 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       assertEquals(classOf[DefaultHoodieRecordPayload].getName, metaClient.getTableConfig.getPayloadClass)
       assertEquals(RecordMergeMode.EVENT_TIME_ORDERING.name, metaClient.getTableConfig.getRecordMergeMode.name)
     }
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, COPY_ON_WRITE, COMMIT_TIME_ORDERING, ce9acb64-bde0-424c-9b91-f6ebba25356d, org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+    "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, MERGE_ON_READ, EVENT_TIME_ORDERING, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5, org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+    "org.apache.hudi.common.model.DefaultHoodieRecordPayload, , EVENT_TIME_ORDERING, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5, org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+    "com.example.CustomPayload, , CUSTOM, 00000000-0000-0000-0000-000000000000, com.example.CustomPayload",
+    ", , EVENT_TIME_ORDERING, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5, org.apache.hudi.common.model.DefaultHoodieRecordPayload"))
+  def testUpgradeMergeMode(payloadClass: String, tableType: String, expectedMergeMode: String, expectedStrategy: String, expectedPayloadClass: String): Unit = {
+    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
+    val tablePropsToAdd = new java.util.HashMap[ConfigProperty[_], String]()
+    when(tableConfig.getPayloadClass).thenReturn(payloadClass)
+    if (tableType != null) when(tableConfig.getTableType).thenReturn(HoodieTableType.valueOf(tableType))
+    SevenToEightUpgradeHandler.upgradeMergeMode(tableConfig, tablePropsToAdd)
+    assertEquals(expectedMergeMode, tablePropsToAdd.get(HoodieTableConfig.RECORD_MERGE_MODE))
+    assertEquals(expectedStrategy, tablePropsToAdd.get(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID))
   }
 }
