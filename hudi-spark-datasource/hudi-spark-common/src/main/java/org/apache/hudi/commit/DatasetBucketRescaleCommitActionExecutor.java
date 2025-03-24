@@ -29,9 +29,6 @@ import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.execution.bulkinsert.BucketIndexBulkInsertPartitionerWithRows;
 import org.apache.hudi.index.bucket.PartitionBucketIndexUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
-
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.slf4j.Logger;
@@ -76,8 +73,8 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
    * @param result
    */
   @Override
-  protected void afterExecute(HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
-    super.afterExecute(result);
+  protected void preExecute() {
+    super.preExecute();
     boolean res = PartitionBucketIndexUtils.saveHashingConfig(hashingConfig, table.getMetaClient());
     ValidationUtils.checkArgument(res);
     LOG.info("Finish to save hashing config " + hashingConfig);
