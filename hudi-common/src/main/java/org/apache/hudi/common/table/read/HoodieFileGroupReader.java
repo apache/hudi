@@ -191,12 +191,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (baseFileStoragePathInfo != null) {
       return readerContext.getFileRecordIterator(
           baseFileStoragePathInfo, start, length,
-          readerContext.getSchemaHandler().getDataSchema(),
+          readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     } else {
       return readerContext.getFileRecordIterator(
           baseFile.getStoragePath(), start, length,
-          readerContext.getSchemaHandler().getDataSchema(),
+          readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
   }

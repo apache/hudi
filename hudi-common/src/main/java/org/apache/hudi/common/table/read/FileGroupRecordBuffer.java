@@ -73,8 +73,6 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_ME
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
-import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
-import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
@@ -93,16 +91,14 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> records;
   protected final HoodieReadStats readStats;
+  protected final boolean shouldCheckCustomDeleteMarker;
+  protected final boolean shouldCheckBuiltInDeleteMarker;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
   protected T nextRecord;
   protected boolean enablePartialMerging = false;
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
-  protected boolean shouldCheckCustomDeleteMarker = false;
-  protected boolean shouldCheckHoodieDeleteMarker = false;
-  protected String customDeleteMarkerKey;
-  protected String customDeleteMarkerValue;
 
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
@@ -149,69 +145,36 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
-    // Initialize custom delete marker related variables.
-    initCustomDeleteConfigs();
-  }
-
-  protected void initCustomDeleteConfigs() {
-    this.shouldCheckCustomDeleteMarker = hasCustomDeleteConfigs(props, readerSchema);
-    if (shouldCheckCustomDeleteMarker) {
-      this.customDeleteMarkerKey = props.getProperty(DELETE_KEY);
-      this.customDeleteMarkerValue = props.getProperty(DELETE_MARKER);
-    }
-    this.shouldCheckHoodieDeleteMarker = hasHoodieDeleteField(readerSchema);
-  }
-
-  /**
-   * Check if
-   *   1. delete key and delete markers are set properly.
-   *   2. schema contains delete key column.
-   */
-  static boolean hasCustomDeleteConfigs(TypedProperties props, Schema schema) {
-    String deleteKey = props.getProperty(DELETE_KEY);
-    String deleteMarker = props.getProperty(DELETE_MARKER);
-    boolean deleteKeyExists = !StringUtils.isNullOrEmpty(deleteKey);
-    boolean deleteMarkerExists = !StringUtils.isNullOrEmpty(deleteMarker);
-
-    // DELETE_KEY and DELETE_MARKER both should be set.
-    if (deleteKeyExists && deleteMarkerExists) {
-      // DELETE_KEY field exists in the schema.
-      return schema.getField(deleteKey) != null;
-    } else if (!deleteKeyExists && !deleteMarkerExists) {
-      // Normal case.
-      return false;
-    } else {
-      throw new RuntimeException("Either custom delete key or marker is not specified");
-    }
-  }
-
-  /**
-   * Check if "_hoodie_is_deleted" field exists.
-   * Assume the type of this column is boolean.
-   */
-  protected boolean hasHoodieDeleteField(Schema schema) {
-    return schema.getField(HOODIE_IS_DELETED_FIELD) != null;
+    this.shouldCheckCustomDeleteMarker =
+        readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isPresent();
+    this.shouldCheckBuiltInDeleteMarker =
+        readerContext.getSchemaHandler().hasBuiltInDelete();
   }
 
   /**
    * Here we assume that delete marker column type is of string.
    * This should be sufficient for most cases.
    */
-  protected boolean isCustomDeleteRecord(T record) {
+  protected final boolean isCustomDeleteRecord(T record) {
+    if (readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isEmpty()) {
+      return false;
+    }
+
+    Pair<String, String> markerKeyValue =
+        readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().get();
     Object deleteMarkerValue =
-        readerContext.getValue(record, readerSchema, customDeleteMarkerKey);
+        readerContext.getValue(record, readerSchema, markerKeyValue.getLeft());
     return deleteMarkerValue != null
-          && customDeleteMarkerValue.equals(deleteMarkerValue.toString());
+        && markerKeyValue.getRight().equals(deleteMarkerValue.toString());
   }
 
   /**
    * Check if the value of column "_hoodie_is_deleted" is true.
    */
-  protected boolean isHoodieDeleteRecord(T record) {
+  protected final boolean isHoodieDeleteRecord(T record) {
     Object columnValue = readerContext.getValue(
         record, readerSchema, HOODIE_IS_DELETED_FIELD);
-    return columnValue != null
-        && readerContext.castToBoolean(columnValue);
+    return columnValue != null && readerContext.castToBoolean(columnValue);
   }
 
   @Override

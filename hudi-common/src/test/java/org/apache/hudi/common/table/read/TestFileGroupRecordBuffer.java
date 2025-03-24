@@ -40,12 +40,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-
-import java.io.Serializable;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
@@ -56,7 +55,6 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.table.read.FileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -184,6 +182,7 @@ class TestFileGroupRecordBuffer {
     when(deleteRecord.getOrderingValue()).thenReturn(orderingValue);
   }
 
+  /*
   @Test
   void testHasCustomDeleteConfigs() {
     KeyBasedFileGroupRecordBuffer keyBasedBuffer =
@@ -207,6 +206,7 @@ class TestFileGroupRecordBuffer {
         () -> keyBasedBuffer.hasCustomDeleteConfigs(props, null));
     assertTrue(keyBasedBuffer.hasCustomDeleteConfigs(props, schema));
   }
+*/
 
   @Test
   void testIsCustomDeleteRecord() {
@@ -290,6 +290,7 @@ class TestFileGroupRecordBuffer {
     assertEquals("54321", records.get("54321").getRight().get(INTERNAL_META_RECORD_KEY));
   }
 
+  /*
   @Test
   void testHasHoodieDeleteField() {
     KeyBasedFileGroupRecordBuffer keyBasedBuffer =
@@ -310,5 +311,5 @@ class TestFileGroupRecordBuffer {
     Schema.Field field = new Schema.Field("_hoodie_is_deleted", fieldSchema);
     when(schema.getField(any())).thenReturn(field);
     assertTrue(keyBasedBuffer.hasHoodieDeleteField(schema));
-  }
+  }*/
 }

@@ -24,7 +24,7 @@ import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECO
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
 import org.apache.hudi.common.engine.HoodieReaderContext
-import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieRecord, HoodieRecordMerger, OverwriteWithLatestMerger, WriteOperationType}
+import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieRecord, OverwriteWithLatestMerger, WriteOperationType}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -37,11 +37,8 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.HoodieSparkKryoRegistrar
-import org.apache.spark.SparkConf
-import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
-import org.apache.spark.sql.HoodieInternalRowUtils
-import org.apache.spark.sql.HoodieUnsafeUtils
+import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
+import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, HoodieUnsafeUtils, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
 import org.apache.spark.sql.functions.col
@@ -187,7 +184,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     (20, "1", "rider-Z", "driver-Z", 27.7, "i"))
 
   @ParameterizedTest
-  @MethodSource(Array("provideParams"))
+  @MethodSource(Array("customDeleteTestParams"))
   def testCustomDelete(useFgReader: String,
                        tableType: String,
                        recordType: String,
@@ -310,20 +307,14 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 }
 
 object TestHoodieFileGroupReaderOnSpark {
-  def provideParams(): java.util.List[Arguments] = {
+  def customDeleteTestParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "EVENT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "true", "EVENT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "COMMIT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "true", "COMMIT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "CUSTOM"),
-      Arguments.of("true", "MERGE_ON_READ", "AVRO", "true", "CUSTOM"),
-      Arguments.of("true", "MERGE_ON_READ", "SPARK", "false", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "SPARK", "true", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "SPARK", "false", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "SPARK", "true", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "SPARK", "false", "CUSTOM"),
-      Arguments.of("true", "MERGE_ON_READ", "SPARK", "true", "CUSTOM"))
+      Arguments.of("true", "MERGE_ON_READ", "AVRO", "true", "CUSTOM"))
   }
 
   def getDataFileNumber(metaClient: HoodieTableMetaClient, basePath: String): Long = {

@@ -86,8 +86,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
             nextRecord, schema);
         String recordKey = (String) metadata.get(HoodieReaderContext.INTERNAL_META_RECORD_KEY);
 
-        if (shouldCheckCustomDeleteMarker && isCustomDeleteRecord(nextRecord)
-            || (shouldCheckHoodieDeleteMarker && isHoodieDeleteRecord(nextRecord))) {
+        if (isHoodieDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord)) {
           processCustomDeleteRecord(nextRecord, metadata);
         } else {
           processNextDataRecord(nextRecord, metadata, recordKey);
