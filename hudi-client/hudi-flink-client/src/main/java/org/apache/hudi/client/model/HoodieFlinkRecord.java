@@ -130,7 +130,13 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
-    return getOperation() == HoodieOperation.DELETE;
+    if (data == null) {
+      return true;
+    }
+
+    // Use data field to decide.
+    Schema.Field deleteField = recordSchema.getField(HOODIE_IS_DELETED_FIELD);
+    return deleteField != null && data.getBoolean(deleteField.pos());
   }
 
   @Override
