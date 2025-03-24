@@ -25,11 +25,13 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.functional.TestHoodieBackedMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -100,7 +102,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
   }
 
   protected HoodieWriteConfig getConfigToTestMDTRollbacks(Boolean autoCommit, Boolean mdtEnable) {
-    return HoodieWriteConfig.newBuilder()
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withProperties(getPropertiesForKeyGen(true))
         .withSchema(TRIP_EXAMPLE_SCHEMA)
@@ -111,6 +113,8 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
         .withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(mdtEnable).build())
         .build();
+    cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, "6");
+    return cfg;
   }
 
   /**
@@ -118,7 +122,10 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
    */
   protected void testRollbackWithFailurePreMDT(HoodieTableType tableType) throws Exception {
     initBasePath();
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType);
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.VERSION.key(), "6");
+    props.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(), "1");
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, props);
     SparkRDDWriteClient client =  getHoodieWriteClient(true);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
@@ -145,7 +152,10 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
 
   protected void testRollbackWithFailurePostMDT(HoodieTableType tableType, Boolean failRollback) throws Exception {
     initBasePath();
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType);
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.VERSION.key(), "6");
+    props.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(), "1");
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, props);
     HoodieWriteConfig cfg = getConfigToTestMDTRollbacks(true);
     SparkRDDWriteClient client =  getHoodieWriteClient(cfg);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
@@ -225,8 +235,12 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
    */
   protected void testRollbackWithFailureinMDT(HoodieTableType tableType) throws Exception {
     initBasePath();
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.VERSION.key(), "6");
+    props.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(), "1");
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, props);
     HoodieWriteConfig cfg = getConfigToTestMDTRollbacks(true);
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType);
+    cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, "6");
     SparkRDDWriteClient client =  getHoodieWriteClient(cfg);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 

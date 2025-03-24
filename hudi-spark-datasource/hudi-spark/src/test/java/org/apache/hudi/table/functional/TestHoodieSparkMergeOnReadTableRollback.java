@@ -407,6 +407,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
+    cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, "6");
 
     Properties properties = CollectionUtils.copy(cfg.getProps());
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
@@ -458,7 +459,9 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
        */
       final String commitTime1 = "000000002";
       // WriteClient with custom config (disable small file handling)
-      try (SparkRDDWriteClient secondClient = getHoodieWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff(true));) {
+      HoodieWriteConfig secondCfg = getHoodieWriteConfigWithSmallFileHandlingOff(true);
+      secondCfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, "6");
+      try (SparkRDDWriteClient secondClient = getHoodieWriteClient(secondCfg);) {
         secondClient.startCommitWithTime(commitTime1);
 
         List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
@@ -712,7 +715,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       /*
        * Write 1 (only inserts)
        */
-      String newCommitTime = "001";
+      String newCommitTime = client.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
@@ -721,29 +724,30 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       assertNoWriteErrors(statuses);
       client.commit(newCommitTime, jsc().parallelize(statuses));
 
-      upsertRecords(client, "002", records, dataGen);
+      String commit2 = client.createNewInstantTime();
+      upsertRecords(client, commit2, records, dataGen);
 
-      client.savepoint("002", "user1", "comment1");
+      client.savepoint(commit2, "user1", "comment1");
 
-      upsertRecords(client, "003", records, dataGen);
-      upsertRecords(client, "004", records, dataGen);
+      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
+      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
 
       // Compaction commit
-      String compactionInstantTime = "006";
+      String compactionInstantTime = client.createNewInstantTime();
       client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
       client.commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
 
-      upsertRecords(client, "007", records, dataGen);
-      upsertRecords(client, "008", records, dataGen);
+      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
+      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
 
       // Compaction commit
-      String compactionInstantTime1 = "009";
+      String compactionInstantTime1 = client.createNewInstantTime();
       client.scheduleCompactionAtInstant(compactionInstantTime1, Option.empty());
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata1 = client.compact(compactionInstantTime1);
       client.commitCompaction(compactionInstantTime1, compactionMetadata1.getCommitMetadata().get(), Option.empty());
 
-      upsertRecords(client, "010", records, dataGen);
+      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
 
       // trigger clean. creating a new client with aggressive cleaner configs so that clean will kick in immediately.
       cfgBuilder = getConfigBuilder(false)
@@ -757,10 +761,10 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       }
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      upsertRecords(client, "011", records, dataGen);
+      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
 
       // Rollback to 002
-      client.restoreToInstant("002", cfg.isMetadataTableEnabled());
+      client.restoreToInstant(commit2, cfg.isMetadataTableEnabled());
 
       // verify that no files are present after 002. every data file should have been cleaned up
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
@@ -769,11 +773,11 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
           metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
       assertFalse(dataFilesToRead.anyMatch(
-          file -> compareTimestamps("002", GREATER_THAN,
+          file -> compareTimestamps(commit2, GREATER_THAN,
               file.getCommitTime())));
 
-      client.deleteSavepoint("002");
-      assertFalse(metaClient.reloadActiveTimeline().getSavePointTimeline().containsInstant("002"));
+      client.deleteSavepoint(commit2);
+      assertFalse(metaClient.reloadActiveTimeline().getSavePointTimeline().containsInstant(commit2));
     }
   }
 

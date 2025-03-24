@@ -23,7 +23,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -85,15 +87,18 @@ public class TestCommitMetadataUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testReconcileMetadataForMissingFiles() throws IOException {
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setTableVersion(HoodieTableVersion.SIX);
+
     // Mock table type as MERGE_ON_READ and action as DELTA_COMMIT
     when(table.getMetaClient()).thenReturn(metaClient);
     Mockito.when(table.getConfig()).thenReturn(writeConfig);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(metaClient.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
     when(metaClient.getStorage()).thenReturn(storage);
     when(metaClient.getBasePath()).thenReturn(new StoragePath(basePath));
     when(metaClient.getMarkerFolderPath(any())).thenReturn(basePath + ".hoodie/.temp");
     when(table.getContext()).thenReturn(context);
-    //    when(context.getStorageConf()).thenReturn(((StorageConfiguration<?>) storageConf));
     when(writeConfig.getViewStorageConfig()).thenReturn(FileSystemViewStorageConfig.newBuilder().build());
     when(writeConfig.getMarkersType()).thenReturn(MarkerType.DIRECT);
     when(writeConfig.getBasePath()).thenReturn(basePath);

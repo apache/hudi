@@ -395,6 +395,6 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     assertEquals(
         tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? 0 : 1,
         rollbackStat.getCommandBlocksCount().size());
-    assertEquals(0, rollbackStat.getLogFilesFromFailedCommit().size());
+    assertEquals(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? 0 : numLogFiles, rollbackStat.getLogFilesFromFailedCommit().size());
   }
 }
