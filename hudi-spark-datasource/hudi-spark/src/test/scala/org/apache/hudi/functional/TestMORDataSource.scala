@@ -21,7 +21,7 @@ import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSour
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode}
+import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -30,11 +30,12 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtil
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists, PARTITION_NAME_SECONDARY_INDEX_PREFIX}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
+import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
 
@@ -424,6 +425,130 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       // inserted 2 new row
       assertEquals(2, hudiIncDF6.count())
     }
+  }
+
+  @Test
+  def testUpgradeDowngradeWithRecordIndex() : Unit = {
+    initMetaClient(HoodieTableType.MERGE_ON_READ)
+    // Common Hudi options for MERGE_ON_READ table with metadata and column stats enabled.
+    val hudiOptions = Map[String, String](
+      "hoodie.table.name" -> tableName,
+      RECORDKEY_FIELD.key -> "id",
+      PRECOMBINE_FIELD.key -> "ts",
+      TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
+      OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+      KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true", // enable RECORD_INDEX
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "100", // ensure compaction does not run before downgrade
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.SIX.versionCode().toString,
+      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false" // write in table version 6 and disable auto upgrade
+    )
+
+    val _spark = spark
+    import _spark.implicits._
+
+    // ------------------------------------------------------------------
+    // Step 1 & 2: Create table and insert two records (initial commit)
+    // ------------------------------------------------------------------
+    println("== Step 1 & 2: Creating table and inserting initial records ==")
+    val initialDF = Seq(
+      (1, "Alice", 1000, 10),  // (id, name, ts, price)
+      (2, "Bob",   1000, 20)
+    ).toDF("id", "name", "ts", "price")
+
+    initialDF.write.format("hudi")
+      .options(hudiOptions)
+      .mode("overwrite")
+      .save(basePath)
+
+    // ------------------------------------------------------------------
+    // Step 3: Update the records (generating a new log file with updated stats)
+    // ------------------------------------------------------------------
+    println("== Step 3: Updating records ==")
+    val updateDF = Seq(
+      (1, "Alice", 2000, 15),  // update Alice
+      (2, "Bob",   2000, 25)   // update Bob
+    ).toDF("id", "name", "ts", "price")
+
+    updateDF.write.format("hudi")
+      .options(hudiOptions)
+      .mode("append")
+      .save(basePath)
+
+    // ------------------------------------------------------------------
+    // Step 4: Trigger compaction so that a new base file is produced.
+    // For inline compaction, we set inline compaction options.
+    // ------------------------------------------------------------------
+    val compactionOptions = hudiOptions ++ Map(
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "true",
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1"
+    )
+    // Writing the same updateDF triggers inline compaction in a MERGE_ON_READ table.
+    updateDF.write.format("hudi")
+      .options(compactionOptions)
+      .mode("append")
+      .save(basePath)
+
+    // ------------------------------------------------------------------
+    // Step 5: Perform a clean operation.
+    // ------------------------------------------------------------------
+    val cleanOptions = hudiOptions ++ Map(
+      HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED.key -> "1"
+    )
+    val client = DataSourceUtils.createHoodieClient(
+      spark.sparkContext, "", basePath, tableName, cleanOptions.asJava
+    ).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+    // Trigger cleaning via an additional write (which invokes cleaning)
+    val cleanInstant = client.scheduleTableService(Option.empty(), TableServiceType.CLEAN)
+    client.clean(cleanInstant.get())
+    client.close()
+
+    // ------------------------------------------------------------------
+    // Step 6: Upgrade to version 8.
+    // ------------------------------------------------------------------
+    val upgradedOptions = hudiOptions ++ Map(
+      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "true",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.EIGHT.versionCode().toString
+    )
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    new UpgradeDowngrade(metaClient, getWriteConfig(upgradedOptions, basePath), context, SparkUpgradeDowngradeHelper.getInstance)
+      .run(HoodieTableVersion.EIGHT, null)
+    // assert table version
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
+
+    // ------------------------------------------------------------------
+    // Step 7: Read the table.
+    // ------------------------------------------------------------------
+    var df = spark.read.format("hudi").load(basePath).filter("id = 2")
+    // assert the result
+    assertEquals(1, df.count())
+    assertEquals(1, df.filter("id = 2").count())
+
+    // ------------------------------------------------------------------
+    // Step 8: Do a commit on the upgraded table
+    // ------------------------------------------------------------------
+    val updateDF2 = Seq(
+      (1, "Alice", 3000, 20),  // update Alice
+      (2, "Bob",   3000, 30)   // update Bob
+    ).toDF("id", "name", "ts", "price")
+    updateDF2.write.format("hudi")
+      .options(upgradedOptions)
+      .mode("append")
+      .save(basePath)
+    // assert new data
+    df = spark.read.format("hudi").load(basePath).filter("id = 2")
+    // assert the result
+    assertEquals(1, df.count())
+    assertEquals(1, df.filter("price = 30").count())
+  }
+
+  private def getWriteConfig(hudiOpts: Map[String, String], basePath: String): HoodieWriteConfig = {
+    val props = TypedProperties.fromMap(hudiOpts.asJava)
+    HoodieWriteConfig.newBuilder()
+      .withProps(props)
+      .withPath(basePath)
+      .build()
   }
 
   @Test

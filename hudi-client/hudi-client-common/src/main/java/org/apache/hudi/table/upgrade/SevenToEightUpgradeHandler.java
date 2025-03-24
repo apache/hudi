@@ -192,6 +192,14 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
             HoodieTableConfig.RECORD_MERGE_MODE,
             RecordMergeMode.EVENT_TIME_ORDERING.name());
       }
+    } else if (tableConfig.getPayloadClass() != null
+        && tableConfig.getPayloadClass().equals(DefaultHoodieRecordPayload.class.getName())) {
+      tablePropsToAdd.put(
+          HoodieTableConfig.PAYLOAD_CLASS_NAME,
+          DefaultHoodieRecordPayload.class.getName());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_MODE,
+          RecordMergeMode.EVENT_TIME_ORDERING.name());
     }
   }
 
