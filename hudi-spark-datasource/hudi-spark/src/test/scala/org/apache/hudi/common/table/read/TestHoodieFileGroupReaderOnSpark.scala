@@ -19,16 +19,17 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, OverwriteWithLatestSparkRecordMerger, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
-import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, RecordMergeMode}
+import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode}
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
 import org.apache.hudi.common.engine.HoodieReaderContext
-import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieRecord, OverwriteWithLatestMerger, WriteOperationType}
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getDataFileNumber
+import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
 import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
@@ -187,22 +188,11 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   @MethodSource(Array("customDeleteTestParams"))
   def testCustomDelete(useFgReader: String,
                        tableType: String,
-                       recordType: String,
                        positionUsed: String,
                        mergeMode: String): Unit = {
-    val sparkMergeClasses = List(
-      classOf[DefaultSparkRecordMerger].getName,
-      classOf[OverwriteWithLatestSparkRecordMerger].getName).mkString(",")
-    val avroMergerClasses = List(
-      classOf[HoodieAvroRecordMerger].getName,
-      classOf[OverwriteWithLatestMerger].getName).mkString(",")
     val payloadClass = "org.apache.hudi.common.table.read.CustomPayloadForTesting"
-    val mergeOpts: Map[String, String] = Map(
-      HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key ->
-        (if (recordType.equals("SPARK")) sparkMergeClasses else avroMergerClasses))
     val fgReaderOpts: Map[String, String] = Map(
-      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> (
-        if (recordType.equals("SPARK")) "parquet" else "avro"),
+      HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
       HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> useFgReader,
       HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key -> positionUsed,
       HoodieWriteConfig.RECORD_MERGE_MODE.key -> mergeMode
@@ -215,7 +205,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     } else {
       fgReaderOpts ++ deleteOpts
     }
-    val opts = mergeOpts ++ readOpts
+    val opts = readOpts
     val columns = Seq("ts", "key", "rider", "driver", "fare", "op")
 
     val data = Seq(
@@ -234,10 +224,9 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       options(opts).
       mode(SaveMode.Overwrite).
       save(getBasePath)
-    // Validate data file number.
-    var metaClient = HoodieTableMetaClient
+    val metaClient = HoodieTableMetaClient
       .builder().setConf(getStorageConf).setBasePath(getBasePath).build
-    assertEquals(1, getDataFileNumber(metaClient, getBasePath))
+    assertEquals((1, 0), getFileCount(metaClient, getBasePath))
 
     // Delete using delete markers.
     val updateData = Seq(
@@ -250,8 +239,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       options(opts).
       mode(SaveMode.Append).
       save(getBasePath)
-    // Validate data file number.
-    assertEquals(2, getDataFileNumber(metaClient, getBasePath))
+    assertEquals((1, 1), getFileCount(metaClient, getBasePath))
 
     // Delete from operation.
     val deletesData = Seq((-5, "4", "rider-D", "driver-D", 34.15, 6))
@@ -262,8 +250,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       options(opts).
       mode(SaveMode.Append).
       save(getBasePath)
-    // Validate data file number.
-    assertEquals(3, getDataFileNumber(metaClient, getBasePath))
+    assertEquals((1, 2), getFileCount(metaClient, getBasePath))
 
     // Add a record back to test ensure event time ordering work.
     val updateDataSecond = Seq(
@@ -276,7 +263,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       mode(SaveMode.Append).
       save(getBasePath)
     // Validate data file number.
-    assertEquals(4, getDataFileNumber(metaClient, getBasePath))
+    assertEquals((1, 3), getFileCount(metaClient, getBasePath))
 
     // Validate in the end.
     val columnsToCompare = Set("ts", "key", "rider", "driver", "fare", "op")
@@ -309,19 +296,22 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 object TestHoodieFileGroupReaderOnSpark {
   def customDeleteTestParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
-      Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "AVRO", "true", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "AVRO", "true", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "CUSTOM"),
-      Arguments.of("true", "MERGE_ON_READ", "AVRO", "true", "CUSTOM"))
+      Arguments.of("true", "MERGE_ON_READ", "false", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "false", "COMMIT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "COMMIT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "false", "CUSTOM"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "CUSTOM"))
   }
 
-  def getDataFileNumber(metaClient: HoodieTableMetaClient, basePath: String): Long = {
+  def getFileCount(metaClient: HoodieTableMetaClient, basePath: String): (Long, Long) = {
     val newMetaClient = HoodieTableMetaClient.reload(metaClient)
     val files = newMetaClient.getStorage.listFiles(new StoragePath(basePath))
-    files.stream().filter(f =>
+    (files.stream().filter(f =>
       f.getPath.getParent.equals(new StoragePath(basePath))
-        && !f.getPath.getName.equals(".hoodie_partition_metadata")).count()
+        && FSUtils.isBaseFile(f.getPath)).count(),
+      files.stream().filter(f =>
+        f.getPath.getParent.equals(new StoragePath(basePath))
+          && FSUtils.isLogFile(f.getPath)).count())
   }
 }
