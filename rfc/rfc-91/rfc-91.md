@@ -39,7 +39,7 @@ AWS S3 recently introduced conditional writes, and GCS and Azure storage already
 
 ## Implementation
 
-This design implements a leader election algorithm for Apache Hudi using a single lock file per table stored in .hoodie folder. Each table’s lock is represented by a JSON file with the following fields:
+This design implements a leader election algorithm for Apache Hudi using a single lock file per table stored in .hoodie folder by default. Each table’s lock is represented by a JSON file with the following fields:
 - owner: A unique UUID identifying the lock provider instance.
 - expiration: A UTC timestamp indicating when the lock expires.
 - expired: A boolean flag marking the lock as released.
