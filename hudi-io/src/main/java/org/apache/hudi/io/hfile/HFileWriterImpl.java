@@ -51,8 +51,6 @@ import java.util.Map;
 public class HFileWriterImpl implements HFileWriter {
   private final OutputStream outputStream;
   private final HFileContext context;
-  // Flushed data blocks.
-  private final List<HFileDataBlock> dataBlocks = new ArrayList<>();
   // Meta Info map.
   private final Map<String, byte[]> metaInfo = new HashMap<>();
   // Data block under construction.
@@ -66,6 +64,13 @@ public class HFileWriterImpl implements HFileWriter {
   private long currentOffset;
   private long loadOnOpenSectionOffset;
   private final int blockSize;
+
+  // Variables used to record necessary information to reduce
+  // the memory usage.
+  private byte[] lastKey = new byte[0];
+  private long firstDataBlockOffset = -1;
+  private long lastDataBlockOffset;
+  private long totalNumberOfRecords = 0;
 
   public HFileWriterImpl(HFileContext context, OutputStream outputStream) {
     this.outputStream = outputStream;
@@ -117,20 +122,23 @@ public class HFileWriterImpl implements HFileWriter {
   }
 
   private void flushCurrentDataBlock() throws IOException {
+    // 0. Skip flush if no data.
     if (currentDataBlock.isEmpty()) {
       return;
     }
-    // Flush data block.
+    // 1. Update metrics.
+    if (firstDataBlockOffset < 0) {
+      firstDataBlockOffset = currentOffset;
+    }
+    lastDataBlockOffset = currentOffset;
+    totalNumberOfRecords += currentDataBlock.getNumOfEntries();
+    // 2. Flush data block.
     ByteBuffer blockBuffer = currentDataBlock.serialize();
-    // Current block offset.
-    currentDataBlock.setStartOffsetInBuff(currentOffset);
-    long blockOffset = currentOffset;
     writeBuffer(blockBuffer);
-    dataBlocks.add(currentDataBlock);
-    // Create an index entry.
+    // 3. Create an index entry.
     rootIndexBlock.add(
-        currentDataBlock.getFirstKey(), blockOffset, blockBuffer.limit());
-    // Create a new data block.
+        currentDataBlock.getFirstKey(), currentOffset, blockBuffer.limit());
+    // 4. Create a new data block.
     currentDataBlock = new HFileDataBlock(context);
   }
 
@@ -163,13 +171,7 @@ public class HFileWriterImpl implements HFileWriter {
     metaIndexBlock.setStartOffsetInBuff(currentOffset);
     writeBuffer(metaIndexBuffer);
     // Write File Info.
-    if (!dataBlocks.isEmpty()) {
-      fileInfoBlock.add(
-          "hfile.LASTKEY", dataBlocks.get(dataBlocks.size() - 1).getLastKey());
-    } else {
-      fileInfoBlock.add(
-          "hfile.LASTKEY", new byte[0]);
-    }
+    fileInfoBlock.add("hfile.LASTKEY", lastKey);
     fileInfoBlock.setStartOffsetInBuff(currentOffset);
     writeBuffer(fileInfoBlock.serialize());
   }
@@ -181,13 +183,11 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setUncompressedDataIndexSize(totalUncompressedBytes);
     builder.setDataIndexCount(rootIndexBlock.getNumOfEntries());
     builder.setMetaIndexCount(metaIndexBlock.getNumOfEntries());
-    builder.setEntryCount(getTotalNumOfEntries());
+    builder.setEntryCount(totalNumberOfRecords);
     // TODO: support multiple levels.
     builder.setNumDataIndexLevels(1);
-    if (!dataBlocks.isEmpty()) {
-      builder.setFirstDataBlockOffset(dataBlocks.get(0).getStartOffsetInBuff());
-      builder.setLastDataBlockOffset(dataBlocks.get(dataBlocks.size() - 1).getStartOffsetInBuff());
-    }
+    builder.setFirstDataBlockOffset(firstDataBlockOffset);
+    builder.setLastDataBlockOffset(lastDataBlockOffset);
     builder.setComparatorClassName("NA");
     builder.setCompressionCodec(2);
     // TODO: support compression.
@@ -212,14 +212,6 @@ public class HFileWriterImpl implements HFileWriter {
 
     trailer.flip();
     writeBuffer(trailer);
-  }
-
-  private long getTotalNumOfEntries() {
-    long totalNumOfEntries = 0L;
-    for (HFileDataBlock db : dataBlocks) {
-      totalNumOfEntries += db.getNumOfEntries();
-    }
-    return totalNumOfEntries;
   }
 
   private void writeBuffer(ByteBuffer buffer) throws IOException {
