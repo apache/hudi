@@ -44,6 +44,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
 import javax.annotation.concurrent.NotThreadSafe
+
 import java.text.SimpleDateFormat
 import java.util.stream.Collectors
 
