@@ -79,6 +79,7 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.io.hadoop.HoodieAvroParquetReader;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
+import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.metrics.Metrics;
@@ -472,6 +473,21 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getHiveStylePartitioningEnable()));
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getUrlEncodePartitioning()));
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  public void testPartitionKeyFieldsBasedOnVersion(HoodieTableVersion version) throws IOException {
+    String tablePath = basePath + "/partition_key_fields_meta_client" + version.versionCode();
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
+    cfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + version.versionCode());
+    cfg.configs.add(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() + "=" + CustomKeyGenerator.class.getName());
+    cfg.configs.add("hoodie.datasource.write.partitionpath.field=partition_path:simple");
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamer.getIngestionService().ingestOnce();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
+    String expectedPartitionFields = version.equals(HoodieTableVersion.SIX) ? "partition_path" : "partition_path:simple";
+    assertEquals(expectedPartitionFields, metaClient.getTableConfig().getString(HoodieTableConfig.PARTITION_FIELDS));
   }
 
   @ParameterizedTest
