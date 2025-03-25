@@ -55,6 +55,7 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.table.read.FileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -182,6 +183,42 @@ class TestFileGroupRecordBuffer {
     assertEquals(addCustomDeleteMarker
             ? Option.of(Pair.of(customDeleteKey, customDeleteValue)) : Option.empty(),
         fileGroupReaderSchemaHandler.getCustomDeleteMarkerKeyValue());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,false", "false,true"})
+  void testInvalidCustomDeleteConfigs(boolean configureCustomDeleteKey,
+                                      boolean configureCustomDeleteMarker) {
+    HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
+    when(readerContext.getHasBootstrapBaseFile()).thenReturn(false);
+    when(readerContext.getHasLogFiles()).thenReturn(true);
+    HoodieRecordMerger recordMerger = mock(HoodieRecordMerger.class);
+    when(readerContext.getRecordMerger()).thenReturn(Option.of(recordMerger));
+    when(recordMerger.isProjectionCompatible()).thenReturn(false);
+
+    String customDeleteKey = "colC";
+    String customDeleteValue = "D";
+    List<String> dataSchemaFields = new ArrayList<>(Arrays.asList(
+        HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+        "colA", "colB", "colC", "colD"));
+
+    Schema dataSchema = getSchema(dataSchemaFields);
+    Schema requestedSchema = getSchema(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+
+    TypedProperties props = new TypedProperties();
+    if (configureCustomDeleteKey) {
+      props.setProperty(DELETE_KEY, customDeleteKey);
+    }
+    if (configureCustomDeleteMarker) {
+      props.setProperty(DELETE_MARKER, customDeleteValue);
+    }
+    Throwable exception = assertThrows(IllegalArgumentException.class,
+        () -> new FileGroupReaderSchemaHandler(readerContext,
+            dataSchema, requestedSchema, Option.empty(), tableConfig, props));
+    assertEquals("Either custom delete key or marker is not specified",
+        exception.getMessage());
   }
 
   private Schema getSchema(List<String> fields) {
