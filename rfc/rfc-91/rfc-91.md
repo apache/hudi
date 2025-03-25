@@ -35,7 +35,7 @@ Currently in Hudi, distributed locking relies on external systems like Zookeeper
 
 ## Background
 
-AWS S3 recently introduced conditional writes, and GCS and Azure storage already support them. This RFC leverages these features to implement a distributed lock provider for Hudi using a leader election algorithm. In this approach, each process attempts an atomic conditional write to a file calculated using the table base path. The first process to succeed is elected leader and takes charge of exclusive operations. This method provides a straightforward, reliable locking mechanism without the need for external lock providers.
+AWS S3 recently introduced conditional writes, and GCS and Azure storage already support them. This RFC leverages these features to implement a distributed lock provider for Hudi using a leader election algorithm. In this approach, each process attempts an atomic conditional write to a file calculated using the table base path. The first process to succeed is elected leader and takes charge of exclusive operations. This method provides a straightforward, reliable locking mechanism without the need for additional distributed system.
 
 ## Implementation
 
