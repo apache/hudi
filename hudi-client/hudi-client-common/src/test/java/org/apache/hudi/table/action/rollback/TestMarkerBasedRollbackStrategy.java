@@ -141,7 +141,7 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
-    }).collect(Collectors.toMap(Function.identity(), e -> 1L));
+    }).collect(Collectors.toMap(Function.identity(), e -> 0L));
   }
 }
 

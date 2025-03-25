@@ -186,6 +186,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -3611,7 +3612,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // in the .hoodie folder.
     List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, storage, getMetadataTableBasePath(basePath),
         false);
-    assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
+    // Secondary index is enabled by default but no MDT partition corresponding to it is available
+    long enabledMDTPartitionsSize = metadataWriter.getEnabledPartitionTypes().stream()
+        .filter(partition -> !partition.equals(SECONDARY_INDEX))
+        .count();
+    assertEquals(enabledMDTPartitionsSize, metadataTablePartitions.size());
 
     final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
     metadataWriter.getEnabledPartitionTypes().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
@@ -3640,7 +3645,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     });
 
     // TODO: include validation for record_index partition here.
-    LOG.info("Validation time=" + timer.endTimer());
   }
 
   public static void validateMetadata(HoodieWriteConfig config, Option<String> ignoreFilesWithCommit,
