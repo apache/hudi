@@ -86,8 +86,8 @@ public class DataHubTableProperties {
   private static void addSparkRelatedProperties(Map<String, String> properties, DataHubSyncConfig config, HoodieTableMetadata tableMetadata) {
     Map<String, String> sparkProperties = SparkDataSourceTableUtils.getSparkTableProperties(
         config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
-        config.getString(META_SYNC_SPARK_VERSION),
-        config.getInt(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD),
+        config.getStringOrDefault(META_SYNC_SPARK_VERSION),
+        config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD),
         tableMetadata.getSchema()
     );
     properties.putAll(sparkProperties);
