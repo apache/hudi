@@ -2234,9 +2234,11 @@ public class ITTestHoodieDataSource {
     conf.setString(FlinkOptions.TABLE_NAME, "t1");
     conf.setString(FlinkOptions.TABLE_TYPE, tableType.name());
     conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
+    long start = System.currentTimeMillis();
 
     // write the first commit
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    System.out.println(">>> write1, cost: " + (System.currentTimeMillis() - start));
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
@@ -2248,13 +2250,20 @@ public class ITTestHoodieDataSource {
     streamTableEnv.executeSql(hoodieTableDDL);
 
     // launch a streaming query
+    start = System.currentTimeMillis();
     TableResult tableResult = submitSelectSql(streamTableEnv,
         "select uuid, name, age, ts, `partition` as part from t1 where `partition` > 'par4'",
         TestConfigurations.getCollectSinkDDL("sink", TestData.DATA_SET_INSERT_SEPARATE_PARTITION.size()));
+    System.out.println(">>> launch streaming read, cost: " + (System.currentTimeMillis() - start));
+
+    start = System.currentTimeMillis();
     // write second commit
     TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
+    System.out.println(">>> write2, cost: " + (System.currentTimeMillis() - start));
     // stop the streaming query and get data
+    start = System.currentTimeMillis();
     List<Row> actualResult = fetchResult(streamTableEnv, tableResult);
+    System.out.println(">>> fetch result, cost: " + (System.currentTimeMillis() - start));
     assertRowsEquals(actualResult, TestData.DATA_SET_INSERT_SEPARATE_PARTITION);
   }
 
