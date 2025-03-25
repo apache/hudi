@@ -209,6 +209,16 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
+  public boolean castToBoolean(Object value) {
+    if (value instanceof BooleanWritable) {
+      return ((BooleanWritable) value).get();
+    } else {
+      throw new IllegalArgumentException(
+          "Expected BooleanWritable but got " + value.getClass());
+    }
+  }
+
+  @Override
   public HoodieRecord<ArrayWritable> constructHoodieRecord(Option<ArrayWritable> recordOption, Map<String, Object> metadataMap) {
     if (!recordOption.isPresent()) {
       return new HoodieEmptyRecord<>(new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)), HoodieRecord.HoodieRecordType.HIVE);

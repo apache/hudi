@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -41,21 +42,23 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
+
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
  * by calling the {@link #processDataBlock} and {@link #processDeleteBlock} methods into a record key based map.
  * The records from the base file is accessed from an iterator object. These records are merged when the
  * {@link #hasNext} method is called.
  */
-public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
+public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
-  public HoodieKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                             HoodieTableMetaClient hoodieTableMetaClient,
-                                             RecordMergeMode recordMergeMode,
-                                             Option<String> partitionNameOverrideOpt,
-                                             Option<String[]> partitionPathFieldOpt,
-                                             TypedProperties props,
-                                             HoodieReadStats readStats) {
+  public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+                                       HoodieTableMetaClient hoodieTableMetaClient,
+                                       RecordMergeMode recordMergeMode,
+                                       Option<String> partitionNameOverrideOpt,
+                                       Option<String[]> partitionPathFieldOpt,
+                                       TypedProperties props,
+                                       HoodieReadStats readStats) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
   }
 
@@ -82,7 +85,12 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
         Map<String, Object> metadata = readerContext.generateMetadataForRecord(
             nextRecord, schema);
         String recordKey = (String) metadata.get(HoodieReaderContext.INTERNAL_META_RECORD_KEY);
-        processNextDataRecord(nextRecord, metadata, recordKey);
+
+        if (isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord)) {
+          processDeleteRecord(nextRecord, metadata);
+        } else {
+          processNextDataRecord(nextRecord, metadata, recordKey);
+        }
       }
     }
   }
@@ -121,6 +129,20 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
           (String) recordKey, recordOpt.get().getPartitionPath(),
           getOrderingValue(readerContext, recordOpt.get()))));
     }
+  }
+
+  protected void processDeleteRecord(T record, Map<String, Object> metadata) {
+    DeleteRecord deleteRecord = DeleteRecord.create(
+        new HoodieKey(
+            (String) metadata.get(INTERNAL_META_RECORD_KEY),
+            // The partition path of the delete record is set to null because it is not
+            // used, and the delete record is never surfaced from the file group reader
+            null),
+        readerContext.getOrderingValue(
+            Option.of(record), metadata, readerSchema, orderingFieldName));
+    processNextDeletedRecord(
+        deleteRecord,
+        (String) metadata.get(INTERNAL_META_RECORD_KEY));
   }
 
   @Override

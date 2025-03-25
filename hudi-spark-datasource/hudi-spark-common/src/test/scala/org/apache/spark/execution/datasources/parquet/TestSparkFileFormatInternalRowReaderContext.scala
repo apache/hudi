@@ -22,7 +22,7 @@ package org.apache.spark.execution.datasources.parquet
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.filterIsSafeForBootstrap
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader

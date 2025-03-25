@@ -33,9 +33,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer;
-import org.apache.hudi.common.table.read.HoodiePositionBasedSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.PositionBasedSchemaHandler;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -70,11 +70,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupReaderOnSpark {
+public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupReaderOnSpark {
   private final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF);
   private HoodieTableMetaClient metaClient;
   private Schema avroSchema;
-  private HoodiePositionBasedFileGroupRecordBuffer<InternalRow> buffer;
+  private PositionBasedFileGroupRecordBuffer<InternalRow> buffer;
   private String partitionPath;
   private HoodieReadStats readStats;
 
@@ -123,7 +123,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     } else {
       ctx.setRecordMerger(Option.empty());
     }
-    ctx.setSchemaHandler(new HoodiePositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
+    ctx.setSchemaHandler(new PositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
         Option.empty(), metaClient.getTableConfig(), new TypedProperties()));
     TypedProperties props = new TypedProperties();
     props.put("hoodie.write.record.merge.mode", mergeMode.name());
@@ -136,7 +136,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
     readStats = new HoodieReadStats();
-    buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
+    buffer = new PositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
         mergeMode,

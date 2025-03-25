@@ -19,15 +19,22 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.hudi.{SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
-import org.apache.hudi.common.config.HoodieReaderConfig
+import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode}
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
 import org.apache.hudi.common.engine.HoodieReaderContext
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
 import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
 import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.storage.StorageConfiguration
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
@@ -39,7 +46,9 @@ import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.mockito.Mockito
 
 import java.util
@@ -165,6 +174,111 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       sparkReaderContext, row, avroSchema, "non_existent_col", DEFAULT_ORDERING_VALUE)
   }
 
+  val expectedEventTimeBased: Seq[(Int, String, String, String, Double, String)] = Seq(
+    (10, "5", "rider-E", "driver-E", 17.85, "i"),
+    (10, "3", "rider-C", "driver-C", 33.9, "i"),
+    (10, "2", "rider-B", "driver-B", 27.7, "i"),
+    (20, "1", "rider-Z", "driver-Z", 27.7, "i"))
+  val expectedCommitTimeBased: Seq[(Int, String, String, String, Double, String)] = Seq(
+    (10, "5", "rider-E", "driver-E", 17.85, "i"),
+    (10, "3", "rider-C", "driver-C", 33.9, "i"),
+    (20, "1", "rider-Z", "driver-Z", 27.7, "i"))
+
+  @ParameterizedTest
+  @MethodSource(Array("customDeleteTestParams"))
+  def testCustomDelete(useFgReader: String,
+                       tableType: String,
+                       positionUsed: String,
+                       mergeMode: String): Unit = {
+    val payloadClass = "org.apache.hudi.common.table.read.CustomPayloadForTesting"
+    val fgReaderOpts: Map[String, String] = Map(
+      HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
+      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> useFgReader,
+      HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key -> positionUsed,
+      HoodieWriteConfig.RECORD_MERGE_MODE.key -> mergeMode
+    )
+    val deleteOpts: Map[String, String] = Map(
+      DELETE_KEY -> "op", DELETE_MARKER -> "d")
+    val readOpts = if (mergeMode.equals("CUSTOM")) {
+      fgReaderOpts ++ deleteOpts ++ Map(
+        HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> payloadClass)
+    } else {
+      fgReaderOpts ++ deleteOpts
+    }
+    val opts = readOpts
+    val columns = Seq("ts", "key", "rider", "driver", "fare", "op")
+
+    val data = Seq(
+      (10, "1", "rider-A", "driver-A", 19.10, "i"),
+      (10, "2", "rider-B", "driver-B", 27.70, "i"),
+      (10, "3", "rider-C", "driver-C", 33.90, "i"),
+      (10, "4", "rider-D", "driver-D", 34.15, "i"),
+      (10, "5", "rider-E", "driver-E", 17.85, "i"))
+    val inserts = spark.createDataFrame(data).toDF(columns: _*)
+    inserts.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "key").
+      option(PRECOMBINE_FIELD.key(), "ts").
+      option(TABLE_TYPE.key(), tableType).
+      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      options(opts).
+      mode(SaveMode.Overwrite).
+      save(getBasePath)
+    val metaClient = HoodieTableMetaClient
+      .builder().setConf(getStorageConf).setBasePath(getBasePath).build
+    assertEquals((1, 0), getFileCount(metaClient, getBasePath))
+
+    // Delete using delete markers.
+    val updateData = Seq(
+      (11, "1", "rider-X", "driver-X", 19.10, "d"),
+      (9, "2", "rider-Y", "driver-Y", 27.70, "d"))
+    val updates = spark.createDataFrame(updateData).toDF(columns: _*)
+    updates.write.format("hudi").
+      option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      options(opts).
+      mode(SaveMode.Append).
+      save(getBasePath)
+    assertEquals((1, 1), getFileCount(metaClient, getBasePath))
+
+    // Delete from operation.
+    val deletesData = Seq((-5, "4", "rider-D", "driver-D", 34.15, 6))
+    val deletes = spark.createDataFrame(deletesData).toDF(columns: _*)
+    deletes.write.format("hudi").
+      option(OPERATION.key(), "DELETE").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      options(opts).
+      mode(SaveMode.Append).
+      save(getBasePath)
+    assertEquals((1, 2), getFileCount(metaClient, getBasePath))
+
+    // Add a record back to test ensure event time ordering work.
+    val updateDataSecond = Seq(
+      (20, "1", "rider-Z", "driver-Z", 27.70, "i"))
+    val updatesSecond = spark.createDataFrame(updateDataSecond).toDF(columns: _*)
+    updatesSecond.write.format("hudi").
+      option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      options(opts).
+      mode(SaveMode.Append).
+      save(getBasePath)
+    // Validate data file number.
+    assertEquals((1, 3), getFileCount(metaClient, getBasePath))
+
+    // Validate in the end.
+    val columnsToCompare = Set("ts", "key", "rider", "driver", "fare", "op")
+    val df = spark.read.options(readOpts).format("hudi").load(getBasePath)
+    val finalDf = df.select("ts", "key", "rider", "driver", "fare", "op").sort("key")
+    val expected = if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING.name()) {
+      expectedEventTimeBased
+    } else {
+      expectedCommitTimeBased
+    }
+    val expectedDf = spark.createDataFrame(expected).toDF(columns: _*).sort("key")
+    assertTrue(
+      SparkClientFunctionalTestHarness.areDataframesEqual(expectedDf, finalDf, columnsToCompare.asJava))
+  }
+
   private def testGetOrderingValue(sparkReaderContext: HoodieReaderContext[InternalRow],
                                    row: InternalRow,
                                    avroSchema: Schema,
@@ -175,5 +289,28 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       HOption.of(row), metadataMap, avroSchema, HOption.of(orderingColumn)))
     assertEquals(expectedOrderingValue,
       metadataMap.get(HoodieReaderContext.INTERNAL_META_ORDERING_FIELD))
+  }
+}
+
+object TestHoodieFileGroupReaderOnSpark {
+  def customDeleteTestParams(): java.util.List[Arguments] = {
+    java.util.Arrays.asList(
+      Arguments.of("true", "MERGE_ON_READ", "false", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "false", "COMMIT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "COMMIT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "false", "CUSTOM"),
+      Arguments.of("true", "MERGE_ON_READ", "true", "CUSTOM"))
+  }
+
+  def getFileCount(metaClient: HoodieTableMetaClient, basePath: String): (Long, Long) = {
+    val newMetaClient = HoodieTableMetaClient.reload(metaClient)
+    val files = newMetaClient.getStorage.listFiles(new StoragePath(basePath))
+    (files.stream().filter(f =>
+      f.getPath.getParent.equals(new StoragePath(basePath))
+        && FSUtils.isBaseFile(f.getPath)).count(),
+      files.stream().filter(f =>
+        f.getPath.getParent.equals(new StoragePath(basePath))
+          && FSUtils.isLogFile(f.getPath)).count())
   }
 }
