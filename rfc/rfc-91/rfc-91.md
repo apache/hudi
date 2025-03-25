@@ -39,12 +39,12 @@ AWS S3 recently introduced conditional writes, and GCS and Azure storage already
 
 ## Implementation
 
-This design implements a leader election algorithm for Apache Hudi using a single lock file per table stored in cloud storage. Each table’s lock is represented by a JSON file with the following fields:
+This design implements a leader election algorithm for Apache Hudi using a single lock file per table stored in .hoodie folder. Each table’s lock is represented by a JSON file with the following fields:
 - owner: A unique UUID identifying the lock provider instance.
 - expiration: A UTC timestamp indicating when the lock expires.
 - expired: A boolean flag marking the lock as released.
 
-Example lock file path: `s3://bucket/locks/<cleaned-table-base-path>-<short-sha>.json`
+Example lock file path: `s3://bucket/table/.hoodie/.locks/table_lock.json`
 
 Each `LockProvider` must implement `tryLock()` and `unlock()` however we also need to do our own lock renewal, therefore this implementation also has `renewLock()`. The implementation will import a service using reflection which writes to S3/GCS/Azure based on the provided location to write the locks. This ensures the main logic for conditional writes is shared regardless of the underlying storage.
 
