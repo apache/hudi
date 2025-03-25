@@ -54,7 +54,7 @@ Each `LockProvider` must implement `tryLock()` and `unlock()` however we also ne
 - Existing Lock – Expired: If the lock file exists but is expired, this is overwritten with a new lock file payload using conditional writes. This write has a precondition based on the current file’s unique tag from cloud storage to ensure the write succeeds only if no other process has updated it in the meantime. If another process manages to overwrite the lock file first, a 412 precondition failure will return and the lock will not be acquired.
 
 `renewLock()`:  periodically extends the lock’s expiration (the heartbeat) to continue holding the lock if allowed.
-- Mechanism: Update the lock file’s expiration using a conditional write that verifies the unique tag from the current lock state. If the tag does not match, the renewal fails, indicating that the lock has been lost.
+- Update the lock file’s expiration using a conditional write that verifies the unique tag from the current lock state. If the tag does not match, the renewal fails, indicating that the lock has been lost.
 
 `unlock()`: safely releases the lock.
 - Update the existing lock file to mark it as expired. This update is performed with a conditional write that ensures the operation is only executed if the file’s unique tag still matches the one held by the lock owner. We do not delete the current lock file, this is an unnecessary operation.
