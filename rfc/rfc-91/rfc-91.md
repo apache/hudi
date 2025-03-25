@@ -71,7 +71,7 @@ Once a lock is acquired, a dedicated heartbeat task periodically calls renewLock
 
 ### New Hudi configs
 
-- `hoodie.write.lock.conditional_write.locks_location`: required, tells us where to write the locks files to.
+- `hoodie.write.lock.conditional_write.locks_location`: default empty String (indicating that "<table_base_path>/.hoodie/.locks/table_lock.json" is used as the lock file), tells us where to write the lock file to.
 - `hoodie.write.lock.conditional_write.heartbeat_poll_ms`: default 30 sec, how often to renew each lock.
 - `hoodie.write.lock.conditional_write.lock_validity_timeout_ms`: default 5 min, how long each lock is valid for.
 Also requires `hoodie.base.path`, if this does not exist it should fail.
