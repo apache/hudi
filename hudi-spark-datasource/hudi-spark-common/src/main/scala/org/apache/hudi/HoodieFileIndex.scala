@@ -44,7 +44,6 @@ import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
 import javax.annotation.concurrent.NotThreadSafe
-
 import java.text.SimpleDateFormat
 import java.util.stream.Collectors
 
@@ -616,10 +615,12 @@ object HoodieFileIndex extends Logging {
 
   // if database name is not set, fall back to use 'default' instead of failing
   def getDatabaseName(tableConfig: HoodieTableConfig, defaultDatabase: String)  = {
-    if (StringUtils.isNullOrEmpty(tableConfig.getDatabaseName) && StringUtils.isNullOrEmpty(defaultDatabase)) {
-      "default"
-    } else if (StringUtils.isNullOrEmpty(tableConfig.getDatabaseName)) {
-      defaultDatabase
+    if (StringUtils.isNullOrEmpty(tableConfig.getDatabaseName)) {
+      if (StringUtils.isNullOrEmpty(defaultDatabase)) {
+        "default"
+      } else {
+        defaultDatabase
+      }
     } else {
       tableConfig.getDatabaseName
     }

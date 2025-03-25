@@ -22,14 +22,13 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.HoodieFileIndex
 import org.apache.hudi.common.table.HoodieTableConfig
 
-import org.apache.spark.sql.hive.test.TestHive
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class TestHoodieFileIndex {
   @Test
   def testDefaultDatabaseName(): Unit = {
-    assertEquals(HoodieFileIndex.getDatabaseName(new HoodieTableConfig(), null), "default")
-    assertEquals(HoodieFileIndex.getDatabaseName(new HoodieTableConfig(), TestHive.sparkSession.catalog.currentDatabase), "default")
+    assertEquals("default", HoodieFileIndex.getDatabaseName(new HoodieTableConfig(), null))
+    assertEquals("default_db", HoodieFileIndex.getDatabaseName(new HoodieTableConfig(), "default_db"))
   }
 }
