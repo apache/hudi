@@ -22,7 +22,7 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -59,7 +59,7 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  */
 public abstract class HoodieReaderContext<T> implements Closeable {
 
-  private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
+  private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
   private Option<HoodieRecordMerger> recordMerger = null;
@@ -72,11 +72,11 @@ public abstract class HoodieReaderContext<T> implements Closeable {
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
   // Getter and Setter for schemaHandler
-  public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
+  public FileGroupReaderSchemaHandler<T> getSchemaHandler() {
     return schemaHandler;
   }
 
-  public void setSchemaHandler(HoodieFileGroupReaderSchemaHandler<T> schemaHandler) {
+  public void setSchemaHandler(FileGroupReaderSchemaHandler<T> schemaHandler) {
     this.schemaHandler = schemaHandler;
   }
 
@@ -214,6 +214,19 @@ public abstract class HoodieReaderContext<T> implements Closeable {
    * @return The field value.
    */
   public abstract Object getValue(T record, Schema schema, String fieldName);
+
+  /**
+   * Cast to Java boolean value.
+   * If the object is not compatible with boolean type, throws.
+   */
+  public boolean castToBoolean(Object value) {
+    if (value instanceof Boolean) {
+      return (boolean) value;
+    } else {
+      throw new IllegalArgumentException(
+          "Input value type " + value.getClass() + ", cannot be cast to boolean");
+    }
+  }
 
   /**
    * Gets the record key in String.
