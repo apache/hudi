@@ -289,9 +289,12 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
   }
 
   /**
-   * @param props
-   * @param tableSchema
-   * @return
+   * Fetches the delete configs from the configs.
+   *
+   * @param props write and table configs that contain delete related properties
+   * @param tableSchema table schema
+   * @return a pair of custom delete marker key, value, and whether built-in delete marker
+   * (`_hoodie_is_deleted`) is included.
    */
   private static Pair<Option<Pair<String, String>>, Boolean> initDeleteConfigs(TypedProperties props,
                                                                                Schema tableSchema) {
