@@ -23,12 +23,11 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.HoodieSimpleBucketIndex;
-import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.Partitioner;
@@ -42,21 +41,15 @@ import java.util.stream.Collectors;
 public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload> extends RDDBucketIndexPartitioner<T> {
 
   private final boolean isNonBlockingConcurrencyControl;
-  private boolean isPartitionBucketIndexEnable = false;
-  private PartitionBucketIndexCalculator calc;
+  private final NumBucketsFunction numBucketsFunction;
 
   public RDDSimpleBucketBulkInsertPartitioner(HoodieTable table) {
     super(table, null, false);
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSimpleBucketIndex);
     this.isNonBlockingConcurrencyControl = table.getConfig().isNonBlockingConcurrencyControl();
     HoodieWriteConfig writeConfig = table.getConfig();
-    String expression = writeConfig.getBucketIndexPartitionExpression();
-    String ruleType = writeConfig.getBucketIndexPartitionRuleType();
-    int defaultBucketNumber = writeConfig.getBucketIndexNumBuckets();
-    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(expression);
-    if (isPartitionBucketIndexEnable) {
-      calc = PartitionBucketIndexCalculator.getInstance(expression, ruleType, defaultBucketNumber);
-    }
+    this.numBucketsFunction = new NumBucketsFunction(writeConfig.getBucketIndexPartitionExpression(), writeConfig.getBucketIndexPartitionRuleType(),
+        writeConfig.getBucketIndexNumBuckets());
   }
 
   @Override
@@ -70,24 +63,16 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
     return doPartition(records, new Partitioner() {
       @Override
       public int numPartitions() {
-        return computeNumPartitions();
+        return partitionMapper.values().stream().mapToInt(Map::size).sum();
       }
 
       @Override
       public int getPartition(Object key) {
         HoodieKey hoodieKey = (HoodieKey) key;
         String partitionPath = hoodieKey.getPartitionPath();
-        int bucketID = isPartitionBucketIndexEnable ? index.getBucketID(hoodieKey, calc.computeNumBuckets(partitionPath)) : index.getBucketID(hoodieKey);
+        int bucketID = index.getBucketID(hoodieKey, numBucketsFunction.getNumBuckets(partitionPath));
         String fileID = partitionMapper.get(partitionPath).get(bucketID);
         return fileIdPrefixToBucketIndex.get(fileID);
-      }
-
-      private int computeNumPartitions() {
-        if (isPartitionBucketIndexEnable) {
-          return partitionMapper.values().stream().mapToInt(Map::size).sum();
-        } else {
-          return index.getNumBuckets() * partitionMapper.size();
-        }
       }
     });
   }
@@ -115,7 +100,7 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
             doAppend.add(true);
           });
 
-          int numBuckets = isPartitionBucketIndexEnable ? calc.computeNumBuckets(p) : index.getNumBuckets();
+          int numBuckets = numBucketsFunction.getNumBuckets(p);
           // Generate a file that does not exist
           for (int i = 0; i < numBuckets; i++) {
             if (!existsBucketID.contains(i)) {

@@ -20,11 +20,10 @@ package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Functions;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
-import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.Configuration;
@@ -37,20 +36,15 @@ import org.apache.flink.configuration.Configuration;
  */
 public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<T> {
 
-  private final Configuration conf;
   private final String indexKeyFields;
-  private final String expressions;
-  private final String rule;
-  private final int defaultBucketNumber;
+  private final NumBucketsFunction numBucketsFunction;
 
   private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
 
   public BucketIndexPartitioner(Configuration conf, String indexKeyFields) {
-    this.conf = conf;
     this.indexKeyFields = indexKeyFields;
-    this.expressions = conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS);
-    this.rule = conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE);
-    this.defaultBucketNumber = conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
+    this.numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
+        conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
   }
 
   @Override
@@ -58,14 +52,7 @@ public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<
     if (this.partitionIndexFunc == null) {
       this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(numPartitions);
     }
-
-    int bucketNum;
-    if (!StringUtils.isNullOrEmpty(expressions)) {
-      PartitionBucketIndexCalculator calc = PartitionBucketIndexCalculator.getInstance(expressions, rule, defaultBucketNumber);
-      bucketNum = calc.computeNumBuckets(key.getPartitionPath());
-    } else {
-      bucketNum = conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
-    }
+    int bucketNum = numBucketsFunction.getNumBuckets(key.getPartitionPath());
     int curBucket = BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, bucketNum);
     return this.partitionIndexFunc.apply(bucketNum, key.getPartitionPath(), curBucket);
   }

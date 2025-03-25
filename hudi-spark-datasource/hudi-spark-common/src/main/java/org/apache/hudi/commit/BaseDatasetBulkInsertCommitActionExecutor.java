@@ -119,8 +119,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
     if (populateMetaFields) {
       if (writeConfig.getIndexType() == HoodieIndex.IndexType.BUCKET) {
         if (writeConfig.getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.SIMPLE) {
-          return new BucketIndexBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault(),
-              writeConfig.getBucketIndexNumBuckets(), table);
+          return new BucketIndexBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault(), table);
         } else {
           return new ConsistentBucketIndexBulkInsertPartitionerWithRows(table, Collections.emptyMap(), true);
         }

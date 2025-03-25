@@ -19,9 +19,8 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 
@@ -35,36 +34,24 @@ import org.apache.spark.sql.Row;
 public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   private final String indexKeyFields;
-  private final int bucketNum;
-  private boolean isPartitionBucketIndexEnable = false;
-  private PartitionBucketIndexCalculator calc;
+  private final NumBucketsFunction numBucketsFunction;
 
-  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum, HoodieTable table) {
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, HoodieTable table) {
     this.indexKeyFields = indexKeyFields;
-    this.bucketNum = bucketNum;
     HoodieWriteConfig writeConfig = table.getConfig();
-    String expression = writeConfig.getBucketIndexPartitionExpression();
-    String ruleType = writeConfig.getBucketIndexPartitionRuleType();
-    int defaultBucketNumber = writeConfig.getBucketIndexNumBuckets();
-    this.isPartitionBucketIndexEnable = StringUtils.nonEmpty(expression);
-    if (isPartitionBucketIndexEnable) {
-      calc = PartitionBucketIndexCalculator.getInstance(expression, ruleType, defaultBucketNumber);
-    }
+    this.numBucketsFunction = new NumBucketsFunction(writeConfig.getBucketIndexPartitionExpression(),
+        writeConfig.getBucketIndexPartitionRuleType(), writeConfig.getBucketIndexNumBuckets());
   }
 
-  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum, PartitionBucketIndexHashingConfig hashingConfig) {
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, PartitionBucketIndexHashingConfig hashingConfig) {
     this.indexKeyFields = indexKeyFields;
-    this.bucketNum = bucketNum;
-    this.isPartitionBucketIndexEnable = true;
-    this.calc = PartitionBucketIndexCalculator.getInstance(hashingConfig.getExpressions(), hashingConfig.getRule(), hashingConfig.getDefaultBucketNumber());
+    this.numBucketsFunction = new NumBucketsFunction(hashingConfig.getExpressions(),
+        hashingConfig.getRule(), hashingConfig.getDefaultBucketNumber());
   }
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputPartitions) {
-
-    return isPartitionBucketIndexEnable
-        ? BucketPartitionUtils$.MODULE$.createDataFrameWithPartitionBucketIndex(rows, indexKeyFields, outputPartitions, calc)
-        : BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, bucketNum, outputPartitions);
+    return BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, numBucketsFunction, outputPartitions);
   }
 
   @Override

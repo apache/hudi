@@ -335,14 +335,12 @@ class HoodieSparkSqlWriterInternal {
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
 
-      // take care of partition level bucket index which is simple bucket index
-      if (parameters.contains(HoodieIndexConfig.INDEX_TYPE.key)
-        && parameters(HoodieIndexConfig.INDEX_TYPE.key) == HoodieIndex.IndexType.BUCKET.name
-        && (!parameters.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key)
-        || (parameters.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key)
-        && parameters(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key) == HoodieIndex.IndexType.SIMPLE.name))
-        && hoodieConfig.getString(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key()) != WriteOperationType.BUCKET_RESCALE.value()
-        && PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(tableMetaClient.getStorageConf, basePath.toString)) {
+      // take care of partition level bucket index which is simple bucket index.
+      // for BUCKET_RESCALE action will set related configs in call command, so skip here.
+      if (hoodieConfig.getStringOrDefault(HoodieIndexConfig.INDEX_TYPE, "") == HoodieIndex.IndexType.BUCKET.name
+        && PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(tableMetaClient.getStorageConf, basePath.toString)
+        && hoodieConfig.getStringOrDefault(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE, "") != WriteOperationType.BUCKET_RESCALE.value()) {
+
         val latestHashingConfig = PartitionBucketIndexHashingConfig.loadingLatestHashingConfig(tableMetaClient)
         hoodieConfig.setValue(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS.key, latestHashingConfig.getExpressions)
         hoodieConfig.setValue(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key, latestHashingConfig.getDefaultBucketNumber.toString)
