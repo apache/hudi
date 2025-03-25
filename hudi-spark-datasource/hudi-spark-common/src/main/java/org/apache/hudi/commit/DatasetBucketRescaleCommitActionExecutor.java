@@ -55,10 +55,7 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
   }
 
   /**
-   * Create BulkInsertPartitioner with prepared PartitionBucketIndexCalculator
-   * @param populateMetaFields
-   * @param isTablePartitioned
-   * @return BulkInsertPartitioner
+   * Create BulkInsertPartitioner with prepared PartitionBucketIndexCalculator.
    */
   @Override
   protected BulkInsertPartitioner<Dataset<Row>> getPartitioner(boolean populateMetaFields, boolean isTablePartitioned) {
@@ -66,7 +63,7 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
   }
 
   /**
-   * create new hashing_config during afterExecute and before commit finished
+   * create new hashing_config during afterExecute and before commit finished.
    * @param result
    */
   @Override

@@ -25,9 +25,9 @@ import java.io.Serializable;
  */
 interface RuleEngine extends Serializable {
   /**
-   * Calculate bucket number for a partition path
-   * @param partitionPath The partition path
-   * @return The calculated bucket number, or -1 if no rule matches
+   * Calculate bucket number for a partition path.
+   * @param partitionPath The partition path.
+   * @return The calculated bucket number, or -1 if no rule matches.
    */
   int calculateBucketNumber(String partitionPath);
 }

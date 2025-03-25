@@ -53,7 +53,7 @@ public class NumBucketsFunction implements Serializable {
   /**
    * Creates a NumBucketsFunction with the given configuration.
    *
-   * @param config The Flink configuration containing bucket index settings
+   * @param config The Flink configuration containing bucket index settings.
    */
   public NumBucketsFunction(String expressions, String ruleType, int defaultBucketNumber) {
     this.defaultBucketNumber = defaultBucketNumber;
@@ -74,8 +74,8 @@ public class NumBucketsFunction implements Serializable {
   /**
    * Gets the number of buckets for the given partition path.
    *
-   * @param partitionPath The partition path
-   * @return The number of buckets for the partition
+   * @param partitionPath The partition path.
+   * @return The number of buckets for the partition.
    */
   public int getNumBuckets(String partitionPath) {
     if (isPartitionLevelBucketIndexEnabled && calculator != null) {
@@ -87,7 +87,7 @@ public class NumBucketsFunction implements Serializable {
   /**
    * Gets the default bucket number.
    *
-   * @return The default bucket number
+   * @return The default bucket number.
    */
   public int getDefaultBucketNumber() {
     return defaultBucketNumber;
@@ -96,7 +96,7 @@ public class NumBucketsFunction implements Serializable {
   /**
    * Checks if partition-level bucket index is enabled.
    *
-   * @return True if partition-level bucket index is enabled, false otherwise
+   * @return True if partition-level bucket index is enabled, false otherwise.
    */
   public boolean isPartitionLevelBucketIndexEnabled() {
     return isPartitionLevelBucketIndexEnabled;

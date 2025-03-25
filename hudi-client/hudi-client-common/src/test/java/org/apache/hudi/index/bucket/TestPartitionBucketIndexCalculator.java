@@ -48,7 +48,7 @@ public class TestPartitionBucketIndexCalculator extends HoodieCommonTestHarness 
   }
 
   /**
-   * Test basic regex rule matching
+   * Test basic regex rule matching.
    */
   @ParameterizedTest(name = "Partition {0} should map to bucket {1}")
   @MethodSource("providePartitionsAndExpectedBuckets")
@@ -58,7 +58,7 @@ public class TestPartitionBucketIndexCalculator extends HoodieCommonTestHarness 
   }
 
   /**
-   * Provide test data for parameterized tests
+   * Provide test data for parameterized tests.
    */
   private static Stream<Arguments> providePartitionsAndExpectedBuckets() {
     return Stream.of(
@@ -106,7 +106,7 @@ public class TestPartitionBucketIndexCalculator extends HoodieCommonTestHarness 
   }
 
   /**
-   * Test multiple regex rules with priority
+   * Test multiple regex rules with priority.
    */
   @Test
   void testMultipleRegexRulesWithPriority() throws IOException {
@@ -132,7 +132,7 @@ public class TestPartitionBucketIndexCalculator extends HoodieCommonTestHarness 
   }
 
   /**
-   * Test invalid regex expressions
+   * Test invalid regex expressions.
    */
   @Test
   void testInvalidExpressions() {

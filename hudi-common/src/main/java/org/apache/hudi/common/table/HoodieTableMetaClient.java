@@ -370,7 +370,6 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * Used for partition level bucket index to save hashing_config.
-   * @return
    */
   public String getHashingMetadataConfigPath() {
     return new StoragePath(metaPath, BUCKET_INDEX_METAFOLDER_CONFIG_FOLDER).toString();

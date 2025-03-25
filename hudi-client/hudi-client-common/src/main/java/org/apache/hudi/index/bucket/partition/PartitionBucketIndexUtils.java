@@ -63,8 +63,8 @@ public class PartitionBucketIndexUtils {
   }
 
   /**
-   * Used for test
-   * @return all File id in current table using `partitionPath + FileId` format
+   * Used for test.
+   * @return all File id in current table using `partitionPath + FileId` format.
    */
   public static List<String> getAllFileIDWithPartition(HoodieTableMetaClient metaClient) throws IOException {
     List<StoragePathInfo> allFiles = metaClient.getStorage().listDirectEntries(metaClient.getBasePath()).stream().flatMap(path -> {

@@ -76,12 +76,12 @@ public class SparkPartitionBucketIndexPartitioner<T> extends SparkHoodiePartitio
 
   private final boolean isNonBlockingConcurrencyControl;
   /**
-   * Direct mapping from partition number to partition path
+   * Direct mapping from partition number to partition path.
    */
   private final String[] partitionNumberToPath;
 
   /**
-   * Direct mapping from partition number to local bucket ID
+   * Direct mapping from partition number to local bucket ID.
    */
   private final Integer[] partitionNumberToLocalBucketId;
 

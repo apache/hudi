@@ -86,6 +86,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static java.util.Arrays.asList;
+import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
+import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.utils.TestConfigurations.catalog;
 import static org.apache.hudi.utils.TestConfigurations.sql;
 import static org.apache.hudi.utils.TestData.array;
@@ -1264,8 +1267,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"bulk_insert", "upsert"})
-  void testBulkInsertWithPartitionBucketIndex(String operationType) throws IOException {
+  @MethodSource("testBulkInsertWithPartitionBucketIndex")
+  void testBulkInsertWithPartitionBucketIndex(String operationType, String tableType) throws IOException {
     TableEnvironment tableEnv = batchTableEnv;
     // csv source
     String csvSourceDDL = TestConfigurations.getCsvSourceDDL("csv_source", "test_source_5.data");
@@ -1282,6 +1285,7 @@ public class ITTestHoodieDataSource {
 
     String hoodieTableDDL = sql(catalogName + ".hudi.hoodie_sink")
         .option(FlinkOptions.PATH, basePath)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.OPERATION, operationType)
         .option(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_INPUT, true)
         .option(FlinkOptions.INDEX_TYPE, "BUCKET")
@@ -1320,6 +1324,15 @@ public class ITTestHoodieDataSource {
     expected.add("partition=par4" + "00000000");
 
     assertEquals(expected.stream().sorted().collect(Collectors.toList()), actual.stream().sorted().collect(Collectors.toList()));
+  }
+
+  public static List<Arguments> testBulkInsertWithPartitionBucketIndex() {
+    return asList(
+        Arguments.of("bulk_insert", COPY_ON_WRITE.name()),
+        Arguments.of("bulk_insert", MERGE_ON_READ.name()),
+        Arguments.of("upsert", MERGE_ON_READ.name()),
+        Arguments.of("upsert", MERGE_ON_READ.name())
+    );
   }
 
   @Test
