@@ -175,7 +175,8 @@ public class HFileDataBlock extends HFileBlock {
 
   public void add(byte[] key, byte[] value) {
     KeyValueEntry kv = new KeyValueEntry(key, value);
-    add(kv, true);
+    // Assume all entries are sorted before write.
+    add(kv, false);
   }
 
   public int getNumOfEntries() {
