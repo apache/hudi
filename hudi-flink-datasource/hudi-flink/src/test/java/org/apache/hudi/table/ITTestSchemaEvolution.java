@@ -36,6 +36,7 @@ import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
@@ -80,6 +81,9 @@ public class ITTestSchemaEvolution {
   public void setUp() {
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment().setParallelism(1);
     tEnv = StreamTableEnvironment.create(env);
+    // flink job uses child-first classloader by default, async services fired by flink job are not guaranteed
+    // to be killed right away, which then may trigger classloader leak checking exception
+    tEnv.getConfig().getConfiguration().set(CoreOptions.CHECK_LEAKED_CLASSLOADER, false);
   }
 
   @Test

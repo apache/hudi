@@ -25,6 +25,7 @@ import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictReso
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -41,6 +42,7 @@ import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.types.logical.RowType;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -68,6 +70,20 @@ public class OptionsResolver {
     // 1. inline clustering is supported for COW table;
     // 2. async clustering is supported for both COW and MOR table
     return isInsertOperation(conf) && ((isCowTable(conf) && !conf.getBoolean(FlinkOptions.INSERT_CLUSTER)) || isMorTable(conf));
+  }
+
+  /**
+   * Returns whether the RowData append is enabled with given configuration {@code conf}.
+   * <p>
+   * todo:
+   * <p> support RowData append for COW, see HUDI-9149
+   * <p> support RowData append for operation besides UPSERT/DELETE, see HUDI-9149
+   */
+  public static boolean supportRowDataAppend(Configuration conf, RowType rowType) {
+    return conf.get(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED)
+        && HoodieTableType.valueOf(conf.get(FlinkOptions.TABLE_TYPE)) == HoodieTableType.MERGE_ON_READ
+        && (WriteOperationType.valueOf(conf.get(FlinkOptions.OPERATION).toUpperCase()) == WriteOperationType.UPSERT
+            || WriteOperationType.valueOf(conf.get(FlinkOptions.OPERATION).toUpperCase()) == WriteOperationType.DELETE);
   }
 
   /**
