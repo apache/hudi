@@ -100,6 +100,8 @@ public enum WriteOperationType {
         return INDEX;
       case "alter_schema":
         return ALTER_SCHEMA;
+      case "logcompact":
+        return LOG_COMPACT;
       case "unknown":
         return UNKNOWN;
       default:
