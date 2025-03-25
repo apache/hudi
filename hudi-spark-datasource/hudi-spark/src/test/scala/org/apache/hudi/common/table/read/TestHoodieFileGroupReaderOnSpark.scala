@@ -269,7 +269,6 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val columnsToCompare = Set("ts", "key", "rider", "driver", "fare", "op")
     val df = spark.read.options(readOpts).format("hudi").load(getBasePath)
     val finalDf = df.select("ts", "key", "rider", "driver", "fare", "op").sort("key")
-    finalDf.show(false)
     val expected = if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING.name()) {
       expectedEventTimeBased
     } else {

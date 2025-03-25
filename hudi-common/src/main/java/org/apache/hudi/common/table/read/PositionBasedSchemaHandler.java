@@ -40,13 +40,13 @@ import static org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuff
 /**
  * This class is responsible for handling the schema for the file group reader that supports positional merge.
  */
-public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSchemaHandler<T> {
-  public HoodiePositionBasedSchemaHandler(HoodieReaderContext<T> readerContext,
-                                          Schema dataSchema,
-                                          Schema requestedSchema,
-                                          Option<InternalSchema> internalSchemaOpt,
-                                          HoodieTableConfig hoodieTableConfig,
-                                          TypedProperties properties) {
+public class PositionBasedSchemaHandler<T> extends FileGroupReaderSchemaHandler<T> {
+  public PositionBasedSchemaHandler(HoodieReaderContext<T> readerContext,
+                                    Schema dataSchema,
+                                    Schema requestedSchema,
+                                    Option<InternalSchema> internalSchemaOpt,
+                                    HoodieTableConfig hoodieTableConfig,
+                                    TypedProperties properties) {
     super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig, properties);
   }
 
@@ -60,7 +60,7 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
 
   @Override
   protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
-    return internalSchemaOpt.map(HoodiePositionBasedSchemaHandler::addPositionalMergeCol);
+    return internalSchemaOpt.map(PositionBasedSchemaHandler::addPositionalMergeCol);
   }
 
   @Override

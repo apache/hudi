@@ -77,8 +77,8 @@ class TestFileGroupRecordBuffer {
       + "}";
   private Schema schema = new Schema.Parser().parse(schemaString);
   private final HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
-  private final HoodieFileGroupReaderSchemaHandler schemaHandler =
-      mock(HoodieFileGroupReaderSchemaHandler.class);
+  private final FileGroupReaderSchemaHandler schemaHandler =
+      mock(FileGroupReaderSchemaHandler.class);
   private HoodieTableMetaClient hoodieTableMetaClient = mock(HoodieTableMetaClient.class);
   private Option<String> partitionNameOverrideOpt = Option.empty();
   private Option<String[]> partitionPathFieldOpt = Option.empty();
@@ -109,24 +109,27 @@ class TestFileGroupRecordBuffer {
 
   @ParameterizedTest
   @CsvSource({
-      "true, true, EVENT_TIME_ORDERING",
-      "true, false, EVENT_TIME_ORDERING",
-      "false, true, EVENT_TIME_ORDERING",
-      "false, false, EVENT_TIME_ORDERING",
-      "true, true, COMMIT_TIME_ORDERING",
-      "true, false, COMMIT_TIME_ORDERING",
-      "false, true, COMMIT_TIME_ORDERING",
-      "false, false, COMMIT_TIME_ORDERING",
-      "true, true, CUSTOM",
-      "true, false, CUSTOM",
-      "false, true, CUSTOM",
-      "false, false, CUSTOM",
-      "true, true,",
-      "true, false,",
-      "false, true,",
-      "false, false,"
+      "true, true, true, EVENT_TIME_ORDERING",
+      "true, false, false, EVENT_TIME_ORDERING",
+      "false, true, false, EVENT_TIME_ORDERING",
+      "false, false, true, EVENT_TIME_ORDERING",
+      "true, true, true, COMMIT_TIME_ORDERING",
+      "true, false, false, COMMIT_TIME_ORDERING",
+      "false, true, false, COMMIT_TIME_ORDERING",
+      "false, false, true, COMMIT_TIME_ORDERING",
+      "true, true, true, CUSTOM",
+      "true, false, false, CUSTOM",
+      "false, true, false, CUSTOM",
+      "false, false, true, CUSTOM",
+      "true, true, true,",
+      "true, false, false,",
+      "false, true, false,",
+      "false, false, true,"
   })
-  public void testSchemaForMandatoryFields(boolean setPrecombine, boolean addHoodieIsDeleted, RecordMergeMode mergeMode) {
+  public void testSchemaForMandatoryFields(boolean setPrecombine,
+                                           boolean addHoodieIsDeleted,
+                                           boolean addCustomDeleteMarker,
+                                           RecordMergeMode mergeMode) {
     HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
     when(readerContext.getHasBootstrapBaseFile()).thenReturn(false);
     when(readerContext.getHasLogFiles()).thenReturn(true);
@@ -135,6 +138,8 @@ class TestFileGroupRecordBuffer {
     when(recordMerger.isProjectionCompatible()).thenReturn(false);
 
     String preCombineField = "ts";
+    String customDeleteKey = "colC";
+    String customDeleteValue = "D";
     List<String> dataSchemaFields = new ArrayList<>();
     dataSchemaFields.addAll(Arrays.asList(
         HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD, preCombineField,
@@ -152,11 +157,18 @@ class TestFileGroupRecordBuffer {
     when(tableConfig.getPreCombineField()).thenReturn(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING);
 
     TypedProperties props = new TypedProperties();
-    HoodieFileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new HoodieFileGroupReaderSchemaHandler(readerContext,
+    if (addCustomDeleteMarker) {
+      props.setProperty(DELETE_KEY, customDeleteKey);
+      props.setProperty(DELETE_MARKER, customDeleteValue);
+    }
+    FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
         dataSchema, requestedSchema, Option.empty(), tableConfig, props);
     List<String> expectedFields = new ArrayList();
     expectedFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
     expectedFields.add(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+    if (addCustomDeleteMarker) {
+      expectedFields.add(customDeleteKey);
+    }
     if (setPrecombine && mergeMode != RecordMergeMode.COMMIT_TIME_ORDERING) { // commit time ordering does not project ordering field.
       expectedFields.add(preCombineField);
     }
@@ -166,6 +178,10 @@ class TestFileGroupRecordBuffer {
     Schema expectedSchema = mergeMode == RecordMergeMode.CUSTOM ? dataSchema : getSchema(expectedFields);
     Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema();
     assertEquals(expectedSchema, actualSchema);
+    assertEquals(addHoodieIsDeleted, fileGroupReaderSchemaHandler.hasBuiltInDelete());
+    assertEquals(addCustomDeleteMarker
+            ? Option.of(Pair.of(customDeleteKey, customDeleteValue)) : Option.empty(),
+        fileGroupReaderSchemaHandler.getCustomDeleteMarkerKeyValue());
   }
 
   private Schema getSchema(List<String> fields) {
@@ -181,32 +197,6 @@ class TestFileGroupRecordBuffer {
                                 Comparable orderingValue) {
     when(deleteRecord.getOrderingValue()).thenReturn(orderingValue);
   }
-
-  /*
-  @Test
-  void testHasCustomDeleteConfigs() {
-    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
-        new KeyBasedFileGroupRecordBuffer(
-            readerContext,
-            hoodieTableMetaClient,
-            RecordMergeMode.COMMIT_TIME_ORDERING,
-            partitionNameOverrideOpt,
-            partitionPathFieldOpt,
-            props,
-            readStats);
-
-    assertFalse(keyBasedBuffer.hasCustomDeleteConfigs(props, schema));
-    props.setProperty(DELETE_KEY, "op");
-    assertThrows(
-        RuntimeException.class,
-        () -> keyBasedBuffer.hasCustomDeleteConfigs(props, schema));
-    props.setProperty(DELETE_MARKER, "d");
-    assertThrows(
-        NullPointerException.class,
-        () -> keyBasedBuffer.hasCustomDeleteConfigs(props, null));
-    assertTrue(keyBasedBuffer.hasCustomDeleteConfigs(props, schema));
-  }
-*/
 
   @Test
   void testIsCustomDeleteRecord() {
@@ -276,7 +266,7 @@ class TestFileGroupRecordBuffer {
     metadata.put(INTERNAL_META_PARTITION_PATH, "partition1");
     when(readerContext.getOrderingValue(any(), any(), any(), any())).thenReturn(1);
     when(readerContext.generateMetadataForRecord(any(), any(), any())).thenReturn(metadata);
-    keyBasedBuffer.processCustomDeleteRecord(record, metadata);
+    keyBasedBuffer.processDeleteRecord(record, metadata);
     Map<Serializable, Pair<Option<GenericRecord>, Map<String, Object>>> records =
         keyBasedBuffer.getLogRecords();
     assertEquals(1, records.size());
@@ -293,32 +283,9 @@ class TestFileGroupRecordBuffer {
     anotherMetadata.put(INTERNAL_META_RECORD_KEY, "54321");
     anotherMetadata.put(INTERNAL_META_PARTITION_PATH, "partition2");
     when(readerContext.generateMetadataForRecord(any(), any(), any())).thenReturn(anotherMetadata);
-    keyBasedBuffer.processCustomDeleteRecord(anotherRecord, anotherMetadata);
+    keyBasedBuffer.processDeleteRecord(anotherRecord, anotherMetadata);
     records = keyBasedBuffer.getLogRecords();
     assertEquals(2, records.size());
     assertEquals(Pair.of(Option.empty(), anotherMetadata), records.get("54321"));
   }
-
-  /*
-  @Test
-  void testHasHoodieDeleteField() {
-    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
-        new KeyBasedFileGroupRecordBuffer(
-            readerContext,
-            hoodieTableMetaClient,
-            RecordMergeMode.COMMIT_TIME_ORDERING,
-            partitionNameOverrideOpt,
-            partitionPathFieldOpt,
-            props,
-            readStats);
-
-    Schema schema = mock(Schema.class);
-    when(schema.getField(any())).thenReturn(null);
-    assertFalse(keyBasedBuffer.hasHoodieDeleteField(schema));
-
-    Schema fieldSchema = mock(Schema.class);
-    Schema.Field field = new Schema.Field("_hoodie_is_deleted", fieldSchema);
-    when(schema.getField(any())).thenReturn(field);
-    assertTrue(keyBasedBuffer.hasHoodieDeleteField(schema));
-  }*/
 }

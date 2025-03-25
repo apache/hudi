@@ -87,7 +87,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
         String recordKey = (String) metadata.get(HoodieReaderContext.INTERNAL_META_RECORD_KEY);
 
         if (isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord)) {
-          processCustomDeleteRecord(nextRecord, metadata);
+          processDeleteRecord(nextRecord, metadata);
         } else {
           processNextDataRecord(nextRecord, metadata, recordKey);
         }
@@ -131,7 +131,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     }
   }
 
-  protected void processCustomDeleteRecord(T record, Map<String, Object> metadata) {
+  protected void processDeleteRecord(T record, Map<String, Object> metadata) {
     DeleteRecord deleteRecord = DeleteRecord.create(
         new HoodieKey(
             (String) metadata.get(INTERNAL_META_RECORD_KEY),

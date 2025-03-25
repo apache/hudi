@@ -139,7 +139,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
         Map<String, Object> metadata = readerContext.generateMetadataForRecord(evolvedNextRecord, schema);
         if (isBuiltInDeleteRecord(evolvedNextRecord) || isCustomDeleteRecord(evolvedNextRecord)) {
-          processCustomDeleteRecord(evolvedNextRecord, metadata, recordPosition);
+          processDeleteRecord(evolvedNextRecord, metadata, recordPosition);
         } else {
           processNextDataRecord(evolvedNextRecord, metadata, recordPosition);
         }
@@ -203,7 +203,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
   }
 
-  protected void processCustomDeleteRecord(T record, Map<String, Object> metadata, long recordPosition) {
+  protected void processDeleteRecord(T record, Map<String, Object> metadata, long recordPosition) {
     DeleteRecord deleteRecord = DeleteRecord.create(
         new HoodieKey(
             // The partition path of the delete record is set to null because it is not

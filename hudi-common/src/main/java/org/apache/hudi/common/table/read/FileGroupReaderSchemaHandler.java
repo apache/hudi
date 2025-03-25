@@ -60,7 +60,7 @@ import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 /**
  * This class is responsible for handling the schema for the file group reader.
  */
-public class HoodieFileGroupReaderSchemaHandler<T> {
+public class FileGroupReaderSchemaHandler<T> {
 
   protected final Schema tableSchema;
 
@@ -92,12 +92,12 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
   private final Option<Pair<String, String>> customDeleteMarkerKeyValue;
   private final boolean hasBuiltInDelete;
 
-  public HoodieFileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
-                                            Schema tableSchema,
-                                            Schema requestedSchema,
-                                            Option<InternalSchema> internalSchemaOpt,
-                                            HoodieTableConfig hoodieTableConfig,
-                                            TypedProperties properties) {
+  public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
+                                      Schema tableSchema,
+                                      Schema requestedSchema,
+                                      Option<InternalSchema> internalSchemaOpt,
+                                      HoodieTableConfig hoodieTableConfig,
+                                      TypedProperties properties) {
     this.properties = properties;
     this.readerContext = readerContext;
     this.hasBootstrapBaseFile = readerContext.getHasBootstrapBaseFile();
@@ -106,7 +106,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     this.tableSchema = tableSchema;
     this.requestedSchema = AvroSchemaCache.intern(requestedSchema);
     this.hoodieTableConfig = hoodieTableConfig;
-    Pair<Option<Pair<String, String>>, Boolean> deleteConfigs = initDeleteConfigs(properties, tableSchema);
+    Pair<Option<Pair<String, String>>, Boolean> deleteConfigs = getDeleteConfigs(properties, tableSchema);
     this.customDeleteMarkerKeyValue = deleteConfigs.getLeft();
     this.hasBuiltInDelete = deleteConfigs.getRight();
     this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema());
@@ -296,8 +296,8 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
    * @return a pair of custom delete marker key, value, and whether built-in delete marker
    * (`_hoodie_is_deleted`) is included.
    */
-  private static Pair<Option<Pair<String, String>>, Boolean> initDeleteConfigs(TypedProperties props,
-                                                                               Schema tableSchema) {
+  private static Pair<Option<Pair<String, String>>, Boolean> getDeleteConfigs(TypedProperties props,
+                                                                              Schema tableSchema) {
     String deleteKey = props.getProperty(DELETE_KEY);
     String deleteMarker = props.getProperty(DELETE_MARKER);
     boolean deleteKeyExists = !StringUtils.isNullOrEmpty(deleteKey);
