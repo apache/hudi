@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -281,7 +282,8 @@ public class BootstrapExecutorUtils implements Serializable {
       keyGenClass = KeyGeneratorType.getKeyGeneratorClassName(new HoodieConfig(props));
     }
     props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), keyGenClass);
-    String partitionColumnsForKeyGenerator = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props);
+    HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(props.getInteger(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), HoodieTableVersion.current().versionCode()));
+    String partitionColumnsForKeyGenerator = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props, tableVersion);
 
     if (StringUtils.isNullOrEmpty(partitionColumnsForKeyGenerator)) {
       partitionColumnsForKeyGenerator = null;
