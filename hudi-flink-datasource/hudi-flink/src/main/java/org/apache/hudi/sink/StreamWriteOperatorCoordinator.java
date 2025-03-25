@@ -590,7 +590,7 @@ public class StreamWriteOperatorCoordinator
       if (success) {
         reset();
         this.ckpMetadata.commitInstant(instant);
-        LOG.info("Commit instant [{}] success!", instant);
+        LOG.warn("Commit instant [{}] success!", instant);
       } else {
         throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
       }

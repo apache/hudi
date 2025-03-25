@@ -213,6 +213,7 @@ public class StreamReadMonitoringFunction
       // table does not exist
       return;
     }
+    LOG.warn(">>> before, issued offset: {}, issuedInstant: {}", this.issuedOffset, this.issuedInstant);
     IncrementalInputSplits.Result result =
         incrementalInputSplits.inputSplits(metaClient, this.issuedOffset, this.cdcEnabled);
 
@@ -229,6 +230,7 @@ public class StreamReadMonitoringFunction
     // update the issues instant time
     this.issuedInstant = result.getEndInstant();
     this.issuedOffset = result.getOffset();
+    LOG.warn(">>> after, issued offset: {}, issuedInstant: {}", this.issuedOffset, this.issuedInstant);
     LOG.info("\n"
             + "------------------------------------------------------------\n"
             + "---------- table: {}\n"
