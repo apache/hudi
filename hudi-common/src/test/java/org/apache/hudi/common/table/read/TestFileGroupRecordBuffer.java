@@ -76,7 +76,9 @@ class TestFileGroupRecordBuffer {
       + "]"
       + "}";
   private Schema schema = new Schema.Parser().parse(schemaString);
-  private HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
+  private final HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
+  private final HoodieFileGroupReaderSchemaHandler schemaHandler =
+      mock(HoodieFileGroupReaderSchemaHandler.class);
   private HoodieTableMetaClient hoodieTableMetaClient = mock(HoodieTableMetaClient.class);
   private Option<String> partitionNameOverrideOpt = Option.empty();
   private Option<String[]> partitionPathFieldOpt = Option.empty();
@@ -85,8 +87,6 @@ class TestFileGroupRecordBuffer {
 
   @BeforeEach
   void setUp() {
-    HoodieFileGroupReaderSchemaHandler schemaHandler =
-        mock(HoodieFileGroupReaderSchemaHandler.class);
     when(readerContext.getSchemaHandler()).thenReturn(schemaHandler);
     when(schemaHandler.getRequiredSchema()).thenReturn(schema);
     when(readerContext.getRecordMerger()).thenReturn(Option.empty());
@@ -210,11 +210,15 @@ class TestFileGroupRecordBuffer {
 
   @Test
   void testIsCustomDeleteRecord() {
+    String customDeleteKey = "op";
+    String customDeleteValue = "d";
     GenericRecord record = new GenericData.Record(schema);
     record.put("id", "12345");
     record.put("ts", System.currentTimeMillis());
-    record.put("op", "d");
+    record.put(customDeleteKey, "d");
 
+    when(schemaHandler.getCustomDeleteMarkerKeyValue())
+        .thenReturn(Option.of(Pair.of(customDeleteKey, customDeleteValue)));
     KeyBasedFileGroupRecordBuffer keyBasedBuffer =
         new KeyBasedFileGroupRecordBuffer(
             readerContext,
@@ -227,8 +231,8 @@ class TestFileGroupRecordBuffer {
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
 
-    props.setProperty(DELETE_KEY, "op");
-    props.setProperty(DELETE_MARKER, "d");
+    props.setProperty(DELETE_KEY, customDeleteKey);
+    props.setProperty(DELETE_MARKER, customDeleteValue);
     keyBasedBuffer = new KeyBasedFileGroupRecordBuffer(
             readerContext,
             hoodieTableMetaClient,
@@ -245,6 +249,11 @@ class TestFileGroupRecordBuffer {
 
   @Test
   void testProcessCustomDeleteRecord() {
+    String customDeleteKey = "op";
+    String customDeleteValue = "d";
+    when(schemaHandler.getCustomDeleteMarkerKeyValue())
+        .thenReturn(Option.of(Pair.of(customDeleteKey, customDeleteValue)));
+    when(schemaHandler.hasBuiltInDelete()).thenReturn(true);
     KeyBasedFileGroupRecordBuffer keyBasedBuffer =
         new KeyBasedFileGroupRecordBuffer(
             readerContext,
@@ -271,7 +280,7 @@ class TestFileGroupRecordBuffer {
     Map<Serializable, Pair<Option<GenericRecord>, Map<String, Object>>> records =
         keyBasedBuffer.getLogRecords();
     assertEquals(1, records.size());
-    assertEquals("12345", records.get("12345").getRight().get(INTERNAL_META_RECORD_KEY));
+    assertEquals(Pair.of(Option.empty(), metadata), records.get("12345"));
 
     // CASE 2: With _hoodie_is_deleted is true.
     GenericRecord anotherRecord = new GenericData.Record(schema);
@@ -287,7 +296,7 @@ class TestFileGroupRecordBuffer {
     keyBasedBuffer.processCustomDeleteRecord(anotherRecord, anotherMetadata);
     records = keyBasedBuffer.getLogRecords();
     assertEquals(2, records.size());
-    assertEquals("54321", records.get("54321").getRight().get(INTERNAL_META_RECORD_KEY));
+    assertEquals(Pair.of(Option.empty(), anotherMetadata), records.get("54321"));
   }
 
   /*

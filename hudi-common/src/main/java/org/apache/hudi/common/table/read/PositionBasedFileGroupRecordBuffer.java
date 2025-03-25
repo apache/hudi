@@ -206,6 +206,8 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   protected void processCustomDeleteRecord(T record, Map<String, Object> metadata, long recordPosition) {
     DeleteRecord deleteRecord = DeleteRecord.create(
         new HoodieKey(
+            // The partition path of the delete record is set to null because it is not
+            // used, and the delete record is never surfaced from the file group reader
             (String) metadata.get(INTERNAL_META_RECORD_KEY), null),
         readerContext.getOrderingValue(
             Option.of(record), metadata, readerSchema, orderingFieldName));

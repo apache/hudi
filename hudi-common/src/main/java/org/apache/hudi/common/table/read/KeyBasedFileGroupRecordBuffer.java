@@ -135,6 +135,8 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     DeleteRecord deleteRecord = DeleteRecord.create(
         new HoodieKey(
             (String) metadata.get(INTERNAL_META_RECORD_KEY),
+            // The partition path of the delete record is set to null because it is not
+            // used, and the delete record is never surfaced from the file group reader
             null),
         readerContext.getOrderingValue(
             Option.of(record), metadata, readerSchema, orderingFieldName));
