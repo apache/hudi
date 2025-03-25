@@ -2254,7 +2254,7 @@ public class ITTestHoodieDataSource {
     TableResult tableResult = submitSelectSql(streamTableEnv,
         "select uuid, name, age, ts, `partition` as part from t1 where `partition` > 'par4'",
         TestConfigurations.getCollectSinkDDL("sink", TestData.DATA_SET_INSERT_SEPARATE_PARTITION.size()));
-    System.out.println(">>> launch streaming read, cost: " + (System.currentTimeMillis() - start));
+    System.out.println(">>> launch read, cost: " + (System.currentTimeMillis() - start));
 
     start = System.currentTimeMillis();
     // write second commit
@@ -2263,7 +2263,7 @@ public class ITTestHoodieDataSource {
     // stop the streaming query and get data
     start = System.currentTimeMillis();
     List<Row> actualResult = fetchResult(streamTableEnv, tableResult);
-    System.out.println(">>> fetch result, cost: " + (System.currentTimeMillis() - start));
+    System.out.println(">>> fetch result cost: " + (System.currentTimeMillis() - start));
     assertRowsEquals(actualResult, TestData.DATA_SET_INSERT_SEPARATE_PARTITION);
   }
 
