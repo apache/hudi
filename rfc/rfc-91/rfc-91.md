@@ -122,7 +122,7 @@ We can use the same logic for preconditions with overwrite operations using the 
 
 We can write normal junit tests using testcontainers with GCS and S3 to simulate edge cases and general contention. Further adhoc testing will include the following scenarios:
 
-## High-Frequency Commit and Table Service Test
+### High-Frequency Commit and Table Service Test
 
 Run a long-running streaming ingestion process that continuously performs inserts, updates, and deletes. Ensure that frequent commits occur while table services like compaction and clustering operate concurrently. This test will help verify that the lock provider can handle overlapping operations without causing excessive delays or lock contention.
 
