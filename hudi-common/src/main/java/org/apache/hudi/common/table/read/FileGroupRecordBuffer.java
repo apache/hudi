@@ -156,7 +156,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * This should be sufficient for most cases.
    */
   protected final boolean isCustomDeleteRecord(T record) {
-    if (readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isEmpty()) {
+    if (!shouldCheckCustomDeleteMarker) {
       return false;
     }
 
@@ -171,7 +171,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   /**
    * Check if the value of column "_hoodie_is_deleted" is true.
    */
-  protected final boolean isHoodieDeleteRecord(T record) {
+  protected final boolean isBuiltInDeleteRecord(T record) {
+    if (!shouldCheckBuiltInDeleteMarker) {
+      return false;
+    }
+
     Object columnValue = readerContext.getValue(
         record, readerSchema, HOODIE_IS_DELETED_FIELD);
     return columnValue != null && readerContext.castToBoolean(columnValue);

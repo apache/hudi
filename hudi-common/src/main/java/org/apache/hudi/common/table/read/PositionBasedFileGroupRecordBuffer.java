@@ -138,7 +138,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         long recordPosition = recordPositions.get(recordIndex++);
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
         Map<String, Object> metadata = readerContext.generateMetadataForRecord(evolvedNextRecord, schema);
-        if (shouldCheckCustomDeleteMarker && isCustomDeleteRecord(evolvedNextRecord)) {
+        if (isBuiltInDeleteRecord(evolvedNextRecord) || isCustomDeleteRecord(evolvedNextRecord)) {
           processCustomDeleteRecord(evolvedNextRecord, metadata, recordPosition);
         } else {
           processNextDataRecord(evolvedNextRecord, metadata, recordPosition);
