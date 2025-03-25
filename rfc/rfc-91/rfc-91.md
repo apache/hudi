@@ -48,7 +48,7 @@ Example lock file path: `s3://bucket/table/.hoodie/.locks/table_lock.json`.  An 
 
 Each `LockProvider` must implement `tryLock()` and `unlock()` however we also need to do our own lock renewal, therefore this implementation also has `renewLock()`. The implementation will import a service using reflection which writes to S3/GCS/Azure based on the provided location to write the locks. This ensures the main logic for conditional writes is shared regardless of the underlying storage.
 
-`tryLock()`
+`tryLock()`: guarantees that only one process can acquire the lock using the conditional write
 - No Existing Lock: If the lock file doesn’t exist, a new lock file is created with the current instance’s details using a conditional write that only succeeds if the file is absent.
 - Existing Lock – Not Expired: If a valid (non-expired) lock exists, the process refrains from taking the lock.
 - Existing Lock – Expired: If the lock file exists but is expired, this is overwritten with a new lock file payload using conditional writes. This write has a precondition based on the current file’s unique tag from cloud storage to ensure the write succeeds only if no other process has updated it in the meantime. If another process manages to overwrite the lock file first, a 412 precondition failure will return and the lock will not be acquired.
