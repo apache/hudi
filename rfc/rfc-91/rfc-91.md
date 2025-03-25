@@ -35,6 +35,8 @@ Currently in Hudi, distributed locking relies on external systems like Zookeeper
 
 ## Background
 
+There's a limitation of existing implementation in FileSystemBasedLockProvider (https://github.com/apache/hudi/pull/7440/files#r1061068482) and conditional writes of the file system / storage are required for the storage-based lock provider to operate properly. Hence, we cannot leverage existing implementations.
+
 AWS S3 recently introduced conditional writes, and GCS and Azure storage already support them. This RFC leverages these features to implement a distributed lock provider for Hudi using a leader election algorithm. In this approach, each process attempts an atomic conditional write to a file calculated using the table base path. The first process to succeed is elected leader and takes charge of exclusive operations. This method provides a straightforward, reliable locking mechanism without the need for additional distributed system.
 
 ## Implementation
@@ -45,6 +47,10 @@ This design implements a leader election algorithm for Apache Hudi using a singl
 - expired: A boolean flag marking the lock as released.
 
 Example lock file path: `s3://bucket/table/.hoodie/.locks/table_lock.json`.  An advanced user might configure the lock file path in a separate location outside the bath path, but this is not recommended for proper concurrency control among multiple writers. 
+
+### Diagram
+
+![DFS-based Locking Service w/Conditional Writes](./dfs-locking-diagram.png)
 
 Each `LockProvider` must implement `tryLock()` and `unlock()` however we also need to do our own lock renewal, therefore this implementation also has `renewLock()`. The implementation will import a service using reflection which writes to S3/GCS/Azure based on the provided location to write the locks. This ensures the main logic for conditional writes is shared regardless of the underlying storage.
 
@@ -68,6 +74,7 @@ Once a lock is acquired, a dedicated heartbeat task periodically calls renewLock
 - If the renewal fails past the expiration, we log an error, and stop the heartbeat. Other Hudi lock provider implementations are susceptible to this behavior. If a writer somehow loses access to Zookeeper, there is no way to tell the writer to exit gracefully.
 - If we are unable to start the heartbeat (renewal) we throw HoodieLockException and the lock is immediately released.
 - Clock drift: we allow for a maximum of 500ms of clock drift between nodes. A requirement of this lock provider is that all writers competing for the same lock must be writing from the same cloud provider (AWS/Azure/GCP).
+  - This will not be configurable at this time. If a storage-specific implementation needs to customize this the config can be added at that time but it should never go below 500ms.
 
 ### New Hudi configs
 
@@ -77,6 +84,8 @@ Once a lock is acquired, a dedicated heartbeat task periodically calls renewLock
 Also requires `hoodie.base.path`, if this does not exist it should fail.
 
 ### Cloud Provider Specific Details
+
+We will make the conditional write implementation pluggable so each cloud provider's conditional write logic can be added uniquely. For libraries like Hadoop and OpenDAL, conditional writes are on the verge of being supported in java, but not at this time, so we will default to using the client libraries.
 
 ### AWS/S3
 
@@ -121,6 +130,10 @@ We can use the same logic for preconditions with overwrite operations using the 
 ## Test Plan
 
 We can write normal junit tests using testcontainers with GCS and S3 to simulate edge cases and general contention. Further adhoc testing will include the following scenarios:
+
+### Unit tests
+
+We will add some high contention, high usage unit tests that create hundreds of threads to try and acquire locks simultaneously on the testcontainers to simulate load and contention. We can also use thread-unsafe structures like Arraylists to ensure concurrent modifications do not occur.
 
 ### High-Frequency Commit and Table Service Test
 
