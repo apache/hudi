@@ -359,7 +359,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     if (fileSlice.getBaseFile().get().getBootstrapBaseFile().isPresent()) {
       //TODO: [HUDI-8169] this code path will not hit until we implement bootstrap tests
-      Pair<List<Schema.Field>, List<Schema.Field>> dataAndMetaCols = HoodieFileGroupReaderSchemaHandler.getDataAndMetaCols(requestedSchema);
+      Pair<List<Schema.Field>, List<Schema.Field>> dataAndMetaCols = FileGroupReaderSchemaHandler.getDataAndMetaCols(requestedSchema);
       return !dataAndMetaCols.getLeft().isEmpty() && !dataAndMetaCols.getRight().isEmpty();
     }
     return false;

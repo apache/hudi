@@ -21,7 +21,7 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -70,7 +70,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
                                       Option<String> partitionName,
                                       Option<String> keyFieldOverride,
                                       boolean enableOptimizedLogBlocksScan,
-                                      HoodieFileGroupRecordBuffer<T> recordBuffer) {
+                                      FileGroupRecordBuffer<T> recordBuffer) {
     super(readerContext, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
         forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordBuffer);
     this.scannedPrefixes = new HashSet<>();
@@ -219,7 +219,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     private boolean forceFullScan = true;
     private boolean enableOptimizedLogBlocksScan = false;
 
-    private HoodieFileGroupRecordBuffer<T> recordBuffer;
+    private FileGroupRecordBuffer<T> recordBuffer;
 
     @Override
     public Builder<T> withHoodieReaderContext(HoodieReaderContext<T> readerContext) {
@@ -287,7 +287,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return this;
     }
 
-    public Builder<T> withRecordBuffer(HoodieFileGroupRecordBuffer<T> recordBuffer) {
+    public Builder<T> withRecordBuffer(FileGroupRecordBuffer<T> recordBuffer) {
       this.recordBuffer = recordBuffer;
       return this;
     }
