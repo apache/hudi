@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.config.HoodieWriteConfig
 
 import org.apache.spark.sql.SaveMode
@@ -362,6 +363,89 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
 
           checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
         }
+      }
+    }
+  }
+
+  test("Test Delete Table On Multiple Insert/Delete") {
+    withTempDir { tmp =>
+      Seq(true, false).foreach { enableFgReader =>
+
+        /** non-partitioned table */
+        val tableName = generateTableName
+        spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key()}=$enableFgReader")
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+          """.stripMargin)
+
+        // insert data to table
+        spark.sql(
+          s"""
+             |insert into $tableName
+             |values (1, 'a1', 10.0, 1000), (2, 'a2', 20.0, 1000), (3, 'a2', 30.0, 1000)
+             |""".stripMargin)
+
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 20.0, 1000),
+          Seq(3, "a2", 30.0, 1000)
+        )
+
+        // delete data on non-pk condition
+        spark.sql(s"delete from $tableName where name = 'a2'")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
+
+        // insert again
+        spark.sql(
+          s"""
+             |insert into $tableName
+             |values (2, 'a2', 20.0, 1000), (3, 'a2', 30.0, 1000)
+             |""".stripMargin)
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 20.0, 1000),
+          Seq(3, "a2", 30.0, 1000)
+        )
+
+        // delete data on non-pk condition
+        spark.sql(s"delete from $tableName where price = '30.0'")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 20.0, 1000)
+        )
+
+        // insert with higher ts
+        spark.sql(
+          s"""
+             |insert into $tableName
+             |values (2, 'a2', 20.0, 2000), (3, 'a2', 30.0, 2000)
+             |""".stripMargin)
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 20.0, 2000),
+          Seq(3, "a2", 30.0, 2000)
+        )
+
+        // delete
+        spark.sql(s"delete from $tableName where name = 'a2'")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
       }
     }
   }
