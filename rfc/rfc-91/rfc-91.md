@@ -44,7 +44,7 @@ This design implements a leader election algorithm for Apache Hudi using a singl
 - expiration: A UTC timestamp indicating when the lock expires.
 - expired: A boolean flag marking the lock as released.
 
-Example lock file path: `s3://bucket/table/.hoodie/.locks/table_lock.json`
+Example lock file path: `s3://bucket/table/.hoodie/.locks/table_lock.json`.  An advanced user might configure the lock file path in a separate location outside the bath path, but this is not recommended for proper concurrency control among multiple writers. 
 
 Each `LockProvider` must implement `tryLock()` and `unlock()` however we also need to do our own lock renewal, therefore this implementation also has `renewLock()`. The implementation will import a service using reflection which writes to S3/GCS/Azure based on the provided location to write the locks. This ensures the main logic for conditional writes is shared regardless of the underlying storage.
 
