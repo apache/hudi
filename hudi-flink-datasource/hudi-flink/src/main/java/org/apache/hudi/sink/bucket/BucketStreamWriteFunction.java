@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -138,7 +137,6 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     final int bucketNum = BucketIdentifier.getBucketId(record.getRecordKey(), indexKeyFields, numBuckets);
     final String bucketId = partition + "/" + bucketNum;
 
-    final HoodieRecordLocation location;
     if (incBucketIndex.contains(bucketId)) {
       record.setInstantTime("I");
       record.setFileId(bucketToFileId.get(bucketNum));

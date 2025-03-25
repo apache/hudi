@@ -29,10 +29,10 @@ import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
+import org.apache.parquet.schema.ConversionPatterns;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
@@ -622,27 +622,19 @@ public class ParquetSchemaConverter {
               .named(name);
         }
       case ARRAY:
+        // align with Spark And Avro regarding the standard mode array type, see:
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists
+        //
         // <list-repetition> group <name> (LIST) {
-        //   repeated group array {
+        //   repeated group list {
         //     <element-repetition> <element-type> element;
         //   }
         // }
         ArrayType arrayType = (ArrayType) type;
-        LogicalType elementType = arrayType.getElementType();
-
-        Types.GroupBuilder<GroupType> arrayGroupBuilder = Types.repeatedGroup();
-        if (elementType.getTypeRoot() == LogicalTypeRoot.ROW) {
-          RowType rowType = (RowType) elementType;
-          rowType.getFields().forEach(field ->
-                  arrayGroupBuilder.addField(convertToParquetType(field.getName(), field.getType(), repetition)));
-        } else {
-          arrayGroupBuilder.addField(convertToParquetType("element", elementType, repetition));
-        }
-
-        return Types
-            .buildGroup(repetition).as(OriginalType.LIST)
-            .addField(arrayGroupBuilder.named("array"))
-            .named(name);
+        Type.Repetition eleRepetition =
+            arrayType.getElementType().isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED;
+        return ConversionPatterns.listOfElements(
+            repetition, name, convertToParquetType("element", arrayType.getElementType(), eleRepetition));
       case MAP:
         // <map-repetition> group <name> (MAP) {
         //   repeated group key_value {
