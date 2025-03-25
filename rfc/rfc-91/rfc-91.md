@@ -56,8 +56,7 @@ Each `LockProvider` must implement `tryLock()` and `unlock()` however we also ne
 `renewLock()`:  periodically extends the lock’s expiration (the heartbeat) to continue holding the lock if allowed.
 - Mechanism: Update the lock file’s expiration using a conditional write that verifies the unique tag from the current lock state. If the tag does not match, the renewal fails, indicating that the lock has been lost.
 
-`unlock()`
-- Purpose: Safely release the lock.
+`unlock()`: safely releases the lock.
 - Update the existing lock file to mark it as expired. This update is performed with a conditional write that ensures the operation is only executed if the file’s unique tag still matches the one held by the lock owner. We do not delete the current lock file, this is an unnecessary operation.
 
 ### Heartbeat Manager
