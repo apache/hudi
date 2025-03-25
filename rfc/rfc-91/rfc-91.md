@@ -126,7 +126,7 @@ We can write normal junit tests using testcontainers with GCS and S3 to simulate
 
 Run a long-running streaming ingestion process that continuously performs inserts, updates, and deletes. Ensure that frequent commits occur while table services like compaction and clustering operate concurrently. This test will help verify that the lock provider can handle overlapping operations without causing excessive delays or lock contention.
 
-## Concurrent SQL and Spark Operations Test
+### Concurrent SQL and Spark Operations Test
 
 While the streaming ingestion is active, execute multiple Spark jobs and SQL operations (including inserts, updates, and deletes) against the same Hudi table. This scenario is designed to simulate a mixed workload and to confirm that the lock provider maintains a stable baseline commit latency, prevents deadlocks, and handles high levels of concurrency without impacting overall performance.
 
