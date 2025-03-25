@@ -41,8 +41,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.File;
@@ -172,5 +175,38 @@ class TestEightToSevenDowngradeHandler {
     EightToSevenDowngradeHandler.downgradeKeyGeneratorType(tableConfig, tablePropsToAdd);
     assertFalse(tablePropsToAdd.containsKey(KEY_GENERATOR_TYPE));
     assertFalse(tablePropsToAdd.containsKey(KEY_GENERATOR_CLASS_NAME));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "com.example.CustomPayload, , CUSTOM, 00000000-0000-0000-0000-000000000000, com.example.CustomPayload, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5",
+      "org.apache.hudi.metadata.HoodieMetadataPayload, , CUSTOM, 00000000-0000-0000-0000-000000000000, org.apache.hudi.metadata.HoodieMetadataPayload, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5",
+      "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, , COMMIT_TIME_ORDERING, ce9acb64-bde0-424c-9b91-f6ebba25356d,"
+          + " org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, ce9acb64-bde0-424c-9b91-f6ebba25356d",
+      "org.apache.hudi.common.model.DefaultHoodieRecordPayload, , EVENT_TIME_ORDERING, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5,"
+          + " org.apache.hudi.common.model.DefaultHoodieRecordPayload, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5",
+      ", preCombineFieldValue, EVENT_TIME_ORDERING, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5, org.apache.hudi.common.model.DefaultHoodieRecordPayload,eeb8d96f-b1e4-49fd-bbf8-28ac514178e5",
+      ", , COMMIT_TIME_ORDERING, ce9acb64-bde0-424c-9b91-f6ebba25356d, org.apache.hudi.common.model.OverwriteWithLatestAvroPayload,ce9acb64-bde0-424c-9b91-f6ebba25356d"
+  })
+  void testUnsetRecordMergeMode(String payloadClass, String preCombineField, String mergeMode, String mergeStrategy, String expectedPayloadClass, String expectedMergeStrategy) {
+    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+    TypedProperties props = new TypedProperties();
+
+    when(tableConfig.getPayloadClass()).thenReturn(payloadClass);
+    when(tableConfig.getPreCombineField()).thenReturn(preCombineField);
+    when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.valueOf(mergeMode));
+    when(tableConfig.getRecordMergeStrategyId()).thenReturn(mergeStrategy);
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
+    when(tableConfig.getProps()).thenReturn(props);
+
+    EightToSevenDowngradeHandler.unsetRecordMergeMode(tableConfig, tablePropsToAdd);
+
+    if (expectedPayloadClass != null) {
+      assertEquals(expectedPayloadClass, tablePropsToAdd.get(HoodieTableConfig.PAYLOAD_CLASS_NAME));
+    }
+    if (mergeStrategy != null) {
+      assertEquals(expectedMergeStrategy, tablePropsToAdd.get(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID));
+    }
   }
 }
