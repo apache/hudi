@@ -84,19 +84,117 @@ The metadata corresponding to the table format (iceberg, ..) will be stored unde
 
 ### Codebase:
 
-This implementation can co-exist in the Hudi codebase and will be shipped as separate modules (for eg -  hudi-dynamodb, hudi-iceberg, hudi-deltalake,...),  
+The pluggable interface and Hudi's native format implementation will reside in hudi codebase while support for other systems will be done in X-table.
 
 
-The lakehouse platform interacts with this plugin and the table can be queried using the table format corresponding to the plugin. 
+The lakehouse platform interacts with this plugin and the table can be queried using the table format corresponding to the plugin. Here is the interface definition:
 
-<TBD : Interface definition> 
+```
+/**
+ * External Table Format needs to implement this class.
+ * Contract: 
+ *    This implementation will get the commit and completeXXX calls after the Hudi platform commit's internally. 
+ *    An operation must be defined as complete only when the plugin's implementation successfully handles the corresponding callback.
+ *    This implementation is responsible for providing the source of truth timeline based on what operations completed successfully.
+ */
+public interface PluggableTableFormat implements Serializable {
 
+  /**
+   * Callback to handle committing a transaction. This call is made after Hudi's internal commit. 
+   * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
+   * @param viewManager  FileSystem Manager to fetch table's file-system view.
+   * @param commitMetadata HoodieCommitMetadata  corresponding to the transaction.
+   * @param instant Hoodie Instant used for this transaction.
+   */
+  void commit(
+      HoodieTableMetaClient metaClient,
+      FileSystemViewManager viewManager,
+      HoodieCommitMetadata commitMetadata,
+      HoodieInstant instant
+  );
+
+  /**
+   * Callback to complete finish clustering operation by the plugin.
+   * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
+   * @param viewManager  FileSystem Manager to fetch table's file-system view.
+   * @param replaceCommitMetadata Replace Commit Metadata corresponding to the transaction.
+   * @param instant Hoodie Instant used for this transaction.
+   */
+  void completeClustering(
+      HoodieTableMetaClient metaClient,
+      FileSystemViewManager viewManager,
+      HoodieReplaceCommitMetadata replaceCommitMetadata,
+      HoodieInstant instant
+  );
+
+  /**
+   * Callback to complete finish clean operation by the plugin.
+   * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
+   * @param viewManager  FileSystem Manager to fetch table's file-system view.
+   * @param cleanCommitMetadata Clean Commit Metadata corresponding to the clean operation.
+   * @param instant Hoodie Instant used for this transaction.
+   */
+  void completeClean(
+      HoodieTableMetaClient metaClient,
+      FileSystemViewManager viewManager,
+      HoodieCleanMetadata cleanMetadata,
+      HoodieInstant instant
+  );
+
+  /**
+   * Callback to complete finish clean operation by the plugin.
+   * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
+   * @param viewManager  FileSystem Manager to fetch table's file-system view.
+   * @param rollbackMetadata Rollback Metadata containing the instants rolledback and files deleted.
+   * @param instant Hoodie Instant used for this transaction.
+   */
+  void completeRollback(
+      HoodieTableMetaClient metaClient,
+      FileSystemViewManager viewManager,
+      HoodieRollbackMetadata rollbackMetadata,
+      HoodieInstant instant
+  );
+
+
+  /**
+   * Callback to complete finish archive operation by the plugin.
+   * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
+   * @param viewManager  FileSystem Manager to fetch table's file-system view.
+   * @param archivedInstants List of Hoodie Instants archived.
+   */
+  void archiveInstants(
+      HoodieTableMetaClient metaClient,
+      FileSystemViewManager viewManager,
+      List<HoodieInstant> archivedInstants
+  );
+
+  /**
+   * Return Timeline Factory which uses the external plugin's timeline state as the source of truth. 
+   * The timeline factory needs to create timelines which has instants marked complete only when the plugin's commit call succeeded.
+   */
+  TimelineFactory getTimelineFactory();
+
+  /**
+   * Provides MetadataFactory which returns metadata reader interface that uses the plugin format's metadata.
+   */
+  BaseHoodieTableMetadataFactory getMetadataFactory();
+
+  /**
+   * LockProvider corresponding to the plugin.
+   */
+  Option<LockProvider> getLockProvider(LockConfiguration lockConfiguration, StorageConfiguration storageConf);
+
+  /**
+   * Conflict resolution strategy that aligns with the plugin format.
+   */
+  Option<String> getConflictResolutionStrategyClassName(HoodieConfig config);
+}
+
+```
 ## **Rollout/Adoption Plan**
 
 *   For existing tables, utility to construct the table format for the first time.
 *   Configuration of plugin to turn on specific formats. Default will be hudi.
 *   Add support in 1.x
 
-## **Test Plan**
 
-TBD%
