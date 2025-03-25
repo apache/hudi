@@ -58,7 +58,7 @@ Each `LockProvider` must implement `tryLock()` and `unlock()` however we also ne
 
 `unlock()`
 - Purpose: Safely release the lock.
-- Mechanism: Update the existing lock file to mark it as expired. This update is performed with a conditional write that ensures the operation is only executed if the file’s unique tag still matches the one held by the lock owner. We do not delete the current lock file, this is an unnecessary operation.
+- Update the existing lock file to mark it as expired. This update is performed with a conditional write that ensures the operation is only executed if the file’s unique tag still matches the one held by the lock owner. We do not delete the current lock file, this is an unnecessary operation.
 
 ### Heartbeat Manager
 
