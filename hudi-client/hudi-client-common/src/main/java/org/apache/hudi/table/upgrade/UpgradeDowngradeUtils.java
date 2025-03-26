@@ -211,11 +211,4 @@ public class UpgradeDowngradeUtils {
       throw new HoodieException(e);
     }
   }
-
-  static String getTimelineTimezone(HoodieTableConfig tableConfig) {
-    if (tableConfig.getTimelineTimezone() != null) {
-      return tableConfig.getTimelineTimezone().name();
-    }
-    return HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue().name();
-  }
 }
