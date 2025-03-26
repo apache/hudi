@@ -285,6 +285,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private val insertingActions: Seq[InsertAction] = mergeInto.notMatchedActions.collect { case u: InsertAction => u}
   private val deletingActions: Seq[DeleteAction] = mergeInto.matchedActions.collect { case u: DeleteAction => u}
 
+  private def hasPrimaryKey(): Boolean = {
+    hoodieCatalogTable.tableConfig.getRecordKeyFields.isPresent
+  }
+
   /**
    * Here we're adjusting incoming (source) dataset in case its schema is divergent from
    * the target table, to make sure it (at a bare minimum)
@@ -326,9 +330,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private def getProcessedInputDf: DataFrame = {
     val resolver = sparkSession.sessionState.analyzer.resolver
 
-    // for pkless table, we need to project the meta columns
-    val hasPrimaryKey = hoodieCatalogTable.tableConfig.getRecordKeyFields.isPresent
-    val inputDataPlan = if (!hasPrimaryKey) {
+    // For pkless table, we need to project the meta columns by joining with the target table;
+    // for a Hudi table with record key, we use the source table and rely on Hudi's tagging
+    // to identify inserts, updates, and deletes to avoid the join
+    val inputPlan = if (!hasPrimaryKey()) {
       // We want to join the source and target tables.
       // Then we want to project the output so that we have the meta columns from the target table
       // followed by the data columns of the source table
@@ -340,12 +345,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       mergeInto.sourceTable
     }
 
-    val inputDataPlanOutput = inputDataPlan.output
+    val inputPlanAttributes = inputPlan.output
 
     val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
 
     val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
-      case (keyAttr, _) => inputDataPlanOutput.exists(attr => resolver(keyAttr.name, attr.name))
+      case (keyAttr, _) => inputPlanAttributes.exists(attr => resolver(keyAttr.name, attr.name))
     }
 
     // This is to handle the situation where condition is something like "s0.s_id = t0.id" so In the source table
@@ -357,7 +362,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       them according to aforementioned heuristic) to meet Hudi's requirements
     val additionalColumns: Seq[NamedExpression] =
       missingAttributesMap.flatMap {
-        case (keyAttr, sourceExpression) if !inputDataPlanOutput.exists(attr => resolver(attr.name, keyAttr.name)) =>
+        case (keyAttr, sourceExpression) if !inputPlanAttributes.exists(attr => resolver(attr.name, keyAttr.name)) =>
           Seq(Alias(sourceExpression, keyAttr.name)())
 
         case _ => Seq()
@@ -367,7 +372,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // matches to that one of the target table. This is necessary b/c unlike Spark, Avro is case-sensitive
     // and therefore would fail downstream if case of corresponding columns don't match
     val existingAttributes = existingAttributesMap.map(_._1)
-    val adjustedSourceTableOutput = inputDataPlanOutput.map { attr =>
+    val adjustedSourceTableOutput = inputPlanAttributes.map { attr =>
       existingAttributes.find(keyAttr => resolver(keyAttr.name, attr.name)) match {
         // To align the casing we just rename the attribute to match that one of the
         // target table
@@ -376,7 +381,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       }
     }
 
-    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, inputDataPlan)
+    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, inputPlan)
 
     Dataset.ofRows(sparkSession, amendedPlan)
   }
@@ -731,7 +736,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
     // for pkless tables, we need to enable optimized merge
-    val isPrimaryKeylessTable = !tableConfig.getRecordKeyFields.isPresent
+    val isPrimaryKeylessTable = !hasPrimaryKey()
     val keyGeneratorClassName = if (isPrimaryKeylessTable) {
       classOf[MergeIntoKeyGenerator].getCanonicalName
     } else {
