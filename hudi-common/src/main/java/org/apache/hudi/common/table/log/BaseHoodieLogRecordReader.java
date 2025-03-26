@@ -194,6 +194,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
 
     this.partitionNameOverrideOpt = partitionNameOverride;
     this.recordBuffer = recordBuffer;
+    // When the allowInflightInstants flag is enabled, records written by inflight instants are also read
     this.allowInflightInstants = allowInflightInstants;
   }
 
