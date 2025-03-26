@@ -267,7 +267,18 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public InputStream getContentStream(HoodieInstant instant) {
-    StoragePath filePath = getInstantFileNamePath(getInstantFileName(instant));
+    String instantFileName = getInstantFileName(instant);
+    String crcFileName = "." + instantFileName + ".crc";
+    StoragePath filePath = getInstantFileNamePath(instantFileName);
+    StoragePath crcFilePath = getInstantFileNamePath(crcFileName);
+    try {
+      LOG.warn(">>> read instant path info: {}", metaClient.getStorage().getPathInfo(filePath));
+      if (metaClient.getStorage().exists(crcFilePath)) {
+        LOG.warn(">>> read instant crc path info: {}", metaClient.getStorage().getPathInfo(crcFilePath));
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
     return readDataStreamFromPath(filePath);
   }
 
@@ -703,11 +714,22 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     timeGenerator.consumeTime(!shouldLock, currentTimeMillis -> {
       String completionTime = TimelineUtils.generateInstantTime(false, timeGenerator);
       String fileName = instantFileNameGenerator.getFileName(completionTime, instant);
+      String crcFileName = "." + fileName + ".crc";
       StoragePath fullPath = getInstantFileNamePath(fileName);
+      StoragePath crcfullPath = getInstantFileNamePath(crcFileName);
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
         FileIOUtils.createFileInPath(metaClient.getStorage(), fullPath, writerOption);
       } else {
         metaClient.getStorage().createImmutableFileInPath(fullPath, writerOption);
+        try {
+          LOG.info(">>> commit metadata: {}", metadata.isPresent() ? metadata.get() : "empty");
+          LOG.info(">>> instant path info: {}", metaClient.getStorage().getPathInfo(fullPath));
+          if (metaClient.getStorage().exists(crcfullPath)) {
+            LOG.info(">>> instant crc path info: {}", metaClient.getStorage().getPathInfo(crcfullPath));
+          }
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
       }
       LOG.info("Created new file for toInstant ?" + fullPath);
     });
