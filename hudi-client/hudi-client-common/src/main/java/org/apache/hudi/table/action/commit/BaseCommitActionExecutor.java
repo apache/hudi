@@ -236,11 +236,11 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       result.setCommitMetadata(Option.of(metadata));
       // update cols to Index as applicable
       try {
-          HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, actionType,
-                  (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
-                      updateColumnsToIndexForColumnStats(metaClient, columnsToIndex);
-                      return null;
-                  });
+        HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, actionType,
+                (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
+                    updateColumnsToIndexForColumnStats(metaClient, columnsToIndex);
+                    return null;
+                });
       } catch (UnsupportedOperationException uoe) {
         LOG.warn("Skip updating column stats index in the metadata table for bootstrap operation because it is not supported", uoe);
       }
