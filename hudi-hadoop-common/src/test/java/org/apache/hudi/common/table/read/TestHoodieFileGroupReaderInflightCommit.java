@@ -92,6 +92,7 @@ public class TestHoodieFileGroupReaderInflightCommit extends HoodieFileGroupRead
 
   @Test
   public void testInflightDataRead() throws IOException, InterruptedException {
+    // delete the completed instant to convert last update commit to inflight commit
     testTable.moveCompleteCommitToInflight(instantTimes.get(1));
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // The FileSlice contains a base file and a log file.
