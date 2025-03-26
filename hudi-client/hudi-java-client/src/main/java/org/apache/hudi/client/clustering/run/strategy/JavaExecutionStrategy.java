@@ -167,10 +167,10 @@ public abstract class JavaExecutionStrategy<T>
       Option<HoodieFileReader> baseFileReader = ClusteringUtils.getBaseFileReader(getHoodieTable().getStorage(), recordType, getWriteConfig(), op.getDataFilePath());
       return getRecordIteratorWithLogFiles(op, instantTime, maxMemoryPerCompaction, Option.empty(), baseFileReader);
     }));
-    LazyConcatenatingIterator<HoodieRecord<T>> lazyIterator = new LazyConcatenatingIterator<>(suppliers);
 
-    lazyIterator.forEachRemaining(records::add);
-    lazyIterator.close();
+    try (LazyConcatenatingIterator<HoodieRecord<T>> lazyIterator = new LazyConcatenatingIterator<>(suppliers)) {
+      lazyIterator.forEachRemaining(records::add);
+    }
     return records;
   }
 
@@ -186,10 +186,10 @@ public abstract class JavaExecutionStrategy<T>
           ValidationUtils.checkArgument(baseFileReaderOpt.isPresent(), "Base file reader should be present for base file only read.");
           return getRecordIteratorWithBaseFileOnly(Option.empty(), baseFileReaderOpt.get());
         }));
-    LazyConcatenatingIterator<HoodieRecord<T>> lazyIterator = new LazyConcatenatingIterator<>(suppliers);
 
-    lazyIterator.forEachRemaining(records::add);
-    lazyIterator.close();
+    try (LazyConcatenatingIterator<HoodieRecord<T>> lazyIterator = new LazyConcatenatingIterator<>(suppliers)) {
+      lazyIterator.forEachRemaining(records::add);
+    }
     return records;
   }
 }

@@ -167,6 +167,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * Initialize internal iterators on the base and log files.
    */
   public void initRecordIterators() throws IOException {
+    // FIXME-vc: make sure these are closed
     ClosableIterator<T> iter = makeBaseFileIterator();
     if (logFiles.isEmpty()) {
       this.baseFileIterator = CachingIterator.wrap(iter, readerContext);
@@ -315,6 +316,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   public HoodieFileGroupReaderIterator<T> getClosableIterator() {
+    // FIXME-vc: file group reader/iterator needs closing. 
     return new HoodieFileGroupReaderIterator<>(this);
   }
 

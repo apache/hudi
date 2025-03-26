@@ -126,6 +126,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
       Supplier<ClosableIterator<HoodieRecord<T>>> supplier = () -> getRecordIterator(op, instantTime, maxMemoryPerCompaction);
       readerSuppliers.add(supplier);
     });
+    // FIXME: this is not closed.
     LazyConcatenatingIterator<HoodieRecord<T>> inputRecordsIter = new LazyConcatenatingIterator<>(readerSuppliers);
 
     HoodieConsumer<HoodieRecord<T>, List<WriteStatus>> insertHandler =

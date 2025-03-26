@@ -154,6 +154,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         HoodieIOFactory.getIOFactory(inlineStorage).getReaderFactory(HoodieRecordType.AVRO).getContentReader(
             hFileReaderConfig, pathForReader, HoodieFileFormat.HFILE, inlineStorage, content,
             Option.of(getSchemaFromHeader()))) {
+      // FIXME-vc: this means the reader is closed.. and the iterator may not be.
       return unsafeCast(reader.getIndexedRecordIterator(readerSchema, readerSchema));
     }
   }

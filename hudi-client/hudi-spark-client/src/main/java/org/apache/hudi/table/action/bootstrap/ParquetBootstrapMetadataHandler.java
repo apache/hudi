@@ -95,6 +95,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
             //       it since these records will be inserted into the queue later.
             .copy();
       };
+      // FIXME-vc: this may not be closed.
       ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(schema);
       executor = ExecutorFactory.create(config, recordIterator,
           new BootstrapRecordConsumer(bootstrapHandle), transformer, table.getPreExecuteRunnable());

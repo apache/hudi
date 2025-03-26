@@ -54,8 +54,11 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
   public static List<IndexedRecord> readAllRecords(HoodieAvroFileReader reader)
       throws IOException {
     Schema schema = reader.getSchema();
-    return toStream(reader.getIndexedRecordIterator(schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> records;
+    try (ClosableIterator<IndexedRecord> itr = reader.getIndexedRecordIterator(schema)) {
+      records = toStream(itr).collect(Collectors.toList());
+    }
+    return records;
   }
 
   /**

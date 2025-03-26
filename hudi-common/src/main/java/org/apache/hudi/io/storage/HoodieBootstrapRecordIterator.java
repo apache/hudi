@@ -50,6 +50,7 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
 
   @Override
   public void close() {
+    // FIXME-vc: what if one close errors out and the other does not attempt close.
     skeletonIterator.close();
     dataFileIterator.close();
   }

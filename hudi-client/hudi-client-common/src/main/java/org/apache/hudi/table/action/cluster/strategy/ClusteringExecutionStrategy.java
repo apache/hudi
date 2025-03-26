@@ -127,6 +127,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     } catch (IOException e) {
       throw new HoodieClusteringException("Error reading base file", e);
     }
+
     return new CloseableMappingIterator(
         baseRecordsIterator,
         rec -> ((HoodieRecord) rec).copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchemaWithMetaFields, writeConfig.getProps(), keyGeneratorOpt));
