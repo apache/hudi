@@ -248,7 +248,6 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       } catch (UnsupportedOperationException uoe) {
         LOG.warn("Skip updating column stats index in the metadata table for bootstrap operation because it is not supported", uoe);
       }
-
     } catch (HoodieIOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
