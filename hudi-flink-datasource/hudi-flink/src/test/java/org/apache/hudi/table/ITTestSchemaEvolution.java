@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.adapter.ConfigUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -81,11 +82,12 @@ public class ITTestSchemaEvolution {
   @BeforeEach
   public void setUp() {
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment().setParallelism(1);
-    EnvironmentSettings environmentSettings = EnvironmentSettings.newInstance().build();
+    Configuration config = new Configuration();
     // flink job uses child-first classloader by default, async services fired by flink job are not
     // guaranteed to be killed right away, which then may trigger classloader leak checking exception.
-    environmentSettings.getConfiguration().set(CoreOptions.CHECK_LEAKED_CLASSLOADER, false);
-    tEnv = StreamTableEnvironment.create(env);
+    config.set(CoreOptions.CHECK_LEAKED_CLASSLOADER, false);
+    EnvironmentSettings settings = ConfigUtils.createEnvSettingsFromConfig(config);
+    tEnv = StreamTableEnvironment.create(env, settings);
   }
 
   @Test

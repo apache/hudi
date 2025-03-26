@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.adapter.ConfigUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -106,10 +107,11 @@ public class ITTestHoodieDataSource {
 
   @BeforeEach
   void beforeEach() {
-    EnvironmentSettings settings = EnvironmentSettings.newInstance().build();
+    Configuration config = new Configuration();
     // flink job uses child-first classloader by default, async services fired by flink job are not
     // guaranteed to be killed right away, which then may trigger classloader leak checking exception.
-    settings.getConfiguration().set(CoreOptions.CHECK_LEAKED_CLASSLOADER, false);
+    config.set(CoreOptions.CHECK_LEAKED_CLASSLOADER, false);
+    EnvironmentSettings settings = ConfigUtils.createEnvSettingsFromConfig(config);
     streamTableEnv = TableEnvironmentImpl.create(settings);
     streamTableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
