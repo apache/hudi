@@ -21,6 +21,7 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.compress.CompressionCodec;
+import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipDecompressor;
 
 import com.google.protobuf.CodedOutputStream;
 
@@ -30,6 +31,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
+import static org.apache.hudi.io.compress.CompressionCodec.GZIP;
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
@@ -98,11 +100,13 @@ public abstract class HFileBlock {
    * Initialize HFileBlock for write.
    */
   protected HFileBlock(HFileContext context,
-                       HFileBlockType blockType) {
+                       HFileBlockType blockType,
+                       long previousBlockOffset) {
     this.context = context;
     this.blockType = blockType;
     HFileBlockWriteAttributes writeAttributes = new HFileBlockWriteAttributes.Builder()
         .blockSize(context.getBlockSize())
+        .previousBlockOffset(previousBlockOffset)
         .build();
     writeAttributesOpt = Option.of(writeAttributes);
   }
@@ -198,22 +202,24 @@ public abstract class HFileBlock {
   /**
    * Return serialized block including header, data, checksum.
    */
-  public ByteBuffer serialize() {
+  public ByteBuffer serialize() throws IOException {
     // Block payload.
     ByteBuffer payloadBuff = getPayload();
+    // Compress if specified.
+    ByteBuffer compressedPayload = compress(payloadBuff);
     // Buffer for building block.
-    ByteBuffer buf = ByteBuffer.allocate(context.getBlockSize() * 2);
+    ByteBuffer buf = ByteBuffer.allocate(Math.max(
+        context.getBlockSize() * 2,
+        compressedPayload.limit() + HFILEBLOCK_HEADER_SIZE * 2));
     // Block header
     // 1. Magic is always 8 bytes.
     buf.put(blockType.getMagic(), 0, 8);
-    // TODO: add compress when configured.
     // 2. onDiskSizeWithoutHeader.
-    buf.putInt(payloadBuff.limit());
+    buf.putInt(compressedPayload.limit());
     // 3. uncompressedSizeWithoutHeader.
     buf.putInt(payloadBuff.limit());
-    // TODO: pass into previous block offset.
     // 4. previous block offset.
-    buf.putLong(-1);
+    buf.putLong(writeAttributesOpt.get().previousBlockOffset);
     // TODO: set checksum type properly.
     // 5. checksum type.
     buf.put(CHECKSUM_TYPE.getCode());
@@ -225,13 +231,23 @@ public abstract class HFileBlock {
         HFileBlock.HFILEBLOCK_HEADER_SIZE + payloadBuff.limit();
     buf.putInt(onDiskDataSizeWithHeader);
     // 8. payload.
-    buf.put(payloadBuff);
+    buf.put(compressedPayload);
     // 9. Checksum
     buf.put(calcChecksumBytes(CHECKSUM_TYPE));
 
     // Update sizes
     buf.flip();
     return buf;
+  }
+
+  protected ByteBuffer compress(ByteBuffer payload) throws IOException {
+    if (context.getCompressionCodec() == GZIP) {
+      byte[] temp = new byte[payload.remaining()];
+      payload.get(temp);
+      return ByteBuffer.wrap(new HoodieAirliftGzipDecompressor().compress(temp));
+    } else {
+      return payload;
+    }
   }
 
   // TODO: support non-NULL checksum types.

@@ -160,7 +160,11 @@ public class HFileDataBlock extends HFileBlock {
   protected final List<KeyValueEntry> entries = new ArrayList<>();
 
   public HFileDataBlock(HFileContext context) {
-    super(context, HFileBlockType.DATA);
+    this(context,-1L);
+  }
+
+  public HFileDataBlock(HFileContext context, long previousBlockOffset) {
+    super(context, HFileBlockType.DATA, previousBlockOffset);
     // This is not used for write.
     uncompressedContentEndRelativeOffset = -1;
   }

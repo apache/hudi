@@ -41,7 +41,7 @@ public class HFileIndexBlock extends HFileBlock {
 
   public HFileIndexBlock(HFileContext context,
                          HFileBlockType blockType) {
-    super(context, blockType);
+    super(context, blockType, -1L);
   }
 
   public void add(byte[] firstKey, long offset, int size) {
