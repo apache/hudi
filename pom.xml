@@ -1992,6 +1992,8 @@
               <excludedGroups>functional</excludedGroups>
               <excludes>
                 <exclude>**/*FunctionalTestSuite.java</exclude>
+                <exclude>**/*FunctionalTestSuiteA.java</exclude>
+                <exclude>**/*FunctionalTestSuiteB.java</exclude>
                 <exclude>**/IT*.java</exclude>
                 <exclude>**/testsuite/**/Test*.java</exclude>
               </excludes>
