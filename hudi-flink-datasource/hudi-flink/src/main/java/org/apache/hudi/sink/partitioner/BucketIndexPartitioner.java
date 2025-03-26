@@ -52,8 +52,8 @@ public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<
     if (this.partitionIndexFunc == null) {
       this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(numPartitions);
     }
-    int bucketNum = numBucketsFunction.getNumBuckets(key.getPartitionPath());
-    int curBucket = BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, bucketNum);
-    return this.partitionIndexFunc.apply(bucketNum, key.getPartitionPath(), curBucket);
+    int numBuckets = numBucketsFunction.getNumBuckets(key.getPartitionPath());
+    int curBucket = BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, numBuckets);
+    return this.partitionIndexFunc.apply(numBuckets, key.getPartitionPath(), curBucket);
   }
 }

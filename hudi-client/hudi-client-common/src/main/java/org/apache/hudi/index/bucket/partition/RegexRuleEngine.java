@@ -44,11 +44,11 @@ public class RegexRuleEngine implements RuleEngine {
   private static class RegexRule implements Serializable {
     private static final long serialVersionUID = 1L;
     private final Pattern pattern;
-    private final int bucketNumber;
+    private final int numBuckets;
 
-    public RegexRule(String regex, int bucketNumber) {
+    public RegexRule(String regex, int numBuckets) {
       this.pattern = Pattern.compile(regex);
-      this.bucketNumber = bucketNumber;
+      this.numBuckets = numBuckets;
     }
 
     public boolean matches(String input) {
@@ -58,7 +58,7 @@ public class RegexRuleEngine implements RuleEngine {
 
     @Override
     public String toString() {
-      return pattern.pattern() + " -> " + bucketNumber;
+      return pattern.pattern() + " -> " + numBuckets;
     }
   }
 
@@ -98,12 +98,12 @@ public class RegexRuleEngine implements RuleEngine {
   }
 
   @Override
-  public int calculateBucketNumber(String partitionPath) {
+  public int calculateNumBuckets(String partitionPath) {
     // Check each rule in order (priority by position)
     for (RegexRule rule : rules) {
       if (rule.matches(partitionPath)) {
         LOG.debug("Partition '{}' matched regex rule: {}", partitionPath, rule);
-        return rule.bucketNumber;
+        return rule.numBuckets;
       }
     }
 

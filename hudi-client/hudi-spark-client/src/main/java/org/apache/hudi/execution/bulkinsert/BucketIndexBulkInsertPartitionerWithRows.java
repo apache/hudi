@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.sql.BucketPartitionUtils$;
 import org.apache.spark.sql.Dataset;
@@ -36,9 +35,8 @@ public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertParti
   private final String indexKeyFields;
   private final NumBucketsFunction numBucketsFunction;
 
-  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, HoodieTable table) {
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, HoodieWriteConfig writeConfig) {
     this.indexKeyFields = indexKeyFields;
-    HoodieWriteConfig writeConfig = table.getConfig();
     this.numBucketsFunction = new NumBucketsFunction(writeConfig.getBucketIndexPartitionExpression(),
         writeConfig.getBucketIndexPartitionRuleType(), writeConfig.getBucketIndexNumBuckets());
   }

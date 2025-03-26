@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index.bucket.partition;
+package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
@@ -29,8 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndexUtils;
-import org.apache.hudi.index.bucket.BucketIdentifier;
-import org.apache.hudi.index.bucket.HoodieBucketIndex;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
@@ -136,10 +135,6 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
       }
     }
     return false;
-  }
-
-  public int getBucketID(HoodieKey key) {
-    return BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, numBuckets);
   }
 
   public int getBucketID(HoodieKey key, int numBuckets) {

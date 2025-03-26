@@ -55,7 +55,7 @@ public class HoodieLayoutConfig extends HoodieConfig {
   public static final String SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME =
       "org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner";
 
-  public static final String PARTITION_SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME =
+  public static final String PARTITION_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME =
       "org.apache.hudi.table.action.commit.SparkPartitionBucketIndexPartitioner";
 
   private HoodieLayoutConfig() {
@@ -98,7 +98,7 @@ public class HoodieLayoutConfig extends HoodieConfig {
         if ("SIMPLE".equals(layoutConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE))) {
           if (StringUtils.nonEmpty(layoutConfig.getString(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS))) {
             // partition level simple bucket index
-            layoutConfig.setDefaultValue(LAYOUT_PARTITIONER_CLASS_NAME, PARTITION_SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME);
+            layoutConfig.setDefaultValue(LAYOUT_PARTITIONER_CLASS_NAME, PARTITION_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME);
           } else {
             // simple bucket index
             layoutConfig.setDefaultValue(LAYOUT_PARTITIONER_CLASS_NAME, SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME);

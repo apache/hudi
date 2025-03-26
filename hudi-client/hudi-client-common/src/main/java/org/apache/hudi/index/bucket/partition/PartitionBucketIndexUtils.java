@@ -21,6 +21,7 @@ package org.apache.hudi.index.bucket.partition;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -63,9 +64,9 @@ public class PartitionBucketIndexUtils {
   }
 
   /**
-   * Used for test.
    * @return all File id in current table using `partitionPath + FileId` format.
    */
+  @VisibleForTesting
   public static List<String> getAllFileIDWithPartition(HoodieTableMetaClient metaClient) throws IOException {
     List<StoragePathInfo> allFiles = metaClient.getStorage().listDirectEntries(metaClient.getBasePath()).stream().flatMap(path -> {
       try {

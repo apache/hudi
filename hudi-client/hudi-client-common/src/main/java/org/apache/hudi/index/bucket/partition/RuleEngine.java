@@ -29,5 +29,5 @@ interface RuleEngine extends Serializable {
    * @param partitionPath The partition path.
    * @return The calculated bucket number, or -1 if no rule matches.
    */
-  int calculateBucketNumber(String partitionPath);
+  int calculateNumBuckets(String partitionPath);
 }

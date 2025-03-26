@@ -26,7 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
-import org.apache.hudi.index.bucket.partition.HoodieSimpleBucketIndex;
+import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;

@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
-import org.apache.hudi.index.bucket.partition.HoodieSimpleBucketIndex;
+import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.table.HoodieTable;
 
@@ -46,8 +46,8 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
   public RDDSimpleBucketBulkInsertPartitioner(HoodieTable table) {
     super(table, null, false);
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSimpleBucketIndex);
-    this.isNonBlockingConcurrencyControl = table.getConfig().isNonBlockingConcurrencyControl();
     HoodieWriteConfig writeConfig = table.getConfig();
+    this.isNonBlockingConcurrencyControl = writeConfig.isNonBlockingConcurrencyControl();
     this.numBucketsFunction = new NumBucketsFunction(writeConfig.getBucketIndexPartitionExpression(), writeConfig.getBucketIndexPartitionRuleType(),
         writeConfig.getBucketIndexNumBuckets());
   }

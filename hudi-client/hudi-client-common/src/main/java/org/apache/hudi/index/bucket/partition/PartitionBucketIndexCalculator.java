@@ -48,7 +48,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
   private PartitionBucketIndexCalculator(String expressions, String ruleType, int defaultBucketNumber) {
     this.defaultBucketNumber = defaultBucketNumber;
     this.ruleEngine = createRuleEngine(ruleType, expressions);
-    this.partitionToBucketCache =  Caffeine.newBuilder().maximumSize(CACHE_SIZE).build();
+    this.partitionToBucketCache = Caffeine.newBuilder().maximumSize(CACHE_SIZE).build();
   }
 
   /**
@@ -76,7 +76,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
     }
 
     // Calculate bucket number using the rule engine
-    int bucketNumber = ruleEngine.calculateBucketNumber(partitionPath);
+    int bucketNumber = ruleEngine.calculateNumBuckets(partitionPath);
 
     // If no rule matched, use default bucket number
     if (bucketNumber == -1) {

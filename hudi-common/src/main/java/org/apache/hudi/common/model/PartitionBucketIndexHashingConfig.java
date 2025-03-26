@@ -228,7 +228,6 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     return archiveHashingConfig(hashingConfigToArchive, metaClient);
   }
 
-
   // for now we just remove active hashing config into archive folder
   private static boolean archiveHashingConfig(List<String> hashingConfigToArchive, HoodieTableMetaClient metaClient) {
     hashingConfigToArchive.forEach(instant -> {
@@ -290,7 +289,7 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
       String startInstant = activeTimelineStart.get().requestedTime();
       List<String> committedHashingConfig = getCommittedHashingConfig(metaClient);
       int index = 0;
-      for(; index < committedHashingConfig.size(); index++) {
+      for (; index < committedHashingConfig.size(); index++) {
         if (committedHashingConfig.get(index).compareTo(startInstant) >= 0) {
           break;
         }
