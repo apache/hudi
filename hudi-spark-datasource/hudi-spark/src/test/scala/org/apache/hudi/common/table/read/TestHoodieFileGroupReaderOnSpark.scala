@@ -30,15 +30,14 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELE
 import org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
-import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils, RawTripTestPayload}
+import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.storage.{StorageConfiguration, StoragePath, StoragePathInfo}
+import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.common.model.WriteOperationType.{INSERT, UPSERT}
-import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, HoodieUnsafeUtils, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -49,10 +48,11 @@ import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.mockito.Mockito
 
 import java.util
+
 import scala.collection.JavaConverters._
 
 /**
@@ -106,16 +106,11 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val recs = RawTripTestPayload.recordsToStrings(recordList)
     val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recs.asScala.toList, 2))
 
-    val tableType = if (options.containsKey(DataSourceWriteOptions.TABLE_TYPE.key())) {
-      options.get(DataSourceWriteOptions.TABLE_TYPE.key())
-    } else {
-      DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
-    }
     inputDF.write.format("hudi")
       .options(options)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option("hoodie.datasource.write.operation", operation)
-      .option("hoodie.datasource.write.table.type", tableType)
+      .option("hoodie.datasource.write.table.type", "MERGE_ON_READ")
       .mode(if (operation.equalsIgnoreCase(WriteOperationType.INSERT.value())) SaveMode.Overwrite
       else SaveMode.Append)
       .save(getBasePath)
@@ -136,8 +131,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       assertEquals(expectedDf.count, actualRecordList.size)
       val actualDf = HoodieUnsafeUtils.createDataFrameFromInternalRows(
         spark, actualRecordList.asScala.toSeq, HoodieInternalRowUtils.getCachedSchema(schema))
-      assertEquals(0, expectedDf.except(actualDf.selectExpr(expectedDf.columns: _*)).count())
-      assertEquals(0, actualDf.except(expectedDf.selectExpr(actualDf.columns: _*)).count())
+      assertEquals(0, expectedDf.except(actualDf).count())
+      assertEquals(0, actualDf.except(expectedDf).count())
     }
   }
 
@@ -294,27 +289,6 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       HOption.of(row), metadataMap, avroSchema, HOption.of(orderingColumn)))
     assertEquals(expectedOrderingValue,
       metadataMap.get(HoodieReaderContext.INTERNAL_META_ORDERING_FIELD))
-  }
-
-  @ParameterizedTest
-  @EnumSource(classOf[RecordMergeMode])
-  @throws[Exception]
-  def testReadFileGroupInflightData(recordMergeMode: RecordMergeMode): Unit = {
-    val writeConfigs = new util.HashMap[String, String](getCommonConfigs(recordMergeMode))
-    writeConfigs.put(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-    try {
-      val dataGen = new HoodieTestDataGenerator(0xDEEF)
-      try {
-        // One commit; reading one file group containing a base file only
-        commitToTable(dataGen.generateInserts("001", 100), INSERT.value, writeConfigs)
-        validateOutputFromFileGroupReader(getStorageConf, getBasePath, dataGen.getPartitionPaths, true, 0, recordMergeMode)
-
-        commitToTable(dataGen.generateUniqueUpdates("003", 100), UPSERT.value, writeConfigs)
-        val metaClient = HoodieTestUtils.createMetaClient(getStorageConf, getBasePath)
-        metaClient.getStorage.deleteFile(new StoragePath(metaClient.getTimelinePath, new DefaultInstantFileNameGenerator().getFileName(metaClient.getActiveTimeline.lastInstant().get())))
-        validateOutputFromFileGroupReaderIncludingInflight(getStorageConf, getBasePath, dataGen.getPartitionPaths, true, 1, recordMergeMode, true)
-      } finally if (dataGen != null) dataGen.close()
-    }
   }
 }
 

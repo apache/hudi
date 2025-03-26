@@ -255,8 +255,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
             // Skip processing a data or delete block with the instant time greater than the latest instant time used by this log record reader
             continue;
           }
-          if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
-              || (inflightInstantsTimeline.containsInstant(instantTime) && !allowInflightInstants)) {
+          if (!allowInflightInstants
+              && (inflightInstantsTimeline.containsInstant(instantTime) || !completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime))) {
             // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
             continue;
           }
@@ -587,8 +587,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
           continue;
         }
         if (logBlock.getBlockType() != COMMAND_BLOCK) {
-          if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
-              || (inflightInstantsTimeline.containsInstant(instantTime) && !allowInflightInstants)) {
+          if (!allowInflightInstants
+              && (inflightInstantsTimeline.containsInstant(instantTime)) || !completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)) {
             // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
             continue;
           }
