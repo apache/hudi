@@ -2259,7 +2259,7 @@ public class ITTestHoodieDataSource {
     start = System.currentTimeMillis();
     // write second commit
     TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
-    System.out.println(">>> write2, cost: " + (System.currentTimeMillis() - start));
+    System.out.println(">>> write2 cost: " + (System.currentTimeMillis() - start));
     // stop the streaming query and get data
     start = System.currentTimeMillis();
     List<Row> actualResult = fetchResult(streamTableEnv, tableResult);
