@@ -245,6 +245,9 @@ class PartitionBucketIndexManager extends BaseProcedure
       dataFrame)
 
     val details = s"Expression: $expression, Bucket Number: $bucketNumber, Dry Run: $dryRun"
+
+    val archived = PartitionBucketIndexHashingConfig.archiveHashingConfigIfNecessary(metaClient)
+
     Seq(Row("SUCCESS", "OVERWRITE", details))
   }
 

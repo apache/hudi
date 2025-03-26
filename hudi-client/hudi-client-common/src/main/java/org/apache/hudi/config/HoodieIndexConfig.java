@@ -293,11 +293,6 @@ public class HoodieIndexConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Rule parser for expressions when using partition level bucket index, default regex.");
 
-  public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_LOAD_INSTANT = ConfigProperty
-      .key(HoodieInternalConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.key())
-      .defaultValue(HoodieInternalConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.defaultValue())
-      .withDocumentation(HoodieInternalConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT.doc());
-
   public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_EXPRESSIONS = ConfigProperty
       .key("hoodie.bucket.index.partition.expressions")
       .noDefaultValue()

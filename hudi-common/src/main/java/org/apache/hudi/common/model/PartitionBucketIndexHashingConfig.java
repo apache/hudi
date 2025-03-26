@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -124,12 +125,22 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     return new StoragePath(metaPath, HoodieTableMetaClient.BUCKET_INDEX_METAFOLDER_CONFIG_FOLDER);
   }
 
+  public static StoragePath getArchiveHashingConfigStorageFolder(String basePath) {
+    StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    return new StoragePath(metaPath, HoodieTableMetaClient.BUCKET_INDEX_METAFOLDER_CONFIG_ARCHIVE_FOLDER);
+  }
+
   /**
    * Get the absolute path of the specific <instant>.hashing_config path.
    */
-  public static StoragePath getHashingConfigPath(String basePath, String instantToLoad) {
+  public static StoragePath getHashingConfigPath(String basePath, String instant) {
     StoragePath hashingBase = getHashingConfigStorageFolder(basePath);
-    return new StoragePath(hashingBase, instantToLoad + PartitionBucketIndexHashingConfig.HASHING_CONFIG_FILE_SUFFIX);
+    return new StoragePath(hashingBase, instant + PartitionBucketIndexHashingConfig.HASHING_CONFIG_FILE_SUFFIX);
+  }
+
+  public static StoragePath getArchiveHashingConfigPath(String basePath, String instant) {
+    StoragePath hashingBase = getArchiveHashingConfigStorageFolder(basePath);
+    return new StoragePath(hashingBase, instant + PartitionBucketIndexHashingConfig.HASHING_CONFIG_FILE_SUFFIX);
   }
 
   /**
@@ -184,52 +195,127 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
   }
 
   /**
-   * TODO zhangyue19921010 need more test and details java Doc
+   * Get Latest committed hashing config instant to load.
    */
-  public static String getHashingConfigInstantToLoad(HoodieTableMetaClient metaClient) {
-    List<String> instants = metaClient.getActiveTimeline().getCompletedReplaceTimeline()
-        .getInstants().stream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
-    Option<HoodieInstant> earliestInstant = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().firstInstant();
-    String instantToLoad = "";
+  public static String getLatestHashingConfigInstantToLoad(HoodieTableMetaClient metaClient) {
     try {
-      List<String> hashingConfigInstants = metaClient.getStorage()
-          .listDirectEntries(new StoragePath(metaClient.getHashingMetadataConfigPath())).stream().map(info -> {
-            String instant = getHashingConfigInstant(info.getPath().getName());
-            if (StringUtils.isNullOrEmpty(instant)) {
-              throw new HoodieException("Failed to get hashing config instant to load.");
-            }
-            return instant;
-          }).sorted().collect(Collectors.toList());
-
-      for (String instant : hashingConfigInstants) {
-        if (!earliestInstant.isPresent()) {
-          instantToLoad = instant;
-          break;
-        } else if (instants.contains(instant)) {
-          instantToLoad = instant;
-          break;
-        } else if (instant.compareTo(earliestInstant.get().requestedTime()) < 0) {
-          instantToLoad = instant;
-          break;
-        }
-      }
-
-      if (StringUtils.isNullOrEmpty(instantToLoad)) {
-        throw new HoodieException("Failed to get hashing config instant to load.");
-      }
-
-      return instantToLoad;
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to get hashing config instant to load.", e);
+      List<String> allCommittedHashingConfig = getCommittedHashingConfig(metaClient);
+      return allCommittedHashingConfig.get(allCommittedHashingConfig.size() - 1);
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get hashing config instant to load.", e);
     }
   }
 
   public static PartitionBucketIndexHashingConfig loadingLatestHashingConfig(HoodieTableMetaClient metaClient) {
-    String instantToLoad = getHashingConfigInstantToLoad(metaClient);
+    String instantToLoad = getLatestHashingConfigInstantToLoad(metaClient);
     Option<PartitionBucketIndexHashingConfig> latestHashingConfig = loadHashingConfig(metaClient.getStorage(), getHashingConfigPath(metaClient.getBasePath().toString(), instantToLoad));
     ValidationUtils.checkArgument(latestHashingConfig.isPresent(), "Can not load latest hashing config " + instantToLoad);
 
     return latestHashingConfig.get();
+  }
+
+  /**
+   * Archive hashing config.
+   */
+  public static boolean archiveHashingConfigIfNecessary(HoodieTableMetaClient metaClient) throws IOException {
+    List<String> hashingConfigToArchive = getHashingConfigToArchive(metaClient);
+    if (hashingConfigToArchive.size() == 0) {
+      LOG.info("Nothing to archive " + hashingConfigToArchive);
+      return false;
+    }
+
+    LOG.info("Start to archive hashing config " + hashingConfigToArchive);
+    return archiveHashingConfig(hashingConfigToArchive, metaClient);
+  }
+
+
+  // for now we just remove active hashing config into archive folder
+  private static boolean archiveHashingConfig(List<String> hashingConfigToArchive, HoodieTableMetaClient metaClient) {
+    hashingConfigToArchive.forEach(instant -> {
+      StoragePath activeHashingPath = getHashingConfigPath(metaClient.getBasePath().toString(), instant);
+      StoragePath archiveHashingPath = getArchiveHashingConfigPath(metaClient.getBasePath().toString(), instant);
+      try {
+        metaClient.getStorage().rename(activeHashingPath, archiveHashingPath);
+      } catch (IOException e) {
+        throw new HoodieIOException(e.getMessage(), e);
+      }
+    });
+    return true;
+  }
+
+  public static List<String> getArchiveHashingConfig(HoodieTableMetaClient metaClient) throws IOException {
+    return metaClient.getStorage()
+        .listDirectEntries(new StoragePath(metaClient.getArchiveHashingMetadataConfigPath())).stream().map(info -> {
+          String instant = getHashingConfigInstant(info.getPath().getName());
+          if (StringUtils.isNullOrEmpty(instant)) {
+            throw new HoodieException("Failed to get hashing config instant to load.");
+          }
+          return instant;
+        }).sorted().collect(Collectors.toList());
+  }
+
+  /**
+   * Get all commit hashing config.
+   * During rollback we will delete hashing config first, then remove related pending instant.
+   * So that Listed uncommitted hashing instant always exist in active timeline.
+   * **Ascending order**  like 20250325091919474, 20250325091923956, 20250325091927529
+   */
+  public static List<String> getCommittedHashingConfig(HoodieTableMetaClient metaClient) throws IOException {
+    List<String> allActiveHashingConfig = metaClient.getStorage()
+        .listDirectEntries(new StoragePath(metaClient.getHashingMetadataConfigPath())).stream().map(info -> {
+          String instant = getHashingConfigInstant(info.getPath().getName());
+          if (StringUtils.isNullOrEmpty(instant)) {
+            throw new HoodieException("Failed to get hashing config instant to load.");
+          }
+          return instant;
+        }).sorted().collect(Collectors.toList());
+
+    HoodieTimeline pendingReplaceTimeline = metaClient.getActiveTimeline().filterPendingReplaceTimeline();
+    return allActiveHashingConfig.stream().filter(hashingConfigInstant -> {
+      return !pendingReplaceTimeline.containsInstant(hashingConfigInstant);
+    }).collect(Collectors.toList());
+  }
+
+  /**
+   * get hashing config to archive
+   * 1. get all committed active hashing config as list1
+   * 2. get hashing configs before active timeline start instant based on list1 as list2
+   * 3. try to archive list2
+   *
+   * Always keep at least one committed hashing config
+   */
+  public static List<String> getHashingConfigToArchive(HoodieTableMetaClient metaClient) throws IOException {
+    Option<HoodieInstant> activeTimelineStart = metaClient.getActiveTimeline().getCommitsTimeline().firstInstant();
+    if (activeTimelineStart.isPresent()) {
+      String startInstant = activeTimelineStart.get().requestedTime();
+      List<String> committedHashingConfig = getCommittedHashingConfig(metaClient);
+      int index = 0;
+      for(; index < committedHashingConfig.size(); index++) {
+        if (committedHashingConfig.get(index).compareTo(startInstant) >= 0) {
+          break;
+        }
+      }
+      return index == 0 ? Collections.emptyList() : committedHashingConfig.subList(0, index - 1);
+    } else {
+      return Collections.emptyList();
+    }
+  }
+
+  public static boolean rollbackHashingConfig(HoodieInstant instant, HoodieTableMetaClient metaClient) {
+    try {
+      StoragePath path = getHashingConfigPath(metaClient.getBasePath().toString(), instant.requestedTime());
+      HoodieStorage storage = metaClient.getStorage();
+      if (storage.exists(path)) {
+        boolean res = storage.deleteFile(path);
+        ValidationUtils.checkArgument(res, "Failed to delete hashing_config " + path);
+        LOG.info("Deleted hashing config " + path);
+        return true;
+      }
+      LOG.info("Hashing config " + path + " doesn't exist.");
+      return false;
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
   }
 
   public static String getHashingConfigInstant(String hashingConfigName) {
@@ -238,6 +324,12 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
       return null;
     }
     return hashingConfigName.substring(0, dotIndex);
+  }
+
+  public static boolean isHashingConfigExisted(HoodieInstant instant, HoodieTableMetaClient metaClient) throws IOException {
+    StoragePath path = getHashingConfigPath(metaClient.getBasePath().toString(), instant.requestedTime());
+    HoodieStorage storage = metaClient.getStorage();
+    return storage.exists(path);
   }
 
   public String toString() {

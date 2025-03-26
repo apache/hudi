@@ -375,6 +375,10 @@ public class HoodieTableMetaClient implements Serializable {
     return new StoragePath(metaPath, BUCKET_INDEX_METAFOLDER_CONFIG_FOLDER).toString();
   }
 
+  public String getArchiveHashingMetadataConfigPath() {
+    return new StoragePath(metaPath, BUCKET_INDEX_METAFOLDER_CONFIG_ARCHIVE_FOLDER).toString();
+  }
+
   /**
    * @return Temp Folder path
    */

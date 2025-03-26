@@ -39,7 +39,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
   private static final int CACHE_SIZE = 100_000;
   private final int defaultBucketNumber;
   // Cache for partition to bucket number mapping
-  private static final Cache<String, Integer> PARTITION_TO_BUCKET_CACHE = Caffeine.newBuilder().maximumSize(CACHE_SIZE).build();
+  private final Cache<String, Integer> partitionToBucketCache;
   private final RuleEngine ruleEngine;
 
   /**
@@ -48,6 +48,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
   private PartitionBucketIndexCalculator(String expressions, String ruleType, int defaultBucketNumber) {
     this.defaultBucketNumber = defaultBucketNumber;
     this.ruleEngine = createRuleEngine(ruleType, expressions);
+    this.partitionToBucketCache =  Caffeine.newBuilder().maximumSize(CACHE_SIZE).build();
   }
 
   /**
@@ -56,7 +57,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
   public static PartitionBucketIndexCalculator getInstance(String expressions, String rule, int defaultBucketNumber) {
     return INSTANCES.computeIfAbsent(expressions,
         key -> {
-          LOG.info("Creating new {} instance for instantToLoad: {}", PartitionBucketIndexCalculator.class, key);
+          LOG.info("Creating new {} instance for expressions: {}", PartitionBucketIndexCalculator.class, key);
           return new PartitionBucketIndexCalculator(expressions, rule, defaultBucketNumber);
         });
   }
@@ -69,7 +70,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
    */
   public int computeNumBuckets(String partitionPath) {
     // Check cache first
-    Integer cachedBucketNumber = PARTITION_TO_BUCKET_CACHE.getIfPresent(partitionPath);
+    Integer cachedBucketNumber = partitionToBucketCache.getIfPresent(partitionPath);
     if (cachedBucketNumber != null) {
       return cachedBucketNumber;
     }
@@ -85,7 +86,7 @@ public class PartitionBucketIndexCalculator implements Serializable {
     }
 
     // Update cache
-    PARTITION_TO_BUCKET_CACHE.put(partitionPath, bucketNumber);
+    partitionToBucketCache.put(partitionPath, bucketNumber);
 
     return bucketNumber;
   }
@@ -95,11 +96,11 @@ public class PartitionBucketIndexCalculator implements Serializable {
   }
 
   public long getCacheSize() {
-    return PARTITION_TO_BUCKET_CACHE.estimatedSize();
+    return partitionToBucketCache.estimatedSize();
   }
 
   public Map<String, Integer> getPartitionToBucket() {
-    return PARTITION_TO_BUCKET_CACHE.asMap();
+    return partitionToBucketCache.asMap();
   }
 
   /**

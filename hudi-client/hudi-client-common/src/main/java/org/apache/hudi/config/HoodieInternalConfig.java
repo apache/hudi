@@ -52,12 +52,6 @@ public class HoodieInternalConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Inner configure to pass static partition paths to executors for SQL operations.");
 
-  public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_LOAD_INSTANT = ConfigProperty
-      .key("hoodie.bucket.index.partition.load.instant")
-      .defaultValue("")
-      .withDocumentation("Inner config to determine which hashing_config to load when using partition level bucket index,"
-          + "instead of listing and getting everywhere");
-
   /**
    * Returns if partition records are sorted or not.
    *

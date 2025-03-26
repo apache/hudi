@@ -1955,10 +1955,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieIndex.IndexType.valueOf(getString(HoodieIndexConfig.INDEX_TYPE));
   }
 
-  public String getHashingConfigInstantToLoad() {
-    return getString(HoodieIndexConfig.BUCKET_INDEX_PARTITION_LOAD_INSTANT);
-  }
-
   public String getBucketIndexPartitionExpression() {
     return getString(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS);
   }
