@@ -41,4 +41,10 @@ public interface HoodieDecompressor {
                  byte[] targetByteArray,
                  int offset,
                  int length) throws IOException;
+
+  /**
+   * Compress the data provided.
+   *
+   */
+  byte[] compress(byte[] uncompressedBytes) throws IOException;
 }

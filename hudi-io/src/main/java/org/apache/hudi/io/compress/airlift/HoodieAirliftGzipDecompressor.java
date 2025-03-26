@@ -25,8 +25,10 @@ import org.apache.hudi.io.compress.HoodieDecompressor;
 import io.airlift.compress.gzip.JdkGzipHadoopStreams;
 import io.airlift.compress.hadoop.HadoopInputStream;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.zip.GZIPOutputStream;
 
 import static org.apache.hudi.io.util.IOUtils.readFully;
 
@@ -49,5 +51,13 @@ public class HoodieAirliftGzipDecompressor implements HoodieDecompressor {
     try (HadoopInputStream stream = gzipStreams.createInputStream(compressedInput)) {
       return readFully(stream, targetByteArray, offset, length);
     }
+  }
+
+  public byte[] compress(byte[] data) throws IOException {
+    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+    try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(byteArrayOutputStream)) {
+      gzipOutputStream.write(data);
+    }
+    return byteArrayOutputStream.toByteArray();
   }
 }

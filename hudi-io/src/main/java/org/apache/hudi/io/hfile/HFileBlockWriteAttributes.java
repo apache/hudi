@@ -24,15 +24,18 @@ public class HFileBlockWriteAttributes {
   public static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
   public static final ChecksumType CHECKSUM_TYPE = ChecksumType.NULL;
   protected long startOffsetInBuff = -1;
+  protected long previousBlockOffset = -1;
   protected int blockSize;
 
-  public HFileBlockWriteAttributes(long startOffsetInBuff, int blockSize) {
+  public HFileBlockWriteAttributes(long startOffsetInBuff, long previousBlockOffset, int blockSize) {
     this.startOffsetInBuff = startOffsetInBuff;
+    this.previousBlockOffset = -1;
     this.blockSize = blockSize;
   }
 
   public static class Builder {
     private long startOffsetInBuff = -1;
+    private long previousBlockOffset = -1;
     private int blockSize;
 
     public Builder() {
@@ -44,13 +47,21 @@ public class HFileBlockWriteAttributes {
       return this;
     }
 
+    public Builder previousBlockOffset(long previousBlockOffset) {
+      this.previousBlockOffset = previousBlockOffset;
+      return this;
+    }
+
     public Builder blockSize(int blockSize) {
       this.blockSize = blockSize;
       return this;
     }
 
     public HFileBlockWriteAttributes build() {
-      return new HFileBlockWriteAttributes(startOffsetInBuff, blockSize);
+      return new HFileBlockWriteAttributes(
+          startOffsetInBuff,
+          previousBlockOffset,
+          blockSize);
     }
   }
 }

@@ -39,4 +39,9 @@ public class HoodieNoneDecompressor implements HoodieDecompressor {
                         int length) throws IOException {
     return readFully(compressedInput, targetByteArray, offset, length);
   }
+
+  @Override
+  public byte[] compress(byte[] uncompressedBytes) {
+    return uncompressedBytes;
+  }
 }

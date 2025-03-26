@@ -73,7 +73,7 @@ public class HFileFileInfoBlock extends HFileBlock {
   // ================ Below are for Write ================
 
   public HFileFileInfoBlock(HFileContext context) {
-    super(context, HFileBlockType.FILE_INFO);
+    super(context, HFileBlockType.FILE_INFO, -1L);
   }
 
   public void add(String name, byte[] value) {

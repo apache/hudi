@@ -45,7 +45,7 @@ public class HFileMetaBlock extends HFileBlock {
   protected final List<KeyValueEntry> entries = new ArrayList<>();
 
   public HFileMetaBlock(HFileContext context) {
-    super(context, HFileBlockType.META);
+    super(context, HFileBlockType.META, -1L);
   }
 
   public byte[] getFirstKey() {
