@@ -18,11 +18,12 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.utils.CommitMetadataUtils;
 import org.apache.hudi.client.utils.SparkReleaseResources;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.utils.CommitMetadataUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
@@ -100,8 +101,13 @@ public class SparkRDDWriteClient<T> extends
   @Override
   protected HoodieCommitMetadata buildCommitMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata originalMetadata) {
     try {
-      return CommitMetadataUtils.buildMetadata(table, commitActionType,
-          instantTime, originalMetadata, config, context, storageConf, this.getClass().getSimpleName());
+      if (table.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+        // reconciliation not required for table version 8 and above.
+        return originalMetadata;
+      } else {
+        return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, commitActionType, instantTime, originalMetadata,
+            config, context, storageConf, this.getClass().getSimpleName());
+      }
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to fix commit metadata for spurious log files "
           + config.getBasePath() + " at time " + instantTime, e);

@@ -57,19 +57,6 @@ import java.util.stream.Collectors;
 
 public class CommitMetadataUtils {
 
-  public static HoodieCommitMetadata buildMetadata(HoodieTable table, String commitActionType, String instantTime,
-                                                   HoodieCommitMetadata commitMetadata, HoodieWriteConfig config,
-                                                   HoodieEngineContext context, StorageConfiguration<?> storageConfiguration,
-                                                   String classNameForContext) throws IOException {
-    if (table.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      // reconciliation not required for table version 8 and above.
-      return commitMetadata;
-    } else {
-      return reconcileMetadataForMissingFiles(table, commitActionType, instantTime, commitMetadata,
-          config, context, storageConfiguration, classNameForContext);
-    }
-  }
-
   /* In spark mor table, task retries may generate log files which are not included in write status.
    * We need to add these to CommitMetadata so that it will be synced to MDT.
    */
