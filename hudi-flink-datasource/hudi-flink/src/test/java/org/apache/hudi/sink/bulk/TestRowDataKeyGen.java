@@ -18,8 +18,10 @@
 
 package org.apache.hudi.sink.bulk;
 
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.utils.TestConfigurations;
@@ -35,6 +37,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.sql.Timestamp;
 
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.is;
@@ -131,6 +136,18 @@ public class TestRowDataKeyGen {
     assertThat(keyGen2.getPartitionPath(rowData1), is("ts=1970010102"));
     assertThat(keyGen2.getPartitionPath(rowData2), is("ts=1970010100"));
     assertThat(keyGen2.getPartitionPath(rowData3), is("ts=1970010100"));
+
+    // TimestampType.DATE_STRING case, we use another string type `partition` column instead of `ts`
+    conf = TestConfigurations.getDefaultConf("path1");
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.setString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), TimestampBasedAvroKeyGenerator.class.getName());
+    conf.setString(TIMESTAMP_TYPE_FIELD.key(), TimestampBasedAvroKeyGenerator.TimestampType.DATE_STRING.name());
+    conf.setString(TIMESTAMP_INPUT_DATE_FORMAT.key(), "yyyy-MM-dd HH:mm:ss");
+    conf.setString(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), "yyyy-MM-dd");
+    final RowData rowData4 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(7200000), StringData.fromString("2004-02-29 01:02:03"));
+    final RowDataKeyGen keyGen3 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    assertThat(keyGen3.getPartitionPath(rowData4), is("2004-02-29"));
   }
 
   @ParameterizedTest
