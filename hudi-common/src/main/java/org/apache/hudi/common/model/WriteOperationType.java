@@ -55,7 +55,7 @@ public enum WriteOperationType {
   // alter schema
   ALTER_SCHEMA("alter_schema"),
   // log compact
-  LOG_COMPACT("logcompact"),
+  LOG_COMPACT("log_compact"),
   // used for old version
   UNKNOWN("unknown");
 
@@ -100,6 +100,8 @@ public enum WriteOperationType {
         return INDEX;
       case "alter_schema":
         return ALTER_SCHEMA;
+      case "log_compact":
+        return LOG_COMPACT;
       case "unknown":
         return UNKNOWN;
       default:
