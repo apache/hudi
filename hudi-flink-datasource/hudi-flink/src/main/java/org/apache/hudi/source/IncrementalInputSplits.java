@@ -428,12 +428,15 @@ public class IncrementalInputSplits implements Serializable {
    * @return the set of read partitions
    */
   private Set<String> getReadPartitions(List<HoodieCommitMetadata> metadataList) {
+    LOG.warn(">>> commit meta List: {}", metadataList);
     Set<String> partitions = HoodieTableMetadataUtil.getWritePartitionPaths(metadataList);
+    LOG.warn(">>> partitions in commit meta: {}", partitions);
     // apply partition push down
     if (this.partitionPruner != null) {
       Set<String> selectedPartitions = this.partitionPruner.filter(partitions);
       double total = partitions.size();
       double selectedNum = selectedPartitions.size();
+      LOG.warn(">>> partitions pruned: {}", selectedPartitions);
       double percentPruned = total == 0 ? 0 : (1 - selectedNum / total) * 100;
       LOG.info("Selected " + selectedNum + " partitions out of " + total
           + ", pruned " + percentPruned + "% partitions.");

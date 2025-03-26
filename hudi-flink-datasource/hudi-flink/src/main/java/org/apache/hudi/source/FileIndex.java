@@ -37,7 +37,6 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
-import org.mortbay.log.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -233,12 +232,12 @@ public class FileIndex implements Serializable {
         new HoodieFlinkEngineContext(hadoopConf),
         new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString())
         : Collections.emptyList();
-    Log.warn(">>> all partitions: " + allPartitionPaths);
+    LOG.warn(">>> all partitions: {}", allPartitionPaths);
     if (this.partitionPruner == null) {
       this.partitionPaths = allPartitionPaths;
     } else {
       Set<String> prunedPartitionPaths = this.partitionPruner.filter(allPartitionPaths);
-      Log.warn(">>> pruned partitions: " + prunedPartitionPaths);
+      LOG.warn(">>> pruned partitions: {}", prunedPartitionPaths);
       this.partitionPaths = new ArrayList<>(prunedPartitionPaths);
     }
     return this.partitionPaths;
