@@ -36,7 +36,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_ST
 import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Conversions.DecimalConversion
-import org.apache.avro.LogicalTypes
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}

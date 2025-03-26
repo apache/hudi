@@ -35,8 +35,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERA
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
+import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams, WrapperCreator}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
@@ -1080,60 +1079,23 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     })
   }
 
-  @Test
-  def testDeserializeFromByteBuffer(): Unit = {
-    // Original decimal value: 123.45 (scale 2)
-    val original: JBigDecimal = new JBigDecimal("123.45")
-    // Get the unscaled value (12345) as a byte array.
+  @ParameterizedTest
+  @MethodSource(Array("decimalWrapperTestCases"))
+  def testDeserialize(description: String, expected: JBigDecimal, wrapperCreator: WrapperCreator): Unit = {
+    val dt = DecimalType(10, 2)
+    // Get the schema from the DecimalWrapper's Avro definition.
     val schema: Schema = DecimalWrapper.SCHEMA$.getField("value").schema()
-    val buffer: ByteBuffer = ColumnStatsIndexSupport.decConv.toBytes(original, schema, schema.getLogicalType)
-
-    // Create a dummy DecimalWrapper that returns a ByteBuffer.
-    val wrapper: DecimalWrapper = new DecimalWrapper(buffer)
-    // Call tryUnpackValueWrapper – it should match the DecimalWrapper case and return the ByteBuffer.
-    val unwrapped: Any = ColumnStatsIndexSupport.tryUnpackValueWrapper(wrapper)
-    assertTrue(unwrapped.isInstanceOf[ByteBuffer], "Expected a ByteBuffer")
-
-    // Now deserialize the ByteBuffer to a BigDecimal.
-    val dt = DecimalType(10, 2)
-    val deserialized: Any = ColumnStatsIndexSupport.deserialize(unwrapped, dt)
-    assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
-    assertEquals(original, deserialized.asInstanceOf[JBigDecimal], "Decimal value from ByteBuffer does not match")
-  }
-
-  @Test
-  def testDeserializeFromJavaBigDecimal(): Unit = {
-    // Original decimal value: 543.21
-    val original: JBigDecimal = new JBigDecimal("543.21")
-    // Create an anonymous DecimalWrapper that returns a ByteBuffer of java.math.BigDecimal directly.
-    val wrapper: DecimalWrapper = new DecimalWrapper {
-      val schema: Schema = DecimalWrapper.SCHEMA$.getField("value").schema()
-
-      override def getValue: ByteBuffer = ColumnStatsIndexSupport.decConv.toBytes(original, schema, schema.getLogicalType)
+    val wrapper = wrapperCreator.create(expected, schema)
+    // Extract the underlying value.
+    val unwrapped = ColumnStatsIndexSupport.tryUnpackValueWrapper(wrapper)
+    // Optionally, for the "ByteBuffer Test" case, verify that the unwrapped value is a ByteBuffer.
+    if (description.contains("ByteBuffer Test")) {
+      assertTrue(unwrapped.isInstanceOf[ByteBuffer], "Expected a ByteBuffer")
     }
-
-    val dt = DecimalType(10, 2)
-    val deserialized: Any = ColumnStatsIndexSupport.deserialize(ColumnStatsIndexSupport.tryUnpackValueWrapper(wrapper), dt)
+    // Deserialize into a java.math.BigDecimal.
+    val deserialized = ColumnStatsIndexSupport.deserialize(unwrapped, dt)
     assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
-    assertEquals(original, deserialized.asInstanceOf[JBigDecimal], "Decimal value from java.math.BigDecimal does not match")
-  }
-
-  @Test
-  def testDeserializeFromScalaBigDecimal(): Unit = {
-    // Original Scala BigDecimal value
-    val original = scala.math.BigDecimal("987.65")
-    // Create an anonymous DecimalWrapper that returns a ByteBuffer of Scala BigDecimal.
-    val wrapper: DecimalWrapper = new DecimalWrapper {
-      val schema: Schema = DecimalWrapper.SCHEMA$.getField("value").schema()
-
-      override def getValue: ByteBuffer = ColumnStatsIndexSupport.decConv.toBytes(original.bigDecimal, schema, schema.getLogicalType)
-    }
-    // In this case, unwrapped is a Scala BigDecimal.
-    val dt = DecimalType(10, 2)
-    val deserialized: Any = ColumnStatsIndexSupport.deserialize(ColumnStatsIndexSupport.tryUnpackValueWrapper(wrapper), dt)
-    // The deserialize method should convert a Scala BigDecimal to a java.math.BigDecimal.
-    assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
-    // Compare via string representations.
-    assertEquals(original.bigDecimal.toString, deserialized.asInstanceOf[JBigDecimal].toString, "Decimal value from Scala BigDecimal does not match")
+    assertEquals(expected, deserialized.asInstanceOf[JBigDecimal],
+      s"Decimal value from $description does not match")
   }
 }
