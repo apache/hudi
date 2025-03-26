@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test
 class TestHoodieFileIndex {
   @Test
   def testDefaultDatabaseName(): Unit = {
-    assertEquals(HoodieFileIndex.getDatabaseName(new HoodieTableConfig()), "default")
+    assertEquals("default", HoodieFileIndex.getDatabaseName(new HoodieTableConfig(), null))
+    assertEquals("default_db", HoodieFileIndex.getDatabaseName(new HoodieTableConfig(), "default_db"))
   }
 }
