@@ -40,6 +40,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
+
 /**
  * Pure Java implementation of HFile writer (HFile v3 format) for Hudi.
  */
@@ -167,7 +169,7 @@ public class HFileWriterImpl implements HFileWriter {
     metaIndexBlock.setStartOffsetInBuff(currentOffset);
     writeBuffer(metaIndexBuffer);
     // Write File Info.
-    fileInfoBlock.add("hfile.LASTKEY", lastKey);
+    fileInfoBlock.add("hfile.LASTKEY", addKeyLength(lastKey));
     fileInfoBlock.setStartOffsetInBuff(currentOffset);
     writeBuffer(fileInfoBlock.serialize());
   }
@@ -222,6 +224,18 @@ public class HFileWriterImpl implements HFileWriter {
 
   private void initFileInfo() {
     fileInfoBlock.add("hfile.MAX_MEMSTORE_TS_KEY", new byte[]{0});
+  }
+
+  // Note: HFileReaderImpl assumes that:
+  //   The last key should contain the content length bytes.
+  public byte[] addKeyLength(byte[] key) {
+    if (0 == key.length) {
+      return new byte[0];
+    }
+    ByteBuffer byteBuffer = ByteBuffer.allocate(key.length + SIZEOF_INT16);
+    byteBuffer.putShort((short) key.length);
+    byteBuffer.put(key);
+    return byteBuffer.array();
   }
 
   // Example to demonstrate the code is runnable.
