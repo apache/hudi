@@ -99,13 +99,13 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
-  protected HoodieCommitMetadata buildCommitMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata originalMetadata) {
+  protected HoodieCommitMetadata reconcileMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata oriMetadata) {
     try {
       if (table.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
         // reconciliation not required for table version 8 and above.
-        return originalMetadata;
+        return oriMetadata;
       } else {
-        return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, commitActionType, instantTime, originalMetadata,
+        return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, commitActionType, instantTime, oriMetadata,
             config, context, storageConf, this.getClass().getSimpleName());
       }
     } catch (IOException e) {
