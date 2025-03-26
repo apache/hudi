@@ -22,6 +22,7 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
+import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 
 import com.google.protobuf.ByteString;
@@ -35,18 +36,12 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
  * Pure Java implementation of HFile writer (HFile v3 format) for Hudi.
- *
- * TODO: Known improvements to be done:
- *   1. fully compatible with Hbase reader.
- *   2. support given compression codec.
  */
 public class HFileWriterImpl implements HFileWriter {
   private final OutputStream outputStream;
@@ -89,6 +84,7 @@ public class HFileWriterImpl implements HFileWriter {
   // Append a data kv pair.
   public void append(String key, byte[] value) throws IOException {
     byte[] keyBytes = StringUtils.getUTF8Bytes(key);
+    lastKey = keyBytes;
     // Records with the same key must be put into the same block.
     if (!Arrays.equals(currentDataBlock.getLastKeyContent(), keyBytes)
         && uncompressedBytes + keyBytes.length + value.length + 9 > blockSize) {
@@ -137,9 +133,9 @@ public class HFileWriterImpl implements HFileWriter {
     writeBuffer(blockBuffer);
     // 3. Create an index entry.
     rootIndexBlock.add(
-        currentDataBlock.getFirstKey(), currentOffset, blockBuffer.limit());
+        currentDataBlock.getFirstKey(), lastDataBlockOffset, blockBuffer.limit());
     // 4. Create a new data block.
-    currentDataBlock = new HFileDataBlock(context);
+    currentDataBlock = new HFileDataBlock(context, currentOffset);
   }
 
   // NOTE that: reader assumes that every meta info piece
@@ -189,8 +185,12 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setFirstDataBlockOffset(firstDataBlockOffset);
     builder.setLastDataBlockOffset(lastDataBlockOffset);
     builder.setComparatorClassName("NA");
-    builder.setCompressionCodec(2);
-    // TODO: support compression.
+    // Set codec.
+    if (context.getCompressionCodec() == CompressionCodec.GZIP) {
+      builder.setCompressionCodec(1);
+    } else {
+      builder.setCompressionCodec(2);
+    }
     builder.setEncryptionKey(ByteString.EMPTY);
     HFileProtos.TrailerProto trailerProto = builder.build();
 
