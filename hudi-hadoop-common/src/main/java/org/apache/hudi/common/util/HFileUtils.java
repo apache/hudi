@@ -64,6 +64,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  */
 public class HFileUtils extends FileFormatUtils {
   private static final Logger LOG = LoggerFactory.getLogger(HFileUtils.class);
+  private static final int DEFAULT_BLOCK_SIZE_FOR_LOG_FILE = 1024 * 1024;
 
   /**
    * Gets the {@link Compression.Algorithm} Enum based on the {@link CompressionCodec} name.
@@ -163,6 +164,7 @@ public class HFileUtils extends FileFormatUtils {
                                            Schema readerSchema,
                                            String keyFieldName,
                                            Map<String, String> paramsMap) throws IOException {
+    CompressionCodec compressionCodec = getHFileCompressionAlgorithm(paramsMap);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     OutputStream ostream = new DataOutputStream(baos);
 
@@ -196,7 +198,10 @@ public class HFileUtils extends FileFormatUtils {
       sortedRecordsMap.put(recordKey, recordBytes);
     }
 
-    HFileContext context = HFileContext.builder().build();
+    HFileContext context = HFileContext.builder()
+        .blockSize(DEFAULT_BLOCK_SIZE_FOR_LOG_FILE)
+        .compressionCodec(compressionCodec)
+        .build();
     HFileWriter writer = new HFileWriterImpl(context, ostream);
     sortedRecordsMap.forEach((recordKey, recordBytes) -> {
       try {
