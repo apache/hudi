@@ -49,7 +49,7 @@ import scala.concurrent.duration.Duration
 import scala.language.postfixOps
 import scala.util.Using
 
-@Tag("functional-b")
+@Tag("functional")
 class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
