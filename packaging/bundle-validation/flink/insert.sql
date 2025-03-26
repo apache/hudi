@@ -17,6 +17,8 @@
  * under the License.
  */
 
+SET 'table.dml-sync' = 'true';
+
 CREATE TABLE t1
 (
     uuid        VARCHAR(20) PRIMARY KEY NOT ENFORCED,

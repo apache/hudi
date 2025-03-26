@@ -42,18 +42,20 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.catalog.ObjectPath;
-import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
+import org.apache.flink.util.ExceptionUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -83,6 +85,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.utils.TestConfigurations.catalog;
+import static org.apache.hudi.utils.TestConfigurations.getCollectSinkDDL;
 import static org.apache.hudi.utils.TestConfigurations.sql;
 import static org.apache.hudi.utils.TestData.array;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
@@ -104,6 +107,9 @@ public class ITTestHoodieDataSource {
   @BeforeEach
   void beforeEach() {
     EnvironmentSettings settings = EnvironmentSettings.newInstance().build();
+    // flink job uses child-first classloader by default, async services fired by flink job are not
+    // guaranteed to be killed right away, which then may trigger classloader leak checking exception.
+    settings.getConfiguration().set(CoreOptions.CHECK_LEAKED_CLASSLOADER, false);
     streamTableEnv = TableEnvironmentImpl.create(settings);
     streamTableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
@@ -147,19 +153,19 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_START_COMMIT, firstCommit)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
-    List<Row> rows = execSelectSql(streamTableEnv, "select * from t1", 10);
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
 
     // insert another batch of data
     execInsertSql(streamTableEnv, insertInto);
-    List<Row> rows2 = execSelectSql(streamTableEnv, "select * from t1", 10);
+    List<Row> rows2 = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
     assertRowsEquals(rows2, TestData.DATA_SET_SOURCE_INSERT);
 
     streamTableEnv.getConfig().getConfiguration()
         .setBoolean("table.dynamic-table-options.enabled", true);
     // specify the start commit as earliest
-    List<Row> rows3 = execSelectSql(streamTableEnv,
-        "select * from t1/*+options('read.start-commit'='earliest')*/", 10);
+    List<Row> rows3 = execSelectSqlWithExpectedNum(streamTableEnv,
+        "select * from t1/*+options('read.start-commit'='earliest')*/", TestData.DATA_SET_SOURCE_INSERT.size());
     assertRowsEquals(rows3, TestData.DATA_SET_SOURCE_INSERT);
   }
 
@@ -184,18 +190,18 @@ public class ITTestHoodieDataSource {
     execInsertSql(streamTableEnv, insertInto);
 
     String firstCommit = TestUtils.getFirstCompleteInstant(tempFile.getAbsolutePath());
-    List<Row> rows = execSelectSql(streamTableEnv,
-        "select * from t1/*+options('read.start-commit'='" + firstCommit + "')*/", 10);
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv,
+        "select * from t1/*+options('read.start-commit'='" + firstCommit + "')*/", TestData.DATA_SET_SOURCE_INSERT.size());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
 
     // insert another batch of data
     execInsertSql(streamTableEnv, TestSQL.UPDATE_INSERT_T1);
-    List<Row> rows2 = execSelectSql(streamTableEnv, "select * from t1", 10);
+    List<Row> rows2 = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_CHANGELOG.size());
     assertRowsEquals(rows2, TestData.DATA_SET_SOURCE_CHANGELOG);
 
     // specify the start commit as earliest
-    List<Row> rows3 = execSelectSql(streamTableEnv,
-        "select * from t1/*+options('read.start-commit'='earliest')*/", 10);
+    List<Row> rows3 = execSelectSqlWithExpectedNum(streamTableEnv,
+        "select * from t1/*+options('read.start-commit'='earliest')*/", TestData.DATA_SET_SOURCE_MERGED.size());
     assertRowsEquals(rows3, TestData.DATA_SET_SOURCE_MERGED);
   }
 
@@ -218,12 +224,12 @@ public class ITTestHoodieDataSource {
     execInsertSql(streamTableEnv, insertInto);
 
     // reading from the latest commit instance.
-    List<Row> rows = execSelectSql(streamTableEnv, "select * from t1", 10);
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT.size());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
 
     // insert another batch of data
     execInsertSql(streamTableEnv, insertInto);
-    List<Row> rows2 = execSelectSql(streamTableEnv, "select * from t1", 10);
+    List<Row> rows2 = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT.size());
     assertRowsEquals(rows2, TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
   }
 
@@ -259,7 +265,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_START_COMMIT, specifiedCommit)
         .end();
     streamTableEnv.executeSql(createHoodieTable2);
-    List<Row> rows = execSelectSql(streamTableEnv, "select * from t2", 10);
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t2", TestData.DATA_SET_SOURCE_MERGED.size());
     // all the data with same keys are appended within one data bucket and one log file,
     // so when consume, the same keys are merged
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_MERGED);
@@ -360,7 +366,7 @@ public class ITTestHoodieDataSource {
     streamTableEnv.getConfig().getConfiguration()
         .setBoolean("table.dynamic-table-options.enabled", true);
     final String query = String.format("select * from t1/*+ options('read.start-commit'='%s')*/", instant);
-    List<Row> rows = execSelectSql(streamTableEnv, query, 10);
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, query, TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT.size());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
   }
 
@@ -388,7 +394,7 @@ public class ITTestHoodieDataSource {
     streamTableEnv.getConfig().getConfiguration()
         .setBoolean("table.dynamic-table-options.enabled", true);
     final String query = String.format("select * from t1/*+ options('read.start-commit'='%s')*/", instant);
-    List<Row> rows = execSelectSql(streamTableEnv, query, 10);
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, query, TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT.size());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
   }
 
@@ -416,7 +422,7 @@ public class ITTestHoodieDataSource {
     final String query = String.format("select * from t1/*+ options('read.start-commit'='%s')*/",
         FlinkOptions.START_COMMIT_EARLIEST);
 
-    List<Row> rows = execSelectSql(streamTableEnv, query, 10);
+    List<Row> rows = execSelectSql(streamTableEnv, query);
     // batch read will not lose data when cleaned clustered files.
     assertRowsEquals(rows, CollectionUtils.combine(TestData.DATA_SET_SOURCE_INSERT_FIRST_COMMIT,
         TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT));
@@ -502,10 +508,10 @@ public class ITTestHoodieDataSource {
         + "  name varchar(20),\n"
         + "  age_sum int\n"
         + ") with (\n"
-        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'"
+        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "',\n"
+        + "  'sink-expected-row-num' = '2'"
         + ")";
-    List<Row> result = execSelectSql(streamTableEnv,
-        "select name, sum(age) from t1 group by name", sinkDDL, 10);
+    List<Row> result = execSelectSqlWithExpectedNum(streamTableEnv, "select name, sum(age) from t1 group by name", sinkDDL);
     final String expected = "[+I(+I[Danny, 24]), +I(+I[Stephen, 34])]";
     assertRowsEquals(result, expected, true);
   }
@@ -556,8 +562,9 @@ public class ITTestHoodieDataSource {
                 + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]",
             "[+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
                 + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]");
+    List<Integer> expectedNums = Arrays.asList(8, 3, 2);
     for (int i = 0; i < sqls.size(); i++) {
-      List<Row> result = execSelectSql(streamTableEnv, sqls.get(i), 10);
+      List<Row> result = execSelectSqlWithExpectedNum(streamTableEnv, sqls.get(i), expectedNums.get(i));
       assertRowsEquals(result, expectResults.get(i));
     }
   }
@@ -583,11 +590,11 @@ public class ITTestHoodieDataSource {
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
 
-    List<Row> result = execSelectSql(streamTableEnv,
-        "select * from t1 where `partition`='par1'", 10);
     final String expected = "["
         + "+I(+I[id1, Danny, 23, 1970-01-01T00:00:00.001, par1]), "
         + "+I(+I[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1])]";
+    List<Row> result = execSelectSqlWithExpectedNum(streamTableEnv,
+        "select * from t1 where `partition`='par1'", 2);
     assertRowsEquals(result, expected, true);
   }
 
@@ -612,18 +619,8 @@ public class ITTestHoodieDataSource {
 
     String insertInto = "insert into t1 select * from source";
     execInsertSql(streamTableEnv, insertInto);
-
-    List<Row> result = execSelectSql(streamTableEnv, "select * from t1", 10);
-    final String expected = "["
-        + "+I[id1, Danny, 23, 1970-01-01T00:00:01, par1], "
-        + "+I[id2, Stephen, 33, 1970-01-01T00:00:02, par1], "
-        + "+I[id3, Julian, 53, 1970-01-01T00:00:03, par2], "
-        + "+I[id4, Fabian, 31, 1970-01-01T00:00:04, par2], "
-        + "+I[id5, Sophia, 18, 1970-01-01T00:00:05, par3], "
-        + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
-        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
-        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]";
-    assertRowsEquals(result, expected);
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
   }
 
   @ParameterizedTest
@@ -821,13 +818,12 @@ public class ITTestHoodieDataSource {
         + "+I[id7, Bob, 44, par4, 1970-01-01T00:00:07], "
         + "+I[id8, Han, 56, par4, 1970-01-01T00:00:08]]";
 
-    List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
-
+    List<Row> result = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", "t1", 8);
     assertRowsEquals(result, expected);
 
     // insert another batch of data
     execInsertSql(streamTableEnv, insertInto);
-    List<Row> result2 = execSelectSql(streamTableEnv, "select * from t1", execMode);
+    List<Row> result2 = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", "t1", 8);
     assertRowsEquals(result2, expected);
   }
 
@@ -861,12 +857,12 @@ public class ITTestHoodieDataSource {
         + "+I[4, Fabian, 2021-12-04T15:16:04.400004], "
         + "+I[5, Tom, 2721-12-04T15:16:04.500005]]";
 
-    List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
+    List<Row> result = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", "t1", 5);
     assertRowsEquals(result, expected);
 
     // insert another batch of data
     execInsertSql(streamTableEnv, insertInto);
-    List<Row> result2 = execSelectSql(streamTableEnv, "select * from t1", execMode);
+    List<Row> result2 = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", "t1", 5);
     assertRowsEquals(result2, expected);
   }
 
@@ -959,7 +955,7 @@ public class ITTestHoodieDataSource {
     execInsertSql(streamTableEnv, insertInto);
 
     // reading from the earliest commit instance.
-    List<Row> rows = execSelectSql(streamTableEnv, "select * from t1", 20);
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
   }
 
@@ -1162,9 +1158,9 @@ public class ITTestHoodieDataSource {
         .end();
     batchTableEnv.executeSql(createHoodieTable);
 
-    // no exception expects to be thrown
-    assertThrows(Exception.class,
-        () -> execSelectSql(batchTableEnv, "select * from t1", 10),
+    // ValidationException expects to be thrown
+    assertThrows(ValidationException.class,
+        () -> execSelectSql(batchTableEnv, "select * from t1"),
         "Exception should throw when querying non-exists table in batch mode");
 
     // case2: empty table without data files
@@ -1221,7 +1217,10 @@ public class ITTestHoodieDataSource {
         + "+I[109, 9000, spare tire, 22.200000762939453], "
         + "+I[110, 14000, jacket, 0.5]]";
 
-    List<Row> result = execSelectSql(streamTableEnv, "select * from hoodie_sink", execMode);
+    List<Row> result =
+        execMode == ExecMode.STREAM
+            ? execSelectSqlWithExpectedNum(streamTableEnv, "select * from hoodie_sink", "hoodie_sink", 10)
+            : execSelectSql(streamTableEnv, "select * from hoodie_sink");
 
     assertRowsEquals(result, expected);
   }
@@ -1554,7 +1553,6 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result2.subList(result2.size() - 2, result2.size()), "[-U[1], +U[2]]");
   }
 
-  @Disabled("HUDI-9196")
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   void testIncrementalReadArchivedCommits(HoodieTableType tableType) throws Exception {
@@ -2189,7 +2187,7 @@ public class ITTestHoodieDataSource {
         .end();
     batchTableEnv.executeSql(readHoodieTableDDL);
 
-    List<Row> result = execSelectSql(batchTableEnv, "select * from t1", ExecMode.BATCH);
+    List<Row> result = execSelectSql(batchTableEnv, "select * from t1");
     assertRowsEquals(result, expected1.toString());
 
     batchTableEnv.executeSql("drop table t1");
@@ -2211,7 +2209,7 @@ public class ITTestHoodieDataSource {
         .end();
     batchTableEnv.executeSql(readHoodieTableDDL);
 
-    result = execSelectSql(batchTableEnv, "select * from t1", ExecMode.BATCH);
+    result = execSelectSql(batchTableEnv, "select * from t1");
     assertRowsEquals(result, expected2.toString());
 
     batchTableEnv.executeSql("drop table t1");
@@ -2233,12 +2231,11 @@ public class ITTestHoodieDataSource {
         .end();
     batchTableEnv.executeSql(readHoodieTableDDL);
 
-    result = execSelectSql(batchTableEnv, "select * from t1", ExecMode.BATCH);
+    result = execSelectSql(batchTableEnv, "select * from t1");
     assertRowsEquals(result, expected3.toString());
 
   }
 
-  @Disabled("HUDI-9196")
   @ParameterizedTest
   @MethodSource("tableTypeAndBooleanTrueFalseParams")
   void testDynamicPartitionPrune(HoodieTableType tableType, boolean hiveStylePartitioning) throws Exception {
@@ -2262,11 +2259,11 @@ public class ITTestHoodieDataSource {
     // launch a streaming query
     TableResult tableResult = submitSelectSql(streamTableEnv,
         "select uuid, name, age, ts, `partition` as part from t1 where `partition` > 'par4'",
-        TestConfigurations.getCollectSinkDDL("sink"));
+        TestConfigurations.getCollectSinkDDLWithExpectedNum("sink", TestData.DATA_SET_INSERT_SEPARATE_PARTITION.size()));
     // write second commit
     TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
     // stop the streaming query and get data
-    List<Row> actualResult = fetchResult(streamTableEnv, tableResult, 10);
+    List<Row> actualResult = fetchResultWithExpectedNum(streamTableEnv, tableResult);
     assertRowsEquals(actualResult, TestData.DATA_SET_INSERT_SEPARATE_PARTITION);
   }
 
@@ -2326,8 +2323,7 @@ public class ITTestHoodieDataSource {
 
   @ParameterizedTest
   @MethodSource("parametersForMetaColumnsSkip")
-  void testWriteWithoutMetaColumns(HoodieTableType tableType, WriteOperationType operation)
-      throws TableNotExistException, InterruptedException {
+  void testWriteWithoutMetaColumns(HoodieTableType tableType, WriteOperationType operation) throws Exception {
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
 
@@ -2346,7 +2342,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
-    List<Row> rows = execSelectSql(streamTableEnv, "select * from t1", 10);
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
   }
 
@@ -2402,7 +2398,7 @@ public class ITTestHoodieDataSource {
     execInsertSql(streamTableEnv, insertInto);
 
     // reading from the earliest
-    List<Row> rows = execSelectSql(streamTableEnv, "select * from t1", 10);
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
   }
 
@@ -2527,44 +2523,44 @@ public class ITTestHoodieDataSource {
     }
   }
 
-  private List<Row> execSelectSql(TableEnvironment tEnv, String select, ExecMode execMode)
-      throws TableNotExistException, InterruptedException {
-    final String[] splits = select.split(" ");
-    final String tableName = splits[splits.length - 1];
-    switch (execMode) {
-      case STREAM:
-        return execSelectSql(tEnv, select, 10, tableName);
-      case BATCH:
-        return CollectionUtil.iterableToList(
-            () -> tEnv.sqlQuery("select * from " + tableName).execute().collect());
-      default:
-        throw new AssertionError();
-    }
+  /**
+   * Use TableResult#collect() to collect results directly for bounded source.
+   */
+  private List<Row> execSelectSql(TableEnvironment tEnv, String select) {
+    return CollectionUtil.iterableToList(
+        () -> tEnv.sqlQuery(select).execute().collect());
   }
 
-  private List<Row> execSelectSql(TableEnvironment tEnv, String select, long timeout)
-      throws InterruptedException, TableNotExistException {
-    return execSelectSql(tEnv, select, timeout, null);
+  /**
+   * Use CollectTableSink to collect results with expected row number.
+   */
+  private List<Row> execSelectSqlWithExpectedNum(TableEnvironment tEnv, String select, int expectedNum) throws Exception {
+    return execSelectSqlWithExpectedNum(tEnv, select, null, expectedNum);
   }
 
-  private List<Row> execSelectSql(TableEnvironment tEnv, String select, long timeout, String sourceTable)
-      throws InterruptedException, TableNotExistException {
+  /**
+   * Use CollectTableSink to collect results with expected row number.
+   */
+  private List<Row> execSelectSqlWithExpectedNum(TableEnvironment tEnv, String select, String sourceTable, int expectedNum)
+      throws Exception {
     final String sinkDDL;
     if (sourceTable != null) {
-      // use the source table schema as the sink schema if the source table was specified, .
+      // use the source table schema as the sink schema if the source table was specified.
       ObjectPath objectPath = new ObjectPath(tEnv.getCurrentDatabase(), sourceTable);
       TableSchema schema = tEnv.getCatalog(tEnv.getCurrentCatalog()).get().getTable(objectPath).getSchema();
-      sinkDDL = TestConfigurations.getCollectSinkDDL("sink", schema);
+      sinkDDL = TestConfigurations.getCollectSinkDDLWithExpectedNum("sink", schema, expectedNum);
     } else {
-      sinkDDL = TestConfigurations.getCollectSinkDDL("sink");
+      sinkDDL = TestConfigurations.getCollectSinkDDLWithExpectedNum("sink", expectedNum);
     }
-    return execSelectSql(tEnv, select, sinkDDL, timeout);
+    return execSelectSqlWithExpectedNum(tEnv, select, sinkDDL);
   }
 
-  private List<Row> execSelectSql(TableEnvironment tEnv, String select, String sinkDDL, long timeout)
-      throws InterruptedException {
+  /**
+   * Use CollectTableSink to collect results with expected row number.
+   */
+  private List<Row> execSelectSqlWithExpectedNum(TableEnvironment tEnv, String select, String sinkDDL) {
     TableResult tableResult = submitSelectSql(tEnv, select, sinkDDL);
-    return fetchResult(tEnv, tableResult, timeout);
+    return fetchResultWithExpectedNum(tEnv, tableResult);
   }
 
   private TableResult submitSelectSql(TableEnvironment tEnv, String select, String sinkDDL) {
@@ -2574,11 +2570,25 @@ public class ITTestHoodieDataSource {
     return tableResult;
   }
 
-  private List<Row> fetchResult(TableEnvironment tEnv, TableResult tableResult, long timeout)
-      throws InterruptedException {
-    // wait for the timeout then cancels the job
+  private List<Row> execSelectSql(TableEnvironment tEnv, String select, long timeout) throws InterruptedException {
+    TableResult tableResult = submitSelectSql(tEnv, select, getCollectSinkDDL("sink"));
     TimeUnit.SECONDS.sleep(timeout);
+    // wait for the timeout then cancels the job
     tableResult.getJobClient().ifPresent(JobClient::cancel);
+    tEnv.executeSql("DROP TABLE IF EXISTS sink");
+    return CollectSinkTableFactory.RESULT.values().stream()
+        .flatMap(Collection::stream)
+        .collect(Collectors.toList());
+  }
+
+  private List<Row> fetchResultWithExpectedNum(TableEnvironment tEnv, TableResult tableResult) {
+    try {
+      // wait the continuous streaming query to be terminated by forced exception with expected row number
+      // and max waiting timeout is 30s
+      tableResult.await(30, TimeUnit.SECONDS);
+    } catch (Throwable e) {
+      ExceptionUtils.assertThrowable(e, CollectSinkTableFactory.SuccessException.class);
+    }
     tEnv.executeSql("DROP TABLE IF EXISTS sink");
     return CollectSinkTableFactory.RESULT.values().stream()
         .flatMap(Collection::stream)
