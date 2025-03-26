@@ -215,6 +215,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
 
     HoodieConsumer<HoodieRecord<T>, List<WriteStatus>> insertHandler =
         new InsertHandler(writeConfig, instantTime, getHoodieTable(), taskContextSupplier, new FixedIdSuffixCreateHandleFactory(), false, fileIdPrefixExtractor, readerSchema);
+    // FIXME-vc: need to figure out how to close this.
     return ExecutorFactory.create(writeConfig, iterator, insertHandler, op -> op, getHoodieTable().getPreExecuteRunnable()).execute();
   }
 

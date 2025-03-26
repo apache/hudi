@@ -121,6 +121,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
     //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
     //       it since these records will be shuffled later.
+    // FIXME-vc: is there a better way to approach this.
     ClosableIterator<HoodieRecord> baseRecordsIterator;
     try {
       baseRecordsIterator = baseFileReader.getRecordIterator(readerSchemaWithMetaFields);
