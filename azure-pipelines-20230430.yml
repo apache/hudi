@@ -138,7 +138,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
+              options: $(MVN_OPTS_INSTALL) -pl hudi-client/hudi-spark-client -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
