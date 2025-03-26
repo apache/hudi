@@ -40,7 +40,7 @@ import java.util.Properties
 
 import scala.util.Using
 
-@Tag("functional")
+@Tag("functional-b")
 class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   val sqlTempTable = "tbl"
 
