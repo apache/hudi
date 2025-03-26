@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Base64;
 import java.util.Collections;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -172,7 +171,7 @@ class TestSchemaRegistryProvider {
     when(failingParsedSchema.canonicalString()).thenThrow(new IllegalAccessError("tried to access field org.apache.avro.Schema.FACTORY from class org.apache.avro.Schemas"));
     // Override the existing parseSchema behavior on the mock registry client so that it returns our failingParsedSchema
     when(mockRegistryClient.parseSchema("AVRO", RAW_SCHEMA, Collections.emptyList()))
-        .thenReturn(Optional.of(failingParsedSchema));
+        .thenReturn(java.util.Optional.of(failingParsedSchema));
     // Stub the legacy fallback method to return a known fallback schema string.
     SchemaRegistryProvider spyProvider = spy(provider);
     final String FALLBACK_SCHEMA = "{\"type\": \"record\", \"namespace\": \"example.fallback\", \"name\": \"Fallback\", \"fields\": []}";
