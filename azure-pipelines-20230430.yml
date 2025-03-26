@@ -180,7 +180,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE1_ARG) -Dtest="!TestColumnStatsIndex*" -pl hudi-spark-datasource/hudi-spark
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE1_ARG) -pl hudi-spark-datasource/hudi-spark
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
@@ -424,15 +424,6 @@ stages:
               goals: 'test'
               # TODO(HUDI-9143): Investigate why Jacoco execution data file is corrupt
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -Djacoco.agent.dest.filename=jacoco2.corrupt -pl hudi-client/hudi-spark-client
-              publishJUnitResults: false
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - task: Maven@4
-            displayName: FT spark column stats
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dtest="TestColumnStatsIndex*" -pl hudi-spark-datasource/hudi-spark
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
