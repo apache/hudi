@@ -246,7 +246,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
                       return null;
                   });
       } catch (UnsupportedOperationException uoe) {
-        LOG.warn("Failed to update col stats, bootstrap doesn't support col stats", uoe);
+        LOG.warn("Skip updating column stats index in the metadata table for bootstrap operation because it is not supported", uoe);
       }
 
     } catch (HoodieIOException e) {
