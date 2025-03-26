@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1;
@@ -120,7 +121,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
   /**
    * Scenario: data table is updated, no changes to MDT
    */
-  protected void testRollbackWithFailurePreMDT(HoodieTableType tableType) throws Exception {
+  protected void testRollbackWithFailurePreMDTTableVersionSix(HoodieTableType tableType) throws Exception {
     initBasePath();
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.VERSION.key(), "6");
@@ -141,16 +142,17 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     TestHoodieBackedMetadata.validateMetadata(getConfigToTestMDTRollbacks(true), Option.empty(), hoodieStorage(), basePath, metaClient,
         storageConf(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client, hoodieStorage()), client, HoodieTimer.start());
+    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
   }
 
   /**
    * Scenario: data table is updated, deltacommit is completed in MDT
    */
-  protected void testRollbackWithFailurePostMDT(HoodieTableType tableType) throws Exception {
-    testRollbackWithFailurePostMDT(tableType, false);
+  protected void testRollbackWithFailurePostMDTTableVersionSix(HoodieTableType tableType) throws Exception {
+    testRollbackWithFailurePostMDTTableVersionSix(tableType, false);
   }
 
-  protected void testRollbackWithFailurePostMDT(HoodieTableType tableType, Boolean failRollback) throws Exception {
+  protected void testRollbackWithFailurePostMDTTableVersionSix(HoodieTableType tableType, Boolean failRollback) throws Exception {
     initBasePath();
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.VERSION.key(), "6");
@@ -207,6 +209,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), hoodieStorage(), basePath, metaClient, storageConf(), new HoodieSparkEngineContext(jsc()),
         TestHoodieBackedMetadata.metadata(client, hoodieStorage()), client, HoodieTimer.start());
+    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
   }
 
   private void copyOut(HoodieTableType tableType, String commitTime) throws IOException {
@@ -233,7 +236,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
   /**
    * Scenario: data table is updated, deltacommit of interest is inflight in MDT
    */
-  protected void testRollbackWithFailureinMDT(HoodieTableType tableType) throws Exception {
+  protected void testRollbackWithFailureinMDTTableVersionSix(HoodieTableType tableType) throws Exception {
     initBasePath();
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.VERSION.key(), "6");
@@ -278,6 +281,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), hoodieStorage(), basePath, metaClient,
         storageConf(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client, hoodieStorage()), client, HoodieTimer.start());
+    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
   }
 
   /**

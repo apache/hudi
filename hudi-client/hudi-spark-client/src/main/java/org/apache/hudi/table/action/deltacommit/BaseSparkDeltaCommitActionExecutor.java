@@ -64,7 +64,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
 
   @Override
   protected HoodieCommitMetadata appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws IOException {
-    return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, getCommitActionType(), instantTime, commitMetadata, config, context, storageConf, this.getClass().getSimpleName());
+    return CommitMetadataUtils.buildMetadata(table, getCommitActionType(), instantTime, commitMetadata, config, context, storageConf, this.getClass().getSimpleName());
   }
 
   @Override

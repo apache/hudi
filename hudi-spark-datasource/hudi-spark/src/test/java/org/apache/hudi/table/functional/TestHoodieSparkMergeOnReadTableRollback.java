@@ -1185,7 +1185,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
    */
   @Test
   public void testRollbackWithFailurePreMDT() throws Exception {
-    testRollbackWithFailurePreMDT(MERGE_ON_READ);
+    testRollbackWithFailurePreMDTTableVersionSix(MERGE_ON_READ);
   }
 
   /**
@@ -1193,7 +1193,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
    */
   @Test
   public void testRollbackWithFailurePostMDT() throws Exception {
-    testRollbackWithFailurePostMDT(MERGE_ON_READ);
+    testRollbackWithFailurePostMDTTableVersionSix(MERGE_ON_READ);
   }
 
   /**
@@ -1202,7 +1202,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
    */
   @Test
   public void testRollbackWithFailurePostMDTRollbackFailsPreMDT() throws Exception {
-    testRollbackWithFailurePostMDT(MERGE_ON_READ, true);
+    testRollbackWithFailurePostMDTTableVersionSix(MERGE_ON_READ, true);
   }
 
   /**
@@ -1210,6 +1210,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
    */
   @Test
   public void testRollbackWithFailureInMDT() throws Exception {
-    testRollbackWithFailureinMDT(MERGE_ON_READ);
+    testRollbackWithFailureinMDTTableVersionSix(MERGE_ON_READ);
   }
 }

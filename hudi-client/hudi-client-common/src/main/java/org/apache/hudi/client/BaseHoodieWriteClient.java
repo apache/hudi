@@ -234,7 +234,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HoodieInstant inflightInstant = table.getMetaClient().createNewInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
-    HoodieCommitMetadata metadata = reconcileCommitMetadata(table, commitActionType, instantTime, originalMetadata);
+    HoodieCommitMetadata metadata = buildCommitMetadata(table, commitActionType, instantTime, originalMetadata);
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
@@ -270,7 +270,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return true;
   }
 
-  protected HoodieCommitMetadata reconcileCommitMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata originalMetadata) {
+  protected HoodieCommitMetadata buildCommitMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata originalMetadata) {
     return originalMetadata;
   }
 
@@ -278,7 +278,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                         List<HoodieWriteStat> stats) throws IOException {
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    HoodieCommitMetadata reconciledCommitMetadata = reconcileCommitMetadata(table, commitActionType, instantTime, metadata);
+    HoodieCommitMetadata reconciledCommitMetadata = buildCommitMetadata(table, commitActionType, instantTime, metadata);
     // Finalize write
     finalizeWrite(table, instantTime, stats);
     // do save internal schema to support Implicitly add columns in write process

@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -97,8 +98,9 @@ public class DirectWriteMarkers extends WriteMarkers {
 
   @Override
   public Set<String> createdAndMergedDataPaths(HoodieEngineContext context, int parallelism) throws IOException {
-    Set<String> dataFiles = new HashSet<>();
-    List<String> subDirectories = getSubDirectoriesByMarkerCondition(storage.listDirectEntries(markerDirPath), dataFiles, NOT_APPEND_MARKER_PREDICATE);
+    Pair<List<String>, Set<String>> subDirectoriesAndDataFiles = getSubDirectoriesByMarkerCondition(storage.listDirectEntries(markerDirPath), NOT_APPEND_MARKER_PREDICATE);
+    List<String> subDirectories = subDirectoriesAndDataFiles.getLeft();
+    Set<String> dataFiles = subDirectoriesAndDataFiles.getRight();
     if (subDirectories.size() > 0) {
       parallelism = Math.min(subDirectories.size(), parallelism);
       StorageConfiguration<?> storageConf = storage.getConf();
@@ -117,9 +119,9 @@ public class DirectWriteMarkers extends WriteMarkers {
   }
 
   public Set<String> getAppendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException {
-    Set<String> logFiles = new HashSet<>();
-    List<String> subDirectories = getSubDirectoriesByMarkerCondition(storage.listDirectEntries(markerDirPath), logFiles, APPEND_MARKER_PREDICATE);
-
+    Pair<List<String>, Set<String>> subDirectoriesAndDataFiles = getSubDirectoriesByMarkerCondition(storage.listDirectEntries(markerDirPath), APPEND_MARKER_PREDICATE);
+    List<String> subDirectories = subDirectoriesAndDataFiles.getLeft();
+    Set<String> logFiles = subDirectoriesAndDataFiles.getRight();
     if (subDirectories.size() > 0) {
       parallelism = Math.min(subDirectories.size(), parallelism);
       StorageConfiguration<?> storageConf = storage.getConf();
@@ -150,7 +152,8 @@ public class DirectWriteMarkers extends WriteMarkers {
     return logFiles;
   }
 
-  private List<String> getSubDirectoriesByMarkerCondition(List<StoragePathInfo> topLevelInfoList, Set<String> dataFiles, Predicate<String> pathCondition) {
+  private Pair<List<String>, Set<String>> getSubDirectoriesByMarkerCondition(List<StoragePathInfo> topLevelInfoList, Predicate<String> pathCondition) {
+    Set<String> dataFiles = new HashSet<>();
     List<String> subDirectories = new ArrayList<>();
     for (StoragePathInfo topLevelInfo: topLevelInfoList) {
       if (topLevelInfo.isFile()) {
@@ -163,7 +166,7 @@ public class DirectWriteMarkers extends WriteMarkers {
       }
     }
 
-    return subDirectories;
+    return Pair.of(subDirectories, dataFiles);
   }
 
   private String translateMarkerToDataPath(String markerPath) {

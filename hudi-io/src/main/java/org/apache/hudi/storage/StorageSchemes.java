@@ -20,87 +20,89 @@
 package org.apache.hudi.storage;
 
 import java.util.Arrays;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * All the supported storage schemes in Hoodie.
  */
 public enum StorageSchemes {
   // Local filesystem
-  FILE("file", false, true, true),
+  FILE("file", false, true),
   // Hadoop File System
-  HDFS("hdfs", false, true, false),
+  HDFS("hdfs", false, true),
   // Baidu Advanced File System
-  AFS("afs", null, null, null),
+  AFS("afs", null, null),
   // Mapr File System
-  MAPRFS("maprfs", null, null, null),
+  MAPRFS("maprfs", null, null),
   // Apache Ignite FS
-  IGNITE("igfs", null, null, null),
+  IGNITE("igfs", null, null),
   // AWS S3
-  S3A("s3a", true, null, true),
-  S3("s3", true, null, true),
+  S3A("s3a", true, null),
+  S3("s3", true, null),
   // Google Cloud Storage
-  GCS("gs", true, null, true),
+  GCS("gs", true, null),
   // Azure WASB
-  WASB("wasb", null, null, null),
-  WASBS("wasbs", null, null, null),
+  WASB("wasb", null, null),
+  WASBS("wasbs", null, null),
   // Azure ADLS
-  ADL("adl", null, null, null),
+  ADL("adl", null, null),
   // Azure ADLS Gen2
-  ABFS("abfs", null, null, null),
-  ABFSS("abfss", null, null, null),
+  ABFS("abfs", null, null),
+  ABFSS("abfss", null, null),
   // Aliyun OSS
-  OSS("oss", null, null, null),
+  OSS("oss", null, null),
   // View FS for federated setups. If federating across cloud stores, then append support is false
   // View FS support atomic creation
-  VIEWFS("viewfs", null, true, null),
+  VIEWFS("viewfs", null, true),
   //ALLUXIO
-  ALLUXIO("alluxio", null, null, null),
+  ALLUXIO("alluxio", null, null),
   // Tencent Cloud Object Storage
-  COSN("cosn", null, null, null),
+  COSN("cosn", null, null),
   // Tencent Cloud HDFS
-  CHDFS("ofs", null, null, null),
+  CHDFS("ofs", null, null),
   // Tencent Cloud CacheFileSystem
-  GOOSEFS("gfs", null, null, null),
+  GOOSEFS("gfs", null, null),
   // Databricks file system
-  DBFS("dbfs", null, null, null),
+  DBFS("dbfs", null, null),
   // IBM Cloud Object Storage
-  COS("cos", null, null, null),
+  COS("cos", null, null),
   // Huawei Cloud Object Storage
-  OBS("obs", null, null, null),
+  OBS("obs", null, null),
   // Kingsoft Standard Storage ks3
-  KS3("ks3", null, null, null),
+  KS3("ks3", null, null),
   // Netease Object Storage nos
-  NOS("nos", null, null, null),
+  NOS("nos", null, null),
   // JuiceFileSystem
-  JFS("jfs", null, null, null),
+  JFS("jfs", null, null),
   // Baidu Object Storage
-  BOS("bos", null, null, null),
+  BOS("bos", null, null),
   // Oracle Cloud Infrastructure Object Storage
-  OCI("oci", null, null, null),
+  OCI("oci", null, null),
   // Volcengine Object Storage
-  TOS("tos", null, null, null),
+  TOS("tos", null, null),
   // Volcengine Cloud HDFS
-  CFS("cfs", null, null, null),
+  CFS("cfs", null, null),
   // Aliyun Apsara File Storage for HDFS
-  DFS("dfs", false, true, null),
+  DFS("dfs", false, true),
   // Hopsworks File System
-  HOPSFS("hopsfs", false, true, null);
+  HOPSFS("hopsfs", false, true);
+
+  // list files may bring pressure to storage with centralized meta service like HDFS.
+  // when we want to get only part of files under a directory rather than all files, use getStatus may be more friendly than listStatus.
+  // here is a trade-off between rpc times and throughput of storage meta service
+  private static final Set<String> LIST_STATUS_FRIENDLY_SCHEMES = new HashSet<>(Arrays.asList(FILE.scheme, S3.scheme, S3A.scheme, GCS.scheme));
 
   private final String scheme;
   // null for uncertain if write is transactional, please update this for each FS
   private final Boolean isWriteTransactional;
   // null for uncertain if dfs support atomic create&delete, please update this for each FS
   private final Boolean supportAtomicCreation;
-  // list files may bring pressure to storage with centralized meta service like HDFS.
-  // when we want to get only part of files under a directory rather than all files, use getStatus may be more friendly than listStatus.
-  // here is a trade-off between rpc times and throughput of storage meta service
-  private Boolean listStatusFriendly;
 
-  StorageSchemes(String scheme, Boolean isWriteTransactional, Boolean supportAtomicCreation, Boolean listStatusFriendly) {
+  StorageSchemes(String scheme, Boolean isWriteTransactional, Boolean supportAtomicCreation) {
     this.scheme = scheme;
     this.isWriteTransactional = isWriteTransactional;
     this.supportAtomicCreation = supportAtomicCreation;
-    this.listStatusFriendly = listStatusFriendly;
   }
 
   public String getScheme() {
@@ -113,10 +115,6 @@ public enum StorageSchemes {
 
   public boolean isAtomicCreationSupported() {
     return supportAtomicCreation != null && supportAtomicCreation;
-  }
-
-  public boolean getListStatusFriendly() {
-    return listStatusFriendly != null && listStatusFriendly;
   }
 
   public static boolean isSchemeSupported(String scheme) {
@@ -142,6 +140,7 @@ public enum StorageSchemes {
     if (!isSchemeSupported(scheme)) {
       throw new IllegalArgumentException("Unsupported scheme :" + scheme);
     }
-    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.getListStatusFriendly() && s.scheme.equals(scheme));
+
+    return LIST_STATUS_FRIENDLY_SCHEMES.contains(scheme);
   }
 }

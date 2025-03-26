@@ -136,7 +136,7 @@ public class TestCommitMetadataUtils extends HoodieCommonTestHarness {
     when(fs.exists(any())).thenReturn(true);
 
     // Call the method under test
-    HoodieCommitMetadata reconciledMetadata = CommitMetadataUtils.reconcileMetadataForMissingFiles(
+    HoodieCommitMetadata reconciledMetadata = CommitMetadataUtils.buildMetadata(
         table, commitActionType, instantTime, commitMetadataWithLogFiles.getLeft(), writeConfig, context, storageConf, this.getClass().getSimpleName());
 
     // Assertions to verify if the missing files are added

@@ -98,9 +98,9 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
-  protected HoodieCommitMetadata reconcileCommitMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata originalMetadata) {
+  protected HoodieCommitMetadata buildCommitMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata originalMetadata) {
     try {
-      return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, commitActionType,
+      return CommitMetadataUtils.buildMetadata(table, commitActionType,
           instantTime, originalMetadata, config, context, storageConf, this.getClass().getSimpleName());
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to fix commit metadata for spurious log files "

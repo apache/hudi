@@ -25,14 +25,14 @@ import org.junit.jupiter.api.Test;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 
 @Tag("functional")
-public class TestHoodieSparkCopyOnWriteTableRollback extends TestHoodieSparkRollback {
+public class TestHoodieSparkCopyOnWriteTableRollbackTableVersionSix extends TestHoodieSparkRollback {
 
   /**
    * Scenario: data table is updated, no changes to MDT
    */
   @Test
   public void testRollbackWithFailurePreMDT() throws Exception {
-    testRollbackWithFailurePreMDT(COPY_ON_WRITE);
+    testRollbackWithFailurePreMDTTableVersionSix(COPY_ON_WRITE);
   }
 
   /**
@@ -40,7 +40,7 @@ public class TestHoodieSparkCopyOnWriteTableRollback extends TestHoodieSparkRoll
    */
   @Test
   public void testRollbackWithFailurePostMDT() throws Exception {
-    testRollbackWithFailurePostMDT(COPY_ON_WRITE);
+    testRollbackWithFailurePostMDTTableVersionSix(COPY_ON_WRITE);
   }
 
   /**
@@ -49,7 +49,7 @@ public class TestHoodieSparkCopyOnWriteTableRollback extends TestHoodieSparkRoll
    */
   @Test
   public void testRollbackWithFailurePostMDTRollbackFailsPreMDT() throws Exception {
-    testRollbackWithFailurePostMDT(COPY_ON_WRITE, true);
+    testRollbackWithFailurePostMDTTableVersionSix(COPY_ON_WRITE, true);
   }
 
   /**
@@ -57,7 +57,7 @@ public class TestHoodieSparkCopyOnWriteTableRollback extends TestHoodieSparkRoll
    */
   @Test
   public void testRollbackWithFailureInMDT() throws Exception {
-    testRollbackWithFailureinMDT(COPY_ON_WRITE);
+    testRollbackWithFailureinMDTTableVersionSix(COPY_ON_WRITE);
   }
 
 }
