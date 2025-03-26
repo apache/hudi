@@ -173,7 +173,10 @@ public enum MetadataPartitionType {
     @Override
     public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
       GenericRecord recordIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_RECORD_INDEX);
-      Object recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_FIELD_POSITION);
+      Object recordIndexPosition = null;
+      if (recordIndexRecord.hasField(RECORD_INDEX_FIELD_POSITION)) {
+        recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_FIELD_POSITION);
+      }
       payload.recordIndexMetadata = new HoodieRecordIndexInfo(recordIndexRecord.get(RECORD_INDEX_FIELD_PARTITION).toString(),
           Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS).toString()),
           Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS).toString()),
