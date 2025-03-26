@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-@Tag("functional-b")
+@Tag("functional")
 class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
   var instantTime: AtomicInteger = _
