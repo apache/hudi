@@ -209,7 +209,7 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
-        displayName: UT Hudi SQL features & spark-datasource Java Test 1
+        displayName: UT spark-datasource Java Test 1
         timeoutInMinutes: '75'
         steps:
           - task: Maven@4
