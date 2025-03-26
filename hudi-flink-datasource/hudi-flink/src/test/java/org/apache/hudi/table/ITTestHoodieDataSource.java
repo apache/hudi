@@ -2238,7 +2238,7 @@ public class ITTestHoodieDataSource {
 
     // write the first commit
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    System.out.println(">>> write1, cost: " + (System.currentTimeMillis() - start));
+    System.out.println(">>> write1 cost: " + (System.currentTimeMillis() - start));
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
