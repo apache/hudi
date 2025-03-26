@@ -22,13 +22,22 @@ package org.apache.hudi.io.hfile;
 import java.io.Closeable;
 import java.io.IOException;
 
+/**
+ * The interface for HFile writer to implement.
+ */
 public interface HFileWriter extends Closeable {
-  // Append a key-value pair into a data block.
+  /**
+   * Append a key-value pair into a data block.
+    */
   void append(String key, byte[] value) throws IOException;
 
-  // Append a piece of file info.
+  /**
+   * Append a piece of file info.
+   */
   void appendFileInfo(String name, byte[] value);
 
-  // Append a piece of meta info.
+  /**
+   * Append a piece of meta info.
+   */
   void appendMetaInfo(String name, byte[] value);
 }

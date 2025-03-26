@@ -144,7 +144,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
   @Override
   public BootstrapIndex.IndexWriter createWriter(String bootstrapBasePath) {
-    return (IndexWriter) ReflectionUtils.loadClass("org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndexWriter",
+    return (IndexWriter) ReflectionUtils.loadClass(HFileBootstrapIndexWriter.class.getName(),
         new Class<?>[] {String.class, HoodieTableMetaClient.class},
         bootstrapBasePath, metaClient);
   }
@@ -155,7 +155,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       StoragePath[] indexPaths = new StoragePath[] {partitionIndexPath(metaClient), fileIdIndexPath(metaClient)};
       for (StoragePath indexPath : indexPaths) {
         if (metaClient.getStorage().exists(indexPath)) {
-          LOG.info("Dropping bootstrap index. Deleting file : " + indexPath);
+          LOG.info("Dropping bootstrap index. Deleting file: {}", indexPath);
           metaClient.getStorage().deleteDirectory(indexPath);
         }
       }
