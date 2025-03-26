@@ -21,6 +21,10 @@ package org.apache.hudi.io.hfile;
 
 import java.nio.ByteBuffer;
 
+/**
+ * This is data structure used to store the data before written
+ * into the file. By comparison, {@link KeyValue} is used for read.
+ */
 public class KeyValueEntry implements Comparable<KeyValueEntry> {
   public final byte[] key;
   public final byte[] value;
