@@ -28,20 +28,16 @@ import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogF
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.config.HoodieCompactionConfig
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
+import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.testutils.LogFileColStatsTestUtil
+import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
 
 import org.apache.avro.Schema
-import org.apache.spark.sql._
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.functions.lit
-import org.apache.spark.sql.functions.typedLit
+import org.apache.spark.sql.{DataFrame, _}
+import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -58,7 +54,7 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.util.Random
 
-@Tag("functional")
+@Tag("functional-b")
 class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
   var dfList: Seq[DataFrame] = Seq()

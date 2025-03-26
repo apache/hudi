@@ -25,6 +25,5 @@ import org.junit.runner.RunWith;
 @RunWith(JUnitPlatform.class)
 @SelectPackages("org.apache.hudi.functional")
 @IncludeTags("functional")
-public class HoodieSparkFunctionalTestSuite {
-
+public class HoodieSparkFunctionalTestSuiteA {
 }
