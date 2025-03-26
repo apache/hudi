@@ -1990,6 +1990,7 @@
               <skip>${skipUTs}</skip>
               <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
               <excludedGroups>functional</excludedGroups>
+              <excludedGroups>functional-b</excludedGroups>
               <excludes>
                 <exclude>**/*FunctionalTestSuite.java</exclude>
                 <exclude>**/*FunctionalTestSuiteA.java</exclude>
