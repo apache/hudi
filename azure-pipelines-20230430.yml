@@ -350,7 +350,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_7
         displayName: UT Hudi Streamer & FT utilities
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '75'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
@@ -399,7 +399,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_8
         displayName: UT hudi-hadoop-common & Hudi Utilities others
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '75'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
