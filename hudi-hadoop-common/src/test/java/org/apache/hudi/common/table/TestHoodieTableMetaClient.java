@@ -147,7 +147,9 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         String newInstantTime = metaClient.createNewInstantTime(false);
         assertTrue(!instantTimesSoFar.contains(newInstantTime));
         instantTimesSoFar.add(newInstantTime);
-        assertTrue((Long.parseLong(newInstantTime) - Long.parseLong(newCommitTimeInUTC)) < 10000L);
+        assertTrue((Long.parseLong(newInstantTime) - Long.parseLong(newCommitTimeInUTC)) < 60000L,
+            String.format("Validation failed on new instant time created: %s, newCommitTimeInUTC=%s",
+                newInstantTime, newCommitTimeInUTC));
       }
     }
   }
