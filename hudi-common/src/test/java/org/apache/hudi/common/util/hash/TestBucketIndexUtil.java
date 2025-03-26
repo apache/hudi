@@ -137,15 +137,15 @@ public class TestBucketIndexUtil {
   }
 
   private void checkResult(Map<Integer, Integer> parallelism2TaskCount, int parallelism, int bucketNumber, boolean partitioned, boolean needExpand) {
-    int sum = 0; // 一共有多少个Task
+    int sum = 0;
     for (int v : parallelism2TaskCount.values()) {
       sum = sum + v;
     }
-    int avg = sum / parallelism; // 平均一个并行度需要处理avg个task
-    double minToleranceValue = avg * 0.8; // 最小阈值
-    double maxToleranceValue = avg * 1.2; // 最大阈值
-    final ArrayList<Integer> outOfLimit = new ArrayList<>(); // 阈值之外
-    final ArrayList<Integer> inLimit = new ArrayList<>(); // 阈值之内
+    int avg = sum / parallelism;
+    double minToleranceValue = avg * 0.8;
+    double maxToleranceValue = avg * 1.2;
+    final ArrayList<Integer> outOfLimit = new ArrayList<>();
+    final ArrayList<Integer> inLimit = new ArrayList<>();
     for (int v : parallelism2TaskCount.values()) {
       // if parallelism is too bigger, first condition will false although the diff is 1
       // for example, avg is 4, v is 5 or 3 all will out of limit, so add second condition
