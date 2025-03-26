@@ -28,7 +28,7 @@ pool:
   vmImage: 'ubuntu-22.04'
 
 parameters:
-  - name: job3456UTModules
+  - name: job13456UTModules
     type: object
     default:
       - 'hudi-spark-datasource'
@@ -54,7 +54,6 @@ parameters:
       - '!hudi-spark-datasource/hudi-spark3.5.x'
       - '!hudi-spark-datasource/hudi-spark3-common'
       - '!hudi-spark-datasource/hudi-spark-common'
-      - '!hudi-sync/hudi-hive-sync'
       - '!hudi-utilities'
   - name: job10FTModules
     type: object
@@ -112,7 +111,7 @@ variables:
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   JAVA_MVN_TEST_FILTER: '-DwildcardSuites=skipScalaTests -DfailIfNoTests=false'
   SCALA_MVN_TEST_FILTER: '-Dtest=skipJavaTests -DfailIfNoTests=false'
-  JOB3456_MODULES: ${{ join(',',parameters.job3456UTModules) }}
+  JOB13456_MODULES: ${{ join(',',parameters.job13456UTModules) }}
   JAVA_FUNCTIONAL_PACKAGE_TEST_FILTER: '**/org/apache/hudi/functional/**/*'
   MVN_ARG_FUNCTIONAL_PACKAGE_TEST: "-Dtest=\"$(JAVA_FUNCTIONAL_PACKAGE_TEST_FILTER)\""
   MVN_ARG_NON_FUNCTIONAL_PACKAGE_TEST: "-Dtest=\"!$(JAVA_FUNCTIONAL_PACKAGE_TEST_FILTER)\""
@@ -131,7 +130,7 @@ stages:
         value: 1
     jobs:
       - job: UT_FT_1
-        displayName: UT client/spark-client
+        displayName: UT client/spark-client & Hudi SQL feature
         timeoutInMinutes: '75'
         steps:
           - task: Maven@4
@@ -139,16 +138,26 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL) -pl hudi-client/hudi-spark-client -am
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB13456_MODULES) -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: Scala UT spark-datasource Hudi SQL features
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.feature" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB13456_MODULES)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: UT client/spark-client
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -pl hudi-client/hudi-spark-client
-              publishJUnitResults: false
+              options: $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -pl hudi-client/hudi-spark-client
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -208,24 +217,15 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB13456_MODULES) -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
-          - task: Maven@4
-            displayName: Scala UT spark-datasource Hudi SQL features
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.feature" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
-              publishJUnitResults: false
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
           - task: Maven@4
             displayName: Java UT spark-datasource functional package
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE2_ARG) -pl $(JOB3456_MODULES)
+              options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE2_ARG) -pl $(JOB13456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
@@ -252,7 +252,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB13456_MODULES) -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
@@ -260,7 +260,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_NON_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
+              options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_NON_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB13456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
@@ -287,7 +287,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB13456_MODULES) -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
@@ -295,7 +295,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.dml" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
+              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.dml" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB13456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
@@ -322,7 +322,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB13456_MODULES) -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
@@ -330,7 +330,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="$(JOB6_SPARK_DDL_OTHERS_WILDCARD_SUITES)" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
+              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="$(JOB6_SPARK_DDL_OTHERS_WILDCARD_SUITES)" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB13456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
@@ -447,7 +447,7 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_9
-        displayName: FT spark 2 & UT hive-sync
+        displayName: FT spark 2
         timeoutInMinutes: '75'
         steps:
           - task: Maven@4
@@ -455,7 +455,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL) -pl hudi-sync/hudi-hive-sync,hudi-client/hudi-spark-client,hudi-spark-datasource/hudi-spark -am
+              options: $(MVN_OPTS_INSTALL) -pl hudi-client/hudi-spark-client,hudi-spark-datasource/hudi-spark -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
@@ -474,15 +474,6 @@ stages:
               goals: 'test'
               # TODO(HUDI-9143): Investigate why Jacoco execution data file is corrupt
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -Djacoco.agent.dest.filename=jacoco2.corrupt -pl hudi-client/hudi-spark-client
-              publishJUnitResults: false
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - task: Maven@4
-            displayName: UT hudi-hive-sync
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -pl hudi-sync/hudi-hive-sync
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
