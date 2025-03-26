@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonCo
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig.{RECORD_MERGE_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
@@ -160,7 +161,7 @@ object HoodieWriterUtils {
    * In nearly all cases we should make sure that the input config matches the table config
    * But there are a few times where it is allowed to be different
    */
-  private def shouldIgnoreConfig(key: String, value: String, params: Map[String, String]): Boolean = {
+  private def shouldIgnoreConfig(key: String, value: String, params: Map[String, String], tableConfig: HoodieConfig): Boolean = {
     var ignoreConfig = false
     // Base file format can change between writes, so ignore it.
     ignoreConfig = ignoreConfig || HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)
@@ -173,6 +174,8 @@ object HoodieWriterUtils {
 
     //don't validate the payload only in the case that insert into is using fallback to some legacy configs
     ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) && value.equals(VALIDATE_DUPLICATE_KEY_PAYLOAD_CLASS_NAME))
+    // If hoodie.database.name is empty, ignore validation.
+    ignoreConfig = ignoreConfig || (key.equals(HoodieTableConfig.DATABASE_NAME.key()) && isNullOrEmpty(getStringFromTableConfigWithAlternatives(tableConfig, key)))
 
     ignoreConfig
   }
@@ -192,7 +195,7 @@ object HoodieWriterUtils {
       val resolver = spark.sessionState.conf.resolver
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
-        if (!shouldIgnoreConfig(key, value, params)) {
+        if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
           val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
           if (null != existingValue && !resolver(existingValue, value)) {
             diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
