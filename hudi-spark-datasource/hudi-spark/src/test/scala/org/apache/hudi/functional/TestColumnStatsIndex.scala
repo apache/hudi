@@ -100,7 +100,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite))
+      saveMode = SaveMode.Append))
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",
