@@ -456,9 +456,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       assertTrue(matchingPath.isDefined)
       // Corrupt the data file
       val dataFile = new StoragePath(basePath, matchingPath.get)
-      val storage = metaClient.getStorage
-      storage.deleteFile(dataFile)
-      storage.createNewFile(dataFile)
+      HoodieSparkSqlTestBase.replaceWithEmptyFile(metaClient.getStorage, dataFile)
       // Time travel query should now throw an exception
       checkExceptionContain(() => spark.read.format("hudi")
         .options(readOpts)
