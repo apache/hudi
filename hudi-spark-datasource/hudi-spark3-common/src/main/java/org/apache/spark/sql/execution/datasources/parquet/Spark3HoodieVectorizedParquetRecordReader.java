@@ -56,6 +56,8 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
   // The memory mode of the columnarBatch.
   private final MemoryMode memoryMode;
 
+  private Field batchIdxField;
+
   public Spark3HoodieVectorizedParquetRecordReader(
       ZoneId convertTz,
       String datetimeRebaseMode,
@@ -161,8 +163,10 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
 
   private int batchIdxFromSuper() {
     try {
-      Field batchIdxField = VectorizedParquetRecordReader.class.getDeclaredField("batchIdx");
-      batchIdxField.setAccessible(true);
+      if (batchIdxField == null) {
+        batchIdxField = VectorizedParquetRecordReader.class.getDeclaredField("batchIdx");
+        batchIdxField.setAccessible(true);
+      }
       return (Integer) batchIdxField.get(this);
     } catch (NoSuchFieldException | IllegalAccessException e) {
       throw new RuntimeException(e);
