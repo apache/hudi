@@ -128,7 +128,7 @@ test_utilities_bundle () {
     EXTRA_JARS="${EXTRA_JARS%,}"
     OPT_JARS=""
     if [[ -n $EXTRA_JARS ]]; then
-        OPT_JARS="--jars $EXTRA_JARS"
+        OPT_JARS="--jars $EXTRA_JARS,$MAIN_JAR"
     fi
     OUTPUT_DIR=/tmp/hudi-utilities-test/
     rm -r $OUTPUT_DIR
