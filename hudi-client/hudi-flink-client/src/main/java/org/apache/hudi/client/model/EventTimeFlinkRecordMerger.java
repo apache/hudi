@@ -45,6 +45,7 @@ public class EventTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
       HoodieRecord newer,
       Schema newSchema,
       TypedProperties props) throws IOException {
+    // Note: can be removed if we can ensure the type from invoker.
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
 
