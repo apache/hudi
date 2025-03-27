@@ -32,6 +32,7 @@ import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, Cust
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.{DataSourceWriteOptions, HoodieFileIndex}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
@@ -48,6 +49,7 @@ import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.slf4j.LoggerFactory
 
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
