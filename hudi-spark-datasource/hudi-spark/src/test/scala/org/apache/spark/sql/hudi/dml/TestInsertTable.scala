@@ -23,7 +23,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.{Option => HOption}
@@ -1316,8 +1315,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           val metaClient = createMetaClient(spark, tableLocation)
           val instant = metaClient.createNewInstantTime()
           val timeline = HoodieTestUtils.TIMELINE_FACTORY.createActiveTimeline(metaClient)
-          timeline.createNewInstant(metaClient.createNewInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instant))
-          timeline.createNewInstant(metaClient.createNewInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, instant))
+          timeline.createNewInstant(metaClient.createNewInstant(
+            HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instant))
+          timeline.createNewInstant(metaClient.createNewInstant(
+            HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, instant))
 
           spark.sql(s"insert overwrite table $tableName partition (dt) values(1, 'a1', 10)")
           checkAnswer(s"select id, name, dt from $tableName order by id")(
