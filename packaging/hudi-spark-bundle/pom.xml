@@ -99,8 +99,6 @@
                   <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>org.apache.parquet:parquet-avro</include>
-                  <include>com.twitter:bijection-avro_${scala.binary.version}</include>
-                  <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>com.twitter:chill-protobuf</include>
 
                   <include>io.dropwizard.metrics:metrics-core</include>
