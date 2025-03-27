@@ -396,8 +396,8 @@ public class TestHoodieParquetInputFormat {
 
     metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
         baseFileFormat, "");
-    assertEquals("", metaClient.getTableConfig().getDatabaseName(),
-        "The hoodie.database.name should be empty");
+    assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
+        "The hoodie.database.name will be null if set to empty");
 
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length,
