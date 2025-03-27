@@ -149,7 +149,7 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   }
 
   public Map<String, List<HoodieRecord>> getDataBuffer() {
-    if (OptionsResolver.supportRowDataAppend(conf, rowType)) {
+    if (OptionsResolver.supportRowDataAppend(conf)) {
       return ((RowDataStreamWriteFunction) writeFunction).getDataBuffer();
     } else {
       return ((StreamWriteFunction) writeFunction).getDataBuffer();
@@ -232,7 +232,7 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   }
 
   protected AbstractStreamWriteFunction createWriteFunction() {
-    if (OptionsResolver.supportRowDataAppend(conf, rowType)) {
+    if (OptionsResolver.supportRowDataAppend(conf)) {
       return new RowDataBucketStreamWriteFunction(conf, rowType);
     } else {
       return new BucketStreamWriteFunction(conf, rowType);

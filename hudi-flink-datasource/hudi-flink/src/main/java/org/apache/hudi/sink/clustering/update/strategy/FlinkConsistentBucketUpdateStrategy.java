@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
@@ -142,7 +143,17 @@ public class FlinkConsistentBucketUpdateStrategy<T extends HoodieRecordPayload> 
    */
   private void patchFileIdToRecords(List<HoodieRecord> records, String fileId) {
     HoodieRecord first = records.get(0);
-    HoodieRecord record = new HoodieAvroRecord<>(first.getKey(), (HoodieRecordPayload) first.getData(), first.getOperation());
+    HoodieRecord record;
+    switch (first.getRecordType()) {
+      case AVRO:
+        record = new HoodieAvroRecord<>(first.getKey(), (HoodieRecordPayload) first.getData(), first.getOperation());
+        break;
+      case FLINK:
+        record = first.newInstance();
+        break;
+      default:
+        throw new HoodieException("Unexpected record type: " + first.getRecordType());
+    }
     HoodieRecordLocation newLoc = new HoodieRecordLocation("U", fileId);
     record.setCurrentLocation(newLoc);
     records.set(0, record);

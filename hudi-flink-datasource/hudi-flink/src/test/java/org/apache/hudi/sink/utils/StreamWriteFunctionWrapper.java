@@ -191,7 +191,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public Map<String, List<HoodieRecord>> getDataBuffer() {
-    if (OptionsResolver.supportRowDataAppend(conf, rowType)) {
+    if (OptionsResolver.supportRowDataAppend(conf)) {
       return ((RowDataStreamWriteFunction) writeFunction).getDataBuffer();
     } else {
       return ((StreamWriteFunction) writeFunction).getDataBuffer();
@@ -307,7 +307,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   // -------------------------------------------------------------------------
 
   private void setupWriteFunction() throws Exception {
-    if (OptionsResolver.supportRowDataAppend(conf, rowType)) {
+    if (OptionsResolver.supportRowDataAppend(conf)) {
       this.writeFunction = new RowDataStreamWriteFunction(conf, rowType);
     } else {
       this.writeFunction = new StreamWriteFunction(conf, rowType);

@@ -57,7 +57,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecord<RowData> newInstance() {
-    return new HoodieFlinkRecord(this.data);
+    return new HoodieFlinkRecord(key, operation, orderingValue, data);
   }
 
   @Override
