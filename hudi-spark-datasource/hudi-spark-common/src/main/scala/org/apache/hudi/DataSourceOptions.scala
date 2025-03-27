@@ -29,10 +29,10 @@ import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
+import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.keygen.KeyGenUtils.inferKeyGeneratorType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGeneratorClassNameFromType, inferKeyGeneratorTypeFromWriteConfig}
-import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction
 
@@ -668,7 +668,7 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("Controls whether spark sql prepped update, delete, and merge are enabled.")
+    .withDocumentation("Controls whether spark sql prepped update and delete are enabled.")
 
   val OVERWRITE_MODE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.overwrite.mode")
