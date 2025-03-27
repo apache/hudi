@@ -20,7 +20,10 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
+
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.{DoubleType, IntegerType, StringType, StructField}
+import org.junit.jupiter.api.Assertions.assertTrue
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
@@ -28,6 +31,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     Seq(true, false).foreach { sparkSqlOptimizedWrites =>
       withRecordType()(withTempDir { tmp =>
         spark.sql("set hoodie.payload.combined.schema.validate = false")
+        // Column stats and partition stats need to be disabled to validate
+        // that there is no full target table scan during MERGE INTO
+        spark.sql("set hoodie.metadata.index.column.stats.enable = false")
+        spark.sql("set hoodie.metadata.index.partition.stats.enable = false")
         val tableName = generateTableName
         // Create table
         spark.sql(
@@ -38,6 +45,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  price double,
              |  ts long
              |) using hudi
+             | partitioned by (partition)
              | location '${tmp.getCanonicalPath}'
              | tblproperties (
              |  primaryKey ='id',
@@ -45,76 +53,108 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | )
        """.stripMargin)
 
-        // test with optimized sql merge enabled / disabled.
-        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
-
-        // First merge with a extra input field 'flag' (insert a new record)
-        spark.sql(
-          s"""
-             | merge into $tableName
-             | using (
-             |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '1' as flag
-             | ) s0
-             | on s0.id = $tableName.id
-             | when matched and flag = '1' then update set
-             | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
-             | when not matched and flag = '1' then insert *
+          // test with optimized sql merge enabled / disabled.
+          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+          val structFields = List(
+            StructField("id", IntegerType, nullable = true),
+            StructField("name", StringType, nullable = true),
+            StructField("price", DoubleType, nullable = true),
+            StructField("ts", IntegerType, nullable = true),
+            StructField("partition", StringType, nullable = true))
+          // First merge with a extra input field 'flag' (insert a new record)
+          spark.sql(
+            s"""
+               | merge into $tableName
+               | using (
+               |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, 'p1' as partition, '1' as flag
+               |  union
+               |  select 2 as id, 'a2' as name, 20 as price, 1000 as ts, 'p2' as partition, '1' as flag
+               |  union
+               |  select 3 as id, 'a3' as name, 30 as price, 1000 as ts, 'p3' as partition, '1' as flag
+               | ) s0
+               | on s0.id = $tableName.id
+               | when matched and flag = '1' then update set
+               | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
+               | when not matched and flag = '1' then insert *
        """.stripMargin)
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 10.0, 1000)
-        )
+          validateTableSchema(tableName, structFields)
+          checkAnswer(s"select id, name, price, ts, partition from $tableName")(
+            Seq(1, "a1", 10.0, 1000, "p1"),
+            Seq(2, "a2", 20.0, 1000, "p2"),
+            Seq(3, "a3", 30.0, 1000, "p3")
+          )
 
-        // Second merge (update the record)
-        spark.sql(
-          s"""
-             | merge into $tableName
-             | using (
-             |  select 1 as id, 'a1' as name, 10 as price, 1001 as ts
-             | ) s0
-             | on s0.id = $tableName.id
-             | when matched then update set
-             | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
-             | when not matched then insert *
-       """.stripMargin)
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 20.0, 1001)
-        )
+          // Second merge (update the record) with different field names in the source
+          spark.sql(
+            s"""
+               | merge into $tableName
+               | using (
+               |  select 1 as _id, 'a1' as name, 10 as _price, 1001 as _ts, 'p1' as partition
+               | ) s0
+               | on s0._id = $tableName.id
+               | when matched then update set
+               | id = s0._id, name = s0.name, price = s0._price + $tableName.price, ts = s0._ts
+               | """.stripMargin)
+          validateTableSchema(tableName, structFields)
+          checkAnswer(s"select id, name, price, ts, partition from $tableName")(
+            Seq(1, "a1", 20.0, 1001, "p1"),
+            Seq(2, "a2", 20.0, 1000, "p2"),
+            Seq(3, "a3", 30.0, 1000, "p3")
+          )
 
-        // the third time merge (update & insert the record)
-        spark.sql(
-          s"""
-             | merge into $tableName
-             | using (
-             |  select * from (
-             |  select 1 as id, 'a1' as name, 10 as price, 1002 as ts
-             |  union all
-             |  select 2 as id, 'a2' as name, 12 as price, 1001 as ts
-             |  )
-             | ) s0
-             | on s0.id = $tableName.id
-             | when matched then update set
-             | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
-             | when not matched and s0.id % 2 = 0 then insert *
+          // the third time merge (update & insert the record)
+          spark.sql(
+            s"""
+               | merge into $tableName
+               | using (
+               |  select * from (
+               |  select 1 as id, 'a1' as name, 10 as price, 1002 as ts, 'p1' as partition
+               |  union all
+               |  select 4 as id, 'a4' as name, 40 as price, 1001 as ts, 'p4' as partition
+               |  )
+               | ) s0
+               | on s0.id = $tableName.id
+               | when matched then update set
+               | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
+               | when not matched and s0.id % 2 = 0 then insert *
        """.stripMargin)
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 30.0, 1002),
-          Seq(2, "a2", 12.0, 1001)
-        )
+          validateTableSchema(tableName, structFields)
+          checkAnswer(s"select id, name, price, ts, partition from $tableName")(
+            Seq(1, "a1", 30.0, 1002, "p1"),
+            Seq(2, "a2", 20.0, 1000, "p2"),
+            Seq(3, "a3", 30.0, 1000, "p3"),
+            Seq(4, "a4", 40.0, 1001, "p4")
+          )
 
-        // the fourth merge (delete the record)
-        spark.sql(
-          s"""
-             | merge into $tableName
-             | using (
-             |  select 1 as id, 'a1' as name, 12 as price, 1003 as ts
-             | ) s0
-             | on s0.id = $tableName.id
-             | when matched and s0.id != 1 then update set
-             |    id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
-             | when matched and s0.id = 1 then delete
-             | when not matched then insert *
+          // Validate that MERGE INTO only scan affected partitions in the target table
+          // Corrupt the files in other partitions not receiving updates
+          val (metaClient, fsv) = HoodieSparkSqlTestBase.getMetaClientAndFileSystemView(tmp.getCanonicalPath)
+          Seq("p2", "p3", "p4").map(e => "partition=" + e).foreach(partition => {
+            assertTrue(fsv.getLatestFileSlices(partition).count() > 0)
+            fsv.getLatestFileSlices(partition).forEach(fileSlice => {
+              if (fileSlice.getBaseFile.isPresent) {
+                HoodieSparkSqlTestBase.replaceWithEmptyFile(
+                  fileSlice.getBaseFile.get().getHadoopPath)
+              }
+              fileSlice.getLogFiles.forEach(logFile =>
+                HoodieSparkSqlTestBase.replaceWithEmptyFile(logFile.getPath)
+              )
+            })
+          })
+          // the fourth merge (delete the record)
+          spark.sql(
+            s"""
+               | merge into $tableName
+               | using (
+               |  select 1 as id, 'a1' as name, 12 as price, 1003 as ts, 'p1' as partition
+               | ) s0
+               | on s0.id = $tableName.id
+               | when matched and s0.id != 1 then update set
+               |    id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
+               | when matched and s0.id = 1 then delete
+               | when not matched then insert *
        """.stripMargin)
-        val cnt = spark.sql(s"select * from $tableName where id = 1").count()
+        val cnt = spark.sql(s"select * from $tableName where partition = 'p1'").count()
         assertResult(0)(cnt)
       })
     }
