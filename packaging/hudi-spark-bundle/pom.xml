@@ -90,7 +90,6 @@
                   <include>org.eclipse.jetty.websocket:*</include>
                   <include>org.jetbrains.kotlin:*</include>
                   <include>org.rocksdb:rocksdbjni</include>
-                  <include>org.antlr:stringtemplate</include>
                   <!-- Bundle Jackson JSR310 library since it is not present in spark 2.x. For spark 3.x this will
                        bundle the same JSR310 version that is included in spark runtime -->
                   <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>

@@ -94,7 +94,6 @@
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
 
                   <include>org.antlr:stringtemplate</include>
-                  <include>com.yammer.metrics:metrics-core</include>
                   <!-- SPARK-43489 Spark 3.5+ has marked protobuf as provided -->
                   <include>com.google.protobuf:protobuf-java</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
@@ -108,7 +107,6 @@
                   <include>io.confluent:kafka-schema-registry-client</include>
                   <include>io.confluent:kafka-protobuf-serializer</include>
                   <include>io.confluent:kafka-protobuf-provider</include>
-                  <include>io.dropwizard.metrics:metrics-core</include>
                   <include>org.apache.spark:spark-streaming-kafka-0-10_${scala.binary.version}</include>
                   <include>org.apache.spark:spark-token-provider-kafka-0-10_${scala.binary.version}</include>
                   <include>org.apache.kafka:kafka_${scala.binary.version}</include>
