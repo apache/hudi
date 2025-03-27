@@ -19,14 +19,12 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StringType, StructField}
 import org.junit.jupiter.api.Assertions.assertTrue
-
-import scala.collection.JavaConverters._
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
@@ -136,14 +134,14 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           val (metaClient, fsv) = HoodieSparkSqlTestBase.getMetaClientAndFileSystemView(tmp.getCanonicalPath)
           Seq("p2", "p3", "p4").map(e => "partition=" + e).foreach(partition => {
             assertTrue(fsv.getLatestFileSlices(partition).count() > 0)
-            fsv.getLatestFileSlices(partition).iterator().asScala.foreach(fileSlice => {
+            fsv.getLatestFileSlices(partition).forEach((fileSlice: FileSlice) => {
               if (fileSlice.getBaseFile.isPresent) {
                 HoodieSparkSqlTestBase.replaceWithEmptyFile(
                   metaClient.getStorage, fileSlice.getBaseFile.get.getStoragePath)
               }
-              fileSlice.getLogFiles.iterator().asScala.foreach(logFile => {
+              fileSlice.getLogFiles.forEach((logFile: HoodieLogFile) =>
                 HoodieSparkSqlTestBase.replaceWithEmptyFile(metaClient.getStorage, logFile.getPath)
-              })
+              )
             })
           })
           // the fourth merge (delete the record)

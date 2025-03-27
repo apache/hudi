@@ -20,10 +20,13 @@ package org.apache.spark.sql.hudi.common
 import org.apache.hudi.{HoodieSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
-import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.log.HoodieLogFileReader
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -34,7 +37,6 @@ import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
 import org.apache.hudi.util.JFunction
-
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
@@ -43,11 +45,13 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageConta
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 
 import java.io.File
-import java.util.TimeZone
+import java.util.{Collections, Optional, TimeZone}
+import java.util.stream.Collectors
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
@@ -320,6 +324,52 @@ object HoodieSparkSqlTestBase {
                            filePath: StoragePath): Unit = {
     storage.deleteFile(filePath)
     storage.createNewFile(filePath)
+  }
+
+  def validateDeleteLogBlockPrecombineNullOrZero(basePath: String): Unit = {
+    val (metaClient, fsView) = getMetaClientAndFileSystemView(basePath)
+    val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("").findFirst()
+    assertTrue(fileSlice.isPresent)
+    val logFilePathList: java.util.List[String] = if (fileSlice.isPresent) {
+      fileSlice.get().getLogFiles.map[String](JFunction.toJavaFunction[HoodieLogFile, String](
+        f => f.getPath.toString)).collect(Collectors.toList())
+    } else {
+      Collections.emptyList()
+    }
+    Collections.sort(logFilePathList)
+    var deleteLogBlockFound = false
+    val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    for (i <- 0 until logFilePathList.size()) {
+      val logReader = new HoodieLogFileReader(
+        metaClient.getStorage, new HoodieLogFile(logFilePathList.get(i)),
+        avroSchema, 1024 * 1024, false, false,
+        "id", null)
+      assertTrue(logReader.hasNext)
+      val logBlock = logReader.next()
+      if (logBlock.isInstanceOf[HoodieDeleteBlock]) {
+        val deleteLogBlock = logBlock.asInstanceOf[HoodieDeleteBlock]
+        assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue() == 0 || i.getOrderingValue() == null))
+        deleteLogBlockFound = true
+      }
+    }
+    assertTrue(deleteLogBlockFound)
+  }
+
+  def validateTableConfig(storage: HoodieStorage,
+                          basePath: String,
+                          expectedConfigs: Map[String, String],
+                          nonExistentConfigs: Seq[String]): Unit = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(storage.getConf().newInstance())
+      .setBasePath(basePath)
+      .build()
+    val tableConfig = metaClient.getTableConfig
+    expectedConfigs.foreach(e => {
+      assertEquals(e._2, tableConfig.getString(e._1),
+        s"Table config ${e._1} should be ${e._2} but is ${tableConfig.getString(e._1)}")
+    })
+    nonExistentConfigs.foreach(e => assertFalse(
+      tableConfig.contains(e), s"$e should not be present in the table config"))
   }
 
   private def checkMessageContains(e: Throwable, text: String): Boolean =
