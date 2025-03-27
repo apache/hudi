@@ -247,7 +247,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         assertLogFilesNumEqualsTo(config, i);
       }
       HoodieWriteMetadata result = compact(writeClient, String.format("10%s", i));
-      verifyCompaction(result);
+      verifyCompaction(result, 4000L);
 
       // Verify compaction.requested, compaction.completed metrics counts.
       assertEquals(1, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
@@ -282,7 +282,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         assertLogFilesNumEqualsTo(config, 1);
 
         HoodieWriteMetadata result = compact(writeClient, writeClient.createNewInstantTime());
-        verifyCompaction(result);
+        verifyCompaction(result, 100L);
 
         // Verify compaction.requested, compaction.completed metrics counts.
         assertEquals(i / 2 + 1, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
@@ -470,7 +470,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   /**
    * Verify that all partition paths are present in the HoodieWriteMetadata result.
    */
-  private void verifyCompaction(HoodieWriteMetadata compactionMetadata) {
+  private void verifyCompaction(HoodieWriteMetadata compactionMetadata, long expectedTotalLogRecords) {
     assertTrue(compactionMetadata.getWriteStats().isPresent());
     List<HoodieWriteStat> stats = (List<HoodieWriteStat>) compactionMetadata.getWriteStats().get();
     assertEquals(dataGen.getPartitionPaths().length, stats.size());
@@ -486,8 +486,9 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       assertTrue(runtimeStats.getTotalScanTime() > 0);
     });
 
-    long totalLogRecords =
+    // Verify the number of log records processed during the compaction.
+    long actualTotalLogRecords =
         stats.stream().mapToLong(HoodieWriteStat::getTotalLogRecords).sum();
-    assertEquals(4000L, totalLogRecords);
+    assertEquals(expectedTotalLogRecords, actualTotalLogRecords);
   }
 }
