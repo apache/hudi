@@ -773,6 +773,9 @@ public class HoodieTableMetadataUtil {
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
       deletedFiles.forEach(entry -> deleteFileList.add(Pair.of(partition, entry)));
     });
+    if (deleteFileList.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
 
     List<String> columnsToIndex = new ArrayList<>(getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig,
         Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)), false, recordTypeOpt).keySet());
