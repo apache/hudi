@@ -230,11 +230,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config);
-    HoodieCommitMetadata oriMetadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
-        extraMetadata, operationType, config.getWriteSchema(), commitActionType);
+    HoodieCommitMetadata metadata = prepareHoodieCommitMetadata(table, instantTime, stats, extraMetadata, commitActionType, partitionToReplaceFileIds);
     HoodieInstant inflightInstant = table.getMetaClient().createNewInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
-    HoodieCommitMetadata metadata = reconcileMetadata(table, commitActionType, instantTime, oriMetadata);
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
@@ -268,6 +266,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           instantTime, config.getTableName(), config.getBasePath(), stats, Option.of(commitActionType), extraMetadata));
     }
     return true;
+  }
+
+  protected HoodieCommitMetadata prepareHoodieCommitMetadata(HoodieTable table, String instantTime, List<HoodieWriteStat> stats,
+                                                             Option<Map<String, String>> extraMetadata,
+                                                             String commitActionType, Map<String, List<String>> partitionToReplaceFileIds) {
+    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
+        extraMetadata, operationType, config.getWriteSchema(), commitActionType);
+    return reconcileMetadata(table, commitActionType, instantTime, commitMetadata);
   }
 
   protected HoodieCommitMetadata reconcileMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata oriMetadata) {

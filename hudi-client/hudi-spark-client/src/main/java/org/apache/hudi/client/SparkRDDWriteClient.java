@@ -104,10 +104,9 @@ public class SparkRDDWriteClient<T> extends
       if (table.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
         // reconciliation not required for table version 8 and above.
         return oriMetadata;
-      } else {
-        return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, commitActionType, instantTime, oriMetadata,
-            config, context, storageConf, this.getClass().getSimpleName());
       }
+      return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, commitActionType, instantTime, oriMetadata,
+          config, context, storageConf, this.getClass().getSimpleName());
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to fix commit metadata for spurious log files "
           + config.getBasePath() + " at time " + instantTime, e);
