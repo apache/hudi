@@ -593,6 +593,8 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
+      } else {
+        hoodieConfig.setDefaultValue(TIMELINE_TIMEZONE);
       }
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
 
