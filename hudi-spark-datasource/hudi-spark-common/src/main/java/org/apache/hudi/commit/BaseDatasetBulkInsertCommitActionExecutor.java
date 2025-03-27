@@ -80,6 +80,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
   }
 
   private HoodieWriteMetadata<JavaRDD<WriteStatus>> buildHoodieWriteMetadata(Option<HoodieData<WriteStatus>> writeStatuses) {
+    table.getMetaClient().reloadActiveTimeline();
     return writeStatuses.map(statuses -> {
       // cache writeStatusRDD, so that all actions before this are not triggered again for future
       statuses.persist(writeConfig.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), writeClient.getEngineContext(), HoodieData.HoodieDataCacheKey.of(writeConfig.getBasePath(), instantTime));

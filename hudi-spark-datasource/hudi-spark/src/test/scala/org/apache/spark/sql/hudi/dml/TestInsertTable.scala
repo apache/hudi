@@ -23,7 +23,8 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
@@ -1281,6 +1282,48 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
               checkAnswer(s"select id, name, price, dt from $target order by id")(Seq.empty: _*)
             }
           }
+        }
+      }
+    }
+  }
+
+  test("Test bulk insert overwrite with rollback") {
+    withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
+      withTempDir { tmp =>
+        withTable(generateTableName) { tableName =>
+          val tableLocation = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  dt int
+               |) using hudi
+               | tblproperties (
+               |  type = 'cow',
+               |  primaryKey = 'id'
+               | ) partitioned by (dt)
+               | location '$tableLocation'
+               | """.stripMargin)
+
+          spark.sql(s"insert overwrite table $tableName partition (dt) values(1, 'a1', 10)")
+          checkAnswer(s"select id, name, dt from $tableName order by id")(
+            Seq(1, "a1", 10)
+          )
+
+          // Simulate a insert overwrite failure
+          val metaClient = createMetaClient(spark, tableLocation)
+          val instant = metaClient.createNewInstantTime()
+          val timeline = HoodieTestUtils.TIMELINE_FACTORY.createActiveTimeline(metaClient)
+          timeline.createNewInstant(metaClient.createNewInstant(
+            HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instant))
+          timeline.createNewInstant(metaClient.createNewInstant(
+            HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, instant))
+
+          spark.sql(s"insert overwrite table $tableName partition (dt) values(1, 'a1', 10)")
+          checkAnswer(s"select id, name, dt from $tableName order by id")(
+            Seq(1, "a1", 10)
+          )
         }
       }
     }
