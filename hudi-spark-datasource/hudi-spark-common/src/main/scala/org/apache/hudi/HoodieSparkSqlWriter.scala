@@ -207,15 +207,7 @@ class HoodieSparkSqlWriterInternal {
       }
       toReturn
     }
-
-    val executionId = getExecutionId(sqlContext.sparkContext, sourceDf.queryExecution)
-    if (executionId.isEmpty) {
-      sparkAdapter.sqlExecutionWithNewExecutionId(sourceDf.sparkSession, sourceDf.queryExecution, Option("Hudi Command"))(
-        retryWrite.apply()
-      )
-    } else {
-      retryWrite.apply()
-    }
+    retryWrite()
   }
 
   private def writeInternal(sqlContext: SQLContext,
