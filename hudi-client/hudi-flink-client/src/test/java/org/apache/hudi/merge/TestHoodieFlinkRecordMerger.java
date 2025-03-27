@@ -21,7 +21,7 @@ package org.apache.hudi.merge;
 
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
-import org.apache.hudi.client.model.OverwriteWithLatestFlinkRecordMerger;
+import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -71,7 +71,7 @@ public class TestHoodieFlinkRecordMerger {
   private static final String PARTITION = "partition";
 
   /**
-   * If the input records are not Spark record, it throws.
+   * If the input records are not Flink HoodieRecord, it throws.
    */
   @Test
   void testMergerWithAvroRecord() {
@@ -147,7 +147,7 @@ public class TestHoodieFlinkRecordMerger {
   }
 
   @Test
-  void testMergingWithOverwriteWithLatestMerger() throws IOException {
+  void testMergingWithCommitTimeRecordMerger() throws IOException {
     Schema schema = AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE);
     HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
     RowData oldRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 2L);
@@ -156,7 +156,7 @@ public class TestHoodieFlinkRecordMerger {
     RowData newRow = createRow(key, "001", "001_02", "file1", 2, "str_val2", 1L);
     HoodieFlinkRecord newRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 1L, newRow);
 
-    OverwriteWithLatestFlinkRecordMerger merger = new OverwriteWithLatestFlinkRecordMerger();
+    CommitTimeFlinkRecordMerger merger = new CommitTimeFlinkRecordMerger();
     Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(oldRecord, schema, newRecord, schema, new TypedProperties());
     assertTrue(mergingResult.isPresent());
     assertEquals(newRecord.getData(), mergingResult.get().getLeft().getData());

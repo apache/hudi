@@ -31,7 +31,7 @@ import java.io.IOException;
 /**
  * Record merger for Flink HoodieRecord that implements commit time based merging strategy.
  */
-public class OverwriteWithLatestFlinkRecordMerger extends HoodieFlinkRecordMerger {
+public class CommitTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
 
   @Override
   public String getMergingStrategy() {
