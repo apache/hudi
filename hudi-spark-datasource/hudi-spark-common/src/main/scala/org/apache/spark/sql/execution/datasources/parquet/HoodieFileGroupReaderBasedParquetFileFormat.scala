@@ -62,9 +62,10 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                                                   shouldUseRecordPosition: Boolean,
                                                   requiredFilters: Seq[Filter])
   extends HoodieFileGroupReaderBasedFileFormat(
-    tableState,
+    tablePath,
     tableSchema,
     tableName,
+    queryTimestamp,
     mandatoryFields,
     isMOR,
     isBootstrap,
