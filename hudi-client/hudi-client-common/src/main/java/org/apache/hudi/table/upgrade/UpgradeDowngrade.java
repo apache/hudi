@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -40,7 +41,9 @@ import org.apache.hudi.table.HoodieTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Hashtable;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -152,6 +155,7 @@ public class UpgradeDowngrade {
     // Perform the actual upgrade/downgrade; this has to be idempotent, for now.
     LOG.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
     Map<ConfigProperty, String> tableProps = new Hashtable<>();
+    List<ConfigProperty> tablePropsToRemove = new ArrayList<>();
     boolean isDowngrade = false;
     if (fromVersion.versionCode() < toVersion.versionCode()) {
       // upgrade
@@ -165,7 +169,9 @@ public class UpgradeDowngrade {
       isDowngrade = true;
       while (fromVersion.versionCode() > toVersion.versionCode()) {
         HoodieTableVersion prevVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() - 1);
-        tableProps.putAll(downgrade(fromVersion, prevVersion, instantTime));
+        Pair<Map<ConfigProperty, String>, List<ConfigProperty>> tablePropsToAddAndRemove = downgrade(fromVersion, prevVersion, instantTime);
+        tableProps.putAll(tablePropsToAddAndRemove.getLeft());
+        tablePropsToRemove.addAll(tablePropsToAddAndRemove.getRight());
         fromVersion = prevVersion;
       }
     }
@@ -176,6 +182,9 @@ public class UpgradeDowngrade {
     // Write out the current version in hoodie.properties.updated file
     for (Map.Entry<ConfigProperty, String> entry : tableProps.entrySet()) {
       metaClient.getTableConfig().setValue(entry.getKey(), entry.getValue());
+    }
+    for (ConfigProperty configProperty : tablePropsToRemove) {
+      metaClient.getTableConfig().clearValue(configProperty);
     }
     // user could have disabled auto upgrade (probably to deploy the new binary only),
     // in which case, we should not update the table version
@@ -234,7 +243,7 @@ public class UpgradeDowngrade {
     }
   }
 
-  protected Map<ConfigProperty, String> downgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
+  protected Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
     if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.ZERO) {
       return new OneToZeroDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.ONE) {
