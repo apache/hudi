@@ -28,7 +28,6 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
@@ -56,7 +55,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -74,20 +72,15 @@ import static org.apache.hudi.table.action.rollback.RollbackUtils.groupSerializa
  * Contains common methods to be used across engines for rollback operation.
  * This class is meant to be used only for table version 6. Any table version 8 and above will be using {@link BaseRollbackHelper}.
  */
-public class BaseRollbackHelperTableVersionSix implements Serializable {
+public class BaseRollbackHelperTableVersionSix extends BaseRollbackHelper {
 
-  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackHelperTableVersionSix.class);
-  protected static final String EMPTY_STRING = "";
 
   protected final HoodieTable table;
-  protected final HoodieTableMetaClient metaClient;
-  protected final HoodieWriteConfig config;
 
   public BaseRollbackHelperTableVersionSix(HoodieTable table, HoodieWriteConfig config) {
+    super(table.getMetaClient(), config);
     this.table = table;
-    this.metaClient = table.getMetaClient();
-    this.config = config;
   }
 
   /**
@@ -118,22 +111,6 @@ public class BaseRollbackHelperTableVersionSix implements Serializable {
     List<Pair<String, HoodieRollbackStat>> getRollbackStats = maybeDeleteAndCollectStats(context, instantTime, instantToRollback, serializableRequests, true, parallelism);
     List<HoodieRollbackStat> mergedRollbackStatByPartitionPath = context.reduceByKey(getRollbackStats, RollbackUtils::mergeRollbackStat, parallelism);
     return addLogFilesFromPreviousFailedRollbacksToStat(context, mergedRollbackStatByPartitionPath, logPaths);
-  }
-
-  /**
-   * Collect all file info that needs to be rolled back.
-   */
-  public List<HoodieRollbackStat> collectRollbackStats(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
-                                                       List<HoodieRollbackRequest> rollbackRequests) {
-    int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
-    context.setJobStatus(this.getClass().getSimpleName(), "Collect rollback stats for upgrade/downgrade: " + config.getTableName());
-    // If not for conversion to HoodieRollbackInternalRequests, code fails. Using avro model (HoodieRollbackRequest) within spark.parallelize
-    // is failing with com.esotericsoftware.kryo.KryoException
-    // stack trace: https://gist.github.com/nsivabalan/b6359e7d5038484f8043506c8bc9e1c8
-    // related stack overflow post: https://issues.apache.org/jira/browse/SPARK-3601. Avro deserializes list as GenericData.Array.
-    List<SerializableHoodieRollbackRequest> serializableRequests = rollbackRequests.stream().map(SerializableHoodieRollbackRequest::new).collect(Collectors.toList());
-    return context.reduceByKey(maybeDeleteAndCollectStats(context, instantTime, instantToRollback, serializableRequests, false, parallelism),
-        RollbackUtils::mergeRollbackStat, parallelism);
   }
 
   /**
@@ -351,44 +328,5 @@ public class BaseRollbackHelperTableVersionSix implements Serializable {
             return v1.getValue().getKey();
           }
         }).collectAsList();
-  }
-
-  /**
-   * Common method used for cleaning out files during rollback.
-   */
-  protected List<HoodieRollbackStat> deleteFiles(HoodieTableMetaClient metaClient, List<String> filesToBeDeleted, boolean doDelete) throws IOException {
-    return filesToBeDeleted.stream().map(fileToDelete -> {
-      String basePath = metaClient.getBasePath().toString();
-      try {
-        StoragePath fullDeletePath = new StoragePath(fileToDelete);
-        String partitionPath = FSUtils.getRelativePartitionPath(new StoragePath(basePath), fullDeletePath.getParent());
-        boolean isDeleted = true;
-        if (doDelete) {
-          try {
-            isDeleted = metaClient.getStorage().deleteFile(fullDeletePath);
-          } catch (FileNotFoundException e) {
-            // if first rollback attempt failed and retried again, chances that some files are already deleted.
-            isDeleted = true;
-          }
-        }
-        return HoodieRollbackStat.newBuilder()
-            .withPartitionPath(partitionPath)
-            .withDeletedFileResult(fullDeletePath.toString(), isDeleted)
-            .build();
-      } catch (IOException e) {
-        LOG.error("Fetching file status for ");
-        throw new HoodieIOException("Fetching file status for " + fileToDelete + " failed ", e);
-      }
-    }).collect(Collectors.toList());
-  }
-
-  protected Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String commit) {
-    // generate metadata
-    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>(3);
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().requestedTime());
-    header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, commit);
-    header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
-    return header;
   }
 }
