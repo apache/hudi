@@ -137,19 +137,23 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     metaClient = HoodieTestUtils.init(metaClient.getStorageConf(), basePath, HoodieTableType.MERGE_ON_READ, properties);
 
     // run for few iterations
-    for (int j = 0; j < 5; j++) {
+    for (int j = 0; j < 2; j++) {
       instantTimesSoFar.clear();
       // Generate an instant time in UTC and validate that all instants generated using metaClient are within few seconds apart.
       String newCommitTimeInUTC = getNewInstantTimeInUTC();
 
-      // new instant that we generate below should be within few seconds apart compared to above time we generated. If not, the time zone is not honored
-      for (int i = 0; i < 10; i++) {
+      // New instant that we generate below should be within few seconds apart compared to above time we generated. If not, the time zone is not honored.
+      // Note, that `metaClient` is initialized here with default `HoodieTimeGeneratorConfig#timeGeneratorConfig`,
+      // which means that `HoodieTimeGeneratorConfig#MAX_EXPECTED_CLOCK_SKEW_MS` with default value will be used (probably, it's 200 ms).
+      // It leads to corresponding thread sleep in `SkewAdjustingTimeGenerator::generateTime` for each call
+      // after all preliminary initialization costs in the following loop, so we don't want to iterate a lot here.
+      for (int i = 0; i < 3; i++) {
         String newInstantTime = metaClient.createNewInstantTime(false);
-        assertTrue(!instantTimesSoFar.contains(newInstantTime));
+        assertFalse(instantTimesSoFar.contains(newInstantTime));
         instantTimesSoFar.add(newInstantTime);
-        assertTrue((Long.parseLong(newInstantTime) - Long.parseLong(newCommitTimeInUTC)) < 60000L,
-            String.format("Validation failed on new instant time created: %s, newCommitTimeInUTC=%s",
-                newInstantTime, newCommitTimeInUTC));
+        assertTrue((Long.parseLong(newInstantTime) - Long.parseLong(newCommitTimeInUTC)) < 10000L,
+            String.format("Validation failed on new instant time created: '%s', newCommitTimeInUTC: '%s', j = '%d', i = '%d'",
+                newInstantTime, newCommitTimeInUTC, j, i));
       }
     }
   }
