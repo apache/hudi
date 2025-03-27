@@ -114,8 +114,6 @@
                   <include>com.uber.m3:tally-m3</include>
                   <include>com.uber.m3:tally-core</include>
 
-                  <include>com.yammer.metrics:metrics-core</include>
-
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
                   <include>org.apache.hive:hive-service-rpc</include>
@@ -141,10 +139,6 @@
                 <relocation>
                   <pattern>javax.servlet.</pattern>
                   <shadedPattern>org.apache.hudi.javax.servlet.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.yammer.metrics.</pattern>
-                  <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.beust.jcommander.</pattern>
