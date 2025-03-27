@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestBucketIndexUtil {
 
+  // (int parallelism, int bucketNumber)
   private static Stream<Arguments> partitionParams() {
     List<Arguments> argsList = new ArrayList<>();
     argsList.add(Arguments.of(10, 5, true));
@@ -58,6 +59,35 @@ public class TestBucketIndexUtil {
     return argsList.stream();
   }
 
+  private static Stream<Arguments> testPartitionWithPartitionLevelBucketIndex() {
+    List<Arguments> argsList = new ArrayList<>();
+    List<String> total40 = Arrays.asList(
+        "year=2021/month=01/day=01,18",
+        "year=2021/month=01/day=02,11",
+        "year=2021/month=01/day=03,11");
+    List<String> total100 = Arrays.asList(
+        "year=2021/month=01/day=01,18",
+        "year=2021/month=01/day=02,21",
+        "year=2021/month=01/day=03,61");
+    List<String> total1000 = Arrays.asList(
+        "year=2021/month=01/day=01,18",
+        "year=2021/month=01/day=02,21",
+        "year=2021/month=01/day=03,961");
+    argsList.add(Arguments.of(10, total40));
+    argsList.add(Arguments.of(20, total40));
+    argsList.add(Arguments.of(21, total40));
+    argsList.add(Arguments.of(100, total40));
+    argsList.add(Arguments.of(101, total40));
+    argsList.add(Arguments.of(20, total100));
+    argsList.add(Arguments.of(21, total100));
+    argsList.add(Arguments.of(300, total100));
+    argsList.add(Arguments.of(201, total100));
+    argsList.add(Arguments.of(400, total1000));
+    argsList.add(Arguments.of(401, total1000));
+
+    return argsList.stream();
+  }
+
   private static Stream<Arguments> noPartitionParams() {
     List<Arguments> argsList = new ArrayList<>();
 
@@ -69,21 +99,19 @@ public class TestBucketIndexUtil {
     return argsList.stream();
   }
 
-  private static Stream<Arguments> testPartitionWithPartitionLevelBucketIndex() {
-    List<Arguments> argsList = new ArrayList<>();
-    argsList.add(Arguments.of(10));
-    argsList.add(Arguments.of(20));
-    argsList.add(Arguments.of(21));
-    argsList.add(Arguments.of(40));
-    argsList.add(Arguments.of(41));
-    argsList.add(Arguments.of(100));
-    argsList.add(Arguments.of(101));
-    argsList.add(Arguments.of(200));
-    argsList.add(Arguments.of(201));
-    argsList.add(Arguments.of(400));
-    argsList.add(Arguments.of(405));
+  @ParameterizedTest
+  @MethodSource("testPartitionWithPartitionLevelBucketIndex")
+  void testPartitionWithPartitionLevelBucketIndex(int parallelism, List<String> partition2Bucket) {
+    int totalBucketNumber = 0;
+    for (String s : partition2Bucket) {
+      totalBucketNumber = totalBucketNumber + Integer.parseInt(s.split(",")[1]);
+    }
+    Map<Integer, Integer> parallelism2TaskCount = new HashMap<>();
+    final Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc =
+        BucketIndexUtil.getPartitionIndexFunc(parallelism);
+    initPartitionDataPartitionBucket(parallelism2TaskCount, partitionIndexFunc, partition2Bucket);
 
-    return argsList.stream();
+    checkResult(parallelism2TaskCount, parallelism, totalBucketNumber, true, false);
   }
 
   @ParameterizedTest
@@ -94,28 +122,6 @@ public class TestBucketIndexUtil {
         BucketIndexUtil.getPartitionIndexFunc(parallelism);
     initPartitionData(parallelism2TaskCount, bucketNumber, partitionIndexFunc);
     checkResult(parallelism2TaskCount, parallelism, bucketNumber, partitioned);
-  }
-
-  @ParameterizedTest
-  @MethodSource("testPartitionWithPartitionLevelBucketIndex")
-  void testPartitionWithPartitionLevelBucketIndex(int parallelism) {
-    List<String> partition2Bucket = Arrays.asList(
-        "year=2021/month=01/day=01,10",
-        "year=2021/month=01/day=02,50",
-        "year=2021/month=01/day=03,100",
-        "year=2021/month=01/day=04,1000",
-        "year=2021/month=01/day=05,50",
-        "year=2021/month=01/day=06,100",
-        "year=2021/month=01/day=07,200",
-        "year=2021/month=01/day=08,300");
-    int totalBucketNumber = 1810;
-
-    Map<Integer, Integer> parallelism2TaskCount = new HashMap<>();
-    final Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc =
-        BucketIndexUtil.getPartitionIndexFunc(parallelism);
-    initPartitionDataPartitionBucket(parallelism2TaskCount, partitionIndexFunc, partition2Bucket);
-
-    checkResult(parallelism2TaskCount, parallelism, totalBucketNumber, true, false);
   }
 
   @ParameterizedTest

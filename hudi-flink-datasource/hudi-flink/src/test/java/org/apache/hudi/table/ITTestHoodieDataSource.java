@@ -1267,7 +1267,7 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("testBulkInsertWithPartitionBucketIndex")
+  @MethodSource("testBulkInsertWithPartitionBucketIndexParams")
   void testBulkInsertWithPartitionBucketIndex(String operationType, String tableType) throws IOException {
     TableEnvironment tableEnv = batchTableEnv;
     // csv source
@@ -1324,15 +1324,6 @@ public class ITTestHoodieDataSource {
     expected.add("partition=par4" + "00000000");
 
     assertEquals(expected.stream().sorted().collect(Collectors.toList()), actual.stream().sorted().collect(Collectors.toList()));
-  }
-
-  public static List<Arguments> testBulkInsertWithPartitionBucketIndex() {
-    return asList(
-        Arguments.of("bulk_insert", COPY_ON_WRITE.name()),
-        Arguments.of("bulk_insert", MERGE_ON_READ.name()),
-        Arguments.of("upsert", MERGE_ON_READ.name()),
-        Arguments.of("upsert", MERGE_ON_READ.name())
-    );
   }
 
   @Test
@@ -2527,6 +2518,15 @@ public class ITTestHoodieDataSource {
             {HoodieTableType.MERGE_ON_READ, false},
             {HoodieTableType.MERGE_ON_READ, true}};
     return Stream.of(data).map(Arguments::of);
+  }
+
+  public static List<Arguments> testBulkInsertWithPartitionBucketIndexParams() {
+    return asList(
+        Arguments.of("bulk_insert", COPY_ON_WRITE.name()),
+        Arguments.of("bulk_insert", MERGE_ON_READ.name()),
+        Arguments.of("upsert", MERGE_ON_READ.name()),
+        Arguments.of("upsert", MERGE_ON_READ.name())
+    );
   }
 
   /**

@@ -68,7 +68,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     this.bucketNum = writeConfig.getInt(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
     this.handles = new HashMap<>();
     this.isNonBlockingConcurrencyControl = writeConfig.isNonBlockingConcurrencyControl();
-    this.numBucketsFunction = new NumBucketsFunction(writeConfig.getBucketIndexPartitionExpression(), writeConfig.getBucketIndexPartitionRuleType(), bucketNum);
+    this.numBucketsFunction = NumBucketsFunction.fromWriteConfig(writeConfig);
   }
 
   public void write(InternalRow row) throws IOException {

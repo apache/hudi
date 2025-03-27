@@ -37,8 +37,7 @@ public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertParti
 
   public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, HoodieWriteConfig writeConfig) {
     this.indexKeyFields = indexKeyFields;
-    this.numBucketsFunction = new NumBucketsFunction(writeConfig.getBucketIndexPartitionExpression(),
-        writeConfig.getBucketIndexPartitionRuleType(), writeConfig.getBucketIndexNumBuckets());
+    this.numBucketsFunction = NumBucketsFunction.fromWriteConfig(writeConfig);
   }
 
   public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, PartitionBucketIndexHashingConfig hashingConfig) {

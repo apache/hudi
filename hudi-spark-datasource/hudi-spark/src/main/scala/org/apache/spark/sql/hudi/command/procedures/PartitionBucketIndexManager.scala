@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieSparkSqlWriter}
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, ENABLE_ROW_WRITER, OPERATION}
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, SerializableSchema}
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
@@ -155,7 +154,7 @@ class PartitionBucketIndexManager extends BaseProcedure
       // get Map<partitionPath, bucketNumber> based on latest hashing_config
       val latestHashingConfig = PartitionBucketIndexHashingConfig.loadingLatestHashingConfig(metaClient)
       calcWithLatestInstant = PartitionBucketIndexCalculator.getInstance(latestHashingConfig.getExpressions, latestHashingConfig.getRule, latestHashingConfig.getDefaultBucketNumber)
-      partition2BucketWithLatestHashingConfig = PartitionBucketIndexUtils.getAllBucketNumbers(calcWithLatestInstant, allPartitions)
+      partition2BucketWithLatestHashingConfig = calcWithLatestInstant.getAllBucketNumbers(allPartitions)
     } else {
       ValidationUtils.checkArgument(bucketNumber != -1)
       partition2BucketWithLatestHashingConfig = allPartitions.asScala.map(partition => (partition, new Integer(bucketNumber))).toMap.asJava
@@ -176,7 +175,7 @@ class PartitionBucketIndexManager extends BaseProcedure
     )
 
     val calcWithNewExpression = PartitionBucketIndexCalculator.getInstance(expression, rule, defaultBucketNumber)
-    val partition2BucketWithNewHashingConfig = PartitionBucketIndexUtils.getAllBucketNumbers(calcWithNewExpression, allPartitions)
+    val partition2BucketWithNewHashingConfig = calcWithNewExpression.getAllBucketNumbers(allPartitions)
 
     // get partitions need to be rescaled
     val rescalePartitionsMap = getDifferentPartitions(partition2BucketWithNewHashingConfig.asScala, partition2BucketWithLatestHashingConfig.asScala)

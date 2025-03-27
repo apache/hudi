@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -89,6 +90,17 @@ public class PartitionBucketIndexCalculator implements Serializable {
     partitionToBucketCache.put(partitionPath, bucketNumber);
 
     return bucketNumber;
+  }
+
+  public Map<String, Integer> getAllBucketNumbers(List<String> partitions) {
+    for (String partition : partitions) {
+      computeNumBuckets(partition);
+    }
+    return getPartitionToBucket();
+  }
+
+  public void cleanCache() {
+    INSTANCES.clear();
   }
 
   public int getDefaultBucketNumber() {

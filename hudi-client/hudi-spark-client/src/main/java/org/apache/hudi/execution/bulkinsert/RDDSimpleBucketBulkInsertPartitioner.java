@@ -48,8 +48,7 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSimpleBucketIndex);
     HoodieWriteConfig writeConfig = table.getConfig();
     this.isNonBlockingConcurrencyControl = writeConfig.isNonBlockingConcurrencyControl();
-    this.numBucketsFunction = new NumBucketsFunction(writeConfig.getBucketIndexPartitionExpression(), writeConfig.getBucketIndexPartitionRuleType(),
-        writeConfig.getBucketIndexNumBuckets());
+    this.numBucketsFunction = NumBucketsFunction.fromWriteConfig(writeConfig);
   }
 
   @Override

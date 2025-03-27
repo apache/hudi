@@ -35,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -54,13 +53,6 @@ public class PartitionBucketIndexUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to list PARTITION_BUCKET_INDEX_HASHING_FOLDER folder ", e);
     }
-  }
-
-  public static Map<String, Integer> getAllBucketNumbers(PartitionBucketIndexCalculator calc, List<String> partitions) {
-    for (String partition : partitions) {
-      calc.computeNumBuckets(partition);
-    }
-    return calc.getPartitionToBucket();
   }
 
   /**

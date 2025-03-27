@@ -199,7 +199,7 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
    */
   public static String getLatestHashingConfigInstantToLoad(HoodieTableMetaClient metaClient) {
     try {
-      List<String> allCommittedHashingConfig = getCommittedHashingConfig(metaClient);
+      List<String> allCommittedHashingConfig = getCommittedHashingConfigInstants(metaClient);
       return allCommittedHashingConfig.get(allCommittedHashingConfig.size() - 1);
     } catch (Exception e) {
       throw new HoodieException("Failed to get hashing config instant to load.", e);
@@ -242,7 +242,7 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     return true;
   }
 
-  public static List<String> getArchiveHashingConfig(HoodieTableMetaClient metaClient) throws IOException {
+  public static List<String> getArchiveHashingConfigInstants(HoodieTableMetaClient metaClient) throws IOException {
     return metaClient.getStorage()
         .listDirectEntries(new StoragePath(metaClient.getArchiveHashingMetadataConfigPath())).stream().map(info -> {
           String instant = getHashingConfigInstant(info.getPath().getName());
@@ -259,8 +259,8 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
    * So that Listed uncommitted hashing instant always exist in active timeline.
    * **Ascending order**  like 20250325091919474, 20250325091923956, 20250325091927529
    */
-  public static List<String> getCommittedHashingConfig(HoodieTableMetaClient metaClient) throws IOException {
-    List<String> allActiveHashingConfig = metaClient.getStorage()
+  public static List<String> getCommittedHashingConfigInstants(HoodieTableMetaClient metaClient) throws IOException {
+    List<String> allActiveHashingConfigInstants = metaClient.getStorage()
         .listDirectEntries(new StoragePath(metaClient.getHashingMetadataConfigPath())).stream().map(info -> {
           String instant = getHashingConfigInstant(info.getPath().getName());
           if (StringUtils.isNullOrEmpty(instant)) {
@@ -270,7 +270,7 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
         }).sorted().collect(Collectors.toList());
 
     HoodieTimeline pendingReplaceTimeline = metaClient.getActiveTimeline().filterPendingReplaceTimeline();
-    return allActiveHashingConfig.stream().filter(hashingConfigInstant -> {
+    return allActiveHashingConfigInstants.stream().filter(hashingConfigInstant -> {
       return !pendingReplaceTimeline.containsInstant(hashingConfigInstant);
     }).collect(Collectors.toList());
   }
@@ -287,7 +287,7 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     Option<HoodieInstant> activeTimelineStart = metaClient.getActiveTimeline().getCommitsTimeline().firstInstant();
     if (activeTimelineStart.isPresent()) {
       String startInstant = activeTimelineStart.get().requestedTime();
-      List<String> committedHashingConfig = getCommittedHashingConfig(metaClient);
+      List<String> committedHashingConfig = getCommittedHashingConfigInstants(metaClient);
       int index = 0;
       for (; index < committedHashingConfig.size(); index++) {
         if (committedHashingConfig.get(index).compareTo(startInstant) >= 0) {

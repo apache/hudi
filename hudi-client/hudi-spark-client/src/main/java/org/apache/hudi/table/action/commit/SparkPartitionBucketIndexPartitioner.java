@@ -96,8 +96,7 @@ public class SparkPartitionBucketIndexPartitioner<T> extends SparkHoodiePartitio
               + table.getIndex().getClass().getSimpleName());
     }
     HoodieWriteConfig writeConfig = table.getConfig();
-    this.numBucketsFunction = new NumBucketsFunction(writeConfig.getBucketIndexPartitionExpression(),
-        writeConfig.getBucketIndexPartitionRuleType(), writeConfig.getBucketIndexNumBuckets());
+    this.numBucketsFunction = NumBucketsFunction.fromWriteConfig(writeConfig);
 
     this.indexKeyField = config.getBucketIndexHashField();
     this.totalPartitionPaths = profile.getPartitionPaths().size();

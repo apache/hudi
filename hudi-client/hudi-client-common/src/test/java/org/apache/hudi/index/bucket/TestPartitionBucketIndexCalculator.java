@@ -23,6 +23,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -47,6 +48,14 @@ public class TestPartitionBucketIndexCalculator extends HoodieCommonTestHarness 
     this.calc = PartitionBucketIndexCalculator.getInstance(expression, rule, defaultBucketNumber);
   }
 
+  @AfterEach
+  void cleanup() {
+    if (calc == null) {
+      return;
+    }
+    this.calc.cleanCache();
+  }
+
   /**
    * Test basic regex rule matching.
    */
@@ -55,6 +64,62 @@ public class TestPartitionBucketIndexCalculator extends HoodieCommonTestHarness 
   void testBasicRegexRuleMatching(String partition, int expectedBucket) throws IOException {
     setUp(DEFAULT_EXPRESSIONS, DEFAULT_RULE, DEFAULT_BUCKET_NUMBER);
     assertEquals(expectedBucket, calc.computeNumBuckets(partition));
+  }
+
+  @Test
+  void testCaching() throws IOException {
+    setUp(DEFAULT_EXPRESSIONS, DEFAULT_RULE, DEFAULT_BUCKET_NUMBER);
+    // Calculate bucket number for the same partition multiple times
+    String partition = "2023-06-01";
+
+    // First call should calculate and cache
+    int bucket1 = calc.computeNumBuckets(partition);
+    assertEquals(256, bucket1);
+    assertEquals(1, calc.getCacheSize());
+
+    // Second call should use the cache
+    int bucket2 = calc.computeNumBuckets(partition);
+    assertEquals(256, bucket2);
+    assertEquals(1, calc.getCacheSize());
+
+    // Different partition should increase cache size
+    calc.computeNumBuckets("2023-11-10");
+    assertEquals(2, calc.getCacheSize());
+  }
+
+  /**
+   * Test multiple regex rules with priority.
+   */
+  @ParameterizedTest
+  @MethodSource("testMultipleRegexRulesWithPriority")
+  void testMultipleRegexRulesWithPriority(String expressions, boolean hiveStyle, String format) throws IOException {
+    setUp(expressions, DEFAULT_RULE, DEFAULT_BUCKET_NUMBER);
+    PartitionBucketIndexCalculator calc = PartitionBucketIndexCalculator.getInstance(expressions, DEFAULT_RULE, DEFAULT_BUCKET_NUMBER);
+    // Setup configuration with multiple rules
+
+    // First rule should take priority
+    assertEquals(256, calc.computeNumBuckets(hiveStyle ? String.format("dt=2023%s06%s01", format, format) : String.format("2023%s06%s01", format, format)));
+
+    // Second rule should match when first doesn't
+    assertEquals(128, calc.computeNumBuckets(hiveStyle ? String.format("dt=2023%s06%s02", format, format) : String.format("2023%s06%s02", format, format)));
+    assertEquals(128, calc.computeNumBuckets(hiveStyle ? String.format("dt=2023%s06%s30", format, format) : String.format("2023%s06%s30", format, format)));
+
+    // Third rule should match for November dates
+    assertEquals(64, calc.computeNumBuckets(hiveStyle ? String.format("dt=2023%s11%s01", format, format) : String.format("2023%s11%s01",format, format)));
+    assertEquals(64, calc.computeNumBuckets(hiveStyle ? String.format("dt=2023%s11%s30", format, format) : String.format("2023%s11%s30", format, format)));
+
+    // Default for non-matching partitions
+    assertEquals(10, calc.computeNumBuckets(hiveStyle ? String.format("dt=2023%s07%s01", format, format) : String.format("2023%s07%s01", format, format)));
+    assertEquals(10, calc.computeNumBuckets(hiveStyle ? String.format("dt=2023%s12%s25", format, format) : String.format("2023%s12%s25", format, format)));
+  }
+
+  /**
+   * Test invalid regex expressions.
+   */
+  @Test
+  void testInvalidExpressions() {
+    assertThrows(HoodieException.class, () -> setUp("\\d{4-06-01256", DEFAULT_RULE, DEFAULT_BUCKET_NUMBER));
+    assertThrows(HoodieException.class, () -> setUp("\\d{4}-06-01,a", DEFAULT_RULE, DEFAULT_BUCKET_NUMBER));
   }
 
   /**
@@ -84,59 +149,13 @@ public class TestPartitionBucketIndexCalculator extends HoodieCommonTestHarness 
     );
   }
 
-  @Test
-  void testCaching() throws IOException {
-    setUp(DEFAULT_EXPRESSIONS, DEFAULT_RULE, DEFAULT_BUCKET_NUMBER);
-    // Calculate bucket number for the same partition multiple times
-    String partition = "2023-06-01";
-
-    // First call should calculate and cache
-    int bucket1 = calc.computeNumBuckets(partition);
-    assertEquals(256, bucket1);
-    assertEquals(1, calc.getCacheSize());
-
-    // Second call should use the cache
-    int bucket2 = calc.computeNumBuckets(partition);
-    assertEquals(256, bucket2);
-    assertEquals(1, calc.getCacheSize());
-
-    // Different partition should increase cache size
-    calc.computeNumBuckets("2023-11-10");
-    assertEquals(2, calc.getCacheSize());
-  }
-
-  /**
-   * Test multiple regex rules with priority.
-   */
-  @Test
-  void testMultipleRegexRulesWithPriority() throws IOException {
-    String expressions = "\\d{4}-06-01,256;\\d{4}-06-\\d{2},128;\\d{4}-11-\\d{2},64";
-    setUp(expressions, DEFAULT_RULE, DEFAULT_BUCKET_NUMBER);
-    PartitionBucketIndexCalculator calc = PartitionBucketIndexCalculator.getInstance(expressions, DEFAULT_RULE, DEFAULT_BUCKET_NUMBER);
-    // Setup configuration with multiple rules
-
-    // First rule should take priority
-    assertEquals(256, calc.computeNumBuckets("2023-06-01"));
-
-    // Second rule should match when first doesn't
-    assertEquals(128, calc.computeNumBuckets("2023-06-02"));
-    assertEquals(128, calc.computeNumBuckets("2023-06-30"));
-
-    // Third rule should match for November dates
-    assertEquals(64, calc.computeNumBuckets("2023-11-01"));
-    assertEquals(64, calc.computeNumBuckets("2023-11-30"));
-
-    // Default for non-matching partitions
-    assertEquals(10, calc.computeNumBuckets("2023-07-01"));
-    assertEquals(10, calc.computeNumBuckets("2023-12-25"));
-  }
-
-  /**
-   * Test invalid regex expressions.
-   */
-  @Test
-  void testInvalidExpressions() {
-    assertThrows(HoodieException.class, () -> setUp("\\d{4-06-01256", DEFAULT_RULE, DEFAULT_BUCKET_NUMBER));
-    assertThrows(HoodieException.class, () -> setUp("\\d{4}-06-01,a", DEFAULT_RULE, DEFAULT_BUCKET_NUMBER));
+  private static Stream<Arguments> testMultipleRegexRulesWithPriority() {
+    return Stream.of(
+        // Matching the regex pattern - should get bucket 256
+        Arguments.of("\\d{4}-06-01,256;\\d{4}-06-\\d{2},128;\\d{4}-11-\\d{2},64", true, "-"),
+        Arguments.of("\\d{4}-06-01,256;\\d{4}-06-\\d{2},128;\\d{4}-11-\\d{2},64", false, "-"),
+        Arguments.of("\\d{4}/06/01,256;\\d{4}/06/\\d{2},128;\\d{4}/11/\\d{2},64", true, "/"),
+        Arguments.of("\\d{4}/06/01,256;\\d{4}/06/\\d{2},128;\\d{4}/11/\\d{2},64", false, "/")
+    );
   }
 }

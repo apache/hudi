@@ -58,7 +58,7 @@ public class RegexRuleEngine implements RuleEngine {
 
     @Override
     public String toString() {
-      return pattern.pattern() + " -> " + numBuckets;
+      return pattern.pattern() + ":" + numBuckets;
     }
   }
 

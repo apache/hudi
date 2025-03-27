@@ -19,6 +19,8 @@
 package org.apache.hudi.index.bucket.partition;
 
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,6 +71,13 @@ public class NumBucketsFunction implements Serializable {
       this.calculator = null;
       LOG.info("Using fixed bucket number: {}", defaultBucketNumber);
     }
+  }
+
+  public static NumBucketsFunction fromWriteConfig(HoodieWriteConfig writeConfig) {
+    String expression = writeConfig.getBucketIndexPartitionExpression();
+    String ruleType = writeConfig.getBucketIndexPartitionRuleType();
+    int numBuckets = writeConfig.getBucketIndexNumBuckets();
+    return new NumBucketsFunction(expression, ruleType, numBuckets);
   }
 
   /**

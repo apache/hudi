@@ -158,8 +158,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
     public SimpleBucketIndexLocationFunction(HoodieTable table, String partitionPath) {
       this.bucketIdToFileIdMapping = loadBucketIdToFileIdMappingForPartition(table, partitionPath);
       HoodieWriteConfig writeConfig = table.getConfig();
-      this.numBucketsFunction = new NumBucketsFunction(writeConfig.getBucketIndexPartitionExpression(),
-          writeConfig.getBucketIndexPartitionRuleType(), writeConfig.getBucketIndexNumBuckets());
+      this.numBucketsFunction = NumBucketsFunction.fromWriteConfig(writeConfig);
     }
 
     @Override
