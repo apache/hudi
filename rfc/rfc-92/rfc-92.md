@@ -57,13 +57,15 @@ The Hudi platform is responsible for managing the data path and can be configure
 
 ### Commit Protocol:
 
-Hudi uses the creation of a .commit file to advertise the completion of a commit on the table. With the TableFormatPlugin, this will be a two step process:
+Hudi uses the creation of an action-complete file (e:g .commit, .deltacommit, .clean, ..)  in timeline folder to advertise the completion of an action on the table. With the TableFormatPlugin, this will become a two step process:
 
-1.  Creation of .commit file in .hoodie timeline 
-2. Store the commit completion time in the table format's commit metadata.
+1. Creation of the action complete file in .hoodie timeline 
+2. Store the action completion time in the table format's commit metadata.
 
-  
-With this, the write is only completed when both the above steps are completed. The plugin provided timeline needs to fence the timeline ensuring the definition of complete stays consistent.  This ensures the snapshot isolation is maintained.
+The Hudi timeline is still very much used for all internal operations and the table format's commit metadat will be an overlay on top of this.
+With this, the action is only completed when both the above steps are completed. The plugin provided timeline needs to fence the timeline ensuring the definition of complete stays consistent.  This ensures the snapshot isolation is maintained.
+
+There will be a hudi table-property "hudi.table.format.plugin" to identify the table format with default being "native". This allows consistency in plugin behaviors across all hudi writers.
 
 ### Metadata:
 
