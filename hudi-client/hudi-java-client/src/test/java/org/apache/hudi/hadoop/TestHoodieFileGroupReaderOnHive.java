@@ -68,8 +68,6 @@ import org.apache.hadoop.mapred.Reporter;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -199,12 +197,6 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
     } else {
       writeClient.upsert(recordList, instantTime);
     }
-  }
-
-  @ParameterizedTest
-  @EnumSource(RecordMergeMode.class)
-  public void testFileGroupReaderBasedCompaction(RecordMergeMode mergeMode) throws Exception {
-    assertTrue(true);
   }
 
   @Override

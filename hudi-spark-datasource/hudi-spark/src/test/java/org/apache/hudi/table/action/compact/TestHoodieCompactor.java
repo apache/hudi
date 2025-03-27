@@ -477,6 +477,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     for (String partitionPath : dataGen.getPartitionPaths()) {
       assertTrue(stats.stream().anyMatch(stat -> stat.getPartitionPath().contentEquals(partitionPath)));
     }
+
     stats.forEach(stat -> {
       HoodieWriteStat.RuntimeStats runtimeStats = stat.getRuntimeStats();
       assertNotNull(runtimeStats);
@@ -484,5 +485,9 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       assertTrue(runtimeStats.getTotalUpsertTime() > 0);
       assertTrue(runtimeStats.getTotalScanTime() > 0);
     });
+
+    long totalLogRecords =
+        stats.stream().mapToLong(HoodieWriteStat::getTotalLogRecords).sum();
+    assertEquals(4000L, totalLogRecords);
   }
 }
