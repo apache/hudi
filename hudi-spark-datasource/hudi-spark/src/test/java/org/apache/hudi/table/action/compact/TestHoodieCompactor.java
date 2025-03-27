@@ -490,5 +490,15 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     long actualTotalLogRecords =
         stats.stream().mapToLong(HoodieWriteStat::getTotalLogRecords).sum();
     assertEquals(expectedTotalLogRecords, actualTotalLogRecords);
+
+    // Verify the number of records written during compaction.
+    long actualNumWritten =
+        stats.stream().mapToLong(HoodieWriteStat::getNumWrites).sum();
+    long actualNumUpdates =
+        stats.stream().mapToLong(HoodieWriteStat::getNumUpdateWrites).sum();
+    long actualInserts =
+        stats.stream().mapToLong(HoodieWriteStat::getNumInserts).sum();
+    assertTrue(actualNumWritten > 0
+        && actualNumWritten == actualNumUpdates + actualInserts);
   }
 }
