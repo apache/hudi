@@ -83,6 +83,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final Option<UnaryOperator<T>> outputConverter;
   private final HoodieReadStats readStats;
   // Allows to consider inflight instants while merging log records using HoodieMergedLogRecordReader
+  // The inflight instants need to be considered while updating RLI records. RLI needs to fetch the revived
+  // and deleted keys from the log files written as part of active data commit. During the RLI update,
+  // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
+  // considers the log records which are inflight.
   private boolean allowInflightInstants;
 
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
