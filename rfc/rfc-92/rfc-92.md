@@ -75,10 +75,17 @@ If a different table format is configured, Hudi's metadata operations are replac
 
 The timeline implementation ensures the external table format's (table format that is plugged-in) metadata state (e:g commit status) is the source of truth for all operations. 
 
-### Others:
+### Conflict Resolution
 
-The plugin implementation brings in the external table format's conflict resolution strategy and locking mechanisms. 
+Hudi already provides configurable support to plugin different strategies for identifying if two concurrent operations are conflicting at the file level. The 
+external pluggable formats may not have such fine-level granularity. The external pluggable formats needs to implement the strategy based on its metadata.
 
+### Locking
+Hudi has pluggable lock provider supports. External formats will need to rely on catalog or other means for providing locking semantics. The External table format implementation needs to provide custom lock provider to adapt their locking mechanisms to Hudi's LockProvider interface so that all write and table-service operations can concurrently operate. 
+
+### Rollbacks
+External Table format implementation  needs to rollback failed writes and also be able to also restore to previous commits. The external plugin implementation needs to keep enough states to be able to rollback.
+ 
 ### Layout:
 
 The metadata corresponding to the table format (iceberg, ..) will be stored under .hoodie/ folder.
