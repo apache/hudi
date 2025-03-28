@@ -185,6 +185,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTab
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
+import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -259,7 +260,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
   }
 
-  @Disabled("HUDI-9221")
   @Test
   public void testTurnOffMetadataIndexAfterEnable() throws Exception {
     initPath();
@@ -699,7 +699,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   /**
    * Tests that table services in data table won't trigger table services in metadata table.
    */
-  @Disabled("HUDI-9221")
   @Test
   public void testMetadataTableServices() throws Exception {
     init(COPY_ON_WRITE, false);
@@ -752,7 +751,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     testTableOperationsImpl(engineContext, writeConfig);
   }
 
-  @Disabled("HUDI-9221")
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testMetadataTableDeletePartition(HoodieTableType tableType) throws Exception {
@@ -1130,7 +1128,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
-  @Disabled("HUDI-9221")
   @Test
   public void testMetadataRollbackDuringInit() throws Exception {
     HoodieTableType tableType = COPY_ON_WRITE;
@@ -2185,7 +2182,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   /**
    * Test multi-writer on metadata table with optimistic concurrency.
    */
-  @Disabled("HUDI-9221")
   @Test
   public void testMetadataMultiWriter() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
@@ -2259,7 +2255,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Tests that when inline cleaning is enabled and with auto commit set to true, there is no double locking.
    * bcoz, auto clean is triggered within post commit which is already happening within a lock.
    */
-  @Disabled("HUDI-9221")
   @Test
   public void testMultiWriterForDoubleLocking() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
@@ -3619,8 +3614,16 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, storage, getMetadataTableBasePath(basePath),
         false);
     // Secondary index is enabled by default but no MDT partition corresponding to it is available
+    final boolean isPartitionStatsEnabled;
+    if (!metadataWriter.getEnabledPartitionTypes().contains(COLUMN_STATS)) {
+      isPartitionStatsEnabled = false;
+    } else {
+      isPartitionStatsEnabled = true;
+    }
     long enabledMDTPartitionsSize = metadataWriter.getEnabledPartitionTypes().stream()
         .filter(partition -> !partition.equals(SECONDARY_INDEX))
+        // Filter out partition stats if column stats is disabled since it does not get initialized in such a case
+        .filter(partition -> isPartitionStatsEnabled || !partition.equals(PARTITION_STATS))
         .count();
     assertEquals(enabledMDTPartitionsSize, metadataTablePartitions.size());
 

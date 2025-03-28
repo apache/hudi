@@ -515,6 +515,7 @@ public class RequestHandler {
       writeValueAsString(ctx, markers);
     }, false));
 
+    // Operation is used only for version 6 tables
     app.get(MarkerOperation.APPEND_MARKERS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("APPEND_MARKERS", 1);
       Set<String> markers = markerHandler.getAppendMarkers(
