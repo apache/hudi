@@ -21,17 +21,13 @@ package org.apache.hudi.sink.bucket;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.RowDataStreamWriteFunction;
 import org.apache.hudi.sink.buffer.RowDataBucket;
-import org.apache.hudi.sink.clustering.update.strategy.FlinkConsistentBucketUpdateStrategy;
-import org.apache.hudi.table.action.commit.BucketInfo;
-import org.apache.hudi.table.action.commit.BucketType;
+import org.apache.hudi.sink.clustering.update.strategy.RowDataConsistentBucketUpdateStrategy;
+import org.apache.hudi.sink.clustering.update.strategy.RowDataConsistentBucketUpdateStrategy.RichRecords;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 
 import org.apache.flink.configuration.Configuration;
@@ -41,7 +37,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
@@ -57,7 +52,7 @@ public class RowDataConsistentBucketStreamWriteFunction extends RowDataStreamWri
 
   private static final Logger LOG = LoggerFactory.getLogger(RowDataConsistentBucketStreamWriteFunction.class);
 
-  private transient FlinkConsistentBucketUpdateStrategy updateStrategy;
+  private transient RowDataConsistentBucketUpdateStrategy updateStrategy;
 
   /**
    * Constructs a RowDataConsistentBucketStreamWriteFunction.
@@ -72,9 +67,8 @@ public class RowDataConsistentBucketStreamWriteFunction extends RowDataStreamWri
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-
-    List<String> indexKeyFields = Arrays.asList(config.getString(FlinkOptions.INDEX_KEY_FIELD).split(","));
-    this.updateStrategy = new FlinkConsistentBucketUpdateStrategy(this.writeClient, indexKeyFields);
+    List<String> indexKeyFields = Arrays.asList(config.get(FlinkOptions.INDEX_KEY_FIELD).split(","));
+    this.updateStrategy = new RowDataConsistentBucketUpdateStrategy(this.writeClient, indexKeyFields);
     LOG.info("Create update strategy with index key fields: {}", indexKeyFields);
   }
 
@@ -92,41 +86,14 @@ public class RowDataConsistentBucketStreamWriteFunction extends RowDataStreamWri
     Iterator<BinaryRowData> rowItr =
         new MutableIteratorWrapperIterator<>(
             rowDataBucket.getDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()));
-    Iterator<HoodieRecord> recordItr = new MappingIterator<>(
-        rowItr, rowData -> convertToRecord(rowData, rowDataBucket.getBucketInfo()));
-    List<HoodieRecord> recordList = new ArrayList<>();
-    deduplicateRecordsIfNeeded(recordItr).forEachRemaining(recordList::add);
+    Iterator<HoodieRecord> recordItr = deduplicateRecordsIfNeeded(
+        new MappingIterator<>(rowItr, rowData -> convertToRecord(rowData, rowDataBucket.getBucketInfo())));
 
-    // save bucket info into the first record, which will be used in update strategy
-    String instantTime = rowDataBucket.getBucketInfo().getBucketType() == BucketType.INSERT ? "I" : "U";
-    HoodieRecordLocation recordLocation = new HoodieRecordLocation(instantTime, rowDataBucket.getBucketInfo().getFileIdPrefix());
-    recordList.get(0).setCurrentLocation(recordLocation);
+    Pair<List<RichRecords>, Set<HoodieFileGroupId>> recordListFgPair =
+        updateStrategy.handleUpdate(Collections.singletonList(RichRecords.of(recordItr, rowDataBucket.getBucketInfo(), instant)));
 
-    Pair<List<Pair<List<HoodieRecord>, String>>, Set<HoodieFileGroupId>> recordListFgPair =
-        updateStrategy.handleUpdate(Collections.singletonList(Pair.of(recordList, instant)));
-
-    return recordListFgPair.getKey().stream().flatMap(
-        recordsInstantPair -> {
-          List<HoodieRecord> records = recordsInstantPair.getLeft();
-          BucketInfo bucketInfo = getBucketInfo(records.get(0));
-          return writeFunction.write(records.iterator(), bucketInfo, recordsInstantPair.getRight()).stream();
-        }).collect(Collectors.toList());
-  }
-
-  private static BucketInfo getBucketInfo(HoodieRecord hoodieRecord) {
-    BucketType bucketType;
-    ValidationUtils.checkArgument(hoodieRecord.getCurrentLocation() != null,
-        "The HoodieRecordLocation field should not be null for the first HoodieRecord.");
-    switch (hoodieRecord.getCurrentLocation().getInstantTime()) {
-      case "I":
-        bucketType = BucketType.INSERT;
-        break;
-      case "U":
-        bucketType = BucketType.UPDATE;
-        break;
-      default:
-        throw new HoodieException("Unexpected bucket type: " + hoodieRecord.getCurrentLocation().getInstantTime());
-    }
-    return new BucketInfo(bucketType, hoodieRecord.getCurrentLocation().getFileId(), hoodieRecord.getPartitionPath());
+    return recordListFgPair.getKey().stream()
+        .flatMap(richRecords -> writeFunction.write(richRecords.getRecordItr(), richRecords.getBucketInfo(), richRecords.getInstant()).stream())
+        .collect(Collectors.toList());
   }
 }
