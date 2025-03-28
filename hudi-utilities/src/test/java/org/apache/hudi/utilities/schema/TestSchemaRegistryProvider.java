@@ -35,8 +35,11 @@ import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -156,5 +159,26 @@ class TestSchemaRegistryProvider {
     assertNotNull(actual);
     assertEquals(getExpectedSchema(), actual);
     verify(mockRestService, never()).setHttpHeaders(any());
+  }
+
+  @Test
+  public void testFallbackWhenIllegalAccessErrorThrown() throws Exception {
+    TypedProperties props = getProps();
+    // Create an instance with useConverter=false (so canonicalString() is used)
+    SchemaRegistryProvider provider = getUnderTest(props, -1, false);
+    // Simulate failure by making canonicalString() throw IllegalAccessError.
+    ParsedSchema failingParsedSchema = mock(ParsedSchema.class);
+    when(failingParsedSchema.canonicalString()).thenThrow(new IllegalAccessError("tried to access field org.apache.avro.Schema.FACTORY from class org.apache.avro.Schemas"));
+    // Override the existing parseSchema behavior on the mock registry client so that it returns our failingParsedSchema
+    when(mockRegistryClient.parseSchema("AVRO", RAW_SCHEMA, Collections.emptyList()))
+        .thenReturn(java.util.Optional.of(failingParsedSchema));
+    // Stub the legacy fallback method to return a known fallback schema string.
+    SchemaRegistryProvider spyProvider = spy(provider);
+    final String FALLBACK_SCHEMA = "{\"type\": \"record\", \"namespace\": \"example.fallback\", \"name\": \"Fallback\", \"fields\": []}";
+    doReturn(FALLBACK_SCHEMA).when(spyProvider).fetchSchemaUsingLegacyMethod(anyString());
+    // Invoke the method; the IllegalAccessError should be caught and fallback used.
+    Schema schema = spyProvider.getSourceSchema();
+    // Verify that the fallback schema is returned.
+    assertEquals(new Schema.Parser().parse(FALLBACK_SCHEMA), schema);
   }
 }
