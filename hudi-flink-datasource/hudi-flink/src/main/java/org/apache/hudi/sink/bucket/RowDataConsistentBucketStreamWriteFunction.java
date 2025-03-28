@@ -27,7 +27,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.RowDataStreamWriteFunction;
 import org.apache.hudi.sink.buffer.RowDataBucket;
 import org.apache.hudi.sink.clustering.update.strategy.RowDataConsistentBucketUpdateStrategy;
-import org.apache.hudi.sink.clustering.update.strategy.RowDataConsistentBucketUpdateStrategy.RichRecords;
+import org.apache.hudi.sink.clustering.update.strategy.RowDataConsistentBucketUpdateStrategy.BucketRecords;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 
 import org.apache.flink.configuration.Configuration;
@@ -89,11 +89,11 @@ public class RowDataConsistentBucketStreamWriteFunction extends RowDataStreamWri
     Iterator<HoodieRecord> recordItr = deduplicateRecordsIfNeeded(
         new MappingIterator<>(rowItr, rowData -> convertToRecord(rowData, rowDataBucket.getBucketInfo())));
 
-    Pair<List<RichRecords>, Set<HoodieFileGroupId>> recordListFgPair =
-        updateStrategy.handleUpdate(Collections.singletonList(RichRecords.of(recordItr, rowDataBucket.getBucketInfo(), instant)));
+    Pair<List<BucketRecords>, Set<HoodieFileGroupId>> recordListFgPair =
+        updateStrategy.handleUpdate(Collections.singletonList(BucketRecords.of(recordItr, rowDataBucket.getBucketInfo(), instant)));
 
     return recordListFgPair.getKey().stream()
-        .flatMap(richRecords -> writeFunction.write(richRecords.getRecordItr(), richRecords.getBucketInfo(), richRecords.getInstant()).stream())
+        .flatMap(bucketRecords -> writeFunction.write(bucketRecords.getRecordItr(), bucketRecords.getBucketInfo(), bucketRecords.getInstant()).stream())
         .collect(Collectors.toList());
   }
 }
