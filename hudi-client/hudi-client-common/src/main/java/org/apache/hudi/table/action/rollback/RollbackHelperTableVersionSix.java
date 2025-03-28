@@ -45,6 +45,7 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -78,6 +79,63 @@ public class RollbackHelperTableVersionSix extends RollbackHelper {
 
   public RollbackHelperTableVersionSix(HoodieTable table, HoodieWriteConfig config) {
     super(table, config);
+  }
+
+  /**
+   * Get all the files in the given partition path.
+   *
+   * @param storage Hoodie Storage
+   * @param partitionPathIncludeBasePath The full partition path including the base path
+   * @param filesNamesUnderThisPartition The names of the files under this partition for which file status is needed
+   * @param ignoreMissingFiles If true, missing files will be ignored and empty Option will be added to the result list
+   * @return List of file statuses for the files under this partition
+   */
+  public static List<Option<StoragePathInfo>> getPathInfoUnderPartition(HoodieStorage storage,
+                                                                        StoragePath partitionPathIncludeBasePath,
+                                                                        Set<String> filesNamesUnderThisPartition,
+                                                                        boolean ignoreMissingFiles) {
+    String storageScheme = storage.getScheme();
+    boolean useListStatus = StorageSchemes.isListStatusFriendly(storageScheme);
+    List<Option<StoragePathInfo>> result = new ArrayList<>(filesNamesUnderThisPartition.size());
+    try {
+      if (useListStatus) {
+        List<StoragePathInfo> storagePathInfos = storage.listDirectEntries(partitionPathIncludeBasePath,
+            path -> filesNamesUnderThisPartition.contains(path.getName()));
+        Map<String, StoragePathInfo> filenameToPathInfoMap = storagePathInfos.stream()
+            .collect(Collectors.toMap(
+                storagePathInfo -> storagePathInfo.getPath().getName(),
+                storagePathInfo -> storagePathInfo
+            ));
+
+        for (String fileName : filesNamesUnderThisPartition) {
+          if (filenameToPathInfoMap.containsKey(fileName)) {
+            result.add(Option.of(filenameToPathInfoMap.get(fileName)));
+          } else {
+            if (!ignoreMissingFiles) {
+              throw new FileNotFoundException("File not found: " + new StoragePath(partitionPathIncludeBasePath.toString(), fileName));
+            }
+            result.add(Option.empty());
+          }
+        }
+      } else {
+        for (String fileName : filesNamesUnderThisPartition) {
+          StoragePath fullPath = new StoragePath(partitionPathIncludeBasePath.toString(), fileName);
+          try {
+            StoragePathInfo storagePathInfo = storage.getPathInfo(fullPath);
+            result.add(Option.of(storagePathInfo));
+          } catch (FileNotFoundException fileNotFoundException) {
+            if (ignoreMissingFiles) {
+              result.add(Option.empty());
+            } else {
+              throw new FileNotFoundException("File not found: " + fullPath.toString());
+            }
+          }
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("List files under " + partitionPathIncludeBasePath + " failed", e);
+    }
+    return result;
   }
 
   /**
@@ -308,7 +366,7 @@ public class RollbackHelperTableVersionSix extends RollbackHelper {
             // fetch file sizes.
             StoragePath fullPartitionPath = StringUtils.isNullOrEmpty(partition) ? new StoragePath(basePathStr) : new StoragePath(basePathStr, partition);
             HoodieStorage storage = HoodieStorageUtils.getStorage(storageConfiguration);
-            List<Option<StoragePathInfo>> storagePathInfoOpts = FSUtils.getPathInfoUnderPartition(storage,
+            List<Option<StoragePathInfo>> storagePathInfoOpts = getPathInfoUnderPartition(storage,
                 fullPartitionPath, new HashSet<>(missingLogFiles), true);
             List<StoragePathInfo> storagePathInfos = storagePathInfoOpts.stream().filter(storagePathInfoOpt -> storagePathInfoOpt.isPresent())
                 .map(Option::get).collect(Collectors.toList());

@@ -34,10 +34,13 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 
@@ -45,9 +48,11 @@ import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -59,8 +64,10 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
+import static org.apache.hudi.table.action.rollback.RollbackHelperTableVersionSix.getPathInfoUnderPartition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -71,7 +78,6 @@ public class TestCommitMetadataResolver extends HoodieCommonTestHarness {
 
   private final HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
   private final HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-  private final HoodieWrapperFileSystem fileSystem = mock(HoodieWrapperFileSystem.class);
   private final HoodieEngineContext context = mock(HoodieEngineContext.class);
   private final HoodieTable table = mock(HoodieTable.class);
 
@@ -177,5 +183,68 @@ public class TestCommitMetadataResolver extends HoodieCommonTestHarness {
       metadata.addWriteStat(partitionPath, writeStat);
     }));
     return Pair.of(metadata, allLogFiles);
+  }
+
+  @Test
+  public void testGetPathInfoUnderPartition(@TempDir Path tempDir) throws IOException {
+    StoragePath hoodieTempDir = getHoodieTempDir();
+    HoodieStorage storage = super.metaClient.getStorage();
+    prepareTestDirectory(storage, hoodieTempDir);
+    List<Option<StoragePathInfo>> fileStatusList = getPathInfoUnderPartition(
+        storage,
+        new StoragePath(baseUri.toString(), ".hoodie/.temp"),
+        new HashSet<>(Collections.singletonList("file3.txt")),
+        false);
+    assertEquals(1, fileStatusList.size());
+
+    // With ignoreMissingFiles set to true, error is not thrown in case some files are missing
+    fileStatusList = getPathInfoUnderPartition(
+        storage,
+        new StoragePath(baseUri.toString(), ".hoodie/.temp"),
+        new HashSet<>(Arrays.asList("file3.txt", "file4.txt")),
+        true);
+    assertEquals(2, fileStatusList.size());
+    assertTrue(fileStatusList.get(0).isPresent());
+    // For missing files, option of storage path info is empty
+    assertFalse(fileStatusList.get(1).isPresent());
+
+    assertThrows(HoodieIOException.class, () -> getPathInfoUnderPartition(
+        storage,
+        new StoragePath(baseUri.toString(), ".hoodie/.temp"),
+        new HashSet<>(Collections.singletonList("file4.txt")),
+        false));
+  }
+
+  private void prepareTestDirectory(HoodieStorage storage, StoragePath rootDir) throws IOException {
+    // Directory structure
+    // .hoodie/.temp/
+    //  - subdir1
+    //    - file1.txt
+    //  - subdir2
+    //    - file2.txt
+    //  - file3
+    String subDir1 = rootDir + "/subdir1";
+    String file1 = subDir1 + "/file1.txt";
+    String subDir2 = rootDir + "/subdir2";
+    String file2 = subDir2 + "/file2.txt";
+    String file3 = rootDir + "/file3.txt";
+    String[] dirs = new String[] {rootDir.toString(), subDir1, subDir2};
+    String[] files = new String[] {file1, file2, file3};
+    // clean up first
+    cleanUpTestDirectory(storage, rootDir);
+    for (String dir : dirs) {
+      storage.createDirectory(new StoragePath(dir));
+    }
+    for (String filename : files) {
+      storage.create(new StoragePath(filename));
+    }
+  }
+
+  private StoragePath getHoodieTempDir() {
+    return new StoragePath(baseUri.toString(), ".hoodie/.temp");
+  }
+
+  private void cleanUpTestDirectory(HoodieStorage storage, StoragePath rootDir) throws IOException {
+    storage.deleteDirectory(rootDir);
   }
 }

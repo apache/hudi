@@ -541,7 +541,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMetadataStatsOnCommit(Boolean rollbackUsingMarkers) throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder(false, rollbackUsingMarkers, IndexType.BLOOM)
+    HoodieWriteConfig cfg = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY)
         .withAvroSchemaValidate(false)
         .withAllowAutoEvolutionColumnDrop(true)
         .withAutoCommit(false)
