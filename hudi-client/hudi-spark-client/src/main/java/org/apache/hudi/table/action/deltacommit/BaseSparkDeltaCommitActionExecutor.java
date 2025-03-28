@@ -50,13 +50,13 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
   private SparkUpsertDeltaCommitPartitioner<T> mergeOnReadUpsertPartitioner;
 
   public BaseSparkDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
-                                            String instantTime, WriteOperationType operationType) {
+                                                String instantTime, WriteOperationType operationType) {
     this(context, config, table, instantTime, operationType, Option.empty());
   }
 
   public BaseSparkDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
-                                            String instantTime, WriteOperationType operationType,
-                                            Option<Map<String, String>> extraMetadata) {
+                                                String instantTime, WriteOperationType operationType,
+                                                Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
   }
 
@@ -71,7 +71,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                  Iterator<HoodieRecord<T>> recordItr) throws IOException {
+      Iterator<HoodieRecord<T>> recordItr) throws IOException {
     LOG.info("Merging updates for commit " + instantTime + " for file " + fileId);
     if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner != null
         && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
