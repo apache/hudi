@@ -65,7 +65,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
         "", metaClient.getActiveTimeline());
   }
 
-  protected List<String> getMarkerRelativePathList(boolean isTablePartitioned) {
+  protected List<String> getRelativeMarkerPathList(boolean isTablePartitioned) {
     IOType logMarkerType = writeMarkers instanceof AppendMarkerHandler ? IOType.APPEND : IOType.CREATE;
     return isTablePartitioned
         ? CollectionUtils.createImmutableList("2020/06/01/file1.marker.MERGE",
@@ -129,7 +129,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
     long fileSize = HoodieTestTable.listRecursive(storage, markerFolderPath).stream()
         .filter(fileStatus -> !fileStatus.getPath().getName().contains(MarkerUtils.MARKER_TYPE_FILENAME))
         .count();
-    assertEquals(getMarkerRelativePathList(isTablePartitioned).size() + 1, fileSize);
+    assertEquals(getRelativeMarkerPathList(isTablePartitioned).size() + 1, fileSize);
 
     List<String> expectedPaths = new ArrayList<>(isTablePartitioned
         ? Arrays.asList("2020/06/01/file1", "2020/06/03/file3")
@@ -154,7 +154,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
       long fileSize = storage.listFiles(markerFolderPath).stream()
           .filter(fileStatus -> !fileStatus.getPath().getName().contains(MarkerUtils.MARKER_TYPE_FILENAME))
           .count();
-      assertEquals(getMarkerRelativePathList(isTablePartitioned).size() + 1, fileSize);
+      assertEquals(getRelativeMarkerPathList(isTablePartitioned).size() + 1, fileSize);
 
       List<String> expectedPaths = new ArrayList<>(isTablePartitioned
           ? Collections.singletonList("2020/06/02/file2") : Collections.singletonList("file2"));
@@ -174,7 +174,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
     // given
     createSomeMarkers(isTablePartitioned);
 
-    List<String> expectedPaths = getMarkerRelativePathList(isTablePartitioned);
+    List<String> expectedPaths = getRelativeMarkerPathList(isTablePartitioned);
     // then
     assertIterableEquals(expectedPaths,
         writeMarkers.allMarkerFilePaths().stream()

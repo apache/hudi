@@ -62,7 +62,7 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
     List<StoragePathInfo> markerFiles = HoodieTestTable.listRecursive(storage, markerFolderPath)
         .stream().filter(status -> status.getPath().getName().contains(".marker"))
         .sorted().collect(Collectors.toList());
-    List<String> expectedList = getMarkerRelativePathList(isTablePartitioned)
+    List<String> expectedList = getRelativeMarkerPathList(isTablePartitioned)
         .stream().map(e -> markerFolderPath.toString() + "/" + e)
         .collect(Collectors.toList());
     assertEquals(expectedList.size(), markerFiles.size());
