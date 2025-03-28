@@ -19,6 +19,7 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -49,7 +50,8 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
     this.storage = metaClient.getStorage();
     this.markerFolderPath = new StoragePath(Paths.get(metaClient.getMarkerFolderPath("000")).toUri());
     this.writeMarkers = new DirectWriteMarkers(
-        storage, metaClient.getBasePath().toString(), markerFolderPath.toString(), "000");
+        storage, metaClient.getBasePath().toString(), markerFolderPath.toString(), "000",
+        HoodieTableVersion.current());
   }
 
   @AfterEach

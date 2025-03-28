@@ -21,6 +21,7 @@ package org.apache.hudi.table.marker;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -35,7 +36,6 @@ import org.apache.hudi.timeline.TimelineServiceClient;
 import org.apache.hudi.timeline.TimelineServiceClientBase.RequestMethod;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,14 +72,16 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   public TimelineServerBasedWriteMarkers(HoodieTable table, String instantTime) {
     this(table.getMetaClient().getBasePath().toString(),
         table.getMetaClient().getMarkerFolderPath(instantTime), instantTime,
+        table.getMetaClient().getTableConfig().getTableVersion(),
         table.getConfig().getViewStorageConfig());
   }
 
   TimelineServerBasedWriteMarkers(String basePath,
                                   String markerFolderPath,
                                   String instantTime,
+                                  HoodieTableVersion tableVersion,
                                   FileSystemViewStorageConfig  fileSystemViewStorageConfig) {
-    super(basePath, markerFolderPath, instantTime);
+    super(basePath, markerFolderPath, instantTime, tableVersion);
     this.timelineServiceClient = new TimelineServiceClient(fileSystemViewStorageConfig);
   }
 

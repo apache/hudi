@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -184,7 +185,8 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
           .withRemoteTimelineClientMaxRetryIntervalMs(30000L)
           .withRemoteTimelineClientMaxRetryNumbers(5);
     }
-    return new TimelineServerBasedWriteMarkers(basePath, markerFolderPath, "000", builder.build());
+    return new TimelineServerBasedWriteMarkers(
+        basePath, markerFolderPath, "000", HoodieTableVersion.current(), builder.build());
   }
 
   /**

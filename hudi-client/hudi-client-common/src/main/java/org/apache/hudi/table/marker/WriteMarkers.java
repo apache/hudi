@@ -49,11 +49,16 @@ public abstract class WriteMarkers implements Serializable {
   protected final String basePath;
   protected final transient StoragePath markerDirPath;
   protected final String instantTime;
+  protected final HoodieTableVersion tableVersion;
 
-  public WriteMarkers(String basePath, String markerFolderPath, String instantTime) {
+  public WriteMarkers(String basePath,
+                      String markerFolderPath,
+                      String instantTime,
+                      HoodieTableVersion tableVersion) {
     this.basePath = basePath;
     this.markerDirPath = new StoragePath(markerFolderPath);
     this.instantTime = instantTime;
+    this.tableVersion = tableVersion;
   }
 
   /**
@@ -114,14 +119,16 @@ public abstract class WriteMarkers implements Serializable {
    *
    * @param partitionPath  partition path in the table
    * @param fileName       file name
-   * @param tableVersion   tableVersion
    * @param writeConfig    Hudi write configs.
    * @param fileId         File ID.
    * @param activeTimeline Active timeline for the write operation.
    * @return the marker path.
    */
-  public Option<StoragePath> createLogMarkerIfNotExists(String partitionPath, String fileName, HoodieTableVersion tableVersion, HoodieWriteConfig writeConfig,
-                                               String fileId, HoodieActiveTimeline activeTimeline) {
+  public Option<StoragePath> createLogMarkerIfNotExists(String partitionPath,
+                                                        String fileName,
+                                                        HoodieWriteConfig writeConfig,
+                                                        String fileId,
+                                                        HoodieActiveTimeline activeTimeline) {
     IOType ioType = tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? IOType.CREATE : IOType.APPEND;
     return createIfNotExists(partitionPath, fileName, ioType, writeConfig, fileId, activeTimeline);
   }

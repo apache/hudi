@@ -290,8 +290,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       @Override
       public boolean preFileCreation(HoodieLogFile logFile) {
         WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
-        return writeMarkers.createLogMarkerIfNotExists(partitionPath, logFile.getFileName(), getHoodieTableMetaClient().getTableConfig().getTableVersion(),
-            config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
+        return writeMarkers.createLogMarkerIfNotExists(
+            partitionPath, logFile.getFileName(), config, fileId,
+            hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
       }
     };
   }

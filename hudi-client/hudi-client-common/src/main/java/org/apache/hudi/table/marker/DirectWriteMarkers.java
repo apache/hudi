@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -66,8 +67,12 @@ public class DirectWriteMarkers extends WriteMarkers {
 
   private final transient HoodieStorage storage;
 
-  public DirectWriteMarkers(HoodieStorage storage, String basePath, String markerFolderPath, String instantTime) {
-    super(basePath, markerFolderPath, instantTime);
+  DirectWriteMarkers(HoodieStorage storage,
+                     String basePath,
+                     String markerFolderPath,
+                     String instantTime,
+                     HoodieTableVersion tableVersion) {
+    super(basePath, markerFolderPath, instantTime, tableVersion);
     this.storage = storage;
   }
 
@@ -75,7 +80,8 @@ public class DirectWriteMarkers extends WriteMarkers {
     this(table.getStorage(),
         table.getMetaClient().getBasePath().toString(),
         table.getMetaClient().getMarkerFolderPath(instantTime),
-        instantTime);
+        instantTime,
+        table.getMetaClient().getTableConfig().getTableVersion());
   }
 
   /**
