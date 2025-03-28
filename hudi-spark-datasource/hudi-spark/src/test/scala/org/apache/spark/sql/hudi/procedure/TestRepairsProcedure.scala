@@ -149,6 +149,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.table.name,,]
           |[hoodie.table.precombine.field,ts,null]
           |[hoodie.table.recordkey.fields,id,null]
+          |[hoodie.table.timeline.timezone,UTC,UTC]
           |[hoodie.table.type,COPY_ON_WRITE,COPY_ON_WRITE]
           |[hoodie.table.version,,]
           |[hoodie.timeline.history.path,history,history]
