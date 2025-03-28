@@ -49,9 +49,7 @@ public abstract class WriteMarkers implements Serializable {
   protected final transient StoragePath markerDirPath;
   protected final String instantTime;
 
-  public WriteMarkers(String basePath,
-                      String markerFolderPath,
-                      String instantTime) {
+  public WriteMarkers(String basePath, String markerFolderPath, String instantTime) {
     this.basePath = basePath;
     this.markerDirPath = new StoragePath(markerFolderPath);
     this.instantTime = instantTime;
