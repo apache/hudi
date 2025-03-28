@@ -123,8 +123,10 @@ class TestSevenToEightUpgradeHandler {
       "com.example.CustomPayload, preCombineFieldValue, CUSTOM, " + HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID + ", com.example.CustomPayload",
       "org.apache.hudi.metadata.HoodieMetadataPayload, , CUSTOM, " + HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.metadata.HoodieMetadataPayload",
       "org.apache.hudi.metadata.HoodieMetadataPayload, preCombineFieldValue, CUSTOM, " + HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.metadata.HoodieMetadataPayload",
-      "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, , COMMIT_TIME_ORDERING, " + HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
-      "org.apache.hudi.common.model.DefaultHoodieRecordPayload, , EVENT_TIME_ORDERING, " + HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, , COMMIT_TIME_ORDERING, " + HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID
+          + ", org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+      "org.apache.hudi.common.model.DefaultHoodieRecordPayload, , EVENT_TIME_ORDERING, " + HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
+          + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
       ", preCombineFieldValue, EVENT_TIME_ORDERING, " + HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
       "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, preCombineFieldValue, EVENT_TIME_ORDERING,"
           + HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
