@@ -19,23 +19,21 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hadoop.mapreduce.Job
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.io.hadoop.HoodieHBaseAvroHFileReader
-import org.apache.hudi.io.hfile.{HFileContext, HFileReader, HFileReaderImpl}
-import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase
-import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
+import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -51,7 +49,6 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
-import scala.collection.mutable
 
 trait HoodieFormatTrait {
   // Used so that the planner only projects once and does not stack overflow
@@ -162,10 +159,12 @@ class FileGroupReaderBasedFileFormat(tablePath: String,
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
-    val broadcastedParquetFileReader = spark.sparkContext.broadcast(
+    val broadcastParquetFileReader = spark.sparkContext.broadcast(
       sparkAdapter.createParquetFileReader(supportBatchResult, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
-    val broadcastedOrcFileReader = spark.sparkContext.broadcast(
+    val broadcastOrcFileReader = spark.sparkContext.broadcast(
       sparkAdapter.createOrcFileReader(supportBatchCalled, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
+    val broadcastHfileFileReader = spark.sparkContext.broadcast(
+      sparkAdapter.createHFileFileReader(supportBatchCalled, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
@@ -179,12 +178,9 @@ class FileGroupReaderBasedFileFormat(tablePath: String,
           fileSliceMapping.getSlice(filegroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val fileReaders = new java.util.HashMap[String, SparkFileReader]()
-              val hfileFileReader: SparkFileReader = new HoodieHBaseAvroHFileReader(
-                new HadoopStorageConfiguration(broadcastedStorageConf.value.value),
-                new StoragePath(fileSlice.getBaseFile.get.getPath))
-              fileReaders.put(ORC_FILE_EXTENSION, broadcastedOrcFileReader.value)
-              fileReaders.put(PARQUET_FILE_EXTENSION, broadcastedParquetFileReader.value)
-              fileReaders.put(HFILE_FILE_EXTENSION, hfileFileReader)
+              fileReaders.put(ORC_FILE_EXTENSION, broadcastOrcFileReader.value)
+              fileReaders.put(PARQUET_FILE_EXTENSION, broadcastParquetFileReader.value)
+              fileReaders.put(HFILE_FILE_EXTENSION, broadcastHfileFileReader.value)
               val readerContext = new SparkFileFormatInternalRowReaderContext(fileReaders, filters, requiredFilters)
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(storageConf).setBasePath(tablePath).build
@@ -218,23 +214,23 @@ class FileGroupReaderBasedFileFormat(tablePath: String,
               val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
               val baseFileFormat = detectFileFormat(filePath.toString)
               baseFileFormat match {
-                case PARQUET_FILE_EXTENSION => readBaseFile(file, broadcastedParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+                case PARQUET_FILE_EXTENSION => readBaseFile(file, broadcastParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
               requiredSchema, partitionSchema, outputSchema, filters, storageConf)
-                case ORC_FILE_EXTENSION => readBaseFile(file, broadcastedOrcFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+                case ORC_FILE_EXTENSION => readBaseFile(file, broadcastOrcFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
                   requiredSchema, partitionSchema, outputSchema, filters, storageConf)
               }
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
-          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, broadcastedParquetFileReader.value, storageConf, fileIndexProps, requiredSchema)
+          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, broadcastParquetFileReader.value, storageConf, fileIndexProps, requiredSchema)
 
         case _ =>
           val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
           val baseFileFormat = detectFileFormat(filePath.toString)
           baseFileFormat match {
-            case PARQUET_FILE_EXTENSION => readBaseFile(file, broadcastedParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+            case PARQUET_FILE_EXTENSION => readBaseFile(file, broadcastParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
               requiredSchema, partitionSchema, outputSchema, filters, storageConf)
-            case ORC_FILE_EXTENSION => readBaseFile(file, broadcastedOrcFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+            case ORC_FILE_EXTENSION => readBaseFile(file, broadcastOrcFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
               requiredSchema, partitionSchema, outputSchema, filters, storageConf)
           }
       }
