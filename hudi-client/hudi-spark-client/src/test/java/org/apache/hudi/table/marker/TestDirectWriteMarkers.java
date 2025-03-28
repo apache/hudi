@@ -65,7 +65,6 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
     List<String> expectedList = getRelativeMarkerPathList(isTablePartitioned)
         .stream().map(e -> markerFolderPath.toString() + "/" + e)
         .collect(Collectors.toList());
-    assertEquals(expectedList.size(), markerFiles.size());
     assertIterableEquals(
         expectedList,
         markerFiles.stream().map(m -> m.getPath().toString()).collect(Collectors.toList())

@@ -96,8 +96,6 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
             markerFolderPath.toString(), storage, context, 1)
         .values().stream().flatMap(Collection::stream).sorted()
         .collect(Collectors.toList());
-    IOType logMarkerType = writeMarkers instanceof AppendMarkerHandler ? IOType.APPEND : IOType.CREATE;
-    assertEquals(4, allMarkers.size());
     List<String> expectedMarkers = getRelativeMarkerPathList(isTablePartitioned);
     assertIterableEquals(expectedMarkers, allMarkers);
     // Verifies the marker type file
