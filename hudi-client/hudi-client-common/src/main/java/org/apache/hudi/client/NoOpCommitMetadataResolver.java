@@ -26,21 +26,15 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
 /**
- * Provides reconciliation between the commit metadata and markers
+ * No-op implementation
  */
-public interface CommitMetadataResolver {
-  /**
-   * @param config
-   * @param context
-   * @param table
-   * @param instantTime
-   * @param commitMetadata
-   * @return
-   * @throws HoodieIOException
-   */
-  HoodieCommitMetadata reconcileMetadataForMissingFiles(HoodieWriteConfig config,
-                                                        HoodieEngineContext context,
-                                                        HoodieTable table,
-                                                        String instantTime,
-                                                        HoodieCommitMetadata commitMetadata) throws HoodieIOException;
+public class NoOpCommitMetadataResolver implements CommitMetadataResolver {
+  @Override
+  public HoodieCommitMetadata reconcileMetadataForMissingFiles(HoodieWriteConfig config,
+                                                               HoodieEngineContext context,
+                                                               HoodieTable table,
+                                                               String instantTime,
+                                                               HoodieCommitMetadata commitMetadata) throws HoodieIOException {
+    return commitMetadata;
+  }
 }

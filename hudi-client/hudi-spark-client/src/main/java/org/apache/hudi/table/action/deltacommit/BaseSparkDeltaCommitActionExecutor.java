@@ -18,16 +18,12 @@
 
 package org.apache.hudi.table.action.deltacommit;
 
-import org.apache.hudi.client.CommitMetadataResolver;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.io.AppendHandleFactory;
@@ -62,17 +58,6 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
                                             String instantTime, WriteOperationType operationType,
                                             Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
-  }
-
-  @Override
-  protected HoodieCommitMetadata appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws HoodieIOException {
-    if (table.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      // reconciliation not required for table version 8 and above.
-      return commitMetadata;
-    } else {
-      return CommitMetadataResolver.reconcileMetadataForMissingFiles(table, getCommitActionType(), instantTime, commitMetadata,
-          config, context, storageConf, this.getClass().getSimpleName());
-    }
   }
 
   @Override

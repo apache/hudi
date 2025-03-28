@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.client.CommitMetadataResolverFactory;
 import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.TransactionManager;
@@ -225,9 +226,11 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     finalizeWrite(instantTime, writeStats, result);
     try {
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      HoodieCommitMetadata metadata = result.getCommitMetadata().get();
-      metadata = appendMetadataForMissingFiles(metadata);
-
+      HoodieCommitMetadata metadata = CommitMetadataResolverFactory.get(
+              table.getMetaClient().getTableConfig().getTableVersion(), config.getEngineType(),
+              table.getMetaClient().getTableType(), getCommitActionType())
+          .reconcileMetadataForMissingFiles(
+              config, context, table, instantTime, result.getCommitMetadata().get());
       writeTableMetadata(metadata, actionType);
       // cannot serialize maps with null values
       metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
@@ -245,10 +248,6 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
     }
-  }
-
-  protected HoodieCommitMetadata appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws HoodieIOException {
-    return commitMetadata;
   }
 
   /**

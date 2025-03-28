@@ -19,7 +19,7 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.client.CommitMetadataResolver;
+import org.apache.hudi.client.MarkerBasedCommitMetadataResolver;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -107,7 +106,6 @@ public class TestCommitMetadataResolver extends HoodieCommonTestHarness {
     when(writeConfig.getViewStorageConfig()).thenReturn(FileSystemViewStorageConfig.newBuilder().build());
     when(writeConfig.getMarkersType()).thenReturn(MarkerType.DIRECT);
     when(writeConfig.getBasePath()).thenReturn(basePath);
-    String commitActionType = HoodieActiveTimeline.DELTA_COMMIT_ACTION;
     String instantTime = metaClient.createNewInstantTime();
 
     // Setup dummy commit metadata
@@ -136,8 +134,9 @@ public class TestCommitMetadataResolver extends HoodieCommonTestHarness {
     when(fs.exists(any())).thenReturn(true);
 
     // Call the method under test
-    HoodieCommitMetadata reconciledMetadata = CommitMetadataResolver.reconcileMetadataForMissingFiles(
-        table, commitActionType, instantTime, commitMetadataWithLogFiles.getLeft(), writeConfig, context, storageConf, this.getClass().getSimpleName());
+    HoodieCommitMetadata reconciledMetadata = new MarkerBasedCommitMetadataResolver()
+        .reconcileMetadataForMissingFiles(
+            writeConfig, context, table, instantTime, commitMetadataWithLogFiles.getLeft());
 
     // Assertions to verify if the missing files are added
     assertFalse(reconciledMetadata.getPartitionToWriteStats().isEmpty(), "CommitMetadata should not be empty after reconciliation");
