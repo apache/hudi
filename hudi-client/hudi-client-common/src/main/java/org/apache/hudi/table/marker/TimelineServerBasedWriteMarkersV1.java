@@ -40,6 +40,10 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.marker.MarkerOperation.APPEND_MARKERS_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 
+/**
+ * Marker operations of using timeline server as a proxy to create and delete markers
+ * for table version 6.
+ */
 public class TimelineServerBasedWriteMarkersV1 extends TimelineServerBasedWriteMarkers implements AppendMarkerHandler {
   public TimelineServerBasedWriteMarkersV1(HoodieTable table, String instantTime) {
     super(table, instantTime);
