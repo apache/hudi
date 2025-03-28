@@ -47,6 +47,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.AppendMarkerHandler;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.CommonClientUtils;
@@ -151,13 +152,13 @@ public class RollbackHelperTableVersionSix extends RollbackHelper {
     // stack trace: https://gist.github.com/nsivabalan/b6359e7d5038484f8043506c8bc9e1c8
     // related stack overflow post: https://issues.apache.org/jira/browse/SPARK-3601. Avro deserializes list as GenericData.Array.
     List<SerializableHoodieRollbackRequest> serializableRequests = rollbackRequests.stream().map(SerializableHoodieRollbackRequest::new).collect(Collectors.toList());
-    WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), table, instantTime);
+    AppendMarkerHandler markerHandler = WriteMarkersFactory.getAppendMarkerHandler(config.getMarkersType(), table, instantTime);
 
     // Considering rollback may failed before, which generated some additional log files. We need to add these log files back.
     // rollback markers are added under rollback instant itself.
     Set<String> logPaths = new HashSet<>();
     try {
-      logPaths = markers.getAppendedLogPaths(context, config.getFinalizeWriteParallelism());
+      logPaths = markerHandler.getAppendedLogPaths(context, config.getFinalizeWriteParallelism());
     } catch (FileNotFoundException fnf) {
       LOG.warn("Rollback never failed and hence no marker dir was found. Safely moving on");
     } catch (IOException e) {

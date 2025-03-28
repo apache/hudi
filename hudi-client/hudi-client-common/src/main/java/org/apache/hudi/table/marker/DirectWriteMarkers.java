@@ -23,7 +23,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -47,9 +46,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -57,22 +54,21 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
 
 /**
  * Marker operations of directly accessing the file system to create and delete
- * marker files.  Each data file has a corresponding marker file.
+ * marker files for table version 8 and above.
+ * Each data file has a corresponding marker file.
  */
 public class DirectWriteMarkers extends WriteMarkers {
 
   private static final Logger LOG = LoggerFactory.getLogger(DirectWriteMarkers.class);
-  private static final Predicate<String> APPEND_MARKER_PREDICATE = pathStr -> pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && pathStr.endsWith(IOType.APPEND.name());
   private static final Predicate<String> NOT_APPEND_MARKER_PREDICATE = pathStr -> pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name());
 
-  private final transient HoodieStorage storage;
+  protected final transient HoodieStorage storage;
 
   DirectWriteMarkers(HoodieStorage storage,
                      String basePath,
                      String markerFolderPath,
-                     String instantTime,
-                     HoodieTableVersion tableVersion) {
-    super(basePath, markerFolderPath, instantTime, tableVersion);
+                     String instantTime) {
+    super(basePath, markerFolderPath, instantTime);
     this.storage = storage;
   }
 
@@ -80,8 +76,7 @@ public class DirectWriteMarkers extends WriteMarkers {
     this(table.getStorage(),
         table.getMetaClient().getBasePath().toString(),
         table.getMetaClient().getMarkerFolderPath(instantTime),
-        instantTime,
-        table.getMetaClient().getTableConfig().getTableVersion());
+        instantTime);
   }
 
   /**
@@ -124,41 +119,7 @@ public class DirectWriteMarkers extends WriteMarkers {
     return dataFiles;
   }
 
-  public Set<String> getAppendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException {
-    Pair<List<String>, Set<String>> subDirectoriesAndDataFiles = getSubDirectoriesByMarkerCondition(storage.listDirectEntries(markerDirPath), APPEND_MARKER_PREDICATE);
-    List<String> subDirectories = subDirectoriesAndDataFiles.getLeft();
-    Set<String> logFiles = subDirectoriesAndDataFiles.getRight();
-    if (subDirectories.size() > 0) {
-      parallelism = Math.min(subDirectories.size(), parallelism);
-      StorageConfiguration<?> storageConf = storage.getConf();
-      context.setJobStatus(this.getClass().getSimpleName(), "Obtaining marker files for all created, merged paths");
-      logFiles.addAll(context.flatMap(subDirectories, directory -> {
-        Queue<StoragePath> candidatesDirs = new LinkedList<>();
-        candidatesDirs.add(new StoragePath(directory));
-        List<String> result = new ArrayList<>();
-        while (!candidatesDirs.isEmpty()) {
-          StoragePath path = candidatesDirs.remove();
-          HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
-          List<StoragePathInfo> storagePathInfos = storage.listDirectEntries(path);
-          for (StoragePathInfo pathInfo : storagePathInfos) {
-            if (pathInfo.isDirectory()) {
-              candidatesDirs.add(pathInfo.getPath());
-            } else {
-              String pathStr = pathInfo.getPath().toString();
-              if (APPEND_MARKER_PREDICATE.test(pathStr)) {
-                result.add(translateMarkerToDataPath(pathStr));
-              }
-            }
-          }
-        }
-        return result.stream();
-      }, parallelism));
-    }
-
-    return logFiles;
-  }
-
-  private Pair<List<String>, Set<String>> getSubDirectoriesByMarkerCondition(List<StoragePathInfo> topLevelInfoList, Predicate<String> pathCondition) {
+  protected Pair<List<String>, Set<String>> getSubDirectoriesByMarkerCondition(List<StoragePathInfo> topLevelInfoList, Predicate<String> pathCondition) {
     Set<String> dataFiles = new HashSet<>();
     List<String> subDirectories = new ArrayList<>();
     for (StoragePathInfo topLevelInfo: topLevelInfoList) {
@@ -175,7 +136,7 @@ public class DirectWriteMarkers extends WriteMarkers {
     return Pair.of(subDirectories, dataFiles);
   }
 
-  private String translateMarkerToDataPath(String markerPath) {
+  protected String translateMarkerToDataPath(String markerPath) {
     String rPath = MarkerUtils.stripMarkerFolderPrefix(markerPath, basePath, instantTime);
     return stripMarkerSuffix(rPath);
   }

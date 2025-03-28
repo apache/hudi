@@ -49,16 +49,13 @@ public abstract class WriteMarkers implements Serializable {
   protected final String basePath;
   protected final transient StoragePath markerDirPath;
   protected final String instantTime;
-  protected final HoodieTableVersion tableVersion;
 
   public WriteMarkers(String basePath,
                       String markerFolderPath,
-                      String instantTime,
-                      HoodieTableVersion tableVersion) {
+                      String instantTime) {
     this.basePath = basePath;
     this.markerDirPath = new StoragePath(markerFolderPath);
     this.instantTime = instantTime;
-    this.tableVersion = tableVersion;
   }
 
   /**
@@ -129,8 +126,7 @@ public abstract class WriteMarkers implements Serializable {
                                                         HoodieWriteConfig writeConfig,
                                                         String fileId,
                                                         HoodieActiveTimeline activeTimeline) {
-    IOType ioType = tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? IOType.CREATE : IOType.APPEND;
-    return createIfNotExists(partitionPath, fileName, ioType, writeConfig, fileId, activeTimeline);
+    return createIfNotExists(partitionPath, fileName, IOType.CREATE, writeConfig, fileId, activeTimeline);
   }
 
   /**
@@ -234,15 +230,6 @@ public abstract class WriteMarkers implements Serializable {
    * @throws IOException
    */
   public abstract Set<String> createdAndMergedDataPaths(HoodieEngineContext context, int parallelism) throws IOException;
-
-  /**
-   * Fetches markers for log files w/ Append IOType. Used only for table version 6.
-   * @param context {@code HoodieEngineContext} instance.
-   * @param parallelism parallelism for reading the marker files in the directory.
-   * @return all the log file paths of write IO type "APPEND"
-   * @throws IOException
-   */
-  public abstract Set<String> getAppendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException;
 
   /**
    * @return all the marker paths

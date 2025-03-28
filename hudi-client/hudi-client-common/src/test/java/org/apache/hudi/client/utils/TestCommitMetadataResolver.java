@@ -42,7 +42,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.marker.WriteMarkers;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
@@ -70,7 +69,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -128,13 +126,8 @@ public class TestCommitMetadataResolver extends HoodieCommonTestHarness {
 
     // Assume these are paths to log files that were supposed to be in commitMetadata but are missing
     Set<String> missingLogFiles = new HashSet<>(Arrays.asList("path/to/log1", "path/to/log2"));
-    // Mocking the behavior to return missing log files
-    WriteMarkers markers = mock(WriteMarkers.class);
-    // Add valid log files along with missing ones
-    when(markers.getAppendedLogPaths(any(), anyInt())).thenReturn(missingLogFiles);
     when(table.getFileSystemView()).thenReturn(mock(org.apache.hudi.common.table.view.HoodieTableFileSystemView.class));
     missingLogFiles.addAll(commitMetadataWithLogFiles.getRight());
-    when(markers.getAppendedLogPaths(any(), anyInt())).thenReturn(missingLogFiles);
     when(table.getFileSystemView()).thenReturn(mock(org.apache.hudi.common.table.view.HoodieTableFileSystemView.class));
 
     // Mock filesystem and file status

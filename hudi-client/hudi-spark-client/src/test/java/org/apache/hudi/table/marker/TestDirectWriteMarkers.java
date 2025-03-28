@@ -19,9 +19,7 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
@@ -50,8 +48,7 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
     this.storage = metaClient.getStorage();
     this.markerFolderPath = new StoragePath(Paths.get(metaClient.getMarkerFolderPath("000")).toUri());
     this.writeMarkers = new DirectWriteMarkers(
-        storage, metaClient.getBasePath().toString(), markerFolderPath.toString(), "000",
-        HoodieTableVersion.current());
+        storage, metaClient.getBasePath().toString(), markerFolderPath.toString(), "000");
   }
 
   @AfterEach
@@ -65,14 +62,12 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
     List<StoragePathInfo> markerFiles = HoodieTestTable.listRecursive(storage, markerFolderPath)
         .stream().filter(status -> status.getPath().getName().contains(".marker"))
         .sorted().collect(Collectors.toList());
-    assertEquals(3, markerFiles.size());
-    assertIterableEquals(CollectionUtils.createImmutableList(
-            markerFolderPath.toString()
-                + (isTablePartitioned ? "/2020/06/01" : "") + "/file1.marker.MERGE",
-            markerFolderPath.toString()
-                + (isTablePartitioned ? "/2020/06/02" : "") + "/file2.marker.APPEND",
-            markerFolderPath.toString()
-                + (isTablePartitioned ? "/2020/06/03" : "") + "/file3.marker.CREATE"),
+    List<String> expectedList = getMarkerRelativePathList(isTablePartitioned)
+        .stream().map(e -> markerFolderPath.toString() + "/" + e)
+        .collect(Collectors.toList());
+    assertEquals(expectedList.size(), markerFiles.size());
+    assertIterableEquals(
+        expectedList,
         markerFiles.stream().map(m -> m.getPath().toString()).collect(Collectors.toList())
     );
   }
