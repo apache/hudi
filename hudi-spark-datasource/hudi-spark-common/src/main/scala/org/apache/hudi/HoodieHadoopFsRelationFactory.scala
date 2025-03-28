@@ -44,7 +44,7 @@ import org.apache.spark.sql.{SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedParquetFileFormat
+import org.apache.spark.sql.execution.datasources.parquet.FileGroupReaderBasedParquetFileFormat
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.types.StructType
 
@@ -290,12 +290,18 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
 
   override def buildFileFormat(): FileFormat = {
     if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
-      new HoodieFileGroupReaderBasedFileFormat(
-        tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-        metaClient.getTableConfig.getTableName, mandatoryFields, true, isBootstrap,
-        false, validCommits, shouldUseRecordPosition, Seq.empty)
+      new FileGroupReaderBasedFileFormat(
+        basePath.toString,
+        HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
+        metaClient.getTableConfig.getTableName,
+        queryTimestamp.get,
+        mandatoryFields,
+        true,
+        isBootstrap,
+        false,
+        validCommits, shouldUseRecordPosition, Seq.empty)
     } else {
-      new HoodieFileGroupReaderBasedParquetFileFormat(basePath.toString,
+      new FileGroupReaderBasedParquetFileFormat(basePath.toString,
         HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, queryTimestamp.get, mandatoryFields, true, isBootstrap,
         false, fileIndex.isInstanceOf[HoodieCDCFileIndex], validCommits, shouldUseRecordPosition, Seq.empty)
@@ -334,13 +340,15 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
 
   override def buildFileFormat(): FileFormat = {
     if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
-      new HoodieFileGroupReaderBasedFileFormat(
-        tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-        metaClient.getTableConfig.getTableName, mandatoryFields,
+      new FileGroupReaderBasedFileFormat(
+        basePath.toString, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
+        metaClient.getTableConfig.getTableName,
+        queryTimestamp.get,
+        mandatoryFields,
         true, isBootstrap, true,
         validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
     } else {
-      new HoodieFileGroupReaderBasedParquetFileFormat(
+      new FileGroupReaderBasedParquetFileFormat(
         basePath.toString, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, queryTimestamp.get, mandatoryFields,
         true, isBootstrap, true, fileIndex.isInstanceOf[HoodieCDCFileIndex],
@@ -368,12 +376,15 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
 
   override def buildFileFormat(): FileFormat = {
     if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
-      new HoodieFileGroupReaderBasedFileFormat(
-        tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-        metaClient.getTableConfig.getTableName, mandatoryFields,
+      new FileGroupReaderBasedFileFormat(
+        basePath.toString,
+        HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
+        metaClient.getTableConfig.getTableName,
+        queryTimestamp.get,
+        mandatoryFields,
         false, isBootstrap, false, validCommits, shouldUseRecordPosition, Seq.empty)
     } else {
-      new HoodieFileGroupReaderBasedParquetFileFormat(
+      new FileGroupReaderBasedParquetFileFormat(
         basePath.toString, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, queryTimestamp.get, mandatoryFields,
         false, isBootstrap, false, fileIndex.isInstanceOf[HoodieCDCFileIndex], validCommits,
@@ -397,13 +408,16 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
 
   override def buildFileFormat(): FileFormat = {
     if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
-      new HoodieFileGroupReaderBasedFileFormat(
-        tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-        metaClient.getTableConfig.getTableName, mandatoryFields,
+      new FileGroupReaderBasedFileFormat(
+        basePath.toString,
+        HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
+        metaClient.getTableConfig.getTableName,
+        queryTimestamp.get,
+        mandatoryFields,
         false, isBootstrap, true,
         validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
     } else {
-      new HoodieFileGroupReaderBasedParquetFileFormat(
+      new FileGroupReaderBasedParquetFileFormat(
         basePath.toString, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, queryTimestamp.get, mandatoryFields,
         false, isBootstrap, true, fileIndex.isInstanceOf[HoodieCDCFileIndex],

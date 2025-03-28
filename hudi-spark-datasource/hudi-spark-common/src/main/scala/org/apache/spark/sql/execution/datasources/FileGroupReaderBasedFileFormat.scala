@@ -1,41 +1,48 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.spark.sql.execution.datasources.parquet
+package org.apache.spark.sql.execution.datasources
 
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hadoop.mapreduce.Job
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.storage.StorageConfiguration
+import org.apache.hudi.io.hadoop.HoodieHBaseAvroHFileReader
+import org.apache.hudi.io.hfile.{HFileContext, HFileReader, HFileReaderImpl}
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase
+import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.execution.datasources.HoodieFileGroupReaderBasedFileFormat.PARQUET_FILE_EXTENSION
-import org.apache.spark.sql.execution.datasources.{HoodieFileGroupReaderBasedFileFormat, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.FileGroupReaderBasedFileFormat.{HFILE_FILE_EXTENSION, ORC_FILE_EXTENSION, PARQUET_FILE_EXTENSION}
+import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkFileReader}
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
@@ -44,35 +51,93 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
+import scala.collection.mutable
+
+trait HoodieFormatTrait {
+  // Used so that the planner only projects once and does not stack overflow
+  var isProjected: Boolean = false
+  def getRequiredFilters: Seq[Filter]
+}
 
 /**
  * This class utilizes {@link HoodieFileGroupReader} and its related classes to support reading
  * from Parquet formatted base files and their log files.
  */
-class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
-                                                  tableSchema: HoodieTableSchema,
-                                                  tableName: String,
-                                                  queryTimestamp: String,
-                                                  mandatoryFields: Seq[String],
-                                                  isMOR: Boolean,
-                                                  isBootstrap: Boolean,
-                                                  isIncremental: Boolean,
-                                                  isCDC: Boolean,
-                                                  validCommits: String,
-                                                  shouldUseRecordPosition: Boolean,
-                                                  requiredFilters: Seq[Filter])
-  extends HoodieFileGroupReaderBasedFileFormat(
-    tablePath,
-    tableSchema,
-    tableName,
-    queryTimestamp,
-    mandatoryFields,
-    isMOR,
-    isBootstrap,
-    isIncremental,
-    validCommits,
-    shouldUseRecordPosition,
-    requiredFilters) with SparkAdapterSupport  {
+class FileGroupReaderBasedFileFormat(tablePath: String,
+                                     tableSchema: HoodieTableSchema,
+                                     tableName: String,
+                                     queryTimestamp: String,
+                                     mandatoryFields: Seq[String],
+                                     isMOR: Boolean,
+                                     isBootstrap: Boolean,
+                                     isIncremental: Boolean,
+                                     validCommits: String,
+                                     shouldUseRecordPosition: Boolean,
+                                     requiredFilters: Seq[Filter])
+  extends FileFormat with SparkAdapterSupport with HoodieFormatTrait with Serializable {
+  protected var supportBatchCalled = false
+  protected var supportBatchResult = false
+
+  def getRequiredFilters: Seq[Filter] = requiredFilters
+
+  /**
+   * Conditions to support batch:
+   * 1. Parent file format supports batch,
+   * 2. This read is not for a MOR table,
+   * 3. This read is not an incremental read, and
+   * 4. This read is not a bootstrap read.
+   * TODO: remove query type constraint constraints.
+   * TODO: refactor the logic to be more clear.
+   */
+  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+    if (!supportBatchCalled || supportBatchResult) {
+      supportBatchCalled = true
+      supportBatchResult =
+        !isMOR && !isIncremental && !isBootstrap && super.supportBatch(sparkSession, schema)
+    }
+    supportBatchResult
+  }
+
+  override def isSplitable(sparkSession: SparkSession,
+                           options: Map[String, String],
+                           path: Path): Boolean = false
+
+  // For partition columns that we read from the file, we don't want them to be constant column vectors so we
+  // modify the vector types in this scenario
+  override def vectorTypes(requiredSchema: StructType,
+                           partitionSchema: StructType,
+                           sqlConf: SQLConf): Option[Seq[String]] = {
+    val originalVectorTypes = super.vectorTypes(requiredSchema, partitionSchema, sqlConf)
+    if (mandatoryFields.isEmpty) {
+      originalVectorTypes
+    } else {
+      val regularVectorType = if (!sqlConf.offHeapColumnVectorEnabled) {
+        classOf[OnHeapColumnVector].getName
+      } else {
+        classOf[OffHeapColumnVector].getName
+      }
+      originalVectorTypes.map {
+        o: Seq[String] => o.zipWithIndex.map(a => {
+          if (a._2 >= requiredSchema.length && mandatoryFields.contains(
+            partitionSchema.fields(a._2 - requiredSchema.length).name)) {
+            regularVectorType
+          } else {
+            a._1
+          }
+        })
+      }
+    }
+  }
+
+  protected val sanitizedTableName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
+
+  protected lazy val internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema] =
+    if (tableSchema.internalSchema.isEmpty) {
+      org.apache.hudi.common.util.Option.empty()
+    } else {
+      org.apache.hudi.common.util.Option.of(tableSchema.internalSchema.get)
+    }
+
   override def buildReaderWithPartitionValues(spark: SparkSession,
                                               dataSchema: StructType,
                                               partitionSchema: StructType,
@@ -84,7 +149,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
     setSchemaEvolutionConfigs(augmentedStorageConf)
-    val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) = partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name)).unzip
+    val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) =
+      partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name)).unzip
 
     // The schema of the partition cols we want to append the value instead of reading from the file
     val remainingPartitionSchema = StructType(remainingPartitionSchemaArr)
@@ -96,8 +162,10 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
-    val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(
-      supportBatchResult, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
+    val broadcastedParquetFileReader = spark.sparkContext.broadcast(
+      sparkAdapter.createParquetFileReader(supportBatchResult, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
+    val broadcastedOrcFileReader = spark.sparkContext.broadcast(
+      sparkAdapter.createOrcFileReader(supportBatchCalled, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
@@ -106,12 +174,17 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
       file.partitionValues match {
         // Snapshot or incremental queries.
         case fileSliceMapping: HoodiePartitionFileSliceMapping =>
-          val filegroupName = FSUtils.getFileIdFromFilePath(sparkAdapter
-            .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
+          val filegroupName = FSUtils.getFileIdFromFilePath(
+            sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(filegroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val fileReaders = new java.util.HashMap[String, SparkFileReader]()
-              fileReaders.put(PARQUET_FILE_EXTENSION, parquetFileReader.value)
+              val hfileFileReader: SparkFileReader = new HoodieHBaseAvroHFileReader(
+                new HadoopStorageConfiguration(broadcastedStorageConf.value.value),
+                new StoragePath(fileSlice.getBaseFile.get.getPath))
+              fileReaders.put(ORC_FILE_EXTENSION, broadcastedOrcFileReader.value)
+              fileReaders.put(PARQUET_FILE_EXTENSION, broadcastedParquetFileReader.value)
+              fileReaders.put(HFILE_FILE_EXTENSION, hfileFileReader)
               val readerContext = new SparkFileFormatInternalRowReaderContext(fileReaders, filters, requiredFilters)
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(storageConf).setBasePath(tablePath).build
@@ -142,28 +215,40 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                 fixedPartitionIndexes)
 
             case _ =>
-              readBaseFile(file, parquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
-                requiredSchema, partitionSchema, outputSchema, filters, storageConf)
+              val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
+              val baseFileFormat = detectFileFormat(filePath.toString)
+              baseFileFormat match {
+                case PARQUET_FILE_EXTENSION => readBaseFile(file, broadcastedParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+              requiredSchema, partitionSchema, outputSchema, filters, storageConf)
+                case ORC_FILE_EXTENSION => readBaseFile(file, broadcastedOrcFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+                  requiredSchema, partitionSchema, outputSchema, filters, storageConf)
+              }
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
-          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, parquetFileReader.value, storageConf, fileIndexProps, requiredSchema)
+          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, broadcastedParquetFileReader.value, storageConf, fileIndexProps, requiredSchema)
 
         case _ =>
-          readBaseFile(file, parquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
-            requiredSchema, partitionSchema, outputSchema, filters, storageConf)
+          val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
+          val baseFileFormat = detectFileFormat(filePath.toString)
+          baseFileFormat match {
+            case PARQUET_FILE_EXTENSION => readBaseFile(file, broadcastedParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+              requiredSchema, partitionSchema, outputSchema, filters, storageConf)
+            case ORC_FILE_EXTENSION => readBaseFile(file, broadcastedOrcFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+              requiredSchema, partitionSchema, outputSchema, filters, storageConf)
+          }
       }
     }
   }
 
-  private def setSchemaEvolutionConfigs(conf: StorageConfiguration[Configuration]): Unit = {
+  protected def setSchemaEvolutionConfigs(conf: StorageConfiguration[Configuration]): Unit = {
     if (internalSchemaOpt.isPresent) {
       conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
       conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
   }
 
-  private def buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping,
+  protected def buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping,
                                      parquetFileReader: SparkFileReader,
                                      storageConf: StorageConfiguration[Configuration],
                                      props: TypedProperties,
@@ -186,7 +271,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
       props)
   }
 
-  private def appendPartitionAndProject(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
+  protected def appendPartitionAndProject(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
                                         inputSchema: StructType,
                                         partitionSchema: StructType,
                                         to: StructType,
@@ -227,7 +312,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     }
   }
 
-  private def readBaseFile(file: PartitionedFile, parquetFileReader: SparkFileReader, requestedSchema: StructType,
+  protected def readBaseFile(file: PartitionedFile, parquetFileReader: SparkFileReader, requestedSchema: StructType,
                            remainingPartitionSchema: StructType, fixedPartitionIndexes: Set[Int], requiredSchema: StructType,
                            partitionSchema: StructType, outputSchema: StructType, filters: Seq[Filter],
                            storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
@@ -265,4 +350,39 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
   private def getFixedPartitionValues(allPartitionValues: InternalRow, partitionSchema: StructType, fixedPartitionIndexes: Set[Int]): InternalRow = {
     InternalRow.fromSeq(allPartitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
   }
+
+  override def inferSchema(sparkSession: SparkSession,
+                           options: Map[String, String],
+                           files: Seq[FileStatus]): Option[StructType] = {
+    // This is a simple heuristic assuming all files have the same extension.
+    val fileFormat = detectFileFormat(files.head.getPath.toString)
+
+    val parquetFormat = new ParquetFileFormat()
+    val orcFormat = new OrcFileFormat()
+    fileFormat match {
+      case "parquet" => parquetFormat.inferSchema(sparkSession, options, files)
+      case "orc" => orcFormat.inferSchema(sparkSession, options, files)
+      case _ => throw new UnsupportedOperationException(s"File format $fileFormat is not supported.")
+    }
+  }
+
+  override def prepareWrite(sparkSession: SparkSession,
+                            job: Job,
+                            options: Map[String, String],
+                            dataSchema: StructType): OutputWriterFactory = {
+    throw new UnsupportedOperationException("Write operations are not supported in this example.")
+  }
+
+  private def detectFileFormat(filePath: String): String = {
+    // Logic to detect file format based on the filePath or its content.
+    if (filePath.endsWith(".parquet")) PARQUET_FILE_EXTENSION
+    else if (filePath.endsWith(".orc")) ORC_FILE_EXTENSION
+    else ""
+  }
+}
+
+object FileGroupReaderBasedFileFormat {
+  val ORC_FILE_EXTENSION = "orc"
+  val PARQUET_FILE_EXTENSION = "parquet"
+  val HFILE_FILE_EXTENSION = "hfile"
 }

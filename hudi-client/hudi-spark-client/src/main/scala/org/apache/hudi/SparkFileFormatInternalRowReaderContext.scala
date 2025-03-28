@@ -83,16 +83,28 @@ class SparkFileFormatInternalRowReaderContext(fileReaders: java.util.Map[String,
       assert(supportsParquetRowIndex())
     }
     val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
+    // Log file reader
+    // TODO: Add support for HFILE reader.
     if (FSUtils.isLogFile(filePath)) {
       new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
         .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(structType).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
+      // TODO: Add support for HFile reader.
+      // Base file reader.
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
-      val fileReader = if (fileInfo.filePath.toString.endsWith("orc")) fileReaders.get("orc") else fileReaders.get("parquet")
+      val fileReader = if (fileInfo.filePath.toString.endsWith("orc")) {
+        fileReaders.get("orc")
+      } else if (fileInfo.filePath.toString.endsWith("parquet")) {
+        fileReaders.get("parquet")
+      } else if (fileInfo.filePath.toString.endsWith("hfile")) {
+        fileReaders.get("hfile")
+      } else {
+        throw new RuntimeException("Unrecognized file extension from the file path: " + filePath)
+      }
       new CloseableInternalRowIterator(fileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
