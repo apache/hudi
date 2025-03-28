@@ -80,7 +80,6 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -227,6 +226,13 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     }
   }
 
+  /**
+   * Tests marker-based rollback does not include non-existent log files
+   *
+   * @param enableMetadataTable whether to enable the metadata table
+   * @param runRollback         whether to rollback failed commits
+   * @throws IOException upon I/O errors
+   */
   @ParameterizedTest
   @CsvSource(value = {"true,true", "true,false", "false,true", "false,false"})
   void testCompactionSchedulingWithUncommittedLogFileOrRollback(boolean enableMetadataTable,
