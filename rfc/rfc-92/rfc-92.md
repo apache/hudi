@@ -60,7 +60,7 @@ The Hudi platform is responsible for managing the data path and can be configure
 Hudi uses the creation of an action-complete file (e:g .commit, .deltacommit, .clean, ..)  in timeline folder to advertise the completion of an action on the table. With the TableFormatPlugin, this will become a two step process:
 
 1. Creation of the action complete file in .hoodie timeline 
-2. Store the action completion time in the table format's commit metadata.
+2. Storing the action completion time in the table format's commit metadata.
 
 The Hudi timeline is still very much used for all internal operations and the table format's commit metadat will be an overlay on top of this.
 With this, the action is only completed when both the above steps are completed. The plugin provided timeline needs to fence the timeline ensuring the definition of complete stays consistent.  This ensures the snapshot isolation is maintained.
@@ -70,7 +70,6 @@ There will be a hudi table-property "hudi.table.format.plugin" to identify the t
 ### Metadata:
 
 If a different table format is configured, Hudi's metadata operations are replaced with the table format's metadata. This is done by adding a new adapter implementation of HoodieTableMetadata.
-
 
 ### Timeline: 
 
@@ -91,24 +90,24 @@ The pluggable interface and Hudi's native format implementation will reside in h
 
 The lakehouse platform interacts with this plugin and the table can be queried using the table format corresponding to the plugin. Here is the interface definition:
 
-```
+```java
 /**
- * External Table Format needs to implement this class.
+ * External Table Format needs to implement this class. Hudi's native format will be implemented in NativeTableFormat.
  * Contract: 
  *    This implementation will get the commit and completeXXX calls after the Hudi platform commit's internally. 
  *    An operation must be defined as complete only when the plugin's implementation successfully handles the corresponding callback.
  *    This implementation is responsible for providing the source of truth timeline based on what operations completed successfully.
  */
-public interface PluggableTableFormat implements Serializable {
+public interface HoodieTableFormat implements Serializable {
 
   /**
-   * Callback to handle committing a transaction. This call is made after Hudi's internal commit. 
+   * Callback to handle committing a write operation. This call is made after Hudi's internal commit. 
    * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
    * @param viewManager  FileSystem Manager to fetch table's file-system view.
    * @param commitMetadata HoodieCommitMetadata  corresponding to the transaction.
    * @param instant Hoodie Instant used for this transaction.
    */
-  void commit(
+  void completeWrite(
       HoodieTableMetaClient metaClient,
       FileSystemViewManager viewManager,
       HoodieCommitMetadata commitMetadata,
@@ -196,7 +195,7 @@ public interface PluggableTableFormat implements Serializable {
 ## **Rollout/Adoption Plan**
 
 *   For existing tables, utility to construct the table format for the first time.
-*   Configuration of plugin to turn on specific formats. Default will be hudi.
+*   Configuration of plugin to turn on specific formats. Default will be native.
 *   Add support in 1.x
 
 
