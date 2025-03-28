@@ -262,4 +262,18 @@ trait SparkAdapter extends Serializable {
    * @return
    */
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
+
+  /**
+   * Get parquet file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return parquet file reader
+   */
+  def createHFileFileReader(vectorized: Boolean,
+                            sqlConf: SQLConf,
+                            options: Map[String, String],
+                            hadoopConf: Configuration): SparkFileReader
 }
