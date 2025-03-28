@@ -482,7 +482,7 @@ public class FSUtils {
         return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
       }).stream().filter(StoragePathInfo::isFile).collect(Collectors.toList());
     } catch (FileNotFoundException ex) {
-      // return empty StoragePathInfo list if partition does not exist already
+      // return empty FileStatus if partition does not exist already
       return Collections.emptyList();
     }
   }
@@ -584,7 +584,7 @@ public class FSUtils {
       throws IOException {
     List<StoragePathInfo> statuses = storage.globEntries(globPath);
     return statuses.stream()
-        .filter(storagePathInfo -> !storagePathInfo.getPath().toString()
+        .filter(fileStatus -> !fileStatus.getPath().toString()
             .contains(HoodieTableMetaClient.METAFOLDER_NAME))
         .collect(Collectors.toList());
   }
@@ -661,7 +661,7 @@ public class FSUtils {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(dirPath);
       List<String> subPaths = pathInfoList.stream()
           .filter(subPathPredicate)
-          .map(storagePathInfo -> storagePathInfo.getPath().toString())
+          .map(fileStatus -> fileStatus.getPath().toString())
           .collect(Collectors.toList());
       result = parallelizeFilesProcess(hoodieEngineContext, storage, parallelism, pairFunction, subPaths);
     } catch (IOException ioe) {

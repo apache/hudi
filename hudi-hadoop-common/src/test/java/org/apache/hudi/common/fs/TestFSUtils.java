@@ -685,7 +685,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
       "gs://my-bucket/path/to/s3a://object",
       "gs://my-bucket s3a://my-object",
   })
-
+  
   void testUriDoesNotChange(String uri) {
     assertEquals(uri, FSUtils.s3aToS3(uri));
   }
