@@ -118,7 +118,23 @@ trait SparkParquetReaderBuilder {
 
 trait SparkOrcReaderBuilder {
   /**
-   * Get parquet file reader
+   * Get orc file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return properties needed for reading a parquet file
+   */
+  def build(vectorized: Boolean,
+            sqlConf: SQLConf,
+            options: Map[String, String],
+            hadoopConf: Configuration): SparkFileReader
+}
+
+trait SparkHFileReaderBuilder {
+  /**
+   * Get hfile file reader
    *
    * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
    * @param sqlConf    the [[SQLConf]] used for the read
