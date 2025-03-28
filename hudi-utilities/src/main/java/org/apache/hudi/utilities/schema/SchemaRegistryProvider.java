@@ -29,6 +29,8 @@ import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
@@ -36,17 +38,24 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import org.apache.avro.Schema;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
@@ -63,6 +72,7 @@ import java.util.regex.Pattern;
 
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Obtains latest schema from the Confluent/Kafka schema-registry.
@@ -70,6 +80,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  * https://github.com/confluentinc/schema-registry
  */
 public class SchemaRegistryProvider extends SchemaProvider {
+  private static final Logger LOG = LoggerFactory.getLogger(SchemaRegistryProvider.class);
   private static final Pattern URL_PATTERN = Pattern.compile("(.*/)subjects/(.*)/versions/(.*)");
   private static final String LATEST = "latest";
 
@@ -152,6 +163,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
    * @return the Schema in String form.
    */
   public String fetchSchemaFromRegistry(String registryUrl) {
+    String schemaType = "";
     try {
       Matcher matcher = Pattern.compile("://(.*?)@").matcher(registryUrl);
       Triple<String, String, String> registryInfo;
@@ -172,6 +184,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
       String version = registryInfo.getRight();
       SchemaRegistryClient registryClient = registryClientProvider.apply(restService);
       SchemaMetadata schemaMetadata = version.equals(LATEST) ? registryClient.getLatestSchemaMetadata(subject) : registryClient.getSchemaMetadata(subject, Integer.parseInt(version));
+      schemaType = schemaMetadata.getSchemaType();
       ParsedSchema parsedSchema = registryClient.parseSchema(schemaMetadata.getSchemaType(), schemaMetadata.getSchema(), schemaMetadata.getReferences())
           .orElseThrow(() -> new HoodieSchemaException("Failed to parse schema from registry"));
       if (schemaConverter.isPresent()) {
@@ -179,9 +192,58 @@ public class SchemaRegistryProvider extends SchemaProvider {
       } else {
         return parsedSchema.canonicalString();
       }
+    } catch (IllegalAccessError error) {
+      // If we're not processing Protobuf schema, fall back to the legacy method
+      if (!ProtobufSchema.TYPE.equalsIgnoreCase(schemaType)) {
+        LOG.warn("Falling back to legacy schema retrieval due to IllegalAccessError", error);
+        return fetchSchemaUsingLegacyMethod(registryUrl);
+      }
+      // Otherwise, rethrow the error
+      throw error;
     } catch (Exception e) {
       throw new HoodieSchemaFetchException("Failed to fetch schema from registry", e);
     }
+  }
+
+  // Legacy method replicating the original HTTP-based schema fetch approach
+  String fetchSchemaUsingLegacyMethod(String registryUrl) {
+    try {
+      HttpURLConnection connection;
+      Matcher matcher = Pattern.compile("://(.*?)@").matcher(registryUrl);
+      if (matcher.find()) {
+        String creds = matcher.group(1);
+        String urlWithoutCreds = registryUrl.replace(creds + "@", "");
+        connection = getConnection(urlWithoutCreds);
+        setAuthorizationHeader(creds, connection);
+      } else {
+        connection = getConnection(registryUrl);
+      }
+      ObjectMapper mapper = new ObjectMapper();
+      JsonNode node = mapper.readTree(getStream(connection));
+      return node.get("schema").asText();
+    } catch (Exception e) {
+      throw new HoodieSchemaFetchException("Failed to fetch schema from registry (legacy method)", e);
+    }
+  }
+
+  private HttpURLConnection getConnection(String url) throws IOException {
+    URL registry = new URL(url);
+    if (sslSocketFactory != null) {
+      // we cannot cast to HttpsURLConnection if url is http so only cast when sslSocketFactory is set
+      HttpsURLConnection connection = (HttpsURLConnection) registry.openConnection();
+      connection.setSSLSocketFactory(sslSocketFactory);
+      return connection;
+    }
+    return (HttpURLConnection) registry.openConnection();
+  }
+
+  private void setAuthorizationHeader(String creds, HttpURLConnection connection) {
+    String encodedAuth = Base64.getEncoder().encodeToString(getUTF8Bytes(creds));
+    connection.setRequestProperty("Authorization", "Basic " + encodedAuth);
+  }
+
+  private InputStream getStream(HttpURLConnection connection) throws IOException {
+    return connection.getInputStream();
   }
 
   private Triple<String, String, String> getUrlSubjectAndVersion(String registryUrl) {
