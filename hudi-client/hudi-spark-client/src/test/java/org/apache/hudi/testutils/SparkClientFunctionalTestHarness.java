@@ -355,10 +355,6 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles(table.getBaseFileExtension());
   }
 
-  protected List<StoragePathInfo> listAllLogFilesInPath(HoodieTable table) throws IOException {
-    return HoodieTestTable.of(table.getMetaClient()).listAllLogFiles();
-  }
-
   protected Properties getPropertiesForKeyGen() {
     return getPropertiesForKeyGen(false);
   }
