@@ -138,7 +138,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     // downgrade table properties
     downgradePartitionFields(config, metaClient.getTableConfig(), tablePropsToAdd);
     unsetInitialVersion(metaClient.getTableConfig(), tablePropsToAdd);
-    List<ConfigProperty> configsToRemove = unsetRecordMergeMode(config, metaClient.getTableConfig(), tablePropsToAdd);
+    List<ConfigProperty> tablePropsToRemove = unsetRecordMergeMode(config, metaClient.getTableConfig(), tablePropsToAdd);
     downgradeKeyGeneratorType(metaClient.getTableConfig(), tablePropsToAdd);
     downgradeBootstrapIndexType(metaClient.getTableConfig(), tablePropsToAdd);
 
@@ -148,7 +148,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       downgradeMetadataPartitions(context, metaClient.getStorage(), metaClient, tablePropsToAdd);
       UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.SEVEN, metaClient);
     }
-    return Pair.of(tablePropsToAdd, configsToRemove);
+    return Pair.of(tablePropsToAdd, tablePropsToRemove);
   }
 
   static void downgradePartitionFields(HoodieWriteConfig config,
@@ -178,12 +178,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
           tablePropsToAdd.put(HoodieTableConfig.PAYLOAD_CLASS_NAME, OverwriteWithLatestAvroPayload.class.getName());
           break;
         case CUSTOM:
-          //TODO: Handle CUSTOM payload
-          HoodieRecordMerger recordMerger = config.getRecordMerger();
-          if (recordMerger != null) {
-            throw new HoodieUpgradeDowngradeException(String.format("Custom payload class must be available when record merger is set %s", recordMerger.getClass().getName()));
-          }
-          break;
+          throw new HoodieUpgradeDowngradeException("Custom payload class must be available for downgrading custom merge mode");
         default:
           throw new HoodieUpgradeDowngradeException("Downgrade is not handled for " + mergeMode);
       }

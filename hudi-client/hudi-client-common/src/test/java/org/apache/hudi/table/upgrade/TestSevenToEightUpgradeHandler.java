@@ -22,6 +22,7 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -118,17 +119,19 @@ class TestSevenToEightUpgradeHandler {
 
   @ParameterizedTest
   @CsvSource({
-      "com.example.CustomPayload, , CUSTOM, 00000000-0000-0000-0000-000000000000, com.example.CustomPayload",
-      "com.example.CustomPayload, preCombineFieldValue, CUSTOM, 00000000-0000-0000-0000-000000000000, com.example.CustomPayload",
-      "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, , COMMIT_TIME_ORDERING, ce9acb64-bde0-424c-9b91-f6ebba25356d, org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
-      "org.apache.hudi.common.model.DefaultHoodieRecordPayload, , EVENT_TIME_ORDERING, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5, org.apache.hudi.common.model.DefaultHoodieRecordPayload",
-      ", preCombineFieldValue, EVENT_TIME_ORDERING, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5, org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      "com.example.CustomPayload, , CUSTOM, " + HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID + ", com.example.CustomPayload",
+      "com.example.CustomPayload, preCombineFieldValue, CUSTOM, " + HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID + ", com.example.CustomPayload",
+      "org.apache.hudi.metadata.HoodieMetadataPayload, , CUSTOM, " + HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.metadata.HoodieMetadataPayload",
+      "org.apache.hudi.metadata.HoodieMetadataPayload, preCombineFieldValue, CUSTOM, " + HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.metadata.HoodieMetadataPayload",
+      "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, , COMMIT_TIME_ORDERING, " + HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+      "org.apache.hudi.common.model.DefaultHoodieRecordPayload, , EVENT_TIME_ORDERING, " + HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      ", preCombineFieldValue, EVENT_TIME_ORDERING, " + HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
       "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, preCombineFieldValue, EVENT_TIME_ORDERING,"
-          + " eeb8d96f-b1e4-49fd-bbf8-28ac514178e5, org.apache.hudi.common.model.DefaultHoodieRecordPayload",
-      ", preCombineFieldValue, EVENT_TIME_ORDERING, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5, org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+          + HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      ", preCombineFieldValue, EVENT_TIME_ORDERING, " + HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
       "org.apache.hudi.common.model.DefaultHoodieRecordPayload, preCombineFieldValue, EVENT_TIME_ORDERING,"
-          + " eeb8d96f-b1e4-49fd-bbf8-28ac514178e5, org.apache.hudi.common.model.DefaultHoodieRecordPayload",
-      ", , COMMIT_TIME_ORDERING, ce9acb64-bde0-424c-9b91-f6ebba25356d, org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
+          + HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      ", , COMMIT_TIME_ORDERING, " + HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID + ", org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
   })
   void testUpgradeMergeMode(String payloadClass, String preCombineField, String expectedMergeMode, String expectedStrategy, String expectedPayloadClass) {
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
@@ -143,6 +146,8 @@ class TestSevenToEightUpgradeHandler {
     assertEquals(expectedStrategy, tablePropsToAdd.get(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID));
     if (expectedPayloadClass != null) {
       assertEquals(expectedPayloadClass, tablePropsToAdd.get(HoodieTableConfig.PAYLOAD_CLASS_NAME));
+    } else {
+      assertTrue(!tablePropsToAdd.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME));
     }
   }
 
