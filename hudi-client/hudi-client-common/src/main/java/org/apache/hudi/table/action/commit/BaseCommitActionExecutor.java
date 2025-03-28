@@ -241,13 +241,13 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
             updateColumnsToIndexForColumnStats(metaClient, columnsToIndex);
             return null;
           });
-    } catch (HoodieIOException | IOException e) {
+    } catch (HoodieIOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
     }
   }
 
-  protected HoodieCommitMetadata appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws IOException {
+  protected HoodieCommitMetadata appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws HoodieIOException {
     return commitMetadata;
   }
 

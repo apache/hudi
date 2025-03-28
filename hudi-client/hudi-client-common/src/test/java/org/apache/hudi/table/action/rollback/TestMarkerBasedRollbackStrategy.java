@@ -47,7 +47,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.table.action.rollback.TestRollbackUtils.assertRollbackRequestListEquals;
 
-class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
+class TestMarkerBasedRollbackStrategy extends TestRollbackHelper {
   private static final int ROLLBACK_LOG_VERSION = 10;
 
   @Override

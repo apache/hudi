@@ -70,22 +70,20 @@ import static org.apache.hudi.table.action.rollback.RollbackUtils.groupSerializa
 
 /**
  * Contains common methods to be used across engines for rollback operation.
- * This class is meant to be used only for table version 6. Any table version 8 and above will be using {@link BaseRollbackHelper}.
+ * This class is meant to be used only for table version 6. Any table version 8 and above will be using {@link RollbackHelper}.
  */
-public class BaseRollbackHelperTableVersionSix extends BaseRollbackHelper {
+public class RollbackHelperTableVersionSix extends RollbackHelper {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackHelperTableVersionSix.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RollbackHelperTableVersionSix.class);
 
-  protected final HoodieTable table;
-
-  public BaseRollbackHelperTableVersionSix(HoodieTable table, HoodieWriteConfig config) {
-    super(table.getMetaClient(), config);
-    this.table = table;
+  public RollbackHelperTableVersionSix(HoodieTable table, HoodieWriteConfig config) {
+    super(table, config);
   }
 
   /**
    * Performs all rollback actions that we have collected in parallel.
    */
+  @Override
   public List<HoodieRollbackStat> performRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
                                                   List<HoodieRollbackRequest> rollbackRequests) {
     int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);

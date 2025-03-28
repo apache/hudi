@@ -64,7 +64,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THA
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.getHoodieCommitMetadata;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
-import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STRING;
+import static org.apache.hudi.table.action.rollback.RollbackHelper.EMPTY_STRING;
 
 /**
  * Listing based rollback strategy to fetch list of {@link HoodieRollbackRequest}s.
@@ -99,6 +99,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
   public List<HoodieRollbackRequest> getRollbackRequests(HoodieInstant instantToRollback) {
     try {
       HoodieTableMetaClient metaClient = table.getMetaClient();
+      boolean tableVersionLessThanEight = metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT);
       List<String> partitionPaths =
           FSUtils.getAllPartitionPaths(context, table.getStorage(), table.getMetaClient().getBasePath(), false);
       int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
@@ -162,16 +163,12 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                     listBaseFilesToBeDeleted(instantToRollback.requestedTime(), baseFileExtension, partitionPath, metaClient.getStorage())));
               } else {
                 // if this is part of a restore operation, we should rollback/delete entire file slice.
-                if (metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
-                  // For table version 6, the files can be directly fetched from the instant to rollback
-                  hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
-                } else {
-                  // For table version 8, the files are computed based on completion time. All files completed after
-                  // the requested time of instant to rollback are included
-                  hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
-                      listAllFilesSinceCommit(instantToRollback.requestedTime(), baseFileExtension, partitionPath,
-                          metaClient)));
-                }
+                // For table version 6, the files can be directly fetched from the instant to rollback
+                // For table version 8, the files are computed based on completion time. All files completed after
+                // the requested time of instant to rollback are included
+                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, tableVersionLessThanEight ? filesToDelete.get() :
+                    listAllFilesSinceCommit(instantToRollback.requestedTime(), baseFileExtension, partitionPath,
+                        metaClient)));
               }
               break;
             case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -181,7 +178,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               // We do not know fileIds for inserts (first inserts are either log files or base files),
               // delete all files for the corresponding failed commit, if present (same as COW)
               hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
-              if (metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
+              if (tableVersionLessThanEight) {
 
                 // --------------------------------------------------------------------------------------------------
                 // (A) The following cases are possible if index.canIndexLogFiles and/or index.isGlobal

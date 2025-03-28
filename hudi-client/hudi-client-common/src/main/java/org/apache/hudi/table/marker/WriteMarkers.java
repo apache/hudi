@@ -22,6 +22,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -105,6 +106,24 @@ public abstract class WriteMarkers implements Serializable {
    */
   public Option<StoragePath> createIfNotExists(String partitionPath, String fileName, IOType type) {
     return create(partitionPath, fileName, type, true);
+  }
+
+  /**
+   * Creates a log marker if the marker does not exist.
+   * This can invoke marker-based early conflict detection when enabled for multi-writers.
+   *
+   * @param partitionPath  partition path in the table
+   * @param fileName       file name
+   * @param tableVersion   tableVersion
+   * @param writeConfig    Hudi write configs.
+   * @param fileId         File ID.
+   * @param activeTimeline Active timeline for the write operation.
+   * @return the marker path.
+   */
+  public Option<StoragePath> createLogMarkerIfNotExists(String partitionPath, String fileName, HoodieTableVersion tableVersion, HoodieWriteConfig writeConfig,
+                                               String fileId, HoodieActiveTimeline activeTimeline) {
+    IOType ioType = tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? IOType.CREATE : IOType.APPEND;
+    return createIfNotExists(partitionPath, fileName, ioType, writeConfig, fileId, activeTimeline);
   }
 
   /**

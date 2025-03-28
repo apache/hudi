@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.hudi.client.CommitMetadataResolver;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
@@ -66,7 +67,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestCommitMetadataUtils extends HoodieCommonTestHarness {
+public class TestCommitMetadataResolver extends HoodieCommonTestHarness {
 
   private final HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
   private final HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
@@ -136,7 +137,7 @@ public class TestCommitMetadataUtils extends HoodieCommonTestHarness {
     when(fs.exists(any())).thenReturn(true);
 
     // Call the method under test
-    HoodieCommitMetadata reconciledMetadata = CommitMetadataUtils.reconcileMetadataForMissingFiles(
+    HoodieCommitMetadata reconciledMetadata = CommitMetadataResolver.reconcileMetadataForMissingFiles(
         table, commitActionType, instantTime, commitMetadataWithLogFiles.getLeft(), writeConfig, context, storageConf, this.getClass().getSimpleName());
 
     // Assertions to verify if the missing files are added

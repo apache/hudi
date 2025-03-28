@@ -18,9 +18,7 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.client.utils.CommitMetadataUtils;
 import org.apache.hudi.client.utils.SparkReleaseResources;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -38,7 +36,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.index.HoodieIndex;
@@ -60,7 +57,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -96,21 +92,6 @@ public class SparkRDDWriteClient<T> extends
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
-  }
-
-  @Override
-  protected HoodieCommitMetadata reconcileMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata oriMetadata) {
-    try {
-      if (table.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-        // reconciliation not required for table version 8 and above.
-        return oriMetadata;
-      }
-      return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, commitActionType, instantTime, oriMetadata,
-          config, context, storageConf, this.getClass().getSimpleName());
-    } catch (IOException e) {
-      throw new HoodieCommitException("Failed to fix commit metadata for spurious log files "
-          + config.getBasePath() + " at time " + instantTime, e);
-    }
   }
 
   @Override

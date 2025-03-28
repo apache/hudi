@@ -45,7 +45,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.rollback.BaseRollbackHelper;
+import org.apache.hudi.table.action.rollback.RollbackHelper;
 import org.apache.hudi.table.action.rollback.MarkerBasedRollbackStrategy;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import org.apache.hudi.table.marker.DirectWriteMarkers;
@@ -243,7 +243,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         "002").getRollbackRequests(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
 
     //  "002" argument performRollback older API
-    List<HoodieRollbackStat> stats = new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+    List<HoodieRollbackStat> stats = new RollbackHelper(hoodieTable, getConfig()).performRollback(context, "002",
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"),
         rollbackRequests);
 
@@ -326,7 +326,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
     // rollback 1st commit and ensure stats reflect the info.
     // 002 argument older API might be needed
-    return new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+    return new RollbackHelper(hoodieTable, getConfig()).performRollback(context, "002",
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"),
         rollbackRequests);
   }
@@ -352,7 +352,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
     // rollback 2nd commit and ensure stats reflect the info.
     // 003 argument older API might be needed
-    return new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+    return new RollbackHelper(hoodieTable, getConfig()).performRollback(context, "003",
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"),
         rollbackRequests);
   }

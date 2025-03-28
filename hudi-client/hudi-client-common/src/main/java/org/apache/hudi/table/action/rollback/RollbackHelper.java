@@ -37,6 +37,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.CommonClientUtils;
 
 import org.slf4j.Logger;
@@ -59,24 +60,26 @@ import static org.apache.hudi.table.action.rollback.RollbackUtils.groupSerializa
 /**
  * Contains common methods to be used across engines for rollback operation.
  */
-public class BaseRollbackHelper implements Serializable {
+public class RollbackHelper implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RollbackHelper.class);
   protected static final String EMPTY_STRING = "";
 
+  protected final HoodieTable table;
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieWriteConfig config;
 
-  public BaseRollbackHelper(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
-    this.metaClient = metaClient;
+  public RollbackHelper(HoodieTable table, HoodieWriteConfig config) {
+    this.table = table;
+    this.metaClient = table.getMetaClient();
     this.config = config;
   }
 
   /**
    * Performs all rollback actions that we have collected in parallel.
    */
-  public List<HoodieRollbackStat> performRollback(HoodieEngineContext context, HoodieInstant instantToRollback,
+  public List<HoodieRollbackStat> performRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
                                                   List<HoodieRollbackRequest> rollbackRequests) {
     int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(this.getClass().getSimpleName(), "Perform rollback actions: " + config.getTableName());
