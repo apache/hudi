@@ -47,7 +47,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.rollback.RollbackHelperTableVersionSix;
+import org.apache.hudi.table.action.rollback.RollbackHelperV1;
 import org.apache.hudi.table.marker.AppendMarkerHandler;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
@@ -237,7 +237,7 @@ public class CommitMetadataResolver {
           // fetch file sizes from FileSystem
           StoragePath fullPartitionPath = StringUtils.isNullOrEmpty(partitionPath) ? new StoragePath(basePathStr) : new StoragePath(basePathStr, partitionPath);
           HoodieStorage storage = HoodieStorageUtils.getStorage(fullPartitionPath, storageConfiguration);
-          List<Option<StoragePathInfo>> storageInfosOpt = RollbackHelperTableVersionSix.getPathInfoUnderPartition(storage, fullPartitionPath, new HashSet<>(missingLogFileNames), true);
+          List<Option<StoragePathInfo>> storageInfosOpt = RollbackHelperV1.getPathInfoUnderPartition(storage, fullPartitionPath, new HashSet<>(missingLogFileNames), true);
           List<StoragePathInfo> storagePathInfos = storageInfosOpt.stream()
               .filter(fileStatusOpt -> fileStatusOpt.isPresent())
               .map(fileStatusOption -> fileStatusOption.get())

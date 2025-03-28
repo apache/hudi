@@ -63,7 +63,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
-import static org.apache.hudi.table.action.rollback.RollbackHelperTableVersionSix.getPathInfoUnderPartition;
+import static org.apache.hudi.table.action.rollback.RollbackHelperV1.getPathInfoUnderPartition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

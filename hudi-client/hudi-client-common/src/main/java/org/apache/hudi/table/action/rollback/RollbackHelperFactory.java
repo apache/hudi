@@ -30,7 +30,7 @@ public class RollbackHelperFactory {
 
   public static RollbackHelper getRollBackHelper(HoodieTable table, HoodieWriteConfig config) {
     if (table.getMetaClient().getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
-      return new RollbackHelperTableVersionSix(table, config);
+      return new RollbackHelperV1(table, config);
     }
     return new RollbackHelper(table, config);
   }
