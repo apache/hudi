@@ -884,6 +884,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
+        val errorMsg =
+          "It is not allowed to specify partition columns when the table schema is not defined."
+
         // Create a table over the existing table.
         // Fail to create table if only specify partition columns, no table schema.
         checkExceptionContain(
@@ -892,7 +895,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |partitioned by (dt)
              |location '$tablePath'
              |""".stripMargin
-        )("It is not allowed to specify partition columns when the table schema is not defined.")
+        )(errorMsg)
 
         spark.sql(
           s"""

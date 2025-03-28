@@ -91,7 +91,7 @@ public class QueryRunner {
     LOG.info("Running incremental query");
 
     HoodieTableVersion tableVersion = HoodieTableMetaClient.builder().setConf(getStorageConf()).setBasePath(sourcePath).build().getTableConfig().getTableVersion();
-    return Pair.of(queryInfo, sparkSession.read().format("org.apache.hudi")
+    return Pair.of(queryInfo, sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType())
         .option(INCREMENTAL_READ_TABLE_VERSION().key(), tableVersion.versionCode())
         .option(DataSourceReadOptions.START_COMMIT().key(), queryInfo.getStartInstant())
@@ -104,7 +104,7 @@ public class QueryRunner {
 
   public Pair<QueryInfo, Dataset<Row>> runSnapshotQuery(QueryInfo queryInfo, Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitterOption) {
     LOG.info("Running snapshot query");
-    Dataset<Row> snapshot = sparkSession.read().format("org.apache.hudi")
+    Dataset<Row> snapshot = sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType()).load(sourcePath);
     QueryInfo snapshotQueryInfo = snapshotLoadQuerySplitterOption
         .map(snapshotLoadQuerySplitter -> snapshotLoadQuerySplitter.getNextCheckpoint(snapshot, queryInfo, Option.empty()))

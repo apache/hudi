@@ -28,10 +28,11 @@ import org.apache.hudi.table.HoodieSparkTable
 import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieOptionConfig
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import scala.collection.JavaConverters._
@@ -53,7 +54,7 @@ case class AlterHoodieTableAddColumnsCommand(tableId: TableIdentifier,
         colsToAdd.map(_.name).filter(col => tableSchema.fieldNames.exists(f => resolver(f, col)))
 
       if (existsColumns.nonEmpty) {
-        throw new AnalysisException(s"Columns: [${existsColumns.mkString(",")}] already exists in the table," +
+        throw new HoodieAnalysisException(s"Columns: [${existsColumns.mkString(",")}] already exists in the table," +
           s" table columns is: [${hoodieCatalogTable.tableSchemaWithoutMetaFields.fieldNames.mkString(",")}]")
       }
       // Get the new schema
