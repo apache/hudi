@@ -99,7 +99,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
   public List<HoodieRollbackRequest> getRollbackRequests(HoodieInstant instantToRollback) {
     try {
       HoodieTableMetaClient metaClient = table.getMetaClient();
-      boolean tableVersionLessThanEight = metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT);
+      boolean isTableVersionLessThanEight = metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT);
       List<String> partitionPaths =
           FSUtils.getAllPartitionPaths(context, table.getStorage(), table.getMetaClient().getBasePath(), false);
       int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
@@ -166,7 +166,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                 // For table version 6, the files can be directly fetched from the instant to rollback
                 // For table version 8, the files are computed based on completion time. All files completed after
                 // the requested time of instant to rollback are included
-                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, tableVersionLessThanEight ? filesToDelete.get() :
+                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, isTableVersionLessThanEight ? filesToDelete.get() :
                     listAllFilesSinceCommit(instantToRollback.requestedTime(), baseFileExtension, partitionPath,
                         metaClient)));
               }
@@ -178,7 +178,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               // We do not know fileIds for inserts (first inserts are either log files or base files),
               // delete all files for the corresponding failed commit, if present (same as COW)
               hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
-              if (tableVersionLessThanEight) {
+              if (isTableVersionLessThanEight) {
 
                 // --------------------------------------------------------------------------------------------------
                 // (A) The following cases are possible if index.canIndexLogFiles and/or index.isGlobal

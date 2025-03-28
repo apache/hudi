@@ -127,7 +127,8 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (table.getMetaClient().getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)
         && table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ) {
-      // For MOR table rollbacks, rollback command blocks might generate markers under rollback instant. So, lets clean up the markers if any.
+      // For MOR table rollbacks in table version 6 and below, rollback command blocks might
+      // generate markers under rollback instant. So, lets clean up the markers if any.
       WriteMarkersFactory.get(config.getMarkersType(), table, rollbackInstant.requestedTime())
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     }
