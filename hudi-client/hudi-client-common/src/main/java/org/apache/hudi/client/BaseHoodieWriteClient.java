@@ -296,7 +296,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   // Save internal schema
-  protected final void saveInternalSchema(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
+  private void saveInternalSchema(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());

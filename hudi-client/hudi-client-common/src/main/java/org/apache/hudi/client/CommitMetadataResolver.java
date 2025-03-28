@@ -26,17 +26,19 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
 /**
- * Provides reconciliation between the commit metadata and markers
+ * Provides reconciliation between the commit metadata and files on storage
  */
 public interface CommitMetadataResolver {
   /**
-   * @param config
-   * @param context
-   * @param table
-   * @param instantTime
-   * @param commitMetadata
-   * @return
-   * @throws HoodieIOException
+   * Reconcile the commit metadata against the files on storage to add missing files
+   *
+   * @param config         the write config
+   * @param context        {@link HoodieEngineContext} instance
+   * @param table          {@link HoodieTable} instance
+   * @param instantTime    instant time of the transaction
+   * @param commitMetadata input commit metadata
+   * @return reconciled commit metadata with all files
+   * @throws HoodieIOException upon I/O errors
    */
   HoodieCommitMetadata reconcileMetadataForMissingFiles(HoodieWriteConfig config,
                                                         HoodieEngineContext context,
