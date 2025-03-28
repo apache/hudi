@@ -70,7 +70,7 @@ Data Summit Connect, May, 2021
 
 28. ["Change Data Capture to Data lakes using Apache Pulsar/Hudi"](https://www.slideshare.net/streamnative/change-data-capture-to-data-lakes-using-apache-pulsar-and-apache-hudi-pulsar-summit-na-2021) - By Vinoth Chandar, Pulsar Summit North America, June 2021. ["Video link"](https://www.youtube.com/watch?v=MWpnVIgcAXw)
 
-29. ["Meet the creator of Apache hudi: Vinoth Chandar"](https://www.youtube.com/watch?v=XcaFaJR4IVk) - By Vinoth Chandar. Presto Con Day, 2021
+29. ["Meet the original creator of Apache hudi: Vinoth Chandar"](https://www.youtube.com/watch?v=XcaFaJR4IVk) - By Vinoth Chandar. Presto Con Day, 2021
 
 30. ["Presto Eco system Panel Discussion"](https://www.youtube.com/watch?v=lsFSM2Z4kPs) - By Vinoth Chandar, Dipti Borkar, Nezih Yigitbasi, Maxime Beauchemin, Kishore. Presto Con, 2021
 
