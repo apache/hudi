@@ -45,21 +45,23 @@ public class WriteMarkersFactory {
     LOG.debug("Instantiated MarkerFiles with marker type: " + markerType.toString());
     switch (markerType) {
       case DIRECT:
-        return new DirectWriteMarkers(table, instantTime);
+        return getDirectWriteMarkers(table, instantTime);
       case TIMELINE_SERVER_BASED:
         if (!table.getConfig().isEmbeddedTimelineServerEnabled()) {
           LOG.warn("Timeline-server-based markers are configured as the marker type "
               + "but embedded timeline server is not enabled.  Falling back to direct markers.");
-          return new DirectWriteMarkers(table, instantTime);
+          return getDirectWriteMarkers(table, instantTime);
         }
         String basePath = table.getMetaClient().getBasePath().toString();
         if (StorageSchemes.HDFS.getScheme().equals(
             HadoopFSUtils.getFs(basePath, table.getContext().getStorageConf(), true).getScheme())) {
           LOG.warn("Timeline-server-based markers are not supported for HDFS: "
               + "base path " + basePath + ".  Falling back to direct markers.");
-          return new DirectWriteMarkers(table, instantTime);
+          return getDirectWriteMarkers(table, instantTime);
         }
-        return new TimelineServerBasedWriteMarkers(table, instantTime);
+        return table.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
+            ? new TimelineServerBasedWriteMarkers(table, instantTime)
+            : new TimelineServerBasedWriteMarkersV1(table, instantTime);
       default:
         throw new HoodieException("The marker type \"" + markerType.name() + "\" is not supported.");
     }
@@ -77,5 +79,10 @@ public class WriteMarkersFactory {
             .lesserThan(HoodieTableVersion.EIGHT),
         "Expects table version 6 and below for getting the AppendMarkerHandler");
     return (AppendMarkerHandler) WriteMarkersFactory.get(markerType, table, instantTime);
+  }
+
+  private static DirectWriteMarkers getDirectWriteMarkers(HoodieTable table, String instantTime) {
+    return table.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
+        ? new DirectWriteMarkers(table, instantTime) : new DirectWriteMarkersV1(table, instantTime);
   }
 }
