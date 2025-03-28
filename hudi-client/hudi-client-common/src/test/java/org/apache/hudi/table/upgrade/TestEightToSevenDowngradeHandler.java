@@ -161,6 +161,7 @@ class TestEightToSevenDowngradeHandler {
     existingTableProps.put(RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
     existingTableProps.put(BOOTSTRAP_INDEX_TYPE.key(), BootstrapIndexType.HFILE.name());
     existingTableProps.put(KEY_GENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
+    when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
     when(tableConfig.getProps()).thenReturn(new TypedProperties(existingTableProps));
     when(config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())).thenReturn("partition_field");
     when(tableConfig.getPartitionFieldProp()).thenReturn("partition_field");
@@ -170,8 +171,8 @@ class TestEightToSevenDowngradeHandler {
     assertEquals("partition_field", tablePropsToAdd.get(PARTITION_FIELDS));
     EightToSevenDowngradeHandler.unsetInitialVersion(tableConfig, tablePropsToAdd);
     assertFalse(tableConfig.getProps().containsKey(INITIAL_VERSION.key()));
-    EightToSevenDowngradeHandler.unsetRecordMergeMode(config, tableConfig, tablePropsToAdd);
-    assertFalse(tableConfig.getProps().containsKey(RECORD_MERGE_MODE.key()));
+    List<ConfigProperty> propsToRemove = EightToSevenDowngradeHandler.unsetRecordMergeMode(config, tableConfig, tablePropsToAdd);
+    assertTrue(propsToRemove.contains(RECORD_MERGE_MODE));
     assertTrue(tablePropsToAdd.containsKey(PAYLOAD_CLASS_NAME));
     EightToSevenDowngradeHandler.downgradeBootstrapIndexType(tableConfig, tablePropsToAdd);
     assertFalse(tablePropsToAdd.containsKey(BOOTSTRAP_INDEX_TYPE));
