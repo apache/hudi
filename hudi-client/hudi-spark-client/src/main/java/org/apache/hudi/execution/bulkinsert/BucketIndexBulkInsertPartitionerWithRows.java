@@ -18,6 +18,9 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.BucketPartitionUtils$;
@@ -30,16 +33,22 @@ import org.apache.spark.sql.Row;
 public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   private final String indexKeyFields;
-  private final int bucketNum;
+  private final NumBucketsFunction numBucketsFunction;
 
-  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum) {
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, HoodieWriteConfig writeConfig) {
     this.indexKeyFields = indexKeyFields;
-    this.bucketNum = bucketNum;
+    this.numBucketsFunction = NumBucketsFunction.fromWriteConfig(writeConfig);
+  }
+
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, PartitionBucketIndexHashingConfig hashingConfig) {
+    this.indexKeyFields = indexKeyFields;
+    this.numBucketsFunction = new NumBucketsFunction(hashingConfig.getExpressions(),
+        hashingConfig.getRule(), hashingConfig.getDefaultBucketNumber());
   }
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputPartitions) {
-    return BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, bucketNum, outputPartitions);
+    return BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, numBucketsFunction, outputPartitions);
   }
 
   @Override

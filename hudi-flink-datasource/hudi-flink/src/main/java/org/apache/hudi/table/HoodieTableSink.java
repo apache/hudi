@@ -82,6 +82,8 @@ public class HoodieTableSink implements
       OptionsInference.setupSinkTasks(conf, dataStream.getExecutionConfig().getParallelism());
       // set up client id
       OptionsInference.setupClientId(conf);
+      // set up index related configs
+      OptionsInference.setupIndexConfigs(conf);
 
       RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
 

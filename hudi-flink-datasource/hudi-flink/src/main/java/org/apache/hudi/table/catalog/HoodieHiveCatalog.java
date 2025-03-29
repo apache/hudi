@@ -474,7 +474,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       //create hive table
       client.createTable(hiveTable);
       //init hoodie metaClient
-      initTableIfNotExists(tablePath, (CatalogTable) table);
+      HoodieTableMetaClient metaClient = initTableIfNotExists(tablePath, (CatalogTable) table);
+      HoodieCatalogUtil.initPartitionBucketIndexMeta(metaClient, table);
     } catch (AlreadyExistsException e) {
       if (!ignoreIfExists) {
         throw new TableAlreadyExistException(getName(), tablePath, e);
@@ -485,7 +486,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
   }
 
-  private void initTableIfNotExists(ObjectPath tablePath, CatalogTable catalogTable) {
+  private HoodieTableMetaClient initTableIfNotExists(ObjectPath tablePath, CatalogTable catalogTable) {
     Configuration flinkConf = Configuration.fromMap(catalogTable.getOptions());
     final String avroSchema = AvroSchemaConverter.convertToSchema(
         catalogTable.getSchema().toPersistedRowDataType().getLogicalType(),
@@ -527,7 +528,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     StreamerUtil.checkPreCombineKey(flinkConf, fields);
 
     try {
-      StreamerUtil.initTableIfNotExists(flinkConf, hiveConf);
+      return StreamerUtil.initTableIfNotExists(flinkConf, hiveConf);
     } catch (IOException e) {
       throw new HoodieCatalogException("Initialize table exception.", e);
     }

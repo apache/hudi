@@ -18,7 +18,11 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.util.ClientIds;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
 import org.slf4j.Logger;
@@ -87,6 +91,25 @@ public class OptionsInference {
           String clientId = clientIds.nextId(conf);
           conf.setString(FlinkOptions.WRITE_CLIENT_ID, clientId);
         }
+      }
+    }
+  }
+
+  /**
+   * Set up Index related configs.
+   * For now we will add partition level bucket index related expressions and bucket number during start-up
+   * instant of loading hashing config from dfs everywhere.
+   */
+  public static void setupIndexConfigs(Configuration conf) {
+    if (OptionsResolver.isPartitionLevelSimpleBucketIndex(conf)) {
+      try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClientV2(conf)) {
+        HoodieTableMetaClient metaClient = writeClient.getHoodieTable().getMetaClient();
+        PartitionBucketIndexHashingConfig hashingConfig = PartitionBucketIndexHashingConfig.loadingLatestHashingConfig(metaClient);
+        conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS, hashingConfig.getExpressions());
+        conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_RULE, hashingConfig.getRule());
+        conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, hashingConfig.getDefaultBucketNumber());
+        LOG.info("Loaded Latest Hashing Config " + hashingConfig
+            + ". Reset hoodie.bucket.index.num.buckets to " + hashingConfig.getDefaultBucketNumber());
       }
     }
   }

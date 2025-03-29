@@ -30,6 +30,8 @@ import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWr
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
+import org.apache.hudi.index.HoodieIndex
+import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -78,6 +80,27 @@ trait ProvidesHoodieConfig extends Logging {
       HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> tableConfig.getPartitionFieldProp,
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
       HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString
+    )
+
+    val overridingOpts = buildOverridingOpts(hoodieCatalogTable, preCombineField)
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+      defaultOpts = defaultOpts, overridingOpts = overridingOpts)
+  }
+
+  def buildBucketRescaleHoodieConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
+    val sparkSession: SparkSession = hoodieCatalogTable.spark
+    val tableConfig = hoodieCatalogTable.tableConfig
+    val preCombineField = Option(tableConfig.getPreCombineField).getOrElse("")
+    val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
+
+    val defaultOpts = Map[String, String](
+      KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
+      HoodieIndexConfig.INDEX_TYPE.key() -> HoodieIndex.IndexType.BUCKET.name(),
+      HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key() -> BucketIndexEngineType.SIMPLE.name(),
+      SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
+      SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL,
+      HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
+      HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> "false"
     )
 
     val overridingOpts = buildOverridingOpts(hoodieCatalogTable, preCombineField)
