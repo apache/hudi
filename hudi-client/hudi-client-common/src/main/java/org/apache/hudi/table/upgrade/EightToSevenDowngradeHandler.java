@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -164,14 +165,24 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
   static void unsetRecordMergeMode(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
     Triple<RecordMergeMode, String, String> mergingConfigs =
         HoodieTableConfig.inferCorrectMergingBehavior(
-            tableConfig.getRecordMergeMode(), tableConfig.getPayloadClass(),
-            tableConfig.getRecordMergeStrategyId(), tableConfig.getPreCombineField(),
+            tableConfig.getRecordMergeMode(),
+            tableConfig.getPayloadClass(),
+            tableConfig.getRecordMergeStrategyId(),
+            tableConfig.getPreCombineField(),
             tableConfig.getTableVersion());
     if (StringUtils.nonEmpty(mergingConfigs.getMiddle())) {
       tablePropsToAdd.put(HoodieTableConfig.PAYLOAD_CLASS_NAME, mergingConfigs.getMiddle());
     }
     if (StringUtils.nonEmpty(mergingConfigs.getRight())) {
-      tablePropsToAdd.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID, mergingConfigs.getRight());
+      // Payload based merge strategy is introduced in 1.x. So set it to event time based when downgrade.
+      // This should cover the MDT payload case properly.
+      if (mergingConfigs.getRight().equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+        tablePropsToAdd.put(
+            HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+            HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+      } else {
+        tablePropsToAdd.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID, mergingConfigs.getRight());
+      }
     }
     tableConfig.getProps().remove(HoodieTableConfig.RECORD_MERGE_MODE.key());
   }
