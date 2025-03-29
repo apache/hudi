@@ -156,26 +156,27 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
     if (baseFileReaderOpt.isPresent()) {
       HoodieFileReader baseFileReader = baseFileReaderOpt.get();
       HoodieRecordMerger recordMerger = config.getRecordMerger();
-      ClosableIterator<HoodieRecord<T>> baseFileItr = baseFileReader.getRecordIterator(baseFileReaderSchema);
       HoodieTableConfig tableConfig = hoodieTable.getMetaClient().getTableConfig();
       Option<Pair<String, String>> simpleKeyGenFieldsOpt =
           tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
-      while (baseFileItr.hasNext()) {
-        HoodieRecord<T> record = baseFileItr.next().wrapIntoHoodieRecordPayloadWithParams(readerSchema,
-            config.getProps(), simpleKeyGenFieldsOpt, logRecordScanner.isWithOperationField(), logRecordScanner.getPartitionNameOverride(), false, Option.empty());
-        String key = record.getRecordKey();
-        if (deltaRecordMap.containsKey(key)) {
-          deltaRecordKeys.remove(key);
-          Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger
-              .merge(record, readerSchema, deltaRecordMap.get(key), readerSchema, config.getPayloadConfig().getProps());
-          if (!mergeResult.isPresent()) {
-            continue;
-          }
-          HoodieRecord<T> r = mergeResult.get().getLeft().wrapIntoHoodieRecordPayloadWithParams(readerSchema,
+      try (ClosableIterator<HoodieRecord<T>> baseFileItr = baseFileReader.getRecordIterator(baseFileReaderSchema)) {
+        while (baseFileItr.hasNext()) {
+          HoodieRecord<T> record = baseFileItr.next().wrapIntoHoodieRecordPayloadWithParams(readerSchema,
               config.getProps(), simpleKeyGenFieldsOpt, logRecordScanner.isWithOperationField(), logRecordScanner.getPartitionNameOverride(), false, Option.empty());
-          mergedRecords.add(r);
-        } else {
-          mergedRecords.add(record.copy());
+          String key = record.getRecordKey();
+          if (deltaRecordMap.containsKey(key)) {
+            deltaRecordKeys.remove(key);
+            Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger
+                .merge(record, readerSchema, deltaRecordMap.get(key), readerSchema, config.getPayloadConfig().getProps());
+            if (!mergeResult.isPresent()) {
+              continue;
+            }
+            HoodieRecord<T> r = mergeResult.get().getLeft().wrapIntoHoodieRecordPayloadWithParams(readerSchema,
+                config.getProps(), simpleKeyGenFieldsOpt, logRecordScanner.isWithOperationField(), logRecordScanner.getPartitionNameOverride(), false, Option.empty());
+            mergedRecords.add(r);
+          } else {
+            mergedRecords.add(record.copy());
+          }
         }
       }
     }

@@ -75,6 +75,7 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
   public ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema schema) throws IOException {
     ClosableIterator<HoodieRecord<T>> skeletonIterator = skeletonFileReader.getRecordIterator(schema);
     ClosableIterator<HoodieRecord<T>> dataFileIterator = dataFileReader.getRecordIterator(dataFileReader.getSchema());
+    // FIXME-vc: check this guy. 
     return new HoodieBootstrapRecordIterator<T>(skeletonIterator, dataFileIterator, schema, partitionFields, partitionValues) {
       @Override
       protected void setPartitionPathField(int position, Object fieldValue, T row) {

@@ -2338,6 +2338,7 @@ public class HoodieTableMetadataUtil {
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
+      // FIXME-vc: reader is not closed..
       HoodieFileReader reader = HoodieIOFactory.getIOFactory(HoodieStorageUtils.getStorage(basePath, configuration))
           .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
           .getFileReader(config, dataFilePath);
@@ -2390,6 +2391,7 @@ public class HoodieTableMetadataUtil {
                 metaClient.getTableConfig().getRecordMergeStrategyId()))
             .withTableMetaClient(metaClient)
             .build();
+        // FIXME-vc: this is not closed.
         ClosableIterator<String> recordKeyIterator = ClosableIterator.wrap(mergedLogRecordScanner.getRecords().keySet().iterator());
         return getHoodieRecordIterator(recordKeyIterator, forDelete, partition, fileSlice.getFileId(), fileSlice.getBaseInstantTime());
       }
@@ -2403,6 +2405,7 @@ public class HoodieTableMetadataUtil {
       HoodieFileReader reader = HoodieIOFactory.getIOFactory(metaClient.getStorage())
           .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
           .getFileReader(hoodieConfig, dataFilePath);
+      // FIXME-vc: is the reader closed?
       return getHoodieRecordIterator(reader.getRecordKeyIterator(), forDelete, partition, fileId, instantTime);
     });
   }
