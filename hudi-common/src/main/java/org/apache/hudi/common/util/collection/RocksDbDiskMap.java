@@ -55,7 +55,7 @@ public final class RocksDbDiskMap<T extends Serializable, R> extends DiskMap<T, 
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Set<T> keySet;
   private final CustomSerializer<R> valueSerializer;
-  private RocksDBDAO rocksDb;
+  private volatile RocksDBDAO rocksDb;
 
   public RocksDbDiskMap(String rocksDbStoragePath, CustomSerializer<R> valueSerializer) throws IOException {
     super(rocksDbStoragePath, ExternalSpillableMap.DiskMapType.ROCKS_DB.name());

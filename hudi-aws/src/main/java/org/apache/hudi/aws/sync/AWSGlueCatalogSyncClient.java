@@ -221,6 +221,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       }
 
       return partitions;
+    } catch (InterruptedException e) {
+      throw new RuntimeException("Glue sync interrupted", e);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(databaseName, tableName), e);
     } finally {
@@ -257,6 +259,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           partitionList.size() - partitions.size());
 
       return partitions;
+    } catch (InterruptedException e) {
+      throw new RuntimeException("Glue Sync interrupted", e);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(this.databaseName, tableName), e);
     } finally {
@@ -275,13 +279,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         .partitionsToGet(partitionValueList)
         .build();
     BatchGetPartitionResponse callResult = awsGlue.batchGetPartition(request).get();
-    List<Partition> result = callResult
+
+    return callResult
         .partitions()
         .stream()
         .map(p -> new Partition(p.values(), p.storageDescriptor().location()))
         .collect(Collectors.toList());
-
-    return result;
   }
 
   @Override
@@ -311,6 +314,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       for (Future<?> future : futures) {
         future.get();
       }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to parallelize operation", e);
     } finally {
@@ -734,7 +739,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
       // for each needed index create if not exist
       for (List<String> neededIdx : partitionsIndexNeeded) {
-        Boolean toBeCreated = true;
+        boolean toBeCreated = true;
         for (PartitionIndexDescriptor existingIdx: existingIdxsResp.partitionIndexDescriptorList()) {
           List<String> collect = existingIdx.keys().stream().map(key -> key.name()).collect(Collectors.toList());
           if (collect.equals(neededIdx)) {
@@ -917,6 +922,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       // people may wan't to add indexes, without re-creating the table
       // therefore we call this at each commit as a workaround
       managePartitionIndexes(tableName);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
     } catch (ExecutionException e) {
       LOG.warn("An indexation process is currently running.", e);
     } catch (Exception e) {

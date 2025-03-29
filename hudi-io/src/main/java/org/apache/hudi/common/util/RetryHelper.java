@@ -45,6 +45,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
   private final long initialIntervalTime;
   private String taskInfo = "N/A";
   private List<? extends Class<? extends Exception>> retryExceptionsClasses;
+  private final Random random = new Random();
 
   public RetryHelper(long maxRetryIntervalMs, int maxRetryNumbers, long initialRetryIntervalMs,
                      List<Class<? extends Exception>> retryExceptions, String taskInfo) {
@@ -134,7 +135,6 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
   }
 
   private long getWaitTimeExp(int retryCount) {
-    Random random = new Random();
     if (0 == retryCount) {
       return initialIntervalTime;
     }
