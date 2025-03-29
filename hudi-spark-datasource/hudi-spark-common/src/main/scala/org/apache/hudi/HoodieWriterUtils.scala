@@ -22,8 +22,8 @@ import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
-import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig.{RECORD_MERGE_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
@@ -172,12 +172,43 @@ object HoodieWriterUtils {
       || key.equals(RECORD_MERGE_MODE.key())
       || key.equals(RECORD_MERGE_STRATEGY_ID.key())))
 
-    //don't validate the payload only in the case that insert into is using fallback to some legacy configs
-    ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) && value.equals(VALIDATE_DUPLICATE_KEY_PAYLOAD_CLASS_NAME))
+    ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) && shouldIgnorePayloadValidation(value, params, tableConfig))
     // If hoodie.database.name is empty, ignore validation.
     ignoreConfig = ignoreConfig || (key.equals(HoodieTableConfig.DATABASE_NAME.key()) && isNullOrEmpty(getStringFromTableConfigWithAlternatives(tableConfig, key)))
-
     ignoreConfig
+  }
+
+  def shouldIgnorePayloadValidation(value: String, params: Map[String, String], tableConfig: HoodieConfig): Boolean = {
+    //don't validate the payload only in the case that insert into is using fallback to some legacy configs
+    val ignoreConfig = value.equals(VALIDATE_DUPLICATE_KEY_PAYLOAD_CLASS_NAME)
+    if (ignoreConfig) {
+       ignoreConfig
+    } else {
+      if (tableConfig == null) {
+        true
+      } else {
+        // In table version 8, if table Config payload refers to DefaultHoodieRecordPayload and if initial table version is 6, payload class config
+        // writer props are allowed to be OverwriteWithLatest
+        val tableVersion = if (tableConfig.contains(HoodieTableConfig.VERSION.key())) {
+          HoodieTableVersion.fromVersionCode(tableConfig.getInt(HoodieTableConfig.VERSION))
+        } else {
+          HoodieTableVersion.current()
+        }
+        val initTableVersion = if (tableConfig.contains(HoodieTableConfig.INITIAL_VERSION.key())) {
+          HoodieTableVersion.fromVersionCode(tableConfig.getInt(HoodieTableConfig.INITIAL_VERSION))
+        } else {
+          HoodieTableVersion.current()
+        }
+
+        if (tableVersion == HoodieTableVersion.EIGHT && initTableVersion.lesserThan(HoodieTableVersion.EIGHT)
+          && value.equals(classOf[OverwriteWithLatestAvroPayload].getName)
+          && tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()).equals(classOf[DefaultHoodieRecordPayload].getName)) {
+          true
+        } else {
+          ignoreConfig
+        }
+      }
+    }
   }
 
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
