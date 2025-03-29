@@ -92,7 +92,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     // Partition the record keys to lookup such that each partition looks up one record index shard
     JavaRDD<String> partitionedKeyRDD = HoodieJavaRDD.getJavaRDD(records)
         .map(HoodieRecord::getRecordKey)
-        .keyBy(k -> HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(k, numFileGroups))
+        .keyBy(k -> HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(k, numFileGroups, MetadataPartitionType.RECORD_INDEX.getPartitionPath()))
         .partitionBy(new PartitionIdPassthrough(numFileGroups))
         .map(t -> t._2);
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
