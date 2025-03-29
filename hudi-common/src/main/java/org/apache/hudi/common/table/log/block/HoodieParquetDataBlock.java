@@ -147,7 +147,9 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     return readerContext.getFileRecordIterator(
-        inlineLogFilePath, 0, blockContentLoc.getBlockSize(),
+        inlineLogFilePath,
+        0,
+        blockContentLoc.getBlockSize(),
         writerSchema,
         readerSchema,
         inlineStorage);
