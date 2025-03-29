@@ -178,7 +178,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         Map(HoodieTableConfig.PRECOMBINE_FIELD.key -> precombineField)
       } else {
         Map()
-      })).asJava
+      }) ++
+        Map(HoodieTableConfig.TIMELINE_TIMEZONE.key -> "UTC")
+      ).asJava
     val nonExistentConfigs: java.util.List[String] = (if (hasPreCombineField) {
       Seq[String]()
     } else {
