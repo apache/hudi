@@ -579,7 +579,10 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
           nextRecordInfo.getLeft(), nextRecordInfo.getRight());
       if (resultRecord.isPresent()) {
         nextRecord = readerContext.seal(resultRecord.get());
+        readStats.incrementNumInserts();
         return true;
+      } else {
+        readStats.incrementNumDeletes();
       }
     }
     return false;

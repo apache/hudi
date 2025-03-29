@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -245,22 +246,26 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     Map<String, Object> metadata = readerContext.generateMetadataForRecord(
         baseRecord, readerSchema);
 
+    Option<T> resultRecord = Option.empty();
     if (logRecordInfo != null) {
-      Option<T> resultRecord = merge(
+      resultRecord = merge(
           Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight());
       if (resultRecord.isPresent()) {
         nextRecord = readerContext.seal(resultRecord.get());
         readStats.incrementNumUpdates();
-        return true;
       } else {
         readStats.incrementNumDeletes();
-        return false;
       }
+    } else {
+      resultRecord = merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
+      readStats.incrementNumInserts();
     }
 
-    nextRecord = readerContext.seal(baseRecord);
-    readStats.incrementNumInserts();
-    return true;
+    if (resultRecord.isPresent()) {
+      nextRecord = readerContext.seal(resultRecord.get());
+      return true;
+    }
+    return false;
   }
 
   private boolean doHasNextFallbackBaseRecord(T baseRecord) throws IOException {
