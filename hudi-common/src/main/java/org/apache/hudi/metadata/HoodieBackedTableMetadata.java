@@ -46,6 +46,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
@@ -138,7 +139,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             .setBasePath(metadataBasePath)
             .build();
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
-      } catch (TableNotFoundException e) {
+      } catch (TableNotFoundException | InvalidTableException e) {
         LOG.warn("Metadata table was not found at path {}", metadataBasePath);
         this.isMetadataTableInitialized = false;
         this.metadataMetaClient = null;

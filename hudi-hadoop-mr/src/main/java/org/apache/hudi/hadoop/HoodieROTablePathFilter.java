@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
@@ -226,7 +227,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
                 hoodiePathCache.get(folder.toString()).contains(path)));
           }
           return hoodiePathCache.get(folder.toString()).contains(path);
-        } catch (TableNotFoundException e) {
+        } catch (TableNotFoundException | InvalidTableException e) {
           // Non-hoodie path, accept it.
           if (LOG.isDebugEnabled()) {
             LOG.debug(String.format("(1) Caching non-hoodie path under %s with basePath %s \n", folder, baseDir));
