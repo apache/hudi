@@ -457,9 +457,9 @@ public class HoodieMetrics {
     Option<HoodieInstant> hoodieInstantOption = filteredInstants.lastInstant();
     if (hoodieInstantOption.isPresent()) {
       String requestedTime = hoodieInstantOption.get().requestedTime();
-      if (hoodieInstantOption.get().requestedTime().length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
+      if (requestedTime.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
         // If requested instant is in MDT with table version six, it can contain suffix
-        requestedTime = requestedTime.substring(0, requestedTime.length() - 3);
+        requestedTime = requestedTime.substring(0, MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH);
       }
       updateMetric(action, metricName, Long.parseLong(requestedTime));
     }
