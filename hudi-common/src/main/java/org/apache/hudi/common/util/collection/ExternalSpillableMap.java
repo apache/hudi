@@ -32,12 +32,12 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -92,7 +92,7 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
   public ExternalSpillableMap(long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
                               SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType, CustomSerializer<R> valueSerializer,
                               boolean isCompressionEnabled, String loggingContext) throws IOException {
-    this.inMemoryMap = new HashMap<>();
+    this.inMemoryMap = new ConcurrentHashMap<>();
     this.baseFilePath = baseFilePath;
     this.maxInMemorySizeInBytes = (long) Math.floor(maxInMemorySizeInBytes * SIZING_FACTOR_FOR_IN_MEMORY_MAP);
     this.currentInMemoryMapSize = 0L;
