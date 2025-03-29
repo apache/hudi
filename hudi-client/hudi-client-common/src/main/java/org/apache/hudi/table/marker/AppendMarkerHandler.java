@@ -17,14 +17,25 @@
  * under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.table.marker;
+
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.IOType;
+
+import java.io.IOException;
+import java.util.Set;
 
 /**
- * Types of lower level I/O operations done on each file slice.
+ * Provides APIs to handle {@link IOType#APPEND} markers only present in table version 6 and below.
  */
-public enum IOType {
-  MERGE,
-  CREATE,
-  // APPEND is only used by table version 6 and below
-  APPEND
+public interface AppendMarkerHandler {
+  /**
+   * Fetches markers for log files w/ Append IOType ysed only for table version 6.
+   *
+   * @param context     {@code HoodieEngineContext} instance
+   * @param parallelism parallelism for reading the marker files in the directory
+   * @return all the log file paths of write IO type "APPEND"
+   * @throws IOException
+   */
+  Set<String> getAppendedLogPaths(HoodieEngineContext context, int parallelism) throws IOException;
 }

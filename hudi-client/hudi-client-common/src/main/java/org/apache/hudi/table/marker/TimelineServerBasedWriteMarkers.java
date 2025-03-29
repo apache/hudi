@@ -35,7 +35,6 @@ import org.apache.hudi.timeline.TimelineServiceClient;
 import org.apache.hudi.timeline.TimelineServiceClientBase.RequestMethod;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -207,10 +206,10 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     return paramsMap;
   }
 
-  private <T> T executeRequestToTimelineServer(String requestPath,
-                                               Map<String, String> queryParameters,
-                                               TypeReference reference,
-                                               RequestMethod method) throws IOException {
+  protected <T> T executeRequestToTimelineServer(String requestPath,
+                                                 Map<String, String> queryParameters,
+                                                 TypeReference reference,
+                                                 RequestMethod method) throws IOException {
     return timelineServiceClient.makeRequest(
             TimelineServiceClient.Request.newBuilder(method, requestPath).addQueryParams(queryParameters).build())
         .getDecodedContent(reference);
