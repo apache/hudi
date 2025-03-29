@@ -18,22 +18,32 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -46,8 +56,14 @@ import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.index.IndexBuilder;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
@@ -55,6 +71,11 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADAT
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToBloomFilterRecords;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToColumnStatsRecords;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToExpressionIndexRecords;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToFilesPartitionRecords;
 
 /**
  * Metadata table write utils.
@@ -267,5 +288,64 @@ public class HoodieMetadataWriteUtils {
     ValidationUtils.checkArgument(!metadataWriteConfig.isMetadataTableEnabled(), "File listing cannot be used for Metadata Table");
 
     return metadataWriteConfig;
+  }
+
+  /**
+   * Convert the clean action to metadata records.
+   */
+  // TODO(yihua): this is only used by writers, why is this in hudi-common?
+  public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext engineContext,
+                                                                               HoodieCleanMetadata cleanMetadata,
+                                                                               String instantTime,
+                                                                               HoodieTableMetaClient dataMetaClient,
+                                                                               HoodieMetadataConfig metadataConfig,
+                                                                               Map<MetadataPartitionType, IndexBuilder> enabledIndexBuilderMap,
+                                                                               int bloomIndexParallelism,
+                                                                               Option<HoodieRecord.HoodieRecordType> recordTypeOpt) {
+    final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
+    final HoodieData<HoodieRecord> filesPartitionRecordsRDD = engineContext.parallelize(
+        convertMetadataToFilesPartitionRecords(cleanMetadata, instantTime), 1);
+    partitionToRecordsMap.put(MetadataPartitionType.FILES.getPartitionPath(), filesPartitionRecordsRDD);
+    if (enabledIndexBuilderMap.containsKey(MetadataPartitionType.BLOOM_FILTERS)) {
+      final HoodieData<HoodieRecord> metadataBloomFilterRecordsRDD =
+          convertMetadataToBloomFilterRecords(cleanMetadata, engineContext, instantTime, bloomIndexParallelism);
+      partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath(), metadataBloomFilterRecordsRDD);
+    }
+
+    if (enabledIndexBuilderMap.containsKey(MetadataPartitionType.COLUMN_STATS)) {
+      final HoodieData<HoodieRecord> metadataColumnStatsRDD =
+          convertMetadataToColumnStatsRecords(cleanMetadata, engineContext,
+              dataMetaClient, metadataConfig, recordTypeOpt);
+      partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
+    }
+    if (enabledIndexBuilderMap.containsKey(MetadataPartitionType.EXPRESSION_INDEX)) {
+      convertMetadataToExpressionIndexRecords(engineContext, cleanMetadata, instantTime, dataMetaClient, metadataConfig, bloomIndexParallelism, partitionToRecordsMap,
+          recordTypeOpt);
+    }
+
+    return partitionToRecordsMap;
+  }
+
+  public static HoodieIndexDefinition getIndexDefinition(HoodieTableMetaClient dataTableMetaClient,
+                                                         String indexName) {
+    return HoodieTableMetadataUtil.getHoodieIndexDefinition(indexName, dataTableMetaClient);
+  }
+
+  public static List<Pair<String, FileSlice>> getPartitionFileSlicePairs(HoodieTableMetaClient dataTableMetaClient,
+                                                                         HoodieTableMetadata metadata,
+                                                                         HoodieTableFileSystemView fsView)
+      throws IOException {
+    String latestInstant = dataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
+        .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
+    // TODO(yihua): originally this uses try-catch on fsView so it's not reused.
+    // now we need to rely on outside caller to pass fsView and close the fsView.
+    // also see if we can reuse fsView across indexes.
+    // Collect the list of latest file slices present in each partition
+    List<String> partitions = metadata.getAllPartitionPaths();
+    fsView.loadAllPartitions();
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+    partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestInstant)
+        .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
+    return partitionFileSlicePairs;
   }
 }
