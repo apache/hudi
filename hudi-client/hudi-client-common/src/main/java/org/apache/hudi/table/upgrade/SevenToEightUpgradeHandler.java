@@ -192,21 +192,11 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       tablePropsToAdd.put(
           HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
           HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
-    } else if (StringUtils.nonEmpty(preCombineField)) {
-      // This contains a special case: OverwriteWithLatestPayload with preCombine field.
-      tablePropsToAdd.put(
-          HoodieTableConfig.PAYLOAD_CLASS_NAME,
-          DefaultHoodieRecordPayload.class.getName());
-      tablePropsToAdd.put(
-          HoodieTableConfig.RECORD_MERGE_MODE,
-          RecordMergeMode.EVENT_TIME_ORDERING.name());
-      tablePropsToAdd.put(
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
-          HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
-    } else {
-      // DefaultRecordPayload without preCombine Field.
-      // This is unlikely to happen.
-      if (useDefaultHoodieRecordPayload(payloadClass)) {
+    } else if (tableConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+      setEventTimeOrCommitTimeBasedOnPayload(payloadClass, tablePropsToAdd);
+    } else { // MOR table
+      if (StringUtils.nonEmpty(preCombineField)) {
+        // This contains a special case: OverwriteWithLatestPayload with preCombine field.
         tablePropsToAdd.put(
             HoodieTableConfig.PAYLOAD_CLASS_NAME,
             DefaultHoodieRecordPayload.class.getName());
@@ -217,16 +207,34 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
             HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
             HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
       } else {
-        tablePropsToAdd.put(
-            HoodieTableConfig.PAYLOAD_CLASS_NAME,
-            OverwriteWithLatestAvroPayload.class.getName());
-        tablePropsToAdd.put(
-            HoodieTableConfig.RECORD_MERGE_MODE,
-            RecordMergeMode.COMMIT_TIME_ORDERING.name());
-        tablePropsToAdd.put(
-            HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
-            HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+        setEventTimeOrCommitTimeBasedOnPayload(payloadClass, tablePropsToAdd);
       }
+    }
+  }
+
+  private static void setEventTimeOrCommitTimeBasedOnPayload(String payloadClass, Map<ConfigProperty, String> tablePropsToAdd) {
+    // DefaultRecordPayload without preCombine Field.
+    // This is unlikely to happen.
+    if (useDefaultHoodieRecordPayload(payloadClass)) {
+      tablePropsToAdd.put(
+          HoodieTableConfig.PAYLOAD_CLASS_NAME,
+          DefaultHoodieRecordPayload.class.getName());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_MODE,
+          RecordMergeMode.EVENT_TIME_ORDERING.name());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+          HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+    } else {
+      tablePropsToAdd.put(
+          HoodieTableConfig.PAYLOAD_CLASS_NAME,
+          OverwriteWithLatestAvroPayload.class.getName());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_MODE,
+          RecordMergeMode.COMMIT_TIME_ORDERING.name());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+          HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
     }
   }
 

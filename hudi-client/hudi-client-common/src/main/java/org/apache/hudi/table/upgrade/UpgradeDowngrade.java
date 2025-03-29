@@ -154,14 +154,14 @@ public class UpgradeDowngrade {
 
     // Perform the actual upgrade/downgrade; this has to be idempotent, for now.
     LOG.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
-    Map<ConfigProperty, String> tableProps = new Hashtable<>();
+    Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
     List<ConfigProperty> tablePropsToRemove = new ArrayList<>();
     boolean isDowngrade = false;
     if (fromVersion.versionCode() < toVersion.versionCode()) {
       // upgrade
       while (fromVersion.versionCode() < toVersion.versionCode()) {
         HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() + 1);
-        tableProps.putAll(upgrade(fromVersion, nextVersion, instantTime));
+        tablePropsToAdd.putAll(upgrade(fromVersion, nextVersion, instantTime));
         fromVersion = nextVersion;
       }
     } else {
@@ -170,7 +170,7 @@ public class UpgradeDowngrade {
       while (fromVersion.versionCode() > toVersion.versionCode()) {
         HoodieTableVersion prevVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() - 1);
         Pair<Map<ConfigProperty, String>, List<ConfigProperty>> tablePropsToAddAndRemove = downgrade(fromVersion, prevVersion, instantTime);
-        tableProps.putAll(tablePropsToAddAndRemove.getLeft());
+        tablePropsToAdd.putAll(tablePropsToAddAndRemove.getLeft());
         tablePropsToRemove.addAll(tablePropsToAddAndRemove.getRight());
         fromVersion = prevVersion;
       }
@@ -180,8 +180,12 @@ public class UpgradeDowngrade {
       metaClient = HoodieTableMetaClient.reload(metaClient);
     }
     // Write out the current version in hoodie.properties.updated file
-    for (Map.Entry<ConfigProperty, String> entry : tableProps.entrySet()) {
+    for (Map.Entry<ConfigProperty, String> entry : tablePropsToAdd.entrySet()) {
+      // add alternate keys.
       metaClient.getTableConfig().setValue(entry.getKey(), entry.getValue());
+      entry.getKey().getAlternatives().forEach(alternateKey -> {
+        metaClient.getTableConfig().setValue((String)alternateKey, entry.getValue());
+      });
     }
     for (ConfigProperty configProperty : tablePropsToRemove) {
       metaClient.getTableConfig().clearValue(configProperty);

@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapIndexType;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -185,7 +184,7 @@ class TestEightToSevenDowngradeHandler {
   @ParameterizedTest
   @CsvSource({
       "com.example.CustomPayload, CUSTOM, com.example.CustomPayload",
-      ", CUSTOM, com.example.CustomPayload",
+      ", CUSTOM, ",
       "org.apache.hudi.metadata.HoodieMetadataPayload, CUSTOM, org.apache.hudi.metadata.HoodieMetadataPayload",
       "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, COMMIT_TIME_ORDERING, org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
       "org.apache.hudi.common.model.DefaultHoodieRecordPayload, EVENT_TIME_ORDERING, org.apache.hudi.common.model.DefaultHoodieRecordPayload",
@@ -204,9 +203,9 @@ class TestEightToSevenDowngradeHandler {
     if (!StringUtils.isNullOrEmpty(recordMergeMode) && recordMergeMode.equals("CUSTOM") && StringUtils.isNullOrEmpty(payloadClass)) {
       assertThrows(HoodieUpgradeDowngradeException.class, () -> EightToSevenDowngradeHandler.unsetRecordMergeMode(config, tableConfig, tablePropsToAdd));
     } else {
-      List<ConfigProperty> configProperties = EightToSevenDowngradeHandler.unsetRecordMergeMode(config, tableConfig, tablePropsToAdd);
-      assertTrue(configProperties.stream().anyMatch(cfg -> cfg.key().equals(RECORD_MERGE_MODE.key())));
-      assertEquals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, tablePropsToAdd.get(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID));
+      List<ConfigProperty> propsToRemove = EightToSevenDowngradeHandler.unsetRecordMergeMode(config, tableConfig, tablePropsToAdd);
+      assertTrue(propsToRemove.stream().anyMatch(cfg -> cfg.key().equals(RECORD_MERGE_MODE.key())));
+      assertTrue(!tablePropsToAdd.containsKey(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID));
 
       if (!StringUtils.isNullOrEmpty(payloadClass)) {
         assertFalse(tablePropsToAdd.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME));

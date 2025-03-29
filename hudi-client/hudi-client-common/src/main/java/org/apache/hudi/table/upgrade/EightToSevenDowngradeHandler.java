@@ -26,7 +26,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -138,7 +137,9 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     // downgrade table properties
     downgradePartitionFields(config, metaClient.getTableConfig(), tablePropsToAdd);
     unsetInitialVersion(metaClient.getTableConfig(), tablePropsToAdd);
-    List<ConfigProperty> tablePropsToRemove = unsetRecordMergeMode(config, metaClient.getTableConfig(), tablePropsToAdd);
+    List<ConfigProperty> tablePropsToRemove = new ArrayList<>();
+    tablePropsToRemove.addAll(unsetRecordMergeMode(config, metaClient.getTableConfig(), tablePropsToAdd));
+    tablePropsToRemove.add(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID);
     downgradeKeyGeneratorType(metaClient.getTableConfig(), tablePropsToAdd);
     downgradeBootstrapIndexType(metaClient.getTableConfig(), tablePropsToAdd);
 
@@ -183,9 +184,6 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
           throw new HoodieUpgradeDowngradeException("Downgrade is not handled for " + mergeMode);
       }
     }
-    tablePropsToAdd.put(
-        HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
-        HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
     return Collections.singletonList(HoodieTableConfig.RECORD_MERGE_MODE);
   }
 
