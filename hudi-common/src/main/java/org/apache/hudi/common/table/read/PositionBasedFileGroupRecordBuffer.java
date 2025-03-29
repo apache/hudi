@@ -246,9 +246,21 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     Map<String, Object> metadata = readerContext.generateMetadataForRecord(
         baseRecord, readerSchema);
 
-    Option<T> resultRecord = logRecordInfo != null
-        ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
-        : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
+    Option<T> resultRecord = Option.empty();
+    if (logRecordInfo != null) {
+      resultRecord = merge(
+          Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight());
+      if (resultRecord.isPresent()) {
+        nextRecord = readerContext.seal(resultRecord.get());
+        readStats.incrementNumUpdates();
+      } else {
+        readStats.incrementNumDeletes();
+      }
+    } else {
+      resultRecord = merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
+      readStats.incrementNumInserts();
+    }
+
     if (resultRecord.isPresent()) {
       nextRecord = readerContext.seal(resultRecord.get());
       return true;
