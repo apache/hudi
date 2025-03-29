@@ -185,20 +185,11 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     hoodieTable.getMetaClient().getTableConfig().getProps().forEach(props::putIfAbsent);
     config.getProps().forEach(props::putIfAbsent);
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        readerContext,
+    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
         storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
-        hoodieTable.getMetaClient().getBasePath().toString(),
-        instantTime,
-        fileSlice,
-        writeSchemaWithMetaFields,
-        writeSchemaWithMetaFields,
-        internalSchemaOption,
-        hoodieTable.getMetaClient(),
-        props,
-        0,
-        Long.MAX_VALUE,
-        usePosition)) {
+        hoodieTable.getMetaClient().getBasePath().toString(), instantTime, fileSlice,
+        writeSchemaWithMetaFields, writeSchemaWithMetaFields, internalSchemaOption,
+        hoodieTable.getMetaClient(), props, 0, Long.MAX_VALUE, usePosition, false)) {
       fileGroupReader.initRecordIterators();
       // Reads the records from the file slice
       try (HoodieFileGroupReaderIterator<InternalRow> recordIterator

@@ -144,7 +144,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(), tableBasePath,
         latestCommitTime, getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath),
         tableSchema, requestedSchema, Option.empty(), metaClient, props, fileSplit.getStart(),
-        fileSplit.getLength(), false);
+        fileSplit.getLength(), false, false);
     this.fileGroupReader.initRecordIterators();
     // it expects the partition columns to be at the end
     Schema outputSchema = HoodieAvroUtils.generateProjectionSchema(tableSchema,

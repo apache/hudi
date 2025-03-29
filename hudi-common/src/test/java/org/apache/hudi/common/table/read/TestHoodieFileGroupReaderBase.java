@@ -329,6 +329,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           props,
           1,
           fileSlice.getTotalFileSize(),
+          false,
           false));
     }
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
@@ -344,6 +345,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         props,
         0,
         fileSlice.getTotalFileSize(),
+        false,
         false);
     fileGroupReader.initRecordIterators();
     while (fileGroupReader.hasNext()) {

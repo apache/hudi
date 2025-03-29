@@ -114,6 +114,11 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
 
   protected ClosableIterator<IndexedRecord> getFileGroupIterator(int numFiles, boolean shouldReadPositions)
       throws IOException, InterruptedException {
+    return getFileGroupIterator(numFiles, shouldReadPositions, false);
+  }
+
+  protected ClosableIterator<IndexedRecord> getFileGroupIterator(int numFiles, boolean shouldReadPositions, boolean allowInflightCommits)
+      throws IOException, InterruptedException {
     assert (numFiles >= 1 && numFiles <= keyRanges.size());
 
     HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, storageConf);
@@ -143,8 +148,8 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             properties,
             hoodieStorage,
             readerContext,
-            metaClient
-        );
+            metaClient,
+            allowInflightCommits);
 
     fileGroupReader.initRecordIterators();
     return fileGroupReader.getClosableIterator();

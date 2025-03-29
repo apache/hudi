@@ -997,6 +997,7 @@ public class HoodieTableMetadataUtil {
           Collections.emptyList(),
           datasetMetaClient.getTableConfig().getRecordMergeStrategyId());
 
+      // CRITICAL: Ensure allowInflightInstants is set to true while replacing the scanner with *LogRecordReader or HoodieFileGroupReader
       HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
           .withStorage(datasetMetaClient.getStorage())
           .withBasePath(datasetMetaClient.getBasePath())
