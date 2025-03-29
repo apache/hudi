@@ -31,6 +31,8 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, Ho
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.command.DataWritingCommand
 
 import scala.collection.JavaConverters._
 
@@ -40,10 +42,10 @@ import scala.collection.JavaConverters._
 case class CreateHoodieTableAsSelectCommand(
    table: CatalogTable,
    mode: SaveMode,
-   query: LogicalPlan) extends HoodieLeafRunnableCommand {
+   query: LogicalPlan) extends DataWritingCommand {
   override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
 
-  override def run(sparkSession: SparkSession): Seq[Row] = {
+  override def run(sparkSession: SparkSession, plan: SparkPlan): Seq[Row] = {
     checkState(table.tableType != CatalogTableType.VIEW)
     checkState(table.provider.isDefined)
 
@@ -103,7 +105,7 @@ case class CreateHoodieTableAsSelectCommand(
         DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key -> "true"
       )
       val partitionSpec = updatedTable.partitionColumnNames.map((_, None)).toMap
-      val success = InsertIntoHoodieTableCommand.run(sparkSession, updatedTable, query, partitionSpec,
+      val success = InsertIntoHoodieTableCommand.run(sparkSession, updatedTable, plan, partitionSpec,
         mode == SaveMode.Overwrite, refreshTable = false, extraOptions = options)
       if (success) {
         // If write success, create the table in catalog if it has not synced to the
@@ -131,4 +133,8 @@ case class CreateHoodieTableAsSelectCommand(
     val fs = path.getFileSystem(conf)
     fs.delete(path, true)
   }
+
+  override def outputColumnNames: Seq[String] = query.output.map(_.name)
+
+  override def withNewChildInternal(newChild: LogicalPlan) : LogicalPlan = copy(query = newChild)
 }
