@@ -184,25 +184,29 @@ object HoodieWriterUtils {
     if (ignoreConfig) {
        ignoreConfig
     } else {
-      // In table version 8, if table Config payload refers to DefaultHoodieRecordPayload and if initial table version is 6, payload class config
-      // writer props are allowed to be OverwriteWithLatest
-      val tableVersion = if (tableConfig.contains(HoodieTableConfig.VERSION.key())) {
-        HoodieTableVersion.fromVersionCode(tableConfig.getInt(HoodieTableConfig.VERSION))
-      } else {
-        HoodieTableVersion.current()
-      }
-      val initTableVersion = if (tableConfig.contains(HoodieTableConfig.INITIAL_VERSION.key())) {
-        HoodieTableVersion.fromVersionCode(tableConfig.getInt(HoodieTableConfig.INITIAL_VERSION))
-      } else {
-        HoodieTableVersion.current()
-      }
-
-      if (tableVersion == HoodieTableVersion.EIGHT && initTableVersion.lesserThan(HoodieTableVersion.EIGHT)
-        && value.equals(classOf[OverwriteWithLatestAvroPayload].getName)
-        && tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()).equals(classOf[DefaultHoodieRecordPayload].getName)) {
+      if (tableConfig == null) {
         true
       } else {
-        ignoreConfig
+        // In table version 8, if table Config payload refers to DefaultHoodieRecordPayload and if initial table version is 6, payload class config
+        // writer props are allowed to be OverwriteWithLatest
+        val tableVersion = if (tableConfig.contains(HoodieTableConfig.VERSION.key())) {
+          HoodieTableVersion.fromVersionCode(tableConfig.getInt(HoodieTableConfig.VERSION))
+        } else {
+          HoodieTableVersion.current()
+        }
+        val initTableVersion = if (tableConfig.contains(HoodieTableConfig.INITIAL_VERSION.key())) {
+          HoodieTableVersion.fromVersionCode(tableConfig.getInt(HoodieTableConfig.INITIAL_VERSION))
+        } else {
+          HoodieTableVersion.current()
+        }
+
+        if (tableVersion == HoodieTableVersion.EIGHT && initTableVersion.lesserThan(HoodieTableVersion.EIGHT)
+          && value.equals(classOf[OverwriteWithLatestAvroPayload].getName)
+          && tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()).equals(classOf[DefaultHoodieRecordPayload].getName)) {
+          true
+        } else {
+          ignoreConfig
+        }
       }
     }
   }
