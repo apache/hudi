@@ -17,14 +17,21 @@
  * under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.table.action.rollback;
+
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieTable;
 
 /**
- * Types of lower level I/O operations done on each file slice.
+ * Factory class to assist with instantiating the right {@link RollbackHelper}.
  */
-public enum IOType {
-  MERGE,
-  CREATE,
-  // APPEND is only used by table version 6 and below
-  APPEND
+public class RollbackHelperFactory {
+
+  public static RollbackHelper getRollBackHelper(HoodieTable table, HoodieWriteConfig config) {
+    if (table.getMetaClient().getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
+      return new RollbackHelperV1(table, config);
+    }
+    return new RollbackHelper(table, config);
+  }
 }
