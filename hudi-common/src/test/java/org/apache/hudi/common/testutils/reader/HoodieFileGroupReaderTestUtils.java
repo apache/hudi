@@ -48,14 +48,21 @@ public class HoodieFileGroupReaderTestUtils {
       HoodieTableMetaClient metaClient
   ) {
     assert (fileSliceOpt.isPresent());
-    return new HoodieFileGroupReaderBuilder()
+    return HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withStorage(storage)
+        .withTablePath(basePath)
+        .withLatestCommitTime(latestCommitTime)
         .withFileSlice(fileSliceOpt.get())
+        .withDataSchema(schema)
+        .withRequestedSchema(schema)
+        .withInternalSchema(Option.empty())
+        .withHoodieTableMetaClient(metaClient)
+        .withProps(properties)
         .withStart(start)
         .withLength(length)
-        .withProperties(properties)
-        .build(basePath, latestCommitTime, schema, shouldUseRecordPosition, metaClient);
+        .withShouldUseRecordPosition(shouldUseRecordPosition)
+        .build();
   }
 
   public static class HoodieFileGroupReaderBuilder {
@@ -108,20 +115,22 @@ public class HoodieFileGroupReaderTestUtils {
       props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),  basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME);
       props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
       props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
-      return new HoodieFileGroupReader<>(
-          readerContext,
-          storage,
-          basePath,
-          latestCommitTime,
-          fileSlice,
-          schema,
-          schema,
-          Option.empty(),
-          metaClient,
-          props,
-          start,
-          length,
-          shouldUseRecordPosition);
+
+      // Create a new HoodieFileGroupReader with the provided parameters
+      return HoodieFileGroupReader.<IndexedRecord>newBuilder()
+          .withReaderContext(readerContext)
+          .withStorage(storage)
+          .withTablePath(basePath)
+          .withLatestCommitTime(latestCommitTime)
+          .withFileSlice(fileSlice)
+          .withDataSchema(schema)
+          .withRequestedSchema(schema)
+          .withHoodieTableMetaClient(metaClient)
+          .withProps(props)
+          .withStart(start)
+          .withLength(length)
+          .withShouldUseRecordPosition(shouldUseRecordPosition)
+          .build();
     }
   }
 }
