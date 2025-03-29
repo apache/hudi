@@ -496,7 +496,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     return ret;
   }
 
-  private interface WriteFunction {
+  protected interface WriteFunction {
     List<WriteStatus> write(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant);
   }
 }

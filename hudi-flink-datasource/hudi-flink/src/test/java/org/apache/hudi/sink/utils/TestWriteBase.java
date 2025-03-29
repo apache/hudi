@@ -638,7 +638,7 @@ public class TestWriteBase {
 
   protected boolean supportRowDataAppend(Configuration conf) {
     RowType rowType = (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
-    return OptionsResolver.supportRowDataAppend(conf, rowType);
+    return OptionsResolver.supportRowDataAppend(conf);
   }
 
   protected TestHarness preparePipeline(Configuration conf) throws Exception {
