@@ -20,6 +20,7 @@ package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -84,6 +85,24 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Enable asynchronous indexing of metadata table.");
+
+  public static final ConfigProperty<FileSystemViewStorageType> METADATA_VIEW_TYPE = ConfigProperty
+      .key(METADATA_PREFIX + ".filesystem.view.type")
+      .defaultValue(FileSystemViewStorageType.MEMORY)
+      .withValidValues(FileSystemViewStorageType.MEMORY.name(), FileSystemViewStorageType.SPILLABLE_DISK.name())
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("The type of the file system view to use for the metadata table. "
+          + "Supported options include MEMORY and SPILLABLE_DISK which provide different "
+          + " trade-offs for memory usage and API request performance.");
+
+  public static final ConfigProperty<Long> METADATA_VIEW_SPILLABLE_MEMORY = ConfigProperty
+      .key(METADATA_PREFIX + ".filesystem.view.spillable.mem")
+      .defaultValue(100 * 1024 * 1024L) // 100 MB
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Amount of memory to be used in bytes for holding file system view "
+          + "of the metadata table, before spilling to disk.");
 
   // Maximum delta commits before compaction occurs
   public static final ConfigProperty<Integer> COMPACT_NUM_DELTA_COMMITS = ConfigProperty
@@ -445,6 +464,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return new Builder();
   }
 
+  public FileSystemViewStorageType getMetadataViewType() {
+    return FileSystemViewStorageType.valueOf(getString(METADATA_VIEW_TYPE));
+  }
+
+  public long getMetadataViewSpillableMemory() {
+    return getLong(METADATA_VIEW_SPILLABLE_MEMORY);
+  }
+
   public int getFileListingParallelism() {
     return Math.max(getInt(HoodieMetadataConfig.FILE_LISTING_PARALLELISM_VALUE), 1);
   }
@@ -661,6 +688,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder enable(boolean enable) {
       metadataConfig.setValue(ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withMetadataViewType(FileSystemViewStorageType type) {
+      metadataConfig.setValue(METADATA_VIEW_TYPE, type.name());
+      return this;
+    }
+
+    public Builder withMetadataViewSpillableMemory(long memoryInBytes) {
+      metadataConfig.setValue(METADATA_VIEW_SPILLABLE_MEMORY, String.valueOf(memoryInBytes));
       return this;
     }
 
