@@ -22,18 +22,18 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.HashMap;
@@ -56,14 +56,7 @@ import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class TestSevenToEightUpgradeHandler {
-
-  @Mock
-  private HoodieTable table;
-  @Mock
-  private HoodieTableMetaClient metaClient;
-  @Mock
-  private HoodieEngineContext context;
+class TestSevenToEightUpgradeHandler {
   @Mock
   private HoodieWriteConfig config;
   @Mock
@@ -121,5 +114,50 @@ public class TestSevenToEightUpgradeHandler {
     SevenToEightUpgradeHandler.upgradeKeyGeneratorType(tableConfig, tablePropsToAdd);
     assertTrue(tablePropsToAdd.containsKey(KEY_GENERATOR_CLASS_NAME));
     assertTrue(tablePropsToAdd.containsKey(KEY_GENERATOR_TYPE));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      // hard coding all merge strategy Ids since older version of hudi has different variable name to represent the merge strategy id.
+      "com.example.CustomPayload, , CUSTOM, " + "00000000-0000-0000-0000-000000000000" + ", com.example.CustomPayload",
+      "com.example.CustomPayload, preCombineFieldValue, CUSTOM, " + "00000000-0000-0000-0000-000000000000" + ", com.example.CustomPayload",
+      "org.apache.hudi.metadata.HoodieMetadataPayload, , CUSTOM, " + "00000000-0000-0000-0000-000000000000" + ", org.apache.hudi.metadata.HoodieMetadataPayload",
+      "org.apache.hudi.metadata.HoodieMetadataPayload, preCombineFieldValue, CUSTOM, " + "00000000-0000-0000-0000-000000000000" + ", org.apache.hudi.metadata.HoodieMetadataPayload",
+      "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, , COMMIT_TIME_ORDERING, " + "ce9acb64-bde0-424c-9b91-f6ebba25356d"
+          + ", org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+      "org.apache.hudi.common.model.DefaultHoodieRecordPayload, , EVENT_TIME_ORDERING, " + "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5"
+          + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      ", preCombineFieldValue, EVENT_TIME_ORDERING, " + "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5" + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, preCombineFieldValue, EVENT_TIME_ORDERING,"
+          + "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5" + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      ", preCombineFieldValue, EVENT_TIME_ORDERING, " + "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5" + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      "org.apache.hudi.common.model.DefaultHoodieRecordPayload, preCombineFieldValue, EVENT_TIME_ORDERING,"
+          + "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5" + ", org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      ", , COMMIT_TIME_ORDERING, " + "ce9acb64-bde0-424c-9b91-f6ebba25356d" + ", org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
+  })
+  void testUpgradeMergeMode(String payloadClass, String preCombineField, String expectedMergeMode, String expectedStrategy, String expectedPayloadClass) {
+    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+
+    when(tableConfig.getPayloadClass()).thenReturn(payloadClass);
+    when(tableConfig.getPreCombineField()).thenReturn(preCombineField);
+
+    SevenToEightUpgradeHandler.upgradeMergeMode(tableConfig, tablePropsToAdd);
+
+    assertEquals(expectedMergeMode, tablePropsToAdd.get(HoodieTableConfig.RECORD_MERGE_MODE));
+    assertEquals(expectedStrategy, tablePropsToAdd.get(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID));
+    if (expectedPayloadClass != null) {
+      assertEquals(expectedPayloadClass, tablePropsToAdd.get(HoodieTableConfig.PAYLOAD_CLASS_NAME));
+    } else {
+      assertTrue(!tablePropsToAdd.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME));
+    }
+  }
+
+  private static Map<ConfigProperty, String> createMap(Object... keyValues) {
+    Map<ConfigProperty, String> map = new HashMap<>();
+    for (int i = 0; i < keyValues.length; i += 2) {
+      map.put((ConfigProperty) keyValues[i], (String) keyValues[i + 1]);
+    }
+    return map;
   }
 }

@@ -28,7 +28,9 @@ import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -41,8 +43,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.File;
@@ -67,6 +72,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -154,6 +160,7 @@ class TestEightToSevenDowngradeHandler {
     existingTableProps.put(RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
     existingTableProps.put(BOOTSTRAP_INDEX_TYPE.key(), BootstrapIndexType.HFILE.name());
     existingTableProps.put(KEY_GENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
+    when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
     when(tableConfig.getProps()).thenReturn(new TypedProperties(existingTableProps));
     when(config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())).thenReturn("partition_field");
     when(tableConfig.getPartitionFieldProp()).thenReturn("partition_field");
@@ -163,8 +170,8 @@ class TestEightToSevenDowngradeHandler {
     assertEquals("partition_field", tablePropsToAdd.get(PARTITION_FIELDS));
     EightToSevenDowngradeHandler.unsetInitialVersion(tableConfig, tablePropsToAdd);
     assertFalse(tableConfig.getProps().containsKey(INITIAL_VERSION.key()));
-    EightToSevenDowngradeHandler.unsetRecordMergeMode(tableConfig, tablePropsToAdd);
-    assertFalse(tableConfig.getProps().containsKey(RECORD_MERGE_MODE.key()));
+    List<ConfigProperty> propsToRemove = EightToSevenDowngradeHandler.unsetRecordMergeMode(config, tableConfig, tablePropsToAdd);
+    assertTrue(propsToRemove.contains(RECORD_MERGE_MODE));
     assertTrue(tablePropsToAdd.containsKey(PAYLOAD_CLASS_NAME));
     EightToSevenDowngradeHandler.downgradeBootstrapIndexType(tableConfig, tablePropsToAdd);
     assertFalse(tablePropsToAdd.containsKey(BOOTSTRAP_INDEX_TYPE));
@@ -172,5 +179,39 @@ class TestEightToSevenDowngradeHandler {
     EightToSevenDowngradeHandler.downgradeKeyGeneratorType(tableConfig, tablePropsToAdd);
     assertFalse(tablePropsToAdd.containsKey(KEY_GENERATOR_TYPE));
     assertFalse(tablePropsToAdd.containsKey(KEY_GENERATOR_CLASS_NAME));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "com.example.CustomPayload, CUSTOM, com.example.CustomPayload",
+      ", CUSTOM, ",
+      "org.apache.hudi.metadata.HoodieMetadataPayload, CUSTOM, org.apache.hudi.metadata.HoodieMetadataPayload",
+      "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload, COMMIT_TIME_ORDERING, org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+      "org.apache.hudi.common.model.DefaultHoodieRecordPayload, EVENT_TIME_ORDERING, org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      ", EVENT_TIME_ORDERING, org.apache.hudi.common.model.DefaultHoodieRecordPayload",
+      ", COMMIT_TIME_ORDERING, org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
+  })
+  void testUnsetRecordMergeMode(String payloadClass, String recordMergeMode, String expectedPayloadClass) {
+    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+
+    when(tableConfig.getPayloadClass()).thenReturn(payloadClass);
+    if (StringUtils.isNullOrEmpty(payloadClass)) {
+      when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.valueOf(recordMergeMode));
+    }
+
+    if (!StringUtils.isNullOrEmpty(recordMergeMode) && recordMergeMode.equals("CUSTOM") && StringUtils.isNullOrEmpty(payloadClass)) {
+      assertThrows(HoodieUpgradeDowngradeException.class, () -> EightToSevenDowngradeHandler.unsetRecordMergeMode(config, tableConfig, tablePropsToAdd));
+    } else {
+      List<ConfigProperty> propsToRemove = EightToSevenDowngradeHandler.unsetRecordMergeMode(config, tableConfig, tablePropsToAdd);
+      assertTrue(propsToRemove.stream().anyMatch(cfg -> cfg.key().equals(RECORD_MERGE_MODE.key())));
+      assertTrue(!tablePropsToAdd.containsKey(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID));
+
+      if (!StringUtils.isNullOrEmpty(payloadClass)) {
+        assertFalse(tablePropsToAdd.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME));
+      } else {
+        assertEquals(expectedPayloadClass, tablePropsToAdd.get(HoodieTableConfig.PAYLOAD_CLASS_NAME));
+      }
+    }
   }
 }

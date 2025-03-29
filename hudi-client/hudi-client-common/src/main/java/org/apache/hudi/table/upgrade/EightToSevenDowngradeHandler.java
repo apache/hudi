@@ -25,7 +25,9 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -42,10 +44,11 @@ import org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineLoade
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -61,6 +64,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -95,7 +99,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
   private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
 
   @Override
-  public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     // Rollback and run compaction in one step
@@ -133,7 +137,9 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     // downgrade table properties
     downgradePartitionFields(config, metaClient.getTableConfig(), tablePropsToAdd);
     unsetInitialVersion(metaClient.getTableConfig(), tablePropsToAdd);
-    unsetRecordMergeMode(metaClient.getTableConfig(), tablePropsToAdd);
+    List<ConfigProperty> tablePropsToRemove = new ArrayList<>();
+    tablePropsToRemove.addAll(unsetRecordMergeMode(config, metaClient.getTableConfig(), tablePropsToAdd));
+    tablePropsToRemove.add(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID);
     downgradeKeyGeneratorType(metaClient.getTableConfig(), tablePropsToAdd);
     downgradeBootstrapIndexType(metaClient.getTableConfig(), tablePropsToAdd);
 
@@ -143,7 +149,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       downgradeMetadataPartitions(context, metaClient.getStorage(), metaClient, tablePropsToAdd);
       UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.SEVEN, metaClient);
     }
-    return tablePropsToAdd;
+    return Pair.of(tablePropsToAdd, tablePropsToRemove);
   }
 
   static void downgradePartitionFields(HoodieWriteConfig config,
@@ -161,19 +167,24 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     tableConfig.getProps().remove(HoodieTableConfig.INITIAL_VERSION.key());
   }
 
-  static void unsetRecordMergeMode(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
-    Triple<RecordMergeMode, String, String> mergingConfigs =
-        HoodieTableConfig.inferCorrectMergingBehavior(
-            tableConfig.getRecordMergeMode(), tableConfig.getPayloadClass(),
-            tableConfig.getRecordMergeStrategyId(), tableConfig.getPreCombineField(),
-            tableConfig.getTableVersion());
-    if (StringUtils.nonEmpty(mergingConfigs.getMiddle())) {
-      tablePropsToAdd.put(HoodieTableConfig.PAYLOAD_CLASS_NAME, mergingConfigs.getMiddle());
+  static List<ConfigProperty> unsetRecordMergeMode(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+    String payloadClass = tableConfig.getPayloadClass();
+    if (StringUtils.isNullOrEmpty(payloadClass)) {
+      RecordMergeMode mergeMode = tableConfig.getRecordMergeMode();
+      switch (mergeMode) {
+        case EVENT_TIME_ORDERING:
+          tablePropsToAdd.put(HoodieTableConfig.PAYLOAD_CLASS_NAME, DefaultHoodieRecordPayload.class.getName());
+          break;
+        case COMMIT_TIME_ORDERING:
+          tablePropsToAdd.put(HoodieTableConfig.PAYLOAD_CLASS_NAME, OverwriteWithLatestAvroPayload.class.getName());
+          break;
+        case CUSTOM:
+          throw new HoodieUpgradeDowngradeException("Custom payload class must be available for downgrading custom merge mode");
+        default:
+          throw new HoodieUpgradeDowngradeException("Downgrade is not handled for " + mergeMode);
+      }
     }
-    if (StringUtils.nonEmpty(mergingConfigs.getRight())) {
-      tablePropsToAdd.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID, mergingConfigs.getRight());
-    }
-    tableConfig.getProps().remove(HoodieTableConfig.RECORD_MERGE_MODE.key());
+    return Collections.singletonList(HoodieTableConfig.RECORD_MERGE_MODE);
   }
 
   static void downgradeBootstrapIndexType(HoodieTableConfig tableConfig,
