@@ -56,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
-class TestBaseRollbackHelper extends HoodieRollbackTestBase {
+class TestRollbackHelper extends HoodieRollbackTestBase {
   private static final int ROLLBACK_LOG_VERSION = 20;
 
   @Override
@@ -76,7 +76,7 @@ class TestBaseRollbackHelper extends HoodieRollbackTestBase {
     when(tableConfig.getTableVersion()).thenReturn(tableVersion);
     String rollbackInstantTime = "003";
     String instantToRollback = "002";
-    BaseRollbackHelper rollbackHelper = new BaseRollbackHelper(metaClient, config);
+    RollbackHelper rollbackHelper = new RollbackHelper(table, config);
 
     List<SerializableHoodieRollbackRequest> rollbackRequests = new ArrayList<>();
     String baseInstantTimeOfLogFiles = "001";
@@ -187,7 +187,7 @@ class TestBaseRollbackHelper extends HoodieRollbackTestBase {
     when(tableConfig.getTableVersion()).thenReturn(tableVersion);
     String rollbackInstantTime = "003";
     String instantToRollback = "002";
-    BaseRollbackHelper rollbackHelper = new BaseRollbackHelper(metaClient, config);
+    RollbackHelper rollbackHelper = new RollbackHelper(table, config);
 
     List<SerializableHoodieRollbackRequest> rollbackRequests = new ArrayList<>();
     String baseInstantTimeOfLogFiles = "001";

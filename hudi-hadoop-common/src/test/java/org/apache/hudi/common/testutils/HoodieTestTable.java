@@ -749,6 +749,12 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
+  public HoodieTestTable withLogMarkerFile(String baseInstantTime, String partitionPath, String fileId, IOType ioType, int logVersion)
+      throws IOException {
+    createLogFileMarker(basePath, partitionPath, baseInstantTime, currentInstantTime, fileId, ioType, logVersion);
+    return this;
+  }
+
   public HoodieTestTable withLogMarkerFile(String partitionPath, String fileName) throws IOException {
     createLogFileMarker(metaClient, partitionPath, currentInstantTime, fileName);
     return this;
@@ -823,9 +829,32 @@ public class HoodieTestTable implements AutoCloseable {
     return Pair.of(this, logFiles);
   }
 
+  /**
+   * Writes log files in the partition.
+   *
+   * @param partition partition to write log files
+   * @param fileInfos list of pairs of file ID, log version, and file size of the log files
+   * @return {@link HoodieTestTable} instance
+   * @throws Exception upon error
+   */
   public HoodieTestTable withLogFilesInPartition(String partition, List<Pair<String, Integer[]>> fileInfos) throws Exception {
-    for (Pair<String, Integer[]> fileInfo : fileInfos) {
-      FileCreateUtils.createLogFile(metaClient, partition, currentInstantTime, fileInfo.getKey(), fileInfo.getValue()[0], fileInfo.getValue()[1]);
+    return withLogFilesAndBaseInstantTimeInPartition(partition,
+        fileInfos.stream().map(e -> Pair.of(Pair.of(currentInstantTime, e.getLeft()), e.getRight())).collect(Collectors.toList()));
+  }
+
+  /**
+   * Writes log files in the partition.
+   *
+   * @param partition partition to write log files
+   * @param fileInfos list of pairs of base instant time, file ID, log version, and file size of the log files
+   * @return {@link HoodieTestTable} instance
+   * @throws Exception upon error
+   */
+  public HoodieTestTable withLogFilesAndBaseInstantTimeInPartition(String partition, List<Pair<Pair<String, String>, Integer[]>> fileInfos)
+      throws Exception {
+    for (Pair<Pair<String, String>, Integer[]> fileInfo : fileInfos) {
+      FileCreateUtils.createLogFile(
+          metaClient, partition, fileInfo.getKey().getKey(), fileInfo.getKey().getValue(), fileInfo.getValue()[0], fileInfo.getValue()[1]);
     }
     return this;
   }
@@ -908,11 +937,15 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public Path getLogFilePath(String partition, String fileId, int version) {
-    return new Path(Paths.get(basePath, partition, getLogFileNameById(fileId, version)).toString());
+    return new Path(Paths.get(basePath, partition, getLogFileNameById(currentInstantTime, fileId, version)).toString());
   }
 
   public String getLogFileNameById(String fileId, int version) {
     return logFileName(currentInstantTime, fileId, version);
+  }
+
+  public String getLogFileNameById(String baseInstantTime, String fileId, int version) {
+    return logFileName(baseInstantTime, fileId, version);
   }
 
   public List<String> getEarliestFilesInPartition(String partition, int count) throws IOException {
@@ -1291,7 +1324,7 @@ public class HoodieTestTable implements AutoCloseable {
     return commitMetadata;
   }
 
-  private Option<HoodieCommitMetadata> getMetadataForInstant(String instantTime) {
+  public Option<HoodieCommitMetadata> getMetadataForInstant(String instantTime) {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().filter(i -> i.requestedTime().equals(instantTime)).firstInstant();

@@ -17,14 +17,28 @@
  * under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.table.marker;
+
+import org.apache.hudi.table.HoodieTable;
+
+import org.junit.jupiter.api.BeforeEach;
+
+import java.io.IOException;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
- * Types of lower level I/O operations done on each file slice.
+ * Tests {@link DirectWriteMarkersV1}
  */
-public enum IOType {
-  MERGE,
-  CREATE,
-  // APPEND is only used by table version 6 and below
-  APPEND
+public class TestDirectWriteMarkersV1 extends TestDirectWriteMarkers {
+  @BeforeEach
+  @Override
+  public void setup() throws IOException {
+    super.setup();
+    HoodieTable table = mock(HoodieTable.class);
+    when(table.getStorage()).thenReturn(storage);
+    when(table.getMetaClient()).thenReturn(metaClient);
+    this.writeMarkers = new DirectWriteMarkersV1(table, "000");
+  }
 }

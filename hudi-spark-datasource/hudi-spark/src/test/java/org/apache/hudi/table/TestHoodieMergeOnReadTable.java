@@ -605,6 +605,10 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertEquals(0, inserts);
       assertEquals(200, upserts);
 
+      if (!rollbackUsingMarkers) {
+        // we can do listing based rollback only when commit is completed
+        assertTrue(client.commit(instant2, statuses), "Commit should succeed");
+      }
       client.rollback(instant2);
 
       // Read from commit file

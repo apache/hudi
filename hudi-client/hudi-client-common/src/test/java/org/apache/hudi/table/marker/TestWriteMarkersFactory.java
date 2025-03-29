@@ -20,7 +20,9 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -36,7 +38,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.stream.Stream;
@@ -44,16 +45,18 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
   private static final String NON_HDFS_BASE_PATH = "/tmp/dir";
   private static final String HDFS_BASE_PATH = "hdfs://localhost/dir";
-  private final HoodieWriteConfig writeConfig = Mockito.mock(HoodieWriteConfig.class);
-  private final HoodieTableMetaClient metaClient = Mockito.mock(HoodieTableMetaClient.class);
-  private final HoodieStorage storage = Mockito.mock(HoodieStorage.class);
-  private final HoodieWrapperFileSystem fileSystem = Mockito.mock(HoodieWrapperFileSystem.class);
-  private final HoodieEngineContext context = Mockito.mock(HoodieEngineContext.class);
-  private final HoodieTable table = Mockito.mock(HoodieTable.class);
+  private final HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+  private final HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+  private final HoodieStorage storage = mock(HoodieStorage.class);
+  private final HoodieWrapperFileSystem fileSystem = mock(HoodieWrapperFileSystem.class);
+  private final HoodieEngineContext context = mock(HoodieEngineContext.class);
+  private final HoodieTable table = mock(HoodieTable.class);
 
   @BeforeEach
   public void init() throws IOException {
@@ -72,49 +75,65 @@ public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
   @MethodSource("configParams")
   public void testDirectMarkers(String basePath, boolean isTimelineServerEnabled) {
     testWriteMarkersFactory(
-        MarkerType.DIRECT, basePath, isTimelineServerEnabled, DirectWriteMarkers.class);
+        MarkerType.DIRECT, basePath, HoodieTableVersion.current(),
+        isTimelineServerEnabled, DirectWriteMarkers.class);
+    testWriteMarkersFactory(
+        MarkerType.DIRECT, basePath, HoodieTableVersion.SIX,
+        isTimelineServerEnabled, DirectWriteMarkersV1.class);
   }
 
   @Test
   public void testTimelineServerBasedMarkersWithTimelineServerEnabled() {
     testWriteMarkersFactory(
-        MarkerType.TIMELINE_SERVER_BASED, NON_HDFS_BASE_PATH, true,
-        TimelineServerBasedWriteMarkers.class);
+        MarkerType.TIMELINE_SERVER_BASED, NON_HDFS_BASE_PATH,
+        HoodieTableVersion.current(), true, TimelineServerBasedWriteMarkers.class);
+    testWriteMarkersFactory(
+        MarkerType.TIMELINE_SERVER_BASED, NON_HDFS_BASE_PATH,
+        HoodieTableVersion.SIX, true, TimelineServerBasedWriteMarkersV1.class);
   }
 
   @Test
   public void testTimelineServerBasedMarkersWithTimelineServerDisabled() {
     // Fallback to direct markers should happen
     testWriteMarkersFactory(
-        MarkerType.TIMELINE_SERVER_BASED, NON_HDFS_BASE_PATH, false,
-        DirectWriteMarkers.class);
+        MarkerType.TIMELINE_SERVER_BASED, NON_HDFS_BASE_PATH,
+        HoodieTableVersion.current(), false, DirectWriteMarkers.class);
+    testWriteMarkersFactory(
+        MarkerType.TIMELINE_SERVER_BASED, NON_HDFS_BASE_PATH,
+        HoodieTableVersion.SIX, false, DirectWriteMarkersV1.class);
   }
 
   @Test
   public void testTimelineServerBasedMarkersWithHDFS() {
     // Fallback to direct markers should happen
     testWriteMarkersFactory(
-        MarkerType.TIMELINE_SERVER_BASED, HDFS_BASE_PATH, true,
-        DirectWriteMarkers.class);
+        MarkerType.TIMELINE_SERVER_BASED, HDFS_BASE_PATH,
+        HoodieTableVersion.current(), true, DirectWriteMarkers.class);
+    testWriteMarkersFactory(
+        MarkerType.TIMELINE_SERVER_BASED, HDFS_BASE_PATH,
+        HoodieTableVersion.SIX, true, DirectWriteMarkersV1.class);
   }
 
   private void testWriteMarkersFactory(
-      MarkerType markerTypeConfig, String basePath, boolean isTimelineServerEnabled,
-      Class<?> expectedWriteMarkersClass) {
+      MarkerType markerTypeConfig, String basePath, HoodieTableVersion tableVersion,
+      boolean isTimelineServerEnabled, Class<?> expectedWriteMarkersClass) {
     String instantTime = "001";
-    Mockito.when(table.getConfig()).thenReturn(writeConfig);
-    Mockito.when(writeConfig.isEmbeddedTimelineServerEnabled())
+    when(table.getConfig()).thenReturn(writeConfig);
+    when(writeConfig.isEmbeddedTimelineServerEnabled())
         .thenReturn(isTimelineServerEnabled);
-    Mockito.when(table.getMetaClient()).thenReturn(metaClient);
-    Mockito.when(metaClient.getStorage()).thenReturn(storage);
-    Mockito.when(storage.getFileSystem()).thenReturn(fileSystem);
-    Mockito.when(metaClient.getBasePath()).thenReturn(new StoragePath(basePath));
-    Mockito.when(metaClient.getMarkerFolderPath(any())).thenReturn(basePath + ".hoodie/.temp");
-    Mockito.when(table.getContext()).thenReturn(context);
+    when(table.getMetaClient()).thenReturn(metaClient);
+    when(metaClient.getStorage()).thenReturn(storage);
+    when(storage.getFileSystem()).thenReturn(fileSystem);
+    when(metaClient.getBasePath()).thenReturn(new StoragePath(basePath));
+    when(metaClient.getMarkerFolderPath(any())).thenReturn(basePath + ".hoodie/.temp");
+    when(table.getContext()).thenReturn(context);
     StorageConfiguration storageConfToReturn = getDefaultStorageConf();
-    Mockito.when(context.getStorageConf()).thenReturn(storageConfToReturn);
-    Mockito.when(writeConfig.getViewStorageConfig())
+    when(context.getStorageConf()).thenReturn(storageConfToReturn);
+    when(writeConfig.getViewStorageConfig())
         .thenReturn(FileSystemViewStorageConfig.newBuilder().build());
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getTableVersion()).thenReturn(tableVersion);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
     assertEquals(expectedWriteMarkersClass,
         WriteMarkersFactory.get(markerTypeConfig, table, instantTime).getClass());
   }

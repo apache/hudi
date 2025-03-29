@@ -98,6 +98,22 @@ public class FileCreateUtils extends FileCreateUtilsBase {
         metadata.flatMap(m -> metaClient.getCommitMetadataSerDe().getInstantWriter(m)));
   }
 
+  public static String markerFileName(String fileName, IOType ioType) {
+    return String.format("%s%s.%s", fileName, HoodieTableMetaClient.MARKER_EXTN, ioType.name());
+  }
+
+  public static String dataFileMarkerFileName(String instantTime, String fileId, IOType ioType, String fileExtension, String writeToken) {
+    return markerFileName(FSUtils.makeBaseFileName(instantTime, writeToken, fileId, fileExtension), ioType);
+  }
+
+  public static String logFileMarkerFileName(String instantTime, String fileId, IOType ioType, int logVersion) {
+    return logFileMarkerFileName(instantTime, fileId, ioType, HoodieLogFile.DELTA_EXTENSION, logVersion);
+  }
+
+  public static String logFileMarkerFileName(String instantTime, String fileId, IOType ioType, String fileExtension, int logVersion) {
+    return markerFileName(FSUtils.makeLogFileName(fileId, fileExtension, instantTime, logVersion, WRITE_TOKEN), ioType);
+  }
+
   private static void deleteMetaFile(HoodieTableMetaClient metaClient, String instantTime, String suffix,
                                      HoodieStorage storage) throws IOException {
     deleteMetaFileInTimeline(metaClient.getTimelinePath().toUri().getPath(), instantTime, suffix, storage);
@@ -423,6 +439,46 @@ public class FileCreateUtils extends FileCreateUtilsBase {
     Path parentPath = Paths.get(metaClient.getTempFolderPath(), commitInstant, partitionPath);
     Files.createDirectories(parentPath);
     Path markerFilePath = parentPath.resolve(markerFileName);
+    if (Files.notExists(markerFilePath)) {
+      Files.createFile(markerFilePath);
+    }
+    return markerFilePath.toAbsolutePath().toString();
+  }
+
+  public static String createMarkerFile(String basePath, String partitionPath, String commitInstant,
+      String instantTime, String fileId, IOType ioType, String writeToken) throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
+    Files.createDirectories(parentPath);
+    Path markerFilePath = parentPath.resolve(dataFileMarkerFileName(instantTime, fileId, ioType, BASE_FILE_EXTENSION, writeToken));
+    if (Files.notExists(markerFilePath)) {
+      Files.createFile(markerFilePath);
+    }
+    return markerFilePath.toAbsolutePath().toString();
+  }
+
+  public static String createLogFileMarker(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)
+      throws IOException {
+    return createLogFileMarker(basePath, partitionPath, instantTime, instantTime, fileId, ioType, HoodieLogFile.LOGFILE_BASE_VERSION);
+  }
+
+  public static String createLogFileMarker(String basePath, String partitionPath, String baseInstantTime, String instantTime, String fileId,
+                                           IOType ioType,
+                                           int logVersion)
+      throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
+    Files.createDirectories(parentPath);
+    Path markerFilePath = parentPath.resolve(logFileMarkerFileName(baseInstantTime, fileId, ioType, logVersion));
+    if (Files.notExists(markerFilePath)) {
+      Files.createFile(markerFilePath);
+    }
+    return markerFilePath.toAbsolutePath().toString();
+  }
+
+  public static String createFileMarkerByFileName(String basePath, String partitionPath, String instantTime, String fileName, IOType ioType)
+      throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
+    Files.createDirectories(parentPath);
+    Path markerFilePath = parentPath.resolve(markerFileName(fileName, ioType));
     if (Files.notExists(markerFilePath)) {
       Files.createFile(markerFilePath);
     }

@@ -163,6 +163,16 @@ public class MarkerHandler extends Handler {
   }
 
   /**
+   * @param markerDir marker directory path
+   * @return all marker paths of write IO type "APPEND"
+   */
+  public Set<String> getAppendMarkers(String markerDir) {
+    return getAllMarkers(markerDir).stream()
+        .filter(markerName -> markerName.endsWith(IOType.APPEND.name()))
+        .collect(Collectors.toSet());
+  }
+
+  /**
    * @param markerDir  marker directory path
    * @return {@code true} if the marker directory exists; {@code false} otherwise.
    */

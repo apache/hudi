@@ -33,7 +33,7 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.rollback.BaseRollbackHelper;
+import org.apache.hudi.table.action.rollback.RollbackHelper;
 import org.apache.hudi.table.action.rollback.ListingBasedRollbackStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -119,7 +119,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     List<HoodieRollbackRequest> hoodieRollbackRequests =
         new ListingBasedRollbackStrategy(table, context, table.getConfig(), commitInstantOpt.get().requestedTime(), false)
             .getRollbackRequests(commitInstantOpt.get());
-    return new BaseRollbackHelper(table.getMetaClient(), table.getConfig())
+    return new RollbackHelper(table, table.getConfig())
         .collectRollbackStats(context, commitInstantOpt.get(), hoodieRollbackRequests);
   }
 

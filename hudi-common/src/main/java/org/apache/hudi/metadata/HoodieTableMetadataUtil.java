@@ -1092,35 +1092,6 @@ public class HoodieTableMetadataUtil {
     return Collections.emptySet();
   }
 
-  private static void reAddLogFilesFromRollbackPlan(HoodieTableMetaClient dataTableMetaClient, String instantTime,
-                                                    Map<String, Map<String, Long>> partitionToFilesMap) {
-    InstantGenerator factory = dataTableMetaClient.getInstantGenerator();
-    HoodieInstant rollbackInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, instantTime);
-    HoodieInstant requested = factory.getRollbackRequestedInstant(rollbackInstant);
-    try {
-      HoodieRollbackPlan rollbackPlan =
-          dataTableMetaClient.getActiveTimeline().readRollbackPlan(requested);
-
-      rollbackPlan.getRollbackRequests().forEach(rollbackRequest -> {
-        final String partitionId = getPartitionIdentifierForFilesPartition(rollbackRequest.getPartitionPath());
-        partitionToFilesMap.computeIfAbsent(partitionId, s -> new HashMap<>());
-        // fetch only log files that are expected to be RB'd in DT as part of this rollback. these log files will not be deleted, but rendered
-        // invalid once rollback is complete.
-        if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
-          Map<String, Long> logFiles = new HashMap<>();
-          rollbackRequest.getLogBlocksToBeDeleted().forEach((k,v) -> {
-            String fileName = k.substring(k.lastIndexOf("/") + 1);
-            // rollback plan may not have size for log files to be rolled back. but while merging w/ original commits, the size will get adjusted.
-            logFiles.put(fileName, 1L);
-          });
-          partitionToFilesMap.get(partitionId).putAll(logFiles);
-        }
-      });
-    } catch (IOException e) {
-      throw new HoodieMetadataException("Parsing rollback plan for " + rollbackInstant + " failed ");
-    }
-  }
-
   /**
    * Convert rollback action metadata to metadata table records.
    * <p>
@@ -1146,7 +1117,6 @@ public class HoodieTableMetadataUtil {
                                                                      HoodieTableMetaClient dataTableMetaClient) {
     Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
     processRollbackMetadata(rollbackMetadata, partitionToAppendedFiles);
-    reAddLogFilesFromRollbackPlan(dataTableMetaClient, instantTime, partitionToAppendedFiles);
     return convertFilesToFilesPartitionRecords(Collections.emptyMap(), partitionToAppendedFiles, instantTime, "Rollback");
   }
 
@@ -1180,6 +1150,12 @@ public class HoodieTableMetadataUtil {
 
         // Extract appended file name from the absolute paths saved in getAppendFiles()
         pm.getRollbackLogFiles().forEach((path, size) -> {
+          String fileName = new StoragePath(path).getName();
+          partitionToAppendedFiles.get(partitionId).merge(fileName, size, fileMergeFn);
+        });
+
+        // Extract original log files from failed commit
+        pm.getLogFilesFromFailedCommit().forEach((path, size) -> {
           String fileName = new StoragePath(path).getName();
           partitionToAppendedFiles.get(partitionId).merge(fileName, size, fileMergeFn);
         });

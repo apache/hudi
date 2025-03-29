@@ -108,6 +108,25 @@ public abstract class WriteMarkers implements Serializable {
   }
 
   /**
+   * Creates a log marker if the marker does not exist.
+   * This can invoke marker-based early conflict detection when enabled for multi-writers.
+   *
+   * @param partitionPath  partition path in the table
+   * @param fileName       file name
+   * @param writeConfig    Hudi write configs.
+   * @param fileId         File ID.
+   * @param activeTimeline Active timeline for the write operation.
+   * @return the marker path.
+   */
+  public Option<StoragePath> createLogMarkerIfNotExists(String partitionPath,
+                                                        String fileName,
+                                                        HoodieWriteConfig writeConfig,
+                                                        String fileId,
+                                                        HoodieActiveTimeline activeTimeline) {
+    return createIfNotExists(partitionPath, fileName, IOType.CREATE, writeConfig, fileId, activeTimeline);
+  }
+
+  /**
    * Creates a marker if the marker does not exist.
    * This can invoke marker-based early conflict detection when enabled for multi-writers.
    *

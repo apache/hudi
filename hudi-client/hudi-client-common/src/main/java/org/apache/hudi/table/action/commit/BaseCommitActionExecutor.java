@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.client.CommitMetadataResolverFactory;
 import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.TransactionManager;
@@ -225,8 +226,11 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     finalizeWrite(instantTime, writeStats, result);
     try {
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      HoodieCommitMetadata metadata = result.getCommitMetadata().get();
-
+      HoodieCommitMetadata metadata = CommitMetadataResolverFactory.get(
+              table.getMetaClient().getTableConfig().getTableVersion(), config.getEngineType(),
+              table.getMetaClient().getTableType(), getCommitActionType())
+          .reconcileMetadataForMissingFiles(
+              config, context, table, instantTime, result.getCommitMetadata().get());
       writeTableMetadata(metadata, actionType);
       // cannot serialize maps with null values
       metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
