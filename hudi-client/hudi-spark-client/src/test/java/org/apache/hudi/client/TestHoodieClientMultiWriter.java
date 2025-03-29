@@ -47,6 +47,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -771,10 +772,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     final SparkRDDWriteClient client1 = getHoodieWriteClient(cfg2);
     final SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
     final SparkRDDWriteClient client3 = getHoodieWriteClient(cfg);
+    final String upsertCommitTime = HoodieActiveTimeline.createNewInstantTime(); // upsert commit time has to be lesser than compaction instant time.
+    // and w/ MOR table, during conflict resolution, we will definitely hit conflict resolution exception.
+    // if the delta commit's instant time is not guaranteed to be < compaction instant time, then delta commit will succeed w/o issues.
 
     // Create upserts, schedule cleaning, schedule compaction in parallel
     Future future1 = executors.submit(() -> {
-      final String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       final int numRecords = 100;
       final String commitTimeBetweenPrevAndNew = secondCommitTime;
 
@@ -785,11 +788,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Since the compaction already went in, this upsert has
         // to fail
         assertThrows(IllegalArgumentException.class, () -> {
-          createCommitWithUpserts(cfg, client1, thirdCommitTime, Option.of(commitTimeBetweenPrevAndNew), newCommitTime, numRecords);
+          createCommitWithUpserts(cfg, client1, thirdCommitTime, Option.of(commitTimeBetweenPrevAndNew), upsertCommitTime, numRecords);
         });
       } else {
         // We don't have the compaction for COW and so this upsert
         // has to pass
+        final String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
         assertDoesNotThrow(() -> {
           createCommitWithUpserts(cfg, client1, thirdCommitTime, Option.of(commitTimeBetweenPrevAndNew), newCommitTime, numRecords);
         });
@@ -801,6 +805,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       if (tableType == MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
           String compactionTimeStamp = HoodieActiveTimeline.createNewInstantTime();
+          ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(compactionTimeStamp, HoodieTimeline.GREATER_THAN, upsertCommitTime));
           client2.scheduleTableService(compactionTimeStamp, Option.empty(), TableServiceType.COMPACT);
         });
       }
