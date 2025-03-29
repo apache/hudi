@@ -247,7 +247,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         assertLogFilesNumEqualsTo(config, i);
       }
       HoodieWriteMetadata result = compact(writeClient, String.format("10%s", i));
-      verifyCompaction(result);
+      verifyCompaction(result, 4000L);
 
       // Verify compaction.requested, compaction.completed metrics counts.
       assertEquals(1, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
@@ -282,7 +282,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         assertLogFilesNumEqualsTo(config, 1);
 
         HoodieWriteMetadata result = compact(writeClient, writeClient.createNewInstantTime());
-        verifyCompaction(result);
+        verifyCompaction(result, 100L);
 
         // Verify compaction.requested, compaction.completed metrics counts.
         assertEquals(i / 2 + 1, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
@@ -470,13 +470,14 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   /**
    * Verify that all partition paths are present in the HoodieWriteMetadata result.
    */
-  private void verifyCompaction(HoodieWriteMetadata compactionMetadata) {
+  private void verifyCompaction(HoodieWriteMetadata compactionMetadata, long expectedTotalLogRecords) {
     assertTrue(compactionMetadata.getWriteStats().isPresent());
     List<HoodieWriteStat> stats = (List<HoodieWriteStat>) compactionMetadata.getWriteStats().get();
     assertEquals(dataGen.getPartitionPaths().length, stats.size());
     for (String partitionPath : dataGen.getPartitionPaths()) {
       assertTrue(stats.stream().anyMatch(stat -> stat.getPartitionPath().contentEquals(partitionPath)));
     }
+
     stats.forEach(stat -> {
       HoodieWriteStat.RuntimeStats runtimeStats = stat.getRuntimeStats();
       assertNotNull(runtimeStats);
@@ -484,5 +485,20 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       assertTrue(runtimeStats.getTotalUpsertTime() > 0);
       assertTrue(runtimeStats.getTotalScanTime() > 0);
     });
+
+    // Verify the number of log records processed during the compaction.
+    long actualTotalLogRecords =
+        stats.stream().mapToLong(HoodieWriteStat::getTotalLogRecords).sum();
+    assertEquals(expectedTotalLogRecords, actualTotalLogRecords);
+
+    // Verify the number of records written during compaction.
+    long actualNumWritten =
+        stats.stream().mapToLong(HoodieWriteStat::getNumWrites).sum();
+    long actualNumUpdates =
+        stats.stream().mapToLong(HoodieWriteStat::getNumUpdateWrites).sum();
+    long actualInserts =
+        stats.stream().mapToLong(HoodieWriteStat::getNumInserts).sum();
+    assertTrue(actualNumWritten > 0
+        && actualNumWritten == actualNumUpdates + actualInserts);
   }
 }

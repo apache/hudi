@@ -91,6 +91,11 @@ public interface HoodieFileGroupRecordBuffer<T> {
   int size();
 
   /**
+   * @return the total number of log records processed.
+   */
+  long getTotalLogRecords();
+
+  /**
    * @return An iterator on the log records.
    */
   Iterator<Pair<Option<T>, Map<String, Object>>> getLogRecordIterator();
