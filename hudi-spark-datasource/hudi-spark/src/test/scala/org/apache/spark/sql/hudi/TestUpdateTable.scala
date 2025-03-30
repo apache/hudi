@@ -21,6 +21,8 @@ import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieSparkUtils.isSpark2
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
+import org.apache.spark.sql.AnalysisException
 import org.junit.jupiter.api.Assertions.assertEquals
 
 class TestUpdateTable extends HoodieSparkSqlTestBase {
@@ -361,5 +363,75 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         )
       }
     }
+  }
+
+  test("Test Update Table With Primary Key and Partition Key Updates error out") {
+    withRecordType()(withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        // create table with primary key and partition
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  pt string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by (pt)
+       """.stripMargin)
+
+        // Insert initial data
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000, '2021')")
+
+        // Verify initial state
+        checkAnswer(s"select id, name, price, ts, pt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2021")
+        )
+
+        // Try to update primary key (should fail)
+        val e1 = intercept[AnalysisException] {
+          spark.sql(s"update $tableName set id = 2 where id = 1")
+        }
+
+        if (gteqSpark3_4) {
+          assert(e1.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for record key field `id`" +
+            s" for table `spark_catalog.default.$tableName`. Please remove the assignment clause to avoid the error."))
+        } else {
+          assert(e1.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for record key field `id`" +
+            s" for table `default.$tableName`. Please remove the assignment clause to avoid the error."))
+        }
+
+        // Try to update partition column (should fail)
+        val e2 = intercept[AnalysisException] {
+          spark.sql(s"update $tableName set pt = '2022' where id = 1")
+        }
+        if (gteqSpark3_4) {
+          assert(e2.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for partition field `pt`" +
+            s" for table `spark_catalog.default.$tableName`. Please remove the assignment clause to avoid the error."))
+        } else {
+          assert(e2.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for partition field `pt`" +
+            s" for table `default.$tableName`. Please remove the assignment clause to avoid the error."))
+        }
+
+        // Verify data remains unchanged after failed updates
+        checkAnswer(s"select id, name, price, ts, pt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2021")
+        )
+
+        // Verify normal update still works
+        spark.sql(s"update $tableName set price = 20.0 where id = 1")
+        checkAnswer(s"select id, name, price, ts, pt from $tableName")(
+          Seq(1, "a1", 20.0, 1000, "2021")
+        )
+      }
+    })
   }
 }
