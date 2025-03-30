@@ -214,6 +214,7 @@ public class FlinkWriteClients {
                 .parquetPageSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_PAGE_SIZE) * 1024 * 1024)
                 .parquetMaxFileSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE) * 1024 * 1024L)
                 .withWriteUtcTimezone(conf.get(FlinkOptions.WRITE_UTC_TIMEZONE))
+                .withReadUtcTimezone(conf.get(FlinkOptions.READ_UTC_TIMEZONE))
                 .build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder()
                 .withEngineType(EngineType.FLINK) // this affects the default value inference

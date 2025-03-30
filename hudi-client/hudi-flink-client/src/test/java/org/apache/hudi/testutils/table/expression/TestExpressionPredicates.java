@@ -16,19 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source;
+package org.apache.hudi.testutils.table.expression;
 
-import org.apache.hudi.source.ExpressionPredicates.And;
-import org.apache.hudi.source.ExpressionPredicates.Equals;
-import org.apache.hudi.source.ExpressionPredicates.GreaterThan;
-import org.apache.hudi.source.ExpressionPredicates.GreaterThanOrEqual;
-import org.apache.hudi.source.ExpressionPredicates.In;
-import org.apache.hudi.source.ExpressionPredicates.LessThan;
-import org.apache.hudi.source.ExpressionPredicates.LessThanOrEqual;
-import org.apache.hudi.source.ExpressionPredicates.Not;
-import org.apache.hudi.source.ExpressionPredicates.NotEquals;
-import org.apache.hudi.source.ExpressionPredicates.Or;
-import org.apache.hudi.source.ExpressionPredicates.Predicate;
+import org.apache.hudi.table.expression.ExpressionPredicates;
+import org.apache.hudi.table.expression.ExpressionPredicates.And;
+import org.apache.hudi.table.expression.ExpressionPredicates.Equals;
+import org.apache.hudi.table.expression.ExpressionPredicates.GreaterThan;
+import org.apache.hudi.table.expression.ExpressionPredicates.GreaterThanOrEqual;
+import org.apache.hudi.table.expression.ExpressionPredicates.In;
+import org.apache.hudi.table.expression.ExpressionPredicates.LessThan;
+import org.apache.hudi.table.expression.ExpressionPredicates.LessThanOrEqual;
+import org.apache.hudi.table.expression.ExpressionPredicates.Not;
+import org.apache.hudi.table.expression.ExpressionPredicates.NotEquals;
+import org.apache.hudi.table.expression.ExpressionPredicates.Or;
+import org.apache.hudi.table.expression.ExpressionPredicates.Predicate;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.expressions.CallExpression;
@@ -55,7 +56,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.source.ExpressionPredicates.fromExpression;
+import static org.apache.hudi.table.expression.ExpressionPredicates.fromExpression;
 import static org.apache.parquet.filter2.predicate.FilterApi.and;
 import static org.apache.parquet.filter2.predicate.FilterApi.eq;
 import static org.apache.parquet.filter2.predicate.FilterApi.gt;
