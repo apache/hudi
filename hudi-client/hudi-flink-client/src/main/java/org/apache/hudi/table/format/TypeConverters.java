@@ -327,7 +327,7 @@ public class TypeConverters {
   private static TypeConverter createRowConverter(LogicalType fromType, LogicalType toType) {
     final List<LogicalType> fromChildren = fromType.getChildren();
     final List<LogicalType> toChildren = toType.getChildren();
-    final RowData.FieldGetter[] fieldGetters = IntStream
+    final FieldGetter[] fieldGetters = IntStream
         .range(0, fromChildren.size())
         .mapToObj(i -> RowData.createFieldGetter(fromChildren.get(i), i))
         .toArray(FieldGetter[]::new);

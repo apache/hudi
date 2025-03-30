@@ -16,12 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.format;
+package org.apache.hudi.io.parquet;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.source.ExpressionPredicates.Predicate;
+import org.apache.hudi.table.expression.ExpressionPredicates.Predicate;
+import org.apache.hudi.table.format.CastMap;
+import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.ParquetSplitRecordIterator;
+import org.apache.hudi.table.format.SchemaEvolvedRecordIterator;
 import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
 import org.apache.hudi.util.RowDataProjection;
 

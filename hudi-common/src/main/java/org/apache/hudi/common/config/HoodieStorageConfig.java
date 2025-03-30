@@ -168,6 +168,14 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Use UTC timezone or local timezone to the conversion between epoch"
               + " time and LocalDateTime. Default value is utc timezone for forward compatibility.");
 
+  public static final ConfigProperty<Boolean> PARQUET_READ_UTC_TIMEZONE = ConfigProperty
+      .key("hoodie.parquet.read.utc-timezone.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Use UTC timezone or local timezone to the conversion between epoch"
+          + " time and LocalDateTime. Default value is utc timezone for forward compatibility.");
+
   public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM_NAME = ConfigProperty
       .key("hoodie.hfile.compression.algorithm")
       .defaultValue("GZ")
@@ -517,6 +525,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder withWriteUtcTimezone(boolean writeUtcTimezone) {
       storageConfig.setValue(WRITE_UTC_TIMEZONE, String.valueOf(writeUtcTimezone));
+      return this;
+    }
+
+    public Builder withReadUtcTimezone(boolean writeUtcTimezone) {
+      storageConfig.setValue(PARQUET_READ_UTC_TIMEZONE, String.valueOf(writeUtcTimezone));
       return this;
     }
 

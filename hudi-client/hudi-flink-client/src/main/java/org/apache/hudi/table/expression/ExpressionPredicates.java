@@ -16,9 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source;
-
-import org.apache.hudi.util.ImplicitTypeConverter;
+package org.apache.hudi.table.expression;
 
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
@@ -61,7 +59,7 @@ import static org.apache.parquet.io.api.Binary.fromConstantByteArray;
 import static org.apache.parquet.io.api.Binary.fromString;
 
 /**
- * Tool to predicate the {@link org.apache.flink.table.expressions.ResolvedExpression}s.
+ * Tool to predicate the {@link ResolvedExpression}s.
  */
 public class ExpressionPredicates {
 
@@ -408,7 +406,7 @@ public class ExpressionPredicates {
 
     private static final long serialVersionUID = 1L;
 
-    private static final Logger LOG = LoggerFactory.getLogger(ExpressionEvaluators.In.class);
+    private static final Logger LOG = LoggerFactory.getLogger(In.class);
 
 
     private static final int IN_PREDICATE_LIMIT = 200;
