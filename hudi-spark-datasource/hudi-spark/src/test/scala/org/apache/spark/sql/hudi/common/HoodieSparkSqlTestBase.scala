@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -34,7 +33,7 @@ import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.storage.HoodieStorage
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
 
 import org.apache.hadoop.fs.Path
@@ -408,6 +407,19 @@ object HoodieSparkSqlTestBase {
     )
     val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
     (metaClient, fsView)
+  }
+
+  /**
+   * Replaces the existing file with an empty file which is meant to be corrupted
+   * in a Hudi table.
+   *
+   * @param storage  [[HoodieStorage]] instance
+   * @param filePath file path
+   */
+  def replaceWithEmptyFile(storage: HoodieStorage,
+                           filePath: StoragePath): Unit = {
+    storage.deleteFile(filePath)
+    storage.createNewFile(filePath)
   }
 
   def validateDeleteLogBlockPrecombineNullOrZero(basePath: String): Unit = {

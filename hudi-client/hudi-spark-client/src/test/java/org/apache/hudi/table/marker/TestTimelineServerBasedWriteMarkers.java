@@ -27,7 +27,6 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieRemoteException;
@@ -62,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestTimelineServerBasedWriteMarkers.class);
-  private static int DEFAULT_READ_TIMEOUT_SECS = 60;
+  protected static int DEFAULT_READ_TIMEOUT_SECS = 60;
 
   TimelineService timelineService = null;
 
@@ -96,13 +95,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
             markerFolderPath.toString(), storage, context, 1)
         .values().stream().flatMap(Collection::stream).sorted()
         .collect(Collectors.toList());
-    assertEquals(3, allMarkers.size());
-    List<String> expectedMarkers = isTablePartitioned
-        ? CollectionUtils.createImmutableList(
-        "2020/06/01/file1.marker.MERGE", "2020/06/02/file2.marker.APPEND",
-        "2020/06/03/file3.marker.CREATE")
-        : CollectionUtils.createImmutableList(
-        "file1.marker.MERGE", "file2.marker.APPEND", "file3.marker.CREATE");
+    List<String> expectedMarkers = getRelativeMarkerPathList(isTablePartitioned);
     assertIterableEquals(expectedMarkers, allMarkers);
     // Verifies the marker type file
     StoragePath markerTypeFilePath = new StoragePath(markerFolderPath, MarkerUtils.MARKER_TYPE_FILENAME);
@@ -184,7 +177,8 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
           .withRemoteTimelineClientMaxRetryIntervalMs(30000L)
           .withRemoteTimelineClientMaxRetryNumbers(5);
     }
-    return new TimelineServerBasedWriteMarkers(basePath, markerFolderPath, "000", builder.build());
+    return new TimelineServerBasedWriteMarkers(
+        basePath, markerFolderPath, "000", builder.build());
   }
 
   /**

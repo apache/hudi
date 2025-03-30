@@ -47,7 +47,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.table.action.rollback.TestRollbackUtils.assertRollbackRequestListEquals;
 
-class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
+class TestMarkerBasedRollbackStrategy extends TestRollbackHelper {
   private static final int ROLLBACK_LOG_VERSION = 10;
 
   @Override
@@ -75,9 +75,9 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
     StoragePath baseFilePath1 = createBaseFileAndMarkerToRollback(partition1, baseFileId1, instantToRollbackTs);
     StoragePath baseFilePath2 = createBaseFileAndMarkerToRollback(partition2, baseFileId2, instantToRollbackTs);
     StoragePath baseFilePath3 = createBaseFileAndMarkerToRollback(partition2, baseFileId3, instantToRollbackTs);
-    // Log files to roll back
+    // Log files to roll back. logFilesToRollback1 is in new file group part of instant being rolled back
     Map<String, Long> logFilesToRollback1 = createLogFilesAndMarkersToRollback(
-        partition2, logFileId1, baseInstantTimeOfLogFiles, instantToRollbackTs, IntStream.of(1));
+        partition2, logFileId1, instantToRollbackTs, instantToRollbackTs, IntStream.of(1));
     // Multiple rollback requests of log files belonging to the same file group
     Map<String, Long> logFilesToRollback2 = IntStream.range(1, ROLLBACK_LOG_VERSION).boxed()
         .flatMap(version -> createLogFilesAndMarkersToRollback(
@@ -107,10 +107,11 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
               partition2, logFileId2, instantToRollbackTs,
               Collections.singletonList(logFilePath), Collections.emptyMap())));
     } else {
-      expected.add(new HoodieRollbackRequest(
-          partition2, logFileId1, baseInstantTimeOfLogFiles, Collections.emptyList(), logFilesToRollback1));
-      expected.add(new HoodieRollbackRequest(
-          partition2, logFileId2, baseInstantTimeOfLogFiles, Collections.emptyList(), logFilesToRollback2));
+      String logFile1Path = new StoragePath(new StoragePath(basePath, partition2), logFilesToRollback1.keySet().stream().findFirst().get()).toString();
+      // Since logFile1 is part of a new file group, it can be deleted as part of rollback
+      // logFile2 would be rolled back using a rollback command block
+      expected.add(new HoodieRollbackRequest(partition2, "", "", Collections.singletonList(logFile1Path), Collections.emptyMap()));
+      expected.add(new HoodieRollbackRequest(partition2, logFileId2, baseInstantTimeOfLogFiles, Collections.emptyList(), logFilesToRollback2));
     }
     assertRollbackRequestListEquals(expected, actual);
   }
@@ -141,7 +142,7 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
-    }).collect(Collectors.toMap(Function.identity(), e -> 1L));
+    }).collect(Collectors.toMap(Function.identity(), e -> 0L));
   }
 }
 

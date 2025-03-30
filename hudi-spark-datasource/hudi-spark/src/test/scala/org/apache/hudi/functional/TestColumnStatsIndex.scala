@@ -22,6 +22,7 @@ import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
+import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.fs.FSUtils
@@ -31,16 +32,15 @@ import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGenera
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
-import org.apache.hudi.common.util.ParquetUtils
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
+import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams, WrapperCreator}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
+import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
@@ -53,13 +53,15 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
+import java.math.{BigDecimal => JBigDecimal}
+import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
-@Tag("functional")
+@Tag("functional-b")
 class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
   val DEFAULT_COLUMNS_TO_INDEX = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
@@ -85,11 +87,20 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
     ) ++ metadataOpts
 
+    // write empty first commit to validate edge cases
+    sparkSession.emptyDataFrame
+      .write
+      .format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite))
+      saveMode = SaveMode.Append))
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",
@@ -1074,5 +1085,25 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       assertNotNull(max)
       assertTrue(r.getMinValue.asInstanceOf[Comparable[Object]].compareTo(r.getMaxValue.asInstanceOf[Object]) <= 0)
     })
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("decimalWrapperTestCases"))
+  def testDeserialize(description: String, expected: JBigDecimal, wrapperCreator: WrapperCreator): Unit = {
+    val dt = DecimalType(10, 2)
+    // Get the schema from the DecimalWrapper's Avro definition.
+    val schema: Schema = DecimalWrapper.SCHEMA$.getField("value").schema()
+    val wrapper = wrapperCreator.create(expected, schema)
+    // Extract the underlying value.
+    val unwrapped = ColumnStatsIndexSupport.tryUnpackValueWrapper(wrapper)
+    // Optionally, for the "ByteBuffer Test" case, verify that the unwrapped value is a ByteBuffer.
+    if (description.contains("ByteBuffer Test")) {
+      assertTrue(unwrapped.isInstanceOf[ByteBuffer], "Expected a ByteBuffer")
+    }
+    // Deserialize into a java.math.BigDecimal.
+    val deserialized = ColumnStatsIndexSupport.deserialize(unwrapped, dt)
+    assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
+    assertEquals(expected, deserialized.asInstanceOf[JBigDecimal],
+      s"Decimal value from $description does not match")
   }
 }

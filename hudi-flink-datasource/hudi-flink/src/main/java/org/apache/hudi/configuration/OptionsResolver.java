@@ -43,7 +43,6 @@ import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.types.logical.RowType;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -80,7 +79,7 @@ public class OptionsResolver {
    * <p> support RowData append for COW, see HUDI-9149
    * <p> support RowData append for operation besides UPSERT/DELETE, see HUDI-9149
    */
-  public static boolean supportRowDataAppend(Configuration conf, RowType rowType) {
+  public static boolean supportRowDataAppend(Configuration conf) {
     return conf.get(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED)
         && HoodieTableType.valueOf(conf.get(FlinkOptions.TABLE_TYPE)) == HoodieTableType.MERGE_ON_READ
         && (WriteOperationType.valueOf(conf.get(FlinkOptions.OPERATION).toUpperCase()) == WriteOperationType.UPSERT

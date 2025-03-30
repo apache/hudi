@@ -33,7 +33,7 @@ import org.apache.flink.table.types.logical.RowType;
 public class StreamWriteOperator extends AbstractWriteOperator<HoodieFlinkInternalRow> {
 
   public StreamWriteOperator(Configuration conf, RowType rowType) {
-    super(OptionsResolver.supportRowDataAppend(conf, rowType)
+    super(OptionsResolver.supportRowDataAppend(conf)
         ? new RowDataStreamWriteFunction(conf, rowType) : new StreamWriteFunction(conf, rowType));
   }
 

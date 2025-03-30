@@ -90,7 +90,6 @@
                   <include>org.eclipse.jetty.websocket:*</include>
                   <include>org.jetbrains.kotlin:*</include>
                   <include>org.rocksdb:rocksdbjni</include>
-                  <include>org.antlr:stringtemplate</include>
                   <!-- Bundle Jackson JSR310 library since it is not present in spark 2.x. For spark 3.x this will
                        bundle the same JSR310 version that is included in spark runtime -->
                   <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
@@ -99,8 +98,6 @@
                   <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>org.apache.parquet:parquet-avro</include>
-                  <include>com.twitter:bijection-avro_${scala.binary.version}</include>
-                  <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>com.twitter:chill-protobuf</include>
 
                   <include>io.dropwizard.metrics:metrics-core</include>
@@ -113,8 +110,6 @@
                   <include>io.prometheus:simpleclient_common</include>
                   <include>com.uber.m3:tally-m3</include>
                   <include>com.uber.m3:tally-core</include>
-
-                  <include>com.yammer.metrics:metrics-core</include>
 
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
@@ -141,10 +136,6 @@
                 <relocation>
                   <pattern>javax.servlet.</pattern>
                   <shadedPattern>org.apache.hudi.javax.servlet.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.yammer.metrics.</pattern>
-                  <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.beust.jcommander.</pattern>

@@ -21,32 +21,30 @@ package org.apache.hudi.functional
 import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, PartitionStatsIndexSupport}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
+import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogFile, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.config.HoodieCompactionConfig
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
+import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.testutils.LogFileColStatsTestUtil
+import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
 
 import org.apache.avro.Schema
-import org.apache.spark.sql._
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.functions.lit
-import org.apache.spark.sql.functions.typedLit
+import org.apache.spark.sql.{DataFrame, _}
+import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.provider.Arguments
 
-import java.math.BigInteger
+import java.math.{BigDecimal => JBigDecimal, BigInteger}
+import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
 import java.util
 import java.util.List
@@ -56,7 +54,7 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.util.Random
 
-@Tag("functional")
+@Tag("functional-b")
 class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
   var dfList: Seq[DataFrame] = Seq()
@@ -490,6 +488,54 @@ object ColumnStatIndexTestBase {
         Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", "8")
       )
         : _*)
+  }
+
+  trait WrapperCreator {
+    def create(orig: JBigDecimal, sch: Schema): DecimalWrapper
+  }
+
+  // Test cases for column stats index with DecimalWrapper
+  def decimalWrapperTestCases: java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      // Test case 1: "ByteBuffer Test" – using an original JBigDecimal.
+      Arguments.of(
+        "ByteBuffer Test",
+        new JBigDecimal("123.45"),
+        new WrapperCreator {
+          override def create(orig: JBigDecimal, sch: Schema): DecimalWrapper =
+            new DecimalWrapper {
+              // Return a ByteBuffer computed via Avro's DecimalConversion.`
+              override def getValue: ByteBuffer =
+                ColumnStatsIndexSupport.decConv.toBytes(orig, sch, sch.getLogicalType)
+            }
+        }
+      ),
+      // Test case 2: "Java BigDecimal Test" – again using a JBigDecimal.
+      Arguments.of(
+        "Java BigDecimal Test",
+        new JBigDecimal("543.21"),
+        new WrapperCreator {
+          override def create(orig: JBigDecimal, sch: Schema): DecimalWrapper =
+            new DecimalWrapper {
+              override def getValue: ByteBuffer =
+                ColumnStatsIndexSupport.decConv.toBytes(orig, sch, sch.getLogicalType)
+            }
+        }
+      ),
+      // Test case 3: "Scala BigDecimal Test" – using a Scala BigDecimal converted to JBigDecimal.
+      Arguments.of(
+        "Scala BigDecimal Test",
+        scala.math.BigDecimal("987.65").bigDecimal,
+        new WrapperCreator {
+          override def create(orig: JBigDecimal, sch: Schema): DecimalWrapper =
+            new DecimalWrapper {
+              override def getValue: ByteBuffer =
+                // Here we explicitly use orig (which comes from Scala BigDecimal converted to java.math.BigDecimal)
+                ColumnStatsIndexSupport.decConv.toBytes(orig, sch, sch.getLogicalType)
+            }
+        }
+      )
+    )
   }
 
   case class ColumnStatsTestParams(testCase: ColumnStatsTestCase,
