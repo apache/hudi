@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -83,6 +84,15 @@ public class OptionsResolver {
         && HoodieTableType.valueOf(conf.get(FlinkOptions.TABLE_TYPE)) == HoodieTableType.MERGE_ON_READ
         && (WriteOperationType.valueOf(conf.get(FlinkOptions.OPERATION).toUpperCase()) == WriteOperationType.UPSERT
             || WriteOperationType.valueOf(conf.get(FlinkOptions.OPERATION).toUpperCase()) == WriteOperationType.DELETE);
+  }
+
+  /**
+   * Returns whether current index is partition level simple bucket index based on given configuration {@code conf}.
+   */
+  public static Boolean isPartitionLevelSimpleBucketIndex(Configuration conf) {
+    HoodieIndex.BucketIndexEngineType engineType = OptionsResolver.getBucketEngineType(conf);
+    return engineType.equals(HoodieIndex.BucketIndexEngineType.SIMPLE)
+        && PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(HadoopConfigurations.getHadoopConf(conf), conf.get(FlinkOptions.PATH));
   }
 
   /**

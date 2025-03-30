@@ -26,6 +26,7 @@ import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -230,6 +232,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     }
 
     backupRollbackInstantsIfNeeded();
+    rollbackHashingConfigIfNecessary(instantToRollback);
 
     try {
       List<HoodieRollbackStat> stats = executeRollback(hoodieRollbackPlan);
@@ -240,6 +243,16 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       return stats;
     } catch (IOException e) {
       throw new HoodieIOException("Unable to execute rollback ", e);
+    }
+  }
+
+  /**
+   * try to delete hashing config during rollback if using partition level bucket index.
+   * @param instantToRollback
+   */
+  private void rollbackHashingConfigIfNecessary(HoodieInstant instantToRollback) {
+    if (StringUtils.nonEmpty(config.getBucketIndexPartitionExpression()) && instantToRollback.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      PartitionBucketIndexHashingConfig.rollbackHashingConfig(instantToRollback, table.getMetaClient());
     }
   }
 

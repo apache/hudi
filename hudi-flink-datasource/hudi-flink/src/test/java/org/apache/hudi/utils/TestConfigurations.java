@@ -411,6 +411,10 @@ public class TestConfigurations {
       return TestConfigurations.getCreateHoodieTableDDL(this.tableName, this.fields, options,
           this.withPartition, this.pkField, this.partitionField);
     }
+
+    public Map<String, String> getOptions() {
+      return this.options;
+    }
   }
 
   /**
