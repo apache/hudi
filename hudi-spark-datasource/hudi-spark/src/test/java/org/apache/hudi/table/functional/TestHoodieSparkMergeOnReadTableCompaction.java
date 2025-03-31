@@ -427,7 +427,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     assertNoWriteErrors(writeStatuses);
     if (doCommit) {
       List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-      boolean committed = client.commitStats(instant, writeStats, Option.empty(), metaClient.getCommitActionType());
+      boolean committed = client.commitStats(instant, writeStats, Option.empty(), metaClient.getCommitActionType()).isSuccess();
       assertTrue(committed);
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -437,7 +437,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   private void commitToTable(String instant, List<WriteStatus> writeStatuses) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
     boolean committed =
-        client.commitStats(instant, writeStats, Option.empty(), metaClient.getCommitActionType());
+        client.commitStats(instant, writeStats, Option.empty(), metaClient.getCommitActionType()).isSuccess();
     assertTrue(committed);
   }
 }

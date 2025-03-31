@@ -64,7 +64,7 @@ class TestHoodieSparkSqlWriterUtc extends HoodieSparkWriterTestBase {
       TimeZone.setDefault(TimeZone.getTimeZone("Asia/Novosibirsk"))
 
       // write to Hudi
-      val (success, writeInstantTimeOpt, _, _, _, hoodieTableConfig) = HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
+      val (success, writeInstantTimeOpt, _, _, _, hoodieTableConfig, _) = HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
       assertTrue(success)
       val hoodieTableTimelineTimezone = HoodieTimelineTimeZone.valueOf(hoodieTableConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE))
       assertEquals(hoodieTableTimelineTimezone, HoodieTimelineTimeZone.UTC)

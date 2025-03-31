@@ -18,8 +18,11 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.hudi.common.model.HoodieCommitMetadata
+import org.apache.hudi.common.util.VisibleForTesting
 import org.apache.hudi.exception.HoodieException
 
+import org.apache.spark.SparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
@@ -29,6 +32,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
@@ -56,6 +60,8 @@ case class InsertIntoHoodieTableCommand(logicalRelation: LogicalRelation,
                                         overwrite: Boolean)
   extends DataWritingCommand {
   override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
+  val sparkContext = SparkContext.getActive.get
+  override lazy val metrics: Map[String, SQLMetric] = InsertIntoHoodieTableCommand.metrics
 
   override def outputColumnNames: Seq[String] = {
     query.output.map(_.name)
@@ -65,7 +71,8 @@ case class InsertIntoHoodieTableCommand(logicalRelation: LogicalRelation,
     assert(logicalRelation.catalogTable.isDefined, "Missing catalog table")
 
     val table = logicalRelation.catalogTable.get
-    InsertIntoHoodieTableCommand.run(sparkSession, table, plan, partitionSpec, overwrite)
+    InsertIntoHoodieTableCommand.run(sparkSession, table, plan, partitionSpec, overwrite, metrics = metrics)
+    DataWritingCommand.propogateMetrics(sparkContext, this, metrics)
     Seq.empty[Row]
   }
 
@@ -94,7 +101,8 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
           partitionSpec: Map[String, Option[String]],
           overwrite: Boolean,
           refreshTable: Boolean = true,
-          extraOptions: Map[String, String] = Map.empty): Boolean = {
+          extraOptions: Map[String, String] = Map.empty,
+          metrics: Map[String, SQLMetric]): Boolean = {
     val catalogTable = new HoodieCatalogTable(sparkSession, table)
 
     val (mode, isOverWriteTable, isOverWritePartition, staticOverwritePartitionPathOpt) = if (overwrite) {
@@ -105,10 +113,14 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions, staticOverwritePartitionPathOpt)
 
     val df = sparkSession.internalCreateDataFrame(query.execute(), query.schema)
-    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, df)
+    val (success, _, _, _, _, _, commitMetadata) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, df)
 
     if (!success) {
       throw new HoodieException("Insert Into to Hudi table failed")
+    }
+
+    if (success && commitMetadata.isPresent) {
+      updateInsertMetrics(metrics, commitMetadata.get())
     }
 
     if (success && refreshTable) {
@@ -221,4 +233,61 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
 
   private def filterStaticPartitionValues(partitionsSpec: Map[String, Option[String]]): Map[String, String] =
     partitionsSpec.filter(p => p._2.isDefined).mapValues(_.get).toMap
+
+  @VisibleForTesting
+  def updateInsertMetrics(metrics: Map[String, SQLMetric], metadata: HoodieCommitMetadata): Unit = {
+    updateInsertMetric(metrics, NUM_PARTITION_KEY, metadata.fetchTotalPartitionsWritten())
+    updateInsertMetric(metrics, NUM_INSERT_FILE_KEY, metadata.fetchTotalFilesInsert())
+    updateInsertMetric(metrics, NUM_UPDATE_FILE_KEY, metadata.fetchTotalFilesUpdated())
+    updateInsertMetric(metrics, NUM_WRITE_ROWS_KEY, metadata.fetchTotalRecordsWritten())
+    updateInsertMetric(metrics, NUM_UPDATE_ROWS_KEY, metadata.fetchTotalUpdateRecordsWritten())
+    updateInsertMetric(metrics, NUM_INSERT_ROWS_KEY, metadata.fetchTotalInsertRecordsWritten())
+    updateInsertMetric(metrics, NUM_DELETE_ROWS_KEY, metadata.getTotalRecordsDeleted())
+    updateInsertMetric(metrics, NUM_OUTPUT_BYTES_KEY, metadata.fetchTotalBytesWritten())
+    updateInsertMetric(metrics, INSERT_TIME, metadata.getTotalCreateTime())
+    updateInsertMetric(metrics, UPSERT_TIME, metadata.getTotalUpsertTime())
+  }
+
+  private def updateInsertMetric(metrics: Map[String, SQLMetric], name: String, value: Long): Unit = {
+    val metric = metrics.get(name)
+    metric.foreach(_.set(value))
+  }
+
+
+  @VisibleForTesting
+  val NUM_PARTITION_KEY = "number of written partitions"
+  @VisibleForTesting
+  val NUM_INSERT_FILE_KEY = "number of inserted files"
+  @VisibleForTesting
+  val NUM_UPDATE_FILE_KEY = "number of updated files"
+  @VisibleForTesting
+  val NUM_WRITE_ROWS_KEY = "number of written rows"
+  @VisibleForTesting
+  val NUM_UPDATE_ROWS_KEY = "number of updated rows"
+  @VisibleForTesting
+  val NUM_INSERT_ROWS_KEY = "number of inserted rows"
+  @VisibleForTesting
+  val NUM_DELETE_ROWS_KEY = "number of deleted rows"
+  @VisibleForTesting
+  val NUM_OUTPUT_BYTES_KEY = "output size in bytes"
+  @VisibleForTesting
+  val INSERT_TIME = "total insert time"
+  @VisibleForTesting
+  val UPSERT_TIME = "total upsert time"
+
+  def metrics: Map[String, SQLMetric] = {
+    val sparkContext = SparkContext.getActive.get
+    Map(
+      NUM_PARTITION_KEY -> SQLMetrics.createMetric(sparkContext, NUM_PARTITION_KEY),
+      NUM_INSERT_FILE_KEY -> SQLMetrics.createMetric(sparkContext, NUM_INSERT_FILE_KEY),
+      NUM_UPDATE_FILE_KEY -> SQLMetrics.createMetric(sparkContext, NUM_UPDATE_FILE_KEY),
+      NUM_WRITE_ROWS_KEY -> SQLMetrics.createMetric(sparkContext, NUM_WRITE_ROWS_KEY),
+      NUM_UPDATE_ROWS_KEY -> SQLMetrics.createMetric(sparkContext, NUM_UPDATE_ROWS_KEY),
+      NUM_INSERT_ROWS_KEY -> SQLMetrics.createMetric(sparkContext, NUM_INSERT_ROWS_KEY),
+      NUM_DELETE_ROWS_KEY -> SQLMetrics.createMetric(sparkContext, NUM_DELETE_ROWS_KEY),
+      NUM_OUTPUT_BYTES_KEY -> SQLMetrics.createSizeMetric(sparkContext, NUM_OUTPUT_BYTES_KEY),
+      INSERT_TIME -> SQLMetrics.createTimingMetric(sparkContext, INSERT_TIME),
+      UPSERT_TIME -> SQLMetrics.createTimingMetric(sparkContext, UPSERT_TIME)
+    )
+  }
 }
