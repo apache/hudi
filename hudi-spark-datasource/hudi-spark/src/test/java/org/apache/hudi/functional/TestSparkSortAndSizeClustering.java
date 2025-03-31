@@ -158,7 +158,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
     if (doCommit) {
       Assertions.assertTrue(writeClient.commitStats(commitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
-          Option.empty(), metaClient.getCommitActionType()));
+          Option.empty(), metaClient.getCommitActionType()).isSuccess());
     }
 
     metaClient = HoodieTableMetaClient.reload(metaClient);

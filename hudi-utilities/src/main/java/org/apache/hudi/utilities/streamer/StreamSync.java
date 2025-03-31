@@ -39,6 +39,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.CommitStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -858,9 +859,9 @@ public class StreamSync implements Serializable, Closeable {
             }
           }
         }
-        boolean success = writeClient.commit(instantTime, dataTableWriteStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
+        CommitStatus commitStatus = writeClient.commit(instantTime, dataTableWriteStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
         releaseResourcesInvoked = true;
-        if (success) {
+        if (commitStatus.isSuccess()) {
           LOG.info("Commit " + instantTime + " successful!");
           this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch() != null
               ? inputBatch.getCheckpointForNextBatch().getCheckpointKey() : null);

@@ -61,7 +61,7 @@ case class AlterHoodieTableDropPartitionCommand(
     // delete partition files by enabling cleaner and setting retention policies.
     val partitionsToDrop = getPartitionPathToDrop(hoodieCatalogTable, normalizedSpecs)
     val parameters = buildHoodieDropPartitionsConfig(sparkSession, hoodieCatalogTable, partitionsToDrop)
-    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
+    val (success, _, _, _, _, _, _) = HoodieSparkSqlWriter.write(
       sparkSession.sqlContext,
       SaveMode.Append,
       parameters,
