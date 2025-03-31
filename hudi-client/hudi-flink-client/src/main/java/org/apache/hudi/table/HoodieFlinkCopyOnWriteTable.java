@@ -365,9 +365,10 @@ public class HoodieFlinkCopyOnWriteTable<T>
 
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
-                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore) {
-      return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
-          shouldRollbackUsingMarkers, isRestore).execute();
+                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore,
+                                                     boolean skipLocking) {
+    return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
+        shouldRollbackUsingMarkers, isRestore, skipLocking).execute();
   }
 
   @Override

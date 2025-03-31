@@ -53,7 +53,7 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
   private final boolean skipTimelinePublish;
   private final boolean shouldRollbackUsingMarkers;
   private final TransactionManager txnManager;
-  private final boolean acquireLock;
+  private final boolean skipLocking;
   protected final Boolean isRestore;
 
   public static final Integer ROLLBACK_PLAN_VERSION_1 = 1;
@@ -66,14 +66,15 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
                                         HoodieInstant instantToRollback,
                                         boolean skipTimelinePublish,
                                         boolean shouldRollbackUsingMarkers,
-                                        boolean isRestore) {
+                                        boolean isRestore,
+                                        boolean skipLocking) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.skipTimelinePublish = skipTimelinePublish;
     this.shouldRollbackUsingMarkers = shouldRollbackUsingMarkers && !instantToRollback.isCompleted();
     this.isRestore = isRestore;
     this.txnManager = new TransactionManager(config, table.getStorage());
-    this.acquireLock = !isRestore;
+    this.skipLocking = skipLocking;
   }
 
   /**
@@ -158,13 +159,13 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
   public Option<HoodieRollbackPlan> execute() {
     HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, instantTime, HoodieTimeline.ROLLBACK_ACTION);
     try {
-      if (acquireLock) {
+      if (!skipLocking) {
         txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty());
       }
       // Plan a new rollback action
       return requestRollback(instantTime);
     } finally {
-      if (acquireLock) {
+      if (!skipLocking) {
         txnManager.endTransaction(Option.of(rollbackInstant));
       }
     }

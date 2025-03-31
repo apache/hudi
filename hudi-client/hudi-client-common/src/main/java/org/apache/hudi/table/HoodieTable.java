@@ -540,13 +540,16 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param instantTime Instant Time for scheduling rollback
    * @param instantToRollback instant to be rolled back
    * @param shouldRollbackUsingMarkers uses marker based rollback strategy when set to true. uses list based rollback when false.
+   * @param isRestore {@code true} when invoked as part of restore.
+   * @param skipLocking {@code true} when locking needs to be skipped. if not, lock is acquired to plan rollback.
    * @return HoodieRollbackPlan containing info on rollback.
    */
   public abstract Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
                                                               String instantTime,
                                                               HoodieInstant instantToRollback,
                                                               boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers,
-                                                              boolean isRestore);
+                                                              boolean isRestore,
+                                                              boolean skipLocking);
 
   /**
    * Rollback the (inflight/committed) record changes with the given commit time.
@@ -666,7 +669,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         -> entry.getRollbackInstant().getTimestamp())
         .orElseGet(HoodieActiveTimeline::createNewInstantTime);
     scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-        false);
+        false, false);
     rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
   }
@@ -682,7 +685,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         -> entry.getRollbackInstant().getTimestamp())
         .orElseGet(HoodieActiveTimeline::createNewInstantTime);
     scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-        false);
+        false, false);
     rollback(context, commitTime, inflightInstant, true, false);
   }
 

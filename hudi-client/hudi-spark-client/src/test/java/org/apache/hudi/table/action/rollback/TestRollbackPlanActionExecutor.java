@@ -118,7 +118,7 @@ public class TestRollbackPlanActionExecutor extends HoodieClientRollbackTestBase
           // trigger rollback planning by writer 1.
           BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
               new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant2, needRollBackInstant, false,
-                  table.getConfig().shouldRollbackUsingMarkers(), false);
+                  table.getConfig().shouldRollbackUsingMarkers(), false, false);
           HoodieRollbackPlan rollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
           CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, rollbackInstant2, needRollBackInstant, true,
               false);
@@ -159,7 +159,7 @@ public class TestRollbackPlanActionExecutor extends HoodieClientRollbackTestBase
     public MockRollbackPlanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable table, String instantTime,
                                           HoodieInstant instantToRollback, boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore,
                                           CountDownLatch countDownLatch) {
-      super(context, config, table, instantTime, instantToRollback, skipTimelinePublish, shouldRollbackUsingMarkers, isRestore);
+      super(context, config, table, instantTime, instantToRollback, skipTimelinePublish, shouldRollbackUsingMarkers, isRestore, false);
       this.countDownLatch = countDownLatch;
     }
 
