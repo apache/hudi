@@ -700,3 +700,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-23647][INTERNAL] Refactor LP config to not require locks location (#1292)
 [ENG-23178][HUDI-9132] Avoid empty string row key for delete and update operations (#1260)
 [AUDIT-1071]: Changelog for release-v1.105.0 (#1278)
+
+--- [2025-03-30 18:26:07] [release-v1.107.0] ---
+[ENG-17863][HUDI-8823] Ban update from updating primary key and partition key (#1297)
+[ENG-23109][HUDI-9083] Fixing flakiness with multi writer test (#1309)
+[AUDIT-1071]: Changelog for release-v1.106.0 (#1295)
