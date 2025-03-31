@@ -25,15 +25,16 @@ import org.apache.hudi.common.engine.{HoodieEngineContext, HoodieLocalEngineCont
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH}
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -52,7 +53,11 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+    HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+    HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "1",
+    HoodieClusteringConfig.INLINE_CLUSTERING.key -> "false",
+    HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "2"
   )
   val sparkOpts = Map(
     HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
@@ -87,10 +92,17 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     insertAndValidateSnapshot(basePath, HoodieTableType.MERGE_ON_READ.name())
   }
 
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieFileFormat], names = Array("ORC"))
+  def testHFileFormatForMORTableType(fileFormat: HoodieFileFormat): Unit = {
+    testTableWithOneBaseFileFormat(basePath, HoodieTableType.MERGE_ON_READ.name(), fileFormat.name())
+  }
+
   def insertAndValidateSnapshot(basePath: String, tableType: String): Unit = {
     // Insert records in Parquet format to one of the partitions.
     val records1 = recordsToStrings(dataGen.generateInsertsForPartition("001", 10, DEFAULT_FIRST_PARTITION_PATH)).asScala.toSeq
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
@@ -104,6 +116,16 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
       .option(HoodieWriteConfig.BASE_FILE_FORMAT.key, HoodieFileFormat.ORC.name())
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Insert records to a new partition in HFILE format.
+    val records3 = recordsToStrings(dataGen.generateInsertsForPartition("003", 10, DEFAULT_THIRD_PARTITION_PATH)).asScala.toSeq
+    val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    inputDF3.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
+      .option(HoodieWriteConfig.BASE_FILE_FORMAT.key, HoodieFileFormat.HFILE.name())
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -124,8 +146,8 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     assertEquals(20, hudiDf.count())
 
     // Update and generate new slice across partitions.
-    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 10)).asScala.toSeq
-    val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    val records4 = recordsToStrings(dataGen.generateUniqueUpdates("003", 10)).asScala.toSeq
+    val inputDF4: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     inputDF3.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
@@ -135,5 +157,56 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     // Snapshot Read the table
     val hudiDfAfterUpdate = spark.read.format("hudi").load(basePath)
     assertEquals(20, hudiDfAfterUpdate.count())
+  }
+
+  def testTableWithOneBaseFileFormat(basePath: String, tableType: String, baseFileFormat: String): Unit = {
+    // Insert records.
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toSeq
+    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
+      .option(HoodieWriteConfig.BASE_FILE_FORMAT.key, baseFileFormat)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // Update.
+    val records2 = recordsToStrings(dataGen.generateUpdatesForAllRecords("002")).asScala.toSeq
+    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
+      .option(HoodieWriteConfig.BASE_FILE_FORMAT.key, baseFileFormat)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Update.
+    val records3 = recordsToStrings(dataGen.generateUpdatesForAllRecords("003")).asScala.toSeq
+    val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    inputDF3.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
+      .option(HoodieWriteConfig.BASE_FILE_FORMAT.key, baseFileFormat)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Snapshot Read the table
+    val hudiDf = spark.read
+      .options(commonOpts)
+      .format("hudi").load(basePath)
+    assertEquals(100, hudiDf.count())
+
+    // Update.
+    val records4 = recordsToStrings(dataGen.generateUpdatesForAllRecords("004")).asScala.toSeq
+    val inputDF4: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records4, 2))
+    inputDF4.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Snapshot Read the table
+    val hudiDfAfterUpdate = spark.read.format("hudi").load(basePath)
+    assertEquals(100, hudiDfAfterUpdate.count())
   }
 }
