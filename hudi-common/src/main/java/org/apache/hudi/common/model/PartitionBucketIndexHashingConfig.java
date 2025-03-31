@@ -232,7 +232,8 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
   public static Option<PartitionBucketIndexHashingConfig> loadingLatestHashingConfigBeforeOrOn(HoodieTableMetaClient metaClient, String instant) {
     Option<String> hashingConfigInstantToLoad = getHashingConfigInstantToLoad(metaClient, Option.of(instant));
     if (hashingConfigInstantToLoad.isPresent()) {
-      Option<PartitionBucketIndexHashingConfig> latestHashingConfig = loadHashingConfig(metaClient.getStorage(), getHashingConfigPath(metaClient.getBasePath().toString(), hashingConfigInstantToLoad.get()));
+      Option<PartitionBucketIndexHashingConfig> latestHashingConfig = loadHashingConfig(metaClient.getStorage(),
+          getHashingConfigPath(metaClient.getBasePath().toString(), hashingConfigInstantToLoad.get()));
       ValidationUtils.checkArgument(latestHashingConfig.isPresent(), "Can not load hashing config " + hashingConfigInstantToLoad + " based on " + instant);
       return latestHashingConfig;
     } else {
