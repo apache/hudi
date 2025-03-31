@@ -42,7 +42,7 @@ import scala.collection.{mutable, JavaConverters}
 class BucketIndexSupport(spark: SparkSession,
                          metadataConfig: HoodieMetadataConfig,
                          metaClient: HoodieTableMetaClient)
-  extends SparkBaseIndexSupport (spark, metadataConfig, metaClient){
+  extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) {
 
   private val log = LoggerFactory.getLogger(getClass)
 

@@ -93,7 +93,6 @@ public class NumBucketsFunction implements Serializable {
     }
   }
 
-
   /**
    * Gets the number of buckets for the given partition path.
    *
