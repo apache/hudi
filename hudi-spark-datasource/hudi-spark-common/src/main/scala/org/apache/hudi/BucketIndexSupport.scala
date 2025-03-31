@@ -101,8 +101,8 @@ class BucketIndexSupport(spark: SparkSession,
     candidateFiles.toSet
   }
 
-  def filterQueriesWithBucketHashField(queryFilters: Seq[Expression]): Option[BitSet] = {
-    val bucketNumber = metadataConfig.getIntOrDefault(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS)
+  def filterQueriesWithBucketHashField(queryFilters: Seq[Expression],
+                                       bucketNumber: Int = metadataConfig.getIntOrDefault(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS)): Option[BitSet] = {
     if (indexBucketHashFieldsOpt.isEmpty || queryFilters.isEmpty) {
       None
     } else {

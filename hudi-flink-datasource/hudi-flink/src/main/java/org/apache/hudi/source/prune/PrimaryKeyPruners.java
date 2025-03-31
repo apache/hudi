@@ -45,7 +45,7 @@ public class PrimaryKeyPruners {
 
   public static final int BUCKET_ID_NO_PRUNING = -1;
 
-  public static int getBucketId(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
+  public static int getBucketFieldHashing(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
     List<String> pkFields = Arrays.asList(conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
     // step1: resolve the hash key values
     final boolean logicalTimestamp = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
@@ -60,7 +60,7 @@ public class PrimaryKeyPruners {
         .map(Pair::getValue)
         .collect(Collectors.toList());
     // step2: generate bucket id
-    return BucketIdentifier.getBucketId(values, conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
+    return BucketIdentifier.getFieldsHashing(values);
   }
 
   private static Pair<FieldReferenceExpression, ValueLiteralExpression> castChildAs(List<Expression> children) {
