@@ -106,7 +106,7 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   @Override
   public void validateForLatestTimestamp(String instantTime) {
-    validateForLatestTimestampInternal(instantTime);
+    validateForLatestTimestampInternal(metaClient, instantTime, true);
   }
 
   @Override

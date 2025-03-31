@@ -21,7 +21,9 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -50,6 +52,8 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
   protected final HoodieInstant instantToRollback;
   private final boolean skipTimelinePublish;
   private final boolean shouldRollbackUsingMarkers;
+  private final TransactionManager txnManager;
+  private final boolean acquireLock;
   protected final Boolean isRestore;
 
   public static final Integer ROLLBACK_PLAN_VERSION_1 = 1;
@@ -68,6 +72,8 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
     this.skipTimelinePublish = skipTimelinePublish;
     this.shouldRollbackUsingMarkers = shouldRollbackUsingMarkers && !instantToRollback.isCompleted();
     this.isRestore = isRestore;
+    this.txnManager = new TransactionManager(config, table.getStorage());
+    this.acquireLock = !isRestore;
   }
 
   /**
@@ -113,7 +119,9 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
       HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan(new HoodieInstantInfo(instantToRollback.getTimestamp(),
           instantToRollback.getAction()), rollbackRequests, LATEST_ROLLBACK_PLAN_VERSION);
       if (!skipTimelinePublish) {
-        table.validateForLatestTimestamp(rollbackInstant.getTimestamp());
+        if (!canProceedWithRollback(rollbackInstant)) {
+          return Option.empty();
+        }
         if (table.getRollbackTimeline().filterInflightsAndRequested().containsInstant(rollbackInstant.getTimestamp())) {
           LOG.warn("Request Rollback found with instant time " + rollbackInstant + ", hence skipping scheduling rollback");
         } else {
@@ -129,9 +137,36 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
     }
   }
 
+  private boolean canProceedWithRollback(HoodieInstant rollbackInstant) {
+    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      // check for concurrent rollbacks. i.e if the commit being rolledback is already rolled back, we can bail out.
+      HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(table.getMetaClient());
+      HoodieTimeline reloadedActiveTimeline = reloadedMetaClient.reloadActiveTimeline();
+      if (!reloadedActiveTimeline.filterInflightsAndRequested().containsInstant(instantToRollback.getTimestamp())
+          && !reloadedActiveTimeline.filterCompletedInstants().containsInstant(instantToRollback.getTimestamp())) {
+        // if instant to rollback is already rolled back, we can bail out.
+        return false;
+      } else {
+        // since we had already reloaded the timeline above, lets avoid additional reload with validateForLatestTimestamp.
+        table.validateForLatestTimestampWithoutReload(reloadedMetaClient, rollbackInstant.getTimestamp());
+      }
+    }
+    return true;
+  }
+
   @Override
   public Option<HoodieRollbackPlan> execute() {
-    // Plan a new rollback action
-    return requestRollback(instantTime);
+    HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, instantTime, HoodieTimeline.ROLLBACK_ACTION);
+    try {
+      if (acquireLock) {
+        txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty());
+      }
+      // Plan a new rollback action
+      return requestRollback(instantTime);
+    } finally {
+      if (acquireLock) {
+        txnManager.endTransaction(Option.of(rollbackInstant));
+      }
+    }
   }
 }

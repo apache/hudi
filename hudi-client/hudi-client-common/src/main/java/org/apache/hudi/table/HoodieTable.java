@@ -898,14 +898,24 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   /**
+   * Validates that the instantTime is latest in the write timeline. This method is specifically used to avoid additional timeline reloads.
+   * If the caller expects the validation to explicitly reload, please use {@link #validateForLatestTimestampInternal(HoodieTableMetaClient, String, boolean)}.
+   * @param metaClient instance of {@link HoodieTableMetaClient} to use.
+   * @param instantTime instant time of interest.
+   */
+  public void validateForLatestTimestampWithoutReload(HoodieTableMetaClient metaClient, String instantTime) {
+    validateForLatestTimestampInternal(metaClient, instantTime, false);
+  }
+
+  /**
    * Validates that the instantTime is latest in the write timeline.
    * @param instantTime instant time of interest.
    */
   public abstract void validateForLatestTimestamp(String instantTime);
 
-  protected void validateForLatestTimestampInternal(String instantTime) {
-    if (this.config.shouldEnableTimestampOrderinValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+  protected void validateForLatestTimestampInternal(HoodieTableMetaClient metaClient, String instantTime, boolean reloadTimeline) {
+    if (this.config.shouldEnableTimestampOrderingValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime, reloadTimeline);
     }
   }
 

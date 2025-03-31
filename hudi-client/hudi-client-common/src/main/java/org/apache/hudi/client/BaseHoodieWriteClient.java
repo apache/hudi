@@ -342,8 +342,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected abstract void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime);
 
   protected void validateTimestampInternal(HoodieTableMetaClient metaClient, String instantTime) {
-    if (config.shouldEnableTimestampOrderinValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+    if (config.shouldEnableTimestampOrderingValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime, true);
     }
   }
 
