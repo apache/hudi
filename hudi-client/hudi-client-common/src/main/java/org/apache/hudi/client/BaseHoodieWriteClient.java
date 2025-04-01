@@ -226,7 +226,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                   Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     // Skip the empty commit if not allowed
     if (!config.allowEmptyCommit() && stats.isEmpty()) {
-      return CommitStatus.success(null);
+      return CommitStatus.successWithEmptyCommit();
     }
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
