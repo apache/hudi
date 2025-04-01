@@ -18,6 +18,7 @@
 
 package org.apache.hudi.spark3.internal;
 
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -42,10 +43,11 @@ public class HoodieDataSourceInternalBatchWriteBuilder implements WriteBuilder {
   private final Map<String, String> properties;
   private final boolean populateMetaFields;
   private final boolean arePartitionRecordsSorted;
+  private final WriteOperationType writeOperationType;
 
   public HoodieDataSourceInternalBatchWriteBuilder(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
                                                    SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties, boolean populateMetaFields,
-                                                   boolean arePartitionRecordsSorted) {
+                                                   boolean arePartitionRecordsSorted, WriteOperationType writeOperationType) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
@@ -54,11 +56,12 @@ public class HoodieDataSourceInternalBatchWriteBuilder implements WriteBuilder {
     this.properties = properties;
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
+    this.writeOperationType = writeOperationType;
   }
 
   @Override
   public BatchWrite buildForBatch() {
     return new HoodieDataSourceInternalBatchWrite(instantTime, writeConfig, structType, jss,
-        storageConf, properties, populateMetaFields, arePartitionRecordsSorted);
+        storageConf, properties, populateMetaFields, arePartitionRecordsSorted, writeOperationType);
   }
 }

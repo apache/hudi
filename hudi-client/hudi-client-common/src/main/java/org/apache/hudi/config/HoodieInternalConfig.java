@@ -52,6 +52,12 @@ public class HoodieInternalConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Inner configure to pass static partition paths to executors for SQL operations.");
 
+  public static final ConfigProperty<WriteOperationType> BULK_INSERT_WRITE_OPERATION_TYPE = ConfigProperty
+      .key("hoodie.bulkinsert.write.operation.type")
+      .defaultValue(WriteOperationType.BULK_INSERT)
+      .markAdvanced()
+      .withDocumentation("Write operation type for bulk insert.");
+
   /**
    * Returns if partition records are sorted or not.
    *

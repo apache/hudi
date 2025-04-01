@@ -19,6 +19,7 @@
 package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -56,6 +57,8 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
         Boolean.toString(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue())));
     boolean arePartitionRecordsSorted = Boolean.parseBoolean(properties.getOrDefault(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED,
         Boolean.toString(HoodieInternalConfig.DEFAULT_BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED)));
+    WriteOperationType writeOperationType = WriteOperationType.fromValue(
+        properties.getOrDefault(HoodieInternalConfig.BULK_INSERT_WRITE_OPERATION_TYPE.key(), HoodieInternalConfig.BULK_INSERT_WRITE_OPERATION_TYPE.defaultValue().value()));
     // Create a new map as the properties is an unmodifiableMap on Spark 3.2.0
     Map<String, String> newProps = new HashMap<>(properties);
     // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
@@ -63,6 +66,6 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
     // 1st arg to createHoodieConfig is not really required to be set. but passing it anyways.
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(newProps.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()), path, tblName, newProps);
     return new HoodieDataSourceInternalTable(instantTime, config, schema, getSparkSession(),
-        getConfiguration(), newProps, populateMetaFields, arePartitionRecordsSorted);
+        getConfiguration(), newProps, populateMetaFields, arePartitionRecordsSorted, writeOperationType);
   }
 }

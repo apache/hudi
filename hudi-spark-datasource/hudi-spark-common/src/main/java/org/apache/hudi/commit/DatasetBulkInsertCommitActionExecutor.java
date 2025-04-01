@@ -18,16 +18,30 @@
 
 package org.apache.hudi.commit;
 
+import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.execution.bulkinsert.BucketIndexBulkInsertPartitionerWithRows;
+import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory;
+import org.apache.hudi.execution.bulkinsert.ConsistentBucketIndexBulkInsertPartitionerWithRows;
+import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.internal.DataSourceInternalWriterHelper;
+import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -35,31 +49,41 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsertCommitActionExecutor {
+public class DatasetBulkInsertCommitActionExecutor implements Serializable {
+
+  protected final transient HoodieWriteConfig writeConfig;
+  protected final transient SparkRDDWriteClient writeClient;
+  protected final String instantTime;
+  private final WriteOperationType writeOperationType;
+  protected HoodieTable table;
 
   public DatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config,
-                                               SparkRDDWriteClient writeClient,
-                                               String instantTime) {
-    super(config, writeClient, instantTime);
+                                                   SparkRDDWriteClient writeClient,
+                                                   String instantTime, WriteOperationType writeOperationType) {
+    this.writeConfig = config;
+    this.writeClient = writeClient;
+    this.instantTime = instantTime;
+    this.writeOperationType = writeOperationType;
   }
 
-  @Override
   protected void preExecute() {
-    // no op
+    table.validateInsertSchema();
   }
 
-  @Override
-  protected Option<HoodieData<WriteStatus>> doExecute(Dataset<Row> records, boolean arePartitionRecordsSorted) {
+  protected void afterExecute(HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
+    // no-op
+  }
+
+  protected Option<HoodieData<WriteStatus>>  doExecute(Dataset<Row> records, boolean arePartitionRecordsSorted) {
     Map<String, String> opts = writeConfig.getProps().entrySet().stream().collect(Collectors.toMap(
         e -> String.valueOf(e.getKey()),
         e -> String.valueOf(e.getValue())));
-    Map<String, String> optsOverrides = Collections.singletonMap(
-        HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED, String.valueOf(arePartitionRecordsSorted));
 
     String targetFormat;
     Map<String, String> customOpts = new HashMap<>(1);
@@ -73,21 +97,66 @@ public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsert
 
     records.write().format(targetFormat)
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
+        .option(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED, String.valueOf(arePartitionRecordsSorted))
+        .option(HoodieInternalConfig.BULK_INSERT_WRITE_OPERATION_TYPE.key(), writeOperationType.value())
         .options(opts)
         .options(customOpts)
-        .options(optsOverrides)
         .mode(SaveMode.Append)
         .save();
     return Option.empty();
   }
 
-  @Override
-  protected void afterExecute(HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
-    // no op
+  protected HoodieWriteMetadata<JavaRDD<WriteStatus>> buildHoodieWriteMetadata(Option<HoodieData<WriteStatus>> writeStatuses) {
+    table.getMetaClient().reloadActiveTimeline();
+    return writeStatuses.map(statuses -> {
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> hoodieWriteMetadata = new HoodieWriteMetadata<>();
+      hoodieWriteMetadata.setWriteStatuses(HoodieJavaRDD.getJavaRDD(statuses));
+      return hoodieWriteMetadata;
+    }).orElseGet(HoodieWriteMetadata::new);
   }
 
-  @Override
+  public final HoodieWriteResult execute(Dataset<Row> records, boolean isTablePartitioned) {
+    if (writeConfig.getBoolean(DataSourceWriteOptions.INSERT_DROP_DUPS())) {
+      throw new HoodieException("Dropping duplicates with bulk_insert in row writer path is not supported yet");
+    }
+
+    boolean populateMetaFields = writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS);
+
+    table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
+
+    BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows = getPartitioner(populateMetaFields, isTablePartitioned);
+    Dataset<Row> hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(records, writeConfig, bulkInsertPartitionerRows, instantTime);
+
+    preExecute();
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> result = buildHoodieWriteMetadata(doExecute(hoodieDF, bulkInsertPartitionerRows.arePartitionRecordsSorted()));
+    afterExecute(result);
+    return new HoodieWriteResult(result.getWriteStatuses(), result.getPartitionToReplaceFileIds());
+  }
+
   public WriteOperationType getWriteOperationType() {
-    return WriteOperationType.BULK_INSERT;
+    return writeOperationType;
+  }
+
+  public String getCommitActionType() {
+    return CommitUtils.getCommitActionType(getWriteOperationType(), writeClient.getConfig().getTableType());
+  }
+
+  protected BulkInsertPartitioner<Dataset<Row>> getPartitioner(boolean populateMetaFields, boolean isTablePartitioned) {
+    if (populateMetaFields) {
+      if (writeConfig.getIndexType() == HoodieIndex.IndexType.BUCKET) {
+        if (writeConfig.getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.SIMPLE) {
+          return new BucketIndexBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault(), table.getConfig());
+        } else {
+          return new ConsistentBucketIndexBulkInsertPartitionerWithRows(table, Collections.emptyMap(), true);
+        }
+      } else {
+        return DataSourceUtils
+            .createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
+            .orElseGet(() -> BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig, isTablePartitioned));
+      }
+    } else {
+      // Sort modes are not yet supported when meta fields are disabled
+      return new NonSortPartitionerWithRows();
+    }
   }
 }

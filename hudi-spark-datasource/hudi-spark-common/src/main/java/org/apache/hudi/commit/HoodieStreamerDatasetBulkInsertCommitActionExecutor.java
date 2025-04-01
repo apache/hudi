@@ -34,15 +34,15 @@ import org.apache.spark.sql.Row;
  * Executor to be used by stream sync. Directly invokes HoodieDatasetBulkInsertHelper.bulkInsert so that WriteStatus is
  * properly returned. Additionally, we do not want to commit the write in this code because it happens in StreamSync.
  */
-public class HoodieStreamerDatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsertCommitActionExecutor {
+public class HoodieStreamerDatasetBulkInsertCommitActionExecutor extends DatasetBulkInsertCommitActionExecutor {
 
   public HoodieStreamerDatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config, SparkRDDWriteClient writeClient, String instantTime) {
-    super(config, writeClient, instantTime);
+    super(config, writeClient, instantTime, WriteOperationType.BULK_INSERT);
   }
 
   @Override
   protected void preExecute() {
-    table.validateInsertSchema();
+    super.preExecute();
     writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());
   }
 
@@ -54,8 +54,4 @@ public class HoodieStreamerDatasetBulkInsertCommitActionExecutor extends BaseDat
         .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false, getWriteOperationType()));
   }
 
-  @Override
-  public WriteOperationType getWriteOperationType() {
-    return WriteOperationType.BULK_INSERT;
-  }
 }
