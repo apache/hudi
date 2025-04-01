@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -852,7 +853,8 @@ public class HoodieTableConfig extends HoodieConfig {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
-    if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)) {
+    if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
+        || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
       // DefaultHoodieRecordPayload matches with EVENT_TIME_ORDERING.
       return EVENT_TIME_ORDERING;
     } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {

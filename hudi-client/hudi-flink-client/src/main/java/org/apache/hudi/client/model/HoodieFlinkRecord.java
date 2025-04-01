@@ -37,10 +37,7 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.data.utils.JoinedRowData;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Map;
@@ -65,6 +62,10 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   public HoodieFlinkRecord(HoodieKey key, HoodieOperation op, Comparable<?> orderingValue, RowData rowData) {
     super(key, rowData, op, Option.empty());
     this.orderingValue = orderingValue;
+  }
+
+  public HoodieFlinkRecord(HoodieKey key, RowData rowData) {
+    super(key, rowData);
   }
 
   @Override
@@ -140,15 +141,24 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
-    int metaFieldSize = targetSchema.getFields().size() - recordSchema.getFields().size();
-    GenericRowData metaRow = new GenericRowData(metaFieldSize);
+    boolean withMetaFields = recordSchema.getField(RECORD_KEY_METADATA_FIELD) != null;
+    boolean withOperationField = targetSchema.getField(OPERATION_METADATA_FIELD) != null;
+    int metaFieldSize = HOODIE_META_COLUMNS.size();
+    String[] metaFields = new String[metaFieldSize];
+    if (withMetaFields) {
+      for (int i = 0; i < metaFieldSize; i++) {
+        metaFields[i] = data.getString(i).toString();
+      }
+    }
+
+    AbstractHoodieRowData rowWithMetaFields = HoodieRowDataCreation.create(metaFields, data, withOperationField, withMetaFields);
     String[] metaVals = metadataValues.getValues();
     for (int i = 0; i < metaVals.length; i++) {
       if (metaVals[i] != null) {
-        metaRow.setField(i, StringData.fromString(metaVals[i]));
+        rowWithMetaFields.updateMeta(i, metaVals[i]);
       }
     }
-    return new HoodieFlinkRecord(key, operation, orderingValue, new JoinedRowData(data.getRowKind(), metaRow, data));
+    return new HoodieFlinkRecord(key, operation, orderingValue, rowWithMetaFields);
   }
 
   @Override

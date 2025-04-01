@@ -147,6 +147,9 @@ public class ITTestHoodieFlinkCompactor {
     // set the table name
     conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
 
+    // set the partition fields
+    CompactionUtil.setPartitionField(conf, metaClient);
+
     // set table schema
     CompactionUtil.setAvroSchema(conf, metaClient);
 

@@ -21,8 +21,10 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
@@ -136,19 +138,36 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
                             Collector<CompactionCommitEvent> collector,
                             HoodieWriteConfig writeConfig) throws IOException {
     compactionMetrics.startCompaction();
-    HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
+    HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>(new HoodieFlinkEngineContext(conf));
     HoodieTableMetaClient metaClient = writeClient.getHoodieTable().getMetaClient();
-    String maxInstantTime = compactor.getMaxInstantTime(metaClient);
-    List<WriteStatus> writeStatuses = compactor.compact(
-        new HoodieFlinkCopyOnWriteTable<>(
-            writeConfig,
-            writeClient.getEngineContext(),
-            metaClient),
-        metaClient,
-        writeClient.getConfig(),
-        compactionOperation,
-        instantTime, maxInstantTime,
-        writeClient.getHoodieTable().getTaskContextSupplier());
+    List<WriteStatus> writeStatuses;
+    // fallback to legacy compaction as file group reader based compactor
+    // do not support produce cdc log during compaction
+    if (metaClient.getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor()) {
+      String maxInstantTime = compactor.getMaxInstantTime(metaClient);
+      writeStatuses = compactor.compact(
+          new HoodieFlinkCopyOnWriteTable<>(
+              writeConfig,
+              writeClient.getEngineContext(),
+              metaClient),
+          metaClient,
+          writeClient.getConfig(),
+          compactionOperation,
+          instantTime, maxInstantTime,
+          writeClient.getHoodieTable().getTaskContextSupplier());
+    } else {
+      // compaction using file group reader
+      writeStatuses = compactor.compact(
+          new HoodieFlinkCopyOnWriteTable<>(
+              writeConfig,
+              writeClient.getEngineContext(),
+              metaClient),
+          metaClient,
+          writeClient.getConfig(),
+          compactionOperation,
+          instantTime,
+          Option.empty());
+    }
     compactionMetrics.endCompaction();
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }

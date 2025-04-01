@@ -18,18 +18,19 @@
 
 package org.apache.hudi.io.parquet;
 
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.io.storage.row.RowDataFileReader;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 import org.apache.hudi.table.expression.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -57,26 +58,16 @@ public class FlinkParquetReader implements RowDataFileReader {
       List<DataType> fieldTypes,
       int[] selectedFields,
       List<Predicate> predicates,
-      Path path,
+      StoragePath path,
       long start,
       long length) throws IOException {
-    final boolean useUTCTimeStamp = conf.getBoolean(
-        HoodieStorageConfig.PARQUET_READ_UTC_TIMEZONE.key(),
-        HoodieStorageConfig.PARQUET_READ_UTC_TIMEZONE.defaultValue());
-
-    LinkedHashMap<String, Object> partitionSpec = FilePathUtils.generatePartitionSpecs(
-        path.toString(),
-        fieldNames,
-        fieldTypes,
-        internalSchemaManager.getFlinkConf().get(FlinkOptions.PARTITION_DEFAULT_NAME),
-        internalSchemaManager.getFlinkConf().get(FlinkOptions.PARTITION_PATH_FIELD),
-        internalSchemaManager.getFlinkConf().get(FlinkOptions.HIVE_STYLE_PARTITIONING));
-
+    final boolean useUTCTimeStamp = conf.get(FlinkOptions.READ_UTC_TIMEZONE);
+    LinkedHashMap<String, Object> partitionSpec = getPartitionSpec(path, fieldNames, fieldTypes);
     return RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
         useUTCTimeStamp,
         true,
-        conf,
+        HadoopConfigurations.getHadoopConf(conf),
         fieldNames.toArray(new String[0]),
         fieldTypes.toArray(new DataType[0]),
         partitionSpec,
@@ -86,5 +77,21 @@ public class FlinkParquetReader implements RowDataFileReader {
         start,
         length,
         predicates);
+  }
+
+  private LinkedHashMap<String, Object> getPartitionSpec(
+      StoragePath path,
+      List<String> fieldNames,
+      List<DataType> fieldTypes) {
+    if (InLineFSUtils.SCHEME.equals(path.toUri().getScheme())) {
+      path = InLineFSUtils.getOuterFilePathFromInlinePath(path);
+    }
+    return FilePathUtils.generatePartitionSpecs(
+        path.toString(),
+        fieldNames,
+        fieldTypes,
+        conf.get(FlinkOptions.PARTITION_DEFAULT_NAME),
+        conf.get(FlinkOptions.PARTITION_PATH_FIELD),
+        conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING));
   }
 }

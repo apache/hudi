@@ -19,11 +19,11 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.expression.ExpressionPredicates.Predicate;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -51,7 +51,7 @@ public interface RowDataFileReader extends Serializable {
       List<DataType> fieldTypes,
       int[] selectedFields,
       List<Predicate> predicates,
-      Path path,
+      StoragePath path,
       long splitStart,
       long splitLength) throws IOException;
 }

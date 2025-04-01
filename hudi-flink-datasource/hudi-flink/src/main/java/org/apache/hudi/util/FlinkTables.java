@@ -50,6 +50,7 @@ public class FlinkTables {
    */
   public static HoodieFlinkTable<?> createTable(Configuration conf, RuntimeContext runtimeContext) {
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
+        conf,
         HadoopFSUtils.getStorageConf(getHadoopConf(conf)),
         new FlinkTaskContextSupplier(runtimeContext));
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true);
@@ -62,10 +63,12 @@ public class FlinkTables {
    * <p>This expects to be used by client.
    */
   public static HoodieFlinkTable<?> createTable(
+      Configuration conf,
       HoodieWriteConfig writeConfig,
       org.apache.hadoop.conf.Configuration hadoopConf,
       RuntimeContext runtimeContext) {
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
+        conf,
         HadoopFSUtils.getStorageConfWithCopy(hadoopConf),
         new FlinkTaskContextSupplier(runtimeContext));
     return createTableInternal(writeConfig, context);
