@@ -12,8 +12,11 @@ for `HoodieStreamer`.
 The target Hudi table will be sync'ed to DataHub as a `Dataset`, which will be created with the following properties:
 
 * Hudi table properties and partitioning information
+  * This includes: `hudi.table.type`, `hudi.table.version` and `hudi.base.path`
+  * As well as: `hudi.partition.fields` (if and only if `hoodie.datasource.hive_sync.partition_fields` is properly set 
+    in the Hudi Config)
 * Spark-related properties
-* User-defined properties
+* User-defined properties (see `hoodie.meta.sync.datahub.table.properties` in the "Configurations" section)
 * The last commit and the last commit completion timestamps
 
 Additionally, the `Dataset` object will include the following metadata:
