@@ -22,6 +22,7 @@ import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
@@ -271,6 +272,7 @@ public class StreamerUtil {
           .setCDCEnabled(conf.getBoolean(FlinkOptions.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
           .setPopulateMetaFields(OptionsResolver.isPopulateMetaFields(conf))
+          .setRecordMergeMode(RecordMergeMode.valueOf(conf.get(FlinkOptions.RECORD_MERGE_MODE)))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
       LOG.info("Table initialized under base path {}", basePath);
     } else {

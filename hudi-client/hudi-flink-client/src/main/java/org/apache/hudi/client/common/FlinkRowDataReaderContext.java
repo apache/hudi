@@ -33,7 +33,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.io.storage.row.RowDataFileReader;
 import org.apache.hudi.io.storage.row.RowDataFileReaderFactories;
 import org.apache.hudi.storage.HoodieStorage;
@@ -46,13 +45,12 @@ import org.apache.hudi.util.HoodieRowDataUtil;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.List;
@@ -71,8 +69,13 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   private final List<Predicate> predicates;
   private final InternalSchemaManager internalSchemaManager;
   private RowDataSerializer rowDataSerializer;
+  private final Configuration flinkConf;
 
-  public FlinkRowDataReaderContext(InternalSchemaManager internalSchemaManager, List<Predicate> predicates) {
+  public FlinkRowDataReaderContext(
+      Configuration conf,
+      InternalSchemaManager internalSchemaManager,
+      List<Predicate> predicates) {
+    this.flinkConf = conf;
     this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;
   }
@@ -86,8 +89,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       Schema requiredSchema,
       HoodieStorage storage) throws IOException {
     RowDataFileReaderFactories.Factory readerFactory = RowDataFileReaderFactories.getFactory(HoodieFileFormat.PARQUET);
-    Configuration conf = storage.getConf().unwrapAs(Configuration.class);
-    RowDataFileReader fileReader = readerFactory.createFileReader(internalSchemaManager, conf);
+    RowDataFileReader fileReader = readerFactory.createFileReader(internalSchemaManager, flinkConf);
 
     List<String> fieldNames = dataSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
     List<DataType> fieldTypes = dataSchema.getFields().stream().map(
@@ -97,13 +99,12 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         .mapToInt(i -> i)
         .toArray();
 
-    Path path = HoodieWrapperFileSystem.convertToHoodiePath(filePath, conf);
     return fileReader.getRowDataIterator(
         fieldNames,
         fieldTypes,
         selectedFields,
         predicates,
-        path,
+        filePath,
         start,
         length);
   }
@@ -122,8 +123,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   @Override
   public Object getValue(RowData record, Schema schema, String fieldName) {
-    RowData.FieldGetter fieldGetter = HoodieRowDataUtil.getFieldGetter(schema, fieldName);
-    return fieldGetter.getFieldOrNull(record);
+    Option<RowData.FieldGetter> fieldGetterOpt = HoodieRowDataUtil.getFieldGetter(schema, fieldName);
+    return fieldGetterOpt.isEmpty() ? null : fieldGetterOpt.get().getFieldOrNull(record);
   }
 
   @Override
@@ -146,11 +147,22 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
       orderingValue = (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
     } else {
-      // todo maybe need some refactor.
-      throw new HoodieException("There should ordering value in metadataMap.");
+      throw new HoodieException("There should be ordering value in metadataMap.");
     }
-
     return new HoodieFlinkRecord(hoodieKey, operation, orderingValue, rowData);
+  }
+
+  @Override
+  public Comparable getOrderingValue(Option<RowData> recordOption, Map<String, Object> metadataMap, Schema schema, Option<String> orderingFieldName) {
+    // orderingValue is of engine type.
+    Comparable orderingValue = super.getOrderingValue(recordOption, metadataMap, schema, orderingFieldName);
+    if (orderingFieldName.isEmpty()) {
+      return orderingValue;
+    }
+    // currently the ordering value stored in DeleteRecord is converted to Avro value because Flink reader currently uses AVRO payload to merge.
+    // So here we align the data format with reader until RowData reader is supported, HUDI-9146.
+    UnaryOperator<Object> fieldConverter = HoodieRowDataUtil.getFieldConverter(schema, orderingFieldName.get(), flinkConf);
+    return (Comparable) fieldConverter.apply(orderingValue);
   }
 
   @Override

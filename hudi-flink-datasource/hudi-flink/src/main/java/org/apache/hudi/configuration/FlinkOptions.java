@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -127,6 +128,15 @@ public class FlinkOptions extends HoodieConfig {
       .withFallbackKeys("write.payload.class", HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key())
       .withDescription("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.\n"
           + "This will render any value set for the option in-effective");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> RECORD_MERGE_MODE = ConfigOptions
+      .key(HoodieWriteConfig.RECORD_MERGE_MODE.key())
+      .stringType()
+      .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
+      .withDescription("RecordMergeMode used. Using EventTime ordering to merge records by default,"
+          + "other possible options are: COMMIT_TIME_ORDERING which uses transaction time to merge records,"
+          + "and CUSTOM which uses custom merging logic specified by user.");
 
   @AdvancedConfig
   public static final ConfigOption<String> RECORD_MERGER_IMPLS = ConfigOptions

@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 
-import org.apache.hadoop.conf.Configuration;
+import org.apache.flink.configuration.Configuration;
 
 /**
  * A factory to create {@link RowDataFileReader} to
@@ -36,15 +36,6 @@ public class RowDataFileReaderFactories {
       default:
         throw new UnsupportedOperationException(String.format("RowData file reader for format: %s is not supported yet.", format));
     }
-  }
-
-  public RowDataFileReader createFileReader(
-      InternalSchemaManager internalSchemaManager,
-      Configuration conf) {
-    return (RowDataFileReader) ReflectionUtils
-        .loadClass("org.apache.hudi.io.parquet.FlinkParquetReader",
-            new Class<?>[] {InternalSchemaManager.class, Configuration.class},
-            internalSchemaManager, conf);
   }
 
   private static class ParquetFileReaderFactory implements Factory {
