@@ -220,6 +220,8 @@ class FileGroupReaderBasedFileFormat(tablePath: String,
               requiredSchema, partitionSchema, outputSchema, filters, storageConf)
                 case ORC_FILE_EXTENSION => readBaseFile(file, broadcastOrcFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
                   requiredSchema, partitionSchema, outputSchema, filters, storageConf)
+                case HFILE_FILE_EXTENSION => readBaseFile(file, broadcastHfileFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+                  requiredSchema, partitionSchema, outputSchema, filters, storageConf)
               }
           }
         // CDC queries.
@@ -233,6 +235,8 @@ class FileGroupReaderBasedFileFormat(tablePath: String,
             case PARQUET_FILE_EXTENSION => readBaseFile(file, broadcastParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
               requiredSchema, partitionSchema, outputSchema, filters, storageConf)
             case ORC_FILE_EXTENSION => readBaseFile(file, broadcastOrcFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+              requiredSchema, partitionSchema, outputSchema, filters, storageConf)
+            case HFILE_FILE_EXTENSION => readBaseFile(file, broadcastHfileFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
               requiredSchema, partitionSchema, outputSchema, filters, storageConf)
           }
       }
@@ -375,6 +379,7 @@ class FileGroupReaderBasedFileFormat(tablePath: String,
     // Logic to detect file format based on the filePath or its content.
     if (filePath.endsWith(".parquet")) PARQUET_FILE_EXTENSION
     else if (filePath.endsWith(".orc")) ORC_FILE_EXTENSION
+    else if (filePath.endsWith(".hfile")) HFILE_FILE_EXTENSION
     else ""
   }
 }
