@@ -90,6 +90,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  *   <li>resetting file-system views.</li>
  * </ul>
  * The actual mechanism of fetching file slices from different view storages is delegated to sub-classes.
+ * To ensure thread-safety, all public methods fetching state must use the read-lock and any methods updating the state need to use the write-lock
  */
 public abstract class AbstractTableFileSystemView implements SyncableFileSystemView, Serializable {
 
@@ -886,6 +887,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return getLatestFileSlices(partition);
     } else {
       try {
+        readLock.lock();
         Stream<FileSlice> fileSliceStream = buildFileGroups(partition, getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
             .filter(fg -> !isFileGroupReplaced(fg))
             .map(HoodieFileGroup::getLatestFileSlice)
@@ -903,6 +905,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return fileSliceStream;
       } catch (IOException e) {
         throw new HoodieIOException("Failed to fetch all files in partition " + partition, e);
+      } finally {
+        readLock.unlock();
       }
     }
   }
@@ -1125,6 +1129,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return getAllFileGroups(partition);
     } else {
       try {
+        readLock.lock();
         Stream<HoodieFileGroup> fileGroupStream = buildFileGroups(partition, getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
             .filter(fg -> !isFileGroupReplaced(fg));
         if (bootstrapIndex.useIndex()) {
@@ -1136,6 +1141,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return fileGroupStream;
       } catch (IOException e) {
         throw new HoodieIOException("Failed to fetch all files in partition " + partition, e);
+      } finally {
+        readLock.unlock();
       }
     }
   }
@@ -1379,7 +1386,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   abstract boolean isPartitionAvailableInStore(String partitionPath);
 
   /**
-   * Add a complete partition view to store.
+   * Add a complete partition view to store. Implementation must use write-lock before updating state.
    *
    * @param partitionPath Partition Path
    * @param fileGroups File Groups for the partition path
@@ -1392,14 +1399,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param partitionPath Partition path for which the file-groups needs to be retrieved.
    * @return file-group stream
    */
-  abstract Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partitionPath);
+  protected abstract Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partitionPath);
 
   /**
    * Fetch all Stored file-groups across all partitions loaded.
    *
    * @return file-group stream
    */
-  abstract Stream<HoodieFileGroup> fetchAllStoredFileGroups();
+  protected abstract Stream<HoodieFileGroup> fetchAllStoredFileGroups();
 
   /**
    * Track instant time for file groups replaced.
@@ -1455,7 +1462,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Default implementation for fetching latest base-files for the partition-path.
    */
-  public Stream<HoodieBaseFile> fetchLatestBaseFiles(final String partitionPath) {
+  Stream<HoodieBaseFile> fetchLatestBaseFiles(final String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath)
         .filter(fg -> !isFileGroupReplaced(fg))
         .map(fg -> Pair.of(fg.getFileGroupId(), getLatestBaseFile(fg)))
@@ -1589,8 +1596,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @return File Slice if present
    */
   public Option<FileSlice> fetchLatestFileSlice(String partitionPath, String fileId) {
-    return Option
-        .fromJavaOptional(fetchLatestFileSlices(partitionPath).filter(fs -> fs.getFileId().equals(fileId)).findFirst());
+    try {
+      readLock.lock();
+      return Option
+          .fromJavaOptional(fetchLatestFileSlices(partitionPath).filter(fs -> fs.getFileId().equals(fileId)).findFirst());
+    } finally {
+      readLock.unlock();
+    }
   }
 
   private boolean isFileGroupReplaced(String partitionPath, String fileId) {

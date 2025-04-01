@@ -269,41 +269,51 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   protected boolean isPartitionAvailableInStore(String partitionPath) {
-    String lookupKey = schemaHelper.getKeyForPartitionLookup(partitionPath);
-    Serializable obj = rocksDB.get(schemaHelper.getColFamilyForStoredPartitions(), lookupKey);
-    return obj != null;
+    try {
+      readLock.lock();
+      String lookupKey = schemaHelper.getKeyForPartitionLookup(partitionPath);
+      Serializable obj = rocksDB.get(schemaHelper.getColFamilyForStoredPartitions(), lookupKey);
+      return obj != null;
+    } finally {
+      readLock.unlock();
+    }
   }
 
   @Override
   protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
-    LOG.info("Resetting and adding new partition ({}) to ROCKSDB based file-system view at {}, Total file-groups={}",
-        partitionPath, config.getRocksdbBasePath(), fileGroups.size());
+    try {
+      writeLock.lock();
+      LOG.info("Resetting and adding new partition ({}) to ROCKSDB based file-system view at {}, Total file-groups={}",
+          partitionPath, config.getRocksdbBasePath(), fileGroups.size());
 
-    String lookupKey = schemaHelper.getKeyForPartitionLookup(partitionPath);
-    rocksDB.delete(schemaHelper.getColFamilyForStoredPartitions(), lookupKey);
+      String lookupKey = schemaHelper.getKeyForPartitionLookup(partitionPath);
+      rocksDB.delete(schemaHelper.getColFamilyForStoredPartitions(), lookupKey);
 
-    // First delete partition views
-    rocksDB.prefixDelete(schemaHelper.getColFamilyForView(),
-        schemaHelper.getPrefixForSliceViewByPartition(partitionPath));
-    rocksDB.prefixDelete(schemaHelper.getColFamilyForView(),
-        schemaHelper.getPrefixForDataFileViewByPartition(partitionPath));
+      // First delete partition views
+      rocksDB.prefixDelete(schemaHelper.getColFamilyForView(),
+          schemaHelper.getPrefixForSliceViewByPartition(partitionPath));
+      rocksDB.prefixDelete(schemaHelper.getColFamilyForView(),
+          schemaHelper.getPrefixForDataFileViewByPartition(partitionPath));
 
-    // Now add them
-    fileGroups.forEach(fg ->
-        rocksDB.writeBatch(batch ->
-            fg.getAllFileSlicesIncludingInflight().forEach(fs -> {
-              rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
-              fs.getBaseFile().ifPresent(df ->
-                  rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs), df)
-              );
-            })
-        )
-    );
+      // Now add them
+      fileGroups.forEach(fg ->
+          rocksDB.writeBatch(batch ->
+              fg.getAllFileSlicesIncludingInflight().forEach(fs -> {
+                rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
+                fs.getBaseFile().ifPresent(df ->
+                    rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs), df)
+                );
+              })
+          )
+      );
 
-    // record that partition is loaded.
-    rocksDB.put(schemaHelper.getColFamilyForStoredPartitions(), lookupKey, Boolean.TRUE);
-    LOG.info("Finished adding new partition ({}}) to ROCKSDB based file-system view at {}, Total file-groups={}",
-        partitionPath, config.getRocksdbBasePath(), fileGroups.size());
+      // record that partition is loaded.
+      rocksDB.put(schemaHelper.getColFamilyForStoredPartitions(), lookupKey, Boolean.TRUE);
+      LOG.info("Finished adding new partition ({}}) to ROCKSDB based file-system view at {}, Total file-groups={}",
+          partitionPath, config.getRocksdbBasePath(), fileGroups.size());
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   @Override
@@ -450,13 +460,13 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partitionPath) {
+  protected Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partitionPath) {
     return getFileGroups(rocksDB.<FileSlice>prefixSearch(schemaHelper.getColFamilyForView(),
         schemaHelper.getPrefixForSliceViewByPartition(partitionPath)).map(Pair::getValue));
   }
 
   @Override
-  Stream<HoodieFileGroup> fetchAllStoredFileGroups() {
+  protected Stream<HoodieFileGroup> fetchAllStoredFileGroups() {
     return getFileGroups(
         rocksDB.<FileSlice>prefixSearch(schemaHelper.getColFamilyForView(), schemaHelper.getPrefixForSliceView())
             .map(Pair::getValue));
