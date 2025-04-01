@@ -71,12 +71,10 @@ public class HoodieRecordLocation implements Serializable, KryoSerializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieRecordLocation {");
-    sb.append("instantTime=").append(instantTime).append(", ");
-    sb.append("fileId=").append(fileId).append(", ");
-    sb.append("position=").append(position);
-    sb.append('}');
-    return sb.toString();
+    return "HoodieRecordLocation {" + "instantTime=" + instantTime + ", "
+        + "fileId=" + fileId + ", "
+        + "position=" + position
+        + '}';
   }
 
   public String getInstantTime() {

@@ -29,7 +29,6 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 
-import org.apache.spark.package$;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -142,6 +141,7 @@ public class SparkDatasetTestUtils {
    */
   public static Row getRandomValue(String partitionPath, boolean isError, String commitTime) {
     // order commit time, seq no, record key, partition path, file name
+    String recordKey = UUID.randomUUID().toString();
     Object[] values = new Object[9];
     values[0] = commitTime; //commit time
     if (!isError) {
@@ -149,10 +149,10 @@ public class SparkDatasetTestUtils {
     } else {
       values[1] = RANDOM.nextLong();
     }
-    values[2] = UUID.randomUUID().toString();
+    values[2] = recordKey;
     values[3] = partitionPath;
     values[4] = ""; // filename
-    values[5] = UUID.randomUUID().toString();
+    values[5] = recordKey;
     values[6] = partitionPath;
     values[7] = RANDOM.nextInt();
     if (!isError) {
@@ -181,7 +181,7 @@ public class SparkDatasetTestUtils {
     values[2] = key.getRecordKey();
     values[3] = key.getPartitionPath();
     values[4] = ""; // filename
-    values[5] = UUID.randomUUID().toString();
+    values[5] = key.getRecordKey();
     values[6] = key.getPartitionPath();
     values[7] = RANDOM.nextInt();
     if (!isError) {
@@ -237,17 +237,10 @@ public class SparkDatasetTestUtils {
         .withBulkInsertParallelism(2);
   }
 
-  private static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
-      throws InvocationTargetException, IllegalAccessException, NoSuchMethodException, ClassNotFoundException {
-    // TODO [HUDI-8298] only spark 3 needed
-    if (package$.MODULE$.SPARK_VERSION().startsWith("2.")) {
-      Method spark2method = encoder.getClass().getMethod("toRow", Object.class);
-      return (InternalRow) spark2method.invoke(encoder, row);
-    } else {
-      Class<?> serializerClass = Class.forName("org.apache.spark.sql.catalyst.encoders.ExpressionEncoder$Serializer");
-      Object serializer = encoder.getClass().getMethod("createSerializer").invoke(encoder);
-      Method aboveSpark2method = serializerClass.getMethod("apply", Object.class);
-      return (InternalRow) aboveSpark2method.invoke(serializer, row);
-    }
+  public static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
+      throws InvocationTargetException, IllegalAccessException, NoSuchMethodException {
+    Object serializer = encoder.createSerializer();
+    Method applyMethod = serializer.getClass().getMethod("apply", Object.class);
+    return (InternalRow) applyMethod.invoke(serializer, row);
   }
 }

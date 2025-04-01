@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop.avro;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
@@ -30,6 +31,9 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
@@ -50,12 +54,22 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
   private final ParquetRecordReader<GenericData.Record> parquetRecordReader;
   private Schema baseSchema;
 
-  public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf) throws IOException {
+  public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf, Option<InternalSchema> internalSchemaOption) throws IOException {
     // get base schema
     ParquetMetadata fileFooter =
         ParquetFileReader.readFooter(conf, ((ParquetInputSplit) inputSplit).getPath(), ParquetMetadataConverter.NO_FILTER);
     MessageType messageType = fileFooter.getFileMetaData().getSchema();
     baseSchema = new AvroSchemaConverter(conf).convert(messageType);
+
+    if (internalSchemaOption.isPresent()) {
+      // do schema reconciliation in case there exists read column which is not in the file schema.
+      InternalSchema mergedInternalSchema = new InternalSchemaMerger(
+              AvroInternalSchemaConverter.convert(baseSchema),
+              internalSchemaOption.get(),
+              true,
+              true).mergeSchema();
+      baseSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, baseSchema.getFullName());
+    }
 
     // if exists read columns, we need to filter columns.
     List<String> readColNames = Arrays.asList(HoodieColumnProjectionUtils.getReadColumnNames(conf));

@@ -17,14 +17,17 @@
 
 package org.apache.spark.sql.hudi.dml
 
-import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.slf4j.LoggerFactory
 
 class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
+  private val log = LoggerFactory.getLogger(getClass)
 
   test("Test MergeInto for MOR table 2") {
     spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
@@ -38,7 +41,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -191,7 +194,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  s_value struct<f0: int, f1: string>,
            |  a_value array<string>,
            |  m_value map<string, string>,
-           |  ts long
+           |  ts int
            | ) using hudi
            | tblproperties (
            |  type = 'mor',
@@ -254,7 +257,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
@@ -342,7 +345,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
@@ -387,7 +390,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
@@ -454,7 +457,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  ID int,
            |  name string,
            |  price double,
-           |  TS long,
+           |  ts int,
            |  DT string
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
@@ -526,7 +529,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  ID int,
            |  NAME string,
            |  price double,
-           |  TS long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | options (
@@ -568,7 +571,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
@@ -615,7 +618,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id2 int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
@@ -661,7 +664,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -699,7 +702,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -739,7 +742,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            | create table $tableName (
            |  id int,
            |  name string,
-           |  ts long
+           |  ts int
            | ) using hudi
            | tblproperties (
            |  type = 'cow',
@@ -780,7 +783,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |  id int,
                |  name string,
                |  price double,
-               |  ts long,
+               |  ts int,
                |  dt string
                | ) using hudi
                | tblproperties (
@@ -845,7 +848,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |  id int,
                |  name string,
                |  price double,
-               |  ts long,
+               |  ts int,
                |  dt string
                | ) using hudi
                | tblproperties (
@@ -900,7 +903,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     }
   }
 
-
   test("Test Merge into with RuntimeReplaceable func such as nvl") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -911,7 +913,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -960,7 +962,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -990,7 +992,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -1029,5 +1031,342 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       // check partitions
       checkAnswer(s"show partitions $destTable")(Seq("dt=2022-09-26"))
     }
+  }
+
+  test("Test MergeInto Anti-Patterns of assignment clauses") {
+    Seq("cow", "mor").foreach { tableType =>
+      Seq("COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING").foreach { mergeMode =>
+        withRecordType()(withTempDir { tmp =>
+          withSparkSqlSessionConfig(DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "false") {
+            log.info(s"Testing table type $tableType with merge mode $mergeMode")
+
+            val tableName = generateTableName
+            // Create table with primaryKey and preCombineField
+            spark.sql(
+              s"""
+                 |create table $tableName (
+                 |  id int,
+                 |  name string,
+                 |  price double,
+                 |  ts int,
+                 |  dt string
+                 |) using hudi
+                 | tblproperties (
+                 |  type = '$tableType',
+                 |  primaryKey = 'id',
+                 |  preCombineField = 'ts',
+                 |  recordMergeMode = '$mergeMode'
+                 | )
+                 | partitioned by(dt)
+                 | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
+
+            // Insert initial data
+            spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, '2021-03-21')")
+
+            // Test 1: Update statements where at least one misses primary key assignment
+            if (tableType.equals("mor")) {
+              checkException(
+                s"""
+                   |merge into $tableName as t0
+                   |using (
+                   |  select 1 as id, 'a1' as name, 11 as price, 1001 as ts, '2021-03-21' as dt
+                   |) as s0
+                   |on t0.id = s0.id
+                   |when matched and s0.id = 1 then update set
+                   |  name = s0.name,
+                   |  price = s0.price,
+                   |  ts = s0.ts,
+                   |  dt = s0.dt
+                   |when matched and s0.id = 2 then update set *
+               """.stripMargin
+              )("MERGE INTO field resolution error: No matching assignment found for target table record key field `id`")
+
+              checkException(
+                s"""
+                   |merge into $tableName as t0
+                   |using (
+                   |  select 1 as id, 'a1' as name, 11 as price, 1001 as ts, '2021-03-21' as dt
+                   |) as s0
+                   |on t0.id = s0.id
+                   |when matched then update set
+                   |  name = s0.name,
+                   |  price = s0.price,
+                   |  ts = s0.ts,
+                   |  dt = s0.dt
+               """.stripMargin
+              )("MERGE INTO field resolution error: No matching assignment found for target table record key field `id`")
+            }
+
+            // Test 2: At least one partial insert assignment clause misses primary key.
+            checkException(
+              s"""
+                 |merge into $tableName as t0
+                 |using (
+                 |  select 2 as id, 'a2' as name, 12 as price, 1002 as ts, '2021-03-21' as dt
+                 |) as s0
+                 |on t0.id = s0.id
+                 |when not matched and s0.id = 1 then insert (name, price, ts, dt)
+                 |values (s0.name, s0.price, s0.ts, s0.dt)
+                 |when not matched and s0.id = 2 then insert *
+               """.stripMargin
+            )("MERGE INTO field resolution error: No matching assignment found for target table record key field `id`")
+
+            checkException(
+              s"""
+                 |merge into $tableName as t0
+                 |using (
+                 |  select 2 as id, 'a2' as name, 12 as price, 1002 as ts, '2021-03-21' as dt
+                 |) as s0
+                 |on t0.id = s0.id
+                 |when not matched then insert (name, price, ts, dt)
+                 |values (s0.name, s0.price, s0.ts, s0.dt)
+               """.stripMargin
+            )("MERGE INTO field resolution error: No matching assignment found for target table record key field `id`")
+
+            // Test 3: Partial insert missing preCombineField - only validate for EVENT_TIME_ORDERING
+            val mergeStmt =
+              s"""
+                 |merge into $tableName as t0
+                 |using (
+                 |  select 2 as id, 'a2' as name, 12 as price, 1002 as ts, '2021-03-21' as dt
+                 |) as s0
+                 |on t0.id = s0.id
+                 |when not matched and s0.id = 1 then insert (id, name, price, dt)
+                 |values (s0.id, s0.name, s0.price, s0.dt)
+                 |when not matched and s0.id = 2 then insert *
+               """.stripMargin
+
+            if (mergeMode == "EVENT_TIME_ORDERING") {
+              checkException(mergeStmt)(
+                "MERGE INTO field resolution error: No matching assignment found for target table precombine field `ts`"
+              )
+            } else {
+              // For COMMIT_TIME_ORDERING, this should execute without error
+              spark.sql(mergeStmt)
+            }
+
+            // Verify data state
+            if (mergeMode == "COMMIT_TIME_ORDERING") {
+              checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
+                Seq(1, "a1", 10.0, 1000, "2021-03-21"),
+                Seq(2, "a2", 12.0, 1002, "2021-03-21")
+              )
+            } else {
+              // For EVENT_TIME_ORDERING, original data should be unchanged due to exception
+              checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+                Seq(1, "a1", 10.0, 1000, "2021-03-21")
+              )
+            }
+          }
+        })
+      }
+    }
+  }
+
+  test("Test merge into Allowed-patterns of assignment clauses") {
+    withRecordType()(withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        Seq("COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING").foreach { mergeMode =>
+          withSparkSqlSessionConfig(DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "true") {
+            val tableName = generateTableName
+            spark.sql(
+              s"""
+                 |create table $tableName (
+                 |  id int,
+                 |  name string,
+                 |  value int,
+                 |  ts int
+                 |) using hudi
+                 | location '${tmp.getCanonicalPath}/$tableName'
+                 | partitioned by(value)
+                 | tblproperties (
+                 |  type = '$tableType',
+                 |  primaryKey ='id',
+                 |  preCombineField = 'ts',
+                 |  recordMergeMode = '$mergeMode'
+                 | )
+            """.stripMargin)
+
+            spark.sql(s"insert into $tableName select 1 as id, 'a1' as name, 10 as value, 1000 as ts")
+
+            // Test case 1: COW primary key column is not mandatory in the update assignment clause.
+            // Covered by test "Test MergeInto with more than once update actions"
+
+            // Test case 2: When partial update feature is on, primary key column is not mandatory in the update
+            // assignment clause. Covered by test class org/apache/spark/sql/hudi/dml/TestPartialUpdateForMergeInto.scala.
+
+            // Test case 3: Precombine key column is not mandatory in the update assignment clause.
+            spark.sql(
+              s"""
+                 |merge into $tableName h0
+                 |using (
+                 |  select 1 as id, 1003 as ts
+                 | ) s0
+                 | on h0.id = s0.id
+                 | when matched then update set h0.id = s0.id
+                 |""".stripMargin)
+
+            checkAnswer(s"select id, name, value, ts from $tableName")(
+              Seq(1, "a1", 10, 1000)
+            )
+          }
+        }
+      }
+    })
+  }
+
+  test("Test MergeInto with commit time/event time ordering coverage") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        Seq(RecordMergeMode.COMMIT_TIME_ORDERING.name(),
+          RecordMergeMode.EVENT_TIME_ORDERING.name()).foreach { recordMergeMode =>
+          val targetTable = generateTableName
+          spark.sql(
+            s"""
+               |create table $targetTable (
+               |  id INT,
+               |  name STRING,
+               |  price INT,
+               |  ts BIGINT
+               |) using hudi
+               |TBLPROPERTIES (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts',
+               |  recordMergeMode = '$recordMergeMode'
+               | )
+               |LOCATION '${tmp.getCanonicalPath}/$targetTable'
+               |""".stripMargin)
+
+          spark.sql(
+            s"""
+               |INSERT INTO $targetTable
+               |SELECT id, name, price, ts
+               |FROM (
+               |    SELECT 1 as id, 'John Doe' as name, 19 as price, 1598886001 as ts
+               |     UNION ALL
+               |     SELECT 2, 'Jane Doe', 24, 1598972400
+               |     UNION ALL
+               |     SELECT 3, 'Bob Smith', 14, 1599058800
+               |)
+               |""".stripMargin)
+
+          spark.sql(
+            s"""
+               |MERGE INTO $targetTable t
+               |USING (
+               | SELECT
+               |   CAST(1 AS INT) as id,
+               |   CAST('John Doe' AS STRING) as name,
+               |   CAST(19 AS INT) as price,
+               |   CAST(1 AS BIGINT) as ts
+               | UNION ALL
+               | SELECT
+               |   CAST(4 AS INT),
+               |   CAST('Alice Johnson' AS STRING),
+               |   CAST(49 AS INT),
+               |   CAST(2 AS BIGINT)
+               |) s
+               |ON t.price = s.price
+               |WHEN MATCHED THEN UPDATE SET
+               |    t.id = s.id,
+               |    t.name = s.name,
+               |    t.price = s.price,
+               |    t.ts = s.ts
+               |WHEN NOT MATCHED THEN INSERT
+               |    (id, name, price, ts)
+               |VALUES
+               |    (s.id, s.name, s.price, s.ts)
+               |""".stripMargin)
+
+          checkAnswer(s"select id, name, price, ts from $targetTable ORDER BY id")(
+            Seq(1, "John Doe", 19, if (recordMergeMode == RecordMergeMode.EVENT_TIME_ORDERING.name()) 1598886001L else 1L),
+            Seq(2, "Jane Doe", 24, 1598972400L),
+            Seq(3, "Bob Smith", 14, 1599058800L),
+            Seq(4, "Alice Johnson", 49, 2L))
+        }
+      }
+    }
+  }
+
+  test("Test MergeInto with CUSTOM merge mode using FirstValueAvroPayload") {
+    withRecordType()(withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val targetTable = generateTableName
+        spark.sql(
+          s"""
+            |create table $targetTable (
+            |  id INT,
+            |  name STRING,
+            |  price INT,
+            |  ts BIGINT
+            |) using hudi
+            |TBLPROPERTIES (
+            |  type = '$tableType',
+            |  primaryKey = 'id',
+            |  preCombineField = 'ts',
+            |  recordMergeMode = '${RecordMergeMode.CUSTOM.name()}',
+            |  'hoodie.datasource.write.payload.class'='org.apache.hudi.common.model.FirstValueAvroPayload',
+            |  hoodie.datasource.write.recordkey.field = 'id'
+            | )
+            |LOCATION '${tmp.getCanonicalPath}/$targetTable'
+            |""".stripMargin)
+
+          spark.sql(
+            s"""
+              |INSERT INTO $targetTable
+              |SELECT id, name, price, ts
+              |FROM (
+              |    SELECT 1 as id, 'John Doe Initial' as name, 19 as price, 1598886001 as ts
+              |     UNION ALL
+              |     SELECT 2, 'Jane Doe', 24, 1598972400
+              |     UNION ALL
+              |     SELECT 3, 'Bob Smith', 14, 1599058800
+              |)
+              |""".stripMargin)
+
+          spark.sql(
+            s"""
+              |MERGE INTO $targetTable t
+              |USING (
+              | SELECT
+              |   CAST(1 AS INT) as id,
+              |   CAST('John Doe Updated' AS STRING) as name,
+              |   CAST(19 AS INT) as price,
+              |   CAST(1598886001 AS BIGINT) as ts
+              | UNION ALL
+              | SELECT
+              |   CAST(2 AS INT),
+              |   CAST('Jane Doe Updated' AS STRING),
+              |   CAST(24 AS INT),
+              |   CAST(1598972401 AS BIGINT)
+              | UNION ALL
+              | SELECT
+              |   CAST(4 AS INT),
+              |   CAST('Alice Johnson' AS STRING),
+              |   CAST(49 AS INT),
+              |   CAST(2 AS BIGINT)
+              |) s
+              |ON t.price = s.price
+              |WHEN MATCHED THEN UPDATE SET
+              |    t.id = s.id,
+              |    t.name = s.name,
+              |    t.price = s.price,
+              |    t.ts = s.ts
+              |WHEN NOT MATCHED THEN INSERT
+              |    (id, name, price, ts)
+              |VALUES
+              |    (s.id, s.name, s.price, s.ts)
+              |""".stripMargin)
+
+          checkAnswer(s"select id, name, price, ts from $targetTable ORDER BY id")(
+            Seq(1, "John Doe Initial", 19, 1598886001L),
+            Seq(2, "Jane Doe Updated", 24, 1598972401L),
+            Seq(3, "Bob Smith", 14, 1599058800L),
+            Seq(4, "Alice Johnson", 49, 2L))
+        }
+      }
+    )
   }
 }

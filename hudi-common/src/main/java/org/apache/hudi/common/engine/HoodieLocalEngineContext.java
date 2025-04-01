@@ -23,6 +23,8 @@ import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodieListPairData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
@@ -71,6 +73,11 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   @Override
   public <T> HoodieData<T> emptyHoodieData() {
     return HoodieListData.eager(Collections.emptyList());
+  }
+
+  @Override
+  public <K, V> HoodiePairData<K, V> emptyHoodiePairData() {
+    return HoodieListPairData.eager(Collections.emptyList());
   }
 
   @Override

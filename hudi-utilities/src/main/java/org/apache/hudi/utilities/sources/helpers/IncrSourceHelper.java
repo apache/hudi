@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.log.InstantRange.RangeType;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -184,7 +185,7 @@ public class IncrSourceHelper {
       Option<Checkpoint> lastCheckpoint,
       MissingCheckpointStrategy missingCheckpointStrategy,
       int numInstantsFromConfig,
-      Option<SourceProfile<Integer>> latestSourceProfile) {
+      Option<SourceProfile<Integer>> latestSourceProfile, TimelineUtils.HollowCommitHandling handlingMode) {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(jssc.hadoopConfiguration()))
         .setBasePath(srcPath)
@@ -197,7 +198,7 @@ public class IncrSourceHelper {
     if (lastCheckpoint.isPresent() && !lastCheckpoint.get().getCheckpointKey().isEmpty()) {
       // Translate checkpoint
       StreamerCheckpointV2 lastStreamerCheckpointV2 = CheckpointUtils.convertToCheckpointV2ForCommitTime(
-          lastCheckpoint.get(), metaClient);
+          lastCheckpoint.get(), metaClient, handlingMode);
       startCompletionTime = lastStreamerCheckpointV2.getCheckpointKey();
       rangeType = RangeType.OPEN_CLOSED;
     } else if (missingCheckpointStrategy != null) {

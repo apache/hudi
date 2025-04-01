@@ -17,25 +17,27 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, RecordLevelIndexSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
+import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, RecordLevelIndexSupport}
+
+import org.apache.spark.sql.{DataFrame, HoodieCatalystExpressionUtils, SaveMode}
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, Literal, Or}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, HoodieCatalystExpressionUtils, SaveMode}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Properties
+
 import scala.util.Using
 
 @Tag("functional")
@@ -45,10 +47,13 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
   def testRLIWithSQL(tableType: String): Unit = {
-    var hudiOpts = commonOpts
-    hudiOpts = hudiOpts + (
+    val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      "hoodie.metadata.index.column.stats.enable" -> "false",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+
+    // some negative test cases in this class assumes
+    // only RLI being enabled. So, disabling col stats for now.
 
     val df = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -276,7 +281,8 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> tableName,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "record_key_col,name",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_key_col",
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      "hoodie.metadata.index.column.stats.enable" -> "false"
     ) ++ metadataOpts
 
     spark.sql(
@@ -292,7 +298,8 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.datasource.write.recordkey.field = 'record_key_col,name',
-         |  hoodie.enable.data.skipping = 'true'
+         |  hoodie.enable.data.skipping = 'true',
+         |  hoodie.metadata.index.column.stats.enable = 'false'
          | )
          | partitioned by(partition_key_col)
          | location '$dummyTablePath'
@@ -338,7 +345,8 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.datasource.write.recordkey.field = 'record_key_col1,record_key_col2,record_key_col3',
-         |  hoodie.enable.data.skipping = 'true'
+         |  hoodie.enable.data.skipping = 'true',
+         |  hoodie.metadata.index.column.stats.enable = 'false'
          | )
          | partitioned by(partition_key_col)
          | location '$dummyTablePath'

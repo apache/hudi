@@ -49,7 +49,7 @@ public class HoodieCDCDataBlock extends HoodieAvroDataBlock {
   public HoodieCDCDataBlock(List<HoodieRecord> records,
                             Map<HeaderMetadataType, String> header,
                             String keyField) {
-    super(records, false, header, keyField);
+    super(records, header, keyField);
   }
 
   @Override

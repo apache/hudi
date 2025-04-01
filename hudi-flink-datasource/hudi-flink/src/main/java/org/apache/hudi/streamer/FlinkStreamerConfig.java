@@ -132,7 +132,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--record-merger-strategy"}, description = "Id of record merger strategy. Hudi will pick HoodieRecordMerger implementations in record-merger-impls "
       + "which has the same record merger strategy id")
-  public String recordMergerStrategy = HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
+  public String recordMergerStrategy = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 
   @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
       + "is purely new data/inserts to gain speed).", converter = OperationConverter.class)

@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.common.model.{HoodieRecordMerger, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.hudi.HoodieOptionConfig
@@ -42,8 +41,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
       "preCombineField" -> "timestamp",
       "type" -> "mor",
       "payloadClass" -> classOf[OverwriteWithLatestAvroPayload].getName,
-      "recordMergeStrategyId" -> HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID,
-      "recordMergeMode" -> HoodieWriteConfig.RECORD_MERGE_MODE.defaultValue
+      "recordMergeStrategyId" -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
     )
     val with2 = HoodieOptionConfig.withDefaultSqlOptions(ops2)
     assertTrue(ops2 == with2)

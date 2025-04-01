@@ -24,10 +24,8 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
@@ -98,7 +96,7 @@ public class TestCompactionUtil {
         .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
         .getInstants();
     assertThat("all the instants should be in pending state", instants.size(), is(3));
-    CompactionUtil.rollbackCompaction(table);
+    CompactionUtil.rollbackCompaction(table, FlinkWriteClients.createWriteClient(conf));
     boolean allRolledBack = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstantsAsStream()
         .allMatch(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     assertTrue(allRolledBack, "all the instants should be rolled back");
@@ -174,17 +172,12 @@ public class TestCompactionUtil {
    */
   private String generateCompactionPlan() {
     HoodieCompactionOperation operation = new HoodieCompactionOperation();
-    HoodieCompactionPlan plan = new HoodieCompactionPlan(Collections.singletonList(operation), Collections.emptyMap(), 1, null, null);
+    HoodieCompactionPlan plan = new HoodieCompactionPlan(Collections.singletonList(operation), Collections.emptyMap(), 1, null, null, null);
     String instantTime = table.getMetaClient().createNewInstantTime();
     HoodieInstant compactionInstant =
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
-    try {
-      metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-          TimelineMetadataUtils.serializeCompactionPlan(plan));
-      table.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Exception scheduling compaction", ioe);
-    }
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, plan);
+    table.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
     metaClient.reloadActiveTimeline();
     return instantTime;
   }

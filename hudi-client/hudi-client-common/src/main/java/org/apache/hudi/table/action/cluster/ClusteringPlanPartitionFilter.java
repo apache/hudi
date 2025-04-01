@@ -18,12 +18,14 @@
 
 package org.apache.hudi.table.action.cluster;
 
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 
 import org.joda.time.DateTime;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -42,11 +44,11 @@ import java.util.stream.Stream;
  */
 public class ClusteringPlanPartitionFilter {
 
-  public static List<String> filter(List<String> partitions, HoodieWriteConfig config) {
+  public static Pair<List<String>, List<String>> filter(List<String> partitions, HoodieWriteConfig config) {
     ClusteringPlanPartitionFilterMode mode = config.getClusteringPlanPartitionFilterMode();
     switch (mode) {
       case NONE:
-        return partitions;
+        return Pair.of(partitions, Collections.emptyList());
       case RECENT_DAYS:
         return recentDaysFilter(partitions, config);
       case SELECTED_PARTITIONS:
@@ -58,7 +60,7 @@ public class ClusteringPlanPartitionFilter {
     }
   }
 
-  private static List<String> dayRollingFilter(List<String> partitions, HoodieWriteConfig config) {
+  private static Pair<List<String>, List<String>> dayRollingFilter(List<String> partitions, HoodieWriteConfig config) {
     int hour = DateTime.now().getHourOfDay();
     int len = partitions.size();
     List<String> selectPt = new ArrayList<>();
@@ -68,20 +70,22 @@ public class ClusteringPlanPartitionFilter {
         selectPt.add(partitions.get(i));
       }
     }
-    return selectPt;
+    return Pair.of(selectPt, Collections.emptyList());
   }
 
-  private static List<String> recentDaysFilter(List<String> partitions, HoodieWriteConfig config) {
+  private static Pair<List<String>, List<String>> recentDaysFilter(List<String> partitions, HoodieWriteConfig config) {
     int targetPartitionsForClustering = config.getTargetPartitionsForClustering();
     int skipPartitionsFromLatestForClustering = config.getSkipPartitionsFromLatestForClustering();
-    return partitions.stream()
-        .sorted(Comparator.reverseOrder())
-        .skip(Math.max(skipPartitionsFromLatestForClustering, 0))
+    int skipOffset = Math.max(skipPartitionsFromLatestForClustering, 0);
+    List<String> sortedPartitions = partitions.stream().sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+    List<String> missingPartitions = sortedPartitions.subList(0, skipOffset);
+    return Pair.of(sortedPartitions.stream()
+        .skip(skipOffset)
         .limit(targetPartitionsForClustering > 0 ? targetPartitionsForClustering : partitions.size())
-        .collect(Collectors.toList());
+        .collect(Collectors.toList()), missingPartitions);
   }
 
-  private static List<String> selectedPartitionsFilter(List<String> partitions, HoodieWriteConfig config) {
+  private static Pair<List<String>, List<String>> selectedPartitionsFilter(List<String> partitions, HoodieWriteConfig config) {
     Stream<String> filteredPartitions = partitions.stream();
 
     String beginPartition = config.getBeginPartitionForClustering();
@@ -94,6 +98,6 @@ public class ClusteringPlanPartitionFilter {
       filteredPartitions = filteredPartitions.filter(path -> path.compareTo(endPartition) <= 0);
     }
 
-    return filteredPartitions.collect(Collectors.toList());
+    return Pair.of(filteredPartitions.collect(Collectors.toList()), Collections.emptyList());
   }
 }

@@ -22,18 +22,21 @@ package org.apache.hudi.common.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.StringJoiner;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.DAYS_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.FORMAT_OPTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.REGEX_GROUP_INDEX_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.LENGTH_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.PATTERN_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.POSITION_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.REGEX_GROUP_INDEX_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.REPLACEMENT_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.TRIM_STRING_OPTION;
 
@@ -60,8 +63,7 @@ public class HoodieIndexDefinition implements Serializable {
   public HoodieIndexDefinition() {
   }
 
-  public HoodieIndexDefinition(String indexName, String indexType, String indexFunction, List<String> sourceFields,
-                               Map<String, String> indexOptions) {
+  HoodieIndexDefinition(String indexName, String indexType, String indexFunction, List<String> sourceFields, Map<String, String> indexOptions) {
     this.indexName = indexName;
     this.indexType = indexType;
     this.indexFunction = nonEmpty(indexFunction) ? indexFunction : EMPTY_STRING;
@@ -125,6 +127,53 @@ public class HoodieIndexDefinition implements Serializable {
     return indexType;
   }
 
+  public static Builder newBuilder() {
+    return new Builder();
+  }
+
+  public static class Builder {
+
+    private String indexName;
+    private String indexType;
+    private String indexFunction;
+    private List<String> sourceFields;
+    private Map<String, String> indexOptions;
+
+    public Builder() {
+      this.sourceFields = new ArrayList<>();
+      this.indexOptions = new HashMap<>();
+    }
+
+    public Builder withIndexName(String indexName) {
+      this.indexName = indexName;
+      return this;
+    }
+
+    public Builder withIndexType(String indexType) {
+      this.indexType = indexType;
+      return this;
+    }
+
+    public Builder withIndexFunction(String indexFunction) {
+      this.indexFunction = indexFunction;
+      return this;
+    }
+
+    public Builder withSourceFields(List<String> sourceFields) {
+      this.sourceFields = sourceFields;
+      return this;
+    }
+
+    public Builder withIndexOptions(Map<String, String> indexOptions) {
+      this.indexOptions = indexOptions;
+      return this;
+    }
+
+    public HoodieIndexDefinition build() {
+      return new HoodieIndexDefinition(indexName, indexType, indexFunction, sourceFields, indexOptions);
+    }
+  }
+
   @Override
   public String toString() {
     return new StringJoiner(", ", HoodieIndexDefinition.class.getSimpleName() + "[", "]")
@@ -134,5 +183,24 @@ public class HoodieIndexDefinition implements Serializable {
         .add("sourceFields=" + sourceFields)
         .add("indexOptions=" + indexOptions)
         .toString();
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof HoodieIndexDefinition)) {
+      return false;
+    }
+    HoodieIndexDefinition that = (HoodieIndexDefinition) o;
+    return getIndexName().equals(that.getIndexName()) && getIndexType().equals(that.getIndexType())
+        && getIndexFunction().equals(that.getIndexFunction()) && getSourceFields().equals(that.getSourceFields())
+        && getIndexOptions().equals(that.getIndexOptions());
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getIndexName(), getIndexType(), getIndexFunction(), getSourceFields(), getIndexOptions());
   }
 }

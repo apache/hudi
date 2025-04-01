@@ -61,6 +61,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy";
   public static final String SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY =
       "org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy";
+  public static final String SINGLE_SPARK_JOB_CONSISTENT_HASHING_EXECUTION_STRATEGY =
+      "org.apache.hudi.client.clustering.run.strategy.SingleSparkJobConsistentHashingExecutionStrategy";
   public static final String JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY =
       "org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy";
   public static final String PLAN_PARTITION_FILTER_MODE =
@@ -653,9 +655,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
           ValidationUtils.checkArgument(
               planStrategy.equalsIgnoreCase(SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY),
               "Consistent hashing bucket index only supports clustering plan strategy : " + SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
+          String clusteringConfigString = clusteringConfig.getString(EXECUTION_STRATEGY_CLASS_NAME);
           ValidationUtils.checkArgument(
-              clusteringConfig.getString(EXECUTION_STRATEGY_CLASS_NAME).equals(SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY),
-              "Consistent hashing bucket index only supports clustering execution strategy : " + SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
+              clusteringConfigString.equals(SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY) || clusteringConfigString.equals(SINGLE_SPARK_JOB_CONSISTENT_HASHING_EXECUTION_STRATEGY),
+              "Consistent hashing bucket index only supports clustering execution strategy : " + SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY + " or "
+                  + SINGLE_SPARK_JOB_CONSISTENT_HASHING_EXECUTION_STRATEGY);
         }
       }
     }
@@ -683,7 +687,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     private String getDefaultExecutionStrategyClassName(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return isConsistentHashingBucketIndex() ? SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY : SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY;
+          return isConsistentHashingBucketIndex() ? SINGLE_SPARK_JOB_CONSISTENT_HASHING_EXECUTION_STRATEGY : SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY;
         case FLINK:
         case JAVA:
           return JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY;

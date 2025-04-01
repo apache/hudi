@@ -21,27 +21,27 @@ package org.apache.hudi.table.action.cluster;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.BaseActionExecutor;
+import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringPlanStrategy;
+import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
-public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
+public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseTableServicePlanActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ClusteringPlanActionExecutor.class);
 
@@ -84,7 +84,9 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
         ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config),
             new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config);
 
-    return strategy.generateClusteringPlan();
+    Lazy<List<String>> partitions = Lazy.lazily(() -> getPartitions(strategy, TableServiceType.CLUSTER));
+
+    return strategy.generateClusteringPlan(this, partitions);
   }
 
   @Override
@@ -95,17 +97,12 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
       String action =  TimelineLayoutVersion.LAYOUT_VERSION_2.equals(table.getMetaClient().getTimelineLayoutVersion()) ? HoodieTimeline.CLUSTERING_ACTION : HoodieTimeline.REPLACE_COMMIT_ACTION;
       HoodieInstant clusteringInstant =
           instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, action, instantTime);
-      try {
-        HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
-            .setOperationType(WriteOperationType.CLUSTER.name())
-            .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
-            .setClusteringPlan(planOption.get())
-            .build();
-        table.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant,
-            TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
-      } catch (IOException ioe) {
-        throw new HoodieIOException("Exception scheduling clustering", ioe);
-      }
+      HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+          .setOperationType(WriteOperationType.CLUSTER.name())
+          .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
+          .setClusteringPlan(planOption.get())
+          .build();
+      table.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, requestedReplaceMetadata);
     }
 
     return planOption;

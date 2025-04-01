@@ -284,6 +284,24 @@
                                             "name": "value"
                                         }
                                     ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "LocalDateWrapper",
+                                    "doc": "A record wrapping Local Date type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": {
+                                                "type": "int"
+                                                // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
+                                                //       rely on logical types to do proper encoding of the native Java types,
+                                                //       and hereby have to encode statistic manually
+                                                //"logicalType": "date"
+                                            },
+                                            "name": "value"
+                                        }
+                                    ]
                                 }
                             ],
                             "default": null
@@ -309,7 +327,8 @@
                                 "org.apache.hudi.avro.model.DateWrapper",
                                 "org.apache.hudi.avro.model.DecimalWrapper",
                                 "org.apache.hudi.avro.model.TimeMicrosWrapper",
-                                "org.apache.hudi.avro.model.TimestampMicrosWrapper"
+                                "org.apache.hudi.avro.model.TimestampMicrosWrapper",
+                                "org.apache.hudi.avro.model.LocalDateWrapper"
                             ],
                             "default": null
                         },

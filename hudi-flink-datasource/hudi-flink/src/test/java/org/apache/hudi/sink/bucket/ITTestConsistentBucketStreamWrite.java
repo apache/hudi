@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink.bucket;
 
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -185,12 +185,12 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
     }
 
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
     // bulk_insert mode
     if (OptionsResolver.isBulkInsertOperation(conf)) {
       Pipelines.bulkInsert(conf, rowType, dataStream);
     } else {
-      DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
+      DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
       execEnv.addOperator(pipeline.getTransformation());
     }
     JobClient client = execEnv.executeAsync(jobName);

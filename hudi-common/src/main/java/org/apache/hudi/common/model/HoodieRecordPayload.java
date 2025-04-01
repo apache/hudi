@@ -146,14 +146,16 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
     return 0;
   }
 
-  static String getAvroPayloadForMergeMode(RecordMergeMode mergeMode) {
+  static String getAvroPayloadForMergeMode(RecordMergeMode mergeMode, String payloadClassName) {
     switch (mergeMode) {
       //TODO: After we have merge mode working for writing, we should have a dummy payload that will throw exception when used
-      default:
       case EVENT_TIME_ORDERING:
         return DefaultHoodieRecordPayload.class.getName();
       case COMMIT_TIME_ORDERING:
         return OverwriteWithLatestAvroPayload.class.getName();
+      case CUSTOM:
+      default:
+        return payloadClassName;
     }
   }
 

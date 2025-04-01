@@ -22,9 +22,11 @@ import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
+import org.apache.hudi.common.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -37,6 +39,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
@@ -69,6 +72,7 @@ import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSI
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
 import static org.apache.hudi.DataSourceReadOptions.START_COMMIT;
+import static org.apache.hudi.common.table.checkpoint.HoodieIncrSourceCheckpointValUtils.resolveToActualCheckpointVersion;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
@@ -183,14 +187,22 @@ public class HoodieIncrSource extends RowSource {
 
   @Override
   protected Option<Checkpoint> translateCheckpoint(Option<Checkpoint> lastCheckpoint) {
-    // For Hudi incremental source, we'll let #fetchNextBatch to handle it since
-    // it involves heavy lifting by loading the timeline for analysis
+    // User might override checkpoint based on
+    // - instant request time: Then we will treat it as a V1 checkpoint.
+    // - completion time: We will treat it as a normal V2 checkpoint.
+    if (!lastCheckpoint.isEmpty() && lastCheckpoint.get() instanceof UnresolvedStreamerCheckpointBasedOnCfg) {
+      lastCheckpoint = Option.of(resolveToActualCheckpointVersion((UnresolvedStreamerCheckpointBasedOnCfg) lastCheckpoint.get()));
+    }
+    // For Hudi incremental source, we'll let #fetchNextBatch to handle request time to completion time
+    // based conversion as it is heavy operation.
     return lastCheckpoint;
   }
 
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    if (CheckpointUtils.targetCheckpointV2(writeTableVersion)) {
+    String srcPath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
+    HoodieTableVersion sourceTableVersion = HoodieTableConfig.loadFromHoodieProps(new HoodieHadoopStorage(srcPath, sparkContext.hadoopConfiguration()), srcPath).getTableVersion();
+    if (sourceTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) && CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, getClass().getName())) {
       return fetchNextBatchBasedOnCompletionTime(lastCheckpoint, sourceLimit);
     } else {
       return fetchNextBatchBasedOnRequestedTime(lastCheckpoint, sourceLimit);
@@ -215,7 +227,7 @@ public class HoodieIncrSource extends RowSource {
     IncrementalQueryAnalyzer analyzer = IncrSourceHelper.getIncrementalQueryAnalyzer(
         sparkContext, srcPath, lastCheckpoint, missingCheckpointStrategy,
         getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH),
-        getLatestSourceProfile());
+        getLatestSourceProfile(), getHollowCommitHandleMode(props));
     QueryContext queryContext = analyzer.analyze();
     Option<InstantRange> instantRange = queryContext.getInstantRange();
 
@@ -372,8 +384,7 @@ public class HoodieIncrSource extends RowSource {
           .option(START_COMMIT().key(), queryInfo.getStartInstant())
           .option(END_COMMIT().key(), queryInfo.getEndInstant())
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-              props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-                  INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
+              props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(), "false"))
           .option(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), handlingMode.name())
           .load(srcPath);
     } else {

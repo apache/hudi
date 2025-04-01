@@ -24,8 +24,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.Partitioner;
@@ -39,11 +41,14 @@ import java.util.stream.Collectors;
 public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload> extends RDDBucketIndexPartitioner<T> {
 
   private final boolean isNonBlockingConcurrencyControl;
+  private final NumBucketsFunction numBucketsFunction;
 
   public RDDSimpleBucketBulkInsertPartitioner(HoodieTable table) {
     super(table, null, false);
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSimpleBucketIndex);
-    this.isNonBlockingConcurrencyControl = table.getConfig().isNonBlockingConcurrencyControl();
+    HoodieWriteConfig writeConfig = table.getConfig();
+    this.isNonBlockingConcurrencyControl = writeConfig.isNonBlockingConcurrencyControl();
+    this.numBucketsFunction = NumBucketsFunction.fromWriteConfig(writeConfig);
   }
 
   @Override
@@ -57,14 +62,14 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
     return doPartition(records, new Partitioner() {
       @Override
       public int numPartitions() {
-        return index.getNumBuckets() * partitionMapper.size();
+        return partitionMapper.values().stream().mapToInt(Map::size).sum();
       }
 
       @Override
       public int getPartition(Object key) {
         HoodieKey hoodieKey = (HoodieKey) key;
         String partitionPath = hoodieKey.getPartitionPath();
-        int bucketID = index.getBucketID(hoodieKey);
+        int bucketID = index.getBucketID(hoodieKey, numBucketsFunction.getNumBuckets(partitionPath));
         String fileID = partitionMapper.get(partitionPath).get(bucketID);
         return fileIdPrefixToBucketIndex.get(fileID);
       }
@@ -75,11 +80,11 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
                                                        Map<String, Integer> fileIdPrefixToBucketIndex) {
 
     HoodieSimpleBucketIndex index = (HoodieSimpleBucketIndex) table.getIndex();
-    int numBuckets = index.getNumBuckets();
     return records
         .map(HoodieRecord::getPartitionPath)
         .distinct().collect().stream()
         .collect(Collectors.toMap(p -> p, p -> {
+          // p ==> partition path
           Map<Integer, HoodieRecordLocation> locationMap = index.loadBucketIdToFileIdMappingForPartition(table, p);
           Map<Integer, String> bucketIdToFileIdPrefixMap = new HashMap<>();
           HashSet<Integer> existsBucketID = new HashSet<>();
@@ -94,6 +99,7 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
             doAppend.add(true);
           });
 
+          int numBuckets = numBucketsFunction.getNumBuckets(p);
           // Generate a file that does not exist
           for (int i = 0; i < numBuckets; i++) {
             if (!existsBucketID.contains(i)) {

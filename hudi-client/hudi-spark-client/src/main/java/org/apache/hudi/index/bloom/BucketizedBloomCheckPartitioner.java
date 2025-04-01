@@ -20,7 +20,6 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.NumericUtils;
-import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.Partitioner;
 import org.slf4j.Logger;
@@ -31,6 +30,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import scala.Tuple2;
 
 /**
  * Partitions bloom filter checks by spreading out comparisons across buckets of work.
@@ -89,7 +90,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     // of buckets and assigns buckets in the same order as file groups. If we were to simply round robin, then buckets
     // for a file group is more or less guaranteed to be placed on different partitions all the time.
     int minBucketsPerPartition = Math.max((int) Math.floor((1.0 * totalBuckets) / partitions), 1);
-    LOG.info(String.format("TotalBuckets %d, min_buckets/partition %d", totalBuckets, minBucketsPerPartition));
+    LOG.info("TotalBuckets {}, min_buckets/partition {}, partitions {}", totalBuckets, minBucketsPerPartition, partitions);
     int[] bucketsFilled = new int[partitions];
     Map<HoodieFileGroupId, AtomicInteger> bucketsFilledPerFileGroup = new HashMap<>();
     int partitionIndex = 0;
@@ -143,11 +144,11 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
 
   @Override
   public int getPartition(Object key) {
-    final Pair<HoodieFileGroupId, String> parts = (Pair<HoodieFileGroupId, String>) key;
+    final Tuple2<HoodieFileGroupId, String> parts = (Tuple2<HoodieFileGroupId, String>) key;
     // TODO replace w/ more performant hash
-    final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", parts.getRight());
-    final List<Integer> candidatePartitions = fileGroupToPartitions.get(parts.getLeft());
-    final int idx = (int) Math.floorMod((int) hashOfKey, candidatePartitions.size());
+    final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", parts._2());
+    final List<Integer> candidatePartitions = fileGroupToPartitions.get(parts._1());
+    final int idx = Math.floorMod((int) hashOfKey, candidatePartitions.size());
     assert idx >= 0;
     return candidatePartitions.get(idx);
   }

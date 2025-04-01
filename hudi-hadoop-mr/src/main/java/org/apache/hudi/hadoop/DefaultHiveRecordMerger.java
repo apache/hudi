@@ -64,6 +64,6 @@ public class DefaultHiveRecordMerger extends HoodieHiveRecordMerger {
 
   @Override
   public String getMergingStrategy() {
-    return HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
+    return HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
   }
 }

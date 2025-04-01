@@ -31,6 +31,7 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -182,11 +183,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       List<T> records = readRecordsFromFileGroup(getStorageConf(), getBasePath(), metaClient,  fileSlice,
           avroSchema, RecordMergeMode.COMMIT_TIME_ORDERING, false);
       HoodieReaderContext<T> readerContext = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf());
-      Comparable castedOrderingField = readerContext.castValue(100, Schema.Type.STRING);
+      Comparable orderingFieldValue = "100";
       for (Boolean isCompressionEnabled : new boolean[] {true, false}) {
         try (ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> spillableMap =
                  new ExternalSpillableMap<>(16L, baseMapPath, new DefaultSizeEstimator(),
-                     new HoodieRecordSizeEstimator(avroSchema), diskMapType, isCompressionEnabled)) {
+                     new HoodieRecordSizeEstimator(avroSchema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, getClass().getSimpleName())) {
           Long position = 0L;
           for (T record : records) {
             String recordKey = readerContext.getRecordKey(record, avroSchema);
@@ -200,8 +201,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             spillableMap.put(position++,
                 Pair.of(
                     Option.ofNullable(readerContext.seal(record)),
-                    readerContext.generateMetadataForRecord(recordKey,
-                        dataGen.getPartitionPaths()[0], 100, orderingFieldType)));
+                    readerContext.generateMetadataForRecord(
+                        recordKey, dataGen.getPartitionPaths()[0],
+                        readerContext.convertValueToEngineType(orderingFieldValue))));
           }
 
           assertEquals(records.size() * 2, spillableMap.size());
@@ -219,7 +221,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             assertEquals(positionBased.getRight().get(INTERNAL_META_RECORD_KEY), recordKey);
             assertEquals(avroSchema, readerContext.getSchemaFromMetadata(keyBased.getRight()));
             assertEquals(dataGen.getPartitionPaths()[0], positionBased.getRight().get(INTERNAL_META_PARTITION_PATH));
-            assertEquals(castedOrderingField, positionBased.getRight().get(INTERNAL_META_ORDERING_FIELD));
+            assertEquals(readerContext.convertValueToEngineType(orderingFieldValue),
+                positionBased.getRight().get(INTERNAL_META_ORDERING_FIELD));
           }
 
         }
@@ -271,7 +274,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(storageConf);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
     FileSystemViewManager viewManager = FileSystemViewManager.createViewManager(
-        engineContext, FileSystemViewStorageConfig.newBuilder().build(),
+        engineContext,
+        metadataConfig,
+        FileSystemViewStorageConfig.newBuilder().build(),
         HoodieCommonConfig.newBuilder().build(),
         mc -> HoodieTableMetadata.create(
             engineContext, mc.getStorage(), metadataConfig, tablePath));
@@ -354,7 +359,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     if (fileSlice.getBaseFile().get().getBootstrapBaseFile().isPresent()) {
       //TODO: [HUDI-8169] this code path will not hit until we implement bootstrap tests
-      Pair<List<Schema.Field>, List<Schema.Field>> dataAndMetaCols = HoodieFileGroupReaderSchemaHandler.getDataAndMetaCols(requestedSchema);
+      Pair<List<Schema.Field>, List<Schema.Field>> dataAndMetaCols = FileGroupReaderSchemaHandler.getDataAndMetaCols(requestedSchema);
       return !dataAndMetaCols.getLeft().isEmpty() && !dataAndMetaCols.getRight().isEmpty();
     }
     return false;

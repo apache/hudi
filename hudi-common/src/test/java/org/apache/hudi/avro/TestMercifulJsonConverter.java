@@ -21,26 +21,33 @@ package org.apache.hudi.avro;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieJsonToAvroConversionException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_ENCODED_DECIMAL_SCHEMA;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
@@ -64,7 +71,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     rec.put("favorite_number", number);
     rec.put("favorite_color", color);
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, simpleSchema));
+    assertEquals(rec, CONVERTER.convert(json, simpleSchema));
   }
 
   @ParameterizedTest
@@ -78,11 +85,9 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     rec.put("favorite_number", 1337);
     rec.put("favorite_color", "10");
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, simpleSchema));
+    assertEquals(rec, CONVERTER.convert(json, simpleSchema));
   }
 
-  private static final String DECIMAL_AVRO_FILE_PATH = "/decimal-logical-type.avsc";
-  private static final String DECIMAL_FIXED_AVRO_FILE_PATH = "/decimal-logical-type-fixed-type.avsc";
   /**
    * Covered case:
    * Avro Logical Type: Decimal
@@ -122,7 +127,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
   @ParameterizedTest
   @MethodSource("decimalGoodCases")
   void decimalLogicalTypeTest(String avroFilePath, String groundTruth, String strInput,
-                              Double numInput, boolean testFixedByteArray) throws IOException {
+                              Number numInput, boolean testFixedByteArray) throws IOException {
     BigDecimal bigDecimal = new BigDecimal(groundTruth);
     Map<String, Object> data = new HashMap<>();
 
@@ -153,7 +158,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     }
 
     // Decide the decimal field expected output according to the test dimension.
-    if (avroFilePath.equals(DECIMAL_AVRO_FILE_PATH)) {
+    if (avroFilePath.equals(DECIMAL_AVRO_FILE_PATH) || avroFilePath.equals(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH)) {
       record.put("decimalField", conv.toBytes(bigDecimal, decimalFieldSchema, decimalFieldSchema.getLogicalType()));
     } else {
       record.put("decimalField", conv.toFixed(bigDecimal, decimalFieldSchema, decimalFieldSchema.getLogicalType()));
@@ -162,11 +167,30 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     String json = MAPPER.writeValueAsString(data);
 
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
-  private static final String DURATION_AVRO_FILE_PATH = "/duration-logical-type.avsc";
-  private static final String DURATION_AVRO_FILE_PATH_INVALID = "/duration-logical-type-invalid.avsc";
+  // tests cases where decimals with fraction `.0` can be interpreted as having scale > 0
+  @ParameterizedTest
+  @MethodSource("zeroScaleDecimalCases")
+  void zeroScaleDecimalConversion(String inputValue, String expected, boolean shouldConvert) {
+    Schema schema = new Schema.Parser().parse("{\"namespace\": \"example.avro\",\"type\": \"record\",\"name\": \"decimalLogicalType\",\"fields\": [{\"name\": \"decimalField\", "
+        + "\"type\": {\"type\": \"bytes\", \"logicalType\": \"decimal\", \"precision\": 38, \"scale\": 0}}]}");
+    String json = String.format("{\"decimalField\":%s}", inputValue);
+
+    if (shouldConvert) {
+      GenericRecord record = new GenericData.Record(schema);
+      Conversions.DecimalConversion conv = new Conversions.DecimalConversion();
+      Schema decimalFieldSchema = schema.getField("decimalField").schema();
+      record.put("decimalField", conv.toBytes(new BigDecimal(expected), decimalFieldSchema, decimalFieldSchema.getLogicalType()));
+
+      GenericRecord real = CONVERTER.convert(json, schema);
+      assertEquals(record, real);
+    } else {
+      assertThrows(HoodieJsonToAvroConversionException.class, () -> CONVERTER.convert(json, schema));
+    }
+  }
+
   /**
    * Covered case:
    * Avro Logical Type: Duration
@@ -196,7 +220,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     durationRecord.put("duration", new GenericData.Fixed(schema.getField("duration").schema(), buffer.array()));
 
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(durationRecord, real);
+    assertEquals(durationRecord, real);
   }
 
   @ParameterizedTest
@@ -214,8 +238,6 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
   }
 
 
-  private static final String DATE_AVRO_FILE_PATH = "/date-type.avsc";
-  private static final String DATE_AVRO_INVALID_FILE_PATH = "/date-type-invalid.avsc";
   /**
    * Covered case:
    * Avro Logical Type: Date
@@ -235,7 +257,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     data.put("dateField", dateInput);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   /**
@@ -285,11 +307,9 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     data.put("localTimestampMicrosField", timeMicro);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
-  private static final String LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH = "/local-timestamp-millis-logical-type.avsc";
-  private static final String LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH = "/local-timestamp-micros-logical-type.avsc";
   @ParameterizedTest
   @MethodSource("localTimestampBadCaseProvider")
   void localTimestampLogicalTypeBadTest(
@@ -305,7 +325,6 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     });
   }
 
-  private static final String TIMESTAMP_AVRO_FILE_PATH = "/timestamp-logical-type2.avsc";
   /**
    * Covered case:
    * Avro Logical Type: localTimestampMillisField & localTimestampMillisField
@@ -332,7 +351,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     data.put("timestampMicrosField", timeMicro);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   @ParameterizedTest
@@ -386,7 +405,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     data.put("timeMillisField", timeMilli);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   @ParameterizedTest
@@ -434,7 +453,34 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     data.put("uuidField", uuid);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
+  }
+
+  @ParameterizedTest
+  @MethodSource("nestedRecord")
+  void nestedRecordTest(String contactInput, boolean isString) {
+    String nestedSchemaStr =
+        "{\"type\":\"record\",\"name\":\"User\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"},"
+            + "{\"name\":\"contact\",\"type\":{\"type\":\"record\",\"name\":\"Contact\","
+            + "\"fields\":[{\"name\":\"email\",\"type\":\"string\"}]}}]}";
+    String json = isString
+        ? String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":\"%s\"}}", contactInput)
+        : String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":%s}}", contactInput);
+    Schema nestedSchema = new Schema.Parser().parse(nestedSchemaStr);
+    GenericRecord userRecord = new GenericData.Record(nestedSchema);
+
+    // Create the nested record for Contact
+    Schema contactSchema = nestedSchema.getField("contact").schema();
+    GenericRecord contactRecord = new GenericData.Record(contactSchema);
+
+    // Set the email field in the nested Contact record
+    contactRecord.put("email", contactInput);
+
+    // Set the fields in the outer User record
+    userRecord.put("name", "Jane Smith");
+    userRecord.put("contact", contactRecord);
+
+    assertEquals(userRecord, CONVERTER.convert(json, nestedSchema));
   }
 
   @Test
@@ -456,7 +502,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     rec.put("favorite__number", number);
     rec.put("favorite__color__", color);
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
+    assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
   }
 
   @Test
@@ -479,6 +525,63 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     rec.put("favorite_number", number);
     rec.put("favorite_color", color);
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
+    assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
+  }
+
+  @ParameterizedTest
+  @MethodSource("encodedDecimalScalePrecisionProvider")
+  void testEncodedDecimal(int scale, int precision) throws JsonProcessingException {
+    Random rand = new Random();
+    BigDecimal decfield = BigDecimal.valueOf(rand.nextDouble())
+        .setScale(scale, RoundingMode.HALF_UP).round(new MathContext(precision, RoundingMode.HALF_UP));
+    Map<String, Object> data = new HashMap<>();
+    data.put("_row_key", "mykey");
+    long timestamp = 214523432;
+    data.put("timestamp", timestamp);
+    data.put("rider", "myrider");
+    data.put("decfield", Base64.getEncoder().encodeToString(decfield.unscaledValue().toByteArray()));
+    data.put("driver", "mydriver");
+    data.put("fare", rand.nextDouble() * 100);
+    data.put("_hoodie_is_deleted", false);
+    String json = MAPPER.writeValueAsString(data);
+    Schema tripSchema = new Schema.Parser().parse(
+        TRIP_ENCODED_DECIMAL_SCHEMA.replace("6", Integer.toString(scale)).replace("10", Integer.toString(precision)));
+    GenericRecord genrec = CONVERTER.convert(json, tripSchema);
+    Schema decimalFieldSchema = tripSchema.getField("decfield").schema();
+    BigDecimal decoded = HoodieAvroUtils.convertBytesToBigDecimal(((ByteBuffer) genrec.get("decfield")).array(),
+        (LogicalTypes.Decimal) decimalFieldSchema.getLogicalType());
+    assertEquals(decfield, decoded);
+  }
+
+  @ParameterizedTest
+  @MethodSource("encodedDecimalFixedScalePrecisionProvider")
+  void testEncodedDecimalAvroSparkPostProcessorCase(int size, int scale, int precision) throws JsonProcessingException {
+    Random rand = new Random();
+    String postProcessSchemaString = String.format("{\"type\":\"record\",\"name\":\"tripUberRec\","
+        + "\"fields\":[{\"name\":\"timestamp\",\"type\":\"long\",\"doc\":\"\"},{\"name\":\"_row_key\","
+        + "\"type\":\"string\",\"doc\":\"\"},{\"name\":\"rider\",\"type\":\"string\",\"doc\":\"\"},"
+        + "{\"name\":\"decfield\",\"type\":{\"type\":\"fixed\",\"name\":\"fixed\","
+        + "\"namespace\":\"tripUberRec.decfield\",\"size\":%d,\"logicalType\":\"decimal\","
+        + "\"precision\":%d,\"scale\":%d},\"doc\":\"\"},{\"name\":\"driver\",\"type\":\"string\","
+        + "\"doc\":\"\"},{\"name\":\"fare\",\"type\":\"double\",\"doc\":\"\"},{\"name\":\"_hoodie_is_deleted\","
+        + "\"type\":\"boolean\",\"doc\":\"\"}]}", size, precision, scale);
+    Schema postProcessSchema = new Schema.Parser().parse(postProcessSchemaString);
+    BigDecimal decfield = BigDecimal.valueOf(rand.nextDouble())
+        .setScale(scale, RoundingMode.HALF_UP).round(new MathContext(precision, RoundingMode.HALF_UP));
+    Map<String, Object> data = new HashMap<>();
+    data.put("_row_key", "mykey");
+    long timestamp = 214523432;
+    data.put("timestamp", timestamp);
+    data.put("rider", "myrider");
+    data.put("decfield", Base64.getEncoder().encodeToString(decfield.unscaledValue().toByteArray()));
+    data.put("driver", "mydriver");
+    data.put("fare", rand.nextDouble() * 100);
+    data.put("_hoodie_is_deleted", false);
+    String json = MAPPER.writeValueAsString(data);
+    GenericRecord genrec = CONVERTER.convert(json, postProcessSchema);
+    GenericData.Fixed fixed = (GenericData.Fixed) genrec.get("decfield");
+    Conversions.DecimalConversion decimalConverter = new Conversions.DecimalConversion();
+    Schema decimalFieldSchema = postProcessSchema.getField("decfield").schema();
+    assertEquals(decfield, decimalConverter.fromFixed(fixed, decimalFieldSchema, decimalFieldSchema.getLogicalType()));
   }
 }

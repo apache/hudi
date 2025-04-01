@@ -114,10 +114,10 @@ spark-3.5.0-bin-hadoop3/bin/spark-shell \
 
 To build for integration tests that include `hudi-integ-test-bundle`, use `-Dintegration-tests`.
 
-To build the Javadoc for all Java and Scala classes:
+To build the Javadoc for all Java and Scala classes (project should be already compiled):
 ```
 # Javadoc generated under target/site/apidocs
-mvn clean javadoc:aggregate -Pjavadocs
+mvn javadoc:aggregate -Pjavadocs
 ```
 
 ### Build with different Spark versions

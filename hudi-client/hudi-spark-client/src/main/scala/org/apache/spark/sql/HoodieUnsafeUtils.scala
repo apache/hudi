@@ -19,7 +19,6 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.{HoodieUnsafeRDD, SparkAdapterSupport}
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
@@ -27,6 +26,8 @@ import org.apache.spark.sql.catalyst.plans.physical.{Partitioning, UnknownPartit
 import org.apache.spark.sql.execution.LogicalRDD
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.MutablePair
+
+import scala.collection.JavaConverters
 
 /**
  * Suite of utilities helping in handling instances of [[HoodieUnsafeRDD]]

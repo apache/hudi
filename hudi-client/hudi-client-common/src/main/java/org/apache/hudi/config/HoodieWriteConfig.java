@@ -67,6 +67,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
+import org.apache.hudi.estimator.AverageRecordSizeEstimator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -75,6 +76,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.storage.StoragePath;
@@ -104,12 +106,14 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieMemoryConfig.DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
 /**
@@ -164,7 +168,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
-      .defaultValue("ts")
+      .noDefaultValue()
       .withDocumentation("Field used in preCombining before actual write. When two records have the same key value, "
           + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)");
 
@@ -179,7 +183,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   // This ConfigProperty is also used in SQL options which expect String type
   public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.write.record.merge.mode")
-      .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
+      .noDefaultValue("COMMIT_TIME_ORDERING if ordering field is not set; EVENT_TIME_ORDERING if ordering field is set")
       .sinceVersion("1.0.0")
       .withDocumentation(RecordMergeMode.class);
 
@@ -209,6 +213,29 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator` "
           + "extract a key out of incoming records.");
 
+  public static final ConfigProperty<String> RECORD_SIZE_ESTIMATOR_CLASS_NAME = ConfigProperty
+      .key("hoodie.record.size.estimator.class")
+      .defaultValue(AverageRecordSizeEstimator.class.getName())
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Class that estimates the size of records written by implementing "
+          + "`org.apache.hudi.estimator.RecordSizeEstimator`. Default implementation is `org.apache.hudi.estimator.AverageRecordSizeEstimator`");
+
+  public static final ConfigProperty<Integer> RECORD_SIZE_ESTIMATOR_MAX_COMMITS = ConfigProperty
+      .key("_hoodie.record.size.estimator.max.commits")
+      .defaultValue(5)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("The maximum number of commits that will be read to estimate the avg record size. "
+          + "This makes sure we parse a limited number of commit metadata, as parsing the entire active timeline can be expensive and unnecessary.");
+
+  public static final ConfigProperty<String> RECORD_SIZE_ESTIMATOR_AVERAGE_METADATA_SIZE = ConfigProperty
+      .key("hoodie.record.size.estimator.average.metadata.size")
+      .defaultValue("0")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("The approximate metadata size in bytes to subtract from the file size when estimating the record size.");
+
   public static final ConfigProperty<String> WRITE_EXECUTOR_TYPE = ConfigProperty
       .key("hoodie.write.executor.type")
       .defaultValue(ExecutorType.SIMPLE.name())
@@ -231,6 +258,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Enables a more efficient mechanism for rollbacks based on the marker files generated "
           + "during the writes. Turned on by default.");
+
+  public static final ConfigProperty<String> FAIL_JOB_ON_DUPLICATE_DATA_FILE_DETECTION = ConfigProperty
+      .key("hoodie.fail.job.on.duplicate.data.file.detection")
+      .defaultValue("false")
+      .withDocumentation("If config is enabled, entire job is failed on invalid file detection");
 
   public static final ConfigProperty<String> TIMELINE_LAYOUT_VERSION_NUM = ConfigProperty
       .key("hoodie.timeline.layout.version")
@@ -267,6 +299,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Schema string representing the latest schema of the table. Hudi passes this to "
           + "implementations of evolution of schema");
+
+  public static final ConfigProperty<Boolean> ENABLE_SCHEMA_CONFLICT_RESOLUTION = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "schema.conflict.resolution.enable")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("If turned on, we detect and abort incompatible concurrent schema evolution.");
 
   public static final ConfigProperty<String> AVRO_SCHEMA_VALIDATE_ENABLE = ConfigProperty
       .key("hoodie.avro.schema.validate")
@@ -638,6 +677,13 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "a projection of the incoming dataset might be used to update the records in the existing table, "
           + "prompting us to override the writer's schema");
 
+  public static final ConfigProperty<Long> CDC_FILE_GROUP_ITERATOR_MEMORY_SPILL_BYTES = ConfigProperty
+      .key("hoodie.cdc.file.group.iterator.memory.spill.bytes")
+      .defaultValue(DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
+      .markAdvanced()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Amount of memory in bytes to be used in bytes for CDCFileGroupIterator holding data in-memory, before spilling to disk.");
+
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
@@ -808,6 +854,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Avro schema of the partial updates. This is automatically set by the "
           + "Hudi write client and user is not expected to manually change the value.");
 
+  public static final ConfigProperty<Boolean> INCREMENTAL_TABLE_SERVICE_ENABLED = ConfigProperty
+      .key("hoodie.table.services.incremental.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -835,7 +888,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private HoodieStorageConfig storageConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private HoodieIndexingConfig indexingConfig;
-  private EngineType engineType;
+  private final EngineType engineType;
 
   /**
    * @deprecated Use {@link #TBL_NAME} and its methods instead
@@ -1299,6 +1352,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(TAGGED_RECORD_STORAGE_LEVEL_VALUE);
   }
 
+  public Boolean isSourceRddPersisted() {
+    return getBoolean(ERROR_TABLE_PERSIST_SOURCE_RDD);
+  }
+
   public String getInternalSchema() {
     return getString(INTERNAL_SCHEMA_STRING);
   }
@@ -1416,6 +1473,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldRollbackUsingMarkers() {
     return getBoolean(ROLLBACK_USING_MARKERS_ENABLE);
+  }
+
+  public boolean shouldFailOnDuplicateDataFileDetection() {
+    return getBoolean(FAIL_JOB_ON_DUPLICATE_DATA_FILE_DETECTION);
   }
 
   public int getWriteBufferLimitBytes() {
@@ -1622,6 +1683,18 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getCopyOnWriteRecordSizeEstimate() {
     return getInt(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
+  }
+
+  public String getRecordSizeEstimator() {
+    return getStringOrDefault(RECORD_SIZE_ESTIMATOR_CLASS_NAME);
+  }
+
+  public int getRecordSizeEstimatorMaxCommits() {
+    return getIntOrDefault(RECORD_SIZE_ESTIMATOR_MAX_COMMITS);
+  }
+
+  public long getRecordSizeEstimatorAverageMetadataSize() {
+    return Long.parseLong(getStringOrDefault(RECORD_SIZE_ESTIMATOR_AVERAGE_METADATA_SIZE));
   }
 
   public boolean allowMultipleCleans() {
@@ -1882,6 +1955,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieIndex.IndexType.valueOf(getString(HoodieIndexConfig.INDEX_TYPE));
   }
 
+  public String getBucketIndexPartitionExpression() {
+    return getString(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS);
+  }
+
+  public String getBucketIndexPartitionRuleType() {
+    return getString(HoodieIndexConfig.BUCKET_INDEX_PARTITION_RULE_TYPE);
+  }
+
   public String getIndexClass() {
     return getString(HoodieIndexConfig.INDEX_CLASS_NAME);
   }
@@ -2039,16 +2120,88 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING);
   }
 
+  public boolean isBloomIndexFileGroupIdKeySortingEnabled() {
+    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_FILE_GROUP_ID_KEY_SORTING);
+  }
+
+  /**
+   * Determines if the metadata bloom filter index is enabled.
+   *
+   * <p>The bloom filter index is enabled if:
+   * <ul>
+   *   <li>The metadata table is enabled and bloom filter index is enabled in the metadata configuration, or</li>
+   *   <li>The bloom filter index is not explicitly marked for dropping in the metadata configuration.</li>
+   * </ul>
+   *
+   * @return {@code true} if the metadata bloom filter index is enabled, {@code false} otherwise.
+   */
   public boolean isMetadataBloomFilterIndexEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled();
+    return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
   }
 
+  /**
+   * Determines if the metadata column stats index is enabled.
+   *
+   * <p>The column stats index is enabled if:
+   * <ul>
+   *   <li>The metadata table is enabled and column stats index is enabled in the metadata configuration, or</li>
+   *   <li>The column stats index is not explicitly marked for dropping in the metadata configuration.</li>
+   * </ul>
+   *
+   * @return {@code true} if the metadata column stats index is enabled, {@code false} otherwise.
+   */
   public boolean isMetadataColumnStatsIndexEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
+    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.COLUMN_STATS.getPartitionPath());
   }
 
+  /**
+   * Determines if the partition stats index is enabled.
+   *
+   * <p>The partition stats index is enabled if:
+   * <ul>
+   *   <li>The column stats is enabled. Partition stats cannot be created without column stats.</li>
+   *   <li>The metadata table is enabled and partition stats index is enabled in the metadata configuration, or</li>
+   *   <li>The partition stats index is not explicitly marked for dropping in the metadata configuration.</li>
+   * </ul>
+   *
+   * @return {@code true} if the partition stats index is enabled, {@code false} otherwise.
+   */
   public boolean isPartitionStatsIndexEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled();
+    if (isMetadataColumnStatsIndexEnabled()) {
+      return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+    }
+    return false;
+  }
+
+  /**
+   * Determines if the record index is enabled.
+   *
+   * <p>The record index is enabled if:
+   * <ul>
+   *   <li>The record index is enabled in the metadata configuration, or</li>
+   *   <li>The record index is not explicitly marked for dropping in the metadata configuration.</li>
+   * </ul>
+   *
+   * @return {@code true} if the record index is enabled, {@code false} otherwise.
+   */
+  public boolean isRecordIndexEnabled() {
+    return metadataConfig.isRecordIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.RECORD_INDEX.getPartitionPath());
+  }
+
+  /**
+   * Checks if a specific metadata index is marked for dropping based on the metadata configuration.
+   *
+   * <p>An index is considered marked for dropping if:
+   * <ul>
+   *   <li>The metadata configuration specifies a non-empty index to drop, and</li>
+   *   <li>The specified index matches the given index name.</li>
+   * </ul>
+   *
+   * @param indexName the name of the metadata index to check
+   * @return {@code true} if the specified metadata index is marked for dropping, {@code false} otherwise.
+   */
+  public boolean isDropMetadataIndex(String indexName) {
+    return StringUtils.nonEmpty(getMetadataConfig().getMetadataIndexToDrop()) && getMetadataConfig().getMetadataIndexToDrop().equals(indexName);
   }
 
   public int getPartitionStatsIndexParallelism() {
@@ -2177,6 +2330,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getPartialUpdateSchema() {
     return getString(WRITE_PARTIAL_UPDATE_SCHEMA);
+  }
+
+  public boolean isIncrementalTableServiceEnabled() {
+    return getBoolean(INCREMENTAL_TABLE_SERVICE_ENABLED);
   }
 
   public double getParquetCompressionRatio() {
@@ -2556,10 +2713,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE);
   }
 
-  public boolean isRecordIndexEnabled() {
-    return metadataConfig.isRecordIndexEnabled();
-  }
-
   public int getRecordIndexMinFileGroupCount() {
     return metadataConfig.getRecordIndexMinFileGroupCount();
   }
@@ -2701,14 +2854,14 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Returns whether the explicit guard of lock is required.
    */
   public boolean isLockRequired() {
-    return !isDefaultLockProvider() || getWriteConcurrencyMode().supportsMultiWriter();
+    return isLockProviderSet() || getWriteConcurrencyMode().supportsMultiWriter();
   }
 
   /**
    * Returns whether the lock provider is default.
    */
-  private boolean isDefaultLockProvider() {
-    return HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue().equals(getLockProviderClass());
+  private boolean isLockProviderSet() {
+    return getLockProviderClass() != null;
   }
 
   /**
@@ -2801,7 +2954,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isCleanConfigSet = false;
     private boolean isArchivalConfigSet = false;
     private boolean isClusteringConfigSet = false;
-    private boolean isOptimizeConfigSet = false;
+    private final boolean isOptimizeConfigSet = false;
     private boolean isMetricsConfigSet = false;
     private boolean isBootstrapConfigSet = false;
     private boolean isMemoryConfigSet = false;
@@ -2920,6 +3073,21 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withKeyGenerator(String keyGeneratorClass) {
       writeConfig.setValue(KEYGENERATOR_CLASS_NAME, keyGeneratorClass);
+      return this;
+    }
+
+    public Builder withRecordSizeEstimator(String recordSizeEstimator) {
+      writeConfig.setValue(RECORD_SIZE_ESTIMATOR_CLASS_NAME, recordSizeEstimator);
+      return this;
+    }
+
+    public Builder withRecordSizeEstimatorMaxCommits(int maxCommits) {
+      writeConfig.setValue(RECORD_SIZE_ESTIMATOR_MAX_COMMITS, String.valueOf(maxCommits));
+      return this;
+    }
+
+    public Builder withRecordSizeEstimatorAverageMetadataSize(long avgMetadataSize) {
+      writeConfig.setValue(RECORD_SIZE_ESTIMATOR_AVERAGE_METADATA_SIZE, String.valueOf(avgMetadataSize));
       return this;
     }
 
@@ -3341,6 +3509,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withIncrementalTableServiceEnabled(boolean incrementalTableServiceEnabled) {
+      writeConfig.setValue(INCREMENTAL_TABLE_SERVICE_ENABLED, String.valueOf(incrementalTableServiceEnabled));
+      return this;
+    }
+
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
@@ -3407,7 +3580,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
       // for a single writer scenario, with all table services inline, lets set InProcessLockProvider
-      if (writeConfig.getWriteConcurrencyMode() == WriteConcurrencyMode.SINGLE_WRITER && !writeConfig.areAnyTableServicesAsync()) {
+      if (writeConfig.isAutoAdjustLockConfigs() && writeConfig.getWriteConcurrencyMode() == WriteConcurrencyMode.SINGLE_WRITER && !writeConfig.areAnyTableServicesAsync()) {
         if (writeConfig.getLockProviderClass() != null && !writeConfig.getLockProviderClass().equals(InProcessLockProvider.class.getCanonicalName())) {
           // add logs only when explicitly overridden by the user.
           LOG.warn(String.format("For a single writer mode, overriding lock provider class (%s) to %s. So, user configured lock provider %s may not take effect",

@@ -18,9 +18,11 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -39,13 +41,14 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_TIME_FORMATTER;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -81,7 +84,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testSerDe() {
+  public void testSerDe() throws IOException {
     // check if this object is serialized and de-serialized, we are able to read from the file system
     HoodieTableMetaClient deserializedMetaClient =
         HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
@@ -89,24 +92,27 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieActiveTimeline commitTimeline = deserializedMetaClient.getActiveTimeline();
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createNewInstant(instant);
-    commitTimeline.saveAsComplete(instant, Option.of(getUTF8Bytes("test-detail")));
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata("key", "val");
+    commitTimeline.saveAsComplete(instant, Option.of(metadata));
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = commitTimeline.getInstantsAsStream().findFirst().get();
     assertTrue(completedInstant.isCompleted());
     assertEquals(completedInstant.requestedTime(), instant.requestedTime());
-    assertArrayEquals(getUTF8Bytes("test-detail"), commitTimeline.getInstantDetails(completedInstant).get(),
-        "Commit value should be \"test-detail\"");
+    assertEquals("val", metaClient.getActiveTimeline().readCommitMetadata(completedInstant).getExtraMetadata().get("key"));
   }
 
   @Test
-  public void testCommitTimeline() {
+  public void testCommitTimeline() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1");
     activeTimeline.createNewInstant(instant);
-    activeTimeline.saveAsComplete(instant, Option.of(getUTF8Bytes("test-detail")));
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata("key", "val");
+    activeTimeline.saveAsComplete(instant, Option.of(metadata));
 
     // Commit timeline should not auto-reload every time getActiveCommitTimeline(), it should be cached
     activeTimeline = metaClient.getActiveTimeline();
@@ -119,8 +125,39 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
     assertTrue(completedInstant.isCompleted());
     assertTrue(completedInstant.requestedTime().equals(instant.requestedTime()));
-    assertArrayEquals(getUTF8Bytes("test-detail"), activeCommitTimeline.getInstantDetails(completedInstant).get(),
-        "Commit value should be \"test-detail\"");
+    assertEquals("val", metaClient.getActiveTimeline().readCommitMetadata(completedInstant).getExtraMetadata().get("key"));
+  }
+
+  @Test
+  public void testCreateNewInstantTimes() throws IOException {
+    List<String> instantTimesSoFar = new ArrayList<>();
+    // explicitly set timezone to UTC and generate timestamps
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.TIMELINE_TIMEZONE.key(), "UTC");
+    metaClient = HoodieTestUtils.init(metaClient.getStorageConf(), basePath, HoodieTableType.MERGE_ON_READ, properties);
+
+    // run for few iterations
+    for (int j = 0; j < 5; j++) {
+      instantTimesSoFar.clear();
+      // Generate an instant time in UTC and validate that all instants generated using metaClient are within few seconds apart.
+      String newCommitTimeInUTC = getNewInstantTimeInUTC();
+
+      // new instant that we generate below should be within few seconds apart compared to above time we generated. If not, the time zone is not honored
+      for (int i = 0; i < 10; i++) {
+        String newInstantTime = metaClient.createNewInstantTime(false);
+        assertTrue(!instantTimesSoFar.contains(newInstantTime));
+        instantTimesSoFar.add(newInstantTime);
+        assertTrue((Long.parseLong(newInstantTime) - Long.parseLong(newCommitTimeInUTC)) < 60000L,
+            String.format("Validation failed on new instant time created: %s, newCommitTimeInUTC=%s",
+                newInstantTime, newCommitTimeInUTC));
+      }
+    }
+  }
+
+  private String getNewInstantTimeInUTC() {
+    Date d = new Date(System.currentTimeMillis());
+    return d.toInstant().atZone(HoodieTimelineTimeZone.UTC.getZoneId())
+        .toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
   }
 
   @Test
@@ -206,7 +243,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
     HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
-        .initTable(this.metaClient.getStorageConf(),basePath);
+        .initTable(this.metaClient.getStorageConf(), basePath);
 
     HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.builder()
         .setConf(this.metaClient.getStorageConf())
@@ -262,8 +299,13 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     Map<String, Map<String, String>> columnsMap = new HashMap<>();
     columnsMap.put("c1", Collections.emptyMap());
     String indexName = MetadataPartitionType.EXPRESSION_INDEX.getPartitionPath() + "idx";
-    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(indexName, "column_stats", "identity",
-        new ArrayList<>(columnsMap.keySet()), Collections.emptyMap());
+    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName(indexName)
+        .withIndexType("column_stats")
+        .withIndexFunction("identity")
+        .withSourceFields(new ArrayList<>(columnsMap.keySet()))
+        .withIndexOptions(Collections.emptyMap())
+        .build();
     metaClient.buildIndexDefinition(indexDefinition);
     assertTrue(metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexName));
     assertTrue(metaClient.getStorage().exists(new StoragePath(metaClient.getIndexDefinitionPath())));

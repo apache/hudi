@@ -60,7 +60,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -244,7 +243,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000011"));
     metaClient.getActiveTimeline().transitionRequestedToInflight(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000011"),
-        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
+        Option.of(commitMetadata));
     List<HoodieCleanStat> hoodieCleanStatsFive2 =
         runCleaner(config, simulateFailureRetry, simulateMetadataFailure, 12, true);
     HoodieCleanStat cleanStat = getCleanStat(hoodieCleanStatsFive2, p0);
@@ -342,7 +341,8 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
   public void testKeepLatestFileVersionsWithBootstrapFileClean() throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false)
+                .withMetadataIndexPartitionStats(false).build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanBootstrapBaseFileEnabled(true)
                 .withCleanerParallelism(1)
@@ -377,6 +377,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       Map<String, List<Pair<String, Integer>>> c2PartitionToFilesNameLengthMap = new HashMap<>();
       c2PartitionToFilesNameLengthMap.put(p0, Arrays.asList(Pair.of(file1P0C0, 101), Pair.of(file2P0C1, 100)));
       c2PartitionToFilesNameLengthMap.put(p1, Arrays.asList(Pair.of(file1P1C0, 201), Pair.of(file2P1C1, 200)));
+      testTable = HoodieMetadataTestTable.of(metaClient, getMetadataWriter(config), Option.of(context));
       testTable.doWriteOperation("00000000000003", WriteOperationType.UPSERT, Collections.emptyList(),
           c2PartitionToFilesNameLengthMap, false, false);
 

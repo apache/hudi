@@ -19,7 +19,10 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.transaction.lock.NoopLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -37,6 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -164,8 +168,19 @@ public class UpgradeDowngradeUtils {
       // set required configs for rollback
       HoodieInstantTimeGenerator.setCommitTimeZone(table.getMetaClient().getTableConfig().getTimelineTimezone());
       // NOTE: at this stage rollback should use the current writer version and disable auto upgrade/downgrade
+      TypedProperties properties = new TypedProperties();
+      properties.putAll(config.getProps());
+      // TimeGenerators are cached and re-used based on table base path. Since here we are changing the lock configurations, avoiding the cache use
+      // for upgrade code block.
+      properties.put(HoodieTimeGeneratorConfig.TIME_GENERATOR_REUSE_ENABLE.key(),"false");
+      // override w/ NoopLock Provider to avoid re-entrant locking. already upgrade is happening within the table level lock.
+      // Below we do trigger rollback and compaction which might again try to acquire the lock. So, here we are explicitly overriding to
+      // NoopLockProvider for just the upgrade code block.
+      properties.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
+      // if auto adjust it not disabled, chances that InProcessLockProvider will get overridden for single writer use-cases.
+      properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(),"false");
       HoodieWriteConfig rollbackWriteConfig = HoodieWriteConfig.newBuilder()
-          .withProps(config.getProps())
+          .withProps(properties)
           .withWriteTableVersion(tableVersion.versionCode())
           .withAutoUpgradeVersion(false)
           .build();
@@ -184,7 +199,7 @@ public class UpgradeDowngradeUtils {
       rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE.key(), "false");
 
       try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(rollbackWriteConfig, context)) {
-        writeClient.rollbackFailedWrites();
+        writeClient.rollbackFailedWrites(table.getMetaClient());
         if (shouldCompact) {
           Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
           if (compactionInstantOpt.isPresent()) {

@@ -29,6 +29,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import scala.Tuple2;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -96,7 +98,7 @@ public class TestBucketizedBloomCheckPartitioner {
     BucketizedBloomCheckPartitioner p = new BucketizedBloomCheckPartitioner(1000, comparisons1, 10);
 
     IntStream.range(0, 100000).forEach(f -> {
-      int partition = p.getPartition(Pair.of(new HoodieFileGroupId("p1", "f" + f), "value"));
+      int partition = p.getPartition(Tuple2.apply(new HoodieFileGroupId("p1", "f" + f), "value"));
       assertTrue(0 <= partition && partition <= 1000, "partition is out of range: " + partition);
     });
   }

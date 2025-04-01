@@ -36,13 +36,16 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieTimeTravelException;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.ParseException;
 import java.util.AbstractMap;
 import java.util.Collection;
@@ -108,8 +111,8 @@ public class TimelineUtils {
     Map<String, String> partitionToLatestDeleteTimestamp = replaceCommitTimeline.getInstantsAsStream()
         .map(instant -> {
           try {
-            HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-                replaceCommitTimeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+            HoodieReplaceCommitMetadata commitMetadata =
+                replaceCommitTimeline.readReplaceCommitMetadata(instant);
             return Pair.of(instant, commitMetadata);
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions modified at " + instant, e);
@@ -124,7 +127,7 @@ public class TimelineUtils {
     cleanerTimeline.getInstantsAsStream()
         .forEach(instant -> {
           try {
-            HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(cleanerTimeline.getInstantDetails(instant).get());
+            HoodieCleanMetadata cleanMetadata = cleanerTimeline.readCleanMetadata(instant);
             cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
               if (Boolean.TRUE.equals(partitionMetadata.getIsPartitionDeleted())) {
                 partitionToLatestDeleteTimestamp.put(partition, instant.requestedTime());
@@ -169,16 +172,14 @@ public class TimelineUtils {
         case COMMIT_ACTION:
         case DELTA_COMMIT_ACTION:
           try {
-            CommitMetadataSerDe metadataSerDe = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion()).getCommitMetadataSerDe();
-            HoodieCommitMetadata commitMetadata = metadataSerDe.deserialize(s, timeline.getInstantDetails(s).get(), HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(s);
             return commitMetadata.getPartitionToWriteStats().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions written at " + s, e);
           }
         case REPLACE_COMMIT_ACTION:
           try {
-            HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-                timeline.getInstantDetails(s).get(), HoodieReplaceCommitMetadata.class);
+            HoodieReplaceCommitMetadata commitMetadata = timeline.readReplaceCommitMetadata(s);
             Set<String> partitions = new HashSet<>();
             partitions.addAll(commitMetadata.getPartitionToReplaceFileIds().keySet());
             partitions.addAll(commitMetadata.getPartitionToWriteStats().keySet());
@@ -188,20 +189,20 @@ public class TimelineUtils {
           }
         case HoodieTimeline.CLEAN_ACTION:
           try {
-            HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(s).get());
+            HoodieCleanMetadata cleanMetadata = timeline.readCleanMetadata(s);
             return cleanMetadata.getPartitionMetadata().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions cleaned at " + s, e);
           }
         case HoodieTimeline.ROLLBACK_ACTION:
           try {
-            return TimelineMetadataUtils.deserializeHoodieRollbackMetadata(timeline.getInstantDetails(s).get()).getPartitionMetadata().keySet().stream();
+            return timeline.readRollbackMetadata(s).getPartitionMetadata().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions rolledback at " + s, e);
           }
         case HoodieTimeline.RESTORE_ACTION:
           try {
-            HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeAvroMetadata(timeline.getInstantDetails(s).get(), HoodieRestoreMetadata.class);
+            HoodieRestoreMetadata restoreMetadata = timeline.readRestoreMetadata(s);
             return restoreMetadata.getHoodieRestoreMetadata().values().stream()
                 .flatMap(Collection::stream)
                 .flatMap(rollbackMetadata -> rollbackMetadata.getPartitionMetadata().keySet().stream());
@@ -210,7 +211,7 @@ public class TimelineUtils {
           }
         case HoodieTimeline.SAVEPOINT_ACTION:
           try {
-            return TimelineMetadataUtils.deserializeHoodieSavepointMetadata(timeline.getInstantDetails(s).get()).getPartitionMetadata().keySet().stream();
+            return timeline.readSavepointMetadata(s).getPartitionMetadata().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions savepoint at " + s, e);
           }
@@ -256,8 +257,8 @@ public class TimelineUtils {
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
     try {
       LOG.info("reading checkpoint info for:" + instant + " key: " + extraMetadataKey);
-      HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(instant,
-          metaClient.getCommitsTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata =
+          metaClient.getCommitsTimeline().readCommitMetadata(instant);
 
       return Option.ofNullable(commitMetadata.getExtraMetadata().get(extraMetadataKey));
     } catch (IOException e) {
@@ -271,8 +272,9 @@ public class TimelineUtils {
       if (REPLACE_COMMIT_ACTION.equals(completedInstant.getAction())) {
         // replacecommit is used for multiple operations: insert_overwrite/cluster etc. 
         // Check operation type to see if this instant is related to clustering.
-        HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(
-            metaClient.getActiveTimeline().getInstantDetails(completedInstant).get(), HoodieReplaceCommitMetadata.class);
+
+        HoodieReplaceCommitMetadata replaceMetadata =
+            metaClient.getActiveTimeline().readReplaceCommitMetadata(completedInstant);
         return WriteOperationType.CLUSTER.equals(replaceMetadata.getOperationType());
       }
 
@@ -307,12 +309,12 @@ public class TimelineUtils {
         ? metaClient.getArchivedTimeline(exclusiveStartInstantTime).mergeTimeline(writeTimeline)
         : writeTimeline;
 
-    HoodieTimeline timelineSinceLastSync = (HoodieTimeline) (((HoodieTimeline) timeline).getCommitsTimeline()
-        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE));
+    HoodieTimeline timelineSinceLastSync = timeline.getCommitsTimeline()
+        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
 
     if (lastMaxCompletionTime.isPresent()) {
       // Get 'hollow' instants that have less instant time than exclusiveStartInstantTime but with greater commit completion time
-      HoodieTimeline hollowInstantsTimeline = ((HoodieTimeline) timeline).getCommitsTimeline()
+      HoodieTimeline hollowInstantsTimeline = timeline.getCommitsTimeline()
           .filterCompletedInstants()
           .filter(s -> compareTimestamps(s.requestedTime(), LESSER_THAN, exclusiveStartInstantTime))
           .filter(s -> compareTimestamps(s.getCompletionTime(), GREATER_THAN, lastMaxCompletionTime.get()));
@@ -334,12 +336,10 @@ public class TimelineUtils {
   public static HoodieCommitMetadata getCommitMetadata(
       HoodieInstant instant,
       HoodieTimeline timeline) throws IOException {
-    byte[] data = timeline.getInstantDetails(instant).get();
     if (instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) {
-      return HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class);
+      return timeline.readReplaceCommitMetadata(instant);
     } else {
-      CommitMetadataSerDe metadataSerDe = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion()).getCommitMetadataSerDe();
-      return metadataSerDe.deserialize(instant, data, HoodieCommitMetadata.class);
+      return timeline.readCommitMetadata(instant);
     }
   }
 
@@ -438,7 +438,7 @@ public class TimelineUtils {
    * and return filtered or non-filtered timeline for incremental query to run against.
    */
   public static HoodieTimeline handleHollowCommitIfNeeded(HoodieTimeline completedCommitTimeline,
-      HoodieTableMetaClient metaClient, HollowCommitHandling handlingMode) {
+                                                          HoodieTableMetaClient metaClient, HollowCommitHandling handlingMode) {
     if (handlingMode == HollowCommitHandling.USE_TRANSITION_TIME) {
       return completedCommitTimeline;
     }
@@ -474,10 +474,10 @@ public class TimelineUtils {
   /**
    * Parse the timestamp of an Instant and return a {@code Date}.
    * Throw ParseException if timestamp is not valid format as
-   *  {@link HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
+   * {@link HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
    *
    * @param timestamp a timestamp String which follow pattern as
-   *  {@link HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
+   *                  {@link HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
    * @return Date of instant timestamp
    */
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
@@ -488,13 +488,13 @@ public class TimelineUtils {
    * The same parsing method as above, but this method will mute ParseException.
    * If the given timestamp is invalid, returns {@code Option.empty}.
    * Or a corresponding Date value if these timestamp strings are provided
-   *  {@link HoodieTimeline#INIT_INSTANT_TS},
-   *  {@link HoodieTimeline#METADATA_BOOTSTRAP_INSTANT_TS},
-   *  {@link HoodieTimeline#FULL_BOOTSTRAP_INSTANT_TS}.
+   * {@link HoodieTimeline#INIT_INSTANT_TS},
+   * {@link HoodieTimeline#METADATA_BOOTSTRAP_INSTANT_TS},
+   * {@link HoodieTimeline#FULL_BOOTSTRAP_INSTANT_TS}.
    * This method is useful when parsing timestamp for metrics
    *
    * @param timestamp a timestamp String which follow pattern as
-   *  {@link HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
+   *                  {@link HoodieInstantTimeGenerator#SECS_INSTANT_TIMESTAMP_FORMAT}.
    * @return {@code Option<Date>} of instant timestamp, {@code Option.empty} if invalid timestamp
    */
   public static Option<Date> parseDateFromInstantTimeSafely(String timestamp) {
@@ -523,7 +523,7 @@ public class TimelineUtils {
    * Returns next instant time in the correct format.
    * Ensures each instant time is at least 1 millisecond apart since we create instant times at millisecond granularity.
    *
-   * @param shouldLock whether the lock should be enabled to get the instant time.
+   * @param shouldLock    whether the lock should be enabled to get the instant time.
    * @param timeGenerator TimeGenerator used to generate the instant time.
    */
   public static String generateInstantTime(boolean shouldLock, TimeGenerator timeGenerator) {
@@ -534,9 +534,9 @@ public class TimelineUtils {
    * Returns next instant time in the correct format.
    * Ensures each instant time is at least 1 millisecond apart since we create instant times at millisecond granularity.
    *
-   * @param shouldLock whether the lock should be enabled to get the instant time.
+   * @param shouldLock    whether the lock should be enabled to get the instant time.
    * @param timeGenerator TimeGenerator used to generate the instant time.
-   * @param milliseconds Milliseconds to add to current time while generating the new instant time
+   * @param milliseconds  Milliseconds to add to current time while generating the new instant time
    */
   public static String generateInstantTime(boolean shouldLock, TimeGenerator timeGenerator, long milliseconds) {
     return HoodieInstantTimeGenerator.createNewInstantTime(shouldLock, timeGenerator, milliseconds);
@@ -544,10 +544,11 @@ public class TimelineUtils {
 
   /**
    * Delete Instant file from storage
-   * @param storage Hoodie Storage.
+   *
+   * @param storage  Hoodie Storage.
    * @param metaPath Path.
-   * @param instant instant to delete.
-   * @param factory Factory to generate file name.
+   * @param instant  instant to delete.
+   * @param factory  Factory to generate file name.
    */
   public static void deleteInstantFile(HoodieStorage storage, StoragePath metaPath, HoodieInstant instant, InstantFileNameGenerator factory) {
     String filePath = factory.getFileName(instant);
@@ -561,7 +562,8 @@ public class TimelineUtils {
   /**
    * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
    * between inflight and completed instants (compaction <=> commit) and (logcompaction <==> deltacommit).
-   * @param instant Hoodie Instant
+   *
+   * @param instant    Hoodie Instant
    * @param metaClient Hoodie metaClient to fetch tableType and fileSystem.
    * @return Inflight Hoodie Instant
    */
@@ -594,13 +596,43 @@ public class TimelineUtils {
    */
   public static HoodieTimeline concatTimeline(HoodieTimeline timeline1, HoodieTimeline timeline2,
                                               HoodieTableMetaClient metaClient) {
-    return metaClient.getTimelineLayout().getTimelineFactory().createDefaultTimeline(Stream.concat(timeline1.getInstantsAsStream(), timeline2.getInstantsAsStream()).sorted(),
-        instant -> metaClient.getActiveTimeline().getInstantDetails(instant));
+    return metaClient.getTimelineLayout().getTimelineFactory().createDefaultTimeline(
+        Stream.concat(timeline1.getInstantsAsStream(), timeline2.getInstantsAsStream()).sorted(),
+        metaClient.getActiveTimeline());
   }
 
   public static boolean isDeletePartition(WriteOperationType operation) {
     return operation == WriteOperationType.DELETE_PARTITION
         || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
         || operation == WriteOperationType.INSERT_OVERWRITE;
+  }
+
+  public static boolean isEmpty(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+    try {
+      return metaClient.getStorage()
+          .getPathInfo(new StoragePath(metaClient.getTimelinePath(), metaClient.getInstantFileNameGenerator().getFileName(instant)))
+          .getLength() == 0;
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to check emptiness of instant " + instant, e);
+    }
+  }
+
+  public static Option<InputStream> getInputStreamOptionLegacy(HoodieTimeline timeline, HoodieInstant instant) {
+    Option<byte[]> bytes = timeline.getInstantDetails(instant);
+    if (bytes.isEmpty() || bytes.get().length == 0) {
+      return Option.empty();
+    }
+    return Option.of(new ByteArrayInputStream(bytes.get()));
+  }
+
+  // TODO[HUDI-9094]: work around when caller needs to write byte array in raw. This method should be removed.
+  public static <T> Option<HoodieInstantWriter> getHoodieInstantWriterOption(HoodieTimeline timeline, Option<T> metadata) {
+    Option<HoodieInstantWriter> writerOption;
+    if (metadata.isPresent() && metadata.get() instanceof HoodieInstantWriter) {
+      writerOption = (Option<HoodieInstantWriter>) metadata;
+    } else {
+      writerOption = timeline.getInstantWriter(metadata);
+    }
+    return writerOption;
   }
 }

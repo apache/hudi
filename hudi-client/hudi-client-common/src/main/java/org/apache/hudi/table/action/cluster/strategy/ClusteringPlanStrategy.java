@@ -32,7 +32,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
+import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,7 +103,7 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
    *
    * If there is no data available to cluster, return None.
    */
-  public abstract Option<HoodieClusteringPlan> generateClusteringPlan();
+  public abstract Option<HoodieClusteringPlan> generateClusteringPlan(ClusteringPlanActionExecutor executor, Lazy<List<String>> partitions);
 
   /**
    * Check if the clustering can proceed. If not (i.e., return false), the PlanStrategy will generate an empty plan to stop the scheduling.
@@ -151,13 +153,15 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
    * Transform {@link FileSlice} to {@link HoodieSliceInfo}.
    */
   protected static List<HoodieSliceInfo> getFileSliceInfo(List<FileSlice> slices) {
-    return slices.stream().map(slice -> new HoodieSliceInfo().newBuilder()
-        .setPartitionPath(slice.getPartitionPath())
-        .setFileId(slice.getFileId())
-        .setDataFilePath(slice.getBaseFile().map(BaseFile::getPath).orElse(StringUtils.EMPTY_STRING))
-        .setDeltaFilePaths(slice.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toList()))
-        .setBootstrapFilePath(slice.getBaseFile().map(bf -> bf.getBootstrapBaseFile().map(bbf -> bbf.getPath()).orElse(StringUtils.EMPTY_STRING)).orElse(StringUtils.EMPTY_STRING))
-        .build()).collect(Collectors.toList());
+    return slices.stream().map(slice -> {
+      return HoodieSliceInfo.newBuilder()
+          .setPartitionPath(slice.getPartitionPath())
+          .setFileId(slice.getFileId())
+          .setDataFilePath(slice.getBaseFile().map(BaseFile::getPath).orElse(StringUtils.EMPTY_STRING))
+          .setDeltaFilePaths(slice.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toList()))
+          .setBootstrapFilePath(slice.getBaseFile().map(bf -> bf.getBootstrapBaseFile().map(bbf -> bbf.getPath()).orElse(StringUtils.EMPTY_STRING)).orElse(StringUtils.EMPTY_STRING))
+          .build();
+    }).collect(Collectors.toList());
   }
 
   /**

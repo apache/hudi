@@ -18,10 +18,11 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieSparkSqlWriter
+
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 

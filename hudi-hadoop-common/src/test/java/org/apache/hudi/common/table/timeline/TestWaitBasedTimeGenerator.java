@@ -27,12 +27,16 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class TestWaitBasedTimeGenerator {
 
@@ -145,4 +149,29 @@ public class TestWaitBasedTimeGenerator {
       Assertions.assertTrue(t2Timestamp.get() < t1Timestamp.get());
     }
   }
+
+  @Test
+  public void testTimeGeneratorCache() {
+    TimeGenerator timeGenerator1 = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
+    TimeGenerator timeGenerator2 = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
+    TimeGenerator timeGenerator3 = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
+
+    assertEquals(timeGenerator1, timeGenerator2);
+    assertEquals(timeGenerator1, timeGenerator3);
+
+    // disable reuse
+    HoodieTimeGeneratorConfig timeGeneratorConfigWithNoReuse = HoodieTimeGeneratorConfig.newBuilder()
+        .withPath("test_wait_based")
+        .withMaxExpectedClockSkewMs(25L)
+        .withReuseTimeGenerator(false)
+        .withTimeGeneratorType(TimeGeneratorType.WAIT_TO_ADJUST_SKEW)
+        .build();
+
+    TimeGenerator timeGenerator4 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithNoReuse, storageConf);
+    assertNotEquals(timeGenerator1, timeGenerator4);
+    // how many ever times we call, we should get new time generator
+    TimeGenerator timeGenerator5 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithNoReuse, storageConf);
+    assertNotEquals(timeGenerator4, timeGenerator5);
+  }
+
 }

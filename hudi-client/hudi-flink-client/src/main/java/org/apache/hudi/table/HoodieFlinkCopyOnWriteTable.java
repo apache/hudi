@@ -53,6 +53,7 @@ import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
+import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.FlinkBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeletePartitionCommitActionExecutor;
@@ -111,6 +112,26 @@ public class HoodieFlinkCopyOnWriteTable<T>
       String instantTime,
       List<HoodieRecord<T>> records) {
     return new FlinkUpsertCommitActionExecutor<>(context, writeHandle, config, this, instantTime, records).execute();
+  }
+
+  /**
+   * Upsert a batch of RowData into Hoodie table at the supplied instantTime.
+   *
+   * @param context     HoodieEngineContext
+   * @param writeHandle The write handle
+   * @param bucketInfo  The bucket info for the flushing data bucket
+   * @param instantTime Instant Time for the action
+   * @param records     hoodieRecords to upsert
+   * @return HoodieWriteMetadata
+   */
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> upsert(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      BucketInfo bucketInfo,
+      String instantTime,
+      Iterator<HoodieRecord<T>> records) {
+    throw new UnsupportedOperationException("RowData upsert writing is not supported for COW yet.");
   }
 
   /**

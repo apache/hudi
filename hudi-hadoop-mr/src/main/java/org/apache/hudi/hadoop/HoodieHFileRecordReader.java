@@ -50,10 +50,10 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 public class HoodieHFileRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
   private long count = 0;
-  private ArrayWritable valueObj;
+  private final ArrayWritable valueObj;
   private HoodieFileReader reader;
   private ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator;
-  private Schema schema;
+  private final Schema schema;
 
   public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
     FileSplit fileSplit = (FileSplit) split;

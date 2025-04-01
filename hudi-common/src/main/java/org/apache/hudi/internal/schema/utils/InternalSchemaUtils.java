@@ -90,7 +90,7 @@ public class InternalSchemaUtils {
         if (f != null) {
           newFields.add(f);
         } else {
-          throw new HoodieSchemaException(String.format("cannot find pruned id %s in currentSchema %s", id, schema.toString()));
+          throw new HoodieSchemaException(String.format("cannot find pruned id %s in currentSchema %s", id, schema));
         }
       }
     }
@@ -111,10 +111,8 @@ public class InternalSchemaUtils {
           Type newType = pruneType(f.type(), fieldIds);
           if (fieldIds.contains(f.fieldId())) {
             newTypes.add(f.type());
-          } else if (newType != null) {
-            newTypes.add(newType);
           } else {
-            newTypes.add(null);
+            newTypes.add(newType);
           }
         }
         boolean changed = false;

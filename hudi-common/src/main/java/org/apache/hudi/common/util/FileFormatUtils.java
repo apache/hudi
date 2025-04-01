@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -39,6 +40,7 @@ import org.apache.avro.generic.GenericRecord;
 import javax.annotation.Nonnull;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -59,14 +61,53 @@ public abstract class FileFormatUtils {
    * @param fileColumnRanges List of column range statistics for each file in a partition
    */
   public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(String relativePartitionPath,
-                                                                                                 @Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges) {
+                                                                                                 @Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges,
+                                                                                                 Map<String, Schema> colsToIndexSchemaMap) {
+
     ValidationUtils.checkArgument(!fileColumnRanges.isEmpty(), "fileColumnRanges should not be empty.");
+    // Let's do one pass and deduce all columns that needs to go through schema evolution.
+    Map<String, Set<Class<?>>> schemaSeenForColsToIndex = new HashMap<>();
+    Set<String> colsWithSchemaEvolved = new HashSet<>();
+    fileColumnRanges.stream().forEach(entry -> {
+      String colToIndex = entry.getColumnName();
+      Class<?> minValueClass = entry.getMinValue() != null ? entry.getMinValue().getClass() : null;
+      Class<?> maxValueClass = entry.getMaxValue() != null ? entry.getMaxValue().getClass() : null;
+      schemaSeenForColsToIndex.computeIfAbsent(colToIndex, s -> new HashSet());
+      if (minValueClass != null) {
+        schemaSeenForColsToIndex.get(colToIndex).add(minValueClass);
+      }
+      if (maxValueClass != null) {
+        schemaSeenForColsToIndex.get(colToIndex).add(maxValueClass);
+      }
+      if (!colsToIndexSchemaMap.isEmpty() && schemaSeenForColsToIndex.get(colToIndex).size() > 1) {
+        colsWithSchemaEvolved.add(colToIndex);
+      }
+    });
+
     // There are multiple files. Compute min(file_mins) and max(file_maxs)
     return fileColumnRanges.stream()
         .map(e -> HoodieColumnRangeMetadata.create(
             relativePartitionPath, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
             e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize()))
-        .reduce(HoodieColumnRangeMetadata::merge).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
+        .reduce((a,b) -> {
+          if (colsWithSchemaEvolved.isEmpty() || colsToIndexSchemaMap.isEmpty()
+              || a.getMinValue() == null || a.getMaxValue() == null || b.getMinValue() == null || b.getMaxValue() == null
+              || !colsWithSchemaEvolved.contains(a.getColumnName())) {
+            return HoodieColumnRangeMetadata.merge(a, b);
+          } else {
+            // schema is evolving for the column of interest.
+            Schema schema = colsToIndexSchemaMap.get(a.getColumnName());
+            HoodieColumnRangeMetadata<T> left = HoodieColumnRangeMetadata.create(a.getFilePath(), a.getColumnName(),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMinValue()),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMaxValue()), a.getNullCount(),
+                a.getValueCount(), a.getTotalSize(), a.getTotalUncompressedSize());
+            HoodieColumnRangeMetadata<T> right = HoodieColumnRangeMetadata.create(b.getFilePath(), b.getColumnName(),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMinValue()),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMaxValue()), b.getNullCount(),
+                b.getValueCount(), b.getTotalSize(), b.getTotalUncompressedSize());
+            return HoodieColumnRangeMetadata.merge(left, right);
+          }
+        }).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
   }
 
   /**
@@ -283,6 +324,26 @@ public abstract class FileFormatUtils {
                                                     Schema writerSchema,
                                                     Schema readerSchema, String keyFieldName,
                                                     Map<String, String> paramsMap) throws IOException;
+
+  /**
+   * Serializes Hudi records to the log block and collect column range metadata.
+   *
+   * @param storage      {@link HoodieStorage} instance.
+   * @param records      a list of {@link HoodieRecord}.
+   * @param writerSchema writer schema string from the log block header.
+   * @param readerSchema schema of reader.
+   * @param keyFieldName name of key field.
+   * @param paramsMap    additional params for serialization.
+   * @return pair of byte array after serialization and format metadata.
+   * @throws IOException upon serialization error.
+   */
+  public abstract Pair<byte[], Object> serializeRecordsToLogBlock(HoodieStorage storage,
+                                                                  Iterator<HoodieRecord> records,
+                                                                  HoodieRecord.HoodieRecordType recordType,
+                                                                  Schema writerSchema,
+                                                                  Schema readerSchema,
+                                                                  String keyFieldName,
+                                                                  Map<String, String> paramsMap) throws IOException;
 
   // -------------------------------------------------------------------------
   //  Inner Class

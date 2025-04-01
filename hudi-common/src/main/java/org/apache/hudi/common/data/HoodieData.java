@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.Serializable;
 import java.util.Iterator;
@@ -227,7 +228,7 @@ public interface HoodieData<T> extends Serializable {
   class HoodieDataCacheKey implements Serializable {
 
     public static HoodieDataCacheKey of(String basePath, String instantTime) {
-      return new HoodieDataCacheKey(basePath, instantTime);
+      return new HoodieDataCacheKey(new StoragePath(basePath).toString(), instantTime);
     }
 
     private final String basePath;

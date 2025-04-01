@@ -29,19 +29,23 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.{collection, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
-import org.apache.hudi.common.util.{StringUtils, collection}
 import org.apache.hudi.data.HoodieJavaRDD
+import org.apache.hudi.index.expression.HoodieExpressionIndex
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.util.JFunction
+
+import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.catalyst.util.TimestampFormatter
 import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import scala.collection.JavaConverters._
@@ -79,11 +83,58 @@ class ExpressionIndexSupport(spark: SparkSession,
         val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(fileIndex, prunedPartitionsAndFileSlices)
         val expressionIndexRecords = loadExpressionIndexRecords(indexPartition, prunedPartitions, readInMemory)
         loadTransposed(queryReferencedColumns, readInMemory, expressionIndexRecords, expressionIndexQuery) {
-          transposedColStatsDF =>Some(getCandidateFiles(transposedColStatsDF, Seq(expressionIndexQuery), prunedFileNames, isExpressionIndex = true))
+          transposedColStatsDF =>Some(getCandidateFiles(transposedColStatsDF, Seq(expressionIndexQuery), prunedFileNames, isExpressionIndex = true, Option.apply(indexDefinition)))
         }
       } else if (indexDefinition.getIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)) {
         val prunedPartitionAndFileNames = getPrunedPartitionsAndFileNamesMap(prunedPartitionsAndFileSlices, includeLogFiles = true)
         Option.apply(getCandidateFilesForKeys(indexPartition, prunedPartitionAndFileNames, literals))
+      } else {
+        Option.empty
+      }
+    } else {
+      Option.empty
+    }
+  }
+
+  def prunePartitions(fileIndex: HoodieFileIndex,
+                      queryFilters: Seq[Expression],
+                      queryReferencedColumns: Seq[String]): Option[Set[String]] = {
+    lazy val expressionIndexPartitionOpt = getExpressionIndexPartitionAndLiterals(queryFilters)
+    if (isIndexAvailable && queryFilters.nonEmpty && expressionIndexPartitionOpt.nonEmpty) {
+      val (indexPartition, expressionIndexQuery, _) = expressionIndexPartitionOpt.get
+      val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
+      if (indexDefinition.getIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
+        val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
+        val expressionIndexRecords = loadExpressionIndexPartitionStatRecords(indexDefinition, readInMemory)
+        loadTransposed(queryReferencedColumns, readInMemory, expressionIndexRecords, expressionIndexQuery) {
+          transposedPartitionStatsDF => {
+            try {
+              transposedPartitionStatsDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
+              val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                .collect()
+                .map(_.getString(0))
+                .toSet
+              if (allPartitions.nonEmpty) {
+                // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
+                //       column in a filter does not have the stats available, by making sure such a
+                //       filter does not prune any partition.
+                val indexSchema = transposedPartitionStatsDF.schema
+                val indexedCols : Seq[String] = indexDefinition.getSourceFields.asScala.toSeq
+                val indexFilter = Seq(expressionIndexQuery).map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex = true, indexedCols = indexedCols)).reduce(And)
+                Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+                  .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                  .collect()
+                  .map(_.getString(0))
+                  .toSet)
+              } else {
+                // Partition stats do not exist, skip the pruning
+                Option.empty
+              }
+            } finally {
+              transposedPartitionStatsDF.unpersist()
+            }
+          }
+        }
       } else {
         Option.empty
       }
@@ -448,6 +499,15 @@ class ExpressionIndexSupport(spark: SparkSession,
     colStatsRecords
   }
 
+  private def loadExpressionIndexPartitionStatRecords(indexDefinition: HoodieIndexDefinition, shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
+    // We are omitting the partition name and only using the column name and expression index partition stat prefix to fetch the records
+    val recordKeyPrefix = getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, indexDefinition.getSourceFields.get(0))
+    val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadExpressionIndexForColumnsInternal(
+      indexDefinition.getIndexName, shouldReadInMemory, Seq(recordKeyPrefix))
+    //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
+    colStatsRecords
+  }
+
   def loadExpressionIndexDataFrame(indexPartition: String,
                                    prunedPartitions: Set[String],
                                    shouldReadInMemory: Boolean): DataFrame = {
@@ -494,6 +554,10 @@ class ExpressionIndexSupport(spark: SparkSession,
     } else {
       encodedTargetColumnNames
     }
+    loadExpressionIndexForColumnsInternal(indexPartition, shouldReadInMemory, keyPrefixes)
+  }
+
+  private def loadExpressionIndexForColumnsInternal(indexPartition: String, shouldReadInMemory: Boolean, keyPrefixes: Iterable[String] with (String with Int => Any)) = {
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
       metadataTable.getRecordsByKeyPrefixes(keyPrefixes.toSeq.asJava, indexPartition, shouldReadInMemory)
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =

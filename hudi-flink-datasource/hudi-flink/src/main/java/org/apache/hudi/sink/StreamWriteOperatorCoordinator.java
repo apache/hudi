@@ -265,10 +265,10 @@ public class StreamWriteOperatorCoordinator
           scheduleTableServices(committed);
 
           if (committed) {
-            // start new instant.
-            startInstant();
             // sync Hive if is enabled
             syncHiveAsync();
+            // start new instant.
+            startInstant();
           }
         }, "commits the instant %s", this.instant
     );
@@ -388,6 +388,8 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void startInstant() {
+    // refresh the meta client which is reused
+    metaClient.reloadActiveTimeline();
     // refresh the last txn metadata
     this.writeClient.preTxn(tableState.operationType, this.metaClient);
     // put the assignment in front of metadata generation,
@@ -449,6 +451,9 @@ public class StreamWriteOperatorCoordinator
         LOG.warn("Reuse current pending Instant {} with {} operationType, "
                 + "ignoring empty bootstrap event.", this.instant, WriteOperationType.INSERT.value());
         reset();
+
+        // send commit act event to unblock write tasks
+        sendCommitAckEvents(-1L);
         return;
       }
 

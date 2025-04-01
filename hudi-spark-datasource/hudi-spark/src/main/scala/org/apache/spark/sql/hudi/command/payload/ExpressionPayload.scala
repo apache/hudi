@@ -23,15 +23,17 @@ import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, Option => HOption, StringUtils, ValidationUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils, ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
+import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.serializer.{KryoSerializer, SerializerInstance}
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
@@ -39,11 +41,10 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, Projection, SafeProjection}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructType}
-import org.apache.spark.{SparkConf, SparkEnv}
 
 import java.nio.ByteBuffer
-import java.util.function.{Function, Supplier}
 import java.util.{Base64, Objects, Properties}
+import java.util.function.{Function, Supplier}
 
 import scala.collection.JavaConverters._
 
@@ -65,7 +66,7 @@ class ExpressionPayload(@transient record: GenericRecord,
   extends DefaultHoodieRecordPayload(record, orderingVal) with Logging {
 
   def this(recordOpt: HOption[GenericRecord]) {
-    this(recordOpt.orElse(null), 0)
+    this(recordOpt.orElse(null), HoodieRecord.DEFAULT_ORDERING_VALUE)
   }
 
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,
@@ -132,12 +133,10 @@ class ExpressionPayload(@transient record: GenericRecord,
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
 
-        if (targetRecord.isEmpty || needUpdatingPersistedRecord(targetRecord.get, resultingAvroRecord, properties)) {
-          resultRecordOpt = HOption.of(resultingAvroRecord)
+        resultRecordOpt = if (targetRecord.isEmpty) {
+          HOption.of(resultingAvroRecord)
         } else {
-          // if the PreCombine field value of targetRecord is greater
-          // than the new incoming record, just keep the old record value.
-          resultRecordOpt = HOption.of(targetRecord.get)
+          doRecordMerge(resultingAvroRecord, targetRecord.get, writerSchema, properties)
         }
       }
     }
@@ -161,6 +160,38 @@ class ExpressionPayload(@transient record: GenericRecord,
       HOption.of(HoodieRecord.SENTINEL)
     } else {
       resultRecordOpt
+    }
+  }
+
+  private def doRecordMerge(incomingRecord: GenericRecord,
+                            existingRecord: IndexedRecord,
+                            schema: Schema,
+                            properties: Properties): HOption[IndexedRecord] = {
+    val originalPayload = properties.getProperty(PAYLOAD_ORIGINAL_AVRO_PAYLOAD)
+    if (originalPayload.equals(classOf[OverwriteWithLatestAvroPayload].getName)) {
+      // If is overwrite payload, then always pick the incoming record.
+      HOption.of(incomingRecord)
+    } else if (originalPayload.equals(classOf[DefaultHoodieRecordPayload].getName)) {
+      // If is default payload, then pick based on comparison result.
+      if (needUpdatingPersistedRecord(existingRecord, incomingRecord, properties)) {
+        HOption.of(incomingRecord)
+      } else {
+        HOption.of(existingRecord)
+      }
+    } else {
+      // For customized payload, create the payload class and merge.
+      val orderingField = ConfigUtils.getOrderingField(properties)
+      if (StringUtils.isNullOrEmpty(orderingField)) {
+        HOption.of(incomingRecord)
+      } else {
+        val consistentLogicalTimestampEnabled = properties.getProperty(
+          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
+          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean
+        val incomingRecordPayload = HoodieRecordUtils.loadPayload(originalPayload, incomingRecord,
+          HoodieAvroUtils.getNestedFieldVal(incomingRecord, orderingField, true, consistentLogicalTimestampEnabled)
+            .asInstanceOf[Comparable[_]]).asInstanceOf[HoodieRecordPayload[_ <: HoodieRecordPayload[_]]]
+        incomingRecordPayload.combineAndGetUpdateValue(existingRecord, schema, properties)
+      }
     }
   }
 
@@ -313,6 +344,11 @@ object ExpressionPayload {
    * Property holding record's original (Avro) schema
    */
   val PAYLOAD_RECORD_AVRO_SCHEMA = "hoodie.payload.record.schema"
+
+  /**
+   * Original record payload
+   */
+  val PAYLOAD_ORIGINAL_AVRO_PAYLOAD = "hoodie.payload.original.avro.payload"
 
   /**
    * Property associated w/ expected combined schema of the joined records of the source (incoming batch)

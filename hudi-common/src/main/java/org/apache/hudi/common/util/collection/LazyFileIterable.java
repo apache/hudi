@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util.collection;
 
+import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.util.BufferedRandomAccessFile;
 import org.apache.hudi.exception.HoodieException;
 
@@ -43,23 +44,21 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
   private final Map<T, BitCaskDiskMap.ValueMetadata> inMemoryMetadataOfSpilledData;
   // Was compressions enabled for the values when inserted into the file/ map
   private final boolean isCompressionEnabled;
+  private final CustomSerializer<R> serializer;
 
   private transient Thread shutdownThread = null;
 
-  public LazyFileIterable(String filePath, Map<T, BitCaskDiskMap.ValueMetadata> map) {
-    this(filePath, map, false);
-  }
-
-  public LazyFileIterable(String filePath, Map<T, BitCaskDiskMap.ValueMetadata> map, boolean isCompressionEnabled) {
+  public LazyFileIterable(String filePath, Map<T, BitCaskDiskMap.ValueMetadata> map, CustomSerializer<R> serializer, boolean isCompressionEnabled) {
     this.filePath = filePath;
     this.inMemoryMetadataOfSpilledData = map;
     this.isCompressionEnabled = isCompressionEnabled;
+    this.serializer = serializer;
   }
 
   @Override
   public ClosableIterator<R> iterator() {
     try {
-      return new LazyFileIterator<>(filePath, inMemoryMetadataOfSpilledData);
+      return new LazyFileIterator<>(filePath, inMemoryMetadataOfSpilledData, serializer);
     } catch (IOException io) {
       throw new HoodieException("Unable to initialize iterator for file on disk", io);
     }
@@ -73,10 +72,12 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
     private final String filePath;
     private BufferedRandomAccessFile readOnlyFileHandle;
     private final Iterator<Map.Entry<T, BitCaskDiskMap.ValueMetadata>> metadataIterator;
+    private final CustomSerializer<R> serializer;
 
-    public LazyFileIterator(String filePath, Map<T, BitCaskDiskMap.ValueMetadata> map) throws IOException {
+    public LazyFileIterator(String filePath, Map<T, BitCaskDiskMap.ValueMetadata> map, CustomSerializer<R> serializer) throws IOException {
       this.filePath = filePath;
       this.readOnlyFileHandle = new BufferedRandomAccessFile(filePath, "r", BitCaskDiskMap.BUFFER_SIZE);
+      this.serializer = serializer;
       readOnlyFileHandle.seek(0);
 
       // sort the map in increasing order of offset of value so disk seek is only in one(forward) direction
@@ -102,7 +103,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
         throw new IllegalStateException("next() called on EOF'ed stream. File :" + filePath);
       }
       Map.Entry<T, BitCaskDiskMap.ValueMetadata> entry = this.metadataIterator.next();
-      return BitCaskDiskMap.get(entry.getValue(), readOnlyFileHandle, isCompressionEnabled);
+      return BitCaskDiskMap.get(entry.getValue(), readOnlyFileHandle, serializer, isCompressionEnabled);
     }
 
     @Override

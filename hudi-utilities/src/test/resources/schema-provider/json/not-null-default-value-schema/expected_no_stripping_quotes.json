@@ -1,0 +1,138 @@
+{
+  "type": "record",
+  "name": "json_schema_with_non_null_default_values",
+  "doc": "",
+  "fields": [
+    {
+      "name": "field1",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "field1",
+          "fields": [
+            {
+              "name": "property1",
+              "type": [
+                "string",
+                "null"
+              ],
+              "doc": "",
+              "default": "\"property1_defaultvalue\""
+            },
+            {
+              "name": "property2",
+              "type": [
+                "null",
+                "double"
+              ],
+              "doc": "",
+              "default": null
+            },
+            {
+              "name": "property3",
+              "type": [
+                "long",
+                "null"
+              ],
+              "doc": "",
+              "default": 10
+            },
+            {
+              "name": "property4",
+              "type": [
+                "double",
+                "null"
+              ],
+              "doc": "",
+              "default": 8.25
+            }
+          ]
+        }
+      ],
+      "doc": "",
+      "default": null
+    },
+    {
+      "name": "field2",
+      "type": [
+        "string",
+        "null"
+      ],
+      "doc": "",
+      "default": "\"property2_defaultvalue\""
+    },
+    {
+      "name": "field3",
+      "type": [
+        "string",
+        "null"
+      ],
+      "doc": "",
+      "default": "\"N\""
+    },
+    {
+      "name": "field4",
+      "type": [
+        "long",
+        "null"
+      ],
+      "doc": "",
+      "default": 40
+    },
+    {
+      "name": "field5",
+      "type": [
+        "long",
+        "null"
+      ],
+      "doc": "",
+      "default": 50
+    },
+    {
+      "name": "field6",
+      "type": [
+        "long",
+        "null"
+      ],
+      "doc": "",
+      "default": 60
+    },
+    {
+      "name": "field7",
+      "type": [
+        "double",
+        "null"
+      ],
+      "doc": "",
+      "default": 7.75
+    },
+    {
+      "name": "field8",
+      "type": [
+        "double",
+        "null"
+      ],
+      "doc": "",
+      "default": 8.375
+    },
+    {
+      "name": "field9",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "doc": "",
+      "default": true
+    },
+    {
+      "name": "field10",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "doc": "",
+      "default": false
+    }
+  ]
+}

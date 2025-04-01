@@ -49,9 +49,15 @@ import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.FloatWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.FileSplit;
@@ -203,6 +209,16 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
+  public boolean castToBoolean(Object value) {
+    if (value instanceof BooleanWritable) {
+      return ((BooleanWritable) value).get();
+    } else {
+      throw new IllegalArgumentException(
+          "Expected BooleanWritable but got " + value.getClass());
+    }
+  }
+
+  @Override
   public HoodieRecord<ArrayWritable> constructHoodieRecord(Option<ArrayWritable> recordOption, Map<String, Object> metadataMap) {
     if (!recordOption.isPresent()) {
       return new HoodieEmptyRecord<>(new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)), HoodieRecord.HoodieRecordType.HIVE);
@@ -264,12 +280,27 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public Comparable castValue(Comparable value, Schema.Type newType) {
-    //TODO: [HUDI-8261] actually do casting here
+  public Comparable convertValueToEngineType(Comparable value) {
     if (value instanceof WritableComparable) {
       return value;
     }
-    return (WritableComparable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(value, Schema.create(newType));
+    //TODO: [HUDI-8261] cover more types
+    if (value == null) {
+      return null;
+    } else if (value instanceof String) {
+      return new Text((String) value);
+    } else if (value instanceof Integer) {
+      return new IntWritable((int) value);
+    } else if (value instanceof Long) {
+      return new LongWritable((long) value);
+    } else if (value instanceof Float) {
+      return new FloatWritable((float) value);
+    } else if (value instanceof Double) {
+      return new DoubleWritable((double) value);
+    } else if (value instanceof Boolean) {
+      return new BooleanWritable((boolean) value);
+    }
+    return value;
   }
 
   public UnaryOperator<ArrayWritable> reverseProjectRecord(Schema from, Schema to) {

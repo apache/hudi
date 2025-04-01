@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -70,12 +71,12 @@ import static org.apache.hudi.utilities.config.HoodieStreamerConfig.TRANSFORMER_
  */
 public class HoodieMultiTableStreamer {
 
-  private static Logger logger = LoggerFactory.getLogger(HoodieMultiTableStreamer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMultiTableStreamer.class);
 
-  private List<TableExecutionContext> tableExecutionContexts;
+  private final List<TableExecutionContext> tableExecutionContexts;
   private transient JavaSparkContext jssc;
-  private Set<String> successTables;
-  private Set<String> failedTables;
+  private final Set<String> successTables;
+  private final Set<String> failedTables;
 
   public HoodieMultiTableStreamer(Config config, JavaSparkContext jssc) throws IOException {
     this.tableExecutionContexts = new ArrayList<>();
@@ -119,7 +120,7 @@ public class HoodieMultiTableStreamer {
   //commonProps are passed as parameter which contain table to config file mapping
   private void populateTableExecutionContextList(TypedProperties properties, String configFolder, FileSystem fs, Config config) throws IOException {
     List<String> tablesToBeIngested = getTablesToBeIngested(properties);
-    logger.info("tables to be ingested via MultiTableDeltaStreamer : " + tablesToBeIngested);
+    LOG.info("tables to be ingested via MultiTableDeltaStreamer : " + tablesToBeIngested);
     TableExecutionContext executionContext;
     for (String table : tablesToBeIngested) {
       String[] tableWithDatabase = table.split("\\.");
@@ -270,19 +271,23 @@ public class HoodieMultiTableStreamer {
     }
 
     if (config.enableHiveSync) {
-      logger.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
+      LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
 
     if (config.targetTableName != null) {
-      logger.warn(String.format("--target-table is deprecated and will be removed in a future release due to it's useless;"
+      LOG.warn(String.format("--target-table is deprecated and will be removed in a future release due to it's useless;"
           + " please use %s to configure multiple target tables", HoodieStreamerConfig.TABLES_TO_BE_INGESTED.key()));
     }
 
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-streamer", Constants.LOCAL_SPARK_MASTER);
+    int exitCode = 0;
     try {
       new HoodieMultiTableStreamer(config, jssc).sync();
+    } catch (Throwable throwable) {
+      exitCode = 1;
+      throw new HoodieException("Failed to run HoodieMultiTableStreamer ", throwable);
     } finally {
-      jssc.stop();
+      SparkAdapterSupport$.MODULE$.sparkAdapter().stopSparkContext(jssc, exitCode);
     }
   }
 
@@ -458,14 +463,14 @@ public class HoodieMultiTableStreamer {
         new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
         successTables.add(Helpers.getTableWithDatabase(context));
       } catch (Exception e) {
-        logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
+        LOG.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
         failedTables.add(Helpers.getTableWithDatabase(context));
       }
     }
 
-    logger.info("Ingestion was successful for topics: " + successTables);
+    LOG.info("Ingestion was successful for topics: " + successTables);
     if (!failedTables.isEmpty()) {
-      logger.info("Ingestion failed for topics: " + failedTables);
+      LOG.info("Ingestion failed for topics: " + failedTables);
     }
   }
 

@@ -49,9 +49,9 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteCommitKafkaCallback.class);
 
-  private HoodieConfig hoodieConfig;
-  private String bootstrapServers;
-  private String topic;
+  private final HoodieConfig hoodieConfig;
+  private final String bootstrapServers;
+  private final String topic;
 
   public HoodieWriteCommitKafkaCallback(HoodieWriteConfig config) {
     this.hoodieConfig = config;

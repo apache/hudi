@@ -23,14 +23,19 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * Configurations used by the HUDI Metadata Table.
@@ -352,6 +357,24 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating expression index.");
 
+  public static final ConfigProperty<String> EXPRESSION_INDEX_COLUMN = ConfigProperty
+      .key(METADATA_PREFIX + ".index.expression.column")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Column for which expression index will be built.");
+
+  public static final ConfigProperty<String> EXPRESSION_INDEX_NAME = HoodieIndexingConfig.INDEX_NAME;
+
+  public static final ConfigProperty<String> EXPRESSION_INDEX_TYPE = HoodieIndexingConfig.INDEX_TYPE;
+
+  public static final ConfigProperty<String> EXPRESSION_INDEX_OPTIONS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.expression.options")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Options for the expression index, e.g. \"expr='from_unixtime', format='yyyy-MM-dd'\"");
+
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.enable")
       .defaultValue(false)
@@ -390,6 +413,25 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating secondary index.");
+
+  public static final ConfigProperty<String> SECONDARY_INDEX_NAME = HoodieIndexingConfig.INDEX_NAME;
+
+  public static final ConfigProperty<String> SECONDARY_INDEX_COLUMN = ConfigProperty
+      .key(METADATA_PREFIX + ".index.secondary.column")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Column for which secondary index will be built.");
+
+  // Config to specify metadata index to delete
+  public static final ConfigProperty<String> DROP_METADATA_INDEX = ConfigProperty
+      .key(METADATA_PREFIX + ".index.drop")
+      .noDefaultValue()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Drop the specified index. "
+          + "The value should be the name of the index to delete. You can check index names using `SHOW INDEXES` command. "
+          + "The index name either starts with or matches exactly can be one of the following: "
+          + StringUtils.join(Arrays.stream(MetadataPartitionType.values()).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList()), ", "));
 
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
@@ -531,6 +573,42 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getInt(EXPRESSION_INDEX_PARALLELISM);
   }
 
+  public String getExpressionIndexColumn() {
+    return getString(EXPRESSION_INDEX_COLUMN);
+  }
+
+  public String getExpressionIndexName() {
+    return getString(EXPRESSION_INDEX_NAME);
+  }
+
+  public String getExpressionIndexType() {
+    return getString(EXPRESSION_INDEX_TYPE);
+  }
+
+  public Map<String, String> getExpressionIndexOptions() {
+    return getExpressionIndexOptions(getString(EXPRESSION_INDEX_OPTIONS));
+  }
+
+  private Map<String, String> getExpressionIndexOptions(String configValue) {
+    Map<String, String> optionsMap = new HashMap<>();
+    if (StringUtils.isNullOrEmpty(configValue)) {
+      return optionsMap;
+    }
+
+    // Split the string into key-value pairs by comma
+    String[] keyValuePairs = configValue.split(",");
+    for (String pair : keyValuePairs) {
+      String[] keyValue = pair.split("=", 2); // Split into key and value, allowing '=' in the value
+      if (keyValue.length == 2) {
+        optionsMap.put(keyValue[0].trim(), keyValue[1].trim());
+      } else {
+        throw new IllegalArgumentException("Invalid key-value pair: " + pair);
+      }
+    }
+
+    return optionsMap;
+  }
+
   public boolean isPartitionStatsIndexEnabled() {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_PARTITION_STATS);
   }
@@ -550,6 +628,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getSecondaryIndexParallelism() {
     return getInt(SECONDARY_INDEX_PARALLELISM);
+  }
+
+  public String getSecondaryIndexColumn() {
+    return getString(SECONDARY_INDEX_COLUMN);
+  }
+
+  public String getSecondaryIndexName() {
+    return getString(SECONDARY_INDEX_NAME);
+  }
+
+  public String getMetadataIndexToDrop() {
+    return getString(DROP_METADATA_INDEX);
   }
 
   public static class Builder {
@@ -740,6 +830,28 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withExpressionIndexColumn(String column) {
+      metadataConfig.setValue(EXPRESSION_INDEX_COLUMN, column);
+      return this;
+    }
+
+    public Builder withExpressionIndexName(String name) {
+      metadataConfig.setValue(EXPRESSION_INDEX_NAME, name);
+      return this;
+    }
+
+    public Builder withExpressionIndexType(String type) {
+      metadataConfig.setValue(EXPRESSION_INDEX_TYPE, type);
+      return this;
+    }
+
+    public Builder withExpressionIndexOptions(Map<String, String> options) {
+      metadataConfig.setValue(EXPRESSION_INDEX_OPTIONS, options.entrySet().stream()
+          .map(e -> e.getKey() + "=" + e.getValue())
+          .collect(Collectors.joining(",")));
+      return this;
+    }
+
     public Builder withMetadataIndexPartitionStats(boolean enable) {
       metadataConfig.setValue(ENABLE_METADATA_INDEX_PARTITION_STATS, String.valueOf(enable));
       return this;
@@ -755,8 +867,31 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withSecondaryIndexForColumn(String column) {
+      metadataConfig.setValue(SECONDARY_INDEX_COLUMN, column);
+      return this;
+    }
+
+    public Builder withSecondaryIndexName(String name) {
+      metadataConfig.setValue(SECONDARY_INDEX_NAME, name);
+      return this;
+    }
+
+    public Builder withSecondaryIndexParallelism(int parallelism) {
+      metadataConfig.setValue(SECONDARY_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withDropMetadataIndex(String indexName) {
+      metadataConfig.setValue(DROP_METADATA_INDEX, indexName);
+      return this;
+    }
+
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
+      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
+      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, metadataConfig.isColumnStatsIndexEnabled());
+      // fix me: disable when schema on read is enabled.
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
     }
@@ -768,6 +903,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           return ENABLE.defaultValue();
         case JAVA:
           return false;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+
+    private boolean getDefaultColStatsEnable(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return true;
+        case FLINK:
+        case JAVA:
+          return false; // HUDI-8814
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }

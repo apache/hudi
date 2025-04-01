@@ -35,7 +35,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -67,7 +67,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileName;
 
 public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteableTestTable.class);
@@ -110,7 +110,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
 
   public StoragePath withInserts(String partition, String fileId, List<HoodieRecord> records,
                                  TaskContextSupplier contextSupplier) throws Exception {
-    FileCreateUtils.createPartitionMetaFile(basePath, partition);
+    FileCreateUtilsLegacy.createPartitionMetaFile(basePath, partition);
     String fileName = baseFileName(currentInstantTime, fileId);
 
     StoragePath baseFilePath = new StoragePath(Paths.get(basePath, partition, fileName).toString());
@@ -191,7 +191,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           return null;
         }
       }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()),
-          false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+          header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
       return Pair.of(partitionPath, logWriter.getLogFile());
     }
   }

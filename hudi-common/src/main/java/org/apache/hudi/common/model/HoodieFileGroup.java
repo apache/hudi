@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
@@ -235,12 +236,10 @@ public class HoodieFileGroup implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieFileGroup {");
-    sb.append("id=").append(fileGroupId);
-    sb.append(", fileSlices='").append(fileSlices).append('\'');
-    sb.append(", lastInstant='").append(lastInstant).append('\'');
-    sb.append('}');
-    return sb.toString();
+    return "HoodieFileGroup {" + "id=" + fileGroupId
+        + ", fileSlices='" + fileSlices + '\''
+        + ", lastInstant='" + lastInstant + '\''
+        + '}';
   }
 
   public void addFileSlice(FileSlice slice) {
@@ -253,5 +252,24 @@ public class HoodieFileGroup implements Serializable {
 
   public HoodieTimeline getTimeline() {
     return timeline;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    HoodieFileGroup fileGroup = (HoodieFileGroup) o;
+    return Objects.equals(fileGroupId, fileGroup.fileGroupId)
+        && Objects.equals(fileSlices, fileGroup.fileSlices)
+        && Objects.equals(lastInstant, fileGroup.lastInstant);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(fileGroupId, fileSlices, lastInstant);
   }
 }

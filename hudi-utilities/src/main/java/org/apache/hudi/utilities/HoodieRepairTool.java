@@ -146,7 +146,7 @@ public class HoodieRepairTool {
   // Repair config
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
-  private TypedProperties props;
+  private final TypedProperties props;
   // Spark context
   private final HoodieEngineContext context;
   private final HoodieTableMetaClient metaClient;

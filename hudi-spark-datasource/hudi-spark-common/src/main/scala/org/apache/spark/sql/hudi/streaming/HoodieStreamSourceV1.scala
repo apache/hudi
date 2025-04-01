@@ -19,23 +19,24 @@
 
 package org.apache.spark.sql.hudi.streaming
 
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelationV1, MergeOnReadIncrementalRelationV1, SparkAdapterSupport}
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV1}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
-import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelationV1, MergeOnReadIncrementalRelationV1, SparkAdapterSupport}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, SQLContext}
 
 /**
  * The Struct Stream Source for Hudi to consume the data by streaming job.
@@ -67,7 +68,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
    * Users can set [[DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT]] to
    * [[HollowCommitHandling.USE_TRANSITION_TIME]] to avoid the blocking behavior.
    */
-  private val hollowCommitHandling: HollowCommitHandling =
+  private val hollowCommitHandlingMode: HollowCommitHandling =
     parameters.get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
       .map(HollowCommitHandling.valueOf)
       .getOrElse(HollowCommitHandling.BLOCK)
@@ -103,15 +104,11 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
   private def getLatestOffset: Option[HoodieSourceOffset] = {
     metaClient.reloadActiveTimeline()
     val filteredTimeline = handleHollowCommitIfNeeded(
-      metaClient.getActiveTimeline.filterCompletedInstants(), metaClient, hollowCommitHandling)
+      metaClient.getActiveTimeline.filterCompletedInstants(), metaClient, hollowCommitHandlingMode)
     filteredTimeline match {
       case activeInstants if !activeInstants.empty() =>
-        val timestamp = if (hollowCommitHandling == USE_TRANSITION_TIME) {
-          activeInstants.getInstantsOrderedByCompletionTime
-            .skip(activeInstants.countInstants() - 1)
-            .findFirst()
-            .get()
-            .getCompletionTime
+        val timestamp = if (hollowCommitHandlingMode == USE_TRANSITION_TIME) {
+          activeInstants.getLatestCompletionTime.get()
         } else {
           activeInstants.lastInstant().get().requestedTime()
         }
@@ -159,7 +156,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
           DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
           DataSourceReadOptions.START_COMMIT.key -> startCommitTime(startOffset),
           DataSourceReadOptions.END_COMMIT.key -> endOffset.offsetCommitTime,
-          INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key -> hollowCommitHandling.name
+          INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key -> hollowCommitHandlingMode.name
         )
 
         val rdd = tableType match {
@@ -192,7 +189,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
   private def translateCheckpoint(commitTime: String): String = {
     if (writeTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       CheckpointUtils.convertToCheckpointV2ForCommitTime(
-        new StreamerCheckpointV1(commitTime), metaClient).getCheckpointKey
+        new StreamerCheckpointV1(commitTime), metaClient, hollowCommitHandlingMode).getCheckpointKey
     } else {
       commitTime
     }

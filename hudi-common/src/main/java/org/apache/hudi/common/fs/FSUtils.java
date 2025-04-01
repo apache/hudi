@@ -141,6 +141,16 @@ public class FSUtils {
     }
   }
 
+  public static String getCommitTimeWithFullPath(String path) {
+    String fullFileName;
+    if (path.contains("/")) {
+      fullFileName = path.substring(path.lastIndexOf("/") + 1);
+    } else {
+      fullFileName = path;
+    }
+    return getCommitTime(fullFileName);
+  }
+
   public static long getFileSize(HoodieStorage storage, StoragePath path) throws IOException {
     return storage.getPathInfo(path).getLength();
   }
@@ -471,13 +481,9 @@ public class FSUtils {
         String extension = FSUtils.getFileExtension(path.getName());
         return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
       }).stream().filter(StoragePathInfo::isFile).collect(Collectors.toList());
-    } catch (IOException e) {
+    } catch (FileNotFoundException ex) {
       // return empty FileStatus if partition does not exist already
-      if (!storage.exists(partitionPath)) {
-        return Collections.emptyList();
-      } else {
-        throw e;
-      }
+      return Collections.emptyList();
     }
   }
 
@@ -730,6 +736,11 @@ public class FSUtils {
   public static Path getPathWithoutScheme(Path path) {
     return path.isUriPathAbsolute()
         ? new Path(null, path.toUri().getAuthority(), path.toUri().getPath()) : path;
+  }
+
+  // Converts s3a to s3a
+  public static String s3aToS3(String s3aUrl) {
+    return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
   }
 
   /**

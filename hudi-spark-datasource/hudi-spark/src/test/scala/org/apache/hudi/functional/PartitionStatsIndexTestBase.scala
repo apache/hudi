@@ -22,28 +22,14 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.PartitionStatsIndexSupport
 import org.apache.hudi.TestHoodieSparkUtils.dropMetaFields
-import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.{ActionType, HoodieCommitMetadata, WriteOperationType}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
-import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.functional.PartitionStatsIndexTestBase.checkIfOverlapped
-import org.apache.hudi.metadata.HoodieBackedTableMetadata
-import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.util.JavaConversions
 
-import org.apache.spark.sql.functions.{col, not}
-import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
-
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.stream.Collectors
+import org.apache.spark.sql.{Column, DataFrame, SaveMode}
+import org.junit.jupiter.api.Assertions.assertEquals
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -52,10 +38,7 @@ import scala.util.matching.Regex
 /**
  * Common test setup and validation methods for partition stats index testing.
  */
-class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
-
-  var spark: SparkSession = _
-  var instantTime: AtomicInteger = _
+class PartitionStatsIndexTestBase extends HoodieStatsIndexTestBase {
   val targetColumnsToIndex: Seq[String] = Seq("rider", "driver")
   val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
@@ -64,110 +47,18 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> targetColumnsToIndex.mkString(",")
   )
   val commonOpts: Map[String, String] = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    RECORDKEY_FIELD.key -> "_row_key",
     PARTITIONPATH_FIELD.key -> "partition,trip_type",
-    HIVE_STYLE_PARTITIONING.key -> "true",
-    PRECOMBINE_FIELD.key -> "timestamp"
-  ) ++ metadataOpts
-  var mergedDfList: List[DataFrame] = List.empty
+    HIVE_STYLE_PARTITIONING.key -> "true"
+  ) ++ baseOpts ++ metadataOpts
 
-  @BeforeEach
-  override def setUp(): Unit = {
-    initPath()
-    initQueryIndexConf()
-    initSparkContexts()
-    initHoodieStorage()
-    initTestDataGenerator()
-
-    setTableName("hoodie_test")
-    initMetaClient()
-
-    instantTime = new AtomicInteger(1)
-
-    spark = sqlContext.sparkSession
+  override def createJoinCondition(prevDf: DataFrame, latestBatchDf: DataFrame): Column = {
+    prevDf("_row_key") === latestBatchDf("_row_key") &&
+      prevDf("partition") === latestBatchDf("partition") &&
+      prevDf("trip_type") === latestBatchDf("trip_type")
   }
 
-  @AfterEach
-  override def tearDown(): Unit = {
-    cleanupResources()
-  }
-
-  protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
-    val lastInstant = String.format("%03d", new Integer(instantTime.incrementAndGet()))
-    if (enforce || metaClient.getActiveTimeline.lastInstant().get().requestedTime.compareTo(lastInstant) < 0) {
-      println("Reloaded timeline")
-      metaClient.reloadActiveTimeline()
-      metaClient
-    }
-    metaClient
-  }
-
-  protected def rollbackLastInstant(hudiOpts: Map[String, String]): HoodieInstant = {
-    val lastInstant = getLatestMetaClient(false).getActiveTimeline
-      .filter(JavaConversions.getPredicate(instant => instant.getAction != ActionType.rollback.name()))
-      .lastInstant().get()
-    if (getLatestCompactionInstant != getLatestMetaClient(false).getActiveTimeline.lastInstant()
-      && lastInstant.getAction != ActionType.replacecommit.name()
-      && lastInstant.getAction != ActionType.clean.name()) {
-      mergedDfList = mergedDfList.take(mergedDfList.size - 1)
-    }
-    val writeConfig = getWriteConfig(hudiOpts)
-    new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
-      .rollback(lastInstant.requestedTime)
-
-    if (lastInstant.getAction != ActionType.clean.name()) {
-      assertEquals(ActionType.rollback.name(), getLatestMetaClient(true).getActiveTimeline.lastInstant().get().getAction)
-    }
-    lastInstant
-  }
-
-  protected def executeFunctionNTimes[T](function0: Function0[T], n: Int): Unit = {
-    for (_ <- 1 to n) {
-      function0.apply()
-    }
-  }
-
-  protected def deleteLastCompletedCommitFromDataAndMetadataTimeline(hudiOpts: Map[String, String]): Unit = {
-    val writeConfig = getWriteConfig(hudiOpts)
-    val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
-    val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
-    val metadataTableLastInstant = metadataTableMetaClient.getCommitsTimeline.lastInstant().get()
-    assertTrue(storage.deleteFile(new StoragePath(metaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
-    assertTrue(storage.deleteFile(new StoragePath(metadataTableMetaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(metadataTableLastInstant))))
-    mergedDfList = mergedDfList.take(mergedDfList.size - 1)
-  }
-
-  protected def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String]): Unit = {
-    val writeConfig = getWriteConfig(hudiOpts)
-    val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
-    assertTrue(storage.deleteFile(new StoragePath(metaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
-    mergedDfList = mergedDfList.take(mergedDfList.size - 1)
-  }
-
-  protected def getMetadataMetaClient(hudiOpts: Map[String, String]): HoodieTableMetaClient = {
-    getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
-  }
-
-  protected def getLatestCompactionInstant: org.apache.hudi.common.util.Option[HoodieInstant] = {
-    getLatestMetaClient(false).getActiveTimeline
-      .filter(JavaConversions.getPredicate(s => Option(
-        try {
-          val commitMetadata = MetadataConversionUtils.getHoodieCommitMetadata(metaClient, s)
-            .orElse(new HoodieCommitMetadata())
-          commitMetadata
-        } catch {
-          case _: Exception => new HoodieCommitMetadata()
-        })
-        .map(c => c.getOperationType == WriteOperationType.COMPACT)
-        .get))
-      .lastInstant()
-  }
-
-  protected def getLatestClusteringInstant: org.apache.hudi.common.util.Option[HoodieInstant] = {
-    getLatestMetaClient(false).getActiveTimeline.getCompletedReplaceTimeline.lastInstant()
+  protected override def getLastInstant(): String = {
+    String.format("%03d", new Integer(instantTime.incrementAndGet()))
   }
 
   protected def doWriteAndValidateDataAndPartitionStats(hudiOpts: Map[String, String],
@@ -212,51 +103,8 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     latestBatchDf
   }
 
-  /**
-   * @return [[DataFrame]] that should not exist as of the latest instant; used for non-existence validation.
-   */
   protected def calculateMergedDf(latestBatchDf: DataFrame, operation: String): DataFrame = synchronized {
-    val prevDfOpt = mergedDfList.lastOption
-    if (prevDfOpt.isEmpty) {
-      mergedDfList = mergedDfList :+ latestBatchDf
-      sparkSession.emptyDataFrame
-    } else {
-      if (operation == INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL) {
-        mergedDfList = mergedDfList :+ latestBatchDf
-        // after insert_overwrite_table, all previous snapshot's records should be deleted from RLI
-        prevDfOpt.get
-      } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
-        val overwrittenPartitions = latestBatchDf.select("partition")
-          .collectAsList().stream().map[String](JavaConversions.getFunction[Row, String](r => r.getString(0))).collect(Collectors.toList[String])
-        val prevDf = prevDfOpt.get
-        val latestSnapshot = prevDf
-          .filter(not(col("partition").isInCollection(overwrittenPartitions)))
-          .union(latestBatchDf)
-        mergedDfList = mergedDfList :+ latestSnapshot
-
-        // after insert_overwrite (partition), all records in the overwritten partitions should be deleted from RLI
-        prevDf.filter(col("partition").isInCollection(overwrittenPartitions))
-      } else {
-        val prevDf = prevDfOpt.get
-        val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key")
-          && prevDf("partition") === latestBatchDf("partition") && prevDf("trip_type") === latestBatchDf("trip_type"), "leftanti")
-        val latestSnapshot = prevDfOld.union(latestBatchDf)
-        mergedDfList = mergedDfList :+ latestSnapshot
-        sparkSession.emptyDataFrame
-      }
-    }
-  }
-
-  protected def getInstantTime: String = {
-    String.format("%03d", new Integer(instantTime.incrementAndGet()))
-  }
-
-  protected def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
-    val props = TypedProperties.fromMap(hudiOpts.asJava)
-    HoodieWriteConfig.newBuilder()
-      .withProps(props)
-      .withPath(basePath)
-      .build()
+    calculateMergedDf(latestBatchDf, operation, globalIndexEnableUpdatePartitions = false)
   }
 
   protected def validateDataAndPartitionStats(inputDf: DataFrame = sparkSession.emptyDataFrame): Unit = {

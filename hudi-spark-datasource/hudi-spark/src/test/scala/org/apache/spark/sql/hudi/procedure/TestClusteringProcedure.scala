@@ -19,22 +19,24 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
-import org.apache.spark.sql.types.{DataTypes, Metadata, StringType, StructField, StructType}
 import org.apache.spark.sql.{Dataset, Row}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
+import org.apache.spark.sql.types.{DataTypes, IntegerType, Metadata, StringType, StructField, StructType}
 
 import java.util
+
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
@@ -486,6 +488,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      val config = Map("hoodie.avro.schema.validate"-> "false")
 
       spark.sql(
         s"""
@@ -505,7 +508,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
            | location '$basePath'
      """.stripMargin)
 
-      writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate"-> "false"))
+      writeRecords(2, 4, 0, basePath, config)
       val conf = new Configuration
       val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
       assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
@@ -516,16 +519,19 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
       assert(1 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
+      writeRecords(2, 4, 0, basePath, config)
       spark.sql(s"call run_clustering(table => '$tableName', op => 'execute')")
       metaClient.reloadActiveTimeline()
       assert(1 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
       assert(0 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
+      writeRecords(2, 4, 0, basePath, config)
       spark.sql(s"call run_clustering(table => '$tableName')")
       metaClient.reloadActiveTimeline()
       assert(2 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
       assert(0 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
+      writeRecords(2, 4, 0, basePath, config)
       spark.sql(s"call run_clustering(table => '$tableName')")
       metaClient.reloadActiveTimeline()
       assert(3 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
@@ -574,9 +580,10 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       val fileNum = 20
       val numRecords = 400000
+      val config = metadataOpts ++ Map("hoodie.avro.schema.validate" -> "false")
 
       // insert records
-      writeRecords(fileNum, numRecords, 0, basePath,  metadataOpts ++ Map("hoodie.avro.schema.validate"-> "false"))
+      val records = writeRecords(fileNum, numRecords, 0, basePath, config)
       val conf = new Configuration
       val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
       val avgSize = avgRecord(metaClient.getActiveTimeline)
@@ -598,7 +605,11 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       val orderAllFiles = fileIndex1.allBaseFiles.size
       val c2OrderFilterCount = fileIndex1.listFiles(Seq(), Seq(dataFilterC2)).head.files.size
       val c3OrderFilterCount = fileIndex1.listFiles(Seq(), Seq(dataFilterC3)).head.files.size
+      val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
 
+      // re-create and ingestion + clustering
+      fs.delete(new Path(basePath), true)
+      writeRecordsArray(fileNum, records, basePath, config ++ Map("hoodie.table.name" -> tableName))
       spark.sql(
         s"""call run_clustering(table => '$tableName', order => 'c2,c3', order_strategy => 'z-order', options => "
            | hoodie.copyonwrite.record.size.estimate=$avgSize,
@@ -774,13 +785,56 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call show_clustering with limit") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      val hudiOptions = Map(
+        "hoodie.table.name" -> tableName,
+        "hoodie.datasource.write.table.type" -> "COPY_ON_WRITE",
+        "hoodie.datasource.write.recordkey.field" -> "a",
+        "hoodie.datasource.write.partitionpath.field" -> "a,b,c",
+        "hoodie.clean.automatic" -> "true",
+        "hoodie.metadata.enable" -> "true",
+        "hoodie.clustering.inline" -> "true",
+        "hoodie.clustering.inline.max.commits" -> "1",
+        "hoodie.cleaner.commits.retained" -> "2",
+        "hoodie.datasource.write.operation" -> "insert_overwrite"
+      )
+
+      val data = Seq(
+        (1, 2, 4),
+        (1, 2, 4),
+        (1, 2, 3)
+      )
+      val schema = StructType(Array(
+        StructField("a", IntegerType, true),
+        StructField("b", IntegerType, true),
+        StructField("c", IntegerType, true)
+      ))
+
+      val df = spark.createDataFrame(spark.sparkContext.parallelize(data).map {
+        case (a, b, c) => Row(a, b, c)
+      }, schema)
+
+      df.write
+        .options(hudiOptions)
+        .format("hudi")
+        .mode("append")
+        .save(s"$basePath")
+
+      assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath')").count())
+      assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath', limit => 1)").count())
+      assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath', limit => 2)").count())
+    }
+  }
+
   def avgRecord(commitTimeline: HoodieTimeline): Long = {
     var totalByteSize = 0L
     var totalRecordsCount = 0L
     val layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion)
     commitTimeline.getReverseOrderedInstants.toArray.foreach(instant => {
-      val commitMetadata = layout.getCommitMetadataSerDe.deserialize(instant.asInstanceOf[HoodieInstant],
-        commitTimeline.getInstantDetails(instant.asInstanceOf[HoodieInstant]).get, classOf[HoodieCommitMetadata])
+      val commitMetadata = commitTimeline.readCommitMetadata(instant.asInstanceOf[HoodieInstant])
       totalByteSize = totalByteSize + commitMetadata.fetchTotalBytesWritten()
       totalRecordsCount = totalRecordsCount + commitMetadata.fetchTotalRecordsWritten()
     })
@@ -788,7 +842,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
     Math.ceil((1.0 * totalByteSize) / totalRecordsCount).toLong
   }
 
-  def writeRecords(files: Int, numRecords: Int, partitions: Int, location: String, options: Map[String, String]): Unit = {
+  def writeRecords(files: Int, numRecords: Int, partitions: Int, location: String, options: Map[String, String]): util.ArrayList[Row] = {
     val records = new util.ArrayList[Row](numRecords)
     val rowDimension = Math.ceil(Math.sqrt(numRecords)).toInt
 
@@ -805,6 +859,19 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       }
     }
 
+    val struct = StructType(Array[StructField](
+      StructField("c1", DataTypes.IntegerType, nullable = true, Metadata.empty),
+      StructField("c2", DataTypes.StringType, nullable = true, Metadata.empty),
+      StructField("c3", DataTypes.StringType, nullable = true, Metadata.empty)
+    ))
+
+    // files can not effect for hudi
+    val df = spark.createDataFrame(records, struct).repartition(files)
+    writeDF(df, location, options)
+    records
+  }
+
+  def writeRecordsArray(files: Int, records: util.ArrayList[Row], location: String, options: Map[String, String]): Unit = {
     val struct = StructType(Array[StructField](
       StructField("c1", DataTypes.IntegerType, nullable = true, Metadata.empty),
       StructField("c2", DataTypes.StringType, nullable = true, Metadata.empty),

@@ -200,6 +200,10 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
       .metaClient(metaClient)
       .startCompletionTime(optParams(DataSourceReadOptions.START_COMMIT.key))
       .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_COMMIT.key, null))
+      .skipClustering(optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SKIP_CLUSTER.key(),
+        String.valueOf(DataSourceReadOptions.INCREMENTAL_READ_SKIP_CLUSTER.defaultValue)).toBoolean)
+      .skipCompaction(optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SKIP_COMPACT.key(),
+        String.valueOf(DataSourceReadOptions.INCREMENTAL_READ_SKIP_COMPACT.defaultValue)).toBoolean)
       .rangeType(rangeType)
       .build()
       .analyze()

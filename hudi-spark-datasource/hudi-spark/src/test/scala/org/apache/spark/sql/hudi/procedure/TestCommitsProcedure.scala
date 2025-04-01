@@ -56,14 +56,14 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // collect active commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(4) {
+      assertResult(5) {
         commits.length
       }
 
       // collect archived commits for table
       val endTs = commits(0).get(0).toString
       val archivedCommits = spark.sql(s"""call show_archived_commits(table => '$tableName', end_ts => '$endTs')""").collect()
-      assertResult(3) {
+      assertResult(2) {
         archivedCommits.length
       }
     }
@@ -106,14 +106,14 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // collect active commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(4) {
+      assertResult(5) {
         commits.length
       }
 
       // collect archived commits for table
       val endTs = commits(0).get(0).toString
       val archivedCommits = spark.sql(s"""call show_archived_commits_metadata(table => '$tableName', end_ts => '$endTs')""").collect()
-      assertResult(3) {
+      assertResult(2) {
         archivedCommits.length
       }
     }

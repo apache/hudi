@@ -56,6 +56,8 @@ import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.avro.HoodieAvroDeserializer;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Iterator;
@@ -70,6 +72,8 @@ import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_VALIDAT
  */
 public class HoodieStreamerUtils {
 
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieStreamerUtils.class);
+
   /**
    * Generates HoodieRecords for the avro data read from source.
    * Takes care of dropping columns, precombine, auto key generation.
@@ -79,11 +83,14 @@ public class HoodieStreamerUtils {
                                                                   SchemaProvider schemaProvider, HoodieRecord.HoodieRecordType recordType, boolean autoGenerateRecordKeys,
                                                                   String instantTime, Option<BaseErrorTableWriter> errorTableWriter) {
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
+    boolean shouldUseOrderingField = shouldCombine && !StringUtils.isNullOrEmpty(cfg.sourceOrderingField);
     boolean shouldErrorTable = errorTableWriter.isPresent() && props.getBoolean(ERROR_ENABLE_VALIDATE_RECORD_CREATION.key(), ERROR_ENABLE_VALIDATE_RECORD_CREATION.defaultValue());
     boolean useConsistentLogicalTimestamp = ConfigUtils.getBooleanWithAltKeys(
         props, KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
     Set<String> partitionColumns = getPartitionColumns(props);
-    String payloadClassName = StringUtils.isNullOrEmpty(cfg.payloadClassName) ? HoodieRecordPayload.getAvroPayloadForMergeMode(cfg.recordMergeMode) : cfg.payloadClassName;
+    String payloadClassName = StringUtils.isNullOrEmpty(cfg.payloadClassName)
+        ? HoodieRecordPayload.getAvroPayloadForMergeMode(cfg.recordMergeMode, cfg.payloadClassName)
+        : cfg.payloadClassName;
     return avroRDDOptional.map(avroRDD -> {
       SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
       SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns(props) ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());
@@ -91,6 +98,10 @@ public class HoodieStreamerUtils {
       if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
         records = avroRDD.mapPartitions(
             (FlatMapFunction<Iterator<GenericRecord>, Either<HoodieRecord,String>>) genericRecordIterator -> {
+              TaskContext taskContext = TaskContext.get();
+              LOG.info("Creating HoodieRecords with stageId : {}, stage attempt no: {}, taskId : {}, task attempt no : {}, task attempt id : {} ",
+                  taskContext.stageId(), taskContext.stageAttemptNumber(), taskContext.partitionId(), taskContext.attemptNumber(),
+                  taskContext.taskAttemptId());
               if (autoGenerateRecordKeys) {
                 props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
                 props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
@@ -100,7 +111,7 @@ public class HoodieStreamerUtils {
                 try {
                   HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
                   GenericRecord gr = isDropPartitionColumns(props) ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
-                  HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(payloadClassName, gr,
+                  HoodieRecordPayload payload = shouldUseOrderingField ? DataSourceUtils.createPayload(payloadClassName, gr,
                       (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, useConsistentLogicalTimestamp))
                       : DataSourceUtils.createPayload(payloadClassName, gr);
                   return Either.left(new HoodieAvroRecord<>(hoodieKey, payload));

@@ -26,7 +26,10 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -48,8 +51,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createBaseFile;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.utils.HoodieWriterClientTestHarness.getPropertiesForKeyGen;
 
@@ -109,6 +112,16 @@ public class ClusteringTestUtils {
     // Schedule and execute clustering.
     String clusteringCommitTime = clusteringClient.createNewInstantTime();
     return runClusteringOnInstant(clusteringClient, skipExecution, shouldCommit, clusteringCommitTime);
+  }
+
+  public static HoodieClusteringPlan getClusteringPlan(HoodieTableMetaClient client, HoodieInstant clusteringInstant) {
+    return ClusteringUtils.getClusteringPlan(client, clusteringInstant).get().getRight();
+  }
+
+  public static HoodieClusteringPlan getClusteringPlan(HoodieTableMetaClient client, String clusteringInstantString) {
+    HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION,
+        clusteringInstantString, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    return getClusteringPlan(client, clusteringInstant);
   }
 
   public static String runClusteringOnInstant(SparkRDDWriteClient clusteringClient, boolean skipExecution, boolean shouldCommit, String clusteringCommitTime) {

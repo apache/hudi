@@ -55,7 +55,7 @@ public class DataSourceInternalWriterHelper {
   private final SparkRDDWriteClient writeClient;
   private final HoodieTable hoodieTable;
   private final WriteOperationType operationType;
-  private Map<String, String> extraMetadata;
+  private final Map<String, String> extraMetadata;
 
   public DataSourceInternalWriterHelper(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
                                         SparkSession sparkSession, StorageConfiguration<?> storageConf, Map<String, String> extraMetadata) {

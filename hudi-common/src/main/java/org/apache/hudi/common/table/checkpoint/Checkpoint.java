@@ -36,6 +36,11 @@ public abstract class Checkpoint implements Serializable {
   // These are extra props to be written to the commit metadata
   protected Map<String, String> extraProps = new HashMap<>();
 
+  public Checkpoint setCheckpointKey(String newKey) {
+    checkpointKey = newKey;
+    return this;
+  }
+
   public String getCheckpointKey() {
     return checkpointKey;
   }

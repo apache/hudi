@@ -99,13 +99,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   protected Option<String> getLastCommitCompletionTime() {
-    int countInstants = getActiveTimeline().countInstants();
-    return getActiveTimeline()
-        .getInstantsOrderedByCompletionTime()
-        .skip(countInstants - 1)
-        .findFirst()
-        .map(HoodieInstant::getCompletionTime)
-        .map(Option::of).orElseGet(Option::empty);
+    return getActiveTimeline().getLatestCompletionTime();
   }
 
   @Override

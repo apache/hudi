@@ -22,11 +22,13 @@ import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -34,6 +36,7 @@ import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.StringType
+import org.junit.jupiter.api.Assertions.assertEquals
 
 import scala.collection.JavaConverters._
 
@@ -77,6 +80,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
         spark.sql("set hoodie.schema.on.read.enable=true")
+        spark.sql("set hoodie.metadata.index.column.stats.enable=false")
         // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
         //       and are disallowed now by default in Spark 3.x
         spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
@@ -139,6 +143,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
         spark.sessionState.conf.unsetConf("spark.sql.storeAssignmentPolicy")
       }
+      spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable")
     })
   }
 
@@ -230,9 +235,16 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test alter table properties and add rename drop column") {
+  test("Test alter table properties and add rename drop column with table services") {
     withTempDir { tmp =>
-      Seq("cow", "mor").foreach { tableType =>
+      Seq("cow,clustering", "mor,compaction", "mor,clustering").foreach { args =>
+        val argArray = args.split(',')
+        val tableType = argArray(0)
+        val runCompaction = "compaction".equals(argArray(1))
+        val runClustering = "clustering".equals(argArray(1))
+        val isMor = "mor".equals(tableType)
+        assert(runCompaction || runClustering)
+
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         // disable automatic inline compaction
@@ -240,6 +252,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         spark.sql("set hoodie.compact.schedule.inline=false")
 
         spark.sql("set hoodie.schema.on.read.enable=true")
+        spark.sql("set hoodie.metadata.index.column.stats.enable=false")
         spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
         // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
         //       and are disallowed now by default in Spark 3.x
@@ -280,7 +293,9 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         assert(schema.filter(p => p.name.equals("col9")).asJava.get(0).getComment().get == "col9 desc")
         // test change column type float to double
         spark.sql(s"alter table $tableName alter column col2 type double")
-        spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id").show(false)
+        checkAnswer(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id")(
+          Seq(1, null, getDouble("101.01", isMor)),
+          Seq(2, null, getDouble("102.02", isMor)))
         spark.sql(
           s"""
              | insert into $tableName values
@@ -288,22 +303,70 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | (6,6,5,15,100005,105.05,1005.0005,100005.0005,'a000005','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
              |""".stripMargin)
 
-        spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 order by id").show(false)
-        // try schedule compact
-        if (tableType == "mor") spark.sql(s"schedule compaction  on $tableName")
-        // test change column type decimal(10,4) 为decimal(18,8)
+        val allExpectedRows = Seq(
+          Seq(1, 3, 1, 11, 100001L, 101.01, 1001.0001,
+            new java.math.BigDecimal("100001.0001"), "a000001", java.sql.Date.valueOf("2021-12-25"),
+            java.sql.Timestamp.valueOf("2021-12-25 12:01:01"), true,
+            java.sql.Date.valueOf("2021-12-25")),
+          Seq(2, null, 2, 12, 100002L, getDouble("102.02", isMor), 1002.0002,
+            new java.math.BigDecimal("100002.0002"), "a000002", java.sql.Date.valueOf("2021-12-25"),
+            java.sql.Timestamp.valueOf("2021-12-25 12:02:02"), true,
+            java.sql.Date.valueOf("2021-12-25")),
+          Seq(3, null, 3, 13, 100003L, getDouble("103.03", isMor), 1003.0003,
+            new java.math.BigDecimal("100003.0003"), "a000003", java.sql.Date.valueOf("2021-12-25"),
+            java.sql.Timestamp.valueOf("2021-12-25 12:03:03"), false,
+            java.sql.Date.valueOf("2021-12-25")),
+          Seq(4, null, 4, 14, 100004L, 104.04, 1004.0004,
+            new java.math.BigDecimal("100004.0004"), "a000004", java.sql.Date.valueOf("2021-12-26"),
+            java.sql.Timestamp.valueOf("2021-12-26 12:04:04"), true,
+            java.sql.Date.valueOf("2021-12-26")),
+          Seq(5, null, 5, 15, 100005L, 105.05, 1005.0005,
+            new java.math.BigDecimal("100005.0005"), "a000005", java.sql.Date.valueOf("2021-12-26"),
+            java.sql.Timestamp.valueOf("2021-12-26 12:05:05"), false,
+            java.sql.Date.valueOf("2021-12-26")),
+          Seq(6, 6, 5, 15, 100005L, 105.05, 1005.0005,
+            new java.math.BigDecimal("100005.0005"), "a000005", java.sql.Date.valueOf("2021-12-26"),
+            java.sql.Timestamp.valueOf("2021-12-26 12:05:05"), false,
+            java.sql.Date.valueOf("2021-12-26")))
+
+        checkAnswer(s"select id, col1_new, comb, col0, col1, col2, col3, col4, col5, "
+          + s"col6, col7, col8, par from $tableName")(allExpectedRows: _*)
+        if (runCompaction) {
+          // try schedule compact
+          if (tableType == "mor") spark.sql(s"schedule compaction on $tableName")
+        } else if (runClustering) {
+          assertEquals(0, spark.sql(s"CALL show_clustering('$tableName')").count)
+          spark.sql(s"CALL run_clustering(table => '$tableName', op => 'schedule')")
+          spark.sql(s"CALL run_clustering(table => '$tableName', op => 'execute')")
+          val clusteringRows = spark.sql(s"CALL show_clustering('$tableName')").collect()
+          assertResult(1)(clusteringRows.length)
+          val states = clusteringRows.map(_.getString(2))
+          assertResult(HoodieInstant.State.COMPLETED.name())(states(0))
+        }
+        // Data should not change after scheduling or running table services
+        checkAnswer(s"select id, col1_new, comb, col0, col1, col2, col3, col4, col5, "
+          + s"col6, col7, col8, par from $tableName")(allExpectedRows: _*)
+        // test change column type decimal(10,4) to decimal(18,8)
         spark.sql(s"alter table $tableName alter column col4 type decimal(18, 8)")
-        spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id").show(false)
+        checkAnswer(s"select id, col1_new, comb, col0, col1, col2, col3, col4, col5, "
+          + s"col6, col7, col8, par from $tableName")(allExpectedRows: _*)
         spark.sql(
           s"""
              | insert into $tableName values
              | (5,6,5,15,100005,105.05,1005.0005,100005.0005,'a000005','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
              |""".stripMargin)
 
-        spark.sql(s"select id, col1_new, col4 from $tableName where id = 1 or id = 6 or id = 2 order by id").show(false)
+        checkAnswer(s"select id, col1_new, col4 from $tableName "
+          + s"where id = 1 or id = 6 or id = 2 order by id")(
+          Seq(1, 3, new java.math.BigDecimal("100001.00010000")),
+          Seq(2, null, new java.math.BigDecimal("100002.00020000")),
+          Seq(6, 6, new java.math.BigDecimal("100005.00050000")))
+
         // test change column type float to double
         spark.sql(s"alter table $tableName alter column col2 type string")
-        spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id").show(false)
+        checkAnswer(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id")(
+          Seq(1, 3, "101.01"),
+          Seq(2, null, getDouble("102.02", isMor && runClustering).toString))
         spark.sql(
           s"""
              | insert into $tableName values
@@ -311,17 +374,31 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | (6,6,5,15,100005,'105.05',1005.0005,100005.0005,'a000005','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
              |""".stripMargin)
 
-        spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 order by id").show(false)
-        // try schedule compact
-        if (tableType == "mor") spark.sql(s"schedule compaction  on $tableName")
-        // if tableType is mor, check compaction
-        if (tableType == "mor") {
-          val compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
-          val timestamps = compactionRows.map(_.getString(0))
-          assertResult(2)(timestamps.length)
-          spark.sql(s"run compaction on $tableName at ${timestamps(1)}")
-          spark.sql(s"run compaction on $tableName at ${timestamps(0)}")
+        checkAnswer(s"select id, col1_new, comb, col0, col1, col2, col3, col4, col5, "
+          + s"col6, col7, col8, par from $tableName")(getExpectedRowsSecondTime(isMor && runClustering): _*)
+        if (runCompaction) {
+          // try schedule compact
+          if (tableType == "mor") spark.sql(s"schedule compaction  on $tableName")
+          // if tableType is mor, check compaction
+          if (tableType == "mor") {
+            val compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
+            val timestamps = compactionRows.map(_.getString(0))
+            assertResult(2)(timestamps.length)
+            spark.sql(s"run compaction on $tableName at ${timestamps(1)}")
+            spark.sql(s"run compaction on $tableName at ${timestamps(0)}")
+          }
+        } else if (runClustering) {
+          spark.sql(s"CALL run_clustering(table => '$tableName', op => 'schedule')")
+          spark.sql(s"CALL run_clustering(table => '$tableName', op => 'execute')")
+          val clusteringRows = spark.sql(s"CALL show_clustering('$tableName')").collect()
+          assertResult(2)(clusteringRows.length)
+          val states = clusteringRows.map(_.getString(2))
+          assertResult(HoodieInstant.State.COMPLETED.name())(states(0))
+          assertResult(HoodieInstant.State.COMPLETED.name())(states(1))
         }
+        // Data should not change after scheduling or running table services
+        checkAnswer(s"select id, col1_new, comb, col0, col1, col2, col3, col4, col5, "
+          + s"col6, col7, col8, par from $tableName")(getExpectedRowsSecondTime(isMor): _*)
         spark.sql(
           s"""
              | insert into $tableName values
@@ -329,11 +406,56 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | (11,3,1,11,100001,'101.01',1001.0001,100011.0001,'a000008','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
              | (6,6,5,15,100005,'105.05',1005.0005,100007.0005,'a000009','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
              |""".stripMargin)
-
-        spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 or id = 11 order by id").show(false)
+        checkAnswer(s"select id, col1_new, col2 from $tableName "
+          + s"where id = 1 or id = 6 or id = 2 or id = 11 order by id")(
+          Seq(1, 3, "101.01"),
+          Seq(11, 3, "101.01"),
+          Seq(2, null, getDouble("102.02", isMor).toString),
+          Seq(6, 6, "105.05"))
       }
       spark.sessionState.conf.unsetConf("spark.sql.storeAssignmentPolicy")
       spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
+      spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable")
+    }
+  }
+
+  private def getExpectedRowsSecondTime(floatToDouble: Boolean): Seq[Seq[Any]] = {
+    Seq(
+      Seq(1, 3, 1, 11, 100001L, "101.01", 1001.0001, new java.math.BigDecimal("100001.00010000"),
+        "a000001", java.sql.Date.valueOf("2021-12-25"),
+        java.sql.Timestamp.valueOf("2021-12-25 12:01:01"), true,
+        java.sql.Date.valueOf("2021-12-25")),
+      Seq(2, null, 2, 12, 100002L, getDouble("102.02", floatToDouble).toString,
+        1002.0002, new java.math.BigDecimal("100002.00020000"),
+        "a000002", java.sql.Date.valueOf("2021-12-25"),
+        java.sql.Timestamp.valueOf("2021-12-25 12:02:02"), true,
+        java.sql.Date.valueOf("2021-12-25")),
+      Seq(3, null, 3, 13, 100003L, getDouble("103.03", floatToDouble).toString,
+        1003.0003, new java.math.BigDecimal("100003.00030000"),
+        "a000003", java.sql.Date.valueOf("2021-12-25"),
+        java.sql.Timestamp.valueOf("2021-12-25 12:03:03"), false,
+        java.sql.Date.valueOf("2021-12-25")),
+      Seq(4, null, 4, 14, 100004L, "104.04", 1004.0004, new java.math.BigDecimal("100004.00040000"),
+        "a000004", java.sql.Date.valueOf("2021-12-26"),
+        java.sql.Timestamp.valueOf("2021-12-26 12:04:04"), true,
+        java.sql.Date.valueOf("2021-12-26")),
+      Seq(5, 6, 5, 15, 100005L, "105.05", 1005.0005, new java.math.BigDecimal("100005.00050000"),
+        "a000005", java.sql.Date.valueOf("2021-12-26"),
+        java.sql.Timestamp.valueOf("2021-12-26 12:05:05"), false,
+        java.sql.Date.valueOf("2021-12-26")),
+      Seq(6, 6, 5, 15, 100005L, "105.05", 1005.0005, new java.math.BigDecimal("100005.00050000"),
+        "a000005", java.sql.Date.valueOf("2021-12-26"),
+        java.sql.Timestamp.valueOf("2021-12-26 12:05:05"), false,
+        java.sql.Date.valueOf("2021-12-26")))
+  }
+
+  private def getDouble(value: String, convertFromFloat: Boolean): Double = {
+    // TODO(HUDI-8902): Investigate different read behavior on a field after promotion
+    //  from float to double
+    if (convertFromFloat) {
+      value.toFloat.toDouble
+    } else {
+      value.toDouble
     }
   }
 

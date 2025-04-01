@@ -17,9 +17,14 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieFileFormat
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.hadoop.fs.Path
+
+import java.util.{Date, UUID}
 
 class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call show_invalid_parquet Procedure") {
@@ -120,7 +125,7 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call show_invalid_parquet Procedure and Specify Partitions") {
+  test("Test Call show_invalid_parquet Procedure, Specify Partitions and/or Instants.") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -153,23 +158,34 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
       checkExceptionContain(s"""call show_invalid_parquet(limit => 10)""")(
         s"Argument: path is required")
 
+      val TEST_WRITE_TOKEN = "1-0-1"
+      val instantTime = HoodieInstantTimeGenerator.formatDate(new Date)
+      val fileName1 = UUID.randomUUID.toString
+      val fullFileName1 = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName1, HoodieFileFormat.PARQUET.getFileExtension)
+      val fileName2 = UUID.randomUUID.toString
+      val fullFileName2 = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName2, HoodieFileFormat.PARQUET.getFileExtension)
+      val fileName3 = UUID.randomUUID.toString
+      val fullFileName3 = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName3, HoodieFileFormat.PARQUET.getFileExtension)
+      val fileName4 = UUID.randomUUID.toString
+      val fullFileName4 = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName4, HoodieFileFormat.PARQUET.getFileExtension)
+
       val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
-      val invalidPath1 = new Path(basePath, "year=2022/month=08/day=30/1.parquet")
+      val invalidPath1 = new Path(basePath, "year=2022/month=08/day=30/" + fullFileName1)
       val out1 = fs.create(invalidPath1)
       out1.write(1)
       out1.close()
 
-      val invalidPath2 = new Path(basePath, "year=2022/month=08/day=31/2.parquet")
+      val invalidPath2 = new Path(basePath, "year=2022/month=08/day=31/" + fullFileName2)
       val out2 = fs.create(invalidPath2)
       out2.write(1)
       out2.close()
 
-      val invalidPath3 = new Path(basePath, "year=2022/month=07/day=03/3.parquet")
+      val invalidPath3 = new Path(basePath, "year=2022/month=07/day=03/" + fullFileName3)
       val out3 = fs.create(invalidPath3)
       out3.write(1)
       out3.close()
 
-      val invalidPath4 = new Path(basePath, "year=2022/month=07/day=04/4.parquet")
+      val invalidPath4 = new Path(basePath, "year=2022/month=07/day=04/" + fullFileName4)
       val out4 = fs.create(invalidPath4)
       out4.write(1)
       out4.close()
@@ -202,6 +218,17 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
       result = spark.sql(
         s"""call show_invalid_parquet(path => '$basePath', partitions => 'year=2023')""".stripMargin).collect()
       assertResult(0) {
+        result.length
+      }
+
+      result = spark.sql(
+        s"""call show_invalid_parquet(path => '$basePath', instants => '$instantTime')""".stripMargin).collect()
+      assertResult(4) {
+        result.length
+      }
+      result = spark.sql(
+        s"""call show_invalid_parquet(path => '$basePath', instants => '$instantTime', partitions => 'year=2022/month=08')""".stripMargin).collect()
+      assertResult(2) {
         result.length
       }
 

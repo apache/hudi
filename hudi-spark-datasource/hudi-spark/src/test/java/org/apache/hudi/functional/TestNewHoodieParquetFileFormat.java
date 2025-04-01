@@ -40,7 +40,7 @@ import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@Tag("functional")
+@Tag("functional-b")
 public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
 
   private static Stream<Arguments> testArgs() {

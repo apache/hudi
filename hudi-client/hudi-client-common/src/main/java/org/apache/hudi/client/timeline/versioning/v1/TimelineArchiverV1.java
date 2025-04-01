@@ -86,6 +86,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  */
 public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements HoodieTimelineArchiver<T, I, K, O> {
 
+  public static final String ARCHIVE_LIMIT_INSTANTS = "hoodie.archive.limit.instants";
   private static final Logger LOG = LoggerFactory.getLogger(TimelineArchiverV1.class);
 
   private final StoragePath archiveFilePath;
@@ -143,12 +144,12 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       List<HoodieInstant> instantsToArchive = getInstantsToArchive();
       if (!instantsToArchive.isEmpty()) {
         this.writer = openWriter(archiveFilePath.getParent());
-        LOG.info("Archiving instants {}", instantsToArchive);
+        LOG.info("Archiving instants {} for table {}", instantsToArchive, config.getBasePath());
         archive(context, instantsToArchive);
-        LOG.info("Deleting archived instants {}", instantsToArchive);
+        LOG.info("Deleting archived instants {} for table {}", instantsToArchive, config.getBasePath());
         deleteArchivedInstants(instantsToArchive, context);
       } else {
-        LOG.info("No Instants to archive");
+        LOG.info("No Instants to archive for table {}", config.getBasePath());
       }
 
       return instantsToArchive.size();
@@ -295,7 +296,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
 
     // If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
-    if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
+    if (config.isMetadataTableEnabled() && table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
       try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), table.getStorage(), config.getMetadataConfig(), config.getBasePath())) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
         if (!latestCompactionTime.isPresent()) {
@@ -353,6 +354,8 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
             InstantComparatorV1.getComparableAction(i.getAction()))));
 
     return instantsToArchive.stream()
+        .sorted()
+        .limit(config.getProps().getLong(ARCHIVE_LIMIT_INSTANTS, Long.MAX_VALUE))
         .flatMap(hoodieInstant ->
             groupByTsAction.getOrDefault(Pair.of(hoodieInstant.requestedTime(),
                 InstantComparatorV1.getComparableAction(hoodieInstant.getAction())), Collections.emptyList()).stream())
@@ -440,7 +443,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
       final String keyField = table.getMetaClient().getTableConfig().getRecordKeyFieldProp();
       List<HoodieRecord> indexRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
-      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, false, header, keyField);
+      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, header, keyField);
       writer.appendBlock(block);
       records.clear();
     }

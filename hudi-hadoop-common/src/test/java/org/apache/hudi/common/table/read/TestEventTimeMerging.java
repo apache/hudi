@@ -20,9 +20,7 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieAvroRecordTestMerger;
@@ -62,8 +60,6 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
   protected Properties getMetaProps() {
     Properties metaProps =  super.getMetaProps();
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
-    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID);
-    metaProps.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
     return metaProps;
   }
 

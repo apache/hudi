@@ -22,16 +22,12 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -52,28 +48,18 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class TestUpsertPartitioner extends HoodieClientTestBase {
 
@@ -88,8 +74,8 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1000 * 1024).parquetMaxFileSize(1000 * 1024).orcMaxFileSize(1000 * 1024).build())
         .build();
 
-    FileCreateUtils.createCommit(basePath, "001");
-    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "001", "file1", fileSize);
+    FileCreateUtilsLegacy.createCommit(basePath, "001");
+    FileCreateUtilsLegacy.createBaseFile(basePath, testPartitionPath, "001", "file1", fileSize);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
@@ -110,84 +96,6 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
         new Tuple2<>(updateRecords.get(0).getKey(), Option.ofNullable(updateRecords.get(0).getCurrentLocation()))),
         "Update record should have gone to the 1 update partition");
     return partitioner;
-  }
-
-  private static List<HoodieInstant> setupHoodieInstants() {
-    List<HoodieInstant> instants = new ArrayList<>();
-    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "ts1"));
-    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "ts2"));
-    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "ts3"));
-    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "ts4"));
-    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "ts5"));
-    Collections.reverse(instants);
-    return instants;
-  }
-
-  private static List<HoodieWriteStat> generateCommitStatWith(int totalRecordsWritten, int totalBytesWritten) {
-    List<HoodieWriteStat> writeStatsList = generateFakeHoodieWriteStat(5);
-    // clear all record and byte stats except for last entry.
-    for (int i = 0; i < writeStatsList.size() - 1; i++) {
-      HoodieWriteStat writeStat = writeStatsList.get(i);
-      writeStat.setNumWrites(0);
-      writeStat.setTotalWriteBytes(0);
-    }
-    HoodieWriteStat lastWriteStat = writeStatsList.get(writeStatsList.size() - 1);
-    lastWriteStat.setTotalWriteBytes(totalBytesWritten);
-    lastWriteStat.setNumWrites(totalRecordsWritten);
-    return writeStatsList;
-  }
-
-  private static HoodieCommitMetadata generateCommitMetadataWith(int totalRecordsWritten, int totalBytesWritten) {
-    List<HoodieWriteStat> fakeHoodieWriteStats = generateCommitStatWith(totalRecordsWritten, totalBytesWritten);
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    fakeHoodieWriteStats.forEach(stat -> commitMetadata.addWriteStat(stat.getPartitionPath(), stat));
-    return commitMetadata;
-  }
-
-  /*
-   * This needs to be a stack so we test all cases when either/both recordsWritten ,bytesWritten is zero before a non
-   * zero averageRecordSize can be computed.
-   */
-  private static LinkedList<Option<byte[]>> generateCommitMetadataList() throws IOException {
-    LinkedList<Option<byte[]>> commits = new LinkedList<>();
-    // First commit with non zero records and bytes
-    commits.push(serializeCommitMetadata(COMMIT_METADATA_SER_DE, generateCommitMetadataWith(2000, 10000)));
-    // Second commit with non zero records and bytes
-    commits.push(serializeCommitMetadata(COMMIT_METADATA_SER_DE, generateCommitMetadataWith(1500, 7500)));
-    // Third commit with a small file
-    commits.push(serializeCommitMetadata(COMMIT_METADATA_SER_DE, generateCommitMetadataWith(100, 500)));
-    // Fourth commit with both zero records and zero bytes
-    commits.push(serializeCommitMetadata(COMMIT_METADATA_SER_DE, generateCommitMetadataWith(0, 0)));
-    // Fifth commit with zero records
-    commits.push(serializeCommitMetadata(COMMIT_METADATA_SER_DE, generateCommitMetadataWith(0, 1500)));
-    // Sixth commit with zero bytes
-    commits.push(serializeCommitMetadata(COMMIT_METADATA_SER_DE, generateCommitMetadataWith(2500, 0)));
-    return commits;
-  }
-
-  @Test
-  public void testAverageBytesPerRecordForNonEmptyCommitTimeLine() throws Exception {
-    HoodieTimeline commitTimeLine = mock(HoodieTimeline.class);
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1000).build())
-        .build();
-    when(commitTimeLine.empty()).thenReturn(false);
-    when(commitTimeLine.getReverseOrderedInstants()).thenReturn(setupHoodieInstants().stream());
-    LinkedList<Option<byte[]>> commits = generateCommitMetadataList();
-    when(commitTimeLine.getInstantDetails(any(HoodieInstant.class))).thenAnswer(invocationOnMock -> commits.pop());
-    long expectAvgSize = (long) Math.ceil((1.0 * 7500) / 1500);
-    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config, COMMIT_METADATA_SER_DE);
-    assertEquals(expectAvgSize, actualAvgSize);
-  }
-
-  @Test
-  public void testAverageBytesPerRecordForEmptyCommitTimeLine() throws Exception {
-    HoodieTimeline commitTimeLine = mock(HoodieTimeline.class);
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder().build();
-    when(commitTimeLine.empty()).thenReturn(true);
-    long expectAvgSize = config.getCopyOnWriteRecordSizeEstimate();
-    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config, COMMIT_METADATA_SER_DE);
-    assertEquals(expectAvgSize, actualAvgSize);
   }
 
   @Test
@@ -223,7 +131,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(0)
             .insertSplitSize(totalInsertNum / 2).autoTuneInsertSplits(false).build()).build();
 
-    FileCreateUtils.createCommit(basePath, "001");
+    FileCreateUtilsLegacy.createCommit(basePath, "001");
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
@@ -335,10 +243,10 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
     // This will generate initial commits and create a compaction plan which includes file groups created as part of this
     HoodieCompactionPlan plan = CompactionTestUtils.createCompactionPlan(metaClient, "001", "002", 1, true, false);
-    FileCreateUtils.createRequestedCompactionCommit(basePath, "002", plan);
+    FileCreateUtilsLegacy.createRequestedCompactionCommit(basePath, "002", plan);
     // Simulate one more commit so that inflight compaction is considered when building file groups in file system view
-    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "003", "2", 1);
-    FileCreateUtils.createCommit(basePath, "003");
+    FileCreateUtilsLegacy.createBaseFile(basePath, testPartitionPath, "003", "2", 1);
+    FileCreateUtilsLegacy.createCommit(basePath, "003");
 
     // Partitioner will attempt to assign inserts to file groups including base file created by inflight compaction
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -372,11 +280,11 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     // create requested replace commit
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
             .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
-    FileCreateUtils.createRequestedClusterCommit(basePath,"002", requestedReplaceMetadata);
+    FileCreateUtilsLegacy.createRequestedClusterCommit(basePath,"002", requestedReplaceMetadata);
 
     // create file slice 003
-    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "003", "3", 1);
-    FileCreateUtils.createCommit(basePath, "003");
+    FileCreateUtilsLegacy.createBaseFile(basePath, testPartitionPath, "003", "3", 1);
+    FileCreateUtilsLegacy.createCommit(basePath, "003");
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -409,13 +317,13 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             .build();
 
     // Create file group with only one log file
-    FileCreateUtils.createLogFile(basePath, testPartitionPath, "001", "fg1", 1);
-    FileCreateUtils.createDeltaCommit(basePath, "001");
+    FileCreateUtilsLegacy.createLogFile(basePath, testPartitionPath, "001", "fg1", 1);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "001");
     // Create another file group size set to max parquet file size so should not be considered during small file sizing
-    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "002", "fg2", 1024);
-    FileCreateUtils.createCommit(basePath, "002");
-    FileCreateUtils.createLogFile(basePath, testPartitionPath, "003", "fg2", 1);
-    FileCreateUtils.createDeltaCommit(basePath, "003");
+    FileCreateUtilsLegacy.createBaseFile(basePath, testPartitionPath, "002", "fg2", 1024);
+    FileCreateUtilsLegacy.createCommit(basePath, "002");
+    FileCreateUtilsLegacy.createLogFile(basePath, testPartitionPath, "003", "fg2", 1);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "003");
 
     // Partitioner will attempt to assign inserts to file groups including base file created by inflight compaction
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -449,11 +357,11 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             .build();
 
     // Bootstrap base files ("small-file targets")
-    FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-1", 1024);
-    FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-2", 1024);
-    FileCreateUtils.createBaseFile(basePath, partitionPath, "002", "fg-3", 1024);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-1", 1024);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-2", 1024);
+    FileCreateUtilsLegacy.createBaseFile(basePath, partitionPath, "002", "fg-3", 1024);
 
-    FileCreateUtils.createCommit(basePath, "002");
+    FileCreateUtilsLegacy.createCommit(basePath, "002");
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
     // Default estimated record size will be 1024 based on last file group created.

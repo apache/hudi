@@ -40,7 +40,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createBaseFile;
 import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.PARTITIONS_LIST_PARALLELISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;

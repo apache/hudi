@@ -26,13 +26,16 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.LogCompactionExecutionHelper;
 
 import org.slf4j.Logger;
@@ -45,23 +48,31 @@ import java.util.stream.Collectors;
 public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O> extends BaseHoodieCompactionPlanGenerator<T, I, K, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLogCompactionPlanGenerator.class);
+  private final HoodieCompactionStrategy compactionStrategy;
 
-  public HoodieLogCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
-    super(table, engineContext, writeConfig);
-  }
-
-  @Override
-  protected HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations) {
-    HoodieCompactionStrategy compactionStrategy = HoodieCompactionStrategy.newBuilder()
+  public HoodieLogCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig,
+                                          BaseTableServicePlanActionExecutor executor) {
+    super(table, engineContext, writeConfig, executor);
+    this.compactionStrategy = HoodieCompactionStrategy.newBuilder()
         .setStrategyParams(getStrategyParams())
         .setCompactorClassName(LogCompactionExecutionHelper.class.getName())
         .build();
+  }
+
+  @Override
+  protected HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations, Pair<List<String>, List<String>> partitionPair) {
     return HoodieCompactionPlan.newBuilder()
         .setOperations(operations)
         .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION)
         .setStrategy(compactionStrategy)
+        .setMissingSchedulePartitions(partitionPair.getRight())
         .setPreserveHoodieMetadata(true)
         .build();
+  }
+
+  @Override
+  protected List<String> getPartitions() {
+    return executor.getPartitions(compactionStrategy, TableServiceType.LOG_COMPACT);
   }
 
   @Override

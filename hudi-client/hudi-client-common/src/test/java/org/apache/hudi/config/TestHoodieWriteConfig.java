@@ -20,6 +20,7 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.client.transaction.lock.NoopLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -278,9 +279,7 @@ public class TestHoodieWriteConfig {
         tableType == HoodieTableType.MERGE_ON_READ, true,
         WriteConcurrencyMode.valueOf(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
-        tableType == HoodieTableType.MERGE_ON_READ
-            ? inProcessLockProviderClassName
-            : HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+        tableType == HoodieTableType.COPY_ON_WRITE ? null : InProcessLockProvider.class.getName());
 
     // 4. All inline services
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
@@ -295,7 +294,7 @@ public class TestHoodieWriteConfig {
         }), true, false, true,
         WriteConcurrencyMode.valueOf(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
-        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+        null);
 
     // 5. All async services
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
@@ -331,7 +330,7 @@ public class TestHoodieWriteConfig {
         true, false, true,
         WriteConcurrencyMode.valueOf(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
-        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+        null);
 
     // even if user explicitly sets a LP, we override it to InProcess LockProvider.
     writeConfig = HoodieWriteConfig.newBuilder()
@@ -368,12 +367,13 @@ public class TestHoodieWriteConfig {
         true, true, true,
         WriteConcurrencyMode.valueOf(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
-        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+        null);
 
     writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withAutoAdjustLockConfigs(false)
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .withClusteringConfig(new HoodieClusteringConfig.Builder().withAsyncClustering(true).build())
         .withProperties(properties)
         .build();
@@ -381,7 +381,7 @@ public class TestHoodieWriteConfig {
     verifyConcurrencyControlRelatedConfigs(writeConfig,
         true, true, true,
         WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL, HoodieFailedWritesCleaningPolicy.LAZY,
-        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+        InProcessLockProvider.class.getName());
   }
 
   @ParameterizedTest
@@ -441,7 +441,7 @@ public class TestHoodieWriteConfig {
           true, false, true,
           WriteConcurrencyMode.valueOf(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()),
           HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
-          HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+          null);
     }
   }
 
@@ -458,9 +458,22 @@ public class TestHoodieWriteConfig {
         }), false, false, false,
         WriteConcurrencyMode.valueOf(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
-        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+        null);
 
-    // 2. No table service, with optimistic concurrency control,
+    // 2. async table service, lock provider expected to be overriden
+    verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
+          {
+            put(HoodieTableConfig.TYPE.key(), tableType.name());
+            put(HoodieWriteConfig.TABLE_SERVICES_ENABLED.key(), "true");
+            put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
+            put(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), "true");
+          }
+        }), true, true, true,
+        WriteConcurrencyMode.valueOf(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()),
+        HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
+        InProcessLockProvider.class.getName());
+
+    // 3. No table service, with optimistic concurrency control,
     // failed write clean policy should be updated accordingly
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
           {
@@ -496,7 +509,7 @@ public class TestHoodieWriteConfig {
         }), true, true, true,
         WriteConcurrencyMode.valueOf(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
-        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+        null);
 
     // 2. Metadata table disabled, with optimistic concurrency control,
     // failed write clean policy should be updated accordingly
@@ -518,6 +531,42 @@ public class TestHoodieWriteConfig {
   }
 
   @Test
+  public void testTimeGeneratorConfig() {
+
+    HoodieWriteConfig writeConfig = createWriteConfig(new HashMap<String, String>() {
+      {
+        put(HoodieTableConfig.TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
+      }
+    });
+
+    // validate the InProcessLockProvider kicks in if no explicit lock provider is set.
+    assertEquals(InProcessLockProvider.class.getName(), writeConfig.getTimeGeneratorConfig().getLockConfiguration().getConfig().getProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
+
+    writeConfig = createWriteConfig(new HashMap<String, String>() {
+      {
+        put(HoodieTableConfig.TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
+        put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
+      }
+    });
+
+    // validate the the configured lock provider is honored by the TimeGeneratorConfig as well.
+    assertEquals(NoopLockProvider.class.getName(), writeConfig.getTimeGeneratorConfig().getLockConfiguration().getConfig().getProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
+
+    // if auto adjust lock config is enabled, for a single writer w/ all inline table services, InProcessLockProvider is overriden
+    writeConfig = createWriteConfig(new HashMap<String, String>() {
+      {
+        put(HoodieTableConfig.TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
+        put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
+        put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "true");
+      }
+    });
+
+    // validate the InProcessLockProvider kicks in due to auto adjust lock configs
+    assertEquals(InProcessLockProvider.class.getName(), writeConfig.getTimeGeneratorConfig().getLockConfiguration().getConfig().getProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
+
+  }
+
+  @Test
   public void testConsistentBucketIndexDefaultClusteringConfig() {
     Properties props = new Properties();
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
@@ -526,7 +575,7 @@ public class TestHoodieWriteConfig {
             .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING).build())
         .build();
     assertEquals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY, writeConfig.getClusteringPlanStrategyClass());
-    assertEquals(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY, writeConfig.getClusteringExecutionStrategyClass());
+    assertEquals(HoodieClusteringConfig.SINGLE_SPARK_JOB_CONSISTENT_HASHING_EXECUTION_STRATEGY, writeConfig.getClusteringExecutionStrategyClass());
   }
 
   @Test
@@ -567,6 +616,18 @@ public class TestHoodieWriteConfig {
   }
 
   @Test
+  void testBloomIndexFileIdKeySortingConfig() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props)
+            .withIndexType(HoodieIndex.IndexType.BLOOM)
+            .enableBloomIndexFileGroupIdKeySorting(true).build())
+        .build();
+    assertTrue(writeConfig.isBloomIndexFileGroupIdKeySortingEnabled());
+  }
+  
+  @Test
   public void testAutoAdjustCleanPolicyForNonBlockingConcurrencyControl() {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
@@ -586,7 +647,7 @@ public class TestHoodieWriteConfig {
     verifyConcurrencyControlRelatedConfigs(writeConfig,
         true, true, true,
         WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL, HoodieFailedWritesCleaningPolicy.LAZY,
-        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+        null);
   }
 
   @Test

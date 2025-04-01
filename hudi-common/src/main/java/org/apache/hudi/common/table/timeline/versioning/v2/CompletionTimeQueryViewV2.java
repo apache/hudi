@@ -191,7 +191,6 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
   }
 
   @Override
-
   public List<String> getInstantTimes(
       HoodieTimeline timeline,
       Option<String> startCompletionTime,
@@ -256,7 +255,7 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
       // fallback to archived timeline
       return this.instantTimeToCompletionTimeMap.entrySet().stream()
           .filter(entry -> InstantComparison.compareTimestamps(entry.getValue(), LESSER_THAN_OR_EQUALS, endCompletionTime.get()))
-          .map(Map.Entry::getKey).collect(Collectors.toList());
+          .map(Map.Entry::getKey).sorted().collect(Collectors.toList());
     }
 
     if (startFromEarliest) {

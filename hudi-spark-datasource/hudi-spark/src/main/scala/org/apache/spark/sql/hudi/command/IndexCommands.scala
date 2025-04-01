@@ -19,25 +19,26 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.HoodieSparkIndexClient
-import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.model.{HoodieIndexDefinition, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.HoodieIndexDefinition
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
 import org.apache.hudi.exception.HoodieIndexException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.index.HoodieSparkIndexClient
 import org.apache.hudi.index.expression.ExpressionIndexSparkFunctions
 import org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION
 import org.apache.hudi.metadata.{HoodieTableMetadataUtil, MetadataPartitionType}
+
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
-import org.apache.spark.sql.{Row, SparkSession}
 
 import java.util
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
 
 case class CreateIndexCommand(table: CatalogTable,
@@ -56,7 +57,6 @@ case class CreateIndexCommand(table: CatalogTable,
 
     if (indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
       || indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)) {
-      // validate that only overwrite with latest payloads can enabled SI
       if (indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS) &&
         options.asJava.getOrDefault(EXPRESSION_OPTION, ExpressionIndexSparkFunctions.IDENTITY_FUNCTION).equals(ExpressionIndexSparkFunctions.IDENTITY_FUNCTION)) {
         throw new HoodieIndexException("Column stats index without expression on any column can be created using datasource configs. " +
@@ -73,12 +73,6 @@ case class CreateIndexCommand(table: CatalogTable,
         HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX
       } else {
         HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
-      }
-      if (derivedIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX)) {
-        if ((metaClient.getTableConfig.getPayloadClass != null && !(metaClient.getTableConfig.getPayloadClass.equals(classOf[OverwriteWithLatestAvroPayload].getCanonicalName)))
-          || (metaClient.getTableConfig.getRecordMergeMode ne RecordMergeMode.COMMIT_TIME_ORDERING)) {
-          throw new HoodieIndexException("Secondary Index can only be enabled on table with OverwriteWithLatestAvroPayload payload class or " + "Merge mode set to OVERWRITE_WITH_LATEST")
-        }
       }
       new HoodieSparkIndexClient(sparkSession).create(metaClient, indexName, derivedIndexType, columnsMap, options.asJava, table.properties.asJava)
     } else {

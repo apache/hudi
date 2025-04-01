@@ -19,6 +19,7 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -53,8 +54,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 public class TestWriteCopyOnWrite extends TestWriteBase {
 
-  // to trigger buffer flush of 3 rows, each is 576 bytes for INSERT and 624 bytes for UPSERT
-  private static final double BATCH_SIZE_MB = 0.0016;
+  // for legacy write function: to trigger buffer flush of 3 rows, each is 576 bytes for INSERT and 624 bytes for UPSERT
+  private static final double BATCH_SIZE_MB_V1 = 0.0016;
+  // for RowData write function: to trigger buffer flush with batch size exceeded by 3 rows, each record is 48 bytes
+  private static final double BATCH_SIZE_MB_V2 = 0.00013;
+  // for RowData write function: to trigger buffer flush with memory pool exhausted.
+  private static final double BUFFER_SIZE_MB_V2 = 0.0003;
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -122,6 +127,30 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .jobFailover()
         .assertNextEvent()
         .checkLastPendingInstantCompleted()
+        .end();
+  }
+
+  @Test
+  public void testAppendInsertAfterFailoverWithEmptyCheckpoint() throws Exception {
+    // open the function and ingest data
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+    conf.setString(FlinkOptions.OPERATION, "INSERT");
+    preparePipeline()
+        .assertEmptyDataFiles()
+        // make an empty snapshot
+        .checkpoint(1)
+        .assertEmptyEvent()
+        // trigger a partial failure
+        .subTaskFails(0, 1)
+        .assertNextEvent()
+        // make sure coordinator send an ack event to unblock the writers.
+        .assertNextSubTaskEvent()
+        // write a set of data and check the result.
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED1)
         .end();
   }
 
@@ -357,7 +386,10 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithSmallBufferSize() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200 + getBatchSize());
+    // In rowdata write mode, BinaryInMemorySortBuffer need at least 2 memory segments for auxiliary information,
+    // the page size is tuned to 64 to make sure 3 records from 5 will trigger a mini-batch write.
+    conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 64);
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200 + getBufferSize());
 
     Map<String, String> expected = getMiniBatchExpected();
 
@@ -418,7 +450,11 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   protected double getBatchSize() {
-    return BATCH_SIZE_MB;
+    return supportRowDataAppend(conf) ? BATCH_SIZE_MB_V2 : BATCH_SIZE_MB_V1;
+  }
+
+  protected double getBufferSize() {
+    return supportRowDataAppend(conf) ? BUFFER_SIZE_MB_V2 : BATCH_SIZE_MB_V1;
   }
 
   protected Map<String, String> getMiniBatchExpected() {
@@ -490,6 +526,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testWriteExactlyOnce() throws Exception {
     // reset the config option
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 128);
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
     preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT)
@@ -614,6 +651,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testReuseEmbeddedServer() throws IOException {
     conf.setInteger("hoodie.filesystem.view.remote.timeout.secs", 500);
     conf.setString("hoodie.metadata.enable","true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false"); // HUDI-8814
+
     HoodieFlinkWriteClient writeClient = null;
     HoodieFlinkWriteClient writeClient2 = null;
 

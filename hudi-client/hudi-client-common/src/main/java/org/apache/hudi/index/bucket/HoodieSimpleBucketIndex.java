@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
@@ -136,8 +137,8 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
     return false;
   }
 
-  public int getBucketID(HoodieKey key) {
-    return BucketIdentifier.getBucketId(key, indexKeyFields, numBuckets);
+  public int getBucketID(HoodieKey key, int numBuckets) {
+    return BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, numBuckets);
   }
 
   @Override
@@ -152,14 +153,17 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
 
   private class SimpleBucketIndexLocationFunction implements Function<HoodieRecord, Option<HoodieRecordLocation>> {
     private final Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping;
+    private final NumBucketsFunction numBucketsFunction;
 
     public SimpleBucketIndexLocationFunction(HoodieTable table, String partitionPath) {
       this.bucketIdToFileIdMapping = loadBucketIdToFileIdMappingForPartition(table, partitionPath);
+      HoodieWriteConfig writeConfig = table.getConfig();
+      this.numBucketsFunction = NumBucketsFunction.fromWriteConfig(writeConfig);
     }
 
     @Override
     public Option<HoodieRecordLocation> apply(HoodieRecord record) {
-      int bucketId = getBucketID(record.getKey());
+      int bucketId = getBucketID(record.getKey(), numBucketsFunction.getNumBuckets(record.getPartitionPath()));
       return Option.ofNullable(bucketIdToFileIdMapping.get(bucketId));
     }
   }

@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -363,7 +364,9 @@ public class ITTestSchemaEvolution {
         FlinkOptions.COMPACTION_TASKS.key(), 1,
         FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), false,
         HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED.key(), false,
-        HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), true);
+        HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), true,
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true",
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
   }
 
   private void checkAnswerEvolved(String... expectedResult) throws Exception {

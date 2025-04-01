@@ -25,6 +25,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -38,6 +39,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -77,16 +79,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.testutils.Assertions.assertFileSizesEqual;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -181,12 +186,25 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return getHoodieMetaClient(storageConf, basePath, getPropertiesForKeyGen(true));
   }
 
+  public HoodieTableMetaClient getHoodieMetaClientWithTableVersion(StorageConfiguration<?> storageConf, String basePath, String tableVersion) throws IOException {
+    Properties props = getPropertiesForKeyGen(true);
+    props.put(WRITE_TABLE_VERSION.key(), tableVersion);
+    return getHoodieMetaClient(storageConf, basePath, props);
+  }
+
   @Override
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
+    return getHoodieMetaClient(storageConf, basePath, props, COPY_ON_WRITE);
+  }
+
+  @Override
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props,
+                                                   HoodieTableType tableType) throws IOException {
     return HoodieTableMetaClient.newTableBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
-        .setTableType(COPY_ON_WRITE)
+        .setTableType(tableType)
         .setPayloadClass(HoodieAvroPayload.class)
+        .setTableVersion(ConfigUtils.getIntWithAltKeys(new TypedProperties(props), WRITE_TABLE_VERSION))
         .fromProperties(props)
         .initTable(storageConf.newInstance(), basePath);
   }
@@ -419,5 +437,29 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     // to avoid port reuse causing failures
     timelineServicePort = (timelineServicePort + 1 - 1024) % (65536 - 1024) + 1024;
     return timelineServicePort;
+  }
+
+  /**
+   * Check if two dataframes are equal.
+   *
+   * @param expectedDf      expected dataframe
+   * @param actualDf        actual dataframe
+   * @param validateColumns columns to validate
+   * @return true if dataframes are equal, false otherwise
+   */
+  public static boolean areDataframesEqual(Dataset<Row> expectedDf,
+                                           Dataset<Row> actualDf,
+                                           Set<String> validateColumns) {
+    // Normalize schema order
+    String[] sortedColumnNames = Arrays.stream(expectedDf.columns())
+        .filter(validateColumns::contains).sorted().toArray(String[]::new);
+
+    // Reorder columns in both datasets
+    Dataset<Row> df1Normalized = expectedDf.selectExpr(sortedColumnNames);
+    Dataset<Row> df2Normalized = actualDf.selectExpr(sortedColumnNames);
+
+    // Check for differences
+    return df1Normalized.except(df2Normalized).isEmpty()
+        && df2Normalized.except(df1Normalized).isEmpty();
   }
 }

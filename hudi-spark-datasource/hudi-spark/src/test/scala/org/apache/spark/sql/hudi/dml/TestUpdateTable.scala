@@ -19,10 +19,13 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
+import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertEquals
 
@@ -360,6 +363,127 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         // Do clustering for all the clustering plan
         checkAnswer(s"call run_clustering(path => '$basePath', order => 'partition')")(
           Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "*")
+        )
+      }
+    }
+  }
+
+  test("Test Update Table With Primary Key and Partition Key Updates error out") {
+    withRecordType()(withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        // create table with primary key and partition
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  pt string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by (pt)
+       """.stripMargin)
+
+        // Insert initial data
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000, '2021')")
+
+        // Verify initial state
+        checkAnswer(s"select id, name, price, ts, pt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2021")
+        )
+
+        // Try to update primary key (should fail)
+        val e1 = intercept[AnalysisException] {
+          spark.sql(s"update $tableName set id = 2 where id = 1")
+        }
+
+        if (gteqSpark3_4) {
+          assert(e1.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for record key field `id`" +
+            s" for table `spark_catalog.default.$tableName`. Please remove the assignment clause to avoid the error."))
+        } else {
+          assert(e1.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for record key field `id`" +
+            s" for table `default.$tableName`. Please remove the assignment clause to avoid the error."))
+        }
+
+        // Try to update partition column (should fail)
+        val e2 = intercept[AnalysisException] {
+          spark.sql(s"update $tableName set pt = '2022' where id = 1")
+        }
+        if (gteqSpark3_4) {
+          assert(e2.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for partition field `pt`" +
+            s" for table `spark_catalog.default.$tableName`. Please remove the assignment clause to avoid the error."))
+        } else {
+          assert(e2.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for partition field `pt`" +
+            s" for table `default.$tableName`. Please remove the assignment clause to avoid the error."))
+        }
+
+        // Verify data remains unchanged after failed updates
+        checkAnswer(s"select id, name, price, ts, pt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2021")
+        )
+
+        // Verify normal update still works
+        spark.sql(s"update $tableName set price = 20.0 where id = 1")
+        checkAnswer(s"select id, name, price, ts, pt from $tableName")(
+          Seq(1, "a1", 20.0, 1000, "2021")
+        )
+      }
+    })
+  }
+
+  test("Test Update Partitioned Table Without Primary Key") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  preCombineField = 'price'
+             |)
+             |partitioned by (ts)
+             |""".stripMargin)
+
+        // test with optimized sql writes enabled.
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
+
+        // insert data to table
+        spark.sql(
+          s"""
+             |insert into $tableName
+             |values
+             |  (1, 'a1', cast(10.0 as double), 1000),
+             |  (2, 'a2', cast(20.0 as double), 1000),
+             |  (3, 'a2', cast(30.0 as double), 1000)
+             |""".stripMargin)
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 20.0, 1000),
+          Seq(3, "a2", 30.0, 1000)
+        )
+
+        // Update the row with id = 2 by setting price to 25.0
+        spark.sql(s"update $tableName set price = cast(25.0 as double) where id = 2")
+
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 25.0, 1000),
+          Seq(3, "a2", 30.0, 1000)
         )
       }
     }

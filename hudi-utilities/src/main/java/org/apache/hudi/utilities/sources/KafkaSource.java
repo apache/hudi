@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
@@ -31,6 +32,8 @@ import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka010.OffsetRange;
@@ -71,10 +74,16 @@ public abstract class KafkaSource<T> extends Source<T> {
   @Override
   protected InputBatch<T> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     try {
-      return toInputBatch(getOffsetRanges(props, sourceProfileSupplier, offsetGen, metrics,
-          lastCheckpoint, sourceLimit));
+      OffsetRange[] offsetRanges = getOffsetRanges(props, sourceProfileSupplier, offsetGen, metrics,
+          lastCheckpoint, sourceLimit);
+      return toInputBatch(offsetRanges);
     } catch (org.apache.kafka.common.errors.TimeoutException e) {
       throw new HoodieSourceTimeoutException("Kafka Source timed out " + e.getMessage());
+    } catch (KafkaException ex) {
+      if (hasConfigException(ex)) {
+        throw new HoodieReadFromSourceException("kafka source config issue ", ex);
+      }
+      throw ex;
     }
   }
 
@@ -108,7 +117,8 @@ public abstract class KafkaSource<T> extends Source<T> {
 
   private InputBatch<T> toInputBatch(OffsetRange[] offsetRanges) {
     long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);
-    LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
+    LOG.info("About to read {} from Kafka for topic :{} after offset generation with offset ranges {}",
+        totalNewMsgs, offsetGen.getTopicName(), Arrays.toString(offsetRanges));
     if (totalNewMsgs <= 0) {
       metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, 0);
       return new InputBatch<>(Option.empty(), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
@@ -125,5 +135,17 @@ public abstract class KafkaSource<T> extends Source<T> {
     if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET)) {
       offsetGen.commitOffsetToKafka(lastCkptStr);
     }
+  }
+
+  private boolean hasConfigException(Throwable e) {
+    if (e == null) {
+      return false;
+    }
+
+    if (e instanceof ConfigException || e instanceof io.confluent.common.config.ConfigException) {
+      return true;
+    }
+
+    return hasConfigException(e.getCause());
   }
 }

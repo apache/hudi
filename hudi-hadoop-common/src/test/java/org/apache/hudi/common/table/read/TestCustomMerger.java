@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -64,10 +63,9 @@ public class TestCustomMerger extends HoodieFileGroupReaderTestHarness {
 
   @Override
   protected Properties getMetaProps() {
-    Properties metaProps =  super.getMetaProps();
+    Properties metaProps = super.getMetaProps();
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), CustomAvroMerger.KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY);
-    metaProps.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
     return metaProps;
   }
 

@@ -201,7 +201,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
         partitionFormatter = partitionFormatter.withZone(parsedDateTime.getZone());
       }
 
-      timeMs = inputFormatter.get().parseDateTime(partitionVal.toString()).getMillis();
+      timeMs = parsedDateTime.getMillis();
     } else {
       throw new HoodieNotSupportedException(
           "Unexpected type for partition field: " + partitionVal.getClass().getName());

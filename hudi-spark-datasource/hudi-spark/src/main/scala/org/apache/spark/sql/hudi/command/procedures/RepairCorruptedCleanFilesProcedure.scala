@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.table.timeline.{HoodieInstant, TimelineUtils}
 import org.apache.hudi.common.util.CleanerUtils
 import org.apache.hudi.exception.HoodieIOException
+
 import org.apache.avro.AvroRuntimeException
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -27,6 +28,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.io.IOException
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class RepairCorruptedCleanFilesProcedure extends BaseProcedure with ProcedureBuilder with Logging {
@@ -61,7 +63,8 @@ class RepairCorruptedCleanFilesProcedure extends BaseProcedure with ProcedureBui
           logWarning("Corruption found. Trying to remove corrupted clean instant file: " + instant)
           TimelineUtils.deleteInstantFile(metaClient.getStorage, metaClient.getTimelinePath, instant, instantFileNameGenerator)
         case ioe: IOException =>
-          if (ioe.getMessage.contains("Not an Avro data file")) {
+          if (ioe.getMessage.contains("Not an Avro data file") ||
+              Option(ioe.getCause).exists(_.getMessage.contains("Not an Avro data file"))) {
             logWarning("Corruption found. Trying to remove corrupted clean instant file: " + instant)
             TimelineUtils.deleteInstantFile(metaClient.getStorage, metaClient.getTimelinePath, instant, instantFileNameGenerator)
           } else {

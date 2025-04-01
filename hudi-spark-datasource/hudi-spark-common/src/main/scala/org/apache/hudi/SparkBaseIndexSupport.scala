@@ -21,15 +21,17 @@ package org.apache.hudi
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
+
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, In, Literal}
-import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression}
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.{break, breakable}
@@ -99,31 +101,42 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
     (prunedPartitions, prunedFiles)
   }
 
-  protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], prunedFileNames: Set[String], isExpressionIndex: Boolean = false): Set[String] = {
-    val indexSchema = indexDf.schema
-    val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema, isExpressionIndex)).reduce(And)
-    val prunedCandidateFileNames =
-      indexDf.where(new Column(indexFilter))
-        .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+  protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], fileNamesFromPrunedPartitions: Set[String],
+                                  isExpressionIndex: Boolean = false, indexDefinitionOpt: Option[HoodieIndexDefinition] = Option.empty): Set[String] = {
+    val indexedCols : Seq[String] = if (indexDefinitionOpt.isDefined) {
+      indexDefinitionOpt.get.getSourceFields.asScala.toSeq
+    } else {
+      metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
+    }
+    val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex, indexedCols)).reduce(And)
+    if (indexFilter.equals(TrueLiteral)) {
+      // if there are any non indexed cols or we can't translate source expr, we have to read all files and may not benefit from col stats lookup.
+       fileNamesFromPrunedPartitions
+    } else {
+      // only lookup in col stats if all filters are eligible to be looked up in col stats index in MDT
+      val prunedCandidateFileNames =
+        indexDf.where(new Column(indexFilter))
+          .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+          .collect()
+          .map(_.getString(0))
+          .toSet
+
+      // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
+      //       base-file or log file: since it's bound to clustering, which could occur asynchronously
+      //       at arbitrary point in time, and is not likely to be touching all of the base files.
+      //
+      //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
+      //       files and all outstanding base-files or log files, and make sure that all base files and
+      //       log file not represented w/in the index are included in the output of this method
+      val allIndexedFileNames =
+      indexDf.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
         .collect()
         .map(_.getString(0))
         .toSet
+      val notIndexedFileNames = fileNamesFromPrunedPartitions -- allIndexedFileNames
 
-    // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
-    //       base-file or log file: since it's bound to clustering, which could occur asynchronously
-    //       at arbitrary point in time, and is not likely to be touching all of the base files.
-    //
-    //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
-    //       files and all outstanding base-files or log files, and make sure that all base files and
-    //       log file not represented w/in the index are included in the output of this method
-    val allIndexedFileNames =
-    indexDf.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-      .collect()
-      .map(_.getString(0))
-      .toSet
-    val notIndexedFileNames = prunedFileNames -- allIndexedFileNames
-
-    prunedCandidateFileNames ++ notIndexedFileNames
+      prunedCandidateFileNames ++ notIndexedFileNames
+    }
   }
 
   /**

@@ -17,9 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.ClusteringUtils
 import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
+import org.apache.hudi.common.util.ClusteringUtils
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -67,7 +66,7 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
 
     val clusteringPlans = clusteringInstants.map(instant =>
       ClusteringUtils.getClusteringPlan(metaClient, instant)
-    )
+    ).filter(clusteringPlan => clusteringPlan.isPresent)
 
     if (showInvolvedPartitions) {
       clusteringPlans.map { p =>
