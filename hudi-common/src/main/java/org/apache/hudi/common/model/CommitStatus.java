@@ -27,6 +27,10 @@ public class CommitStatus {
     return new CommitStatus(true, metadata);
   }
 
+  public static CommitStatus successWithEmptyCommit() {
+    return new CommitStatus(true, null);
+  }
+
   public static CommitStatus fail() {
     return new CommitStatus(false, null);
   }
