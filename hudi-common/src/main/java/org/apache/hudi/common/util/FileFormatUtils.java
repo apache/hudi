@@ -266,7 +266,7 @@ public abstract class FileFormatUtils {
   public abstract ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
                                                                                        StoragePath filePath,
                                                                                        Option<BaseKeyGenerator> keyGeneratorOpt,
-                                                                                       Option<String> partitionPath);
+                                                                                       Option<String> partitionPath) throws IOException;
 
   /**
    * Read the Avro schema of the data file.

@@ -25,13 +25,17 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.compress.CompressionCodec;
+import org.apache.hudi.io.hadoop.HoodieHFileUtils;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.io.storage.HoodieNativeAvroHFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -46,18 +50,21 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
+import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -110,22 +117,64 @@ public class HFileUtils extends FileFormatUtils {
 
   @Override
   public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
-    throw new UnsupportedOperationException("HFileUtils does not support fetchRecordKeysWithPositions");
+    return fetchRecordKeysWithPositions(storage, filePath, Option.empty(), Option.empty());
   }
 
   @Override
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
-    throw new UnsupportedOperationException("HFileUtils does not support getHoodieKeyIterator");
+    try {
+      Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
+      conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
+      HoodieNativeAvroHFileReader reader = new HoodieNativeAvroHFileReader(storage, filePath, Option.empty());
+      ClosableIterator<String> keyIterator = reader.getRecordKeyIterator();
+      return new ClosableIterator<HoodieKey>() {
+        @Override
+        public void close() {
+          keyIterator.close();
+        }
+
+        @Override
+        public boolean hasNext() {
+          return keyIterator.hasNext();
+        }
+
+        @Override
+        public HoodieKey next() {
+          String key = keyIterator.next();
+          if (partitionPath.isPresent()) {
+            return new HoodieKey(key, partitionPath.get());
+          } else {
+            return new HoodieKey(key, null);
+          }
+        }
+      };
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to read the HFile: ", e);
+    }
   }
 
   @Override
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
-    throw new UnsupportedOperationException("HFileUtils does not support getHoodieKeyIterator");
+    return getHoodieKeyIterator(storage, filePath, Option.empty(), Option.empty());
   }
 
   @Override
-  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
-    throw new UnsupportedOperationException("HFileUtils does not support fetchRecordKeysWithPositions");
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
+                                                                              StoragePath filePath,
+                                                                              Option<BaseKeyGenerator> keyGeneratorOpt,
+                                                                              Option<String> partitionPath) {
+    try {
+      if (filePath == null || !storage.exists(filePath)) {
+        return ClosableIterator.wrap(Collections.emptyIterator());
+      } else {
+        AtomicLong position = new AtomicLong(0);
+        return new CloseableMappingIterator<>(
+            getHoodieKeyIterator(storage, filePath, keyGeneratorOpt, partitionPath),
+            key -> Pair.of(key, position.getAndIncrement()));
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read from HFile: " + filePath, e);
+    }
   }
 
   @Override

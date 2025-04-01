@@ -19,6 +19,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.common.config
 import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, SparkDatasetMixin}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.{HoodieEngineContext, HoodieLocalEngineContext}
@@ -57,7 +58,8 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
     HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "1",
     HoodieClusteringConfig.INLINE_CLUSTERING.key -> "false",
-    HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "2"
+    HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "2",
+    "hoodie.metadata.enable" -> "false"
   )
   val sparkOpts = Map(
     HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
@@ -94,7 +96,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
 
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieFileFormat], names = Array("ORC"))
+  @EnumSource(value = classOf[HoodieFileFormat], names = Array("HFILE"))
   def testHFileFormatForMORTableType(fileFormat: HoodieFileFormat): Unit = {
     testTableWithOneBaseFileFormat(basePath, HoodieTableType.MERGE_ON_READ.name(), fileFormat.name())
   }
