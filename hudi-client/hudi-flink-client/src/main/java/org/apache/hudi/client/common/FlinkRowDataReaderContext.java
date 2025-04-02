@@ -29,6 +29,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -59,6 +61,7 @@ import java.util.Objects;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
@@ -117,7 +120,13 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       case COMMIT_TIME_ORDERING:
         return Option.of(new CommitTimeFlinkRecordMerger());
       default:
-        throw new UnsupportedOperationException("No record merger implementation for mode: " + mergeMode);
+        List<String> mergeClasses = ConfigUtils.split2List(mergeImplClasses);
+        ValidationUtils.checkArgument(mergeClasses.size() == 1,
+            "There should be one merger class in configuration, but get: " + mergeImplClasses);
+        HoodieRecordMerger recordMerger = HoodieRecordUtils.loadRecordMerger(mergeClasses.get(0));
+        ValidationUtils.checkArgument(recordMerger.getRecordType() == HoodieRecord.HoodieRecordType.FLINK,
+            "Unexpected record type for merge: " + recordMerger.getClass().getName());
+        return Option.of(recordMerger);
     }
   }
 
@@ -133,10 +142,22 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
+  public Map<String, Object> generateMetadataForRecord(RowData record, Schema schema, Option<String> orderingFieldName) {
+    Map<String, Object> metadata = super.generateMetadataForRecord(record, schema, orderingFieldName);
+    if (orderingFieldName.isEmpty() || metadata.containsKey(INTERNAL_META_ORDERING_FIELD)) {
+      return metadata;
+    }
+    Comparable orderingValue = getOrderingValue(Option.of(record), metadata, schema, orderingFieldName);
+    metadata.put(INTERNAL_META_ORDERING_FIELD, orderingValue);
+    return metadata;
+  }
+
+  @Override
   public HoodieRecord<RowData> constructHoodieRecord(Option<RowData> recordOption, Map<String, Object> metadataMap) {
     HoodieKey hoodieKey = new HoodieKey(
         (String) metadataMap.get(INTERNAL_META_RECORD_KEY),
         (String) metadataMap.get(INTERNAL_META_PARTITION_PATH));
+    // delete record
     if (recordOption.isEmpty()) {
       return new HoodieEmptyRecord<>(hoodieKey, HoodieRecord.HoodieRecordType.FLINK);
     }
@@ -154,15 +175,19 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   @Override
   public Comparable getOrderingValue(Option<RowData> recordOption, Map<String, Object> metadataMap, Schema schema, Option<String> orderingFieldName) {
-    // orderingValue is of engine type.
-    Comparable orderingValue = super.getOrderingValue(recordOption, metadataMap, schema, orderingFieldName);
-    if (orderingFieldName.isEmpty()) {
-      return orderingValue;
+    if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
+      return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
     }
+    if (!recordOption.isPresent() || orderingFieldName.isEmpty()) {
+      return DEFAULT_ORDERING_VALUE;
+    }
+    Object value = getValue(recordOption.get(), schema, orderingFieldName.get());
     // currently the ordering value stored in DeleteRecord is converted to Avro value because Flink reader currently uses AVRO payload to merge.
     // So here we align the data format with reader until RowData reader is supported, HUDI-9146.
     UnaryOperator<Object> fieldConverter = HoodieRowDataUtil.getFieldConverter(schema, orderingFieldName.get(), flinkConf);
-    return (Comparable) fieldConverter.apply(orderingValue);
+    Comparable finalOrderingVal = value != null ? (Comparable) fieldConverter.apply(value) : DEFAULT_ORDERING_VALUE;
+    metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
+    return finalOrderingVal;
   }
 
   @Override

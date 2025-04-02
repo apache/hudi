@@ -855,7 +855,7 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
         || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
-      // DefaultHoodieRecordPayload matches with EVENT_TIME_ORDERING.
+      // DefaultHoodieRecordPayload and EventTimeAvroPayload match with EVENT_TIME_ORDERING.
       return EVENT_TIME_ORDERING;
     } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
       // OverwriteWithLatestAvroPayload matches with COMMIT_TIME_ORDERING.

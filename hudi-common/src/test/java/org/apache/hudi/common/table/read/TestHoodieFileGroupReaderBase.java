@@ -205,7 +205,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             spillableMap.put(recordKey,
                 Pair.of(
                     Option.ofNullable(readerContext.seal(record)),
-                    readerContext.generateMetadataForRecord(record, avroSchema)));
+                    readerContext.generateMetadataForRecord(record, avroSchema, Option.empty())));
 
             //test position based
             spillableMap.put(position++,

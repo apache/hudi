@@ -317,7 +317,7 @@ public abstract class HoodieReaderContext<T> {
    * @param schema The Avro schema of the record.
    * @return A mapping containing the metadata.
    */
-  public Map<String, Object> generateMetadataForRecord(T record, Schema schema) {
+  public Map<String, Object> generateMetadataForRecord(T record, Schema schema, Option<String> orderingFieldName) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, getRecordKey(record, schema));
     meta.put(INTERNAL_META_SCHEMA_ID, encodeAvroSchema(schema));

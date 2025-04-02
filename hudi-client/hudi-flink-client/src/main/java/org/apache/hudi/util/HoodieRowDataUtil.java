@@ -41,6 +41,7 @@ public class HoodieRowDataUtil {
   // key: <record_schema, field_name>
   private static final Map<Pair<Schema, String>, RowData.FieldGetter> FIELD_GETTER_CACHE = new ConcurrentHashMap<>();
   private static final Map<Pair<Schema, String>, UnaryOperator<Object>> FIELD_CONVERTER_CACHE = new ConcurrentHashMap<>();
+  private static final Map<Schema, RowData.FieldGetter[]> ALL_FIELD_GETTERS_CACHE = new ConcurrentHashMap<>();
 
   /**
    * Utils to get FieldGetter from cache.
@@ -94,5 +95,24 @@ public class HoodieRowDataUtil {
       FIELD_CONVERTER_CACHE.put(cacheKey, fieldConverter);
     }
     return fieldConverter;
+  }
+
+  /**
+   * Utils to get full field getters from cache.
+   *
+   * @param schema schema of record
+   * @return All field getters from cache or newly created one if not existed in cache.
+   */
+  public static RowData.FieldGetter[] getAllFieldGetters(Schema schema) {
+    RowData.FieldGetter[] fieldGetters = ALL_FIELD_GETTERS_CACHE.get(schema);
+    if (fieldGetters == null) {
+      fieldGetters = new RowData.FieldGetter[schema.getFields().size()];
+      int idx = 0;
+      for (Schema.Field field: schema.getFields()) {
+        fieldGetters[idx++] = getFieldGetter(schema, field.name()).get();
+      }
+      ALL_FIELD_GETTERS_CACHE.put(schema, fieldGetters);
+    }
+    return fieldGetters;
   }
 }

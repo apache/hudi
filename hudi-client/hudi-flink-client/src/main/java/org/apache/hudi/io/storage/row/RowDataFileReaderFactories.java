@@ -50,9 +50,9 @@ public class RowDataFileReaderFactories {
 
   public interface Factory {
     /**
-     * @param internalSchemaManager
-     * @param conf
-     * @return
+     * @param internalSchemaManager InternalSchema manager used for schema evolution
+     * @param conf flink configuration
+     * @return A RowData file reader
      */
     RowDataFileReader createFileReader(InternalSchemaManager internalSchemaManager, Configuration conf);
   }

@@ -342,7 +342,7 @@ class TestFileGroupRecordBuffer {
     metadata.put(INTERNAL_META_RECORD_KEY, "12345");
     metadata.put(INTERNAL_META_PARTITION_PATH, "partition1");
     when(readerContext.getOrderingValue(any(), any(), any(), any())).thenReturn(1);
-    when(readerContext.generateMetadataForRecord(any(), any(), any())).thenReturn(metadata);
+    when(readerContext.generateMetadataForRecord(any(), any(), Option.empty())).thenReturn(metadata);
     keyBasedBuffer.processDeleteRecord(record, metadata);
     Map<Serializable, Pair<Option<GenericRecord>, Map<String, Object>>> records =
         keyBasedBuffer.getLogRecords();
@@ -359,7 +359,7 @@ class TestFileGroupRecordBuffer {
     Map<String, Object> anotherMetadata = new HashMap<>();
     anotherMetadata.put(INTERNAL_META_RECORD_KEY, "54321");
     anotherMetadata.put(INTERNAL_META_PARTITION_PATH, "partition2");
-    when(readerContext.generateMetadataForRecord(any(), any(), any())).thenReturn(anotherMetadata);
+    when(readerContext.generateMetadataForRecord(any(), any(), Option.empty())).thenReturn(anotherMetadata);
     keyBasedBuffer.processDeleteRecord(anotherRecord, anotherMetadata);
     records = keyBasedBuffer.getLogRecords();
     assertEquals(2, records.size());

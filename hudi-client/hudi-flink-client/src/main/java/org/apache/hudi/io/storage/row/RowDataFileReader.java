@@ -37,13 +37,13 @@ public interface RowDataFileReader extends Serializable {
   /**
    * Read an individual parquet file and return iterator of RowData.
    *
-   * @param fieldNames
-   * @param fieldTypes
-   * @param selectedFields
-   * @param predicates
-   * @param path
-   * @param splitStart
-   * @param splitLength
+   * @param fieldNames names for all fields
+   * @param fieldTypes types for all fields
+   * @param selectedFields positions for required fields
+   * @param predicates pushed down predicates
+   * @param path file path to read
+   * @param start starting byte to start reading.
+   * @param length bytes to read.
    * @return A closable iterator of RowDta
    */
   ClosableIterator<RowData> getRowDataIterator(
@@ -52,6 +52,6 @@ public interface RowDataFileReader extends Serializable {
       int[] selectedFields,
       List<Predicate> predicates,
       StoragePath path,
-      long splitStart,
-      long splitLength) throws IOException;
+      long start,
+      long length) throws IOException;
 }

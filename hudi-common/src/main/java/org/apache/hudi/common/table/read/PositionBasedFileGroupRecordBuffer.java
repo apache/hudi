@@ -136,7 +136,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
         long recordPosition = recordPositions.get(recordIndex++);
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
-        Map<String, Object> metadata = readerContext.generateMetadataForRecord(evolvedNextRecord, schema);
+        Map<String, Object> metadata = readerContext.generateMetadataForRecord(evolvedNextRecord, schema, orderingFieldName);
         if (isBuiltInDeleteRecord(evolvedNextRecord) || isCustomDeleteRecord(evolvedNextRecord)) {
           processDeleteRecord(evolvedNextRecord, metadata, recordPosition);
         } else {
@@ -254,8 +254,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
 
-    Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-        baseRecord, readerSchema);
+    Map<String, Object> metadata = readerContext.generateMetadataForRecord(baseRecord, readerSchema, orderingFieldName);
 
     final Option<T> resultRecord;
     if (logRecordInfo != null) {

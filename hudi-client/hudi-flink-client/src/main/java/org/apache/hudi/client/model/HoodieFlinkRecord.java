@@ -155,7 +155,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
     String[] metaVals = metadataValues.getValues();
     for (int i = 0; i < metaVals.length; i++) {
       if (metaVals[i] != null) {
-        rowWithMetaFields.updateMeta(i, metaVals[i]);
+        rowWithMetaFields.updateMetaField(i, metaVals[i]);
       }
     }
     return new HoodieFlinkRecord(key, operation, orderingValue, rowWithMetaFields);

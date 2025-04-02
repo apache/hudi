@@ -90,6 +90,16 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
             config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED)));
   }
 
+  /**
+   * Create a parquet RowData writer on a given storage path.
+   *
+   * @param instantTime instant time to write
+   * @param storagePath file storage path
+   * @param config Hoodie configuration
+   * @param schema write schema
+   * @param taskContextSupplier task context supplier
+   * @return A RowData parquet writer
+   */
   @Override
   protected HoodieFileWriter newParquetFileWriter(
       String instantTime,

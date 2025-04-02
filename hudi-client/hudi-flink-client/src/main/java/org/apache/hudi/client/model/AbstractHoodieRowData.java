@@ -60,7 +60,7 @@ public abstract class AbstractHoodieRowData implements RowData {
     this.row = row;
   }
 
-  public void updateMeta(int pos, String value) {
+  public void updateMetaField(int pos, String value) {
     if (pos >= metaColumnsNum) {
       throw new HoodieException("Invalid position for metadata field: " + pos);
     }

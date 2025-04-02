@@ -582,8 +582,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   protected boolean hasNextBaseRecord(T baseRecord, Pair<Option<T>, Map<String, Object>> logRecordInfo) throws IOException {
-    Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-        baseRecord, readerSchema);
+    Map<String, Object> metadata = readerContext.generateMetadataForRecord(baseRecord, readerSchema, orderingFieldName);
 
     if (logRecordInfo != null) {
       Option<T> resultRecord = merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight());

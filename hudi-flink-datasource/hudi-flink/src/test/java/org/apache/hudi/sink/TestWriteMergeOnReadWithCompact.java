@@ -19,8 +19,10 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.util.Option;
@@ -90,10 +92,43 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   }
 
   @Test
+  public void testCompactWithCommitTimeOrder() throws Exception {
+    conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, OverwriteWithLatestAvroPayload.class.getName());
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 2);
+
+    List<RowData> dataset1 = Collections.singletonList(
+        insertRow(
+            StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(4), StringData.fromString("par1")));
+    TestHarness pipeline1 = preparePipeline(conf)
+        .consume(dataset1)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1);
+    pipeline1.assertEmptyDataFiles();
+
+    List<RowData> dataset2 = Collections.singletonList(
+        insertRow(
+            StringData.fromString("id1"), StringData.fromString("Julian"), 53,
+            TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
+    TestHarness pipeline2 = preparePipeline(conf)
+        .consume(dataset2)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1);
+
+    Map<String, String> readOptimizedResult = Collections.singletonMap("par1", "[id1,par1,id1,Julian,53,2,par1]");
+    TestData.checkWrittenData(tempFile, readOptimizedResult, 1);
+    pipeline1.end();
+    pipeline2.end();
+  }
+
+  @Test
   public void testNonBlockingConcurrencyControlWithPartialUpdatePayload() throws Exception {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
+    conf.set(FlinkOptions.RECORD_MERGER_IMPLS, PartialUpdateFlinkRecordMerger.class.getName());
     // disable schedule compaction in writers
     conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
@@ -245,6 +280,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
+    conf.set(FlinkOptions.RECORD_MERGER_IMPLS, PartialUpdateFlinkRecordMerger.class.getName());
     // disable schedule compaction in writers
     conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
@@ -289,6 +325,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
+    conf.set(FlinkOptions.RECORD_MERGER_IMPLS, PartialUpdateFlinkRecordMerger.class.getName());
     // disable schedule compaction in writers
     conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
