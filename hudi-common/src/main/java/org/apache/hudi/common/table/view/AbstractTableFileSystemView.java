@@ -877,7 +877,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return getLatestFileSlices(partition);
     } else {
       try {
-        readLock.lock();
         Stream<FileSlice> fileSliceStream = buildFileGroups(partition, getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
             .filter(fg -> !isFileGroupReplaced(fg))
             .map(HoodieFileGroup::getLatestFileSlice)
@@ -895,8 +894,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return fileSliceStream;
       } catch (IOException e) {
         throw new HoodieIOException("Failed to fetch all files in partition " + partition, e);
-      } finally {
-        readLock.unlock();
       }
     }
   }
@@ -1119,7 +1116,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return getAllFileGroups(partition);
     } else {
       try {
-        readLock.lock();
         Stream<HoodieFileGroup> fileGroupStream = buildFileGroups(partition, getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
             .filter(fg -> !isFileGroupReplaced(fg));
         if (bootstrapIndex.useIndex()) {
@@ -1131,8 +1127,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return fileGroupStream;
       } catch (IOException e) {
         throw new HoodieIOException("Failed to fetch all files in partition " + partition, e);
-      } finally {
-        readLock.unlock();
       }
     }
   }
