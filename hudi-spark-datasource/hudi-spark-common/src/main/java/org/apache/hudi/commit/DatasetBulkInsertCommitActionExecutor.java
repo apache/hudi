@@ -52,6 +52,7 @@ import org.apache.spark.sql.SaveMode;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -111,6 +112,7 @@ public class DatasetBulkInsertCommitActionExecutor implements Serializable {
     return writeStatuses.map(statuses -> {
       HoodieWriteMetadata<JavaRDD<WriteStatus>> hoodieWriteMetadata = new HoodieWriteMetadata<>();
       hoodieWriteMetadata.setWriteStatuses(HoodieJavaRDD.getJavaRDD(statuses));
+      hoodieWriteMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(statuses));
       return hoodieWriteMetadata;
     }).orElseGet(HoodieWriteMetadata::new);
   }
@@ -158,5 +160,9 @@ public class DatasetBulkInsertCommitActionExecutor implements Serializable {
       // Sort modes are not yet supported when meta fields are disabled
       return new NonSortPartitionerWithRows();
     }
+  }
+
+  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieData<WriteStatus> writeStatuses) {
+    return Collections.emptyMap();
   }
 }
