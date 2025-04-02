@@ -1001,8 +1001,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime) {
     try {
-      readLock.lock();
       List<String> formattedPartitionList = ensureAllPartitionsLoadedCorrectly();
+      readLock.lock();
       return formattedPartitionList.stream().collect(Collectors.toMap(
           Function.identity(),
           partitionPath -> fetchAllStoredFileGroups(partitionPath)
