@@ -82,20 +82,17 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private ClosableIterator<T> baseFileIterator;
   private final Option<UnaryOperator<T>> outputConverter;
   private final HoodieReadStats readStats;
+  // Allows to consider inflight instants while merging log records using HoodieMergedLogRecordReader
+  // The inflight instants need to be considered while updating RLI records. RLI needs to fetch the revived
+  // and deleted keys from the log files written as part of active data commit. During the RLI update,
+  // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
+  // considers the log records which are inflight.
+  private boolean allowInflightInstants;
 
-  public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
-                               HoodieStorage storage,
-                               String tablePath,
-                               String latestCommitTime,
-                               FileSlice fileSlice,
-                               Schema dataSchema,
-                               Schema requestedSchema,
-                               Option<InternalSchema> internalSchemaOpt,
-                               HoodieTableMetaClient hoodieTableMetaClient,
-                               TypedProperties props,
-                               long start,
-                               long length,
-                               boolean shouldUseRecordPosition) {
+  public HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
+                               String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
+                               Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
+                               long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants) {
     this.readerContext = readerContext;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
@@ -134,6 +131,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
         recordMergeMode, props, hoodieBaseFileOption, this.logFiles.isEmpty(),
         isSkipMerge, shouldUseRecordPosition, readStats);
+    this.allowInflightInstants = allowInflightInstants;
   }
 
   /**
@@ -290,6 +288,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withPartition(getRelativePartitionPath(
             new StoragePath(path), logFiles.get(0).getPath().getParent()))
         .withRecordBuffer(recordBuffer)
+        .withAllowInflightInstants(allowInflightInstants)
         .build()) {
       readStats.setTotalLogReadTimeMs(logRecordReader.getTotalTimeTakenToReadAndMergeBlocks());
       readStats.setTotalUpdatedRecordsCompacted(logRecordReader.getNumMergedRecordsInLog());
