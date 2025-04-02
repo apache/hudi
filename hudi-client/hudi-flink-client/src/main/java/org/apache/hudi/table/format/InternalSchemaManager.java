@@ -232,8 +232,4 @@ public class InternalSchemaManager implements Serializable {
     }
     return hadoopConf;
   }
-
-  public Configuration getFlinkConf() {
-    return this.conf;
-  }
 }
