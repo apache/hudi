@@ -6,7 +6,7 @@ category: blog
 image: /assets/images/blog/sec-thumb.jpg
 tags:
 - Apache Hudi
-- Index
+- Indexing
 - Performance
 ---
 
