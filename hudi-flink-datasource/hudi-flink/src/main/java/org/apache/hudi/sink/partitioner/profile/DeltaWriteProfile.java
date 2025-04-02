@@ -21,7 +21,6 @@ package org.apache.hudi.sink.partitioner.profile;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -92,12 +91,7 @@ public class DeltaWriteProfile extends WriteProfile {
   }
 
   private long getTotalFileSize(FileSlice fileSlice) {
-    if (!fileSlice.getBaseFile().isPresent()) {
-      return convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
-    } else {
-      return fileSlice.getBaseFile().get().getFileSize()
-          + convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
-    }
+    return fileSlice.getTotalFileSizeAsParquetFormat(config.getLogFileToParquetCompressionRatio());
   }
 
   private boolean isSmallFile(FileSlice fileSlice) {
@@ -105,13 +99,4 @@ public class DeltaWriteProfile extends WriteProfile {
     return totalSize < config.getParquetMaxFileSize();
   }
 
-  // TODO (NA) : Make this static part of utility
-  public long convertLogFilesSizeToExpectedParquetSize(List<HoodieLogFile> hoodieLogFiles) {
-    long totalSizeOfLogFiles = hoodieLogFiles.stream().map(HoodieLogFile::getFileSize)
-        .filter(size -> size > 0).reduce(Long::sum).orElse(0L);
-    // Here we assume that if there is no base parquet file, all log files contain only inserts.
-    // We can then just get the parquet equivalent size of these log files, compare that with
-    // {@link config.getParquetMaxFileSize()} and decide if there is scope to insert more rows
-    return (long) (totalSizeOfLogFiles * config.getLogFileToParquetCompressionRatio());
-  }
 }
