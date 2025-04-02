@@ -21,8 +21,6 @@ package org.apache.hudi.common.config;
 
 import javax.annotation.concurrent.Immutable;
 
-import java.util.Map;
-
 /**
  * Configurations for reading a file group
  */
@@ -91,15 +89,4 @@ public class HoodieReaderConfig extends HoodieConfig {
       "hoodie.write.record.merge.custom.implementation.classes";
   public static final String RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY =
       "hoodie.datasource.write.record.merger.impls";
-
-  public static final ConfigProperty<Double> LOG_FILE_TO_PARQUET_FORMAT_SIZE_ESTIMATION_FRACTION = ConfigProperty
-      .key("hoodie.logfile.to.parquet.format.size.estimation.fraction")
-      .defaultValue(0.80)
-      .markAdvanced()
-      .withDocumentation("Estimate the size of the log file in the parquet file format."
-          + "For AVRO-encoded log blocks, lower this value to get a more accurate estimate");
-
-  public static Double getLogFileToParquetFormatSizeEstimationFraction(Map<String, String> options) {
-    return Double.parseDouble(options.getOrDefault(LOG_FILE_TO_PARQUET_FORMAT_SIZE_ESTIMATION_FRACTION.key(), LOG_FILE_TO_PARQUET_FORMAT_SIZE_ESTIMATION_FRACTION.defaultValue().toString()));
-  }
 }
