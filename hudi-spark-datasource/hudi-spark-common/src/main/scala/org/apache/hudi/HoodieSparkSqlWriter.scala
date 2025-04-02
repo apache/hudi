@@ -1036,7 +1036,7 @@ class HoodieSparkSqlWriterInternal {
         tableInstantInfo.basePath, schema)
 
       log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
-      (commitStatus.isSuccess && metaSyncSuccess, compactionInstant, clusteringInstant, HOption.of(commitStatus.getMetadata))
+      (commitStatus.isSuccess && metaSyncSuccess, compactionInstant, clusteringInstant, HOption.ofNullable(commitStatus.getMetadata))
     } else {
       log.error(s"${tableInstantInfo.operation} failed with errors")
       if (log.isTraceEnabled) {
