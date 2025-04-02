@@ -104,6 +104,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests {@link UpgradeDowngrade}.
@@ -666,6 +668,43 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     // Check the entire dataset has all records only from 1st commit and 3rd commit since 2nd is expected to be rolledback.
     assertRows(inputRecords.getKey(), thirdBatch);
      */
+  }
+
+  @Test
+  void testNeedsUpgrade() {
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.autoUpgrade()).thenReturn(true);
+
+    // assert no downgrade for table version 7 from table version 8
+    boolean shouldDowngrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.SEVEN);
+    assertFalse(shouldDowngrade);
+
+    // assert no downgrade for table version 6 from table version 8
+    shouldDowngrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.SIX);
+    assertFalse(shouldDowngrade);
+
+    // assert no upgrade/downgrade for table version 8 from table version 8
+    shouldDowngrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.EIGHT);
+    assertFalse(shouldDowngrade);
+
+    // test upgrade from table version six
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.SIX);
+    // assert upgrade for table version 7 from table version 6
+    boolean shouldUpgrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.SEVEN);
+    assertTrue(shouldUpgrade);
+
+    // assert upgrade for table version 8 from table version 6
+    shouldUpgrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.EIGHT);
+    assertTrue(shouldUpgrade);
   }
 
   private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant, boolean assertExists) throws IOException {
