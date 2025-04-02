@@ -183,10 +183,14 @@ case class HoodieFileIndex(spark: SparkSession,
             new FileStatus(estimationFileSize, fileInfo.isDirectory, 0, fileInfo.getBlockSize, fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri))
           })
           // 2. Generate a mapping from fileId to file slice
-          val sliceMapping = fileSlices.foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
-
-          sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-            new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), sliceMapping), representFiles)
+          val c = fileSlices.filter(f => f.hasLogFiles || f.hasBootstrapBase).foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
+          if (c.nonEmpty) {
+            sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+              new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), representFiles)
+          } else {
+            sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+              InternalRow.fromSeq(partitionOpt.get.values), representFiles)
+          }
         } else {
           val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
             val baseFileStatusOpt = getBaseFileInfo(Option.apply(fs.getBaseFile.orElse(null)))
