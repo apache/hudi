@@ -99,7 +99,7 @@ public class DatasetBulkInsertCommitActionExecutor implements Serializable {
     records.write().format(targetFormat)
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
         .option(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED, String.valueOf(arePartitionRecordsSorted))
-        .option(HoodieInternalConfig.BULK_INSERT_WRITE_OPERATION_TYPE.key(), writeOperationType.value())
+        .option(HoodieInternalConfig.BULK_INSERT_WRITE_OPERATION_TYPE, writeOperationType.value())
         .options(opts)
         .options(customOpts)
         .mode(SaveMode.Append)

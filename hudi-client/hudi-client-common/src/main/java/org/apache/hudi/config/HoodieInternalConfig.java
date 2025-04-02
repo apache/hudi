@@ -30,6 +30,7 @@ public class HoodieInternalConfig extends HoodieConfig {
   private static final long serialVersionUID = 0L;
 
   public static final String BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED = "hoodie.bulkinsert.are.partitioner.records.sorted";
+  public static final String BULK_INSERT_WRITE_OPERATION_TYPE = "hoodie.bulkinsert.write.operation.type";
   public static final Boolean DEFAULT_BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED = false;
 
   public static final ConfigProperty<String> BULKINSERT_INPUT_DATA_SCHEMA_DDL = ConfigProperty
@@ -51,12 +52,6 @@ public class HoodieInternalConfig extends HoodieConfig {
       .defaultValue("")
       .markAdvanced()
       .withDocumentation("Inner configure to pass static partition paths to executors for SQL operations.");
-
-  public static final ConfigProperty<WriteOperationType> BULK_INSERT_WRITE_OPERATION_TYPE = ConfigProperty
-      .key("hoodie.bulkinsert.write.operation.type")
-      .defaultValue(WriteOperationType.BULK_INSERT)
-      .markAdvanced()
-      .withDocumentation("Write operation type for bulk insert.");
 
   /**
    * Returns if partition records are sorted or not.
