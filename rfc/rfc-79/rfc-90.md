@@ -262,9 +262,8 @@ executes the rollback of any failed ingestion writes. Specifically, clean will n
 
 1. Iterate through each inflight cancellable instant, for each instant that has met their cancellation policy, call
    request_cancel if not already has an request for cancellation.
-2. Iterate through each instant in /.cancel and call execute_abort. Note that the request_cancel and execute_abort APIs
-   are responsible for ensuring that already-committed instants aren't cancelled and that ongoing writers aren't
-   concurrently having their files cleaned up by a writer doing cancellation.
+2. Iterate through each instant in /.cancel , and call execute_abort. The execute_abort call will implictly check that the target instant doesn't have an active heartbeat.
+   This will prevent CLEAN from executing cancellation of an instant that is being worked on by an active writer
 
 
 
