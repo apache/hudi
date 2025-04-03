@@ -21,6 +21,8 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -39,6 +41,8 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -91,9 +95,14 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     return expected;
   }
 
-  @Test
-  public void testCompactWithCommitTimeOrder() throws Exception {
-    conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, OverwriteWithLatestAvroPayload.class.getName());
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCompactWithCommitTimeOrder(boolean useLegacyConfig) throws Exception {
+    if (useLegacyConfig) {
+      conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, OverwriteWithLatestAvroPayload.class.getName());
+    } else {
+      conf.set(FlinkOptions.RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
+    }
     conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 2);
 
     List<RowData> dataset1 = Collections.singletonList(
@@ -118,6 +127,43 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
         .checkpointComplete(1);
 
     Map<String, String> readOptimizedResult = Collections.singletonMap("par1", "[id1,par1,id1,Julian,53,2,par1]");
+    TestData.checkWrittenData(tempFile, readOptimizedResult, 1);
+    pipeline1.end();
+    pipeline2.end();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCompactWithEventTimeOrder(boolean useLegacyConfig) throws Exception {
+    if (useLegacyConfig) {
+      conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, EventTimeAvroPayload.class.getName());
+    } else {
+      conf.set(FlinkOptions.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
+    }
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 2);
+
+    List<RowData> dataset1 = Collections.singletonList(
+        insertRow(
+            StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(4), StringData.fromString("par1")));
+    TestHarness pipeline1 = preparePipeline(conf)
+        .consume(dataset1)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1);
+    pipeline1.assertEmptyDataFiles();
+
+    List<RowData> dataset2 = Collections.singletonList(
+        insertRow(
+            StringData.fromString("id1"), StringData.fromString("Julian"), 53,
+            TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
+    TestHarness pipeline2 = preparePipeline(conf)
+        .consume(dataset2)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1);
+
+    Map<String, String> readOptimizedResult = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,4,par1]");
     TestData.checkWrittenData(tempFile, readOptimizedResult, 1);
     pipeline1.end();
     pipeline2.end();

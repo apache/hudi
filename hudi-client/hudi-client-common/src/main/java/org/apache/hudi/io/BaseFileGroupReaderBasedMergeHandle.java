@@ -66,7 +66,7 @@ import java.util.stream.Collectors;
 public abstract class BaseFileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
   private static final Logger LOG = LoggerFactory.getLogger(BaseFileGroupReaderBasedMergeHandle.class);
 
-  protected HoodieReaderContext<T> readerContext;
+  protected HoodieReaderContext readerContext;
   protected FileSlice fileSlice;
   protected Configuration conf;
   protected HoodieReadStats readStats;
@@ -74,7 +74,7 @@ public abstract class BaseFileGroupReaderBasedMergeHandle<T, I, K, O> extends Ho
   public BaseFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                              CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                              Option<BaseKeyGenerator> keyGeneratorOpt,
-                                             HoodieReaderContext<T> readerContext, Configuration conf) {
+                                             HoodieReaderContext readerContext, Configuration conf) {
     super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;

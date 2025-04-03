@@ -22,6 +22,7 @@ import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -29,12 +30,12 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.storage.row.RowDataFileReader;
 import org.apache.hudi.io.storage.row.RowDataFileReaderFactories;
 import org.apache.hudi.storage.HoodieStorage;
@@ -61,6 +62,7 @@ import java.util.Objects;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
@@ -120,13 +122,13 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       case COMMIT_TIME_ORDERING:
         return Option.of(new CommitTimeFlinkRecordMerger());
       default:
-        List<String> mergeClasses = ConfigUtils.split2List(mergeImplClasses);
-        ValidationUtils.checkArgument(mergeClasses.size() == 1,
-            "There should be one merger class in configuration, but get: " + mergeImplClasses);
-        HoodieRecordMerger recordMerger = HoodieRecordUtils.loadRecordMerger(mergeClasses.get(0));
-        ValidationUtils.checkArgument(recordMerger.getRecordType() == HoodieRecord.HoodieRecordType.FLINK,
-            "Unexpected record type for merge: " + recordMerger.getClass().getName());
-        return Option.of(recordMerger);
+        Option<HoodieRecordMerger> mergerClass =
+            HoodieRecordUtils.createValidRecordMerger(EngineType.FLINK, mergeImplClasses, mergeStrategyId);
+        if (mergerClass.isEmpty()) {
+          throw new HoodieValidationException("No valid flink merger implementation set for `"
+              + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
+        }
+        return mergerClass;
     }
   }
 

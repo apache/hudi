@@ -849,7 +849,7 @@ public class HoodieTableConfig extends HoodieConfig {
     return Triple.of(inferredRecordMergeMode, inferredPayloadClassName, inferredRecordMergeStrategyId);
   }
 
-  static RecordMergeMode inferRecordMergeModeFromPayloadClass(String payloadClassName) {
+  public static RecordMergeMode inferRecordMergeModeFromPayloadClass(String payloadClassName) {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
