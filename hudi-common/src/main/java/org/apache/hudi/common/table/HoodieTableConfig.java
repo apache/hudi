@@ -801,7 +801,7 @@ public class HoodieTableConfig extends HoodieConfig {
         inferredRecordMergeMode = modeBasedOnPayload != null ? modeBasedOnPayload : modeBasedOnStrategyId;
       }
     }
-    if (recordMergeMode != null) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) && recordMergeMode != null) {
       checkArgument(inferredRecordMergeMode == recordMergeMode,
           String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
                   + "or record merge strategy ID (%s) configured. Please revisit the configs.",
