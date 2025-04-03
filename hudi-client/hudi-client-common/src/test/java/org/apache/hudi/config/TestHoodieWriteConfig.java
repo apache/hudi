@@ -103,7 +103,7 @@ public class TestHoodieWriteConfig {
           Properties props = new Properties();
           props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(version.versionCode()));
           assertThrows(IllegalArgumentException.class, () -> HoodieWriteConfig.newBuilder()
-              .withPath("/tmp").withProperties(props).build());
+              .withPath("/tmp").withProperties(props).build().getWriteVersion());
         });
     Arrays.stream(HoodieTableVersion.values())
         .filter(supportedVersions::contains)
