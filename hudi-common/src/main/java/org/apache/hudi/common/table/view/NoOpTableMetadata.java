@@ -138,7 +138,8 @@ class NoOpTableMetadata implements HoodieTableMetadata {
 
   @Override
   public Map<Pair<String, StoragePath>, List<StoragePathInfo>> listPartitions(List<Pair<String, StoragePath>> partitionPathList) throws IOException {
-    throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
+    // This should only be called when handling empty partitions since the file statuses should be pre-loaded into the view using this class
+    return Collections.emptyMap();
   }
 
   @Override
