@@ -24,19 +24,19 @@ import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieHBaseIndexConfig, HoodieIndexConfig, HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
 import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
-
+import org.apache.hudi.index.HoodieIndex
 import org.apache.avro.Schema
 import org.apache.spark.sql._
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, MatchCast}
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
@@ -54,7 +54,6 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.Base64
-
 import scala.collection.JavaConverters._
 
 /**
@@ -491,7 +490,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       && parameters.getOrElse(
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.key,
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean
-      && updatingActions.nonEmpty)
+      && updatingActions.nonEmpty
+      && !useGlobalIndex(parameters)
+      && !useCustomMergeMode(parameters))
   }
 
   private def getOperationType(parameters: Map[String, String]) = {
@@ -1056,6 +1057,36 @@ object MergeIntoHoodieTableCommand {
           s"source table uses ${expr.dataType} for '${expr.sql}'"
       )
     }
+  }
+
+  // Check if global index, e.g., GLOBAL_BLOOM, is set.
+  def useGlobalIndex(parameters: Map[String, String]): Boolean = {
+    parameters.get(HoodieIndexConfig.INDEX_TYPE.key).exists { indexType =>
+      isGlobalIndexEnabled(indexType, parameters)
+    }
+  }
+
+  // Check if goal index is enabled for specific indexes.
+  def isGlobalIndexEnabled(indexType: String, parameters: Map[String, String]): Boolean = {
+    Seq(
+      HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+      HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+      HoodieIndex.IndexType.HBASE -> HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE
+    ).collectFirst {
+      case (hoodieIndex, config) if indexType == hoodieIndex.name =>
+        parameters.getOrElse(config.key, config.defaultValue().toString).toBoolean
+    }.getOrElse(false)
+  }
+
+  def useCustomMergeMode(parameters: Map[String, String]): Boolean = {
+    val inferredMergeConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
+      RecordMergeMode.getValue(parameters.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
+      parameters.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
+      parameters.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
+      parameters.getOrElse(PRECOMBINE_FIELD.key(), null),
+      HoodieTableVersion.current())
+    inferredMergeConfigs.getLeft.equals(RecordMergeMode.CUSTOM)
   }
 }
 
