@@ -18,7 +18,6 @@
 
 package org.apache.hudi.source.prune;
 
-import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -37,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
 public class PrimaryKeyPruners {
   private static final Logger LOG = LoggerFactory.getLogger(PrimaryKeyPruners.class);
 
-  public static Option<Functions.Function1<Integer, Integer>> getBucketId(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
+  public static Option<Function<Integer, Integer>> getBucketIdFunc(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
     List<String> pkFields = Arrays.asList(conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
     // step1: resolve the hash key values
     final boolean logicalTimestamp = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);

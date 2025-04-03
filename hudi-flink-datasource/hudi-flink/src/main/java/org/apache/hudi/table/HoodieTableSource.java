@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -118,6 +117,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -158,7 +158,7 @@ public class HoodieTableSource implements
   private List<Predicate> predicates;
   private ColumnStatsProbe columnStatsProbe;
   private PartitionPruners.PartitionPruner partitionPruner;
-  private Option<Functions.Function1<Integer, Integer>> dataBucket;
+  private Option<Function<Integer, Integer>> dataBucketFunc;
   private transient FileIndex fileIndex;
 
   public HoodieTableSource(
@@ -180,7 +180,7 @@ public class HoodieTableSource implements
       @Nullable List<Predicate> predicates,
       @Nullable ColumnStatsProbe columnStatsProbe,
       @Nullable PartitionPruners.PartitionPruner partitionPruner,
-      Option<Functions.Function1<Integer, Integer>> dataBucket,
+      Option<Function<Integer, Integer>> dataBucketFunc,
       @Nullable int[] requiredPos,
       @Nullable Long limit,
       @Nullable HoodieTableMetaClient metaClient,
@@ -194,7 +194,7 @@ public class HoodieTableSource implements
     this.predicates = Optional.ofNullable(predicates).orElse(Collections.emptyList());
     this.columnStatsProbe = columnStatsProbe;
     this.partitionPruner = partitionPruner;
-    this.dataBucket = dataBucket;
+    this.dataBucketFunc = dataBucketFunc;
     this.requiredPos = Optional.ofNullable(requiredPos).orElseGet(() -> IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
     this.limit = Optional.ofNullable(limit).orElse(NO_LIMIT_CONSTANT);
     this.hadoopConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
@@ -269,7 +269,7 @@ public class HoodieTableSource implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, predicates, columnStatsProbe, partitionPruner, dataBucket, requiredPos, limit, metaClient, internalSchemaManager);
+        conf, predicates, columnStatsProbe, partitionPruner, dataBucketFunc, requiredPos, limit, metaClient, internalSchemaManager);
   }
 
   @Override
@@ -284,7 +284,7 @@ public class HoodieTableSource implements
     this.predicates = ExpressionPredicates.fromExpression(splitFilters.f0);
     this.columnStatsProbe = ColumnStatsProbe.newInstance(splitFilters.f0);
     this.partitionPruner = createPartitionPruner(splitFilters.f1, columnStatsProbe);
-    this.dataBucket = getDataBucket(splitFilters.f0);
+    this.dataBucketFunc = getDataBucketFunc(splitFilters.f0);
     // refuse all the filters now
     return SupportsFilterPushDown.Result.of(new ArrayList<>(splitFilters.f1), new ArrayList<>(filters));
   }
@@ -368,7 +368,7 @@ public class HoodieTableSource implements
         .build();
   }
 
-  private Option<Functions.Function1<Integer, Integer>> getDataBucket(List<ResolvedExpression> dataFilters) {
+  private Option<Function<Integer, Integer>> getDataBucketFunc(List<ResolvedExpression> dataFilters) {
     if (!OptionsResolver.isBucketIndexType(conf) || dataFilters.isEmpty()) {
       return Option.empty();
     }
@@ -377,7 +377,7 @@ public class HoodieTableSource implements
     if (!ExpressionUtils.isFilteringByAllFields(indexKeyFilters, indexKeyFields)) {
       return Option.empty();
     }
-    return PrimaryKeyPruners.getBucketId(indexKeyFilters, conf);
+    return PrimaryKeyPruners.getBucketIdFunc(indexKeyFilters, conf);
   }
 
   private List<MergeOnReadInputSplit> buildInputSplits() {
@@ -614,7 +614,7 @@ public class HoodieTableSource implements
           .rowType(this.tableRowType)
           .columnStatsProbe(this.columnStatsProbe)
           .partitionPruner(this.partitionPruner)
-          .dataBucket(this.dataBucket)
+          .dataBucketFunc(this.dataBucketFunc)
           .numBucketFunction(NumBucketsFunction.fromMetaClient(metaClient, conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
           .build();
     }
@@ -699,7 +699,7 @@ public class HoodieTableSource implements
   }
 
   @VisibleForTesting
-  public Option<Functions.Function1<Integer, Integer>> getDataBucket() {
-    return dataBucket;
+  public Option<Function<Integer, Integer>> getDataBucketFunc() {
+    return dataBucketFunc;
   }
 }

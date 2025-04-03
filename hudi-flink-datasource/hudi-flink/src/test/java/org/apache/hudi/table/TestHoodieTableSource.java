@@ -203,7 +203,7 @@ public class TestHoodieTableSource {
 
     int numBuckets = (int)FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
 
-    assertThat(tableSource1.getDataBucket().get().apply(numBuckets), is(1));
+    assertThat(tableSource1.getDataBucketFunc().get().apply(numBuckets), is(1));
     List<StoragePathInfo> fileList = tableSource1.getReadFiles();
     assertThat("Files should be pruned by bucket id 1", fileList.size(), CoreMatchers.is(2));
 
@@ -218,7 +218,7 @@ public class TestHoodieTableSource {
     tableSource2.applyFilters(Arrays.asList(
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1"),
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny")));
-    assertThat(tableSource2.getDataBucket().get().apply(numBuckets), is(3));
+    assertThat(tableSource2.getDataBucketFunc().get().apply(numBuckets), is(3));
     List<StoragePathInfo> fileList2 = tableSource2.getReadFiles();
     assertThat("Files should be pruned by bucket id 3", fileList2.size(), CoreMatchers.is(3));
 
@@ -227,7 +227,7 @@ public class TestHoodieTableSource {
     tableSource2.applyFilters(Arrays.asList(
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny"),
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
-    assertThat(tableSource2.getDataBucket().get().apply(numBuckets), is(3));
+    assertThat(tableSource2.getDataBucketFunc().get().apply(numBuckets), is(3));
     assertThat("Files should be pruned by bucket id 3", tableSource2.getReadFiles().size(),
         CoreMatchers.is(3));
 
@@ -242,7 +242,7 @@ public class TestHoodieTableSource {
     tableSource3.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
 
-    assertTrue(tableSource3.getDataBucket().isEmpty());
+    assertTrue(tableSource3.getDataBucketFunc().isEmpty());
     List<StoragePathInfo> fileList3 = tableSource3.getReadFiles();
     assertThat("Partial pk filtering does not prune any files", fileList3.size(),
         CoreMatchers.is(7));
@@ -257,7 +257,7 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1"),
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny")));
 
-    assertThat(tableSource4.getDataBucket().get().apply(numBuckets), is(1));
+    assertThat(tableSource4.getDataBucketFunc().get().apply(numBuckets), is(1));
     List<StoragePathInfo> fileList4 = tableSource4.getReadFiles();
     assertThat("Files should be pruned by bucket id 1", fileList4.size(), CoreMatchers.is(2));
   }
@@ -282,7 +282,7 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr(f1, 0, DataTypes.TIMESTAMP(3).notNull(),
             LocalDateTime.ofInstant(Instant.ofEpochMilli(1), ZoneId.of("UTC")))));
 
-    assertThat(tableSource1.getDataBucket().get().apply(numBuckets), is(logicalTimestamp ? 1 : 0));
+    assertThat(tableSource1.getDataBucketFunc().get().apply(numBuckets), is(logicalTimestamp ? 1 : 0));
     List<StoragePathInfo> fileList = tableSource1.getReadFiles();
     assertThat("Files should be pruned", fileList.size(), CoreMatchers.is(1));
 
@@ -298,7 +298,7 @@ public class TestHoodieTableSource {
     tableSource2.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr(f2, 1, DataTypes.DATE().notNull(), LocalDate.ofEpochDay(1))));
 
-    assertThat(tableSource2.getDataBucket().get().apply(numBuckets), is(1));
+    assertThat(tableSource2.getDataBucketFunc().get().apply(numBuckets), is(1));
     List<StoragePathInfo> fileList2 = tableSource2.getReadFiles();
     assertThat("Files should be pruned", fileList2.size(), CoreMatchers.is(1));
 
@@ -315,7 +315,7 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr(f3, 1, DataTypes.DECIMAL(3, 2).notNull(),
             new BigDecimal("1.11"))));
 
-    assertThat(tableSource3.getDataBucket().get().apply(numBuckets), is(0));
+    assertThat(tableSource3.getDataBucketFunc().get().apply(numBuckets), is(0));
     List<StoragePathInfo> fileList3 = tableSource3.getReadFiles();
     assertThat("Files should be pruned", fileList3.size(), CoreMatchers.is(1));
   }
@@ -373,7 +373,7 @@ public class TestHoodieTableSource {
     tableSource1.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
 
-    assertThat(tableSource1.getDataBucket().get().apply(4), is(1));
+    assertThat(tableSource1.getDataBucketFunc().get().apply(4), is(1));
     List<StoragePathInfo> fileList = tableSource1.getReadFiles();
     assertThat("Files should be pruned by bucket id 1", fileList.size(), CoreMatchers.is(2));
   }
@@ -403,7 +403,7 @@ public class TestHoodieTableSource {
     tableSource.applyFilters(Arrays.asList(
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1"),
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny")));
-    assertThat(tableSource.getDataBucket().get().apply(4), is(3));
+    assertThat(tableSource.getDataBucketFunc().get().apply(4), is(3));
     List<StoragePathInfo> fileList = tableSource.getReadFiles();
     assertThat("Files should be pruned by bucket id 3", fileList.size(), CoreMatchers.is(3));
   }
@@ -433,7 +433,7 @@ public class TestHoodieTableSource {
     tableSource.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
 
-    assertTrue(tableSource.getDataBucket().isEmpty());
+    assertTrue(tableSource.getDataBucketFunc().isEmpty());
     List<StoragePathInfo> fileList = tableSource.getReadFiles();
     assertThat("Partial pk filtering does not prune any files", fileList.size(),
         CoreMatchers.is(7));
@@ -463,7 +463,7 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1"),
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny")));
 
-    assertThat(tableSource.getDataBucket().get().apply(4), is(1));
+    assertThat(tableSource.getDataBucketFunc().get().apply(4), is(1));
     List<StoragePathInfo> fileList = tableSource.getReadFiles();
     assertThat("Files should be pruned by bucket id 1", fileList.size(), CoreMatchers.is(2));
   }

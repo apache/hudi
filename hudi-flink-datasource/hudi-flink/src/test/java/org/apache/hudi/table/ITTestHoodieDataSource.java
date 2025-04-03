@@ -1355,8 +1355,7 @@ public class ITTestHoodieDataSource {
     String insertInto = "insert into " + catalogName + ".hudi.hoodie_sink select * from csv_source";
     execInsertSql(tableEnv, insertInto);
 
-    List<Row> result1 = CollectionUtil.iterableToList(
-        () -> tableEnv.sqlQuery("select * from " + catalogName + ".hudi.hoodie_sink").execute().collect());
+    List<Row> result1 = execSelectSql(tableEnv, "select * from " + catalogName + ".hudi.hoodie_sink");
     assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
     // apply filters which will prune based on partition level bucket index
     List<Row> result2 = CollectionUtil.iterableToList(
