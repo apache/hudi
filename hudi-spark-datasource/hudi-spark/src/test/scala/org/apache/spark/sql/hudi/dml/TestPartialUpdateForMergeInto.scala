@@ -290,7 +290,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | type ='$tableType',
            | hoodie.index.type = 'GLOBAL_SIMPLE',
            | hoodie.index.global.index.enable = 'true',
-           | hoodie.bloom.index.use.metadata = 'true',
            | primaryKey = 'id',
            | preCombineField = '_ts'
            |)
@@ -313,7 +312,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         s"""
            | UPDATE $tableName
            | SET
-           |     _ts = 1598
+           |     _ts = 1005
            | WHERE id = 1
            |""".stripMargin)
 
@@ -347,7 +346,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            |using ( select 1 as id, 'a1' as name, 'a1: updated desc1' as new_description, 1023 as _ts
            |union select 2 as id, 'a2' as name, 'a2: updated desc2' as new_description, 1270 as _ts) s0
            |on t0.id = s0.id
-           |when matched then update set description = s0.new_description, _ts = s0._ts
+           |when matched then update set description = s0.new_description, _ts = s0._ts, id = s0.id
            |""".stripMargin)
 
       // validateTableSchema(tableName, structFields)
