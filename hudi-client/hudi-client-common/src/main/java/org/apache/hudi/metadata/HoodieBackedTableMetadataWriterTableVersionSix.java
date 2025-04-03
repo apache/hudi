@@ -57,6 +57,12 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
   /**
    * Hudi backed table metadata writer.
    *
+   * Timestamps are generated in format {@link org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator#MILLIS_INSTANT_TIMESTAMP_FORMAT}.
+   * For operations like compaction, log compaction, clean, index and rollback - suffix are used which are appended to the timestamp. In some cases
+   * it is possible for suffix to be added twice. For instance, there is an index commit in metadata table leading to an instant with 010 suffix in
+   * the timeline. If compaction triggers now, the compaction would use the index instant timestamp and add 001 suffix to it, creating a timestamp
+   * value with suffix 010001. Both indexing and compaction suffix would be present in the compaction timestamp in such a case.
+   *
    * @param storageConf                Storage configuration to use for the metadata writer
    * @param writeConfig                Writer config
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
