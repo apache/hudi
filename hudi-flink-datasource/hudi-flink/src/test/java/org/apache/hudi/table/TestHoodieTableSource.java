@@ -201,7 +201,7 @@ public class TestHoodieTableSource {
     tableSource1.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
 
-    int numBuckets = conf1.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue());
+    int numBuckets = (int)FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
 
     assertThat(tableSource1.getDataBucket().get().apply(numBuckets), is(1));
     List<StoragePathInfo> fileList = tableSource1.getReadFiles();
@@ -273,7 +273,7 @@ public class TestHoodieTableSource {
     conf1.setString(FlinkOptions.PRECOMBINE_FIELD, f1);
     conf1.removeConfig(FlinkOptions.PARTITION_PATH_FIELD);
     conf1.setBoolean(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), logicalTimestamp);
-    int numBuckets = conf1.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue());
+    int numBuckets = (int)FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
 
     // test timestamp filtering
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf1);
