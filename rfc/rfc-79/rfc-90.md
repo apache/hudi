@@ -88,20 +88,25 @@ plan can infer that the plan is cancellable, and when trying to commit the insta
 has been requested for cancellation. As a future optimization, the cancellable clustering worker can continually poll
 during its execution to see if it has been requested for cancellation. On the other side, with the ingestion writer
 flow, the commit finalization logic for ingestion writers can be updated to ignore any inflight clustering plans if they
-are cancellable. For the purpose of this design proposal, consider the existing ingestion write flow as having three
+are cancellable. For the purpose of this design proposal, consider the pre-existing ingestion write flow as having three
 steps:
 
 1. Schedule itself on the timeline with a new instant time in a .requested file
 2. Process/record tag incoming records, build a workload profile, and write the updating/replaced file groups to a "inflight"
    instant file on the timeline. Check for conflicts and abort if needed.
-4. Perform write conflict checks and commit the instant on the timeline
+3. Start a transaction, and perform write conflict checks and commit the instant on the timeline
 
 The aforementioned changes to ingestion and clustering flow will ensure that in the event of a conflicting ingestion and
 cancellable table service writer, the ingestion job will take precedence (and cause the cancellable table service
 instant to eventually cancel) as long as a cancellable clustering plan hasn't be completed before (2). Since if the
 cancellable table service has already been completed before (2), the ingestion job will see that a completed instant (a
 cancellable table service action) conflicts with its ongoing inflight write, and therefore it would not be legal to
-proceed. On such cases, ingestion writer will have to abort itself instead of proceeding to completion.
+proceed. This should be the only scenario where the ingestion writer terminates itself in the presence of a cancellable clustering plan
+instead of proceeding to completion.
+
+Note that with cancellable clustering plans we are opting for a concurrency model where ingestion writers are given precdence. The tradeoff here
+is that when a clustering plan is cancellable we aren't allowing it to optionally force proceed or force ingestion to wait, but instead minimize 
+the chance of having it block ingestion.
 
 ### Adding a cancel action and aborted state for cancellable plans
 
@@ -116,10 +121,11 @@ following changes:
   /.cancel directory. The new /.cancel folder will enable goals (A) & (B) by allowing writers to permentantly prevent an
   ongoing cancellable table service write from committing by requesting for cancellation, without needing to block/wait
   for the table service writer. Once an instant is requested for cancellation (added to /.cancel) it cannot be revoked (
-  or "
-  un-cancelled") - it must be eventually transitioned to aborted state, as detailed below. To implement (A), ingestion
+  or "un-cancelled") - it must be eventually transitioned to aborted state, as detailed below. To implement (A), ingestion
   will be updated such that during write-conflict detection, it will create an entry in /.cancel for any cancellable
-  plans with a detected write conflict and will ignore any candidate inflight plans that have an entry in /.cancel.
+  plans with a detected write conflict and will ignore any candidate inflight plans that have an entry in /.cancel. Note that,
+  since write conflict resoltution already happens during a transaction, this multi-step process of checking for any conflicting
+  cancellable plans and adding entries for them to the /.cancel directory will be within the same transaction.
 
 #### Aborted state
 
@@ -178,11 +184,14 @@ The new cancel API request_cancel will perform the following steps
 2. Reload active timeline
 3. If instant is already comitted, throw an exception
 4. If instant is already aborted, exit without throwing exception
-5. create a file under /.cancel with the target instant name
+5. create a file under /.cancel with the target instant name (if it doesn't already exist)
 6. End the transaction
 
 If this call succeeds, then the caller can assume that the target instant will not be commited and can only transitioned
-to .aborted state from that point onwards.
+to .aborted state from that point onwards. Taking a transaction will ensure that a concurrent writer that is executing the instant
+either completes/commits the instant before it is requested for cancellation or self-aborts, since both those phases of table
+service execution are now done during a transaction. If there are multiple concurrent calls of request_cancel to the same instant,
+then the file under /.cancel will remain as expexted.
 
 The other API execute_abort will be added which allows a writer to explictly abort the target instant that has already
 had its cancellation requested (by adding the instant under /.cancel). Note that this API will also do cleaning up all
@@ -209,8 +218,10 @@ call from creating a file under a /.cancel of an instant already transtioned to 
 calling execute_abort or cancellable table service API again after this point would be safe, this guard should prevent
 files in /.cancel for already-aborted instants from accumulating.
 
-Although any user can invoke request_cancel and execute_abort, the ingestion flow is expected to use request_cancel
-against any conflicting cancellable inflight clustering instants. 
+Any user can invoke request_cancel and execute_abort. The ingestion flow is expected to use request_cancel
+against any conflicting cancellable inflight clustering instants, but will not attempt calling execute_abort (to minimize overhead for ingestion).
+Rather, the final "cleanup" and aborting of cancellable instants will be performed either when a writer attempts to execute the plan again (as 
+detailed in the table service execution flow earlier) or when CLEAN calls execute_abort, as proposed further below.
 
 Note that archival will also be updated to delete instants transitioned to .aborted state, since .aborted is a terminal state.
 
