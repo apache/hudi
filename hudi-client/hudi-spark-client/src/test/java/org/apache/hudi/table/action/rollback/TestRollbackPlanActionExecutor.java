@@ -18,9 +18,9 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
-import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.IOType;
@@ -122,8 +122,8 @@ public class TestRollbackPlanActionExecutor extends HoodieClientRollbackTestBase
           HoodieRollbackPlan rollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
           CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, rollbackInstant2, needRollBackInstant, true,
               false);
-          List<HoodieRollbackStat> hoodieRollbackStats = copyOnWriteRollbackActionExecutor.executeRollback(rollbackPlan);
-          assertTrue(!hoodieRollbackStats.isEmpty());
+          HoodieRollbackMetadata hoodieRollbackMetadata = copyOnWriteRollbackActionExecutor.execute();
+          assertTrue(hoodieRollbackMetadata.getTotalFilesDeleted() > 0);
           // once rollback planning is complete, count down the latch
           countDownLatch.countDown();
           return true;
