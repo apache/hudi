@@ -206,7 +206,7 @@ public class TestSchemaHandler {
                                boolean supportsParquetRowIndex,
                                boolean hasBuiltInDelete) {
     Schema dataSchema = hasBuiltInDelete ? DATA_SCHEMA : DATA_SCHEMA_NO_DELETE;
-    HoodieReaderContext<String> readerContext = createReaderContext(supportsParquetRowIndex, true , true, mergeUseRecordPosition);
+    HoodieReaderContext<String> readerContext = createReaderContext(supportsParquetRowIndex, true, true, mergeUseRecordPosition);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(Boolean.TRUE);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
