@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[49569],{42386:a=>{a.exports=JSON.parse('{"tag":{"label":"CDC","permalink":"/blog/tags/cdc","allTagsPath":"/blog/tags","count":9,"unlisted":false},"listMetadata":{"permalink":"/blog/tags/cdc","page":1,"postsPerPage":12,"totalPages":1,"totalCount":9,"blogDescription":"Blog","blogTitle":"Blogs List Page"}}')}}]);

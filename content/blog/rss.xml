@@ -241,6 +241,58 @@
             <category>Community</category>
         </item>
         <item>
+            <title><![CDATA[ACID Transactions in an Open Data Lakehouse]]></title>
+            <link>https://hudi.apache.org/blog/2025/03/26/acid-transactions</link>
+            <guid>https://hudi.apache.org/blog/2025/03/26/acid-transactions</guid>
+            <pubDate>Wed, 26 Mar 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.onehouse.ai/blog/acid-transactions-in-an-open-data-lakehouse">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>Apache Iceberg</category>
+            <category>Delta Lake</category>
+            <category>ACID</category>
+        </item>
+        <item>
+            <title><![CDATA[What is Clustering in an Open Data Lakehouse?]]></title>
+            <link>https://hudi.apache.org/blog/2025/03/26/clustering</link>
+            <guid>https://hudi.apache.org/blog/2025/03/26/clustering</guid>
+            <pubDate>Wed, 26 Mar 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.onehouse.ai/blog/what-is-clustering-in-an-open-data-lakehouse">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>Apache Iceberg</category>
+            <category>Delta Lake</category>
+            <category>Clustering</category>
+            <category>Z-order</category>
+        </item>
+        <item>
+            <title><![CDATA[Data Deduplication Strategies in an Open Lakehouse Architecture]]></title>
+            <link>https://hudi.apache.org/blog/2025/03/26/dedupe</link>
+            <guid>https://hudi.apache.org/blog/2025/03/26/dedupe</guid>
+            <pubDate>Wed, 26 Mar 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.onehouse.ai/blog/data-deduplication-strategies-in-an-open-lakehouse-architecture">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>Apache Iceberg</category>
+            <category>Delta Lake</category>
+            <category>Deduplication</category>
+        </item>
+        <item>
+            <title><![CDATA[From Transactional Bottlenecks to Lightning-Fast Analytics]]></title>
+            <link>https://hudi.apache.org/blog/2025/03/26/uptycs</link>
+            <guid>https://hudi.apache.org/blog/2025/03/26/uptycs</guid>
+            <pubDate>Wed, 26 Mar 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/allthatscales/from-transactional-bottlenecks-to-lightning-fast-analytics-74e0d3fff1c0">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>CDC</category>
+            <category>Debezium</category>
+        </item>
+        <item>
             <title><![CDATA[Building an Amazon Sales Analytics Pipeline with Apache Hudi on Databricks]]></title>
             <link>https://hudi.apache.org/blog/2025/03/13/hudi-on-dbr</link>
             <guid>https://hudi.apache.org/blog/2025/03/13/hudi-on-dbr</guid>
@@ -721,176 +773,6 @@ When we pass the partition column, we can also provide which key generator to us
             <category>hudi streamer</category>
             <category>amazon emr</category>
             <category>linkedin</category>
-        </item>
-        <item>
-            <title><![CDATA[Indexing in Apache Hudi]]></title>
-            <link>https://hudi.apache.org/blog/2024/12/31/indexing-in-apache-hudi</link>
-            <guid>https://hudi.apache.org/blog/2024/12/31/indexing-in-apache-hudi</guid>
-            <pubDate>Tue, 31 Dec 2024 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@sanjeets1900/indexing-in-apache-hudi-674f9481796e">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>apache hudi</category>
-            <category>indexing</category>
-            <category>medium</category>
-        </item>
-        <item>
-            <title><![CDATA[The Architect’s Guide to Open Table Formats and Object Storage]]></title>
-            <link>https://hudi.apache.org/blog/2024/12/31/the-architects-guide-to-open-table-formats-and-object-storage</link>
-            <guid>https://hudi.apache.org/blog/2024/12/31/the-architects-guide-to-open-table-formats-and-object-storage</guid>
-            <pubDate>Tue, 31 Dec 2024 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://thenewstack.io/the-architects-guide-to-open-table-formats-and-object-storage/">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>apache hudi</category>
-            <category>apache iceberg</category>
-            <category>delta lake</category>
-            <category>data lakehouse</category>
-            <category>lakehouse</category>
-            <category>table formats</category>
-            <category>thenewstack</category>
-        </item>
-        <item>
-            <title><![CDATA[Apache Hudi 2024: A Year In Review]]></title>
-            <link>https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review</link>
-            <guid>https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review</guid>
-            <pubDate>Sun, 29 Dec 2024 00:00:00 GMT</pubDate>
-            <description><![CDATA[As we wrap up another remarkable year for Apache Hudi, I am thrilled to reflect on the tremendous achievements and milestones that have defined 2024. This year has been particularly special as we achieved several significant milestones, including the landmark release of Hudi 1.0, the publication of comprehensive books, and the introduction of new tools that expand Hudi's ecosystem.]]></description>
-            <content:encoded><![CDATA[<img src="https://hudi.apache.org/assets/images/blog/2024-12-29-a-year-in-review-2024/cover.jpg" alt="drawing" style="width:80%;display:block;margin-left:auto;margin-right:auto;margin-top:18pt;margin-bottom:18pt">
-<p>As we wrap up another remarkable year for Apache Hudi, I am thrilled to reflect on the tremendous achievements and milestones that have defined 2024. This year has been particularly special as we achieved several significant milestones, including the landmark release of Hudi 1.0, the publication of comprehensive books, and the introduction of new tools that expand Hudi's ecosystem.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="community-growth-and-engagement">Community Growth and Engagement<a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#community-growth-and-engagement" class="hash-link" aria-label="Direct link to Community Growth and Engagement" title="Direct link to Community Growth and Engagement">​</a></h2>
-<p>The Apache Hudi community continued its impressive growth trajectory in 2024. The number of new PRs has remained stable, indicating a consistent level of development activities:</p>
-<img src="https://hudi.apache.org/assets/images/blog/2024-12-29-a-year-in-review-2024/pr-history.svg" alt="drawing" style="width:80%;display:block;margin-left:auto;margin-right:auto;margin-top:18pt;margin-bottom:18pt">
-<p>Our community presence expanded significantly across various platforms:</p>
-<ul>
-<li>The community grew to over 10,500 followers on LinkedIn</li>
-<li>Added 8,755 new followers in the last 365 days</li>
-<li>Generated 441,402 content impressions</li>
-<li>Received 6,555 reactions and 493 comments across platforms</li>
-<li>Our Slack community remained vibrant with rich technical discussions and knowledge sharing</li>
-</ul>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="major-milestones">Major Milestones<a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#major-milestones" class="hash-link" aria-label="Direct link to Major Milestones" title="Direct link to Major Milestones">​</a></h2>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="apache-hudi-10-release">Apache Hudi 1.0 Release<a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#apache-hudi-10-release" class="hash-link" aria-label="Direct link to Apache Hudi 1.0 Release" title="Direct link to Apache Hudi 1.0 Release">​</a></h3>
-<p>2024 marked a historic moment with the <a href="https://hudi.apache.org/releases/release-1.0.0" target="_blank" rel="noopener noreferrer">release of Apache Hudi 1.0</a>, representing a major evolution in data lakehouse technology. This release brought several groundbreaking features:</p>
-<ul>
-<li><strong>Secondary Indexing</strong>: First of its kind in lakehouses, enabling database-like query acceleration with demonstrated 95% latency reduction on 10TB TPC-DS for low-moderate selectivity queries</li>
-<li><strong>Logical Partitioning via Expression Indexes</strong>: Introducing PostgreSQL-style expression indexes for more efficient partition management</li>
-<li><strong>Partial Updates</strong>: Achieving 2.6x performance improvement and 85% reduction in bytes written for update-heavy workloads</li>
-<li><strong>Non-blocking Concurrency Control (NBCC)</strong>: An industry-first feature allowing simultaneous writing from multiple writers</li>
-<li><strong>Merge Modes</strong>: First-class support for both <code>commit_time_ordering</code> and <code>event_time_ordering</code></li>
-<li><strong>LSM Timeline</strong>: Revamped timeline storage as a scalable LSM tree for extended table history retention</li>
-<li><strong>TrueTime</strong>: Strengthened time semantics ensuring forward-moving clocks in distributed processes</li>
-</ul>
-<p>Please check out the <a href="https://hudi.apache.org/blog/2024/12/16/announcing-hudi-1-0-0">announcement blog</a>.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="launch-of-hudi-rs">Launch of Hudi-rs<a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#launch-of-hudi-rs" class="hash-link" aria-label="Direct link to Launch of Hudi-rs" title="Direct link to Launch of Hudi-rs">​</a></h3>
-<p>A significant expansion of the Hudi ecosystem occurred with the <a href="https://github.com/apache/hudi-rs" target="_blank" rel="noopener noreferrer">release of Hudi-rs</a>, the native Rust implementation for Apache Hudi with Python API bindings. This new project enables:</p>
-<ul>
-<li>Reading Hudi Tables without Spark or JVM dependencies</li>
-<li>Integration with Apache Arrow for enhanced compatibility</li>
-<li>Support for Copy-on-Write (CoW) table snapshots and time-travel reads</li>
-<li>Cloud storage support across AWS, Azure, and GCP</li>
-<li>Native integration with Apache DataFusion, Ray, Daft, etc</li>
-</ul>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="published-books-and-educational-content">Published Books and Educational Content<a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#published-books-and-educational-content" class="hash-link" aria-label="Direct link to Published Books and Educational Content" title="Direct link to Published Books and Educational Content">​</a></h3>
-<p>2024 saw the release of two comprehensive guides to Apache Hudi:</p>
-<ul>
-<li><a href="https://learning.oreilly.com/library/view/apache-hudi-the/9781098173821/" target="_blank" rel="noopener noreferrer"><strong>"Apache Hudi: The Definitive Guide"</strong></a> (O'Reilly) - Released in early access, <a href="https://www.onehouse.ai/whitepaper/apache-hudi-the-definitive-guide" target="_blank" rel="noopener noreferrer">free copy available</a>, providing comprehensive coverage of:<!-- -->
-<ul>
-<li>Distributed query engines</li>
-<li>Snapshot and time travel queries</li>
-<li>Incremental queries</li>
-<li>Change-data-capture modes</li>
-<li>End-to-end ingestion with Hudi Streamer</li>
-</ul>
-</li>
-</ul>
-<img src="https://hudi.apache.org/assets/images/blog/2024-12-29-a-year-in-review-2024/hudi-tdg.jpg" alt="drawing" style="width:80%;display:block;margin-left:auto;margin-right:auto;margin-top:18pt;margin-bottom:18pt">
-<ul>
-<li><a href="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-110" target="_blank" rel="noopener noreferrer"><strong>"Apache Hudi: From Zero to One"</strong></a> - A 10-part blog series turned into <a href="https://www.onehouse.ai/whitepaper/ebook-apache-hudi---zero-to-one" target="_blank" rel="noopener noreferrer">an ebook</a>, offering deep technical insights into Hudi's architecture and capabilities, covering:<!-- -->
-<ul>
-<li>Storage format and operations</li>
-<li>Read and write flows</li>
-<li>Table services and indexing</li>
-<li>Incremental processing</li>
-<li>Hudi 1.0 features</li>
-</ul>
-</li>
-</ul>
-<img src="https://hudi.apache.org/assets/images/blog/2024-12-29-a-year-in-review-2024/hudi0to1.png" alt="drawing" style="width:80%;display:block;margin-left:auto;margin-right:auto;margin-top:18pt;margin-bottom:18pt">
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="community-events-and-sharing">Community Events and Sharing<a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#community-events-and-sharing" class="hash-link" aria-label="Direct link to Community Events and Sharing" title="Direct link to Community Events and Sharing">​</a></h2>
-<p>The Apache Hudi community maintained a strong presence at major industry events throughout 2024:</p>
-<img src="https://hudi.apache.org/assets/images/blog/2024-12-29-a-year-in-review-2024/community-events.png" alt="drawing" style="width:80%;display:block;margin-left:auto;margin-right:auto;margin-top:18pt;margin-bottom:18pt">
-<ul>
-<li>Databricks' Data+AI Summit - Presenting Apache Hudi's role in the lakehouse ecosystem and its interoperability with other table formats through XTable, an open-source project enabling seamless conversion between Hudi, Delta Lake, and Iceberg</li>
-<li>Confluent's Current 2024 - Demonstrating Hudi's powerful CDC capabilities with Apache Flink, showcasing real-time data pipelines and the innovative Non-Blocking Concurrency Control (NBCC) for high-volume streaming workloads</li>
-<li>Trino Fest 2024 - Showcasing Hudi connector's evolution and innovations in Trino, including multi-modal indexing capabilities and the roadmap for enhanced query performance through Alluxio-powered caching and expanded DDL/DML support</li>
-<li>Bangalore Lakehouse Days - Deep dive into Apache Hudi 1.0's groundbreaking features including LSM-based timeline, functional indexes, and non-blocking concurrency control, demonstrating Hudi's continued innovation in the lakehouse space</li>
-</ul>
-<p>Additionally, the community launched several new initiatives to foster learning and knowledge sharing:</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="lakehouse-chronicles-with-apache-hudi"><a href="https://www.youtube.com/playlist?list=PLxSSOLH2WRMNQetyPU98B2dHnYv91R6Y8" target="_blank" rel="noopener noreferrer">Lakehouse Chronicles with Apache Hudi</a><a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#lakehouse-chronicles-with-apache-hudi" class="hash-link" aria-label="Direct link to lakehouse-chronicles-with-apache-hudi" title="Direct link to lakehouse-chronicles-with-apache-hudi">​</a></h3>
-<p>A new community series with 4 episodes released.</p>
-<img src="https://hudi.apache.org/assets/images/blog/2024-12-29-a-year-in-review-2024/lakehouse-chronicles.png" alt="drawing" style="width:80%;display:block;margin-left:auto;margin-right:auto;margin-top:18pt;margin-bottom:18pt">
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="hudi-newsletter"><a href="https://hudinewsletter.substack.com/" target="_blank" rel="noopener noreferrer">Hudi Newsletter</a><a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#hudi-newsletter" class="hash-link" aria-label="Direct link to hudi-newsletter" title="Direct link to hudi-newsletter">​</a></h3>
-<p>9 editions published, keeping the community informed about latest developments.</p>
-<img src="https://hudi.apache.org/assets/images/blog/2024-12-29-a-year-in-review-2024/newsletter.png" alt="drawing" style="width:80%;display:block;margin-left:auto;margin-right:auto;margin-top:18pt;margin-bottom:18pt">
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="community-syncs"><a href="https://www.youtube.com/@apachehudi" target="_blank" rel="noopener noreferrer">Community Syncs</a><a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#community-syncs" class="hash-link" aria-label="Direct link to community-syncs" title="Direct link to community-syncs">​</a></h3>
-<p>Featured 8 user stories from major organizations including Amazon, Peloton, Shopee and Uber.</p>
-<img src="https://hudi.apache.org/assets/images/blog/2024-12-29-a-year-in-review-2024/community-syncs.png" alt="drawing" style="width:80%;display:block;margin-left:auto;margin-right:auto;margin-top:18pt;margin-bottom:18pt">
-<ul>
-<li><a href="https://www.youtube.com/watch?v=rMXhlb7Uci8" target="_blank" rel="noopener noreferrer">Powering Amazon Unit Economics with Configurations and Hudi</a></li>
-<li><a href="https://www.youtube.com/watch?v=-Pyid5K9dyU" target="_blank" rel="noopener noreferrer">Modernizing Data Infrastructure at Peleton using Apache Hudi</a></li>
-<li><a href="https://www.youtube.com/watch?v=fqhr-4jXi6I" target="_blank" rel="noopener noreferrer">Innovative Solution for Real-time Analytics at Scale using Apache Hudi (Shopee)</a></li>
-<li><a href="https://www.youtube.com/watch?v=VpdimpH_nsI" target="_blank" rel="noopener noreferrer">Scaling Complex Data Workflows using Apache Hudi (Uber)</a></li>
-</ul>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="notable-user-stories-and-technical-content">Notable User Stories and Technical Content<a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#notable-user-stories-and-technical-content" class="hash-link" aria-label="Direct link to Notable User Stories and Technical Content" title="Direct link to Notable User Stories and Technical Content">​</a></h2>
-<p>Throughout 2024, several organizations shared their Hudi implementation experiences:</p>
-<ul>
-<li><a href="https://www.notion.com/blog/building-and-scaling-notions-data-lake" target="_blank" rel="noopener noreferrer">Notion's transition from Snowflake to Hudi</a></li>
-<li><a href="https://engineering.grab.com/enabling-near-realtime-data-analytics" target="_blank" rel="noopener noreferrer">Grab's implementation of near-realtime data analytics</a></li>
-<li><a href="https://aws.amazon.com/blogs/big-data/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets/" target="_blank" rel="noopener noreferrer">AWS's data sharing capabilities with AWS Data Exchange</a></li>
-<li><a href="https://www.y.uno/post/how-apache-hudi-transformed-yunos-data-lake" target="_blank" rel="noopener noreferrer">Yuno's data lake transformation</a></li>
-<li><a href="https://blogs.halodoc.io/data-lake-cost-optimisation-strategies/" target="_blank" rel="noopener noreferrer">Halodoc's cost optimization strategies</a></li>
-<li><a href="https://medium.com/upstox-engineering/navigating-the-future-the-evolutionary-journey-of-upstoxs-data-platform-92dc10ff22ae" target="_blank" rel="noopener noreferrer">Upstox's data platform evolution</a></li>
-</ul>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="looking-ahead-to-2025">Looking Ahead to 2025<a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#looking-ahead-to-2025" class="hash-link" aria-label="Direct link to Looking Ahead to 2025" title="Direct link to Looking Ahead to 2025">​</a></h2>
-<p>As we look forward to 2025, Apache Hudi's roadmap includes several exciting developments:</p>
-<ul>
-<li>Enhanced core engine with modernized write paths and advanced indexing (bitmap, vector search)</li>
-<li>Multi-modal data support with improved storage engine APIs and cross-format interoperability</li>
-<li>Enterprise-grade features including multi-table transactions and advanced caching</li>
-<li>Robust platform services with Data Lakehouse Management System (DLMS) components</li>
-<li>Broader adoption of Hudi-rs across the ecosystem</li>
-<li>Continued focus on stability and seamless migration path for the community</li>
-</ul>
-<p>These initiatives reflect our commitment to advancing data lakehouse technology while ensuring reliability and user experience.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="get-involved">Get Involved<a href="https://hudi.apache.org/blog/2024/12/29/apache-hudi-2024-a-year-in-review#get-involved" class="hash-link" aria-label="Direct link to Get Involved" title="Direct link to Get Involved">​</a></h2>
-<p>Join our thriving community:</p>
-<ul>
-<li>Contribute to the project on GitHub: <a href="https://github.com/apache/hudi" target="_blank" rel="noopener noreferrer">Hudi</a> &amp; <a href="https://github.com/apache/hudi-rs" target="_blank" rel="noopener noreferrer">Hudi-rs</a></li>
-<li>Join our <a href="https://apache-hudi.slack.com/join/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g" target="_blank" rel="noopener noreferrer">Slack community</a></li>
-<li>Follow us on <a href="https://www.linkedin.com/company/apache-hudi/" target="_blank" rel="noopener noreferrer">LinkedIn</a> and <a href="https://x.com/apachehudi" target="_blank" rel="noopener noreferrer">X (Twitter)</a></li>
-<li>Subscribe to our <a href="https://www.youtube.com/@apachehudi" target="_blank" rel="noopener noreferrer">YouTube channel</a></li>
-<li>Participate in our <a href="https://hudi.apache.org/community/syncs" target="_blank" rel="noopener noreferrer">community syncs</a> and <a href="https://hudi.apache.org/community/office_hours" target="_blank" rel="noopener noreferrer">office hours</a>.</li>
-<li>Subscribe to the dev mailing list by sending an empty email to <code>dev-subscribe@hudi.apache.org</code></li>
-</ul>
-<p>The success of Apache Hudi in 2024 wouldn't have been possible without our dedicated community of contributors, users, and supporters. As we celebrate these achievements, we look forward to another year of innovation and growth in 2025.</p>]]></content:encoded>
-            <category>apache hudi</category>
-            <category>community</category>
-        </item>
-        <item>
-            <title><![CDATA[How lakehouse handles concurrent Read and Writes]]></title>
-            <link>https://hudi.apache.org/blog/2024/12/28/how-lakehouse-handles-concurrent-read-and-writes</link>
-            <guid>https://hudi.apache.org/blog/2024/12/28/how-lakehouse-handles-concurrent-read-and-writes</guid>
-            <pubDate>Sat, 28 Dec 2024 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@sanjeets1900/how-lakehouse-handles-concurrent-read-and-writes-b4423fecfe81">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>apache hudi</category>
-            <category>concurrency</category>
-            <category>concurrency-control</category>
-            <category>non-blocking concurrency-control</category>
-            <category>nbcc</category>
-            <category>medium</category>
         </item>
     </channel>
 </rss>
