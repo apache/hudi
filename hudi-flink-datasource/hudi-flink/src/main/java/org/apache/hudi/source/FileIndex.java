@@ -21,6 +21,8 @@ package org.apache.hudi.source;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -28,7 +30,6 @@ import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
-import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.source.stats.FileStatsIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -69,7 +70,7 @@ public class FileIndex implements Serializable {
   private final org.apache.hadoop.conf.Configuration hadoopConf;
   private final PartitionPruners.PartitionPruner partitionPruner; // for partition pruning
   private final ColumnStatsProbe colStatsProbe;                   // for probing column stats
-  private final int dataBucketHashing;                                   // for bucket pruning
+  private final Option<Functions.Function1<Integer, Integer>> dataBucket;                                   // for bucket pruning
   private List<String> partitionPaths;                            // cache of partition paths
   private final FileStatsIndex fileStatsIndex;                    // for data skipping
   private final NumBucketsFunction numBucketsFunction;
@@ -80,7 +81,7 @@ public class FileIndex implements Serializable {
       RowType rowType,
       ColumnStatsProbe colStatsProbe,
       PartitionPruners.PartitionPruner partitionPruner,
-      int dataBucketHashing,
+      Option<Functions.Function1<Integer, Integer>> dataBucket,
       NumBucketsFunction numBucketsFunction) {
     this.path = path;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
@@ -88,7 +89,7 @@ public class FileIndex implements Serializable {
     this.metadataConfig = StreamerUtil.metadataConfig(conf);
     this.colStatsProbe = isDataSkippingFeasible(conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? colStatsProbe : null;
     this.partitionPruner = partitionPruner;
-    this.dataBucketHashing = dataBucketHashing;
+    this.dataBucket = dataBucket;
     this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, metadataConfig);
     this.numBucketsFunction = numBucketsFunction == null
         ? new NumBucketsFunction(conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS))
@@ -169,11 +170,11 @@ public class FileIndex implements Serializable {
 
     List<StoragePathInfo> allFiles;
     // bucket pruning
-    if (this.dataBucketHashing >= 0) {
+    if (this.dataBucket.isPresent()) {
       allFiles = partition2Files.entrySet().stream().flatMap(entry -> {
         String partitionPath = entry.getKey();
         int numBuckets = numBucketsFunction.getNumBuckets(partitionPath);
-        int bucketId = BucketIdentifier.getBucketId(this.dataBucketHashing, numBuckets);
+        int bucketId = dataBucket.get().apply(numBuckets);
         String bucketIdStr = BucketIdentifier.bucketIdStr(bucketId);
         List<StoragePathInfo> innerAllFiles = entry.getValue();
         return innerAllFiles.stream().filter(fileInfo -> fileInfo.getPath().getName().contains(bucketIdStr));
@@ -299,7 +300,7 @@ public class FileIndex implements Serializable {
     private RowType rowType;
     private ColumnStatsProbe columnStatsProbe;
     private PartitionPruners.PartitionPruner partitionPruner;
-    private int dataBucketHashing = PrimaryKeyPruners.BUCKET_ID_NO_PRUNING;
+    private Option<Functions.Function1<Integer, Integer>> dataBucket = Option.empty();
     private NumBucketsFunction numBucketFunction;
 
     private Builder() {
@@ -330,8 +331,8 @@ public class FileIndex implements Serializable {
       return this;
     }
 
-    public Builder dataBucketHashing(int dataBucketHashing) {
-      this.dataBucketHashing = dataBucketHashing;
+    public Builder dataBucket(Option<Functions.Function1<Integer, Integer>> dataBucket) {
+      this.dataBucket = dataBucket;
       return this;
     }
 
@@ -342,7 +343,7 @@ public class FileIndex implements Serializable {
 
     public FileIndex build() {
       return new FileIndex(Objects.requireNonNull(path), Objects.requireNonNull(conf), Objects.requireNonNull(rowType),
-          columnStatsProbe, partitionPruner, dataBucketHashing, numBucketFunction);
+          columnStatsProbe, partitionPruner, dataBucket, numBucketFunction);
     }
   }
 }
