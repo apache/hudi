@@ -38,15 +38,7 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static int getBucketId(List<String> hashKeyFields, int numBuckets) {
-    return getBucketId(getFieldsHashing(hashKeyFields), numBuckets);
-  }
-
-  public static int getBucketId(int fieldsHashing, int numBuckets) {
-    return fieldsHashing % numBuckets;
-  }
-
-  public static int getFieldsHashing(List<String> hashKeyFields) {
-    return (hashKeyFields.hashCode() & Integer.MAX_VALUE);
+    return (hashKeyFields.hashCode() & Integer.MAX_VALUE) % numBuckets;
   }
 
   protected static List<String> getHashKeys(String recordKey, String indexKeyFields) {
