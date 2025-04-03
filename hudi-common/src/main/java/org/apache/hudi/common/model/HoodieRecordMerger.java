@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -186,9 +187,8 @@ public interface HoodieRecordMerger extends Serializable {
    */
   String getMergingStrategy();
 
-  static String getRecordMergeStrategyId(RecordMergeMode mergeMode,
-                                         String payloadClassName,
-                                         String recordMergeStrategyId) {
+  static String getRecordMergeStrategyId(RecordMergeMode mergeMode, String payloadClassName,
+                                         String recordMergeStrategyId, HoodieTableVersion tableVersion) {
     switch (mergeMode) {
       case COMMIT_TIME_ORDERING:
         return COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
@@ -196,13 +196,19 @@ public interface HoodieRecordMerger extends Serializable {
         return EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
       case CUSTOM:
       default:
+        String stategyId = null;
         if (nonEmpty(recordMergeStrategyId)) {
-          return recordMergeStrategyId;
+          if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+            // If table version is >= 8, we prefer input strategy id
+            return recordMergeStrategyId;
+          }
+          stategyId = recordMergeStrategyId;
         }
         if (nonEmpty(payloadClassName)) {
+          // If table version is < 8, we prefer strategy id based on payload rather than input strategy id
           return PAYLOAD_BASED_MERGE_STRATEGY_UUID;
         }
-        return null;
+        return stategyId;
     }
   }
 }
