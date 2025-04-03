@@ -65,7 +65,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Base
   public HoodieSparkFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                     CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                                     Option<BaseKeyGenerator> keyGeneratorOpt,
-                                                    HoodieReaderContext<T> readerContext, Configuration conf) {
+                                                    HoodieReaderContext readerContext, Configuration conf) {
     super(config, instantTime, hoodieTable, operation, taskContextSupplier, keyGeneratorOpt, readerContext, conf);
   }
 

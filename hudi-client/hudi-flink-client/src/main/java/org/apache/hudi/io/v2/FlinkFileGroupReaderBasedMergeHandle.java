@@ -62,7 +62,7 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
       CompactionOperation operation,
       TaskContextSupplier taskContextSupplier,
       Option<BaseKeyGenerator> keyGeneratorOpt,
-      HoodieReaderContext<T> readerContext,
+      HoodieReaderContext readerContext,
       Configuration conf) {
     super(config, instantTime, hoodieTable, operation,
         taskContextSupplier, keyGeneratorOpt, readerContext, conf);

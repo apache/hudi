@@ -22,10 +22,12 @@ import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -253,14 +255,13 @@ public class StreamerUtil {
       org.apache.hadoop.conf.Configuration hadoopConf) throws IOException {
     final String basePath = conf.getString(FlinkOptions.PATH);
     if (!tableExists(basePath, hadoopConf)) {
-      HoodieTableMetaClient.newTableBuilder()
+      HoodieTableMetaClient.TableBuilder tableBuilder = HoodieTableMetaClient.newTableBuilder()
           .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setTableVersion(conf.getInteger(FlinkOptions.WRITE_TABLE_VERSION))
           .setDatabaseName(conf.getString(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
-          .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
           .setPreCombineField(OptionsResolver.getPreCombineField(conf))
           .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
@@ -270,8 +271,10 @@ public class StreamerUtil {
           .setUrlEncodePartitioning(conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING))
           .setCDCEnabled(conf.getBoolean(FlinkOptions.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
-          .setPopulateMetaFields(OptionsResolver.isPopulateMetaFields(conf))
-          .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
+          .setPopulateMetaFields(OptionsResolver.isPopulateMetaFields(conf));
+      // set correct merge config
+      checkAndSetMergeConfig(tableBuilder, conf);
+      tableBuilder.initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
       LOG.info("Table initialized under base path {}", basePath);
     } else {
       LOG.info("Table [path={}, name={}] already exists, no need to initialize the table",
@@ -282,6 +285,31 @@ public class StreamerUtil {
 
     // Do not close the filesystem in order to use the CACHE,
     // some filesystems release the handles in #close method.
+  }
+
+  public static void checkAndSetMergeConfig(HoodieTableMetaClient.TableBuilder tableBuilder, Configuration conf) {
+    if (conf.contains(FlinkOptions.RECORD_MERGE_MODE)) {
+      RecordMergeMode mergeMode = RecordMergeMode.valueOf(conf.get(FlinkOptions.RECORD_MERGE_MODE));
+      if (conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
+        String payloadClass = conf.get(FlinkOptions.PAYLOAD_CLASS_NAME);
+        RecordMergeMode inferredMergeMode = HoodieTableConfig.inferRecordMergeModeFromPayloadClass(payloadClass);
+        ValidationUtils.checkArgument(mergeMode == inferredMergeMode,
+            String.format("Configured record merge mode (%s) is inconsistent with payload class (%s).", mergeMode, payloadClass));
+        tableBuilder.setPayloadClassName(payloadClass);
+      }
+      tableBuilder.setRecordMergeMode(mergeMode);
+      if (mergeMode == RecordMergeMode.CUSTOM) {
+        tableBuilder.setRecordMergeStrategyId(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID);
+      }
+    } else {
+      // users do not set merge mode, use payload config for compatibility.
+      String payloadClass = conf.get(FlinkOptions.PAYLOAD_CLASS_NAME);
+      tableBuilder.setPayloadClassName(payloadClass);
+      RecordMergeMode inferredMergeMode = HoodieTableConfig.inferRecordMergeModeFromPayloadClass(payloadClass);
+      if (inferredMergeMode == RecordMergeMode.CUSTOM) {
+        tableBuilder.setRecordMergeStrategyId(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID);
+      }
+    }
   }
 
   /**

@@ -82,7 +82,7 @@ import java.io.IOException;
 public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
   @Override
   public String getMergingStrategy() {
-    return EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+    return CUSTOM_MERGE_STRATEGY_UUID;
   }
 
   @Override
