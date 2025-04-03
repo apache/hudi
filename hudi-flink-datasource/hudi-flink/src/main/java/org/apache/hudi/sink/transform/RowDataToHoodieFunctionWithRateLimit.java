@@ -29,7 +29,7 @@ import org.apache.flink.table.types.logical.RowType;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Function that transforms RowData to a HoodieRecord with RateLimit.
+ * Function that transforms RowData to a {@code HoodieFlinkInternalRow} with RateLimit.
  */
 public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends HoodieFlinkInternalRow>
     extends RowDataToHoodieFunction<I, O> {

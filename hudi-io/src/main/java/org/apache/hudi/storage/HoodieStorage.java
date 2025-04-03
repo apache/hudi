@@ -389,7 +389,10 @@ public abstract class HoodieStorage implements Closeable {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public final boolean needCreateTempFile() {
-    return StorageSchemes.HDFS.getScheme().equals(getScheme());
+    return StorageSchemes.HDFS.getScheme().equals(getScheme())
+        // Local file will be visible immediately after LocalFileSystem#create(..), even before the output
+        // stream is closed, so temporary file is also needed for atomic file creating with content written.
+        || StorageSchemes.FILE.getScheme().equals(getScheme());
   }
 
   /**

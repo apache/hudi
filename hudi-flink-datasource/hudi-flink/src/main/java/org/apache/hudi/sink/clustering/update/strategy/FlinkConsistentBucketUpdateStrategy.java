@@ -51,6 +51,8 @@ import java.util.stream.Collectors;
  * Update strategy for consistent hashing bucket index. If updates to file groups that are under clustering are identified,
  * then the current batch of records will route to both old and new file groups
  * (i.e., dual write).
+ *
+ * TODO: remove this class when RowData mode writing is supported for COW.
  */
 public class FlinkConsistentBucketUpdateStrategy<T extends HoodieRecordPayload> extends UpdateStrategy<T, List<Pair<List<HoodieRecord>, String>>> {
 
@@ -100,11 +102,15 @@ public class FlinkConsistentBucketUpdateStrategy<T extends HoodieRecordPayload> 
     Pair<List<HoodieRecord>, String> recordsInstantPair = recordsList.get(0);
     HoodieRecord sampleRecord = recordsInstantPair.getLeft().get(0);
     HoodieFileGroupId fileId = new HoodieFileGroupId(sampleRecord.getPartitionPath(), sampleRecord.getCurrentLocation().getFileId());
-    if (fileGroupsInPendingClustering.isEmpty() || !fileGroupsInPendingClustering.contains(fileId)) {
+    if (!needDualWrite(fileId)) {
       return Pair.of(recordsList, Collections.singleton(fileId));
     }
 
     return doHandleUpdate(fileId, recordsInstantPair);
+  }
+
+  public boolean needDualWrite(HoodieFileGroupId fileId) {
+    return !fileGroupsInPendingClustering.isEmpty() && fileGroupsInPendingClustering.contains(fileId);
   }
 
   private Pair<List<Pair<List<HoodieRecord>, String>>, Set<HoodieFileGroupId>> doHandleUpdate(HoodieFileGroupId fileId, Pair<List<HoodieRecord>, String> recordsInstantPair) {

@@ -24,7 +24,9 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -35,6 +37,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -190,4 +193,37 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
       }
     }
   }
+
+  @Test
+  public void testCompletionTimeGreaterThanRequestedTime() throws IOException {
+    String basePath = URI.create(basePath()).getPath();
+    testAndAssertCompletionIsEarlierThanRequested(basePath, new Properties());
+
+    // retry w/ explicitly setting timezone to UTC
+    basePath = basePath + "_UTC";
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.TIMELINE_TIMEZONE.key(), "UTC");
+    testAndAssertCompletionIsEarlierThanRequested(basePath, props);
+  }
+
+  private void testAndAssertCompletionIsEarlierThanRequested(String basePath, Properties properties) throws IOException {
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath, properties);
+
+    HoodieWriteConfig cfg = getConfigBuilder(true).build();
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      for (int i = 0; i < 10; i++) {
+        String requestedTime = client.startCommit();
+        List<HoodieRecord> records = dataGen.generateInserts(requestedTime, 200);
+        JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
+        client.upsert(writeRecords, requestedTime);
+      }
+    }
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(context().getStorageConf()).build();
+    metaClient.reloadActiveTimeline();
+    metaClient.getActiveTimeline().filterCompletedInstants().getInstants().forEach(hoodieInstant -> {
+      assertTrue(InstantComparison.compareTimestamps(hoodieInstant.requestedTime(), InstantComparison.LESSER_THAN, hoodieInstant.getCompletionTime()));
+    });
+  }
+
 }

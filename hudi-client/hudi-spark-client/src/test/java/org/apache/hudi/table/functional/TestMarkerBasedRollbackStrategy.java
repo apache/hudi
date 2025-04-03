@@ -43,7 +43,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.rollback.BaseRollbackHelper;
+import org.apache.hudi.table.action.rollback.RollbackHelper;
 import org.apache.hudi.table.action.rollback.MarkerBasedRollbackStrategy;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import org.apache.hudi.table.marker.DirectWriteMarkers;
@@ -118,7 +118,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     String f0 = testTable.addRequestedCommit("000")
         .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
     testTable.forCommit("001")
-        .withLogMarkerFile("partA", f0, IOType.CREATE);
+        .withLogMarkerFile("000", "partA", f0, IOType.APPEND, 1);
 
     HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
     List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
@@ -165,11 +165,12 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         .withMarkerFile("partA", f2, IOType.CREATE);
 
     // when
-    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(getConfigBuilder().build(), context, metaClient);
     List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
         "002").getRollbackRequests(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
 
-    List<HoodieRollbackStat> stats = new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+    //  "002" argument performRollback older API
+    List<HoodieRollbackStat> stats = new RollbackHelper(hoodieTable, getConfig()).performRollback(context, "002",
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"),
         rollbackRequests);
 
@@ -244,12 +245,13 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
     writeStatuses.collect();
 
-    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
-    List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
+    HoodieTable hoodieTable = HoodieSparkTable.create(getConfigBuilder().build(), context, metaClient);
+    List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfigBuilder().build(),
         "002").getRollbackRequests(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"));
 
     // rollback 1st commit and ensure stats reflect the info.
-    return new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+    // 002 argument older API might be needed
+    return new RollbackHelper(hoodieTable, getConfig()).performRollback(context, "002",
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"),
         rollbackRequests);
   }
@@ -269,12 +271,13 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     writeStatuses = writeClient.upsert(jsc.parallelize(records, 1), newCommitTime);
     writeStatuses.collect();
 
-    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
-    List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
+    HoodieTable hoodieTable = HoodieSparkTable.create(getConfigBuilder().build(), context, metaClient);
+    List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfigBuilder().build(),
         "003").getRollbackRequests(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"));
 
     // rollback 2nd commit and ensure stats reflect the info.
-    return new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+    // 003 argument older API might be needed
+    return new RollbackHelper(hoodieTable, getConfig()).performRollback(context, "003",
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"),
         rollbackRequests);
   }
@@ -285,7 +288,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     String f0 = testTable.addRequestedCommit("000")
         .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
     testTable.forCommit("001")
-        .withLogMarkerFile("partA", f0, IOType.APPEND);
+        .withLogMarkerFile("000", "partA", f0, IOType.APPEND, 1);
 
     HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
 
@@ -390,6 +393,6 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     assertEquals(
         tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? 0 : 1,
         rollbackStat.getCommandBlocksCount().size());
-    assertEquals(0, rollbackStat.getLogFilesFromFailedCommit().size());
+    assertEquals(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? 0 : numLogFiles, rollbackStat.getLogFilesFromFailedCommit().size());
   }
 }

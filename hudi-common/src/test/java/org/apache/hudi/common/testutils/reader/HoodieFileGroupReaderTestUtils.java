@@ -45,8 +45,8 @@ public class HoodieFileGroupReaderTestUtils {
       TypedProperties properties,
       HoodieStorage storage,
       HoodieReaderContext<IndexedRecord> readerContext,
-      HoodieTableMetaClient metaClient
-  ) {
+      HoodieTableMetaClient metaClient,
+      boolean allowInflightCommits) {
     assert (fileSliceOpt.isPresent());
     return new HoodieFileGroupReaderBuilder()
         .withReaderContext(readerContext)
@@ -55,6 +55,7 @@ public class HoodieFileGroupReaderTestUtils {
         .withStart(start)
         .withLength(length)
         .withProperties(properties)
+        .withAllowInflightCommits(allowInflightCommits)
         .build(basePath, latestCommitTime, schema, shouldUseRecordPosition, metaClient);
   }
 
@@ -65,6 +66,7 @@ public class HoodieFileGroupReaderTestUtils {
     private TypedProperties props;
     private long start;
     private long length;
+    private boolean allowInflightCommits = false;
 
     public HoodieFileGroupReaderBuilder withReaderContext(
         HoodieReaderContext<IndexedRecord> context) {
@@ -97,6 +99,11 @@ public class HoodieFileGroupReaderTestUtils {
       return this;
     }
 
+    public HoodieFileGroupReaderBuilder withAllowInflightCommits(boolean allowInflightCommits) {
+      this.allowInflightCommits = allowInflightCommits;
+      return this;
+    }
+
     public HoodieFileGroupReader<IndexedRecord> build(
         String basePath,
         String latestCommitTime,
@@ -108,20 +115,8 @@ public class HoodieFileGroupReaderTestUtils {
       props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),  basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME);
       props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
       props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
-      return new HoodieFileGroupReader<>(
-          readerContext,
-          storage,
-          basePath,
-          latestCommitTime,
-          fileSlice,
-          schema,
-          schema,
-          Option.empty(),
-          metaClient,
-          props,
-          start,
-          length,
-          shouldUseRecordPosition);
+      return new HoodieFileGroupReader<>(readerContext, storage, basePath, latestCommitTime, fileSlice,
+          schema, schema, Option.empty(), metaClient, props, start, length, shouldUseRecordPosition, allowInflightCommits);
     }
   }
 }

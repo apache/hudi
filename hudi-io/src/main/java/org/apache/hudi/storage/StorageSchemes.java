@@ -20,6 +20,8 @@
 package org.apache.hudi.storage;
 
 import java.util.Arrays;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * All the supported storage schemes in Hoodie.
@@ -86,6 +88,11 @@ public enum StorageSchemes {
   // Hopsworks File System
   HOPSFS("hopsfs", false, true);
 
+  // list files may bring pressure to storage with centralized meta service like HDFS.
+  // when we want to get only part of files under a directory rather than all files, use getStatus may be more friendly than listStatus.
+  // here is a trade-off between rpc times and throughput of storage meta service
+  private static final Set<String> LIST_STATUS_FRIENDLY_SCHEMES = new HashSet<>(Arrays.asList(FILE.scheme, S3.scheme, S3A.scheme, GCS.scheme));
+
   private final String scheme;
   // null for uncertain if write is transactional, please update this for each FS
   private final Boolean isWriteTransactional;
@@ -127,5 +134,13 @@ public enum StorageSchemes {
       throw new IllegalArgumentException("Unsupported scheme :" + scheme);
     }
     return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.isAtomicCreationSupported() && s.scheme.equals(scheme));
+  }
+
+  public static boolean isListStatusFriendly(String scheme) {
+    if (!isSchemeSupported(scheme)) {
+      throw new IllegalArgumentException("Unsupported scheme :" + scheme);
+    }
+
+    return LIST_STATUS_FRIENDLY_SCHEMES.contains(scheme);
   }
 }

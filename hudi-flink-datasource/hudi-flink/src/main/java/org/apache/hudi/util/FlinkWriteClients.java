@@ -213,8 +213,10 @@ public class FlinkWriteClients {
                 .parquetBlockSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_BLOCK_SIZE) * 1024 * 1024)
                 .parquetPageSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_PAGE_SIZE) * 1024 * 1024)
                 .parquetMaxFileSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE) * 1024 * 1024L)
+                .withWriteUtcTimezone(conf.get(FlinkOptions.WRITE_UTC_TIMEZONE))
                 .build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+                .withEngineType(EngineType.FLINK) // this affects the default value inference
                 .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
                 .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))
                 .build())

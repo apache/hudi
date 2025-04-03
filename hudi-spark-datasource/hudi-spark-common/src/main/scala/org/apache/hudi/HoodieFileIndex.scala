@@ -538,7 +538,7 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
 
       // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS
-      val database = getDatabaseName(tableConfig)
+      val database = getDatabaseName(tableConfig, spark.catalog.currentDatabase)
       val tableName = tableConfig.getTableName
 
       if (spark.catalog.tableExists(database, tableName)) {
@@ -615,9 +615,13 @@ object HoodieFileIndex extends Logging {
   }
 
   // if database name is not set, fall back to use 'default' instead of failing
-  def getDatabaseName(tableConfig: HoodieTableConfig)  = {
+  def getDatabaseName(tableConfig: HoodieTableConfig, defaultDatabase: String)  = {
     if (StringUtils.isNullOrEmpty(tableConfig.getDatabaseName)) {
-      "default"
+      if (StringUtils.isNullOrEmpty(defaultDatabase)) {
+        "default"
+      } else {
+        defaultDatabase
+      }
     } else {
       tableConfig.getDatabaseName
     }

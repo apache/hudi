@@ -50,9 +50,9 @@ import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_RE
  */
 public class HoodieParquetDataBlock extends HoodieDataBlock {
 
-  private final Option<String> compressionCodecName;
-  private final Option<Double> expectedCompressionRatio;
-  private final Option<Boolean> useDictionaryEncoding;
+  protected final Option<String> compressionCodecName;
+  protected final Option<Double> expectedCompressionRatio;
+  protected final Option<Boolean> useDictionaryEncoding;
 
   public HoodieParquetDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                                 Option<byte[]> content,
@@ -74,8 +74,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
                                 String keyField,
                                 String compressionCodecName,
                                 double expectedCompressionRatio,
-                                boolean useDictionaryEncoding
-  ) {
+                                boolean useDictionaryEncoding) {
     super(records, header, new HashMap<>(), keyField);
 
     this.compressionCodecName = Option.of(compressionCodecName);
@@ -98,8 +97,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA)));
 
     return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(PARQUET)
-        .serializeRecordsToLogBlock(
-            storage, records, writerSchema, getSchema(), getKeyFieldName(), paramsMap);
+        .serializeRecordsToLogBlock(storage, records, writerSchema, getSchema(), getKeyFieldName(), paramsMap);
   }
 
   /**

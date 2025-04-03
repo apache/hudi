@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestBucketIndexUtil {
 
+  // (int parallelism, int bucketNumber)
   private static Stream<Arguments> partitionParams() {
     List<Arguments> argsList = new ArrayList<>();
     argsList.add(Arguments.of(10, 5, true));
@@ -58,6 +59,35 @@ public class TestBucketIndexUtil {
     return argsList.stream();
   }
 
+  private static Stream<Arguments> testPartitionWithPartitionLevelBucketIndex() {
+    List<Arguments> argsList = new ArrayList<>();
+    List<String> total40 = Arrays.asList(
+        "year=2021/month=01/day=01,18",
+        "year=2021/month=01/day=02,11",
+        "year=2021/month=01/day=03,11");
+    List<String> total100 = Arrays.asList(
+        "year=2021/month=01/day=01,18",
+        "year=2021/month=01/day=02,21",
+        "year=2021/month=01/day=03,61");
+    List<String> total1000 = Arrays.asList(
+        "year=2021/month=01/day=01,18",
+        "year=2021/month=01/day=02,21",
+        "year=2021/month=01/day=03,961");
+    argsList.add(Arguments.of(10, total40));
+    argsList.add(Arguments.of(20, total40));
+    argsList.add(Arguments.of(21, total40));
+    argsList.add(Arguments.of(100, total40));
+    argsList.add(Arguments.of(101, total40));
+    argsList.add(Arguments.of(20, total100));
+    argsList.add(Arguments.of(21, total100));
+    argsList.add(Arguments.of(300, total100));
+    argsList.add(Arguments.of(201, total100));
+    argsList.add(Arguments.of(400, total1000));
+    argsList.add(Arguments.of(401, total1000));
+
+    return argsList.stream();
+  }
+
   private static Stream<Arguments> noPartitionParams() {
     List<Arguments> argsList = new ArrayList<>();
 
@@ -70,11 +100,26 @@ public class TestBucketIndexUtil {
   }
 
   @ParameterizedTest
+  @MethodSource("testPartitionWithPartitionLevelBucketIndex")
+  void testPartitionWithPartitionLevelBucketIndex(int parallelism, List<String> partition2Bucket) {
+    int totalBucketNumber = 0;
+    for (String s : partition2Bucket) {
+      totalBucketNumber = totalBucketNumber + Integer.parseInt(s.split(",")[1]);
+    }
+    Map<Integer, Integer> parallelism2TaskCount = new HashMap<>();
+    final Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc =
+        BucketIndexUtil.getPartitionIndexFunc(parallelism);
+    initPartitionDataPartitionBucket(parallelism2TaskCount, partitionIndexFunc, partition2Bucket);
+
+    checkResult(parallelism2TaskCount, parallelism, totalBucketNumber, true, false);
+  }
+
+  @ParameterizedTest
   @MethodSource("partitionParams")
   void testPartition(int parallelism, int bucketNumber, boolean partitioned) {
     Map<Integer, Integer> parallelism2TaskCount = new HashMap<>();
-    final Functions.Function2<String, Integer, Integer> partitionIndexFunc =
-        BucketIndexUtil.getPartitionIndexFunc(bucketNumber, parallelism);
+    final Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc =
+        BucketIndexUtil.getPartitionIndexFunc(parallelism);
     initPartitionData(parallelism2TaskCount, bucketNumber, partitionIndexFunc);
     checkResult(parallelism2TaskCount, parallelism, bucketNumber, partitioned);
   }
@@ -83,8 +128,8 @@ public class TestBucketIndexUtil {
   @MethodSource("noPartitionParams")
   void testNoPartition(int parallelism, int bucketNumber, boolean partitioned) {
     Map<Integer, Integer> parallelism2TaskCount = new HashMap<>();
-    final Functions.Function2<String, Integer, Integer> partitionIndexFunc =
-        BucketIndexUtil.getPartitionIndexFunc(bucketNumber, parallelism);
+    final Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc =
+        BucketIndexUtil.getPartitionIndexFunc(parallelism);
     initNoPartitionData(parallelism2TaskCount, bucketNumber, partitionIndexFunc);
     checkResult(parallelism2TaskCount, parallelism, bucketNumber, partitioned);
   }
@@ -97,7 +142,7 @@ public class TestBucketIndexUtil {
     }
   }
 
-  private void checkResult(Map<Integer, Integer> parallelism2TaskCount, int parallelism, int bucketNumber, boolean partitioned) {
+  private void checkResult(Map<Integer, Integer> parallelism2TaskCount, int parallelism, int bucketNumber, boolean partitioned, boolean needExpand) {
     int sum = 0;
     for (int v : parallelism2TaskCount.values()) {
       sum = sum + v;
@@ -121,7 +166,7 @@ public class TestBucketIndexUtil {
     // parallelism2TaskCount indicates the number of data split assigned each parallelism,
     // so it's size need infinitely close parallelism or (bucketNumber * 8), try to take advantage of available resources as much as possible
     int totalBucketFileNumber = bucketNumber;
-    if (partitioned) {
+    if (partitioned && needExpand) {
       totalBucketFileNumber = bucketNumber * 8;
     }
     if (parallelism >= totalBucketFileNumber) {
@@ -131,22 +176,37 @@ public class TestBucketIndexUtil {
     }
   }
 
+  private void checkResult(Map<Integer, Integer> parallelism2TaskCount, int parallelism, int bucketNumber, boolean partitioned) {
+    checkResult(parallelism2TaskCount, parallelism, bucketNumber, partitioned, true);
+  }
+
   private void initPartitionData(Map<Integer, Integer> parallelism2TaskCount, int bucketNumber,
-                                 Functions.Function2<String, Integer, Integer> partitionIndexFunc) {
+                                 Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc) {
     parallelism2TaskCount.clear();
     Arrays.asList("year=2021/month=01/day=01", "year=2021/month=01/day=02", "year=2021/month=01/day=03", "year=2021/month=01/day=04",
         "year=2021/month=01/day=05", "year=2021/month=01/day=06", "year=2021/month=01/day=07", "year=2021/month=01/day=08").forEach(partition -> {
           for (int bucketIndex = 0; bucketIndex < bucketNumber; bucketIndex++) {
-            putIndexCount(parallelism2TaskCount, partitionIndexFunc.apply(partition, bucketIndex));
+            putIndexCount(parallelism2TaskCount, partitionIndexFunc.apply(bucketNumber, partition, bucketIndex));
           }
         });
   }
 
+  private void initPartitionDataPartitionBucket(Map<Integer, Integer> parallelism2TaskCount, Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc,
+                                                List<String> partitionToBucket) {
+    partitionToBucket.forEach(partitionPair -> {
+      String[] pair = partitionPair.split(",");
+      int bucketNumber = Integer.parseInt(pair[1]);
+      for (int bucketIndex = 0; bucketIndex < bucketNumber; bucketIndex++) {
+        putIndexCount(parallelism2TaskCount, partitionIndexFunc.apply(bucketNumber, pair[0], bucketIndex));
+      }
+    });
+  }
+
   private void initNoPartitionData(Map<Integer, Integer> parallelism2TaskCount, int bucketNumber,
-                                   Functions.Function2<String, Integer, Integer> partitionIndexFunc) {
+                                   Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc) {
     parallelism2TaskCount.clear();
     for (int bucketIndex = 0; bucketIndex < bucketNumber; bucketIndex++) {
-      putIndexCount(parallelism2TaskCount, partitionIndexFunc.apply("", bucketIndex));
+      putIndexCount(parallelism2TaskCount, partitionIndexFunc.apply(bucketNumber, "", bucketIndex));
     }
   }
 }

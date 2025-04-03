@@ -111,6 +111,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String METADATA_STR = "metadata";
   public static final String METAFOLDER_NAME = ".hoodie";
   public static final String TIMELINEFOLDER_NAME = "timeline";
+  public static final String BUCKET_INDEX_METAFOLDER_NAME = ".bucket_index";
   public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".temp";
   public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".aux";
   public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + ".bootstrap";
@@ -118,7 +119,13 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".heartbeat";
   public static final String METADATA_TABLE_FOLDER_PATH = METAFOLDER_NAME + StoragePath.SEPARATOR + METADATA_STR;
   public static final String HASHING_METADATA_FOLDER_NAME =
-      ".bucket_index" + StoragePath.SEPARATOR + "consistent_hashing_metadata";
+      BUCKET_INDEX_METAFOLDER_NAME + StoragePath.SEPARATOR + "consistent_hashing_metadata";
+  public static final String PARTITION_BUCKET_INDEX_HASHING_FOLDER =
+      BUCKET_INDEX_METAFOLDER_NAME + StoragePath.SEPARATOR + "partition_bucket_index_meta";
+  public static final String BUCKET_INDEX_METAFOLDER_CONFIG_FOLDER =
+      PARTITION_BUCKET_INDEX_HASHING_FOLDER + StoragePath.SEPARATOR + "configs";
+  public static final String BUCKET_INDEX_METAFOLDER_CONFIG_ARCHIVE_FOLDER =
+      PARTITION_BUCKET_INDEX_HASHING_FOLDER + StoragePath.SEPARATOR + "archive";
   public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH
       + StoragePath.SEPARATOR + ".partitions";
   public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH =
@@ -359,6 +366,17 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getHashingMetadataPath() {
     return new StoragePath(metaPath, HASHING_METADATA_FOLDER_NAME).toString();
+  }
+
+  /**
+   * Used for partition level bucket index to save hashing_config.
+   */
+  public String getHashingMetadataConfigPath() {
+    return new StoragePath(metaPath, BUCKET_INDEX_METAFOLDER_CONFIG_FOLDER).toString();
+  }
+
+  public String getArchiveHashingMetadataConfigPath() {
+    return new StoragePath(metaPath, BUCKET_INDEX_METAFOLDER_CONFIG_ARCHIVE_FOLDER).toString();
   }
 
   /**
@@ -1316,6 +1334,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)) {
         setRecordKeyFields(hoodieConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.TIMELINE_TIMEZONE)) {
+        setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.CDC_ENABLED)) {
         setCDCEnabled(hoodieConfig.getBoolean(HoodieTableConfig.CDC_ENABLED));
       }
@@ -1372,7 +1393,7 @@ public class HoodieTableMetaClient implements Serializable {
 
       tableConfig.setAll(others);
 
-      if (databaseName != null) {
+      if (!StringUtils.isNullOrEmpty(databaseName)) {
         tableConfig.setValue(HoodieTableConfig.DATABASE_NAME, databaseName);
       }
       tableConfig.setValue(HoodieTableConfig.NAME, tableName);
