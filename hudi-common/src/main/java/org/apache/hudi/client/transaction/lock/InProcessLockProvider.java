@@ -113,11 +113,6 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   }
 
   @Override
-  public boolean isThreadSafe() {
-    return true;
-  }
-
-  @Override
   public ReentrantReadWriteLock getLock() {
     return lock;
   }
