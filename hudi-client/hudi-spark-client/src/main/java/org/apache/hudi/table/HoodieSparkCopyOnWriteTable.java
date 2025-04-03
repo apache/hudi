@@ -213,8 +213,8 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
-  public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    return new CleanPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
+  public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata, boolean skipLocking) {
+    return new CleanPlanActionExecutor<>(context, config, this, instantTime, extraMetadata, skipLocking).execute();
   }
 
   @Override

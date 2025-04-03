@@ -647,7 +647,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       case CLEAN:
         LOG.info("Scheduling cleaning at instant time: {}", instantTime);
         Option<HoodieCleanerPlan> cleanerPlan = table
-            .scheduleCleaning(context, instantTime, extraMetadata);
+            .scheduleCleaning(context, instantTime, extraMetadata, true);
         option = cleanerPlan.isPresent() ? Option.of(instantTime) : Option.empty();
         break;
       default:

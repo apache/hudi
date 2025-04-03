@@ -321,7 +321,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
       instantTime = HoodieActiveTimeline.createNewInstantTime();
       HoodieTable table = HoodieSparkTable.create(writeConfig, context);
-      Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
+      Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty(), false);
       assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition1).size(), 1);
       assertEquals(earliestInstantToRetain, cleanPlan.get().getEarliestInstantToRetain().getTimestamp(),
               "clean until " + earliestInstantToRetain);
@@ -358,7 +358,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
       // earliest commit to retain should be earlier than first pending compaction in incremental cleaning scenarios.
       instantTime = HoodieActiveTimeline.createNewInstantTime();
-      cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
+      cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty(), false);
       assertEquals(earliestInstantToRetain,cleanPlan.get().getEarliestInstantToRetain().getTimestamp());
     }
   }
@@ -396,7 +396,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
       instantTime = HoodieActiveTimeline.createNewInstantTime();
       HoodieTable table = HoodieSparkTable.create(writeConfig, context);
-      Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
+      Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty(), false);
       assertEquals(cleanPlan.get().getPartitionsToBeDeleted().size(), 0);
       assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(NO_PARTITION_PATH).size(), 1);
       table.getMetaClient().reloadActiveTimeline();
@@ -446,7 +446,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     // mimic failed/leftover clean by scheduling a clean but not performing it
     cleanInstantTime = "00" + index++;
     HoodieTable table = HoodieSparkTable.create(writeConfig, context);
-    Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, cleanInstantTime, Option.empty());
+    Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, cleanInstantTime, Option.empty(), false);
     assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition).size(), 1);
     assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().countInstants(), 1);
 

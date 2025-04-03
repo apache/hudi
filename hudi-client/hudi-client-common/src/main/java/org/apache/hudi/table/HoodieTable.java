@@ -510,11 +510,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param context HoodieEngineContext
    * @param instantTime Instant Time for scheduling cleaning
    * @param extraMetadata additional metadata to write into plan
+   * @param skipLocking {@code true} if locking needs to be skipped. false otherwise.
    * @return HoodieCleanerPlan, if there is anything to clean.
    */
   public abstract Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context,
                                                              String instantTime,
-                                                             Option<Map<String, String>> extraMetadata);
+                                                             Option<Map<String, String>> extraMetadata, boolean skipLocking);
 
   /**
    * Executes a new clean action.
