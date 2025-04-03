@@ -77,15 +77,12 @@ public class TestSchemaHandler {
     readerContext.setShouldMergeUseRecordPosition(false);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     Schema requestedSchema = DATA_SCHEMA;
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA,
-        requestedSchema, Option.empty(), hoodieTableConfig, new TypedProperties());
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, false);
     assertEquals(requestedSchema, schemaHandler.getRequiredSchema());
 
     //read subset of columns
     requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "rider");
-    schemaHandler =
-        new FileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
-            Option.empty(), hoodieTableConfig, new TypedProperties());
+    schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, false);
     assertEquals(requestedSchema, schemaHandler.getRequiredSchema());
     assertFalse(readerContext.getNeedsBootstrapMerge());
   }
@@ -98,9 +95,8 @@ public class TestSchemaHandler {
     readerContext.setShouldMergeUseRecordPosition(false);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     Schema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
-    FileGroupReaderSchemaHandler schemaHandler =
-        new FileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
-            Option.empty(), hoodieTableConfig, new TypedProperties());
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, false);
+
     //meta cols must go first in the required schema
     Schema expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
@@ -118,9 +114,7 @@ public class TestSchemaHandler {
     readerContext.setShouldMergeUseRecordPosition(false);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     Schema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
-    FileGroupReaderSchemaHandler schemaHandler =
-        new ParquetRowIndexBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
-            Option.empty(), hoodieTableConfig, new TypedProperties());
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, true);
     //meta cols must go first in the required schema
     Schema expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
@@ -129,16 +123,14 @@ public class TestSchemaHandler {
     assertEquals(Arrays.asList(getField("begin_lat"), getField("tip_history"), getField("rider"), getPositionalMergeField()), bootstrapFields.getRight());
     assertTrue(readerContext.getNeedsBootstrapMerge());
 
-    schemaHandler = new ParquetRowIndexBasedSchemaHandler(readerContext, DATA_SCHEMA, DATA_COLS_ONLY_SCHEMA,
-        Option.empty(), hoodieTableConfig, new TypedProperties());
+    schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, DATA_COLS_ONLY_SCHEMA, hoodieTableConfig, true);
     assertEquals(DATA_COLS_ONLY_SCHEMA, schemaHandler.getRequiredSchema());
     bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     assertTrue(bootstrapFields.getLeft().isEmpty());
     assertEquals(Arrays.asList(getField("begin_lat"), getField("tip_history"), getField("rider")), bootstrapFields.getRight());
     assertFalse(readerContext.getNeedsBootstrapMerge());
 
-    schemaHandler = new ParquetRowIndexBasedSchemaHandler(readerContext, DATA_SCHEMA, META_COLS_ONLY_SCHEMA,
-        Option.empty(), hoodieTableConfig, new TypedProperties());
+    schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, META_COLS_ONLY_SCHEMA, hoodieTableConfig, true);
     assertEquals(META_COLS_ONLY_SCHEMA, schemaHandler.getRequiredSchema());
     bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     assertEquals(Arrays.asList(getField("_hoodie_commit_seqno"), getField("_hoodie_record_key")), bootstrapFields.getLeft());
@@ -190,11 +182,7 @@ public class TestSchemaHandler {
       readerContext.setRecordMerger(merger);
     }
     Schema requestedSchema = dataSchema;
-    FileGroupReaderSchemaHandler schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties());
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     Schema expectedRequiredFullSchema = supportsParquetRowIndex && mergeUseRecordPosition
         ? ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol(requestedSchema)
         : requestedSchema;
@@ -203,11 +191,7 @@ public class TestSchemaHandler {
 
     //read subset of columns
     requestedSchema = DATA_COLS_ONLY_SCHEMA;
-    schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties());
+    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     Schema expectedRequiredSchema;
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "begin_lat", "tip_history", "rider", "_hoodie_record_key", "timestamp");
@@ -253,11 +237,7 @@ public class TestSchemaHandler {
       readerContext.setRecordMerger(merger);
     }
     Schema requestedSchema = dataSchema;
-    FileGroupReaderSchemaHandler schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties());
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     Schema expectedRequiredFullSchema = supportsParquetRowIndex && mergeUseRecordPosition
         ? ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol(requestedSchema)
         : requestedSchema;
@@ -274,11 +254,7 @@ public class TestSchemaHandler {
 
     //read subset of columns
     requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
-    schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties());
+    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     Schema expectedRequiredSchema;
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
@@ -305,11 +281,7 @@ public class TestSchemaHandler {
 
     // request only data cols
     requestedSchema = DATA_COLS_ONLY_SCHEMA;
-    schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties());
+    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
       assertTrue(readerContext.getNeedsBootstrapMerge());
@@ -344,11 +316,7 @@ public class TestSchemaHandler {
 
     // request only meta cols
     requestedSchema = META_COLS_ONLY_SCHEMA;
-    schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties());
+    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_commit_seqno", "_hoodie_record_key", "timestamp");
       assertTrue(readerContext.getNeedsBootstrapMerge());
@@ -378,6 +346,16 @@ public class TestSchemaHandler {
     }
     assertEquals(expectedBootstrapFields.getLeft(), bootstrapFields.getLeft());
     assertEquals(expectedBootstrapFields.getRight(), bootstrapFields.getRight());
+  }
+
+  private static FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema,
+                                                                   Schema requestedSchema, HoodieTableConfig hoodieTableConfig,
+                                                                   boolean supportsParquetRowIndex) {
+    return supportsParquetRowIndex
+        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
+        Option.empty(), hoodieTableConfig, new TypedProperties())
+        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
+        Option.empty(), hoodieTableConfig, new TypedProperties());
   }
 
   private static Schema generateProjectionSchema(String... fields) {
