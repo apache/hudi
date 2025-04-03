@@ -56,6 +56,7 @@ import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol;
 import static org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler.getPositionalMergeField;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -86,6 +87,7 @@ public class TestSchemaHandler {
         new FileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
             Option.empty(), hoodieTableConfig, new TypedProperties());
     assertEquals(requestedSchema, schemaHandler.getRequiredSchema());
+    assertFalse(readerContext.getNeedsBootstrapMerge());
   }
 
   @Test
@@ -105,6 +107,7 @@ public class TestSchemaHandler {
     Pair<List<Schema.Field>, List<Schema.Field>> bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     assertEquals(Collections.singletonList(getField("_hoodie_record_key")), bootstrapFields.getLeft());
     assertEquals(Arrays.asList(getField("begin_lat"), getField("tip_history"), getField("rider")), bootstrapFields.getRight());
+    assertTrue(readerContext.getNeedsBootstrapMerge());
   }
 
   @Test
@@ -124,6 +127,7 @@ public class TestSchemaHandler {
     Pair<List<Schema.Field>, List<Schema.Field>> bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     assertEquals(Arrays.asList(getField("_hoodie_record_key"), getPositionalMergeField()), bootstrapFields.getLeft());
     assertEquals(Arrays.asList(getField("begin_lat"), getField("tip_history"), getField("rider"), getPositionalMergeField()), bootstrapFields.getRight());
+    assertTrue(readerContext.getNeedsBootstrapMerge());
 
     schemaHandler = new ParquetRowIndexBasedSchemaHandler(readerContext, DATA_SCHEMA, DATA_COLS_ONLY_SCHEMA,
         Option.empty(), hoodieTableConfig, new TypedProperties());
@@ -131,6 +135,7 @@ public class TestSchemaHandler {
     bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     assertTrue(bootstrapFields.getLeft().isEmpty());
     assertEquals(Arrays.asList(getField("begin_lat"), getField("tip_history"), getField("rider")), bootstrapFields.getRight());
+    assertFalse(readerContext.getNeedsBootstrapMerge());
 
     schemaHandler = new ParquetRowIndexBasedSchemaHandler(readerContext, DATA_SCHEMA, META_COLS_ONLY_SCHEMA,
         Option.empty(), hoodieTableConfig, new TypedProperties());
@@ -138,6 +143,7 @@ public class TestSchemaHandler {
     bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     assertEquals(Arrays.asList(getField("_hoodie_commit_seqno"), getField("_hoodie_record_key")), bootstrapFields.getLeft());
     assertTrue(bootstrapFields.getRight().isEmpty());
+    assertFalse(readerContext.getNeedsBootstrapMerge());
   }
 
   private static Stream<Arguments> testMorParams() {
@@ -193,6 +199,7 @@ public class TestSchemaHandler {
         ? ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol(requestedSchema)
         : requestedSchema;
     assertEquals(expectedRequiredFullSchema, schemaHandler.getRequiredSchema());
+    assertFalse(readerContext.getNeedsBootstrapMerge());
 
     //read subset of columns
     requestedSchema = DATA_COLS_ONLY_SCHEMA;
@@ -215,6 +222,7 @@ public class TestSchemaHandler {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
     }
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
+    assertFalse(readerContext.getNeedsBootstrapMerge());
   }
 
   @ParameterizedTest
@@ -254,6 +262,7 @@ public class TestSchemaHandler {
         ? ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol(requestedSchema)
         : requestedSchema;
     assertEquals(expectedRequiredFullSchema, schemaHandler.getRequiredSchema());
+    assertTrue(readerContext.getNeedsBootstrapMerge());
     Pair<List<Schema.Field>, List<Schema.Field>> bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     Pair<List<Schema.Field>, List<Schema.Field>> expectedBootstrapFields = FileGroupReaderSchemaHandler.getDataAndMetaCols(expectedRequiredFullSchema);
     if (supportsParquetRowIndex) {
@@ -284,6 +293,7 @@ public class TestSchemaHandler {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
     }
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
+    assertTrue(readerContext.getNeedsBootstrapMerge());
     bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     expectedBootstrapFields = FileGroupReaderSchemaHandler.getDataAndMetaCols(expectedRequiredSchema);
     if (supportsParquetRowIndex) {
@@ -302,11 +312,15 @@ public class TestSchemaHandler {
         Option.empty(), hoodieTableConfig, new TypedProperties());
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
+      assertTrue(readerContext.getNeedsBootstrapMerge());
     } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider");
+      assertTrue(readerContext.getNeedsBootstrapMerge());
     } else if (mergeMode == CUSTOM && isProjectionCompatible) {
       expectedRequiredSchema = generateProjectionSchema("begin_lat", "tip_history", "rider", "begin_lon", "timestamp");
+      assertFalse(readerContext.getNeedsBootstrapMerge());
     } else {
+      assertTrue(readerContext.getNeedsBootstrapMerge());
       expectedRequiredSchema = dataSchema;
     }
     if (supportsParquetRowIndex && mergeUseRecordPosition) {
@@ -337,12 +351,16 @@ public class TestSchemaHandler {
         Option.empty(), hoodieTableConfig, new TypedProperties());
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_commit_seqno", "_hoodie_record_key", "timestamp");
+      assertTrue(readerContext.getNeedsBootstrapMerge());
     } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_commit_seqno", "_hoodie_record_key");
+      assertEquals(hasBuiltInDelete, readerContext.getNeedsBootstrapMerge());
     } else if (mergeMode == CUSTOM && isProjectionCompatible) {
       expectedRequiredSchema = generateProjectionSchema("_hoodie_commit_seqno", "_hoodie_record_key", "begin_lat", "begin_lon", "timestamp");
+      assertTrue(readerContext.getNeedsBootstrapMerge());
     } else {
       expectedRequiredSchema = dataSchema;
+      assertTrue(readerContext.getNeedsBootstrapMerge());
     }
     if (supportsParquetRowIndex && mergeUseRecordPosition) {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
