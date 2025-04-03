@@ -294,8 +294,6 @@ class TestStreamingSource extends StreamTest {
           .filter(JavaConversions.getPredicate(
             e => e.isCompleted && HoodieTimeline.COMMIT_ACTION.equals(e.getAction)))
           .countInstants() > 0)
-        // clean any open stream after each run
-        DebugFilesystem.clearOpenStreams()
       }
     })
   }
