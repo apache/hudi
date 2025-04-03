@@ -196,19 +196,27 @@ public interface HoodieRecordMerger extends Serializable {
         return EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
       case CUSTOM:
       default:
-        String stategyId = null;
-        if (nonEmpty(recordMergeStrategyId)) {
-          if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-            // If table version is >= 8, we prefer input strategy id
-            return recordMergeStrategyId;
-          }
-          stategyId = recordMergeStrategyId;
-        }
-        if (nonEmpty(payloadClassName)) {
-          // If table version is < 8, we prefer strategy id based on payload rather than input strategy id
-          return PAYLOAD_BASED_MERGE_STRATEGY_UUID;
-        }
-        return stategyId;
+        return getCustomRecordMergeStrategyId(payloadClassName, recordMergeStrategyId, tableVersion);
+    }
+  }
+
+  static String getCustomRecordMergeStrategyId(String payloadClassName, String recordMergeStrategyId, HoodieTableVersion tableVersion) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      // For table version 8, we give preference to input recordMergeStrategyId over payload based strategy
+      if (nonEmpty(recordMergeStrategyId)) {
+        return recordMergeStrategyId;
+      } else if (nonEmpty(payloadClassName)) {
+        return PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+      }
+      return null;
+    } else {
+      // For table version 8, we give preference to payload based strategy over input recordMergeStrategyId
+      if (nonEmpty(payloadClassName)) {
+        return PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+      } else if (nonEmpty(recordMergeStrategyId)) {
+        return recordMergeStrategyId;
+      }
+      return null;
     }
   }
 }
