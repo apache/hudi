@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.lock;
 
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 
@@ -54,7 +56,15 @@ public interface LockProvider<T> extends Lock, AutoCloseable {
     return "";
   }
 
+  default boolean isThreadSafe() {
+    return false;
+  }
+
   @Override
   default void close() {
+  }
+
+  static boolean isThreadSafe(String className) {
+    return className.equals(InProcessLockProvider.class.getCanonicalName());
   }
 }
