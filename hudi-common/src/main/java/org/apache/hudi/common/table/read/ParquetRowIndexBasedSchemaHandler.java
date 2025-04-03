@@ -49,20 +49,15 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
                                            HoodieTableConfig hoodieTableConfig,
                                            TypedProperties properties) {
     super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig, properties);
-  }
-
-  private boolean morMergeNeedsPositionCol() {
-    return readerContext.supportsParquetRowIndex() && readerContext.getShouldMergeUseRecordPosition();
-  }
-
-  private boolean bootstrapMergeNeedsPositionCol() {
-    return readerContext.supportsParquetRowIndex() && readerContext.getNeedsBootstrapMerge();
+    if (!readerContext.supportsParquetRowIndex()) {
+      throw new IllegalStateException("Using " + this.getClass().getName() + " but context does not support parquet row index");
+    }
   }
 
   @Override
   protected Schema prepareRequiredSchema() {
     Schema preMergeSchema = super.prepareRequiredSchema();
-    return morMergeNeedsPositionCol()
+    return readerContext.getShouldMergeUseRecordPosition()
         ? addPositionalMergeCol(preMergeSchema)
         : preMergeSchema;
   }
@@ -74,7 +69,7 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
 
   @Override
   protected InternalSchema doPruneInternalSchema(Schema requiredSchema, InternalSchema internalSchema) {
-    if (!morMergeNeedsPositionCol()) {
+    if (!readerContext.getShouldMergeUseRecordPosition()) {
       return super.doPruneInternalSchema(requiredSchema, internalSchema);
     }
 
@@ -91,7 +86,7 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   @Override
   public Pair<List<Schema.Field>,List<Schema.Field>> getBootstrapRequiredFields() {
     Pair<List<Schema.Field>,List<Schema.Field>> dataAndMetaCols = super.getBootstrapRequiredFields();
-    if (bootstrapMergeNeedsPositionCol() || morMergeNeedsPositionCol()) {
+    if (readerContext.getNeedsBootstrapMerge() || readerContext.getShouldMergeUseRecordPosition()) {
       if (!dataAndMetaCols.getLeft().isEmpty()) {
         dataAndMetaCols.getLeft().add(getPositionalMergeField());
       }

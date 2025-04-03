@@ -42,6 +42,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -62,6 +63,8 @@ import static org.mockito.Mockito.when;
 public class TestSchemaHandler {
 
   protected static final Schema DATA_SCHEMA = HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA);
+  protected static final Schema DATA_SCHEMA_NO_DELETE = generateProjectionSchema(DATA_SCHEMA.getFields().stream()
+      .map(Schema.Field::name).filter(f -> !f.equals("_hoodie_is_deleted")).toArray(String[]::new));
   protected static final Schema DATA_COLS_ONLY_SCHEMA = generateProjectionSchema("begin_lat", "tip_history", "rider");
   protected static final Schema META_COLS_ONLY_SCHEMA = generateProjectionSchema("_hoodie_commit_seqno", "_hoodie_record_key");
 
@@ -141,11 +144,13 @@ public class TestSchemaHandler {
     Stream.Builder<Arguments> b = Stream.builder();
     for (boolean mergeUseRecordPosition : new boolean[] {true, false}) {
       for (boolean supportsParquetRowIndex : new boolean[] {true, false}) {
-        b.add(Arguments.of(EVENT_TIME_ORDERING, true, false, mergeUseRecordPosition, supportsParquetRowIndex));
-        b.add(Arguments.of(EVENT_TIME_ORDERING, false, false, mergeUseRecordPosition, supportsParquetRowIndex));
-        b.add(Arguments.of(COMMIT_TIME_ORDERING, false, false, mergeUseRecordPosition, supportsParquetRowIndex));
-        b.add(Arguments.of(CUSTOM, false, true, mergeUseRecordPosition, supportsParquetRowIndex));
-        b.add(Arguments.of(CUSTOM, false, false, mergeUseRecordPosition, supportsParquetRowIndex));
+        for (boolean hasBuiltInDelete : new boolean[] {true, false}) {
+          b.add(Arguments.of(EVENT_TIME_ORDERING, true, false, mergeUseRecordPosition, supportsParquetRowIndex, hasBuiltInDelete));
+          b.add(Arguments.of(EVENT_TIME_ORDERING, false, false, mergeUseRecordPosition, supportsParquetRowIndex, hasBuiltInDelete));
+          b.add(Arguments.of(COMMIT_TIME_ORDERING, false, false, mergeUseRecordPosition, supportsParquetRowIndex, hasBuiltInDelete));
+          b.add(Arguments.of(CUSTOM, false, true, mergeUseRecordPosition, supportsParquetRowIndex, hasBuiltInDelete));
+          b.add(Arguments.of(CUSTOM, false, false, mergeUseRecordPosition, supportsParquetRowIndex, hasBuiltInDelete));
+        }
       }
     }
     return b.build();
@@ -157,7 +162,9 @@ public class TestSchemaHandler {
                       boolean hasPrecombine,
                       boolean isProjectionCompatible,
                       boolean mergeUseRecordPosition,
-                      boolean supportsParquetRowIndex) {
+                      boolean supportsParquetRowIndex,
+                      boolean hasBuiltInDelete) {
+    Schema dataSchema = hasBuiltInDelete ? DATA_SCHEMA : DATA_SCHEMA_NO_DELETE;
     HoodieReaderContext<String> readerContext = new MockReaderContext(supportsParquetRowIndex);
     readerContext.setHasLogFiles(true);
     readerContext.setHasBootstrapBaseFile(false);
@@ -172,14 +179,15 @@ public class TestSchemaHandler {
       when(hoodieTableConfig.getPreCombineField()).thenReturn(null);
     }
     if (mergeMode == CUSTOM) {
+      when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn("asdf");
       Option<HoodieRecordMerger> merger = Option.of(new MockMerger(isProjectionCompatible, new String[]{"begin_lat", "begin_lon", "_hoodie_record_key", "timestamp"}));
       readerContext.setRecordMerger(merger);
     }
-    Schema requestedSchema = DATA_SCHEMA;
+    Schema requestedSchema = dataSchema;
     FileGroupReaderSchemaHandler schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties());
     Schema expectedRequiredFullSchema = supportsParquetRowIndex && mergeUseRecordPosition
         ? ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol(requestedSchema)
@@ -189,19 +197,19 @@ public class TestSchemaHandler {
     //read subset of columns
     requestedSchema = DATA_COLS_ONLY_SCHEMA;
     schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties());
     Schema expectedRequiredSchema;
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
-      expectedRequiredSchema = generateProjectionSchema("begin_lat", "tip_history", "rider", "_hoodie_record_key", "timestamp");
+      expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "begin_lat", "tip_history", "rider", "_hoodie_record_key", "timestamp");
     } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
-      expectedRequiredSchema = generateProjectionSchema("begin_lat", "tip_history", "rider", "_hoodie_record_key");
+      expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "begin_lat", "tip_history", "rider", "_hoodie_record_key");
     } else if (mergeMode == CUSTOM && isProjectionCompatible) {
       expectedRequiredSchema = generateProjectionSchema("begin_lat", "tip_history", "rider", "begin_lon", "_hoodie_record_key", "timestamp");
     } else {
-      expectedRequiredSchema = DATA_SCHEMA;
+      expectedRequiredSchema = dataSchema;
     }
     if (supportsParquetRowIndex && mergeUseRecordPosition) {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
@@ -215,7 +223,9 @@ public class TestSchemaHandler {
                                boolean hasPrecombine,
                                boolean isProjectionCompatible,
                                boolean mergeUseRecordPosition,
-                               boolean supportsParquetRowIndex) {
+                               boolean supportsParquetRowIndex,
+                               boolean hasBuiltInDelete) {
+    Schema dataSchema = hasBuiltInDelete ? DATA_SCHEMA : DATA_SCHEMA_NO_DELETE;
     HoodieReaderContext<String> readerContext = new MockReaderContext(supportsParquetRowIndex);
     readerContext.setHasLogFiles(true);
     readerContext.setHasBootstrapBaseFile(true);
@@ -229,15 +239,16 @@ public class TestSchemaHandler {
       when(hoodieTableConfig.getPreCombineField()).thenReturn(null);
     }
     if (mergeMode == CUSTOM) {
+      when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn("asdf");
       // NOTE: in this test custom doesn't have any meta cols because it is more interesting of a test case
       Option<HoodieRecordMerger> merger = Option.of(new MockMerger(isProjectionCompatible, new String[]{"begin_lat", "begin_lon", "timestamp"}));
       readerContext.setRecordMerger(merger);
     }
-    Schema requestedSchema = DATA_SCHEMA;
+    Schema requestedSchema = dataSchema;
     FileGroupReaderSchemaHandler schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties());
     Schema expectedRequiredFullSchema = supportsParquetRowIndex && mergeUseRecordPosition
         ? ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol(requestedSchema)
@@ -255,19 +266,19 @@ public class TestSchemaHandler {
     //read subset of columns
     requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
     schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties());
     Schema expectedRequiredSchema;
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
-      expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
+      expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
     } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
-      expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
+      expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider");
     } else if (mergeMode == CUSTOM && isProjectionCompatible) {
       expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider", "begin_lon", "timestamp");
     } else {
-      expectedRequiredSchema = DATA_SCHEMA;
+      expectedRequiredSchema = dataSchema;
     }
     if (supportsParquetRowIndex && mergeUseRecordPosition) {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
@@ -285,18 +296,18 @@ public class TestSchemaHandler {
     // request only data cols
     requestedSchema = DATA_COLS_ONLY_SCHEMA;
     schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties());
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
-      expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
+      expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
     } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
-      expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
+      expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider");
     } else if (mergeMode == CUSTOM && isProjectionCompatible) {
       expectedRequiredSchema = generateProjectionSchema("begin_lat", "tip_history", "rider", "begin_lon", "timestamp");
     } else {
-      expectedRequiredSchema = DATA_SCHEMA;
+      expectedRequiredSchema = dataSchema;
     }
     if (supportsParquetRowIndex && mergeUseRecordPosition) {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
@@ -320,18 +331,18 @@ public class TestSchemaHandler {
     // request only meta cols
     requestedSchema = META_COLS_ONLY_SCHEMA;
     schemaHandler = supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties());
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
-      expectedRequiredSchema = generateProjectionSchema("_hoodie_commit_seqno", "_hoodie_record_key", "timestamp");
+      expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_commit_seqno", "_hoodie_record_key", "timestamp");
     } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
-      expectedRequiredSchema = generateProjectionSchema("_hoodie_commit_seqno", "_hoodie_record_key");
+      expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_commit_seqno", "_hoodie_record_key");
     } else if (mergeMode == CUSTOM && isProjectionCompatible) {
       expectedRequiredSchema = generateProjectionSchema("_hoodie_commit_seqno", "_hoodie_record_key", "begin_lat", "begin_lon", "timestamp");
     } else {
-      expectedRequiredSchema = DATA_SCHEMA;
+      expectedRequiredSchema = dataSchema;
     }
     if (supportsParquetRowIndex && mergeUseRecordPosition) {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
@@ -340,13 +351,11 @@ public class TestSchemaHandler {
     bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     expectedBootstrapFields = FileGroupReaderSchemaHandler.getDataAndMetaCols(expectedRequiredSchema);
     if (supportsParquetRowIndex) {
-      if ((mergeMode == EVENT_TIME_ORDERING && !hasPrecombine) || mergeMode == COMMIT_TIME_ORDERING) {
-        if (mergeUseRecordPosition) {
-          expectedBootstrapFields.getLeft().add(ParquetRowIndexBasedSchemaHandler.getPositionalMergeField());
-        }
-      } else {
+      if (!expectedBootstrapFields.getRight().isEmpty()) {
         expectedBootstrapFields.getLeft().add(ParquetRowIndexBasedSchemaHandler.getPositionalMergeField());
         expectedBootstrapFields.getRight().add(ParquetRowIndexBasedSchemaHandler.getPositionalMergeField());
+      } else if (mergeUseRecordPosition) {
+        expectedBootstrapFields.getLeft().add(ParquetRowIndexBasedSchemaHandler.getPositionalMergeField());
       }
     }
     assertEquals(expectedBootstrapFields.getLeft(), bootstrapFields.getLeft());
@@ -355,6 +364,15 @@ public class TestSchemaHandler {
 
   private static Schema generateProjectionSchema(String... fields) {
     return HoodieAvroUtils.generateProjectionSchema(DATA_SCHEMA, Arrays.asList(fields));
+  }
+
+  private static Schema generateProjectionSchema(boolean hasBuiltInDelete, String... fields) {
+    List<String> fieldList = Arrays.asList(fields);
+    if (hasBuiltInDelete) {
+      fieldList = new ArrayList<>(fieldList);
+      fieldList.add("_hoodie_is_deleted");
+    }
+    return HoodieAvroUtils.generateProjectionSchema(DATA_SCHEMA, fieldList);
   }
 
   private Schema.Field getField(String fieldName) {
