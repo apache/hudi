@@ -37,6 +37,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.JavaLazyInsertIterable;
+import org.apache.hudi.io.AppendHandleFactory;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
@@ -272,6 +273,10 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition");
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
+    }
+    if (table.getIndex().canIndexLogFiles()) {
+      return new JavaLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
+          taskContextSupplier, new AppendHandleFactory());
     }
     return new JavaLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
         taskContextSupplier, new CreateHandleFactory<>());
