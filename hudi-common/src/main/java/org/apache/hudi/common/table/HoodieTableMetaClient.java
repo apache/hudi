@@ -1489,6 +1489,9 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.URL_ENCODE_PARTITIONING, Boolean.toString(urlEncodePartitioning));
       }
       if (null != commitTimeZone) {
+        // check either TIMELINE_TIMEZONE is not present or it is same as the one being set
+        checkState(!tableConfig.contains(HoodieTableConfig.TIMELINE_TIMEZONE) || commitTimeZone.equals(HoodieTimelineTimeZone.valueOf(tableConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE))),
+            "Commit timezone is already set to " + tableConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE));
         tableConfig.setValue(HoodieTableConfig.TIMELINE_TIMEZONE, commitTimeZone.toString());
         HoodieInstantTimeGenerator.setCommitTimeZone(commitTimeZone);
       }

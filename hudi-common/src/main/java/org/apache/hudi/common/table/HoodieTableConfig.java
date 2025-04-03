@@ -281,9 +281,11 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
       .key("hoodie.table.timeline.timezone")
-      .defaultValue(HoodieTimelineTimeZone.UTC)
+      .defaultValue(HoodieTimelineTimeZone.LOCAL)
       .sinceVersion("0.11.0")
-      .withDocumentation("User can set hoodie commit timeline timezone, such as utc, local and so on. local is default");
+      .withDocumentation("User can set hoodie commit timeline timezone, such as UTC or LOCAL. "
+          + "The default is LOCAL so that the instants are easily readable. "
+          + "Most servers run on UTC and on those servers LOCAL is same as UTC.");
 
   public static final ConfigProperty<Boolean> PARTITION_METAFILE_USE_BASE_FORMAT = ConfigProperty
       .key("hoodie.partition.metafile.use.base.format")
