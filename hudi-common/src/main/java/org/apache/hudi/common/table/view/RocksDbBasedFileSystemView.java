@@ -281,39 +281,34 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
-    try {
-      writeLock.lock();
-      LOG.info("Resetting and adding new partition ({}) to ROCKSDB based file-system view at {}, Total file-groups={}",
-          partitionPath, config.getRocksdbBasePath(), fileGroups.size());
+    LOG.info("Resetting and adding new partition ({}) to ROCKSDB based file-system view at {}, Total file-groups={}",
+        partitionPath, config.getRocksdbBasePath(), fileGroups.size());
 
-      String lookupKey = schemaHelper.getKeyForPartitionLookup(partitionPath);
-      rocksDB.delete(schemaHelper.getColFamilyForStoredPartitions(), lookupKey);
+    String lookupKey = schemaHelper.getKeyForPartitionLookup(partitionPath);
+    rocksDB.delete(schemaHelper.getColFamilyForStoredPartitions(), lookupKey);
 
-      // First delete partition views
-      rocksDB.prefixDelete(schemaHelper.getColFamilyForView(),
-          schemaHelper.getPrefixForSliceViewByPartition(partitionPath));
-      rocksDB.prefixDelete(schemaHelper.getColFamilyForView(),
-          schemaHelper.getPrefixForDataFileViewByPartition(partitionPath));
+    // First delete partition views
+    rocksDB.prefixDelete(schemaHelper.getColFamilyForView(),
+        schemaHelper.getPrefixForSliceViewByPartition(partitionPath));
+    rocksDB.prefixDelete(schemaHelper.getColFamilyForView(),
+        schemaHelper.getPrefixForDataFileViewByPartition(partitionPath));
 
-      // Now add them
-      fileGroups.forEach(fg ->
-          rocksDB.writeBatch(batch ->
-              fg.getAllFileSlicesIncludingInflight().forEach(fs -> {
-                rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
-                fs.getBaseFile().ifPresent(df ->
-                    rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs), df)
-                );
-              })
-          )
-      );
+    // Now add them
+    fileGroups.forEach(fg ->
+        rocksDB.writeBatch(batch ->
+            fg.getAllFileSlicesIncludingInflight().forEach(fs -> {
+              rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
+              fs.getBaseFile().ifPresent(df ->
+                  rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs), df)
+              );
+            })
+        )
+    );
 
-      // record that partition is loaded.
-      rocksDB.put(schemaHelper.getColFamilyForStoredPartitions(), lookupKey, Boolean.TRUE);
-      LOG.info("Finished adding new partition ({}}) to ROCKSDB based file-system view at {}, Total file-groups={}",
-          partitionPath, config.getRocksdbBasePath(), fileGroups.size());
-    } finally {
-      writeLock.unlock();
-    }
+    // record that partition is loaded.
+    rocksDB.put(schemaHelper.getColFamilyForStoredPartitions(), lookupKey, Boolean.TRUE);
+    LOG.info("Finished adding new partition ({}}) to ROCKSDB based file-system view at {}, Total file-groups={}",
+        partitionPath, config.getRocksdbBasePath(), fileGroups.size());
   }
 
   @Override

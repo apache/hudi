@@ -178,31 +178,39 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Adds the provided statuses into the file system view for a single partition, and also caches it inside this object.
    */
   public List<HoodieFileGroup> addFilesToView(String partitionPath, List<StoragePathInfo> statuses) {
-    HoodieTimer timer = HoodieTimer.start();
-    List<HoodieFileGroup> fileGroups = buildFileGroups(partitionPath, statuses, visibleCommitsAndCompactionTimeline, true);
-    long fgBuildTimeTakenMs = timer.endTimer();
-    timer.startTimer();
-    // Group by partition for efficient updates for both InMemory and DiskBased structures.
-    fileGroups.stream().collect(Collectors.groupingBy(HoodieFileGroup::getPartitionPath))
-        .forEach((partition, value) -> {
-          if (!isPartitionAvailableInStore(partition)) {
-            if (bootstrapIndex.useIndex()) {
-              try (BootstrapIndex.IndexReader reader = bootstrapIndex.createReader()) {
-                LOG.info("Bootstrap Index available for partition {}", partition);
-                List<BootstrapFileMapping> sourceFileMappings =
-                    reader.getSourceFileMappingForPartition(partition);
-                addBootstrapBaseFileMapping(sourceFileMappings.stream()
-                    .map(s -> new BootstrapBaseFileMapping(new HoodieFileGroupId(s.getPartitionPath(),
-                        s.getFileId()), s.getBootstrapFileStatus())));
+    try {
+      writeLock.lock();
+      HoodieTimer timer = HoodieTimer.start();
+      List<HoodieFileGroup> fileGroups = buildFileGroups(partitionPath, statuses, visibleCommitsAndCompactionTimeline, true);
+      long fgBuildTimeTakenMs = timer.endTimer();
+      timer.startTimer();
+      // Group by partition for efficient updates for both InMemory and DiskBased structures.
+      fileGroups.stream().collect(Collectors.groupingBy(HoodieFileGroup::getPartitionPath))
+          .forEach((partition, value) -> {
+            if (!isPartitionAvailableInStore(partition)) {
+              if (bootstrapIndex.useIndex()) {
+                try (BootstrapIndex.IndexReader reader = bootstrapIndex.createReader()) {
+                  LOG.info("Bootstrap Index available for partition {}", partition);
+                  List<BootstrapFileMapping> sourceFileMappings =
+                      reader.getSourceFileMappingForPartition(partition);
+                  addBootstrapBaseFileMapping(sourceFileMappings.stream()
+                      .map(s -> new BootstrapBaseFileMapping(new HoodieFileGroupId(s.getPartitionPath(),
+                          s.getFileId()), s.getBootstrapFileStatus())));
+                }
               }
+              storePartitionView(partition, value);
             }
-            storePartitionView(partition, value);
-          }
-        });
-    long storePartitionsTs = timer.endTimer();
-    LOG.debug("addFilesToView: NumFiles={}, NumFileGroups={}, FileGroupsCreationTime={}, StoreTimeTaken={}",
-        statuses.size(), fileGroups.size(), fgBuildTimeTakenMs, storePartitionsTs);
-    return fileGroups;
+          });
+      if (fileGroups.isEmpty()) {
+        storePartitionView(partitionPath, Collections.emptyList());
+      }
+      long storePartitionsTs = timer.endTimer();
+      LOG.debug("addFilesToView: NumFiles={}, NumFileGroups={}, FileGroupsCreationTime={}, StoreTimeTaken={}",
+          statuses.size(), fileGroups.size(), fgBuildTimeTakenMs, storePartitionsTs);
+      return fileGroups;
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   /**
@@ -397,10 +405,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           LOG.debug("Time taken to list partitions {} ={}", partitionSet, (endLsTs - beginLsTs));
           pathInfoMap.forEach((partitionPair, statuses) -> {
             String relativePartitionStr = partitionPair.getLeft();
-            List<HoodieFileGroup> groups = addFilesToView(relativePartitionStr, statuses);
-            if (groups.isEmpty()) {
-              storePartitionView(relativePartitionStr, Collections.emptyList());
-            }
+            addFilesToView(relativePartitionStr, statuses);
             LOG.debug("#files found in partition ({}) ={}", relativePartitionStr, statuses.size());
           });
         } catch (IOException e) {
@@ -447,10 +452,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         // Not loaded yet
         try {
           LOG.info("Building file system view for partition ({})", partitionPathStr);
-          List<HoodieFileGroup> groups = addFilesToView(partitionPathStr, getAllFilesInPartition(partitionPathStr));
-          if (groups.isEmpty()) {
-            storePartitionView(partitionPathStr, new ArrayList<>());
-          }
+          addFilesToView(partitionPathStr, getAllFilesInPartition(partitionPathStr));
         } catch (IOException e) {
           throw new HoodieIOException("Failed to list base files in partition " + partitionPathStr, e);
         }
@@ -1370,7 +1372,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   abstract boolean isPartitionAvailableInStore(String partitionPath);
 
   /**
-   * Add a complete partition view to store. Implementation must use write-lock before updating state.
+   * Add a complete partition view to store.
    *
    * @param partitionPath Partition Path
    * @param fileGroups File Groups for the partition path
