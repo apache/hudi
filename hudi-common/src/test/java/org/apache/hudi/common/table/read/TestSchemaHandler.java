@@ -71,10 +71,7 @@ public class TestSchemaHandler {
 
   @Test
   public void testCow() {
-    HoodieReaderContext<String> readerContext = new MockReaderContext(false);
-    readerContext.setHasLogFiles(false);
-    readerContext.setHasBootstrapBaseFile(false);
-    readerContext.setShouldMergeUseRecordPosition(false);
+    HoodieReaderContext<String> readerContext = createReaderContext(false, false, false, false);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     Schema requestedSchema = DATA_SCHEMA;
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, false);
@@ -89,10 +86,7 @@ public class TestSchemaHandler {
 
   @Test
   public void testCowBootstrap() {
-    HoodieReaderContext<String> readerContext = new MockReaderContext(false);
-    readerContext.setHasLogFiles(false);
-    readerContext.setHasBootstrapBaseFile(true);
-    readerContext.setShouldMergeUseRecordPosition(false);
+    HoodieReaderContext<String> readerContext = createReaderContext(false, false, true, false);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     Schema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, false);
@@ -108,10 +102,7 @@ public class TestSchemaHandler {
 
   @Test
   public void testCowBootstrapWithPositionMerge() {
-    HoodieReaderContext<String> readerContext = new MockReaderContext(true);
-    readerContext.setHasLogFiles(false);
-    readerContext.setHasBootstrapBaseFile(true);
-    readerContext.setShouldMergeUseRecordPosition(false);
+    HoodieReaderContext<String> readerContext = createReaderContext(true, false, true, false);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     Schema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, true);
@@ -162,12 +153,9 @@ public class TestSchemaHandler {
                       boolean mergeUseRecordPosition,
                       boolean supportsParquetRowIndex,
                       boolean hasBuiltInDelete) {
+
     Schema dataSchema = hasBuiltInDelete ? DATA_SCHEMA : DATA_SCHEMA_NO_DELETE;
-    HoodieReaderContext<String> readerContext = new MockReaderContext(supportsParquetRowIndex);
-    readerContext.setHasLogFiles(true);
-    readerContext.setHasBootstrapBaseFile(false);
-    //has no effect on schema unless we support position based merging
-    readerContext.setShouldMergeUseRecordPosition(mergeUseRecordPosition);
+    HoodieReaderContext<String> readerContext = createReaderContext(supportsParquetRowIndex, true, false, mergeUseRecordPosition);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(Boolean.TRUE);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
@@ -218,10 +206,7 @@ public class TestSchemaHandler {
                                boolean supportsParquetRowIndex,
                                boolean hasBuiltInDelete) {
     Schema dataSchema = hasBuiltInDelete ? DATA_SCHEMA : DATA_SCHEMA_NO_DELETE;
-    HoodieReaderContext<String> readerContext = new MockReaderContext(supportsParquetRowIndex);
-    readerContext.setHasLogFiles(true);
-    readerContext.setHasBootstrapBaseFile(true);
-    readerContext.setShouldMergeUseRecordPosition(mergeUseRecordPosition);
+    HoodieReaderContext<String> readerContext = createReaderContext(supportsParquetRowIndex, true , true, mergeUseRecordPosition);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(Boolean.TRUE);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
@@ -346,6 +331,15 @@ public class TestSchemaHandler {
     }
     assertEquals(expectedBootstrapFields.getLeft(), bootstrapFields.getLeft());
     assertEquals(expectedBootstrapFields.getRight(), bootstrapFields.getRight());
+  }
+
+  private static HoodieReaderContext<String> createReaderContext(boolean supportsParquetRowIndex, boolean hasLogFiles,
+                                                                 boolean hasBootstrapBaseFile, boolean mergeUseRecordPosition) {
+    HoodieReaderContext<String> readerContext = new MockReaderContext(supportsParquetRowIndex);
+    readerContext.setHasLogFiles(hasLogFiles);
+    readerContext.setHasBootstrapBaseFile(hasBootstrapBaseFile);
+    readerContext.setShouldMergeUseRecordPosition(mergeUseRecordPosition);
+    return readerContext;
   }
 
   private static FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema,
