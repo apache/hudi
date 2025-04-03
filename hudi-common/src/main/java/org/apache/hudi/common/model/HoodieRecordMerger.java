@@ -210,7 +210,7 @@ public interface HoodieRecordMerger extends Serializable {
       }
       return null;
     } else {
-      // For table version 8, we give preference to payload based strategy over input recordMergeStrategyId
+      // For table version 6, we give preference to payload based strategy over input recordMergeStrategyId
       if (nonEmpty(payloadClassName)) {
         return PAYLOAD_BASED_MERGE_STRATEGY_UUID;
       } else if (nonEmpty(recordMergeStrategyId)) {
