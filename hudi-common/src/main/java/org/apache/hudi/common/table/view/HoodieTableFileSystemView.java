@@ -317,7 +317,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   /**
    * Given a partition path, obtain all filegroups within that. All methods, that work at the partition level go through
-   * this.
+   * this. ..
    */
   @Override
   Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partition) {
