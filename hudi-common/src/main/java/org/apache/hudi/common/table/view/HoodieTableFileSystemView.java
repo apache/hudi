@@ -324,7 +324,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
       LOG.warn("Partition: {} is not available in store", partition);
       return Stream.empty();
     }
-    return new ArrayList<>(partitionToFileGroupsMap.get(partition)).stream();
+    return new ArrayList<>(fileGroups).stream();
   }
 
   public Stream<HoodieFileGroup> getAllFileGroups() {
@@ -406,7 +406,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
-    LOG.debug("Adding file-groups for partition :" + partitionPath + ", #FileGroups=" + fileGroups.size());
+    LOG.debug("Adding file-groups for partition:{}, #FileGroups={}", partitionPath, fileGroups.size());
     List<HoodieFileGroup> newList = new ArrayList<>(fileGroups);
     partitionToFileGroupsMap.put(partitionPath, newList);
   }
