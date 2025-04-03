@@ -3617,11 +3617,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     private void validate() {
-      if (HoodieTableVersion.SIX.equals(writeConfig.getWriteVersion())) {
-        LOG.warn("HoodieTableVersion.SIX is not yet fully supported by the writer. "
-            + "Please expect some unexpected behavior, until its fully implemented.");
-      }
-
       String layoutVersion = writeConfig.getString(TIMELINE_LAYOUT_VERSION_NUM);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
