@@ -40,7 +40,7 @@ public class NumBucketsFunction implements Serializable {
   /**
    * The default number of buckets to use when partition-specific buckets are not configured.
    */
-  private final int defaultBucketNumber;
+  private final int defaultBucketsNum;
 
   /**
    * Flag indicating whether partition-level bucket index is enabled.
@@ -55,24 +55,26 @@ public class NumBucketsFunction implements Serializable {
   /**
    * Creates a NumBucketsFunction with the given configuration.
    *
-   * @param config The Flink configuration containing bucket index settings.
+   * @param expressions       The expressions declared as the rules with {@code ruleType}
+   * @param ruleType          The rule type
+   * @param defaultBucketsNum The default buckets number
    */
-  public NumBucketsFunction(String expressions, String ruleType, int defaultBucketNumber) {
-    this.defaultBucketNumber = defaultBucketNumber;
+  public NumBucketsFunction(String expressions, String ruleType, int defaultBucketsNum) {
+    this.defaultBucketsNum = defaultBucketsNum;
     this.isPartitionLevelBucketIndexEnabled = StringUtils.nonEmpty(expressions);
     if (isPartitionLevelBucketIndexEnabled) {
       this.calculator = PartitionBucketIndexCalculator.getInstance(
-          expressions, ruleType, defaultBucketNumber);
+          expressions, ruleType, defaultBucketsNum);
       LOG.info("Initialized partition-level bucket index with expressions: {}, rule: {}, default bucket number: {}",
-          expressions, ruleType, defaultBucketNumber);
+          expressions, ruleType, defaultBucketsNum);
     } else {
       this.calculator = null;
-      LOG.info("Using fixed bucket number: {}", defaultBucketNumber);
+      LOG.info("Using fixed bucket number: {}", defaultBucketsNum);
     }
   }
 
-  public NumBucketsFunction(int defaultBucketNumber) {
-    this.defaultBucketNumber = defaultBucketNumber;
+  public NumBucketsFunction(int defaultBucketsNum) {
+    this.defaultBucketsNum = defaultBucketsNum;
     this.isPartitionLevelBucketIndexEnabled = false;
     this.calculator = null;
   }
@@ -103,7 +105,7 @@ public class NumBucketsFunction implements Serializable {
     if (isPartitionLevelBucketIndexEnabled && calculator != null) {
       return calculator.computeNumBuckets(partitionPath);
     }
-    return defaultBucketNumber;
+    return defaultBucketsNum;
   }
 
   /**
@@ -112,7 +114,7 @@ public class NumBucketsFunction implements Serializable {
    * @return The default bucket number.
    */
   public int getDefaultBucketNumber() {
-    return defaultBucketNumber;
+    return defaultBucketsNum;
   }
 
   /**

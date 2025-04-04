@@ -41,9 +41,10 @@ class PartitionBucketIndexSupport(spark: SparkSession,
         Option.apply(PartitionBucketIndexCalculator.getInstance(hashingConfigOption.get().getExpressions,
           hashingConfigOption.get().getRule,
           hashingConfigOption.get().getDefaultBucketNumber))
+      } else {
+        // could be empty, if user upgrade to partition level bucket index after specifiedQueryInstant
+        Option.empty
       }
-      // could be empty, if user upgrade to partition level bucket index after specifiedQueryInstant
-      Option.empty
     } else {
       // specifiedQueryInstant is null or empty, so load latest hashing config directly
       val hashingConfig = PartitionBucketIndexHashingConfig.loadingLatestHashingConfig(metaClient)

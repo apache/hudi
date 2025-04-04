@@ -38,7 +38,6 @@ import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.ExpressionPredicates;
@@ -48,6 +47,7 @@ import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
+import org.apache.hudi.source.prune.PartitionBucketIdFunc;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.source.rebalance.partitioner.StreamReadAppendPartitioner;
@@ -158,7 +158,7 @@ public class HoodieTableSource implements
   private List<Predicate> predicates;
   private ColumnStatsProbe columnStatsProbe;
   private PartitionPruners.PartitionPruner partitionPruner;
-  private Option<Function<Integer, Integer>> dataBucketFunc;
+  private Option<Function<Integer, Integer>> dataBucketFunc; // numBuckets -> bucketId
   private transient FileIndex fileIndex;
 
   public HoodieTableSource(
@@ -377,7 +377,7 @@ public class HoodieTableSource implements
     if (!ExpressionUtils.isFilteringByAllFields(indexKeyFilters, indexKeyFields)) {
       return Option.empty();
     }
-    return PrimaryKeyPruners.getBucketIdFunc(indexKeyFilters, conf);
+    return Option.of(PrimaryKeyPruners.getBucketIdFunc(indexKeyFilters, conf));
   }
 
   private List<MergeOnReadInputSplit> buildInputSplits() {
@@ -614,8 +614,8 @@ public class HoodieTableSource implements
           .rowType(this.tableRowType)
           .columnStatsProbe(this.columnStatsProbe)
           .partitionPruner(this.partitionPruner)
-          .dataBucketFunc(this.dataBucketFunc)
-          .numBucketFunction(NumBucketsFunction.fromMetaClient(metaClient, conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
+          .partitionBucketIdFunc(PartitionBucketIdFunc.create(this.dataBucketFunc,
+              this.metaClient, conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
           .build();
     }
     return this.fileIndex;

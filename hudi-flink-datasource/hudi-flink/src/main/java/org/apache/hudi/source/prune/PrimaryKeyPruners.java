@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
 public class PrimaryKeyPruners {
   private static final Logger LOG = LoggerFactory.getLogger(PrimaryKeyPruners.class);
 
-  public static Option<Function<Integer, Integer>> getBucketIdFunc(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
+  public static Function<Integer, Integer> getBucketIdFunc(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
     List<String> pkFields = Arrays.asList(conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
     // step1: resolve the hash key values
     final boolean logicalTimestamp = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
@@ -60,9 +60,7 @@ public class PrimaryKeyPruners {
         .map(Pair::getValue)
         .collect(Collectors.toList());
     // step2: generate bucket id
-    return Option.of((numBuckets) -> {
-      return BucketIdentifier.getBucketId(values, numBuckets);
-    });
+    return (numBuckets) -> BucketIdentifier.getBucketId(values, numBuckets);
   }
 
   private static Pair<FieldReferenceExpression, ValueLiteralExpression> castChildAs(List<Expression> children) {

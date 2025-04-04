@@ -21,12 +21,10 @@ package org.apache.hudi.source;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.bucket.BucketIdentifier;
-import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.stats.FileStatsIndex;
@@ -70,10 +68,9 @@ public class FileIndex implements Serializable {
   private final org.apache.hadoop.conf.Configuration hadoopConf;
   private final PartitionPruners.PartitionPruner partitionPruner;  // for partition pruning
   private final ColumnStatsProbe colStatsProbe;                    // for probing column stats
-  private final Option<Function<Integer, Integer>> dataBucketFunc; // for bucket pruning
+  private final Function<String, Integer> partitionBucketIdFunc;   // for bucket pruning
   private List<String> partitionPaths;                             // cache of partition paths
   private final FileStatsIndex fileStatsIndex;                     // for data skipping
-  private final NumBucketsFunction numBucketsFunction;
 
   private FileIndex(
       StoragePath path,
@@ -81,19 +78,15 @@ public class FileIndex implements Serializable {
       RowType rowType,
       ColumnStatsProbe colStatsProbe,
       PartitionPruners.PartitionPruner partitionPruner,
-      Option<Function<Integer, Integer>> dataBucketFunc,
-      NumBucketsFunction numBucketsFunction) {
+      Function<String, Integer> partitionBucketIdFunc) {
     this.path = path;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.tableExists = StreamerUtil.tableExists(path.toString(), hadoopConf);
     this.metadataConfig = StreamerUtil.metadataConfig(conf);
     this.colStatsProbe = isDataSkippingFeasible(conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? colStatsProbe : null;
     this.partitionPruner = partitionPruner;
-    this.dataBucketFunc = dataBucketFunc;
     this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, metadataConfig);
-    this.numBucketsFunction = numBucketsFunction == null
-        ? new NumBucketsFunction(conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS))
-        : numBucketsFunction;
+    this.partitionBucketIdFunc = partitionBucketIdFunc;
   }
 
   /**
@@ -170,14 +163,13 @@ public class FileIndex implements Serializable {
 
     List<StoragePathInfo> allFiles;
     // bucket pruning
-    if (this.dataBucketFunc.isPresent()) {
+    if (this.partitionBucketIdFunc != null) {
       allFiles = partition2Files.entrySet().stream().flatMap(entry -> {
         String partitionPath = entry.getKey();
-        int numBuckets = numBucketsFunction.getNumBuckets(partitionPath);
-        int bucketId = dataBucketFunc.get().apply(numBuckets);
+        int bucketId = partitionBucketIdFunc.apply(partitionPath);
         String bucketIdStr = BucketIdentifier.bucketIdStr(bucketId);
-        List<StoragePathInfo> innerAllFiles = entry.getValue();
-        return innerAllFiles.stream().filter(fileInfo -> fileInfo.getPath().getName().contains(bucketIdStr));
+        List<StoragePathInfo> filesInPartition = entry.getValue();
+        return filesInPartition.stream().filter(fileInfo -> fileInfo.getPath().getName().contains(bucketIdStr));
       }).collect(Collectors.toList());
     } else {
       allFiles = FSUtils.getFilesInPartitions(
@@ -300,8 +292,7 @@ public class FileIndex implements Serializable {
     private RowType rowType;
     private ColumnStatsProbe columnStatsProbe;
     private PartitionPruners.PartitionPruner partitionPruner;
-    private Option<Function<Integer, Integer>> dataBucketFunc = Option.empty();
-    private NumBucketsFunction numBucketFunction;
+    private Function<String, Integer> partitionBucketIdFunc;
 
     private Builder() {
     }
@@ -331,19 +322,14 @@ public class FileIndex implements Serializable {
       return this;
     }
 
-    public Builder dataBucketFunc(Option<Function<Integer, Integer>> dataBucketFunc) {
-      this.dataBucketFunc = dataBucketFunc;
-      return this;
-    }
-
-    public Builder numBucketFunction(NumBucketsFunction function) {
-      this.numBucketFunction = function;
+    public Builder partitionBucketIdFunc(Function<String, Integer> partitionBucketIdFunc) {
+      this.partitionBucketIdFunc = partitionBucketIdFunc;
       return this;
     }
 
     public FileIndex build() {
       return new FileIndex(Objects.requireNonNull(path), Objects.requireNonNull(conf), Objects.requireNonNull(rowType),
-          columnStatsProbe, partitionPruner, dataBucketFunc, numBucketFunction);
+          columnStatsProbe, partitionPruner, partitionBucketIdFunc);
     }
   }
 }
