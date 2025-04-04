@@ -70,6 +70,11 @@ public class UpgradeDowngrade {
 
   public static boolean needsUpgradeOrDowngrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
+    return needsUpgrade(metaClient, config, toWriteVersion) || toWriteVersion.versionCode() < fromTableVersion.versionCode();
+  }
+
+  public static boolean needsUpgrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
+    HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
     // If table version is less than SIX, then we need to upgrade to SIX first before upgrading to any other version, irrespective of autoUpgrade flag
     if (fromTableVersion.versionCode() < HoodieTableVersion.SIX.versionCode() && toWriteVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
       throw new HoodieUpgradeDowngradeException(
@@ -82,12 +87,16 @@ public class UpgradeDowngrade {
           String.format("Please disable metadata table before upgrading from version %s to %s.", fromTableVersion, toWriteVersion));
     }
 
-    // allow upgrades/downgrades otherwise.
-    return toWriteVersion.versionCode() != fromTableVersion.versionCode();
+    // allow upgrades otherwise.
+    return toWriteVersion.versionCode() > fromTableVersion.versionCode();
   }
 
   public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
     return needsUpgradeOrDowngrade(metaClient, config, toWriteVersion);
+  }
+
+  public boolean needsUpgrade(HoodieTableVersion toWriteVersion) {
+    return needsUpgrade(metaClient, config, toWriteVersion);
   }
 
   /**
