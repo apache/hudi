@@ -356,12 +356,11 @@ public class HoodieFlinkCopyOnWriteTable<T>
    * @param context       HoodieEngineContext
    * @param instantTime   Instant Time for scheduling cleaning
    * @param extraMetadata additional metadata to write into plan
-   * @param skipLocking
    * @return
    */
   @Override
-  public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata, boolean skipLocking) {
-    return new CleanPlanActionExecutor(context, config, this, instantTime, extraMetadata, skipLocking).execute();
+  public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+    return new CleanPlanActionExecutor(context, config, this, instantTime, extraMetadata).execute();
   }
 
   @Override

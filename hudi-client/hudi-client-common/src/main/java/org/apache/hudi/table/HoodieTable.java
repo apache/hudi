@@ -514,12 +514,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param context HoodieEngineContext
    * @param instantTime Instant Time for scheduling cleaning
    * @param extraMetadata additional metadata to write into plan
-   * @param skipLocking {@code true} if locking needs to be skipped. false otherwise.
    * @return HoodieCleanerPlan, if there is anything to clean.
    */
   public abstract Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context,
                                                              String instantTime,
-                                                             Option<Map<String, String>> extraMetadata, boolean skipLocking);
+                                                             Option<Map<String, String>> extraMetadata);
 
   /**
    * Executes a new clean action.
@@ -914,7 +913,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   /**
    * Validates that the instantTime is latest in the write timeline. This method is specifically used to avoid additional timeline reloads.
-   * If the caller expects the validation to explicitly reload, please use {@link #validateForLatestTimestampInternal(HoodieTableMetaClient, String, boolean)}.
+   * If the caller expects the validation to explicitly reload, please use {@link #validateForLatestTimestampInternal(Either, boolean, String)}.
    * @param metaClient instance of {@link HoodieTableMetaClient} to use.
    * @param instantTime instant time of interest.
    */

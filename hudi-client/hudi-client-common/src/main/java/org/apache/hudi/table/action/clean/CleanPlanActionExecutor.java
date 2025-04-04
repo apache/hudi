@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -57,21 +56,14 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
 
   private static final Logger LOG = LoggerFactory.getLogger(CleanPlanActionExecutor.class);
   private final Option<Map<String, String>> extraMetadata;
-  private final Option<TransactionManager> txnManagerOpt;
 
   public CleanPlanActionExecutor(HoodieEngineContext context,
                                  HoodieWriteConfig config,
                                  HoodieTable<T, I, K, O> table,
                                  String instantTime,
-                                 Option<Map<String, String>> extraMetadata,
-                                 boolean skipLocking) {
+                                 Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime);
     this.extraMetadata = extraMetadata;
-    if (skipLocking) {
-      this.txnManagerOpt = Option.of(new TransactionManager(config, table.getStorage()));
-    } else {
-      this.txnManagerOpt = Option.empty();
-    }
   }
 
   private int getCommitsSinceLastCleaning() {
@@ -187,7 +179,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
       // Save to both aux and timeline folder
       try {
-        validateForLatestTimestamp(cleanInstant);
+        table.validateForLatestTimestamp(cleanInstant.getTimestamp());
         table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
         LOG.info("Requesting Cleaning with instant time " + cleanInstant);
       } catch (IOException e) {
@@ -198,15 +190,6 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     }
 
     return option;
-  }
-
-  private void validateForLatestTimestamp(HoodieInstant cleanInstant) {
-    try {
-      txnManagerOpt.ifPresent(txnManager -> txnManager.beginTransaction(Option.of(cleanInstant), Option.empty()));
-      table.validateForLatestTimestamp(cleanInstant.getTimestamp());
-    } finally {
-      txnManagerOpt.ifPresent(txnManager -> txnManager.endTransaction(Option.of(cleanInstant)));
-    }
   }
 
   @Override
