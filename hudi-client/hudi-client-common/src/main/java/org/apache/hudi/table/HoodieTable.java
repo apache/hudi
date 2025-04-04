@@ -32,6 +32,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.timeline.TimestampUtils;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -134,6 +135,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private final HoodieTableMetadata metadata;
   private final HoodieStorageLayout storageLayout;
   private final boolean isMetadataTable;
+  private final TransactionManager txnManager;
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
@@ -153,6 +155,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.index = getIndex(config, context);
     this.storageLayout = getStorageLayout(config);
     this.taskContextSupplier = context.getTaskContextSupplier();
+    this.txnManager = new TransactionManager(config, metaClient.getStorage());
   }
 
   public boolean isMetadataTable() {
@@ -542,15 +545,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param instantToRollback instant to be rolled back
    * @param shouldRollbackUsingMarkers uses marker based rollback strategy when set to true. uses list based rollback when false.
    * @param isRestore {@code true} when invoked as part of restore.
-   * @param skipLocking {@code true} when locking needs to be skipped. if not, lock is acquired to plan rollback.
    * @return HoodieRollbackPlan containing info on rollback.
    */
   public abstract Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
                                                               String instantTime,
                                                               HoodieInstant instantToRollback,
                                                               boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers,
-                                                              boolean isRestore,
-                                                              boolean skipLocking);
+                                                              boolean isRestore);
 
   /**
    * Rollback the (inflight/committed) record changes with the given commit time.
@@ -669,8 +670,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp())
         .orElseGet(HoodieActiveTimeline::createNewInstantTime);
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-        false, false);
+    HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, commitTime, HoodieTimeline.ROLLBACK_ACTION);
+    try {
+      txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty());
+      scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
+          false);
+    } finally {
+      txnManager.endTransaction(Option.of(rollbackInstant));
+    }
     rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
   }
@@ -685,8 +692,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp())
         .orElseGet(HoodieActiveTimeline::createNewInstantTime);
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-        false, false);
+    HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, commitTime, HoodieTimeline.ROLLBACK_ACTION);
+    try {
+      txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty());
+      scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
+          false);
+    } finally {
+      txnManager.endTransaction(Option.of(rollbackInstant));
+    }
     rollback(context, commitTime, inflightInstant, true, false);
   }
 

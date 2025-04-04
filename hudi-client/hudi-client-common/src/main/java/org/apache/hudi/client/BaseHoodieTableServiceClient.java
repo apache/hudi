@@ -1034,8 +1034,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
                 + "(exists in active timeline: %s), with rollback plan: %s",
             rollbackInstantTime, commitInstantOpt.isPresent(), pendingRollbackInfo.isPresent()));
         Option<HoodieRollbackPlan> rollbackPlanOption = pendingRollbackInfo.map(entry -> Option.of(entry.getRollbackPlan()))
-            .orElseGet(() -> table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(),
-                false, skipLocking));
+            .orElseGet(() -> scheduleRollback(table, rollbackInstantTime, commitInstantOpt, skipLocking));
         if (rollbackPlanOption.isPresent()) {
           // There can be a case where the inflight rollback failed after the instant files
           // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
@@ -1062,6 +1061,22 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
     } catch (Exception e) {
       throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime, e);
+    }
+  }
+
+  private Option<HoodieRollbackPlan> scheduleRollback(HoodieTable table, String rollbackInstantTime, Option<HoodieInstant> commitInstantOpt,
+                                                      boolean skipLocking) {
+    HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, rollbackInstantTime, HoodieTimeline.ROLLBACK_ACTION);
+    try {
+      if (!skipLocking) {
+        txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty());
+      }
+      return table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(),
+          false);
+    } finally {
+      if (!skipLocking) {
+        txnManager.endTransaction(Option.of(rollbackInstant));
+      }
     }
   }
 

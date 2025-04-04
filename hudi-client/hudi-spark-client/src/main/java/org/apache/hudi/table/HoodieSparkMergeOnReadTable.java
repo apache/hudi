@@ -193,10 +193,9 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
                                                      String instantTime,
                                                      HoodieInstant instantToRollback, boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers,
-                                                     boolean isRestore,
-                                                     boolean skipLocking) {
+                                                     boolean isRestore) {
     return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
-        shouldRollbackUsingMarkers, isRestore, skipLocking).execute();
+        shouldRollbackUsingMarkers, isRestore).execute();
   }
 
   @Override

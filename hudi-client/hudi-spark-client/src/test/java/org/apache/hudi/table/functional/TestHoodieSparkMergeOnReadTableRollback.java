@@ -434,7 +434,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         HoodieInstant failedDeltaCommitInstant = activeTimeline.getDeltaCommitTimeline().lastInstant().get();
         assertEquals(commitTime1, failedDeltaCommitInstant.getTimestamp());
         Option<HoodieRollbackPlan> rollbackPlan = hoodieTable.scheduleRollback(hoodieTable.getContext(), rollbackInstantTime,
-            failedDeltaCommitInstant, false, secondClient.getConfig().shouldRollbackUsingMarkers(), false, false);
+            failedDeltaCommitInstant, false, secondClient.getConfig().shouldRollbackUsingMarkers(), false);
         assertTrue(rollbackPlan.isPresent());
 
         MergeOnReadRollbackActionExecutor rollbackExecutor = new MergeOnReadRollbackActionExecutor<>(hoodieTable.getContext(),

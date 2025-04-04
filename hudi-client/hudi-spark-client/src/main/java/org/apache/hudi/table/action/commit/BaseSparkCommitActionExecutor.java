@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -140,7 +141,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           .collect(Collectors.toSet());
       pendingClusteringInstantsToRollback.forEach(instant -> {
         String commitTime = HoodieActiveTimeline.createNewInstantTime();
-        table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false, false);
+        HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, commitTime, HoodieTimeline.ROLLBACK_ACTION);
+        try {
+          txnManagerOption.ifPresent(txnManager -> txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty()));
+          table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false);
+        } finally {
+          txnManagerOption.ifPresent(txnManager -> txnManager.endTransaction(Option.of(rollbackInstant)));
+        }
         table.rollback(context, commitTime, instant, true, true);
       });
       table.getMetaClient().reloadActiveTimeline();

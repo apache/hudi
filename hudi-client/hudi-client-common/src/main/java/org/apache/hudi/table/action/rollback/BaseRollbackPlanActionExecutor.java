@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -52,8 +51,6 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
   protected final HoodieInstant instantToRollback;
   private final boolean skipTimelinePublish;
   private final boolean shouldRollbackUsingMarkers;
-  private final TransactionManager txnManager;
-  private final boolean skipLocking;
   protected final Boolean isRestore;
 
   public static final Integer ROLLBACK_PLAN_VERSION_1 = 1;
@@ -66,15 +63,12 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
                                         HoodieInstant instantToRollback,
                                         boolean skipTimelinePublish,
                                         boolean shouldRollbackUsingMarkers,
-                                        boolean isRestore,
-                                        boolean skipLocking) {
+                                        boolean isRestore) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.skipTimelinePublish = skipTimelinePublish;
     this.shouldRollbackUsingMarkers = shouldRollbackUsingMarkers && !instantToRollback.isCompleted();
     this.isRestore = isRestore;
-    this.txnManager = new TransactionManager(config, table.getStorage());
-    this.skipLocking = skipLocking;
   }
 
   /**
@@ -158,16 +152,7 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
   @Override
   public Option<HoodieRollbackPlan> execute() {
     HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, instantTime, HoodieTimeline.ROLLBACK_ACTION);
-    try {
-      if (!skipLocking) {
-        txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty());
-      }
-      // Plan a new rollback action
-      return requestRollback(instantTime);
-    } finally {
-      if (!skipLocking) {
-        txnManager.endTransaction(Option.of(rollbackInstant));
-      }
-    }
+    // Plan a new rollback action
+    return requestRollback(instantTime);
   }
 }

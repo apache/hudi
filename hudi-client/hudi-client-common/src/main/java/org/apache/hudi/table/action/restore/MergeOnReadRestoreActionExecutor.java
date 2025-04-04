@@ -51,7 +51,7 @@ public class MergeOnReadRestoreActionExecutor<T, I, K, O>
     }
     table.getMetaClient().reloadActiveTimeline();
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    table.scheduleRollback(context, instantTime, instantToRollback, false, false, true, true);
+    table.scheduleRollback(context, instantTime, instantToRollback, false, false, true);
     table.getMetaClient().reloadActiveTimeline();
     MergeOnReadRollbackActionExecutor rollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
