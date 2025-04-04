@@ -22,9 +22,12 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -143,7 +146,7 @@ class TestFileGroupRecordBuffer {
       "true, false, false, , false, SIX, 00000000-0000-0000-0000-000000000000",
       "false, true, false, , false, SIX, 00000000-0000-0000-0000-000000000000",
       "false, false, true, , false, SIX, 00000000-0000-0000-0000-000000000000",
-      "true, true, true, CUSTOM, true, SIX, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5", /// with table version 6, commit time based merge mode can have event time based merge strategy id.
+      "true, true, true, COMMIT_TIME_ORDERING, true, SIX, eeb8d96f-b1e4-49fd-bbf8-28ac514178e5", /// with table version 6, commit time based merge mode can have event time based merge strategy id.
   })
   public void testSchemaForMandatoryFields(boolean setPrecombine,
                                            boolean addHoodieIsDeleted,
@@ -178,6 +181,15 @@ class TestFileGroupRecordBuffer {
     when(tableConfig.populateMetaFields()).thenReturn(true);
     when(tableConfig.getPreCombineField()).thenReturn(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING);
     when(tableConfig.getTableVersion()).thenReturn(tableVersion);
+    if (tableConfig.getTableVersion() == HoodieTableVersion.SIX) {
+      if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
+        when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
+      } else if (mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
+        when(tableConfig.getPayloadClass()).thenReturn(OverwriteWithLatestAvroPayload.class.getName());
+      } else {
+        when(tableConfig.getPayloadClass()).thenReturn(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+      }
+    }
     if (mergeMode != null) {
       when(tableConfig.getRecordMergeStrategyId()).thenReturn(mergeStrategyId);
     }
@@ -187,8 +199,7 @@ class TestFileGroupRecordBuffer {
       props.setProperty(DELETE_KEY, customDeleteKey);
       props.setProperty(DELETE_MARKER, customDeleteValue);
     }
-    FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
-        dataSchema, requestedSchema, Option.empty(), tableConfig, props);
+
     List<String> expectedFields = new ArrayList();
     expectedFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
     expectedFields.add(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
@@ -202,6 +213,10 @@ class TestFileGroupRecordBuffer {
       expectedFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
     Schema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : getSchema(expectedFields);
+    when(recordMerger.getMandatoryFieldsForMerging(dataSchema, tableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
+
+    FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
+        dataSchema, requestedSchema, Option.empty(), tableConfig, props);
     Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema();
     assertEquals(expectedSchema, actualSchema);
     assertEquals(addHoodieIsDeleted, fileGroupReaderSchemaHandler.hasBuiltInDelete());
