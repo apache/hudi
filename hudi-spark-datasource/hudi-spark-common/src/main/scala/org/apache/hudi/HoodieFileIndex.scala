@@ -104,25 +104,21 @@ case class HoodieFileIndex(spark: SparkSession,
     endCompletionTime = options.get(DataSourceReadOptions.END_COMMIT.key)) with FileIndex {
 
   @transient protected var hasPushedDownPartitionPredicates: Boolean = false
-  private val isPartitionSimpleBucketIndex = PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(spark.sparkContext.hadoopConfiguration,
-    metaClient.getBasePath.toString)
-
-  @transient private lazy val bucketIndexSupport = if (isPartitionSimpleBucketIndex) {
-    val specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant)
-    new PartitionBucketIndexSupport(spark, metadataConfig, metaClient, specifiedQueryInstant)
-  } else {
-    new BucketIndexSupport(spark, metadataConfig, metaClient)
-  }
 
   /**
    * NOTE: [[indicesSupport]] is a transient state, since it's only relevant while logical plan
-   *       is handled by the Spark's driver
-   *       The order of elements is important as in this order indices will be applied
-   *       during `lookupCandidateFilesInMetadataTable`
+   * is handled by the Spark's driver
+   * The order of elements is important as in this order indices will be applied
+   * during `lookupCandidateFilesInMetadataTable`
    */
   @transient private lazy val indicesSupport: List[SparkBaseIndexSupport] = List(
     new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
-    bucketIndexSupport,
+    if (PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(metaClient.getStorageConf, metaClient.getBasePath.toString)) {
+      val specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant)
+      new PartitionBucketIndexSupport(spark, metadataConfig, metaClient, specifiedQueryInstant)
+    } else {
+      new BucketIndexSupport(spark, metadataConfig, metaClient)
+    },
     new SecondaryIndexSupport(spark, metadataConfig, metaClient),
     new ExpressionIndexSupport(spark, schema, metadataConfig, metaClient),
     new BloomFiltersIndexSupport(spark, metadataConfig, metaClient),
