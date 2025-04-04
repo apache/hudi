@@ -183,7 +183,6 @@ test_flink_bundle() {
     $FLINK_HOME/bin/start-cluster.sh
     $FLINK_HOME/bin/sql-client.sh -j $JARS_DIR/flink.jar -f $WORKDIR/flink/insert.sql
     echo "validate flink insert finished."
-    $WORKDIR/flink/compact.sh $JARS_DIR/flink.jar
     local EXIT_CODE=$?
     $FLINK_HOME/bin/stop-cluster.sh
     unset HADOOP_CLASSPATH
