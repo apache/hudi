@@ -52,6 +52,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -343,7 +344,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   protected void validateTimestampInternal(HoodieTableMetaClient metaClient, String instantTime) {
     if (config.shouldEnableTimestampOrderingValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime, true);
+      TimestampUtils.validateForLatestTimestamp(Either.left(metaClient), metaClient.isMetadataTable(), instantTime);
     }
   }
 

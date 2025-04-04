@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -94,7 +95,7 @@ public class HoodieJavaCopyOnWriteTable<T>
 
   @Override
   public void validateForLatestTimestamp(String instantTime) {
-    validateForLatestTimestampInternal(metaClient, instantTime, true);
+    validateForLatestTimestampInternal(Either.left(metaClient), metaClient.isMetadataTable(), instantTime);
   }
 
   @Override

@@ -151,7 +151,6 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
 
   @Override
   public Option<HoodieRollbackPlan> execute() {
-    HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, instantTime, HoodieTimeline.ROLLBACK_ACTION);
     // Plan a new rollback action
     return requestRollback(instantTime);
   }

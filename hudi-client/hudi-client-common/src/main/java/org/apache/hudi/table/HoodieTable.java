@@ -59,6 +59,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
+import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -670,14 +671,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp())
         .orElseGet(HoodieActiveTimeline::createNewInstantTime);
-    HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, commitTime, HoodieTimeline.ROLLBACK_ACTION);
-    try {
-      txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty());
-      scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-          false);
-    } finally {
-      txnManager.endTransaction(Option.of(rollbackInstant));
-    }
+    scheduleRollback(commitTime, inflightInstant);
     rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
   }
@@ -692,6 +686,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp())
         .orElseGet(HoodieActiveTimeline::createNewInstantTime);
+    scheduleRollback(commitTime, inflightInstant);
+    rollback(context, commitTime, inflightInstant, true, false);
+  }
+
+  private void scheduleRollback(String commitTime, HoodieInstant inflightInstant) {
     HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, commitTime, HoodieTimeline.ROLLBACK_ACTION);
     try {
       txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty());
@@ -700,7 +699,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     } finally {
       txnManager.endTransaction(Option.of(rollbackInstant));
     }
-    rollback(context, commitTime, inflightInstant, true, false);
   }
 
   /**
@@ -921,7 +919,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param instantTime instant time of interest.
    */
   public void validateForLatestTimestampWithoutReload(HoodieTableMetaClient metaClient, String instantTime) {
-    validateForLatestTimestampInternal(metaClient, instantTime, false);
+    validateForLatestTimestampInternal(Either.right(metaClient.getActiveTimeline()), metaClient.isMetadataTable(), instantTime);
   }
 
   /**
@@ -930,9 +928,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   public abstract void validateForLatestTimestamp(String instantTime);
 
-  protected void validateForLatestTimestampInternal(HoodieTableMetaClient metaClient, String instantTime, boolean reloadTimeline) {
+  protected void validateForLatestTimestampInternal(Either<HoodieTableMetaClient, HoodieActiveTimeline> metaClientOrActiveTimeline, boolean isMetadataTable, String instantTime) {
     if (this.config.shouldEnableTimestampOrderingValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime, reloadTimeline);
+      TimestampUtils.validateForLatestTimestamp(metaClientOrActiveTimeline, isMetadataTable, instantTime);
     }
   }
 

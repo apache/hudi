@@ -57,8 +57,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
 
   private static final Logger LOG = LoggerFactory.getLogger(CleanPlanActionExecutor.class);
   private final Option<Map<String, String>> extraMetadata;
-  private final TransactionManager txnManager;
-  private final boolean skipLocking;
+  private final Option<TransactionManager> txnManagerOpt;
 
   public CleanPlanActionExecutor(HoodieEngineContext context,
                                  HoodieWriteConfig config,
@@ -68,8 +67,11 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
                                  boolean skipLocking) {
     super(context, config, table, instantTime);
     this.extraMetadata = extraMetadata;
-    this.txnManager = new TransactionManager(config, table.getStorage());
-    this.skipLocking = skipLocking;
+    if (skipLocking) {
+      this.txnManagerOpt = Option.of(new TransactionManager(config, table.getStorage()));
+    } else {
+      this.txnManagerOpt = Option.empty();
+    }
   }
 
   private int getCommitsSinceLastCleaning() {
@@ -200,14 +202,10 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
 
   private void validateForLatestTimestamp(HoodieInstant cleanInstant) {
     try {
-      if (!skipLocking) {
-        txnManager.beginTransaction(Option.of(cleanInstant), Option.empty());
-      }
+      txnManagerOpt.ifPresent(txnManager -> txnManager.beginTransaction(Option.of(cleanInstant), Option.empty()));
       table.validateForLatestTimestamp(cleanInstant.getTimestamp());
     } finally {
-      if (!skipLocking) {
-        txnManager.endTransaction(Option.of(cleanInstant));
-      }
+      txnManagerOpt.ifPresent(txnManager -> txnManager.endTransaction(Option.of(cleanInstant)));
     }
   }
 
