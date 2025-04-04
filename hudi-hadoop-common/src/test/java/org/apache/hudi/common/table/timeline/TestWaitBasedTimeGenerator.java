@@ -152,26 +152,30 @@ public class TestWaitBasedTimeGenerator {
 
   @Test
   public void testTimeGeneratorCache() {
-    TimeGenerator timeGenerator1 = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
-    TimeGenerator timeGenerator2 = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
-    TimeGenerator timeGenerator3 = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
+    HoodieTimeGeneratorConfig timeGeneratorConfigWithReuse = getWaitBasedTimeGenerator(true);
+    TimeGenerator timeGenerator1 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithReuse, storageConf);
+    TimeGenerator timeGenerator2 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithReuse, storageConf);
+    TimeGenerator timeGenerator3 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithReuse, storageConf);
 
     assertEquals(timeGenerator1, timeGenerator2);
     assertEquals(timeGenerator1, timeGenerator3);
 
     // disable reuse
-    HoodieTimeGeneratorConfig timeGeneratorConfigWithNoReuse = HoodieTimeGeneratorConfig.newBuilder()
-        .withPath("test_wait_based")
-        .withMaxExpectedClockSkewMs(25L)
-        .withReuseTimeGenerator(false)
-        .withTimeGeneratorType(TimeGeneratorType.WAIT_TO_ADJUST_SKEW)
-        .build();
-
+    HoodieTimeGeneratorConfig timeGeneratorConfigWithNoReuse = getWaitBasedTimeGenerator(false);
     TimeGenerator timeGenerator4 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithNoReuse, storageConf);
     assertNotEquals(timeGenerator1, timeGenerator4);
     // how many ever times we call, we should get new time generator
     TimeGenerator timeGenerator5 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithNoReuse, storageConf);
     assertNotEquals(timeGenerator4, timeGenerator5);
+  }
+
+  private static HoodieTimeGeneratorConfig getWaitBasedTimeGenerator(boolean reuse) {
+    return HoodieTimeGeneratorConfig.newBuilder()
+        .withPath("test_wait_based")
+        .withMaxExpectedClockSkewMs(25L)
+        .withReuseTimeGenerator(reuse)
+        .withTimeGeneratorType(TimeGeneratorType.WAIT_TO_ADJUST_SKEW)
+        .build();
   }
 
 }
