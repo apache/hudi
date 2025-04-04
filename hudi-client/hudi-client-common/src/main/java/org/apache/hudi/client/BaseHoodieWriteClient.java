@@ -52,6 +52,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -342,8 +343,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected abstract void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime);
 
   protected void validateTimestampInternal(HoodieTableMetaClient metaClient, String instantTime) {
-    if (config.shouldEnableTimestampOrderinValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+    if (config.shouldEnableTimestampOrderingValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      TimestampUtils.validateForLatestTimestamp(Either.left(metaClient), metaClient.isMetadataTable(), instantTime);
     }
   }
 
@@ -829,20 +830,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * cleaned)
    */
   public HoodieCleanMetadata clean(String cleanInstantTime) throws HoodieIOException {
-    return clean(cleanInstantTime, true, false);
-  }
-
-  /**
-   * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
-   * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
-   * cleaned)
-   * @param cleanInstantTime instant time for clean.
-   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
-   * @return instance of {@link HoodieCleanMetadata}.
-   */
-  @Deprecated
-  public HoodieCleanMetadata clean(String cleanInstantTime, boolean skipLocking) throws HoodieIOException {
-    return clean(cleanInstantTime, true, false);
+    return clean(cleanInstantTime, true);
   }
 
   /**
@@ -853,9 +841,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * of clean.
    * @param cleanInstantTime instant time for clean.
    * @param scheduleInline true if needs to be scheduled inline. false otherwise.
-   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
    */
-  public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline, boolean skipLocking) throws HoodieIOException {
+  public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline) throws HoodieIOException {
     return tableServiceClient.clean(cleanInstantTime, scheduleInline);
   }
 
