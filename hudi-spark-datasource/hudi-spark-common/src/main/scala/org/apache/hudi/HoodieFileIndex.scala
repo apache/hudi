@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
@@ -103,6 +104,10 @@ case class HoodieFileIndex(spark: SparkSession,
     endCompletionTime = options.get(DataSourceReadOptions.END_COMMIT.key)) with FileIndex {
 
   @transient protected var hasPushedDownPartitionPredicates: Boolean = false
+  private val isPartitionSimpleBucketIndex = PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(spark.sparkContext.hadoopConfiguration,
+    metaClient.getBasePath.toString)
+
+  @transient private lazy val bucketIndexSupport = new BucketIndexSupport(spark, metadataConfig, metaClient)
 
   /**
    * NOTE: [[indicesSupport]] is a transient state, since it's only relevant while logical plan
@@ -112,7 +117,7 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   @transient private lazy val indicesSupport: List[SparkBaseIndexSupport] = List(
     new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
-    new BucketIndexSupport(spark, metadataConfig, metaClient),
+    bucketIndexSupport,
     new SecondaryIndexSupport(spark, metadataConfig, metaClient),
     new ExpressionIndexSupport(spark, schema, metadataConfig, metaClient),
     new BloomFiltersIndexSupport(spark, metadataConfig, metaClient),
