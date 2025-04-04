@@ -377,7 +377,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
         arguments(CUSTOM, null, customStrategy, null,
             "false", CUSTOM, defaultPayload, customStrategy),
         arguments(CUSTOM, customPayload, customStrategy, null,
-            "false", CUSTOM, customPayload, customStrategy),
+            "false", CUSTOM, customPayload, null),
 
         //test legal configs that work but should not be used usually
         arguments(CUSTOM, defaultPayload, customStrategy, null,
@@ -455,12 +455,10 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
               : Boolean.parseBoolean(shouldThrowString);
           RecordMergeMode expectedMergeMode = outputMergeMode;
           String expectedMergeStrategy = outputMergeStrategy;
-          if (!shouldThrow && outputMergeMode == null) {
+          if (!shouldThrow && (outputMergeMode == null || outputMergeStrategy == null)) {
             expectedMergeMode = tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
                 ? CUSTOM : inferRecordMergeModeFromPayloadClass(outputPayloadClass);
-            expectedMergeStrategy = tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
-                ? PAYLOAD_BASED_MERGE_STRATEGY_UUID
-                : getRecordMergeStrategyId(expectedMergeMode, outputPayloadClass, null);
+            expectedMergeStrategy = getRecordMergeStrategyId(expectedMergeMode, outputPayloadClass, inputMergeStrategy, tableVersion);
           }
           if (shouldThrow) {
             assertThrows(IllegalArgumentException.class,

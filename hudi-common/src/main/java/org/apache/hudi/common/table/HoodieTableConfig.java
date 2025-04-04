@@ -827,7 +827,7 @@ public class HoodieTableConfig extends HoodieConfig {
         inferredRecordMergeMode, payloadClassName);
     // Inferring record merge strategy ID
     inferredRecordMergeStrategyId = HoodieRecordMerger.getRecordMergeStrategyId(
-        inferredRecordMergeMode, inferredPayloadClassName, recordMergeStrategyId);
+        inferredRecordMergeMode, inferredPayloadClassName, recordMergeStrategyId, tableVersion);
 
     // For custom merge mode, either payload class name or record merge strategy ID must be configured
     if (inferredRecordMergeMode == CUSTOM) {
