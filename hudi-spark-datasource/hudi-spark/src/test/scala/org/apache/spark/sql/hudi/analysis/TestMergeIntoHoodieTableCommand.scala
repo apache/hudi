@@ -1,0 +1,81 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.spark.sql.hudi.analysis
+
+import org.apache.hudi.config.{HoodieHBaseIndexConfig, HoodieIndexConfig}
+import org.apache.hudi.index.HoodieIndex
+
+import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+class TestMergeIntoHoodieTableCommand extends AnyFlatSpec with Matchers {
+  "useGlobalIndex" should "return true when global index is enabled" in {
+    val globalIndices = Seq(
+      HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+      HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+      HoodieIndex.IndexType.HBASE -> HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE
+    )
+
+    globalIndices.foreach { case (indexType, config) =>
+      val parameters = Map(
+        HoodieIndexConfig.INDEX_TYPE.key -> indexType.name,
+        config.key -> "true"
+      )
+      MergeIntoHoodieTableCommand.useGlobalIndex(parameters) should be(true)
+    }
+  }
+
+  it should "return false when update partition path is disabled" in {
+    val globalIndices = Seq(
+      HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+      HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+      HoodieIndex.IndexType.HBASE -> HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE
+    )
+
+    globalIndices.foreach { case (indexType, config) =>
+      val parameters = Map(
+        HoodieIndexConfig.INDEX_TYPE.key -> indexType.name,
+        config.key -> "false"
+      )
+      MergeIntoHoodieTableCommand.useGlobalIndex(parameters) should be(false)
+    }
+  }
+
+  it should "return false when index type is absent" in {
+    val parameters = Map.empty[String, String]
+    MergeIntoHoodieTableCommand.useGlobalIndex(parameters) should be(false)
+  }
+
+  it should "return false when index type is not global" in {
+    val nonGlobalIndices = Seq(
+      HoodieIndex.IndexType.SIMPLE.name,
+      HoodieIndex.IndexType.INMEMORY.name,
+      HoodieIndex.IndexType.BLOOM.name,
+      HoodieIndex.IndexType.BUCKET.name,
+      HoodieIndex.IndexType.FLINK_STATE.name)
+    nonGlobalIndices.foreach { indexType =>
+      val parameters = Map(HoodieIndexConfig.INDEX_TYPE.key -> indexType)
+      MergeIntoHoodieTableCommand.useGlobalIndex(parameters) should be(false)
+    }
+  }
+}
