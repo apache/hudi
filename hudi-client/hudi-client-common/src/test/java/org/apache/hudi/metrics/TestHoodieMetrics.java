@@ -295,8 +295,11 @@ public class TestHoodieMetrics {
     HoodieInstant instant008 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "1008");
     HoodieInstant instant0012 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "10012");
     HoodieInstant instant0014 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "10014");
+    HoodieInstant longInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "20250329154030600010001");
 
-    HoodieActiveTimeline activeTimeline3 = new MockHoodieActiveTimeline(instant002, instant003, instant006, instant008, instant0012, instant0014);
+    HoodieActiveTimeline activeTimeline3 = new MockHoodieActiveTimeline(instant002, instant003, instant006, instant008, instant0012, instant0014, longInstant);
+    // verify longer instant times can also be updated in the metrics. These are required for table version six
+    // where suffix is added at the end of older instants for compaction in the metadata timeline
     hoodieMetrics.updateTableServiceInstantMetrics(activeTimeline3);
 
     metricName = hoodieMetrics.getMetricsName(HoodieTimeline.COMPACTION_ACTION, HoodieMetrics.EARLIEST_PENDING_COMPACTION_INSTANT_STR);
@@ -306,7 +309,7 @@ public class TestHoodieMetrics {
     assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), Long.valueOf("1006"));
 
     metricName = hoodieMetrics.getMetricsName(HoodieTimeline.COMPACTION_ACTION, HoodieMetrics.PENDING_COMPACTION_INSTANT_COUNT_STR);
-    assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), 5L);
+    assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), 6L);
   }
 
   private static class MockHoodieActiveTimeline extends ActiveTimelineV2 {
