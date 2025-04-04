@@ -13,7 +13,7 @@ Pre-commit validators are skipped when using the [BULK_INSERT](/docs/write_opera
 
 Multiple class names can be separated by `,` delimiter.
 
-Syntax: `class_name1,class_name2`
+Syntax: `hoodie.precommit.validators=class_name1,class_name2`
 
 Example:
 ```scala
