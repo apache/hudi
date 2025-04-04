@@ -506,8 +506,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.key,
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean
       && updatingActions.nonEmpty
-      && (parameters.getOrElse(HoodieWriteConfig.WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode().toString).toInt
-      >= HoodieTableVersion.EIGHT.versionCode())
+      && (parameters.getOrElse(
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key,
+      HoodieTableVersion.current().versionCode().toString).toInt >= HoodieTableVersion.EIGHT.versionCode())
       && !useGlobalIndex(parameters)
       && !useCustomMergeMode(parameters))
   }
@@ -783,7 +784,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
       RECORD_MERGE_IMPL_CLASSES.key -> classOf[HoodieAvroRecordMerger].getName,
-      HoodieWriteConfig.RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
+      HoodieWriteConfig.RECORD_MERGE_MODE.key() -> hoodieCatalogTable.tableConfig.getRecordMergeMode.name,
       RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
 
       // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
@@ -1098,15 +1099,12 @@ object MergeIntoHoodieTableCommand {
   }
 
   def useCustomMergeMode(parameters: Map[String, String]): Boolean = {
-    val inferredMergeConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
-      RecordMergeMode.getValue(parameters.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
-      parameters.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
-      parameters.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
-      parameters.getOrElse(PRECOMBINE_FIELD.key(), null),
-      HoodieTableVersion.fromVersionCode(parameters.getOrElse(
-        HoodieWriteConfig.WRITE_TABLE_VERSION.key,
-        HoodieTableVersion.current().versionCode().toString).toInt))
-    inferredMergeConfigs.getLeft.equals(RecordMergeMode.CUSTOM)
+    val mergeModeOpt = parameters.get(DataSourceWriteOptions.RECORD_MERGE_MODE.key)
+    // For table version >= 8, mergeMode should exist.
+    if (mergeModeOpt.isEmpty) {
+      throw new HoodieException("Merge mode cannot be null here")
+    }
+    mergeModeOpt.get.equals(RecordMergeMode.CUSTOM.name)
   }
 }
 
