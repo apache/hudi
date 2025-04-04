@@ -124,7 +124,6 @@ public class TestHoodieSparkTable extends HoodieCommonTestHarness {
         }
       });
     }
-    System.out.println("Asdas");
   }
 
   enum DeleteFailureType {
