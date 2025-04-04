@@ -232,6 +232,7 @@ Partial update is not yet supported in the following cases:
 2. When virtual keys is enabled.
 3. When schema on read is enabled. 
 4. When there is an enum field in the source data.
+5. When a global index is enabled, e.g., GLOBAL_SIMPLE.
 
 For a Hudi table with user configured primary keys, the join condition and the `UPDATE`/`INSERT INTO` clause in `MERGE INTO` is expected to contain the primary keys of the table.
 :::
