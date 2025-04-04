@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.config.{HoodieHBaseIndexConfig, HoodieIndexConfig}
 import org.apache.hudi.index.HoodieIndex
+
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

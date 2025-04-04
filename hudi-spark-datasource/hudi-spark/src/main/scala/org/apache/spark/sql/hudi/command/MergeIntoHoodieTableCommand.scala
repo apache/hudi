@@ -31,12 +31,13 @@ import org.apache.hudi.config.{HoodieHBaseIndexConfig, HoodieIndexConfig, Hoodie
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
 import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
+import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
-import org.apache.hudi.index.HoodieIndex
+
 import org.apache.avro.Schema
 import org.apache.spark.sql._
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, MatchCast}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
@@ -54,6 +55,7 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.Base64
+
 import scala.collection.JavaConverters._
 
 /**
