@@ -431,7 +431,25 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param partition partition to be loaded if not present
    */
   protected void ensurePartitionLoadedCorrectly(String partition) {
-    ensurePartitionsLoadedCorrectly(Collections.singletonList(partition));
+    ValidationUtils.checkArgument(!isClosed(), "View is already closed");
+
+    long beginTs = System.currentTimeMillis();
+    if (!isPartitionAvailableInStore(partition)) {
+      // Not loaded yet
+      try {
+        LOG.info("Building file system view for partition ({})", partition);
+        List<HoodieFileGroup> groups = addFilesToView(partition, getAllFilesInPartition(partition));
+        if (groups.isEmpty()) {
+          storePartitionView(partition, Collections.emptyList());
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to list base files in partition " + partition, e);
+      }
+    } else {
+      LOG.debug("View already built for Partition :{}", partition);
+    }
+    long endTs = System.currentTimeMillis();
+    LOG.debug("Time to load partition ({}) ={}", partition, (endTs - beginTs));
   }
 
   /**
