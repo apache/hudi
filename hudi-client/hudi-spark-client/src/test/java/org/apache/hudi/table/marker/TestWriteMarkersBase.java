@@ -86,6 +86,16 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
     }
   }
 
+  protected StoragePath createDataFile(String partitionPath, String datafileName) {
+    StoragePath path = FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath + "/" + datafileName);
+    try {
+      storage.create(path, false).close();
+    } catch (IOException e) {
+      throw new HoodieException("Failed to create data file " + path, e);
+    }
+    return path;
+  }
+
   abstract void verifyMarkersInFileSystem(boolean isTablePartitioned) throws IOException;
 
   @ParameterizedTest
