@@ -380,23 +380,28 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
           val committedInstant = metaClient.getActiveTimeline.filterCompletedInstants().getInstants
           val size = committedInstant.size()
 
-          val writeCommit5 = committedInstant.get(size - 1).requestedTime()
-          val bucketRescaleCommit4 = committedInstant.get(size - 2).requestedTime()
-          val writeCommit3 = committedInstant.get(size - 3).requestedTime()
-          val bucketRescaleCommit2 = committedInstant.get(size - 4).requestedTime()
-          val writeCommit1 = committedInstant.get(size - 5).requestedTime()
+          val writeCommit5 = committedInstant.get(size - 1)
+          val bucketRescaleCommit4 = committedInstant.get(size - 2)
+          val writeCommit3 = committedInstant.get(size - 3)
+          val bucketRescaleCommit2 = committedInstant.get(size - 4)
+          val writeCommit1 = committedInstant.get(size - 5)
 
           // normal query with bucket id pruning at latest writeCommit5
           checkAnswer(s"select id, price, ts, dt from $tableName where id = '1111'")(
             Seq(1111, 3333.0, 3333, "2021-01-05")
           )
           // time travel to writeCommit3
-          checkAnswer(s"select id, price, ts, dt from $tableName timestamp as of '$writeCommit3' where id = '1111'")(
+          checkAnswer(s"select id, price, ts, dt from $tableName timestamp as of '${writeCommit3.requestedTime()}' where id = '1111'")(
             Seq(1111, 2222.0, 2222, "2021-01-05")
           )
-          // time travel to writeCommit3
-          checkAnswer(s"select id, price, ts, dt from $tableName timestamp as of '$writeCommit1' where id = '1111'")(
+          // time travel to writeCommit1
+          checkAnswer(s"select id, price, ts, dt from $tableName timestamp as of '${writeCommit1.requestedTime()}' where id = '1111'")(
             Seq(1111, 1111.0, 1111, "2021-01-05")
+          )
+
+          // incremental query with bucket id pruning
+          checkAnswer(s"select id, price, ts, dt from hudi_table_changes('$tableName', 'latest_state', '${bucketRescaleCommit2.getCompletionTime}', '${writeCommit3.getCompletionTime}') where id = '1111'")(
+            Seq(1111, 2222.0, 2222, "2021-01-05")
           )
         }
       }
