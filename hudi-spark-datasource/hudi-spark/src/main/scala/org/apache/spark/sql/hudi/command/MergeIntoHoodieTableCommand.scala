@@ -493,6 +493,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.key,
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean
       && updatingActions.nonEmpty
+      && (parameters.getOrElse(HoodieWriteConfig.WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode().toString).toInt
+      >= HoodieTableVersion.EIGHT.versionCode())
       && !useGlobalIndex(parameters)
       && !useCustomMergeMode(parameters))
   }
@@ -1083,11 +1085,13 @@ object MergeIntoHoodieTableCommand {
 
   def useCustomMergeMode(parameters: Map[String, String]): Boolean = {
     val inferredMergeConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
-      RecordMergeMode.getValue(parameters.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
-      parameters.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
-      parameters.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
-      parameters.getOrElse(PRECOMBINE_FIELD.key(), null),
-      HoodieTableVersion.current())
+      RecordMergeMode.getValue(parameters.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key, null)),
+      parameters.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key, ""),
+      parameters.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key, ""),
+      parameters.getOrElse(PRECOMBINE_FIELD.key, null),
+      HoodieTableVersion.fromVersionCode(parameters.getOrElse(
+        HoodieWriteConfig.WRITE_TABLE_VERSION.key,
+        HoodieTableVersion.current.versionCode.toString).toInt))
     inferredMergeConfigs.getLeft.equals(RecordMergeMode.CUSTOM)
   }
 }
