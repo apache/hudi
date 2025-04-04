@@ -36,7 +36,7 @@ public class SkewAdjustingTimeGenerator extends TimeGeneratorBase {
   }
 
   @Override
-  public synchronized long generateTime(boolean skipLocking) {
+  public long generateTime(boolean skipLocking) {
     try {
       if (!skipLocking) {
         lock();
@@ -54,7 +54,7 @@ public class SkewAdjustingTimeGenerator extends TimeGeneratorBase {
   }
 
   @Override
-  public synchronized void consumeTime(boolean skipLocking, Consumer<Long> func) {
+  public void consumeTime(boolean skipLocking, Consumer<Long> func) {
     try {
       if (!skipLocking) {
         lock();
