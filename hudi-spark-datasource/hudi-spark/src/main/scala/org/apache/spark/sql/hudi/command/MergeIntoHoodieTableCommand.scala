@@ -506,10 +506,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.key,
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean
       && updatingActions.nonEmpty
-      && (parameters.getOrElse(
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key,
-      HoodieTableVersion.current().versionCode().toString).toInt >= HoodieTableVersion.EIGHT.versionCode())
+      // Partial update is enabled only for table version >= 8
+      && (parameters.getOrElse(HoodieWriteConfig.WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode().toString).toInt
+      >= HoodieTableVersion.EIGHT.versionCode())
+      // Partial update is disabled when global index is used.
+      // After HUDI-9257 is done, we can remove this limitation.
       && !useGlobalIndex(parameters)
+      // Partial update is disabled when custom merge mode is set.
       && !useCustomMergeMode(parameters))
   }
 
