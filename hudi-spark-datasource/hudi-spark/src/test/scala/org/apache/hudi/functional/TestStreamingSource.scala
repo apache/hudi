@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSER
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.util.JavaConversions
 
+import org.apache.spark.DebugFilesystem
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.streaming.StreamTest
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}

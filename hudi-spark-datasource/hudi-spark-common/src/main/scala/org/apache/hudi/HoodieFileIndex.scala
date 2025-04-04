@@ -109,7 +109,7 @@ case class HoodieFileIndex(spark: SparkSession,
 
   @transient private lazy val bucketIndexSupport = if (isPartitionSimpleBucketIndex) {
     val specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant)
-    new BucketIndexSupport(spark, metadataConfig, metaClient)
+    new PartitionBucketIndexSupport(spark, metadataConfig, metaClient, specifiedQueryInstant)
   } else {
     new BucketIndexSupport(spark, metadataConfig, metaClient)
   }
