@@ -107,7 +107,12 @@ case class HoodieFileIndex(spark: SparkSession,
   private val isPartitionSimpleBucketIndex = PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(spark.sparkContext.hadoopConfiguration,
     metaClient.getBasePath.toString)
 
-  @transient private lazy val bucketIndexSupport = new BucketIndexSupport(spark, metadataConfig, metaClient)
+  @transient private lazy val bucketIndexSupport = if (isPartitionSimpleBucketIndex) {
+    val specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant)
+    new BucketIndexSupport(spark, metadataConfig, metaClient)
+  } else {
+    new BucketIndexSupport(spark, metadataConfig, metaClient)
+  }
 
   /**
    * NOTE: [[indicesSupport]] is a transient state, since it's only relevant while logical plan
