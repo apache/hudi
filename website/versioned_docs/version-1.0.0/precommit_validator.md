@@ -7,7 +7,13 @@ Data quality refers to the overall accuracy, completeness, consistency, and vali
 
 Hudi offers **Pre-Commit Validators** that allow you to ensure that your data meets certain data quality expectations as you are writing with Hudi Streamer or Spark Datasource writers.
 
-To configure pre-commit validators, use this setting `hoodie.precommit.validators=<comma separated list of validator class names>`.
+:::note
+Pre-commit validators are skipped when using the [BULK_INSERT](/docs/write_operations#bulk_insert) write operation type.
+:::
+
+Multiple class names can be separated by `,` delimiter.
+
+Syntax: `hoodie.precommit.validators=class_name1,class_name2`
 
 Example:
 ```scala
@@ -49,6 +55,10 @@ This validator is useful when you want to verify that your query does not change
 - Validate that there are no duplicate records after your query runs
 - Validate that you are only updating the data, and no inserts slip through
 
+Multiple queries can be separated by `;` delimiter.
+
+Syntax: `query1;query2`
+
 Example:
 ```scala
 // In this example, we set up a validator that expects no change of null rows with the new commit
@@ -66,6 +76,10 @@ df.write.format("hudi").mode(Overwrite).
 [org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQueryInequalityPreCommitValidator.java)
 
 The SQL Query Inquality validator runs a query before ingesting the data, then runs the same query after ingesting the data and confirms that both outputs DO NOT match. This allows you to confirm changes in the rows before and after the commit.
+
+Multiple queries can be separated by `;` delimiter.
+
+Syntax: `query1;query2`
 
 Example:
 ```scala
