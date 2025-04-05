@@ -291,8 +291,20 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   /**
-   * Here we're adjusting incoming (source) dataset in case its schema is divergent from
-   * the target table, to make sure it (at a bare minimum)
+   * Here we're processing the logical plan of the source table and optionally the target
+   * table to get it prepared for writing the data into the Hudi table:
+   * <ul>
+   * <li> For a target table with record key(s) configure, the source table
+   * [[mergeInto.sourceTable]] is used.
+   * <li> For a primary keyless target table, the source table [[mergeInto.sourceTable]]
+   * and target table [[mergeInto.targetTable]] are left-outer joined based the on the
+   * merge condition so that the record key stored in the record key meta column
+   * (`_hoodie_record_key`) are attached to the input records if they are updates.
+   * </ul>
+   *
+   * After getting the initial logical plan to precess as above, we're adjusting incoming
+   * (source) dataset in case its schema is divergent from the target table, to make sure
+   * it contains all the required columns for MERGE INTO (at a bare minimum)
    *
    * <ol>
    *   <li>Contains "primary-key" column (as defined by target table's config)</li>
@@ -335,7 +347,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // for a Hudi table with record key, we use the source table and rely on Hudi's tagging
     // to identify inserts, updates, and deletes to avoid the join
     val inputPlan = if (!hasPrimaryKey()) {
-      // We want to join the source and target tables.
+      // For a primary keyless target table, join the source and target tables.
       // Then we want to project the output so that we have the meta columns from the target table
       // followed by the data columns of the source table
       val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
@@ -343,6 +355,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
       Project(tableMetaCols ++ incomingDataCols, joinData)
     } else {
+      // For a target table with record key(s) configure, the source table is used
       mergeInto.sourceTable
     }
 
@@ -782,6 +795,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       CANONICALIZE_SCHEMA.key -> "false",
       SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true",
       HoodieSparkSqlWriter.SQL_MERGE_INTO_WRITES.key -> "true",
+      // Only primary keyless table requires prepped keys and upsert
       HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY -> isPrimaryKeylessTable.toString,
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(preCombineField)).toString
     )
