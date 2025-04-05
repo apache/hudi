@@ -62,7 +62,7 @@ Hudi uses the creation of an action-complete file (e:g .commit, .deltacommit, .c
 1. Creation of the action complete file in .hoodie timeline 
 2. Storing the action completion time in the table format's commit metadata.
 
-The Hudi timeline is still very much used for all internal operations and the table format's commit metadat will be an overlay on top of this.
+The Hudi timeline is still very much used for all internal operations and the table format's commit metadata will be an overlay on top of this.
 With this, the action is only completed when both the above steps are completed. The plugin provided timeline needs to fence the timeline ensuring the definition of complete stays consistent.  This ensures the snapshot isolation is maintained.
 
 There will be a hudi table-property "hudi.table.format.plugin" to identify the table format with default being "native". This allows consistency in plugin behaviors across all hudi writers.
@@ -88,7 +88,7 @@ External Table format implementation  needs to rollback failed writes and also b
  
 ### Layout:
 
-The metadata corresponding to the table format (iceberg, ..) will be stored under .hoodie/ folder.
+The metadata corresponding to the table format (iceberg, ..) will be stored under .hoodie/ folder by default with location stored in hoodie.properties.
 
 ## Integration
 
@@ -102,7 +102,7 @@ The key points here are:
 3. The external table format will be configured as part of table properties to ensure all writers can recognize it.
 4. When each of Hudi's actions (write, clean, rollback,..) complete, Hudi will call ther external table format plugin. It is the plugin's responsibility to record necessary metadata for external format readers to query this table. 
 5. Hudi will use the external table format plugin's timeline implementation which uses the state stored in its metadata as the source of truth. For example, an iceberg plugin needs to create a manifest file when action completes and provides a timeline that honors the state in its snapshot files. Hudi uses this timeline to determine what actions completed and what failed (for rollback). 
-6. The external plugin also needs to provide LockProvider and Conflict Resolution implementations that allows the concurrency controls supported by the external table format to be exercised (for example: optimistice concurrency control).
+6. The external plugin also needs to provide LockProvider and Conflict Resolution implementations that allows the concurrency controls supported by the external table format to be exercised (for example: optimistic concurrency control).
 7. The plugin also provides capability to allow its metadata to be used by the Hudi writer.
 8. The external table format's metadata along with Hudi's data files combined allows the table to be read as if it is written directly in external table format.
 
@@ -115,7 +115,7 @@ The key points here are:
 
 ## Codebase:
 
-The pluggable interface and Hudi's native format implementation will reside in hudi codebase while support for other systems will be done in X-table.
+The pluggable interface and Hudi's native format implementation will reside in hudi codebase while support for other systems will be done in Apache XTable (Incubating).
 
 
 The lakehouse platform interacts with this plugin and the table can be queried using the table format corresponding to the plugin. Here is the interface definition:
@@ -173,7 +173,7 @@ public interface HoodieTableFormat implements Serializable {
   );
 
   /**
-   * Callback to complete finish clean operation by the plugin.
+   * Callback to complete finish rollback operation by the plugin.
    * @param metaClient   HoodieTableMetaClient for interacting with Hudi's internal metadata.
    * @param viewManager  FileSystem Manager to fetch table's file-system view.
    * @param rollbackMetadata Rollback Metadata containing the instants rolledback and files deleted.
@@ -225,7 +225,7 @@ public interface HoodieTableFormat implements Serializable {
 ## **Rollout/Adoption Plan**
 
 *   For existing tables, utility to construct the table format for the first time.
-*   Configuration of plugin to turn on specific formats. Default will be native.
+*   Configuration of plugin through reflection to turn on specific formats. Default will be native.
 *   Add support in 1.x
 
 
