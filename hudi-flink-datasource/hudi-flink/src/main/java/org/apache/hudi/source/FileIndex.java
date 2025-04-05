@@ -157,22 +157,25 @@ public class FileIndex implements Serializable {
     if (partitions.length < 1) {
       return Collections.emptyList();
     }
-    Map<String, List<StoragePathInfo>> partition2Files = FSUtils.getFilesInPartitions(
+    Map<String, List<StoragePathInfo>> filesInPartitions = FSUtils.getFilesInPartitions(
         new HoodieFlinkEngineContext(hadoopConf),
         new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString(), partitions);
+    int totalFilesNum = filesInPartitions.values().stream().mapToInt(List::size).sum();
+    if (totalFilesNum < 1) {
+      // returns early for empty table.
+      return Collections.emptyList();
+    }
 
     List<StoragePathInfo> allFiles;
     // bucket pruning
     if (this.partitionBucketIdFunc != null) {
-      allFiles = partition2Files.entrySet().stream().flatMap(entry -> {
-        String partitionPath = entry.getKey();
-        int bucketId = partitionBucketIdFunc.apply(partitionPath);
-        String bucketIdStr = BucketIdentifier.bucketIdStr(bucketId);
-        List<StoragePathInfo> filesInPartition = entry.getValue();
-        return filesInPartition.stream().filter(fileInfo -> fileInfo.getPath().getName().contains(bucketIdStr));
+      allFiles = filesInPartitions.entrySet().stream().flatMap(entry -> {
+        String bucketIdStr = BucketIdentifier.bucketIdStr(partitionBucketIdFunc.apply(entry.getKey()));
+        return entry.getValue().stream().filter(fileInfo -> fileInfo.getPath().getName().contains(bucketIdStr));
       }).collect(Collectors.toList());
+      logPruningMsg(totalFilesNum, allFiles.size(), "bucket pruning");
     } else {
-      allFiles = partition2Files.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
+      allFiles = filesInPartitions.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
     }
 
     if (allFiles.isEmpty()) {
