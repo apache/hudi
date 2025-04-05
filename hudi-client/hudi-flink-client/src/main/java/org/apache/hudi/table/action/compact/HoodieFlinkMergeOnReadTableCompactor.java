@@ -21,8 +21,10 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.FlinkRowDataReaderContext;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -93,5 +95,40 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
         InternalSchemaManager.get(flinkEngineContext.getFlinkConf(), metaClient),
         Collections.emptyList());
     return compactionHandler.compactUsingFileGroupReader(instantTime, operation, writeConfig, readerContext, conf);
+  }
+
+  public List<WriteStatus> compact(HoodieEngineContext context,
+                                   HoodieCompactionHandler compactionHandler,
+                                   HoodieTableMetaClient metaClient,
+                                   HoodieWriteConfig writeConfig,
+                                   CompactionOperation operation,
+                                   String instantTime,
+                                   String maxInstantTime,
+                                   TaskContextSupplier taskContextSupplier) throws IOException {
+    boolean useFileGroupReaderBasedCompaction = context.supportsFileGroupReader()                   // the engine needs to support fg reader first
+        && !metaClient.isMetadataTable()
+        && writeConfig.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+        && operation.getBootstrapFilePath().isEmpty()
+        && writeConfig.populateMetaFields()                                                         // Virtual key support by fg reader is not ready
+        && !(metaClient.getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor());  // do not support produce cdc log during fg reader
+
+    if (useFileGroupReaderBasedCompaction) {
+      return compact(
+          compactionHandler,
+          metaClient,
+          writeConfig,
+          operation,
+          instantTime,
+          Option.empty());
+    } else {
+      return compact(
+          compactionHandler,
+          metaClient,
+          writeConfig,
+          operation,
+          instantTime,
+          maxInstantTime,
+          taskContextSupplier);
+    }
   }
 }

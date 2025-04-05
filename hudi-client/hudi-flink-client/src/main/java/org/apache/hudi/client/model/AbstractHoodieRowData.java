@@ -19,7 +19,7 @@
 package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalData;
@@ -61,9 +61,7 @@ public abstract class AbstractHoodieRowData implements RowData {
   }
 
   public void updateMetaField(int pos, String value) {
-    if (pos >= metaColumnsNum) {
-      throw new HoodieException("Invalid position for metadata field: " + pos);
-    }
+    ValidationUtils.checkArgument(pos < metaColumnsNum, "Invalid position for metadata field: " + pos);
     metaColumns[pos] = value;
   }
 

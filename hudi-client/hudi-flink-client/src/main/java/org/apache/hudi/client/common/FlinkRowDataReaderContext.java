@@ -114,15 +114,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         .mapToInt(i -> i)
         .toArray();
 
-    ClosableIterator<RowData> closableIterator =
-        fileReader.getRowDataIterator(
-            fieldNames,
-            fieldTypes,
-            selectedFields,
-            predicates,
-            filePath,
-            start,
-            length);
+    ClosableIterator<RowData> closableIterator = fileReader.getRowDataIterator(
+        fieldNames, fieldTypes, selectedFields, predicates, filePath, start, length);
 
     if (isLogFile) {
       // the rowdata get from the iterator should be copied because:
@@ -162,11 +155,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   @Override
   public Object getValue(RowData record, Schema schema, String fieldName) {
     Option<RowData.FieldGetter> fieldGetterOpt = HoodieRowDataUtil.getFieldGetter(schema, fieldName);
-    try {
-      return fieldGetterOpt.isEmpty() ? null : fieldGetterOpt.get().getFieldOrNull(record);
-    } catch (Exception e) {
-      throw new HoodieException("error");
-    }
+    return fieldGetterOpt.isEmpty() ? null : fieldGetterOpt.get().getFieldOrNull(record);
   }
 
   @Override
@@ -190,18 +179,17 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     HoodieKey hoodieKey = new HoodieKey(
         (String) metadataMap.get(INTERNAL_META_RECORD_KEY),
         (String) metadataMap.get(INTERNAL_META_PARTITION_PATH));
-    // delete record
-    if (recordOption.isEmpty()) {
-      return new HoodieEmptyRecord<>(hoodieKey, HoodieRecord.HoodieRecordType.FLINK);
-    }
-    RowData rowData = recordOption.get();
-    HoodieOperation operation = HoodieOperation.fromValue(rowData.getRowKind().toByteValue());
-
     Comparable orderingValue;
     if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
       orderingValue = (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
     } else {
       throw new HoodieException("There should be ordering value in metadataMap.");
+    }
+    RowData rowData = recordOption.get();
+    HoodieOperation operation = HoodieOperation.fromValue(rowData.getRowKind().toByteValue());
+    // delete record
+    if (recordOption.isEmpty()) {
+      return new HoodieEmptyRecord<>(hoodieKey, operation, orderingValue, HoodieRecord.HoodieRecordType.FLINK);
     }
     return new HoodieFlinkRecord(hoodieKey, operation, orderingValue, rowData);
   }

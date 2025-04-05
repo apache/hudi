@@ -21,9 +21,9 @@ package org.apache.hudi.schema;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.configuration.HadoopConfigurations;
 
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;

@@ -20,9 +20,9 @@ package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.parquet.RecordIterators;
 import org.apache.hudi.table.expression.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.io.parquet.RecordIterators;
 import org.apache.hudi.table.format.InternalSchemaManager;
 
 import org.apache.flink.api.common.io.FileInputFormat;
