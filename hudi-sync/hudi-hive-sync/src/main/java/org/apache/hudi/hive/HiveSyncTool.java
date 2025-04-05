@@ -158,10 +158,15 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
               : Option.of(tableName + SUFFIX_READ_OPTIMIZED_TABLE);
           break;
         default:
-          LOG.error("Unknown table type " + syncClient.getTableType());
-          throw new InvalidTableException(syncClient.getBasePath());
+          throwInvalidTableTypeException();
       }
     }
+  }
+
+  private void throwInvalidTableTypeException() {
+    String errMsg = String.format("Unknown table type %s", syncClient.getTableType());
+    LOG.error(errMsg);
+    throw new InvalidTableException(syncClient.getBasePath(), errMsg);
   }
 
   @Override
@@ -210,8 +215,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         }
         break;
       default:
-        LOG.error("Unknown table type " + syncClient.getTableType());
-        throw new InvalidTableException(syncClient.getBasePath());
+        throwInvalidTableTypeException();
     }
   }
 

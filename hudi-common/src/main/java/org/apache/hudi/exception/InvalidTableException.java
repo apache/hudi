@@ -18,16 +18,20 @@
 
 package org.apache.hudi.exception;
 
+import org.apache.hudi.common.util.StringUtils;
+
 /**
  * Exception thrown to indicate that a hoodie table is invalid.
  */
 public class InvalidTableException extends HoodieException {
 
-  public InvalidTableException(String basePath) {
-    super(getErrorMessage(basePath));
+  public InvalidTableException(String basePath, String error) {
+    super(buildErrorMessage(basePath, error));
   }
 
-  private static String getErrorMessage(String basePath) {
-    return "Invalid Hoodie Table. " + basePath;
+  private static String buildErrorMessage(String basePath, String error) {
+    return StringUtils.isNullOrEmpty(error)
+        ? "Invalid Hoodie Table: " + basePath
+        : "Invalid Hoodie Table (" + error + "): " + basePath;
   }
 }
