@@ -20,13 +20,13 @@ package org.apache.spark.sql.hudi.dml
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField}
@@ -1685,5 +1685,77 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(3, "a3", 30.0, 1003, "2024-01-14"))
       }
     }
+  }
+
+  test("Partial updates for table version 6 and 8 handled gracefully in MIT") {
+    Seq(HoodieTableVersion.EIGHT.versionCode()).foreach(
+      tableVersion => withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | CREATE TABLE $tableName (
+             |   record_key STRING,
+             |   name STRING,
+             |   age INT,
+             |   department STRING,
+             |   salary DOUBLE,
+             |   ts BIGINT
+             | ) USING hudi
+             | PARTITIONED BY (department)
+             | LOCATION '${tmp.getCanonicalPath}'
+             | TBLPROPERTIES (
+             |   type = 'mor',
+             |   hoodie.write.table.version = '$tableVersion',
+             |   hoodie.index.type = 'GLOBAL_SIMPLE',
+             |   hoodie.index.global.index.enable = 'true',
+             |   hoodie.bloom.index.use.metadata = 'true',
+             |   primaryKey = 'record_key',
+             |   preCombineField = 'ts')""".stripMargin)
+
+        spark.sql(
+          s"""
+             |INSERT INTO $tableName
+             |SELECT * FROM (
+             |  SELECT 'emp_001' as record_key, 'John Doe' as name, 30 as age,
+             |         'Sales' as department, 80000.0 as salary, 1598886000 as ts
+             |  UNION ALL
+             |  SELECT 'emp_002', 'Jane Smith', 28, 'Sales', 75000.0, 1598886001
+             |  UNION ALL
+             |  SELECT 'emp_003', 'Bob Wilson', 35, 'Marketing', 85000.0, 1598886002
+             |)""".stripMargin)
+
+        spark.sql(
+          s"""
+             | UPDATE $tableName
+             | SET
+             |     ts = 1598000000
+             | WHERE record_key = 'emp_001'
+             |""".stripMargin)
+
+        spark.sql(
+          s"""
+             | CREATE OR REPLACE TEMPORARY VIEW source_updates AS
+             | SELECT * FROM (
+             |   SELECT 'emp_001' as record_key, 'John Doe' as name, 30 as age,
+             |          'Engineering' as department, CAST(95000.0 as DOUBLE) as salary, cast(1598886200 as BIGINT) as ts
+             |   UNION ALL
+             |   SELECT 'emp_004', 'Alice Brown', 29, 'Engineering', CAST(82000.0 as DOUBLE), cast(1598886201 as BIGINT)
+             |)""".stripMargin)
+
+        spark.sql(
+          s"""
+             | MERGE INTO $tableName t
+             | USING source_updates s
+             | ON t.record_key = s.record_key
+             | WHEN MATCHED THEN
+             |   UPDATE SET
+             |     record_key = s.record_key,
+             |     department = s.department,
+             |     salary = s.salary,
+             |     ts = s.ts
+             | WHEN NOT MATCHED THEN
+             |   INSERT *""".stripMargin)
+      }
+    )
   }
 }
