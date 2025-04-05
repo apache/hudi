@@ -37,6 +37,7 @@ abstract class BaseProcedure extends Procedure {
 
   protected def getWriteConfig(basePath: String): HoodieWriteConfig = {
     HoodieWriteConfig.newBuilder
+      .withAutoCommit(true)
       .withPath(basePath)
       .withIndexConfig(HoodieIndexConfig.newBuilder.withIndexType(IndexType.BLOOM).build)
       .build

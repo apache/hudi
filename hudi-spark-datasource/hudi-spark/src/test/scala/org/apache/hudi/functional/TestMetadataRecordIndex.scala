@@ -162,6 +162,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
   private def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
     val props = TypedProperties.fromMap(hudiOpts.asJava)
     HoodieWriteConfig.newBuilder()
+      .withAutoCommit(true)
       .withProps(props)
       .withPath(basePath)
       .build()
