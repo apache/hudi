@@ -506,9 +506,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.key,
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean
       && updatingActions.nonEmpty
+      // Partial update is enabled only for table version >= 8
       && (parameters.getOrElse(HoodieWriteConfig.WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode().toString).toInt
       >= HoodieTableVersion.EIGHT.versionCode())
-      && !useGlobalIndex(parameters))
+      // Partial update is disabled when global index is used.
+      // After HUDI-9257 is done, we can remove this limitation.
+      && !useGlobalIndex(parameters)
+      // Partial update is disabled when custom merge mode is set.
+      && !useCustomMergeMode(parameters))
   }
 
   private def getOperationType(parameters: Map[String, String]) = {
@@ -782,7 +787,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
       RECORD_MERGE_IMPL_CLASSES.key -> classOf[HoodieAvroRecordMerger].getName,
-      HoodieWriteConfig.RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
+      HoodieWriteConfig.RECORD_MERGE_MODE.key() -> hoodieCatalogTable.tableConfig.getRecordMergeMode.name,
       RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
 
       // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
@@ -1094,6 +1099,15 @@ object MergeIntoHoodieTableCommand {
       case (hoodieIndex, config) if indexType == hoodieIndex.name =>
         parameters.getOrElse(config.key, config.defaultValue().toString).toBoolean
     }.getOrElse(false)
+  }
+
+  def useCustomMergeMode(parameters: Map[String, String]): Boolean = {
+    val mergeModeOpt = parameters.get(DataSourceWriteOptions.RECORD_MERGE_MODE.key)
+    // For table version >= 8, mergeMode should exist.
+    if (mergeModeOpt.isEmpty) {
+      throw new HoodieException("Merge mode cannot be null here")
+    }
+    mergeModeOpt.get.equals(RecordMergeMode.CUSTOM.name)
   }
 }
 
