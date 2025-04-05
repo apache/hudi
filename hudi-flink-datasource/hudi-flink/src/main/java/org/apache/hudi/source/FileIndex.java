@@ -172,12 +172,7 @@ public class FileIndex implements Serializable {
         return filesInPartition.stream().filter(fileInfo -> fileInfo.getPath().getName().contains(bucketIdStr));
       }).collect(Collectors.toList());
     } else {
-      allFiles = FSUtils.getFilesInPartitions(
-              new HoodieFlinkEngineContext(hadoopConf),
-              new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString(), partitions)
-          .values().stream()
-          .flatMap(Collection::stream)
-          .collect(Collectors.toList());
+      allFiles = partition2Files.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
     }
 
     if (allFiles.isEmpty()) {
