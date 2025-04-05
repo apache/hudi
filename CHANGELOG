@@ -705,3 +705,6 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-17863][HUDI-8823] Ban update from updating primary key and partition key (#1297)
 [ENG-23109][HUDI-9083] Fixing flakiness with multi writer test (#1309)
 [AUDIT-1071]: Changelog for release-v1.106.0 (#1295)
+
+--- [2025-04-05 21:08:08] [release-v1.108.0] ---
+[AUDIT-1263]: Changelog for release-v1.107.0 (#1311)
