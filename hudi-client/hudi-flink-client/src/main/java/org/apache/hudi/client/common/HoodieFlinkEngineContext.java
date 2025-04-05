@@ -110,6 +110,11 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
     return HoodieListData.eager(data);
   }
 
+  @Override
+  public boolean supportsFileGroupReader() {
+    return true;
+  }
+
   public RuntimeContext getRuntimeContext() {
     return this.runtimeContext;
   }

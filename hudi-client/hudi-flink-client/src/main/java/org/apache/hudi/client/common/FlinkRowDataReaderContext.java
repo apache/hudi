@@ -24,6 +24,7 @@ import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.storage.row.RowDataFileReader;
@@ -59,6 +61,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -93,6 +96,13 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       Schema dataSchema,
       Schema requiredSchema,
       HoodieStorage storage) throws IOException {
+    // dataSchema and requiredSchema for log data block is the write schema stored in block header,
+    // set them with table schema and required schema from schema handler to support schema evolution.
+    boolean isLogFile = FSUtils.isLogFile(filePath);
+    if (isLogFile) {
+      dataSchema = getSchemaHandler().getTableSchema();
+      requiredSchema = getSchemaHandler().getRequiredSchema();
+    }
     RowDataFileReaderFactories.Factory readerFactory = RowDataFileReaderFactories.getFactory(HoodieFileFormat.PARQUET);
     RowDataFileReader fileReader = readerFactory.createFileReader(internalSchemaManager, flinkConf);
 
@@ -104,14 +114,31 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         .mapToInt(i -> i)
         .toArray();
 
-    return fileReader.getRowDataIterator(
-        fieldNames,
-        fieldTypes,
-        selectedFields,
-        predicates,
-        filePath,
-        start,
-        length);
+    ClosableIterator<RowData> closableIterator =
+        fileReader.getRowDataIterator(
+            fieldNames,
+            fieldTypes,
+            selectedFields,
+            predicates,
+            filePath,
+            start,
+            length);
+
+    if (isLogFile) {
+      // the rowdata get from the iterator should be copied because:
+      // 1. the underlying flink parquet reader is vector reader, which reads records as `ColumnarRowData`, and `ColumnarRowData` is a reused object.
+      // 2. the rowdata read from the iterator will be cached in `FileGroupRecordBuffer`
+      RowType requiredRowType = (RowType) AvroSchemaConverter.convertToDataType(getSchemaHandler().getRequiredSchema()).getLogicalType();
+      rowDataSerializer = new RowDataSerializer(requiredRowType);
+      return new CloseableMappingIterator<>(closableIterator, new Function<RowData, RowData>() {
+        @Override
+        public RowData apply(RowData rowData) {
+          return rowDataSerializer.copy(rowData);
+        }
+      });
+    } else {
+      return closableIterator;
+    }
   }
 
   @Override
@@ -135,7 +162,11 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   @Override
   public Object getValue(RowData record, Schema schema, String fieldName) {
     Option<RowData.FieldGetter> fieldGetterOpt = HoodieRowDataUtil.getFieldGetter(schema, fieldName);
-    return fieldGetterOpt.isEmpty() ? null : fieldGetterOpt.get().getFieldOrNull(record);
+    try {
+      return fieldGetterOpt.isEmpty() ? null : fieldGetterOpt.get().getFieldOrNull(record);
+    } catch (Exception e) {
+      throw new HoodieException("error");
+    }
   }
 
   @Override
@@ -234,6 +265,11 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         dataFileIterator.close();
       }
     };
+  }
+
+  @Override
+  public boolean supportsLogReaderSchemaEvolution() {
+    return true;
   }
 
   @Override

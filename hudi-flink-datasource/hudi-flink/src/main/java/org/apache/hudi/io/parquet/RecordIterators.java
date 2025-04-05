@@ -21,6 +21,8 @@ package org.apache.hudi.io.parquet;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 import org.apache.hudi.table.expression.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.CastMap;
 import org.apache.hudi.table.format.InternalSchemaManager;
@@ -76,7 +78,7 @@ public abstract class RecordIterators {
     }
     UnboundRecordFilter recordFilter = getUnboundRecordFilterInstance(conf);
 
-    InternalSchema mergeSchema = internalSchemaManager.getMergeSchema(path.getName());
+    InternalSchema mergeSchema = internalSchemaManager.getMergeSchema(getFileName(path));
     if (mergeSchema.isEmptySchema()) {
       return new ParquetSplitRecordIterator(
           ParquetSplitReaderUtil.genPartColumnarRowReader(
@@ -117,6 +119,13 @@ public abstract class RecordIterators {
         return itr;
       }
     }
+  }
+
+  private static String getFileName(Path path) {
+    if (InLineFSUtils.SCHEME.equals(path.toUri().getScheme())) {
+      return InLineFSUtils.getOuterFilePathFromInlinePath(new StoragePath(path.toUri())).getName();
+    }
+    return path.getName();
   }
 
   private static FilterPredicate getFilterPredicate(Configuration configuration) {

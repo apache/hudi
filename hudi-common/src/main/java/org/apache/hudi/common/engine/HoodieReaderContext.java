@@ -415,6 +415,13 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
+   * Return whether the log reader supports schema evolution.
+   */
+  public boolean supportsLogReaderSchemaEvolution() {
+    return false;
+  }
+
+  /**
    * Encodes the given avro schema for efficient serialization.
    */
   private Integer encodeAvroSchema(Schema schema) {
