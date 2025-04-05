@@ -121,7 +121,7 @@ public class TableSchemaResolver {
    * @return Avro schema for this table
    * @throws Exception
    */
-  public Schema getTableAvroSchema() throws Exception {
+  public Schema getTableAvroSchema() throws HoodieSchemaNotFoundException {
     return getTableAvroSchema(metaClient.getTableConfig().populateMetaFields());
   }
 
@@ -132,7 +132,7 @@ public class TableSchemaResolver {
    * @return Avro schema for this table
    * @throws Exception
    */
-  public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
+  public Schema getTableAvroSchema(boolean includeMetadataFields) throws HoodieSchemaNotFoundException {
     return getTableAvroSchemaInternal(includeMetadataFields, Option.empty()).orElseThrow(schemaNotFoundError());
   }
 
@@ -510,7 +510,7 @@ public class TableSchemaResolver {
     return dataSchema;
   }
 
-  private Supplier<Exception> schemaNotFoundError() {
+  private Supplier<HoodieSchemaNotFoundException> schemaNotFoundError() {
     return () -> new HoodieSchemaNotFoundException("No schema found for table at " + metaClient.getBasePath());
   }
 }
