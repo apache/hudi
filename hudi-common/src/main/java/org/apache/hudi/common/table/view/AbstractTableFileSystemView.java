@@ -98,7 +98,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   protected HoodieTableMetaClient metaClient;
 
-  protected  CompletionTimeQueryView completionTimeQueryView;
+  protected CompletionTimeQueryView completionTimeQueryView;
 
   // This is the commits timeline that will be visible for all views extending this view
   // This is nothing but the write timeline, which contains both ingestion and compaction(major and minor) writers.
@@ -438,10 +438,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       // Not loaded yet
       try {
         LOG.info("Building file system view for partition ({})", partition);
-        List<HoodieFileGroup> groups = addFilesToView(partition, getAllFilesInPartition(partition));
-        if (groups.isEmpty()) {
-          storePartitionView(partition, Collections.emptyList());
-        }
+        addFilesToView(partition, getAllFilesInPartition(partition));
       } catch (IOException e) {
         throw new HoodieIOException("Failed to list base files in partition " + partition, e);
       }
