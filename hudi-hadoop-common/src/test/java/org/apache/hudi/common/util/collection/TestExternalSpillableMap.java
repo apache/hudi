@@ -54,7 +54,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -104,7 +103,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       assertEquals(recordKeys.size(), cntSize);
 
       // Test value stream
-      List<HoodieRecord<? extends HoodieRecordPayload>> values = records.valueStream().collect(Collectors.toList());
+      List<HoodieRecord<? extends HoodieRecordPayload>> values = new ArrayList<>(records.values());
       cntSize = 0;
       for (HoodieRecord value : values) {
         assert recordKeys.contains(value.getRecordKey());
@@ -456,7 +455,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       assertTrue(records.keySet().isEmpty());
       assertTrue(records.values().isEmpty());
       assertTrue(records.entrySet().isEmpty());
-      assertEquals(0, records.valueStream().count());
+      assertEquals(0, records.values().size());
       assertEquals(0, records.size());
       assertFalse(records.iterator().hasNext());
     }
