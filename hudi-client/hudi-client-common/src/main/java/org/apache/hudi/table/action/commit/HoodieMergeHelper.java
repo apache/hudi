@@ -129,7 +129,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       }
 
       boolean isBufferingRecords = ExecutorFactory.isBufferingRecords(writeConfig);
-
+      // FIXME-vc: this is not closed.
       executor = ExecutorFactory.create(writeConfig, recordIterator, new UpdateHandler(mergeHandle), record -> {
         HoodieRecord newRecord;
         if (schemaEvolutionTransformerOpt.isPresent()) {

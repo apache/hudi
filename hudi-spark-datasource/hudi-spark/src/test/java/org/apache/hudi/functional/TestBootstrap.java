@@ -95,7 +95,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -549,18 +548,19 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
       try {
         Configuration conf = jsc.hadoopConfiguration();
         AvroReadSupport.setAvroReadSchema(conf, writerSchema);
-        Iterator<GenericRecord> recIterator = new ParquetReaderIterator(
-            AvroParquetReader.<GenericRecord>builder(p.getValue()).withConf(conf).build());
-        return StreamSupport.stream(Spliterators.spliteratorUnknownSize(recIterator, 0), false).map(gr -> {
-          try {
-            String key = gr.get("_row_key").toString();
-            String pPath = p.getKey();
-            return new HoodieAvroRecord<>(new HoodieKey(key, pPath), new RawTripTestPayload(gr.toString(), key, pPath,
-                HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
-          } catch (IOException e) {
-            throw new HoodieIOException(e.getMessage(), e);
-          }
-        });
+        try (ParquetReaderIterator<GenericRecord> recIterator = new ParquetReaderIterator(
+            AvroParquetReader.<GenericRecord>builder(p.getValue()).withConf(conf).build())) {
+          return StreamSupport.stream(Spliterators.spliteratorUnknownSize(recIterator, 0), false).map(gr -> {
+            try {
+              String key = gr.get("_row_key").toString();
+              String pPath = p.getKey();
+              return new HoodieAvroRecord<>(new HoodieKey(key, pPath), new RawTripTestPayload(gr.toString(), key, pPath,
+                  HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
+            } catch (IOException e) {
+              throw new HoodieIOException(e.getMessage(), e);
+            }
+          });
+        }
       } catch (IOException ioe) {
         throw new HoodieIOException(ioe.getMessage(), ioe);
       }

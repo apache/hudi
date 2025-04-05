@@ -100,6 +100,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema schema) throws IOException {
+    // FIXME-vc: need some special eyes on these two methods.
     return getIndexedRecordIteratorInternal(schema);
   }
 

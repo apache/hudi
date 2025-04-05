@@ -132,7 +132,9 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     val records = scala.collection.mutable.ListBuffer.empty[HoodieRecord[_]]
     val blocks = getCDCBlocks(relativeLogFile, cdcSchema)
     blocks.foreach { block =>
-      records.asJava.addAll(block.getRecordIterator[IndexedRecord](HoodieRecordType.AVRO).asScala.toList.asJava)
+      val itr = block.getRecordIterator[IndexedRecord](HoodieRecordType.AVRO)
+      records.asJava.addAll(itr.asScala.toList.asJava)
+      itr.close()
     }
     records.toList
   }

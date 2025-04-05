@@ -109,6 +109,7 @@ public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
         LOG.info("Converting Kafka source objects to strings with stageId : {}, stage attempt no: {}, taskId : {}, task attempt no : {}, task attempt id : {} ",
             taskContext.stageId(), taskContext.stageAttemptNumber(), taskContext.partitionId(), taskContext.attemptNumber(),
             taskContext.taskAttemptId());
+        // FIXME-vc: need to close the iterator.
         return new CloseableMappingIterator<>(ClosableIterator.wrap(partitionIterator), consumerRecord -> {
           String recordKey;
           String record;

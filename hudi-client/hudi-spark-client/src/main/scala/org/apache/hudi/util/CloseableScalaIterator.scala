@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator
  */
 class CloseableScalaIterator[T](iterator: Iterator[T]) extends ClosableIterator[T] {
   override def close(): Unit = {
+    // FIXME-vc: so this doesnot call iterator.close()?
   }
 
   override def hasNext: Boolean = {

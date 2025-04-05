@@ -78,13 +78,14 @@ public class TestLegacyArchivedMetaEntryReader {
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareLegacyArchivedTimeline(metaClient);
     LegacyArchivedMetaEntryReader reader = new LegacyArchivedMetaEntryReader(metaClient);
-    ClosableIterator<ActiveAction> iterator = reader.getActiveActionsIterator();
-    List<ActiveAction> activeActions = new ArrayList<>();
-    while (iterator.hasNext()) {
-      activeActions.add(iterator.next());
+    try (ClosableIterator<ActiveAction> iterator = reader.getActiveActionsIterator()) {
+      List<ActiveAction> activeActions = new ArrayList<>();
+      while (iterator.hasNext()) {
+        activeActions.add(iterator.next());
+      }
+      assertThat(activeActions.stream().map(ActiveAction::getInstantTime).sorted().collect(Collectors.joining(",")),
+          is("00000001,00000002,00000003,00000004,00000005,00000006,00000007,00000008,00000009,00000010"));
     }
-    assertThat(activeActions.stream().map(ActiveAction::getInstantTime).sorted().collect(Collectors.joining(",")),
-        is("00000001,00000002,00000003,00000004,00000005,00000006,00000007,00000008,00000009,00000010"));
   }
 
   private void prepareLegacyArchivedTimeline(HoodieTableMetaClient metaClient) throws Exception {

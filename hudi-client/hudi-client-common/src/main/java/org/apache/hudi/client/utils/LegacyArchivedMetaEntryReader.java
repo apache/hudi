@@ -85,10 +85,6 @@ public class LegacyArchivedMetaEntryReader {
     return loadInstants(null);
   }
 
-  public ClosableIterator<ActiveAction> getActiveActionsIterator(HoodieArchivedTimeline.TimeRangeFilter filter) {
-    return loadInstants(filter);
-  }
-
   /**
    * Reads the avro record for instant and details.
    */
@@ -251,6 +247,7 @@ public class LegacyArchivedMetaEntryReader {
             HoodieLogBlock block = reader.next();
             if (block instanceof HoodieAvroDataBlock) {
               HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
+              // FIXME-vc: is this closed?
               recordItr = avroBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO);
               if (recordItr.hasNext()) {
                 return true;
@@ -277,6 +274,7 @@ public class LegacyArchivedMetaEntryReader {
             HoodieLogBlock block = reader.next();
             if (block instanceof HoodieAvroDataBlock) {
               HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
+              // FIXME-vc: is this closed?
               recordItr = avroBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO);
               if (recordItr.hasNext()) {
                 return true;

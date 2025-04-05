@@ -266,6 +266,7 @@ public class SecondaryIndexRecordGenerationUtils {
       } else {
         readerSchema = tableSchema;
       }
+      // FIXME-vc: this is not closed.
       return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition,
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""));
     });
