@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import scala.Tuple2;
@@ -75,15 +76,16 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
    * @param keysPerBucket maximum number of keys to pack in a single bucket
    */
   public BucketizedBloomCheckPartitioner(int targetPartitions, Map<HoodieFileGroupId, Long> fileGroupToComparisons,
-      int keysPerBucket) {
-    this.fileGroupToPartitions = new HashMap<>();
+      int keysPerBucket, boolean isBloomIndexParallelismConfigured) {
+    this.fileGroupToPartitions = new TreeMap<>();
 
-    Map<HoodieFileGroupId, Integer> bucketsPerFileGroup = new HashMap<>();
+    Map<HoodieFileGroupId, Integer> bucketsPerFileGroup = new TreeMap<>();
     // Compute the buckets needed per file group, using simple uniform distribution
     fileGroupToComparisons.forEach((f, c) -> bucketsPerFileGroup.put(f, (int) Math.ceil((c * 1.0) / keysPerBucket)));
     int totalBuckets = bucketsPerFileGroup.values().stream().mapToInt(i -> i).sum();
-    // If totalBuckets > targetPartitions, no need to have extra partitions
-    this.partitions = Math.min(targetPartitions, totalBuckets);
+    // If totalBuckets > targetPartitions, no need to have extra partitions if parallelism is explicitly configured.
+    // if not explicitly configured, we will honor max of (totalBuckets or dynamically derived partition count)
+    this.partitions = isBloomIndexParallelismConfigured ? Math.min(targetPartitions, totalBuckets) : Math.max(targetPartitions, totalBuckets);
 
     // PHASE 1 : start filling upto minimum number of buckets into partitions, taking all but one bucket from each file
     // This tries to first optimize for goal 1 above, with knowledge that each partition needs a certain minimum number
