@@ -128,11 +128,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
         return downgradeActiveTimelineInstant(instant, originalFileName, metaClient, commitMetadataSerDeV1, activeTimelineV1);
       }, instants.size());
     }
-    try {
-      downgradeFromLSMTimeline(table, config);
-    } catch (Exception e) {
-      LOG.warn("Failed to downgrade from LSM timeline");
-    }
+    downgradeFromLSMTimeline(table, config);
 
     // downgrade table properties
     downgradePartitionFields(config, metaClient.getTableConfig(), tablePropsToAdd);
