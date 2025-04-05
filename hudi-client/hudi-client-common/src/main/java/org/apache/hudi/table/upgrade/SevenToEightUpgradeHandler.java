@@ -148,7 +148,6 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
 
     upgradeToLSMTimeline(table, context, config);
-
     return tablePropsToAdd;
   }
 

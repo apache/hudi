@@ -106,7 +106,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertTrue(
         storage.exists(new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
-    assertEquals(7, config.getProps().size());
+    assertEquals(8, config.getProps().size());
   }
 
   @Test
@@ -119,7 +119,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertTrue(storage.exists(cfgPath));
     assertFalse(storage.exists(backupCfgPath));
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
-    assertEquals(8, config.getProps().size());
+    assertEquals(9, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
     assertEquals("new_field", config.getPreCombineField());
   }
@@ -133,7 +133,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertTrue(storage.exists(cfgPath));
     assertFalse(storage.exists(backupCfgPath));
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
-    assertEquals(6, config.getProps().size());
+    assertEquals(7, config.getProps().size());
     assertNull(config.getProps().getProperty("hoodie.invalid.config"));
     assertFalse(config.getProps().contains(HoodieTableConfig.TIMELINE_HISTORY_PATH.key()));
   }
@@ -157,7 +157,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertFalse(storage.exists(cfgPath));
     assertTrue(storage.exists(backupCfgPath));
     config = new HoodieTableConfig(storage, metaPath, null, null, null);
-    assertEquals(7, config.getProps().size());
+    assertEquals(8, config.getProps().size());
   }
 
   @ParameterizedTest
@@ -175,7 +175,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertTrue(storage.exists(cfgPath));
     assertFalse(storage.exists(backupCfgPath));
     config = new HoodieTableConfig(storage, metaPath, null, null, null);
-    assertEquals(7, config.getProps().size());
+    assertEquals(8, config.getProps().size());
   }
 
   @Test
