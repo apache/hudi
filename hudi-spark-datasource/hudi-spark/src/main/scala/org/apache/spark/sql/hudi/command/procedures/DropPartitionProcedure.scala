@@ -58,7 +58,7 @@ class DropPartitionProcedure extends BaseProcedure
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, TableIdentifier(table, Some(db)))
 
     val parameters = buildHoodieDropPartitionsConfig(sparkSession, hoodieCatalogTable, partitionsStr)
-    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
+    val (success, _, _, _, _, _, _) = HoodieSparkSqlWriter.write(
       sparkSession.sqlContext,
       SaveMode.Append,
       parameters,
