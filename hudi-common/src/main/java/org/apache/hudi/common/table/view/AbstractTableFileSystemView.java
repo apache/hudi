@@ -62,7 +62,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
@@ -90,6 +89,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  *   <li>resetting file-system views.</li>
  * </ul>
  * The actual mechanism of fetching file slices from different view storages is delegated to sub-classes.
+ * To ensure thread-safety, all public methods fetching state must use the read-lock and any methods updating the state need to use the write-lock
  */
 public abstract class AbstractTableFileSystemView implements SyncableFileSystemView, Serializable {
 
@@ -103,9 +103,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   // This is the commits timeline that will be visible for all views extending this view
   // This is nothing but the write timeline, which contains both ingestion and compaction(major and minor) writers.
   private HoodieTimeline visibleCommitsAndCompactionTimeline;
-
-  // Used to concurrently load and populate partition views
-  private final ConcurrentHashMap<String, Boolean> addedPartitions = new ConcurrentHashMap<>(4096);
 
   // Locks to control concurrency. Sync operations use write-lock blocking all fetch operations.
   // For the common-case, we allow concurrent read of single or multiple partitions
@@ -177,31 +174,41 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Adds the provided statuses into the file system view for a single partition, and also caches it inside this object.
    */
   public List<HoodieFileGroup> addFilesToView(String partitionPath, List<StoragePathInfo> statuses) {
-    HoodieTimer timer = HoodieTimer.start();
-    List<HoodieFileGroup> fileGroups = buildFileGroups(partitionPath, statuses, visibleCommitsAndCompactionTimeline, true);
-    long fgBuildTimeTakenMs = timer.endTimer();
-    timer.startTimer();
-    // Group by partition for efficient updates for both InMemory and DiskBased structures.
-    fileGroups.stream().collect(Collectors.groupingBy(HoodieFileGroup::getPartitionPath))
-        .forEach((partition, value) -> {
-          if (!isPartitionAvailableInStore(partition)) {
-            if (bootstrapIndex.useIndex()) {
-              try (BootstrapIndex.IndexReader reader = bootstrapIndex.createReader()) {
-                LOG.info("Bootstrap Index available for partition {}", partition);
-                List<BootstrapFileMapping> sourceFileMappings =
-                    reader.getSourceFileMappingForPartition(partition);
-                addBootstrapBaseFileMapping(sourceFileMappings.stream()
-                    .map(s -> new BootstrapBaseFileMapping(new HoodieFileGroupId(s.getPartitionPath(),
-                        s.getFileId()), s.getBootstrapFileStatus())));
+    try {
+      writeLock.lock();
+      HoodieTimer timer = HoodieTimer.start();
+      List<HoodieFileGroup> fileGroups = buildFileGroups(partitionPath, statuses, visibleCommitsAndCompactionTimeline, true);
+      long fgBuildTimeTakenMs = timer.endTimer();
+      if (fileGroups.isEmpty()) {
+        LOG.debug("No file groups found for partition: {}", partitionPath);
+        storePartitionView(partitionPath, Collections.emptyList());
+        return Collections.emptyList();
+      }
+      timer.startTimer();
+      // Group by partition for efficient updates for both InMemory and DiskBased structures.
+      fileGroups.stream().collect(Collectors.groupingBy(HoodieFileGroup::getPartitionPath))
+          .forEach((partition, value) -> {
+            if (!isPartitionAvailableInStore(partition)) {
+              if (bootstrapIndex.useIndex()) {
+                try (BootstrapIndex.IndexReader reader = bootstrapIndex.createReader()) {
+                  LOG.info("Bootstrap Index available for partition {}", partition);
+                  List<BootstrapFileMapping> sourceFileMappings =
+                      reader.getSourceFileMappingForPartition(partition);
+                  addBootstrapBaseFileMapping(sourceFileMappings.stream()
+                      .map(s -> new BootstrapBaseFileMapping(new HoodieFileGroupId(s.getPartitionPath(),
+                          s.getFileId()), s.getBootstrapFileStatus())));
+                }
               }
+              storePartitionView(partition, value);
             }
-            storePartitionView(partition, value);
-          }
-        });
-    long storePartitionsTs = timer.endTimer();
-    LOG.debug("addFilesToView: NumFiles={}, NumFileGroups={}, FileGroupsCreationTime={}, StoreTimeTaken={}",
-        statuses.size(), fileGroups.size(), fgBuildTimeTakenMs, storePartitionsTs);
-    return fileGroups;
+          });
+      long storePartitionsTs = timer.endTimer();
+      LOG.debug("addFilesToView: NumFiles={}, NumFileGroups={}, FileGroupsCreationTime={}, StoreTimeTaken={}",
+          statuses.size(), fileGroups.size(), fgBuildTimeTakenMs, storePartitionsTs);
+      return fileGroups;
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   /**
@@ -334,7 +341,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Clear the resource.
    */
   protected void clear() {
-    addedPartitions.clear();
     resetViewState();
     bootstrapIndex = null;
   }
@@ -367,51 +373,40 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param partitionList list of partitions to be loaded if not present.
    */
   private void ensurePartitionsLoadedCorrectly(List<String> partitionList) {
-
     ValidationUtils.checkArgument(!isClosed(), "View is already closed");
+    Set<String> partitionSet;
+    try {
+      readLock.lock();
+      partitionSet = partitionList.stream().filter(partition -> !isPartitionAvailableInStore(partition)).collect(Collectors.toSet());
+    } finally {
+      readLock.unlock();
+    }
+    if (!partitionSet.isEmpty()) {
+      long beginTs = System.currentTimeMillis();
+      // Not loaded yet
+      try {
+        LOG.debug("Building file system view for partitions: {}", partitionSet);
 
-    Set<String> partitionSet = new HashSet<>();
-    synchronized (addedPartitions) {
-      partitionList.forEach(partition -> {
-        if (!addedPartitions.containsKey(partition) && !isPartitionAvailableInStore(partition)) {
-          partitionSet.add(partition);
-        }
-      });
-
-      if (!partitionSet.isEmpty()) {
-        long beginTs = System.currentTimeMillis();
-        // Not loaded yet
-        try {
-          LOG.debug("Building file system view for partitions: {}", partitionSet);
-
-          // Pairs of relative partition path and absolute partition path
-          List<Pair<String, StoragePath>> absolutePartitionPathList = partitionSet.stream()
-              .map(partition -> Pair.of(
-                  partition, FSUtils.constructAbsolutePath(metaClient.getBasePath(), partition)))
-              .collect(Collectors.toList());
-          long beginLsTs = System.currentTimeMillis();
-          Map<Pair<String, StoragePath>, List<StoragePathInfo>> pathInfoMap =
-              tableMetadata.listPartitions(absolutePartitionPathList);
-          long endLsTs = System.currentTimeMillis();
-          LOG.debug("Time taken to list partitions {} ={}", partitionSet, (endLsTs - beginLsTs));
-          pathInfoMap.forEach((partitionPair, statuses) -> {
-            String relativePartitionStr = partitionPair.getLeft();
-            List<HoodieFileGroup> groups = addFilesToView(relativePartitionStr, statuses);
-            if (groups.isEmpty()) {
-              storePartitionView(relativePartitionStr, Collections.emptyList());
-            }
-            LOG.debug("#files found in partition ({}) ={}", relativePartitionStr, statuses.size());
-          });
-        } catch (IOException e) {
-          throw new HoodieIOException("Failed to list base files in partitions " + partitionSet, e);
-        }
-        long endTs = System.currentTimeMillis();
-        LOG.debug("Time to load partition {} ={}", partitionSet, (endTs - beginTs));
+        // Pairs of relative partition path and absolute partition path
+        List<Pair<String, StoragePath>> absolutePartitionPathList = partitionSet.stream()
+            .map(partition -> Pair.of(
+                partition, FSUtils.constructAbsolutePath(metaClient.getBasePath(), partition)))
+            .collect(Collectors.toList());
+        long beginLsTs = System.currentTimeMillis();
+        Map<Pair<String, StoragePath>, List<StoragePathInfo>> pathInfoMap =
+            tableMetadata.listPartitions(absolutePartitionPathList);
+        long endLsTs = System.currentTimeMillis();
+        LOG.debug("Time taken to list partitions {} ={}", partitionSet, (endLsTs - beginLsTs));
+        pathInfoMap.forEach((partitionPair, statuses) -> {
+          String relativePartitionStr = partitionPair.getLeft();
+          addFilesToView(relativePartitionStr, statuses);
+          LOG.debug("#files found in partition ({}) ={}", relativePartitionStr, statuses.size());
+        });
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to list base files in partitions " + partitionSet, e);
       }
-
-      partitionSet.forEach(partition ->
-          addedPartitions.computeIfAbsent(partition, partitionPathStr -> true)
-      );
+      long endTs = System.currentTimeMillis();
+      LOG.debug("Time to load partition {} ={}", partitionSet, (endTs - beginTs));
     }
   }
 
@@ -436,30 +431,22 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param partition partition to be loaded if not present
    */
   protected void ensurePartitionLoadedCorrectly(String partition) {
-
     ValidationUtils.checkArgument(!isClosed(), "View is already closed");
 
-    // ensure we list files only once even in the face of concurrency
-    addedPartitions.computeIfAbsent(partition, (partitionPathStr) -> {
-      long beginTs = System.currentTimeMillis();
-      if (!isPartitionAvailableInStore(partitionPathStr)) {
-        // Not loaded yet
-        try {
-          LOG.info("Building file system view for partition ({})", partitionPathStr);
-          List<HoodieFileGroup> groups = addFilesToView(partitionPathStr, getAllFilesInPartition(partitionPathStr));
-          if (groups.isEmpty()) {
-            storePartitionView(partitionPathStr, new ArrayList<>());
-          }
-        } catch (IOException e) {
-          throw new HoodieIOException("Failed to list base files in partition " + partitionPathStr, e);
-        }
-      } else {
-        LOG.debug("View already built for Partition :{}, FOUND is ", partitionPathStr);
+    long beginTs = System.currentTimeMillis();
+    if (!isPartitionAvailableInStore(partition)) {
+      // Not loaded yet
+      try {
+        LOG.info("Building file system view for partition ({})", partition);
+        addFilesToView(partition, getAllFilesInPartition(partition));
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to list base files in partition " + partition, e);
       }
-      long endTs = System.currentTimeMillis();
-      LOG.debug("Time to load partition ({}) ={}", partitionPathStr, (endTs - beginTs));
-      return true;
-    });
+    } else {
+      LOG.debug("View already built for Partition :{}", partition);
+    }
+    long endTs = System.currentTimeMillis();
+    LOG.debug("Time to load partition ({}) ={}", partition, (endTs - beginTs));
   }
 
   /**
@@ -545,7 +532,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected Stream<FileSlice> filterBaseFileAfterPendingCompaction(FileSlice fileSlice, boolean includeEmptyFileSlice) {
     if (isFileSliceAfterPendingCompaction(fileSlice)) {
-      LOG.debug("File Slice (" + fileSlice + ") is in pending compaction");
+      LOG.debug("File Slice ({}) is in pending compaction", fileSlice);
       // Base file is filtered out of the file-slice as the corresponding compaction
       // instant not completed yet.
       FileSlice transformed = new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
@@ -701,9 +688,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Stream<HoodieBaseFile> getLatestBaseFiles(String partitionStr) {
     try {
-      readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
+      readLock.lock();
       return fetchLatestBaseFiles(partitionPath)
           .filter(df -> !isFileGroupReplaced(partitionPath, df.getFileId()))
           .map(df -> addBootstrapBaseFileIfPresent(new HoodieFileGroupId(partitionPath, df.getFileId()), df));
@@ -725,9 +712,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionStr, String maxCommitTime) {
     try {
-      readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
+      readLock.lock();
       return getLatestBaseFilesBeforeOrOnFromCache(partitionPath, maxCommitTime);
     } finally {
       readLock.unlock();
@@ -737,8 +724,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Map<String, Stream<HoodieBaseFile>> getAllLatestBaseFilesBeforeOrOn(String maxCommitTime) {
     try {
-      readLock.lock();
       List<String> formattedPartitionList = ensureAllPartitionsLoadedCorrectly();
+      readLock.lock();
       return formattedPartitionList.stream().collect(Collectors.toMap(
           Function.identity(),
           partitionPath -> getLatestBaseFilesBeforeOrOnFromCache(partitionPath, maxCommitTime)
@@ -762,9 +749,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Option<HoodieBaseFile> getBaseFileOn(String partitionStr, String instantTime, String fileId) {
     try {
-      readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
+      readLock.lock();
       if (isFileGroupReplacedBeforeOrOn(new HoodieFileGroupId(partitionPath, fileId), instantTime)) {
         return Option.empty();
       } else {
@@ -784,9 +771,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Option<HoodieBaseFile> getLatestBaseFile(String partitionStr, String fileId) {
     try {
-      readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
+      readLock.lock();
       if (isFileGroupReplaced(partitionPath, fileId)) {
         return Option.empty();
       } else {
@@ -815,30 +802,20 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public void loadAllPartitions() {
-    try {
-      readLock.lock();
-      ensureAllPartitionsLoadedCorrectly();
-    } finally {
-      readLock.unlock();
-    }
+    ensureAllPartitionsLoadedCorrectly();
   }
 
   @Override
   public void loadPartitions(List<String> partitionPaths) {
-    try {
-      readLock.lock();
-      ensurePartitionsLoadedCorrectly(partitionPaths);
-    } finally {
-      readLock.unlock();
-    }
+    ensurePartitionsLoadedCorrectly(partitionPaths);
   }
 
   @Override
   public final Stream<HoodieBaseFile> getAllBaseFiles(String partitionStr) {
     try {
-      readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
+      readLock.lock();
       return fetchAllBaseFiles(partitionPath)
           .filter(df -> !isFileGroupReplaced(partitionPath, df.getFileId()))
           .filter(df -> visibleCommitsAndCompactionTimeline.containsOrBeforeTimelineStarts(df.getCommitTime()))
@@ -852,9 +829,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Stream<FileSlice> getLatestFileSlices(String partitionStr) {
     try {
-      readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
+      readLock.lock();
       return fetchLatestFileSlices(partitionPath)
           .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
           .flatMap(slice -> tableVersion8AndAbove()
@@ -868,8 +845,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   public Stream<FileSlice> getLatestFileSlicesIncludingInflight(String partitionPath) {
     try {
-      readLock.lock();
       ensurePartitionLoadedCorrectly(partitionPath);
+      readLock.lock();
       return fetchAllStoredFileGroups(partitionPath)
           .map(HoodieFileGroup::getLatestFileSlicesIncludingInflight)
           .filter(Option::isPresent)
@@ -913,9 +890,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Option<FileSlice> getLatestFileSlice(String partitionStr, String fileId) {
     try {
-      readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
+      readLock.lock();
       if (isFileGroupReplaced(partitionPath, fileId)) {
         return Option.empty();
       } else {
@@ -941,9 +918,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Stream<FileSlice> getLatestUnCompactedFileSlices(String partitionStr) {
     try {
-      readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
+      readLock.lock();
       return fetchAllStoredFileGroups(partitionPath)
           .filter(fg -> !isFileGroupReplaced(fg.getFileGroupId()))
           .map(fileGroup -> {
@@ -966,9 +943,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public final Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionStr, String maxCommitTime,
                                                                boolean includeFileSlicesInPendingCompaction) {
     try {
-      readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
+      readLock.lock();
       Stream<Stream<FileSlice>> allFileSliceStream = fetchAllStoredFileGroups(partitionPath)
           .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
           .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime));
@@ -1010,8 +987,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime) {
     try {
-      readLock.lock();
       List<String> formattedPartitionList = ensureAllPartitionsLoadedCorrectly();
+      readLock.lock();
       return formattedPartitionList.stream().collect(Collectors.toMap(
           Function.identity(),
           partitionPath -> fetchAllStoredFileGroups(partitionPath)
@@ -1032,9 +1009,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionStr, String maxInstantTime) {
     try {
-      readLock.lock();
       String partition = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partition);
+      readLock.lock();
       return fetchAllStoredFileGroups(partition)
           .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
           .map(fileGroup -> {
@@ -1067,9 +1044,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   public final Stream<FileSlice> getAllLogsMergedFileSliceBeforeOrOn(String partitionStr, String maxInstantTime) {
     try {
-      readLock.lock();
       String partition = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partition);
+      readLock.lock();
       return fetchAllStoredFileGroups(partition)
           .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
           .map(fileGroup -> fetchAllLogsMergedFileSlice(fileGroup, maxInstantTime))
@@ -1096,9 +1073,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public final Stream<FileSlice> getAllFileSlices(String partitionStr) {
     try {
-      readLock.lock();
       String partition = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partition);
+      readLock.lock();
       return fetchAllFileSlices(partition).filter(slice -> !isFileGroupReplaced(slice.getFileGroupId())).map(this::addBootstrapBaseFileIfPresent);
     } finally {
       readLock.unlock();
@@ -1153,11 +1130,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   private Stream<HoodieFileGroup> getAllFileGroupsIncludingReplaced(final String partitionStr) {
     try {
-      readLock.lock();
       // Ensure there is consistency in handling trailing slash in partition-path. Always trim it which is what is done
       // in other places.
       String partition = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partition);
+      readLock.lock();
       return fetchAllStoredFileGroups(partition).map(this::addBootstrapBaseFileIfPresent);
     } finally {
       readLock.unlock();
@@ -1392,14 +1369,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param partitionPath Partition path for which the file-groups needs to be retrieved.
    * @return file-group stream
    */
-  abstract Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partitionPath);
+  protected abstract Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partitionPath);
 
   /**
    * Fetch all Stored file-groups across all partitions loaded.
    *
    * @return file-group stream
    */
-  abstract Stream<HoodieFileGroup> fetchAllStoredFileGroups();
+  protected abstract Stream<HoodieFileGroup> fetchAllStoredFileGroups();
 
   /**
    * Track instant time for file groups replaced.
@@ -1455,7 +1432,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Default implementation for fetching latest base-files for the partition-path.
    */
-  public Stream<HoodieBaseFile> fetchLatestBaseFiles(final String partitionPath) {
+  Stream<HoodieBaseFile> fetchLatestBaseFiles(final String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath)
         .filter(fg -> !isFileGroupReplaced(fg))
         .map(fg -> Pair.of(fg.getFileGroupId(), getLatestBaseFile(fg)))
@@ -1589,8 +1566,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @return File Slice if present
    */
   public Option<FileSlice> fetchLatestFileSlice(String partitionPath, String fileId) {
-    return Option
-        .fromJavaOptional(fetchLatestFileSlices(partitionPath).filter(fs -> fs.getFileId().equals(fileId)).findFirst());
+    try {
+      readLock.lock();
+      return Option
+          .fromJavaOptional(fetchLatestFileSlices(partitionPath).filter(fs -> fs.getFileId().equals(fileId)).findFirst());
+    } finally {
+      readLock.unlock();
+    }
   }
 
   private boolean isFileGroupReplaced(String partitionPath, String fileId) {
