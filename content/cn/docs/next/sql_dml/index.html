@@ -20,7 +20,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/cn/assets/css/styles.8682b225.css">
-<script src="/cn/assets/js/runtime~main.574d29b3.js" defer="defer"></script>
+<script src="/cn/assets/js/runtime~main.737328b2.js" defer="defer"></script>
 <script src="/cn/assets/js/main.6692f9de.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -76,6 +76,7 @@ latency. <code>MERGE INTO</code> statement above can be modified to use partial 
 <li>When virtual keys is enabled.</li>
 <li>When schema on read is enabled.</li>
 <li>When there is an enum field in the source data.</li>
+<li>When a global index is enabled, e.g., GLOBAL_SIMPLE.</li>
 </ol><p>For a Hudi table with user configured primary keys, the join condition and the <code>UPDATE</code>/<code>INSERT INTO</code> clause in <code>MERGE INTO</code> is expected to contain the primary keys of the table.</p></div></div>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="delete-from">Delete From<a href="#delete-from" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h3>
 <p>You can remove data from a Hudi table using the <code>DELETE FROM</code> statement.</p>
