@@ -1372,7 +1372,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected void commitInternal(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing,
                                 Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
-    HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
+    Pair<HoodieData<HoodieRecord>, List<Pair<String, String>>> result = prepRecords(partitionRecordsMap);
+    HoodieData<HoodieRecord> preppedRecords = result.getKey();
+    List<Pair<String, String>> partitionFileIdPairs = result.getValue();
     I preppedRecordInputs = convertHoodieDataToEngineSpecificData(preppedRecords);
 
     BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient();
@@ -1410,7 +1412,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
     } else {
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-      writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+      // last argument is required so that we take optimized writes flow for metadata table. 
+      writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(partitionFileIdPairs));
     }
 
     metadataMetaClient.reloadActiveTimeline();
@@ -1461,7 +1464,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * Tag each record with the location in the given partition.
    * The record is tagged with respective file slice's location based on its record key.
    */
-  protected HoodieData<HoodieRecord> prepRecords(Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
+  protected Pair<HoodieData<HoodieRecord>, List<Pair<String, String>>> prepRecords(Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
     try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemViewForMetadataTable(metadataMetaClient)) {
@@ -1490,7 +1493,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
         allPartitionRecords = allPartitionRecords.union(rddSinglePartitionRecords);
       }
-      return allPartitionRecords;
+
+      List<Pair<String, String>> partitionFileIdPairs = allPartitionRecords.map(record -> Pair.of(record.getPartitionPath(), record.getCurrentLocation().getFileId()))
+          .distinct().collectAsList();
+      return Pair.of(allPartitionRecords, partitionFileIdPairs);
     }
   }
 
@@ -1766,4 +1772,5 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   protected abstract BaseHoodieWriteClient<?, I, ?, ?> initializeWriteClient();
+
 }
