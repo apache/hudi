@@ -313,6 +313,101 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test BucketID Pruning With Partition Bucket Index") {
+    withSQLConf(
+      "hoodie.datasource.write.operation" -> "upsert") {
+      withTempDir { tmp =>
+        withTable(generateTableName) { tableName =>
+          val tablePath = tmp.getCanonicalPath + "/" + tableName
+          val defaultBucketNumber = 2
+          // Create a partitioned table
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  dt string,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (
+               | primaryKey = 'id',
+               | type = 'mor',
+               | preCombineField = 'ts',
+               | hoodie.index.type = 'BUCKET',
+               | hoodie.bucket.index.hash.field = 'id',
+               | hoodie.bucket.index.num.buckets = $defaultBucketNumber)
+               | partitioned by (dt)
+               | location '$tablePath'
+               | """.stripMargin)
+
+          // Note: Do not write the field alias, the partition field must be placed last.
+          // do commit 1
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1, 'a1,1', 1.0, 1, "2021-01-05"),
+               | (11, 'a11,11', 11.0, 11, "2021-01-05"),
+               | (111, 'a111', 111.0, 111, "2021-01-05"),
+               | (1111, 'a1111', 1111.0, 1111, "2021-01-05")
+               | """.stripMargin)
+
+          // upgrade to partition level bucket index and rescale dt=2021-01-05 from 1 to 2
+          // do bucket rescale commit 2
+          val expressions = "dt=(2021\\-01\\-05|2021\\-01\\-07),4"
+          val rule = "regex"
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucketNumber => $defaultBucketNumber)")
+
+          // do commit 3 update id = 1111
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1111, 'a2222,2222', 2222.0, 2222, "2021-01-05")
+               | """.stripMargin)
+
+          // do bucket rescale commit 4
+          val expressions2 = "dt=(2021\\-01\\-05|2021\\-01\\-07),3"
+          val rule2 = "regex"
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions2', rule => '$rule2', bucketNumber => $defaultBucketNumber)")
+
+          // do commit 5 update id = 1111
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1111, 'a3333,3333', 3333.0, 3333, "2021-01-05")
+               | """.stripMargin)
+          val metaClient = createMetaClient(spark, tablePath)
+          val committedInstant = metaClient.getActiveTimeline.filterCompletedInstants().getInstants
+          val size = committedInstant.size()
+
+          val writeCommit5 = committedInstant.get(size - 1)
+          val bucketRescaleCommit4 = committedInstant.get(size - 2)
+          val writeCommit3 = committedInstant.get(size - 3)
+          val bucketRescaleCommit2 = committedInstant.get(size - 4)
+          val writeCommit1 = committedInstant.get(size - 5)
+
+          // normal query with bucket id pruning at latest writeCommit5
+          checkAnswer(s"select id, price, ts, dt from $tableName where id = '1111'")(
+            Seq(1111, 3333.0, 3333, "2021-01-05")
+          )
+          // time travel to writeCommit3
+          checkAnswer(s"select id, price, ts, dt from $tableName timestamp as of '${writeCommit3.requestedTime()}' where id = '1111'")(
+            Seq(1111, 2222.0, 2222, "2021-01-05")
+          )
+          // time travel to writeCommit1
+          checkAnswer(s"select id, price, ts, dt from $tableName timestamp as of '${writeCommit1.requestedTime()}' where id = '1111'")(
+            Seq(1111, 1111.0, 1111, "2021-01-05")
+          )
+
+          // incremental query with bucket id pruning
+          checkAnswer(s"select id, price, ts, dt from hudi_table_changes('$tableName', 'latest_state', '${bucketRescaleCommit2.getCompletionTime}', '${writeCommit3.getCompletionTime}') where id = '1111'")(
+            Seq(1111, 2222.0, 2222, "2021-01-05")
+          )
+        }
+      }
+    }
+  }
+
   test("Test Rollback Hashing Config") {
     withSQLConf(
       "hoodie.datasource.write.operation" -> "upsert",

@@ -196,22 +196,49 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
 
   /**
    * Get Latest committed hashing config instant to load.
+   * If instant is empty, then return latest hashing config instant
    */
-  public static String getLatestHashingConfigInstantToLoad(HoodieTableMetaClient metaClient) {
+  public static Option<String> getHashingConfigInstantToLoad(HoodieTableMetaClient metaClient, Option<String> instant) {
     try {
       List<String> allCommittedHashingConfig = getCommittedHashingConfigInstants(metaClient);
-      return allCommittedHashingConfig.get(allCommittedHashingConfig.size() - 1);
+      if (instant.isPresent()) {
+        Option<String> res = getHashingConfigInstantToLoadBeforeOrOn(allCommittedHashingConfig, instant.get());
+        // fall back to look up archived hashing config instant before return empty
+        return res.isPresent() ? res : getHashingConfigInstantToLoadBeforeOrOn(getArchiveHashingConfigInstants(metaClient), instant.get());
+      } else {
+        return Option.of(allCommittedHashingConfig.get(allCommittedHashingConfig.size() - 1));
+      }
     } catch (Exception e) {
       throw new HoodieException("Failed to get hashing config instant to load.", e);
     }
   }
 
+  private static Option<String> getHashingConfigInstantToLoadBeforeOrOn(List<String> hashingConfigInstants, String instant) {
+    List<String> res = hashingConfigInstants.stream().filter(hashingConfigInstant -> {
+      return hashingConfigInstant.compareTo(instant) <= 0;
+    }).collect(Collectors.toList());
+    return res.isEmpty() ? Option.empty() : Option.of(res.get(res.size() - 1));
+  }
+
   public static PartitionBucketIndexHashingConfig loadingLatestHashingConfig(HoodieTableMetaClient metaClient) {
-    String instantToLoad = getLatestHashingConfigInstantToLoad(metaClient);
-    Option<PartitionBucketIndexHashingConfig> latestHashingConfig = loadHashingConfig(metaClient.getStorage(), getHashingConfigPath(metaClient.getBasePath().toString(), instantToLoad));
+    Option<String> instantToLoad = getHashingConfigInstantToLoad(metaClient, Option.empty());
+    ValidationUtils.checkArgument(instantToLoad.isPresent(), "Can not load latest hashing config " + instantToLoad);
+    Option<PartitionBucketIndexHashingConfig> latestHashingConfig = loadHashingConfig(metaClient.getStorage(), getHashingConfigPath(metaClient.getBasePath().toString(), instantToLoad.get()));
     ValidationUtils.checkArgument(latestHashingConfig.isPresent(), "Can not load latest hashing config " + instantToLoad);
 
     return latestHashingConfig.get();
+  }
+
+  public static Option<PartitionBucketIndexHashingConfig> loadingLatestHashingConfigBeforeOrOn(HoodieTableMetaClient metaClient, String instant) {
+    Option<String> hashingConfigInstantToLoad = getHashingConfigInstantToLoad(metaClient, Option.of(instant));
+    if (hashingConfigInstantToLoad.isPresent()) {
+      Option<PartitionBucketIndexHashingConfig> latestHashingConfig = loadHashingConfig(metaClient.getStorage(),
+          getHashingConfigPath(metaClient.getBasePath().toString(), hashingConfigInstantToLoad.get()));
+      ValidationUtils.checkArgument(latestHashingConfig.isPresent(), "Can not load hashing config " + hashingConfigInstantToLoad + " based on " + instant);
+      return latestHashingConfig;
+    } else {
+      return Option.empty();
+    }
   }
 
   /**

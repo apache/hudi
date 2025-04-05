@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
@@ -106,13 +107,18 @@ case class HoodieFileIndex(spark: SparkSession,
 
   /**
    * NOTE: [[indicesSupport]] is a transient state, since it's only relevant while logical plan
-   *       is handled by the Spark's driver
-   *       The order of elements is important as in this order indices will be applied
-   *       during `lookupCandidateFilesInMetadataTable`
+   * is handled by the Spark's driver
+   * The order of elements is important as in this order indices will be applied
+   * during `lookupCandidateFilesInMetadataTable`
    */
   @transient private lazy val indicesSupport: List[SparkBaseIndexSupport] = List(
     new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
-    new BucketIndexSupport(spark, metadataConfig, metaClient),
+    if (PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(metaClient.getStorageConf, metaClient.getBasePath.toString)) {
+      new PartitionBucketIndexSupport(spark, metadataConfig, metaClient,
+        options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant))
+    } else {
+      new BucketIndexSupport(spark, metadataConfig, metaClient)
+    },
     new SecondaryIndexSupport(spark, metadataConfig, metaClient),
     new ExpressionIndexSupport(spark, schema, metadataConfig, metaClient),
     new BloomFiltersIndexSupport(spark, metadataConfig, metaClient),
