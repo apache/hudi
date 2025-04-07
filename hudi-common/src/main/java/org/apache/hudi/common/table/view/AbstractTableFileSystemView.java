@@ -105,7 +105,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   // This is nothing but the write timeline, which contains both ingestion and compaction(major and minor) writers.
   private HoodieTimeline visibleCommitsAndCompactionTimeline;
 
-  // Used to concurrently load and populate partition views
+  // Used to avoid loading files for a partition multiple times when handling concurrent requests
   private final ConcurrentHashMap<String, Boolean> addedPartitions = new ConcurrentHashMap<>();
 
   // Locks to control concurrency. Sync operations use write-lock blocking all fetch operations.
