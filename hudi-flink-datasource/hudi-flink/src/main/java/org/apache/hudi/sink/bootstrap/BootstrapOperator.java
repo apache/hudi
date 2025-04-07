@@ -146,7 +146,7 @@ public class BootstrapOperator
     int taskID = getRuntimeContext().getIndexOfThisSubtask();
     LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
     for (String partitionPath : FSUtils.getAllPartitionPaths(
-        new HoodieFlinkEngineContext(this.conf), hoodieTable.getStorage(), metadataConfig(conf), basePath)) {
+        new HoodieFlinkEngineContext(this.hadoopConf), hoodieTable.getStorage(), metadataConfig(conf), basePath)) {
       if (pattern.matcher(partitionPath).matches()) {
         loadRecords(partitionPath);
       }

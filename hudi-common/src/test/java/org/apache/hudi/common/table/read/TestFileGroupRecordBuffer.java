@@ -62,7 +62,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -343,7 +342,7 @@ class TestFileGroupRecordBuffer {
     metadata.put(INTERNAL_META_RECORD_KEY, "12345");
     metadata.put(INTERNAL_META_PARTITION_PATH, "partition1");
     when(readerContext.getOrderingValue(any(), any(), any(), any())).thenReturn(1);
-    when(readerContext.generateMetadataForRecord(any(), nullable(String.class), any())).thenReturn(metadata);
+    when(readerContext.generateMetadataForRecord(any(), any(), any())).thenReturn(metadata);
     keyBasedBuffer.processDeleteRecord(record, metadata);
     Map<Serializable, Pair<Option<GenericRecord>, Map<String, Object>>> records =
         keyBasedBuffer.getLogRecords();
@@ -360,7 +359,7 @@ class TestFileGroupRecordBuffer {
     Map<String, Object> anotherMetadata = new HashMap<>();
     anotherMetadata.put(INTERNAL_META_RECORD_KEY, "54321");
     anotherMetadata.put(INTERNAL_META_PARTITION_PATH, "partition2");
-    when(readerContext.generateMetadataForRecord(any(), nullable(String.class), any())).thenReturn(anotherMetadata);
+    when(readerContext.generateMetadataForRecord(any(), any(), any())).thenReturn(anotherMetadata);
     keyBasedBuffer.processDeleteRecord(anotherRecord, anotherMetadata);
     records = keyBasedBuffer.getLogRecords();
     assertEquals(2, records.size());

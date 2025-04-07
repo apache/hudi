@@ -110,7 +110,6 @@ public class BucketAssignFunction
     super.open(parameters);
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, true);
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
-        conf,
         HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHadoopConf(this.conf)),
         new FlinkTaskContextSupplier(getRuntimeContext()));
     this.bucketAssigner = BucketAssigners.create(

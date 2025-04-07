@@ -110,7 +110,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
         Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-            nextRecord, schema, orderingFieldName);
+            nextRecord, schema);
         processNextDataRecord(nextRecord, metadata, putIndex++);
       }
     }

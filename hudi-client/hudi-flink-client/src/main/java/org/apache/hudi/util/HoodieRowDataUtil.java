@@ -66,15 +66,20 @@ public class HoodieRowDataUtil {
     return Option.of(fieldGetter);
   }
 
+  public static UnaryOperator<Object> getFieldConverter(Schema schema, String fieldName, Configuration conf) {
+    boolean useUTCTimezone = conf.getBoolean("read.utc-timezone", true);
+    return getFieldConverter(schema, fieldName, useUTCTimezone);
+  }
+
   /**
    * Utils to get RowData to Avro value converter from cache.
    *
    * @param schema schema of record
    * @param fieldName name of the field
-   * @param conf flink configuration
+   * @param useUTCTimezone whether to use UTC timezone to create converter
    * @return RowData converter from cache or newly created one if not existed in cache.
    */
-  public static UnaryOperator<Object> getFieldConverter(Schema schema, String fieldName, Configuration conf) {
+  public static UnaryOperator<Object> getFieldConverter(Schema schema, String fieldName, boolean useUTCTimezone) {
     Pair<Schema, String> cacheKey = Pair.of(schema, fieldName);
     UnaryOperator<Object> fieldConverter = FIELD_CONVERTER_CACHE.get(cacheKey);
     if (fieldConverter == null) {
@@ -83,8 +88,7 @@ public class HoodieRowDataUtil {
         throw new HoodieException(String.format("Field %s is not in schema: %s.", fieldName, schema));
       }
       LogicalType fieldType = AvroSchemaConverter.convertToDataType(field.schema()).getLogicalType();
-      RowDataToAvroConverter avroConverter = RowDataToAvroConverters.createConverter(
-          fieldType, conf.getBoolean("read.utc-timezone", true));
+      RowDataToAvroConverter avroConverter = RowDataToAvroConverters.createConverter(fieldType, useUTCTimezone);
       fieldConverter = new UnaryOperator<Object>() {
         @Override
         public Object apply(Object val) {

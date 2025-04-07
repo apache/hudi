@@ -82,7 +82,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
-        Map<String, Object> metadata = readerContext.generateMetadataForRecord(nextRecord, schema, orderingFieldName);
+        Map<String, Object> metadata = readerContext.generateMetadataForRecord(nextRecord, schema);
         String recordKey = (String) metadata.get(HoodieReaderContext.INTERNAL_META_RECORD_KEY);
 
         if (isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord)) {

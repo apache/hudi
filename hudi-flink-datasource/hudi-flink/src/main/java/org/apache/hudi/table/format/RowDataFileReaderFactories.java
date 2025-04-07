@@ -16,11 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage.row;
+package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.io.storage.row.RowDataFileReader;
 
 import org.apache.flink.configuration.Configuration;
 
@@ -41,10 +40,7 @@ public class RowDataFileReaderFactories {
   private static class ParquetFileReaderFactory implements Factory {
     @Override
     public RowDataFileReader createFileReader(InternalSchemaManager internalSchemaManager, Configuration conf) {
-      return (RowDataFileReader) ReflectionUtils
-          .loadClass("org.apache.hudi.io.parquet.FlinkParquetReader",
-              new Class<?>[] {InternalSchemaManager.class, Configuration.class},
-              internalSchemaManager, conf);
+      return new FlinkParquetReader(internalSchemaManager, conf);
     }
   }
 

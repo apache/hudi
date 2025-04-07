@@ -16,7 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.expression;
+package org.apache.hudi.source;
+
+import org.apache.hudi.table.expression.Predicate;
+import org.apache.hudi.util.ImplicitTypeConverter;
 
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
@@ -163,19 +166,6 @@ public class ExpressionPredicates {
   // --------------------------------------------------------------------------------------------
   //  Classes to define predicates
   // --------------------------------------------------------------------------------------------
-
-  /**
-   * A filter predicate that can be evaluated by the FileInputFormat.
-   */
-  public interface Predicate extends Serializable {
-
-    /**
-     * Predicates the criteria for which records to keep when loading data from a parquet file.
-     *
-     * @return A filter predicate of parquet file.
-     */
-    FilterPredicate filter();
-  }
 
   /**
    * Column predicate which depends on the given field.

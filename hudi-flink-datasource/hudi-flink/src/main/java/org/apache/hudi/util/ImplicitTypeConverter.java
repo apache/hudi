@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.expression;
+package org.apache.hudi.util;
 
 import org.apache.flink.table.types.logical.LogicalType;
 import org.slf4j.Logger;

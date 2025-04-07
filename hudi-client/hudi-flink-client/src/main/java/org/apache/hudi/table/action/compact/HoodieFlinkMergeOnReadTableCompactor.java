@@ -19,11 +19,11 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.FlinkRowDataReaderContext;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieKey;
@@ -36,15 +36,10 @@ import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.EngineBroadcastManager;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.format.InternalSchemaManager;
-
-import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -82,31 +77,16 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
     // No OP
   }
 
-  @Override
+  // todo add reader context parameters.
   public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
                                    HoodieTableMetaClient metaClient,
                                    HoodieWriteConfig writeConfig,
                                    CompactionOperation operation,
                                    String instantTime,
-                                   Option<EngineBroadcastManager> broadcastManagerOpt) throws IOException {
-    Configuration conf = metaClient.getStorage().getConf().unwrapAs(Configuration.class);
-    FlinkRowDataReaderContext readerContext = new FlinkRowDataReaderContext(
-        flinkEngineContext.getFlinkConf(),
-        InternalSchemaManager.get(flinkEngineContext.getFlinkConf(), metaClient),
-        Collections.emptyList());
-    return compactionHandler.compactUsingFileGroupReader(instantTime, operation, writeConfig, readerContext, conf);
-  }
-
-  public List<WriteStatus> compact(HoodieEngineContext context,
-                                   HoodieCompactionHandler compactionHandler,
-                                   HoodieTableMetaClient metaClient,
-                                   HoodieWriteConfig writeConfig,
-                                   CompactionOperation operation,
-                                   String instantTime,
                                    String maxInstantTime,
-                                   TaskContextSupplier taskContextSupplier) throws IOException {
-    boolean useFileGroupReaderBasedCompaction = context.supportsFileGroupReader()                   // the engine needs to support fg reader first
-        && !metaClient.isMetadataTable()
+                                   TaskContextSupplier taskContextSupplier,
+                                   HoodieReaderContext readerContext) throws IOException {
+    boolean useFileGroupReaderBasedCompaction = !metaClient.isMetadataTable()
         && writeConfig.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && operation.getBootstrapFilePath().isEmpty()
         && writeConfig.populateMetaFields()                                                         // Virtual key support by fg reader is not ready

@@ -65,7 +65,6 @@ public class FileIndex implements Serializable {
   private final StoragePath path;
   private final boolean tableExists;
   private final HoodieMetadataConfig metadataConfig;
-  private final Configuration flinkConf;
   private final org.apache.hadoop.conf.Configuration hadoopConf;
   private final PartitionPruners.PartitionPruner partitionPruner;  // for partition pruning
   private final ColumnStatsProbe colStatsProbe;                    // for probing column stats
@@ -81,7 +80,6 @@ public class FileIndex implements Serializable {
       PartitionPruners.PartitionPruner partitionPruner,
       Function<String, Integer> partitionBucketIdFunc) {
     this.path = path;
-    this.flinkConf = conf;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.tableExists = StreamerUtil.tableExists(path.toString(), hadoopConf);
     this.metadataConfig = StreamerUtil.metadataConfig(conf);
@@ -160,7 +158,7 @@ public class FileIndex implements Serializable {
       return Collections.emptyList();
     }
     Map<String, List<StoragePathInfo>> filesInPartitions = FSUtils.getFilesInPartitions(
-        new HoodieFlinkEngineContext(flinkConf),
+        new HoodieFlinkEngineContext(hadoopConf),
         new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString(), partitions);
     int totalFilesNum = filesInPartitions.values().stream().mapToInt(List::size).sum();
     if (totalFilesNum < 1) {
@@ -235,7 +233,7 @@ public class FileIndex implements Serializable {
       return this.partitionPaths;
     }
     List<String> allPartitionPaths = this.tableExists ? FSUtils.getAllPartitionPaths(
-        new HoodieFlinkEngineContext(flinkConf),
+        new HoodieFlinkEngineContext(hadoopConf),
         new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString())
         : Collections.emptyList();
     if (this.partitionPruner == null) {

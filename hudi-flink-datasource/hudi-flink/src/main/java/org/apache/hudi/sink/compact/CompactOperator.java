@@ -22,14 +22,18 @@ import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.table.format.FlinkRowDataReaderContext;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
+import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 
@@ -48,6 +52,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -89,6 +94,11 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   private transient StreamRecordCollector<CompactionCommitEvent> collector;
 
   /**
+   * InternalSchema manager for schema evolution.
+   */
+  private transient InternalSchemaManager internalSchemaManager;
+
+  /**
    * Compaction metrics.
    */
   private transient FlinkCompactionMetrics compactionMetrics;
@@ -111,6 +121,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
     this.collector = new StreamRecordCollector<>(output);
+    this.internalSchemaManager = InternalSchemaManager.get(conf, writeClient.getHoodieTable().getMetaClient());
     registerMetrics();
   }
 
@@ -137,22 +148,45 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
                             Collector<CompactionCommitEvent> collector,
                             HoodieWriteConfig writeConfig) throws IOException {
     compactionMetrics.startCompaction();
-    HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>(new HoodieFlinkEngineContext(conf));
+    HoodieFlinkMergeOnReadTableCompactor<?> compactor =
+        new HoodieFlinkMergeOnReadTableCompactor<>(new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)));
     HoodieTableMetaClient metaClient = writeClient.getHoodieTable().getMetaClient();
 
-    String maxInstantTime = compactor.getMaxInstantTime(metaClient);
-    List<WriteStatus> writeStatuses = compactor.compact(
-        writeClient.getEngineContext(),
-        new HoodieFlinkCopyOnWriteTable<>(
-            writeConfig,
-            writeClient.getEngineContext(),
-            metaClient),
-        metaClient,
-        writeClient.getConfig(),
-        compactionOperation,
-        instantTime,
-        maxInstantTime,
-        writeClient.getHoodieTable().getTaskContextSupplier());
+    boolean useFileGroupReaderBasedCompaction = !metaClient.isMetadataTable()
+        && writeConfig.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+        && compactionOperation.getBootstrapFilePath().isEmpty()
+        && writeConfig.populateMetaFields()                                                         // Virtual key support by fg reader is not ready
+        && !(metaClient.getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor());  // do not support produce cdc log during fg reader
+
+    List<WriteStatus> writeStatuses;
+    if (useFileGroupReaderBasedCompaction) {
+      FlinkRowDataReaderContext readerContext =
+          new FlinkRowDataReaderContext(conf, internalSchemaManager, Collections.emptyList());
+      writeStatuses = compactor.compact(
+          new HoodieFlinkCopyOnWriteTable<>(
+              writeConfig,
+              writeClient.getEngineContext(),
+              metaClient),
+          metaClient,
+          writeConfig,
+          compactionOperation,
+          instantTime,
+          readerContext);
+    } else {
+      String maxInstantTime = compactor.getMaxInstantTime(metaClient);
+      writeStatuses = compactor.compact(
+          new HoodieFlinkCopyOnWriteTable<>(
+              writeConfig,
+              writeClient.getEngineContext(),
+              metaClient),
+          metaClient,
+          writeClient.getConfig(),
+          compactionOperation,
+          instantTime,
+          maxInstantTime,
+          writeClient.getHoodieTable().getTaskContextSupplier());
+    }
+
     compactionMetrics.endCompaction();
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }

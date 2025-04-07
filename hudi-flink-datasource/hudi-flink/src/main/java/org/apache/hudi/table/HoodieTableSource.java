@@ -55,8 +55,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.table.expression.ExpressionPredicates;
-import org.apache.hudi.table.expression.ExpressionPredicates.Predicate;
+import org.apache.hudi.source.ExpressionPredicates;
+import org.apache.hudi.table.expression.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
@@ -155,7 +155,7 @@ public class HoodieTableSource implements
 
   private int[] requiredPos;
   private long limit;
-  private List<ExpressionPredicates.Predicate> predicates;
+  private List<Predicate> predicates;
   private ColumnStatsProbe columnStatsProbe;
   private PartitionPruners.PartitionPruner partitionPruner;
   private Option<Function<Integer, Integer>> dataBucketFunc; // numBuckets -> bucketId

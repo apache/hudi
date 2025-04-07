@@ -49,7 +49,7 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
-import org.apache.hudi.table.expression.ExpressionPredicates.Predicate;
+import org.apache.hudi.table.expression.Predicate;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;

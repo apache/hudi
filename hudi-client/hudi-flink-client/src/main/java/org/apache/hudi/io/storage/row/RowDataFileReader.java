@@ -19,8 +19,8 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.table.expression.Predicate;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.table.expression.ExpressionPredicates.Predicate;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;

@@ -53,6 +53,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -292,6 +293,16 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    HoodieReaderContext<T> hoodieReaderContext) throws IOException {
     return compactionHandler.compactUsingFileGroupReader(instantTime, operation,
         writeConfig, hoodieReaderContext);
+  }
+
+  public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
+                                   HoodieTableMetaClient metaClient,
+                                   HoodieWriteConfig writeConfig,
+                                   CompactionOperation operation,
+                                   String instantTime,
+                                   HoodieReaderContext readerContext) throws IOException {
+    return compactionHandler.compactUsingFileGroupReader(instantTime, operation,
+        writeConfig, readerContext, metaClient.getStorageConf().unwrapAs(Configuration.class));
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {

@@ -69,7 +69,7 @@ public class FlinkWriteClients {
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf) throws IOException {
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true, false);
     // build the write client to start the embedded timeline server
-    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(conf), writeConfig);
+    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)), writeConfig);
     writeClient.setOperationType(WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
     // create the filesystem view storage properties for client
     final FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
@@ -103,7 +103,7 @@ public class FlinkWriteClients {
   public static HoodieFlinkWriteClient createWriteClientV2(Configuration conf) {
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true, false);
     // build the write client to start the embedded timeline server
-    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(conf), writeConfig);
+    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)), writeConfig);
     writeClient.setOperationType(WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
     // create the filesystem view storage properties for client
     final FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
@@ -133,7 +133,6 @@ public class FlinkWriteClients {
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext, boolean loadFsViewStorageConfig) {
     HoodieFlinkEngineContext context =
         new HoodieFlinkEngineContext(
-            conf,
             HadoopFSUtils.getStorageConf(HadoopConfigurations.getHadoopConf(conf)),
             new FlinkTaskContextSupplier(runtimeContext));
 

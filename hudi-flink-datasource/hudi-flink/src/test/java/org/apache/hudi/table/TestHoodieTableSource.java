@@ -25,7 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.table.expression.ExpressionPredicates;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;

@@ -38,13 +38,11 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
-import org.apache.flink.configuration.Configuration;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -70,23 +68,20 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   private final RuntimeContext runtimeContext;
 
-  private final Configuration flinkConf;
-
   private HoodieFlinkEngineContext() {
-    this(new Configuration(), HadoopFSUtils.getStorageConf(FlinkClientUtil.getHadoopConf()), new DefaultTaskContextSupplier());
+    this(HadoopFSUtils.getStorageConf(FlinkClientUtil.getHadoopConf()), new DefaultTaskContextSupplier());
   }
 
-  public HoodieFlinkEngineContext(Configuration flinkConf) {
-    this(flinkConf, HadoopFSUtils.getStorageConf(HadoopConfigurations.getHadoopConf(flinkConf)), new DefaultTaskContextSupplier());
+  public HoodieFlinkEngineContext(org.apache.hadoop.conf.Configuration hadoopConf) {
+    this(HadoopFSUtils.getStorageConf(hadoopConf), new DefaultTaskContextSupplier());
   }
 
   public HoodieFlinkEngineContext(TaskContextSupplier taskContextSupplier) {
-    this(new Configuration(), HadoopFSUtils.getStorageConf(FlinkClientUtil.getHadoopConf()), taskContextSupplier);
+    this(HadoopFSUtils.getStorageConf(FlinkClientUtil.getHadoopConf()), taskContextSupplier);
   }
 
-  public HoodieFlinkEngineContext(Configuration flinkConf, StorageConfiguration<?> storageConf, TaskContextSupplier taskContextSupplier) {
+  public HoodieFlinkEngineContext(StorageConfiguration<?> storageConf, TaskContextSupplier taskContextSupplier) {
     super(storageConf, taskContextSupplier);
-    this.flinkConf = flinkConf;
     this.runtimeContext = ((FlinkTaskContextSupplier) taskContextSupplier).getFlinkRuntimeContext();
   }
 
@@ -110,17 +105,8 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
     return HoodieListData.eager(data);
   }
 
-  @Override
-  public boolean supportsFileGroupReader() {
-    return true;
-  }
-
   public RuntimeContext getRuntimeContext() {
     return this.runtimeContext;
-  }
-
-  public Configuration getFlinkConf() {
-    return this.flinkConf;
   }
 
   @Override

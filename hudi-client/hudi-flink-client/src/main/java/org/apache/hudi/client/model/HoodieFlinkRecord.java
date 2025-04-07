@@ -84,6 +84,14 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
+  public HoodieOperation getOperation() {
+    if (this.operation == null) {
+      this.operation = HoodieOperation.fromValue(data.getRowKind().toByteValue());
+    }
+    return this.operation;
+  }
+
+  @Override
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     if (this.orderingValue == null) {
       String orderingField = ConfigUtils.getOrderingField(props);
