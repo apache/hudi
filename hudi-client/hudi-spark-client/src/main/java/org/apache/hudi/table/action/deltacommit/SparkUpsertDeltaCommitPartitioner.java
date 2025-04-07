@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.FileSliceUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -74,13 +73,13 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
       if (smallFileSlice.getBaseFile().isPresent()) {
         HoodieBaseFile baseFile = smallFileSlice.getBaseFile().get();
         sf.location = new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId());
-        sf.sizeBytes = FileSliceUtils.getTotalFileSizeAsParquetFormat(smallFileSlice, config.getLogFileToParquetCompressionRatio());
+        sf.sizeBytes = smallFileSlice.getTotalFileSizeSimilarOnBaseFile(config.getLogFileToParquetCompressionRatio());
         smallFileLocations.add(sf);
       } else {
         HoodieLogFile logFile = smallFileSlice.getLogFiles().findFirst().get();
         sf.location = new HoodieRecordLocation(logFile.getDeltaCommitTime(),
             logFile.getFileId());
-        sf.sizeBytes = FileSliceUtils.getTotalFileSizeAsParquetFormat(smallFileSlice, config.getLogFileToParquetCompressionRatio());
+        sf.sizeBytes = smallFileSlice.getTotalFileSizeSimilarOnBaseFile(config.getLogFileToParquetCompressionRatio());
         smallFileLocations.add(sf);
       }
     }
@@ -123,7 +122,7 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
   }
 
   private boolean isSmallFile(FileSlice fileSlice) {
-    long totalSize = FileSliceUtils.getTotalFileSizeAsParquetFormat(fileSlice, config.getLogFileToParquetCompressionRatio());
+    long totalSize = fileSlice.getTotalFileSizeSimilarOnBaseFile(config.getLogFileToParquetCompressionRatio());
     return totalSize < config.getParquetMaxFileSize();
   }
 

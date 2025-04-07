@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig,
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.{FileSliceUtils, StringUtils}
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
@@ -175,7 +175,7 @@ case class HoodieFileIndex(spark: SparkSession,
           // For file slice only has base file, we directly use the base file size as representative file size
           // For file slice has log file, we estimate the representative file size based on the log file size and option(base file) size
           val representFiles = fileSlices.map(slice => {
-            val estimationFileSize = FileSliceUtils.getTotalFileSizeAsParquetFormat(slice, logFileEstimationFraction)
+            val estimationFileSize = slice.getTotalFileSizeSimilarOnBaseFile(logFileEstimationFraction)
             val fileInfo = if (slice.getBaseFile.isPresent) {
               slice.getBaseFile.get().getPathInfo
             } else {
