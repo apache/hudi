@@ -50,7 +50,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .build();
     HoodieEngineContext context = mock(HoodieEngineContext.class);
     HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
@@ -64,7 +64,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .build();
     HoodieEngineContext context = mock(HoodieEngineContext.class);
     HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
@@ -78,7 +78,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .build();
     HoodieEngineContext context = mock(HoodieEngineContext.class);
     HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
@@ -96,7 +96,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .build();
     HoodieEngineContext context = mock(HoodieEngineContext.class);
     HoodieTable hoodieTable =

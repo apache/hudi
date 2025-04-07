@@ -175,7 +175,7 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
 
     // Create the write client to write some records in
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
@@ -193,7 +193,8 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
 
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    operateFunc(SparkRDDWriteClient::insert, client, writeRecords, newCommitTime);
+    JavaRDD<WriteStatus> result = operateFunc(SparkRDDWriteClient::insert, client, writeRecords, newCommitTime);
+    client.commit(newCommitTime, result);
     return records;
   }
 

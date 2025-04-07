@@ -42,7 +42,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringTestUtils;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.testutils.Assertions;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
@@ -64,6 +63,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
@@ -108,7 +108,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     HoodieWriteConfig writeConfig = getConfigBuilder().withRollbackUsingMarkers(false).build();
     HoodieTable table = this.getHoodieTable(metaClient, writeConfig);
-    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "002");
+    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, "002");
     String rollbackInstant = "003";
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
@@ -178,18 +178,18 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 3);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
+    client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
     newCommitTime = "002";
     client.startCommitWithTime(newCommitTime);
     records = dataGen.generateUpdates(newCommitTime, records);
     statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
+    client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
     context = new HoodieSparkEngineContext(jsc);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
-    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "002");
+    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, "002");
     String rollbackInstant = "003";
 
     ListingBasedRollbackStrategy rollbackStrategy = new ListingBasedRollbackStrategy(table, context, table.getConfig(), rollbackInstant, false);
@@ -264,7 +264,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         .withBaseFilesInPartition(p3, fileLengths);
 
     HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().withRollbackUsingMarkers(false).build());
-    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003");
+    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, "003");
 
     // Schedule rollback
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
@@ -363,7 +363,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
             .build());
     HoodieInstant needRollBackInstant = HoodieTestUtils.getCompleteInstant(
         metaClient.getStorage(), metaClient.getTimelinePath(),
-        "002", HoodieTimeline.COMMIT_ACTION);
+        "002", COMMIT_ACTION);
 
     // Create the rollback plan and perform the rollback
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
@@ -410,7 +410,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         .addCommit("004");
 
     HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().build());
-    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "003");
+    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, COMMIT_ACTION, "003");
 
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor =
@@ -469,7 +469,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     clusteringClient.close();
 
     HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().build());
-    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, secondCommit);
+    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, secondCommit);
 
     properties.put("hoodie.clustering.plan.strategy.partition.selected", DEFAULT_FIRST_PARTITION_PATH);
     clusteringClient = getHoodieWriteClient(
