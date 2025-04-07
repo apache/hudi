@@ -70,7 +70,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .build())
@@ -117,7 +117,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .build())
@@ -153,7 +153,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .build())
@@ -202,7 +202,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .withMetricsConfig(HoodieMetricsConfig.newBuilder()
             .on(true)
             .withReporterType(MetricsReporterType.INMEMORY.name())
