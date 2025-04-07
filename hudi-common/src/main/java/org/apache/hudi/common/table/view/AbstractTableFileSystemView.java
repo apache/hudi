@@ -161,54 +161,62 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Adds the provided statuses into the file system view, and also caches it inside this object.
-   * If the file statuses are limited to a single partition, use {@link #addFilesToView(String, List)} instead.
+   * If the file statuses are limited to a single partition, use {@link #addFilesToView(String, IOSupplier)}  instead.
    */
-  public List<HoodieFileGroup> addFilesToView(List<StoragePathInfo> statuses) {
+  protected void addFilesToView(List<StoragePathInfo> statuses) {
     Map<String, List<StoragePathInfo>> statusesByPartitionPath = statuses.stream()
         .collect(Collectors.groupingBy(fileStatus -> FSUtils.getRelativePartitionPath(metaClient.getBasePath(), fileStatus.getPath().getParent())));
-    return statusesByPartitionPath.entrySet().stream().map(entry -> addFilesToView(entry.getKey(), entry.getValue()))
-        .flatMap(List::stream).collect(Collectors.toList());
+    statusesByPartitionPath.forEach((partition, files) -> addFilesToView(partition, () -> files));
   }
 
   /**
-   * Adds the provided statuses into the file system view for a single partition, and also caches it inside this object.
+   * Lazily loads statuses into the file system view for a single partition, and also caches it inside this object.
    */
-  public List<HoodieFileGroup> addFilesToView(String partitionPath, List<StoragePathInfo> statuses) {
+  private void addFilesToView(String partitionPath, IOSupplier<List<StoragePathInfo>> statusesSupplier) {
     writeLock.lock();
     try {
+      if (isPartitionAvailableInStore(partitionPath)) {
+        // another concurrent request already loaded this partition while this thread was awaiting the write-lock
+        LOG.debug("View already built for Partition :{}", partitionPath);
+        return;
+      }
+      LOG.info("Building file system view for partition ({})", partitionPath);
       HoodieTimer timer = HoodieTimer.start();
+      List<StoragePathInfo> statuses = statusesSupplier.get();
       List<HoodieFileGroup> fileGroups = buildFileGroups(partitionPath, statuses, visibleCommitsAndCompactionTimeline, true);
       long fgBuildTimeTakenMs = timer.endTimer();
       if (fileGroups.isEmpty()) {
         LOG.debug("No file groups found for partition: {}", partitionPath);
         storePartitionView(partitionPath, Collections.emptyList());
-        return Collections.emptyList();
+        return;
       }
       timer.startTimer();
-      // Group by partition for efficient updates for both InMemory and DiskBased structures.
-      fileGroups.stream().collect(Collectors.groupingBy(HoodieFileGroup::getPartitionPath))
-          .forEach((partition, value) -> {
-            if (!isPartitionAvailableInStore(partition)) {
-              if (bootstrapIndex.useIndex()) {
-                try (BootstrapIndex.IndexReader reader = bootstrapIndex.createReader()) {
-                  LOG.info("Bootstrap Index available for partition {}", partition);
-                  List<BootstrapFileMapping> sourceFileMappings =
-                      reader.getSourceFileMappingForPartition(partition);
-                  addBootstrapBaseFileMapping(sourceFileMappings.stream()
-                      .map(s -> new BootstrapBaseFileMapping(new HoodieFileGroupId(s.getPartitionPath(),
-                          s.getFileId()), s.getBootstrapFileStatus())));
-                }
-              }
-              storePartitionView(partition, value);
-            }
-          });
+      if (!isPartitionAvailableInStore(partitionPath)) {
+        if (bootstrapIndex.useIndex()) {
+          try (BootstrapIndex.IndexReader reader = bootstrapIndex.createReader()) {
+            LOG.info("Bootstrap Index available for partition {}", partitionPath);
+            List<BootstrapFileMapping> sourceFileMappings =
+                reader.getSourceFileMappingForPartition(partitionPath);
+            addBootstrapBaseFileMapping(sourceFileMappings.stream()
+                .map(s -> new BootstrapBaseFileMapping(new HoodieFileGroupId(s.getPartitionPath(),
+                    s.getFileId()), s.getBootstrapFileStatus())));
+          }
+        }
+        storePartitionView(partitionPath, fileGroups);
+      }
       long storePartitionsTs = timer.endTimer();
       LOG.debug("addFilesToView: NumFiles={}, NumFileGroups={}, FileGroupsCreationTime={}, StoreTimeTaken={}",
           statuses.size(), fileGroups.size(), fgBuildTimeTakenMs, storePartitionsTs);
-      return fileGroups;
+    } catch (IOException ex) {
+      throw new HoodieIOException("Failed to list base files in partition " + partitionPath, ex);
     } finally {
       writeLock.unlock();
     }
+  }
+
+  @FunctionalInterface
+  private interface IOSupplier<T> {
+    T get() throws IOException;
   }
 
   /**
@@ -399,7 +407,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         LOG.debug("Time taken to list partitions {} ={}", partitionSet, (endLsTs - beginLsTs));
         pathInfoMap.forEach((partitionPair, statuses) -> {
           String relativePartitionStr = partitionPair.getLeft();
-          addFilesToView(relativePartitionStr, statuses);
+          addFilesToView(relativePartitionStr, () -> statuses);
           LOG.debug("#files found in partition ({}) ={}", relativePartitionStr, statuses.size());
         });
       } catch (IOException e) {
@@ -432,18 +440,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void ensurePartitionLoadedCorrectly(String partition) {
     ValidationUtils.checkArgument(!isClosed(), "View is already closed");
-
     long beginTs = System.currentTimeMillis();
     if (!isPartitionAvailableInStore(partition)) {
       // Not loaded yet
-      try {
-        LOG.info("Building file system view for partition ({})", partition);
-        addFilesToView(partition, getAllFilesInPartition(partition));
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to list base files in partition " + partition, e);
-      }
-    } else {
-      LOG.debug("View already built for Partition :{}", partition);
+      addFilesToView(partition, () -> getAllFilesInPartition(partition));
     }
     long endTs = System.currentTimeMillis();
     LOG.debug("Time to load partition ({}) ={}", partition, (endTs - beginTs));
