@@ -184,7 +184,7 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
 
     // Create the write client to write some records in
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
@@ -207,13 +207,14 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
                       List<HoodieRecord> records, String newCommitTime) throws IOException {
     client.startCommitWithTime(newCommitTime);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    operateFunc(SparkRDDWriteClient::upsert, client, writeRecords, newCommitTime);
+    JavaRDD<WriteStatus> result = operateFunc(SparkRDDWriteClient::upsert, client, writeRecords, newCommitTime);
+    client.commit(newCommitTime, result);
   }
 
-  private void operateFunc(
+  private JavaRDD<WriteStatus> operateFunc(
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
       SparkRDDWriteClient<HoodieAvroPayload> client, JavaRDD<HoodieRecord> writeRecords, String commitTime)
       throws IOException {
-    writeFn.apply(client, writeRecords, commitTime);
+    return writeFn.apply(client, writeRecords, commitTime);
   }
 }
