@@ -145,7 +145,7 @@ class TestGlobalSimpleIndex extends HoodieCommonTestHarness {
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
             .fromProperties(props)
             .withIndexType(HoodieIndex.IndexType.GLOBAL_SIMPLE)

@@ -94,7 +94,7 @@ public class TestLockManager extends HoodieCommonTestHarness {
 
   private HoodieWriteConfig getMultiWriterWriteConfig() {
     return HoodieWriteConfig.newBuilder()
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .withPath(basePath)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
@@ -112,7 +112,7 @@ public class TestLockManager extends HoodieCommonTestHarness {
   private HoodieWriteConfig getSingleWriterWriteConfig() {
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(ZookeeperBasedLockProvider.class)
             .withZkBasePath(ZK_BASE_PATH)
