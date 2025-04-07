@@ -765,6 +765,17 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       classOf[SqlKeyGenerator].getCanonicalName
     }
 
+    val mergeMode = if (tableConfig.getTableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      val inferredMergeConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
+        tableConfig.getRecordMergeMode,
+        tableConfig.getPayloadClass,
+        tableConfig.getRecordMergeStrategyId,
+        tableConfig.getPreCombineField,
+        tableConfig.getTableVersion)
+      inferredMergeConfigs.getLeft.name()
+    } else {
+      tableConfig.getRecordMergeMode.name()
+    }
     val overridingOpts = Map(
       "path" -> path,
       RECORDKEY_FIELD.key -> tableConfig.getRawRecordKeyFieldProp,
@@ -787,7 +798,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
       RECORD_MERGE_IMPL_CLASSES.key -> classOf[HoodieAvroRecordMerger].getName,
-      HoodieWriteConfig.RECORD_MERGE_MODE.key() -> hoodieCatalogTable.tableConfig.getRecordMergeMode.name,
+      HoodieWriteConfig.RECORD_MERGE_MODE.key() -> mergeMode,
       RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
 
       // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
