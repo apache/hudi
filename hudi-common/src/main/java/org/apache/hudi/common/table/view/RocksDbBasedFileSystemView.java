@@ -483,7 +483,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   public Option<FileSlice> fetchLatestFileSliceBeforeOrOn(String partitionPath, String fileId, String instantTime) {
     Option<String> completionTime = getCompletionTime(instantTime);
     if (!completionTime.isPresent()) {
-      return fetchLatestFileSlice(partitionPath, fileId);
+      return fetchLatestFileSliceInternal(partitionPath, fileId);
     }
     // Retries only file-slices of the file and filters for the latest
     return Option.ofNullable(rocksDB
