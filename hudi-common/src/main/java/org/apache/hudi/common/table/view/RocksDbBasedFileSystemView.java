@@ -269,8 +269,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   protected boolean isPartitionAvailableInStore(String partitionPath) {
+    readLock.lock();
     try {
-      readLock.lock();
       String lookupKey = schemaHelper.getKeyForPartitionLookup(partitionPath);
       Serializable obj = rocksDB.get(schemaHelper.getColFamilyForStoredPartitions(), lookupKey);
       return obj != null;
