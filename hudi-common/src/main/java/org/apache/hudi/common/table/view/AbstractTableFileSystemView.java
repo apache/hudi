@@ -89,7 +89,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  *   <li>resetting file-system views.</li>
  * </ul>
  * The actual mechanism of fetching file slices from different view storages is delegated to sub-classes.
- * To ensure thread-safety, all methods reading the state must use the read-lock and any methods updating the state need to use the write-lock.
+ * To ensure thread-safety, all public methods fetching state must use the read-lock and any methods updating the state need to use the write-lock
  */
 public abstract class AbstractTableFileSystemView implements SyncableFileSystemView, Serializable {
 
@@ -896,7 +896,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       if (isFileGroupReplaced(partitionPath, fileId)) {
         return Option.empty();
       } else {
-        Option<FileSlice> fs = fetchLatestFileSliceInternal(partitionPath, fileId);
+        Option<FileSlice> fs = fetchLatestFileSlice(partitionPath, fileId);
         if (!fs.isPresent()) {
           return Option.empty();
         }
@@ -1568,21 +1568,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public Option<FileSlice> fetchLatestFileSlice(String partitionPath, String fileId) {
     try {
       readLock.lock();
-      return fetchLatestFileSliceInternal(partitionPath, fileId);
+      return Option
+          .fromJavaOptional(fetchLatestFileSlices(partitionPath).filter(fs -> fs.getFileId().equals(fileId)).findFirst());
     } finally {
       readLock.unlock();
     }
-  }
-
-  /**
-   * Fetches the latest file slice assuming that the caller already has the lock.
-   *
-   * @param partitionPath Partition path
-   * @param fileId File Id
-   * @return File Slice if present
-   */
-  protected Option<FileSlice> fetchLatestFileSliceInternal(String partitionPath, String fileId) {
-    return Option.fromJavaOptional(fetchLatestFileSlices(partitionPath).filter(fs -> fs.getFileId().equals(fileId)).findFirst());
   }
 
   private boolean isFileGroupReplaced(String partitionPath, String fileId) {
