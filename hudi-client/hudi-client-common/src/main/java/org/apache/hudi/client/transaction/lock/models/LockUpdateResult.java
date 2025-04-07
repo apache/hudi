@@ -19,10 +19,20 @@
 package org.apache.hudi.client.transaction.lock.models;
 
 public enum LockUpdateResult {
-  // Lock was successfully created/updated
-  SUCCESS,
-  // Another process has modified the lock file (precondition failure)
-  ACQUIRED_BY_OTHERS,
-  // Unable to determine lock state due to transient errors
-  UNKNOWN_ERROR
+  // Lock was successfully created/updated with code 0
+  SUCCESS(0),
+  // Another process has modified the lock file (precondition failure) with code 1
+  ACQUIRED_BY_OTHERS(1),
+  // Unable to determine lock state due to transient errors with code 2
+  UNKNOWN_ERROR(2);
+
+  private final int code;
+
+  LockUpdateResult(int code) {
+    this.code = code;
+  }
+
+  public int getCode() {
+    return code;
+  }
 }

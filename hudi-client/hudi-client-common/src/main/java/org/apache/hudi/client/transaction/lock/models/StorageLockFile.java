@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.transaction.lock.models;
 
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -28,9 +30,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-public class ConditionalWriteLockFile {
+public class StorageLockFile {
 
-  private final ConditionalWriteLockData data;
+  private final StorageLockData data;
   private final String versionId;
 
   // Get a custom object mapper. See ConditionalWriteLockData for required properties.
@@ -46,15 +48,9 @@ public class ConditionalWriteLockFile {
    * @param data      The data in the lock file.
    * @param versionId The version of this lock file. Used to ensure consistency through conditional writes.
    */
-  public ConditionalWriteLockFile(ConditionalWriteLockData data, String versionId) {
-    if (data == null) {
-      throw new IllegalArgumentException("Data must not be null.");
-    }
-
-    if (versionId == null || versionId.isEmpty()) {
-      throw new IllegalArgumentException("VersionId must not be null or empty.");
-    }
-
+  public StorageLockFile(StorageLockData data, String versionId) {
+    ValidationUtils.checkArgument(data != null, "Data must not be null.");
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(versionId), "VersionId must not be null or empty.");
     this.data = data;
     this.versionId = versionId;
   }
@@ -67,10 +63,10 @@ public class ConditionalWriteLockFile {
    * @return A new instance of ConditionalWriteLockFile.
    * @throws HoodieIOException If deserialization fails.
    */
-  public static ConditionalWriteLockFile createFromStream(InputStream inputStream, String versionId) {
+  public static StorageLockFile createFromStream(InputStream inputStream, String versionId) {
     try {
-      ConditionalWriteLockData data = OBJECT_MAPPER.readValue(inputStream, ConditionalWriteLockData.class);
-      return new ConditionalWriteLockFile(data, versionId);
+      StorageLockData data = OBJECT_MAPPER.readValue(inputStream, StorageLockData.class);
+      return new StorageLockFile(data, versionId);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to deserialize JSON content into ConditionalWriteLockData", e);
     }
@@ -95,7 +91,7 @@ public class ConditionalWriteLockFile {
    * @return A byte array.
    * @throws HoodieIOException If serialization fails.
    */
-  public static byte[] toByteArray(ConditionalWriteLockData data) {
+  public static byte[] toByteArray(StorageLockData data) {
     try {
       return OBJECT_MAPPER.writeValueAsBytes(data);
     } catch (JsonProcessingException e) {
