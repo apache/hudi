@@ -170,7 +170,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected void addFilesToView(List<StoragePathInfo> statuses) {
     Map<String, List<StoragePathInfo>> statusesByPartitionPath = statuses.stream()
         .collect(Collectors.groupingBy(fileStatus -> FSUtils.getRelativePartitionPath(metaClient.getBasePath(), fileStatus.getPath().getParent())));
-    statusesByPartitionPath.forEach((partition, files) -> addFilesToView(partition, files));
+    statusesByPartitionPath.forEach(this::addFilesToView);
   }
 
   /**

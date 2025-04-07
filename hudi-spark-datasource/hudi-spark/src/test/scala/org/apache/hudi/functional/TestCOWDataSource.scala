@@ -649,7 +649,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
    * Test retries on conflict failures.
    */
   @ParameterizedTest
-  @ValueSource(ints = Array(0, 2))
+  @ValueSource(ints = Array(0, 3))
   def testCopyOnWriteConcurrentUpdates(numRetries: Integer): Unit = {
     initTestDataGenerator()
     val records1 = recordsToStrings(dataGen.generateInserts("000", 1000)).asScala.toList
