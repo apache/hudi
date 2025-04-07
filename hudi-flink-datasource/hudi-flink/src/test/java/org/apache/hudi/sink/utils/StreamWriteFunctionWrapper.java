@@ -25,9 +25,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.RowDataStreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
+import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
@@ -62,7 +64,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A wrapper class to manipulate the {@link StreamWriteFunction} instance for testing.
+ * A wrapper class to manipulate the instance of {@link StreamWriteFunction} or {@link RowDataStreamWriteFunction} for testing.
  *
  * @param <I> Input type
  */
@@ -96,7 +98,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   /**
    * Stream write function.
    */
-  private StreamWriteFunction writeFunction;
+  protected AbstractStreamWriteFunction writeFunction;
 
   private CompactFunctionWrapper compactFunctionWrapper;
 
@@ -189,7 +191,11 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public Map<String, List<HoodieRecord>> getDataBuffer() {
-    return this.writeFunction.getDataBuffer();
+    if (OptionsResolver.supportRowDataAppend(conf)) {
+      return ((RowDataStreamWriteFunction) writeFunction).getDataBuffer();
+    } else {
+      return ((StreamWriteFunction) writeFunction).getDataBuffer();
+    }
   }
 
   public void checkpointFunction(long checkpointId) throws Exception {
@@ -301,7 +307,11 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   // -------------------------------------------------------------------------
 
   private void setupWriteFunction() throws Exception {
-    writeFunction = new StreamWriteFunction(conf, rowType);
+    if (OptionsResolver.supportRowDataAppend(conf)) {
+      this.writeFunction = new RowDataStreamWriteFunction(conf, rowType);
+    } else {
+      this.writeFunction = new StreamWriteFunction(conf, rowType);
+    }
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);

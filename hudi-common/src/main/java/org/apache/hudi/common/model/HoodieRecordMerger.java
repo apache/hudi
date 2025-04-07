@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -119,7 +120,7 @@ public interface HoodieRecordMerger extends Serializable {
    * @throws IOException upon merging error.
    */
   default Option<Pair<HoodieRecord, Schema>> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
-    throw new UnsupportedOperationException("Partial merging logic is not implemented.");
+    throw new UnsupportedOperationException("Partial merging logic is not implemented by " + this.getClass().getName());
   }
 
   /**
@@ -141,7 +142,7 @@ public interface HoodieRecordMerger extends Serializable {
    * Merges two records with the same key in full outer merge fashion i.e. all fields from both records are included.
    */
   default List<Pair<HoodieRecord, Schema>> fullOuterMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    throw new UnsupportedOperationException("Partial merging logic is not implemented.");
+    throw new UnsupportedOperationException("Full outer merging logic is not implemented by " + this.getClass().getName());
   }
 
   /**
@@ -186,9 +187,8 @@ public interface HoodieRecordMerger extends Serializable {
    */
   String getMergingStrategy();
 
-  static String getRecordMergeStrategyId(RecordMergeMode mergeMode,
-                                         String payloadClassName,
-                                         String recordMergeStrategyId) {
+  static String getRecordMergeStrategyId(RecordMergeMode mergeMode, String payloadClassName,
+                                         String recordMergeStrategyId, HoodieTableVersion tableVersion) {
     switch (mergeMode) {
       case COMMIT_TIME_ORDERING:
         return COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
@@ -196,13 +196,27 @@ public interface HoodieRecordMerger extends Serializable {
         return EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
       case CUSTOM:
       default:
-        if (nonEmpty(recordMergeStrategyId)) {
-          return recordMergeStrategyId;
-        }
-        if (nonEmpty(payloadClassName)) {
-          return PAYLOAD_BASED_MERGE_STRATEGY_UUID;
-        }
-        return null;
+        return getCustomRecordMergeStrategyId(payloadClassName, recordMergeStrategyId, tableVersion);
+    }
+  }
+
+  static String getCustomRecordMergeStrategyId(String payloadClassName, String recordMergeStrategyId, HoodieTableVersion tableVersion) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      // For table version 8, we give preference to input recordMergeStrategyId over payload based strategy
+      if (nonEmpty(recordMergeStrategyId)) {
+        return recordMergeStrategyId;
+      } else if (nonEmpty(payloadClassName)) {
+        return PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+      }
+      return null;
+    } else {
+      // For table version 6, we give preference to payload based strategy over input recordMergeStrategyId
+      if (nonEmpty(payloadClassName)) {
+        return PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+      } else if (nonEmpty(recordMergeStrategyId)) {
+        return recordMergeStrategyId;
+      }
+      return null;
     }
   }
 }

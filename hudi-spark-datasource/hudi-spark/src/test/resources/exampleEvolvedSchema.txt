@@ -33,6 +33,11 @@
              "type": ["long", "null"]
          },
          {
+             "name": "_hoodie_is_deleted",
+             "type": ["boolean", "null"],
+             "default" : false
+         },
+         {
              "name": "new_field",
              "type": ["string","null"]
          }

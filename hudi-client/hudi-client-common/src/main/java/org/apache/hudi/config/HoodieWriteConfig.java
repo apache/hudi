@@ -1955,6 +1955,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieIndex.IndexType.valueOf(getString(HoodieIndexConfig.INDEX_TYPE));
   }
 
+  public String getBucketIndexPartitionExpression() {
+    return getString(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS);
+  }
+
+  public String getBucketIndexPartitionRuleType() {
+    return getString(HoodieIndexConfig.BUCKET_INDEX_PARTITION_RULE_TYPE);
+  }
+
   public String getIndexClass() {
     return getString(HoodieIndexConfig.INDEX_CLASS_NAME);
   }
@@ -3609,11 +3617,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     private void validate() {
-      if (HoodieTableVersion.SIX.equals(writeConfig.getWriteVersion())) {
-        LOG.warn("HoodieTableVersion.SIX is not yet fully supported by the writer. "
-            + "Please expect some unexpected behavior, until its fully implemented.");
-      }
-
       String layoutVersion = writeConfig.getString(TIMELINE_LAYOUT_VERSION_NUM);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));

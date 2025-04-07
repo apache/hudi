@@ -182,7 +182,7 @@ test_flink_bundle() {
     change_java_runtime_version
     $FLINK_HOME/bin/start-cluster.sh
     $FLINK_HOME/bin/sql-client.sh -j $JARS_DIR/flink.jar -f $WORKDIR/flink/insert.sql
-    sleep 10 # for test stability
+    echo "validate flink insert finished."
     $WORKDIR/flink/compact.sh $JARS_DIR/flink.jar
     local EXIT_CODE=$?
     $FLINK_HOME/bin/stop-cluster.sh
@@ -376,7 +376,7 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
-if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' && ${SCALA_PROFILE} != 'scala-2.13' && ! "${FLINK_HOME}" == *"1.18"* ]]; then
+if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' && ${SCALA_PROFILE} != 'scala-2.13' ]]; then
   echo "::warning::validate.sh validating flink bundle"
   test_flink_bundle
   if [ "$?" -ne 0 ]; then

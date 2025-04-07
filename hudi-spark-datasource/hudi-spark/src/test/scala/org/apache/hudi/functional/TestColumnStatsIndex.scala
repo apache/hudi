@@ -22,24 +22,25 @@ import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
+import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
-import org.apache.hudi.common.util.ParquetUtils
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
+import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams, WrapperCreator}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
+import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
@@ -50,15 +51,17 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{EnumSource, MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
+import java.math.{BigDecimal => JBigDecimal}
+import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
-@Tag("functional")
+@Tag("functional-b")
 class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
   val DEFAULT_COLUMNS_TO_INDEX = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
@@ -80,14 +83,24 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-      "hoodie.compact.inline.max.delta.commits" -> "10"
+      "hoodie.compact.inline.max.delta.commits" -> "10",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
     ) ++ metadataOpts
+
+    // write empty first commit to validate edge cases
+    sparkSession.emptyDataFrame
+      .write
+      .format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite))
+      saveMode = SaveMode.Append))
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",
@@ -171,7 +184,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       shouldValidateColStats = false,
       shouldValidateManually = false))
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     validateNonExistantColumnsToIndexDefn(metaClient)
   }
 
@@ -194,7 +207,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
     ) ++ metadataOpts
 
     var expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
@@ -239,8 +253,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
   @ParameterizedTest
   @MethodSource(Array("testTableTypePartitionTypeParams"))
-  def testMetadataColumnStatsIndexInitializationWithUpserts(tableType: HoodieTableType, partitionCol : String): Unit = {
-    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
+  def testMetadataColumnStatsIndexInitializationWithUpserts(tableType: HoodieTableType, partitionCol : String, tableVersion: Int): Unit = {
+    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
@@ -255,7 +269,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PRECOMBINE_FIELD.key -> "c1",
       PARTITIONPATH_FIELD.key -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "5"
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "5",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
     ) ++ metadataOpts
 
     // inserts
@@ -305,7 +320,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "index/colstats/mor-bootstrap1-column-stats-index-table.json"
     }
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().requestedTime
 
     // lets validate that we have log files generated in case of MOR table
@@ -355,8 +370,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
   @ParameterizedTest
   @MethodSource(Array("testTableTypePartitionTypeParams"))
-  def testMetadataColumnStatsIndexInitializationWithRollbacks(tableType: HoodieTableType, partitionCol : String): Unit = {
-    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
+  def testMetadataColumnStatsIndexInitializationWithRollbacks(tableType: HoodieTableType, partitionCol : String, tableVersion: Int): Unit = {
+    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
@@ -371,7 +386,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PRECOMBINE_FIELD.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       "hoodie.write.markers.type" -> "DIRECT",
-      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
     ) ++ metadataOpts
 
     // inserts
@@ -412,7 +428,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "index/colstats/mor-bootstrap-rollback1-column-stats-index-table.json"
     }
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().requestedTime
 
     // updates a subset which are not deleted and enable col stats and validate bootstrap
@@ -426,7 +442,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
 
     validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
@@ -434,7 +450,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
   def simulateFailureForLatestCommit(tableType: HoodieTableType, partitionCol: String) : Unit = {
     // simulate failure for latest commit.
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     var baseFileName : String = null
     var logFileName : String = null
     val lastCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
@@ -452,12 +468,18 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       } else {
         metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath,  "9"))
       }
-      val baseFileFileStatus = dataFiles.stream().filter(fileStatus => fileStatus.getPath.getName.contains(lastCompletedCommit.requestedTime)).findFirst().get()
+      val baseFileFileStatus = dataFiles.stream().filter(fileStatus => fileStatus.getPath.getName.contains(lastCompletedCommit.requestedTime)
+        && fileStatus.getPath.getName.contains("parquet")).findFirst().get()
       baseFileName = baseFileFileStatus.getPath.getName
     }
 
-    val latestCompletedFileName = INSTANT_FILE_NAME_GENERATOR.getFileName(lastCompletedCommit)
-    metaClient.getStorage.deleteFile(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/timeline/" + latestCompletedFileName))
+    if (metaClient.getTableConfig.getTableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      val latestCompletedFileName = new InstantFileNameGeneratorV1().getFileName(lastCompletedCommit)
+      metaClient.getStorage.deleteFile(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/" + latestCompletedFileName))
+    } else {
+      val latestCompletedFileName = INSTANT_FILE_NAME_GENERATOR.getFileName(lastCompletedCommit)
+      metaClient.getStorage.deleteFile(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/timeline/" + latestCompletedFileName))
+    }
 
     // re-create marker for the deleted file.
     if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -475,11 +497,12 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     }
   }
 
-  @Test
-  def testMORDeleteBlocks(): Unit = {
+  @ParameterizedTest
+  @CsvSource(value = Array("6", "8"))
+  def testMORDeleteBlocks(tableVersion: Int): Unit = {
     val tableType: HoodieTableType = HoodieTableType.MERGE_ON_READ
     val partitionCol = "c8"
-    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
+    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
@@ -494,7 +517,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PRECOMBINE_FIELD.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "5"
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "5",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
     ) ++ metadataOpts
 
     // inserts
@@ -533,10 +557,10 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("", "c8"))
-  def testColStatsWithCleanCOW(partitionCol: String): Unit = {
+  @CsvSource(value = Array("'',6", "'',8", "c8,6", "c8,8"))
+  def testColStatsWithCleanCOW(partitionCol: String, tableVersion: Int): Unit = {
     val tableType: HoodieTableType = HoodieTableType.COPY_ON_WRITE
-    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
+    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true"
     )
@@ -550,7 +574,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PRECOMBINE_FIELD.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1"
+      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
     ) ++ metadataOpts
 
     // inserts
@@ -598,10 +623,10 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("", "c8"))
-  def testColStatsWithCleanMOR(partitionCol: String): Unit = {
+  @CsvSource(value = Array("'',6", "'',8", "c8,6", "c8,8"))
+  def testColStatsWithCleanMOR(partitionCol: String, tableVersion: Int): Unit = {
     val tableType: HoodieTableType = HoodieTableType.MERGE_ON_READ
-    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
+    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true"
     )
@@ -616,7 +641,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PARTITIONPATH_FIELD.key() -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1",
-      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2"
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
     ) ++ metadataOpts
 
     // inserts
@@ -662,13 +688,13 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     assertTrue(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0)
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testMetadataColumnStatsIndexValueCount(tableType: HoodieTableType): Unit = {
+  @CsvSource(value = Array("COPY_ON_WRITE,6", "MERGE_ON_READ,6", "COPY_ON_WRITE,8", "MERGE_ON_READ,8"))
+  def testMetadataColumnStatsIndexValueCount(tableType: HoodieTableType, tableVersion: Int): Unit = {
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
@@ -681,7 +707,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
     ) ++ metadataOpts
 
     val schema = StructType(StructField("c1", IntegerType, false) :: StructField("c2", StringType, true) :: Nil)
@@ -698,7 +725,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
@@ -715,8 +742,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testMetadataColumnStatsWithFilesFilter(shouldReadInMemory: Boolean): Unit = {
+  @CsvSource(value = Array("true,6", "false,6", "true,8", "false,8"))
+  def testMetadataColumnStatsWithFilesFilter(shouldReadInMemory: Boolean, tableVersion: Int): Unit = {
     val targetColumnsToIndex = Seq("c1", "c2", "c3")
 
     val metadataOpts = Map(
@@ -733,7 +760,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       PRECOMBINE_FIELD.key -> "c1",
       PARTITIONPATH_FIELD.key() -> "c8",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-      HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true"
+      HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
     ) ++ metadataOpts
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json-partition-pruning").toString
@@ -752,7 +780,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
@@ -811,8 +839,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testMetadataColumnStatsIndexPartialProjection(shouldReadInMemory: Boolean): Unit = {
+  @CsvSource(value = Array("true,6", "false,6", "true,8", "false,8"))
+  def testMetadataColumnStatsIndexPartialProjection(shouldReadInMemory: Boolean, tableVersion: Int): Unit = {
     var targetColumnsToIndex = Seq("c1", "c2", "c3")
 
     val metadataOpts = Map(
@@ -828,7 +856,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-      HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true"
+      HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
     ) ++ metadataOpts
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
@@ -847,7 +876,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
@@ -896,7 +925,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         .mode(SaveMode.Append)
         .save(basePath)
 
-      metaClient = HoodieTableMetaClient.reload(metaClient)
+      metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
       val requestedColumns = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
         .getSourceFields.toSeq.filterNot(colName => colName.startsWith("_hoodie")).sorted.toSeq
@@ -925,8 +954,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testTranslateQueryFiltersIntoColumnStatsIndexFilterExpr(shouldReadInMemory: Boolean): Unit = {
+  @CsvSource(value = Array("true,6", "false,6", "true,8", "false,8"))
+  def testTranslateQueryFiltersIntoColumnStatsIndexFilterExpr(shouldReadInMemory: Boolean, tableVersion: Int): Unit = {
     val targetColumnsToIndex = Seq("c1", "c2", "c3")
 
     val metadataOpts = Map(
@@ -941,7 +970,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
     ) ++ metadataOpts
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
@@ -960,7 +990,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
@@ -1055,5 +1085,25 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       assertNotNull(max)
       assertTrue(r.getMinValue.asInstanceOf[Comparable[Object]].compareTo(r.getMaxValue.asInstanceOf[Object]) <= 0)
     })
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("decimalWrapperTestCases"))
+  def testDeserialize(description: String, expected: JBigDecimal, wrapperCreator: WrapperCreator): Unit = {
+    val dt = DecimalType(10, 2)
+    // Get the schema from the DecimalWrapper's Avro definition.
+    val schema: Schema = DecimalWrapper.SCHEMA$.getField("value").schema()
+    val wrapper = wrapperCreator.create(expected, schema)
+    // Extract the underlying value.
+    val unwrapped = ColumnStatsIndexSupport.tryUnpackValueWrapper(wrapper)
+    // Optionally, for the "ByteBuffer Test" case, verify that the unwrapped value is a ByteBuffer.
+    if (description.contains("ByteBuffer Test")) {
+      assertTrue(unwrapped.isInstanceOf[ByteBuffer], "Expected a ByteBuffer")
+    }
+    // Deserialize into a java.math.BigDecimal.
+    val deserialized = ColumnStatsIndexSupport.deserialize(unwrapped, dt)
+    assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
+    assertEquals(expected, deserialized.asInstanceOf[JBigDecimal],
+      s"Decimal value from $description does not match")
   }
 }

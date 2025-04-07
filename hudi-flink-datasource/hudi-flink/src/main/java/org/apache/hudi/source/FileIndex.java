@@ -27,7 +27,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
-import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.source.stats.FileStatsIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -50,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -66,11 +66,11 @@ public class FileIndex implements Serializable {
   private final boolean tableExists;
   private final HoodieMetadataConfig metadataConfig;
   private final org.apache.hadoop.conf.Configuration hadoopConf;
-  private final PartitionPruners.PartitionPruner partitionPruner; // for partition pruning
-  private final ColumnStatsProbe colStatsProbe;                   // for probing column stats
-  private final int dataBucket;                                   // for bucket pruning
-  private List<String> partitionPaths;                            // cache of partition paths
-  private final FileStatsIndex fileStatsIndex;                    // for data skipping
+  private final PartitionPruners.PartitionPruner partitionPruner;  // for partition pruning
+  private final ColumnStatsProbe colStatsProbe;                    // for probing column stats
+  private final Function<String, Integer> partitionBucketIdFunc;   // for bucket pruning
+  private List<String> partitionPaths;                             // cache of partition paths
+  private final FileStatsIndex fileStatsIndex;                     // for data skipping
 
   private FileIndex(
       StoragePath path,
@@ -78,15 +78,15 @@ public class FileIndex implements Serializable {
       RowType rowType,
       ColumnStatsProbe colStatsProbe,
       PartitionPruners.PartitionPruner partitionPruner,
-      int dataBucket) {
+      Function<String, Integer> partitionBucketIdFunc) {
     this.path = path;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.tableExists = StreamerUtil.tableExists(path.toString(), hadoopConf);
     this.metadataConfig = StreamerUtil.metadataConfig(conf);
     this.colStatsProbe = isDataSkippingFeasible(conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? colStatsProbe : null;
     this.partitionPruner = partitionPruner;
-    this.dataBucket = dataBucket;
     this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, metadataConfig);
+    this.partitionBucketIdFunc = partitionBucketIdFunc;
   }
 
   /**
@@ -157,26 +157,30 @@ public class FileIndex implements Serializable {
     if (partitions.length < 1) {
       return Collections.emptyList();
     }
-    List<StoragePathInfo> allFiles = FSUtils.getFilesInPartitions(
-            new HoodieFlinkEngineContext(hadoopConf),
-            new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString(), partitions)
-        .values().stream()
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
+    Map<String, List<StoragePathInfo>> filesInPartitions = FSUtils.getFilesInPartitions(
+        new HoodieFlinkEngineContext(hadoopConf),
+        new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString(), partitions);
+    int totalFilesNum = filesInPartitions.values().stream().mapToInt(List::size).sum();
+    if (totalFilesNum < 1) {
+      // returns early for empty table.
+      return Collections.emptyList();
+    }
+
+    List<StoragePathInfo> allFiles;
+    // bucket pruning
+    if (this.partitionBucketIdFunc != null) {
+      allFiles = filesInPartitions.entrySet().stream().flatMap(entry -> {
+        String bucketIdStr = BucketIdentifier.bucketIdStr(partitionBucketIdFunc.apply(entry.getKey()));
+        return entry.getValue().stream().filter(fileInfo -> fileInfo.getPath().getName().contains(bucketIdStr));
+      }).collect(Collectors.toList());
+      logPruningMsg(totalFilesNum, allFiles.size(), "bucket pruning");
+    } else {
+      allFiles = filesInPartitions.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
+    }
 
     if (allFiles.isEmpty()) {
       // returns early for empty table.
       return allFiles;
-    }
-
-    // bucket pruning
-    if (this.dataBucket >= 0) {
-      String bucketIdStr = BucketIdentifier.bucketIdStr(this.dataBucket);
-      List<StoragePathInfo> filesAfterBucketPruning = allFiles.stream()
-          .filter(fileInfo -> fileInfo.getPath().getName().contains(bucketIdStr))
-          .collect(Collectors.toList());
-      logPruningMsg(allFiles.size(), filesAfterBucketPruning.size(), "bucket pruning");
-      allFiles = filesAfterBucketPruning;
     }
 
     // data skipping
@@ -286,7 +290,7 @@ public class FileIndex implements Serializable {
     private RowType rowType;
     private ColumnStatsProbe columnStatsProbe;
     private PartitionPruners.PartitionPruner partitionPruner;
-    private int dataBucket = PrimaryKeyPruners.BUCKET_ID_NO_PRUNING;
+    private Function<String, Integer> partitionBucketIdFunc;
 
     private Builder() {
     }
@@ -316,14 +320,14 @@ public class FileIndex implements Serializable {
       return this;
     }
 
-    public Builder dataBucket(int dataBucket) {
-      this.dataBucket = dataBucket;
+    public Builder partitionBucketIdFunc(Function<String, Integer> partitionBucketIdFunc) {
+      this.partitionBucketIdFunc = partitionBucketIdFunc;
       return this;
     }
 
     public FileIndex build() {
       return new FileIndex(Objects.requireNonNull(path), Objects.requireNonNull(conf), Objects.requireNonNull(rowType),
-          columnStatsProbe, partitionPruner, dataBucket);
+          columnStatsProbe, partitionPruner, partitionBucketIdFunc);
     }
   }
 }

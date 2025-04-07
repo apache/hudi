@@ -230,8 +230,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config);
-    HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
-        extraMetadata, operationType, config.getWriteSchema(), commitActionType);
+    HoodieCommitMetadata metadata = CommitMetadataResolverFactory.get(
+            table.getMetaClient().getTableConfig().getTableVersion(), config.getEngineType(),
+            table.getMetaClient().getTableType(), commitActionType)
+        .reconcileMetadataForMissingFiles(config, context, table, instantTime,
+            CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
+                extraMetadata, operationType, config.getWriteSchema(), commitActionType));
     HoodieInstant inflightInstant = table.getMetaClient().createNewInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
     this.txnManager.beginTransaction(Option.of(inflightInstant),
@@ -284,7 +288,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     writeTableMetadata(table, instantTime, metadata);
     activeTimeline.saveAsComplete(false, table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime), Option.of(metadata));
     // update cols to Index as applicable
-    HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata,
+    HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, commitActionType,
         (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
           updateColumnsToIndexWithColStats(metaClient, columnsToIndex);
           return null;
@@ -953,7 +957,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Starts a new commit time for a write operation (insert/update/delete) with specified action.
    */
   private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
-    if (needsUpgradeOrDowngrade(metaClient)) {
+    if (needsUpgrade(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
@@ -1286,7 +1290,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       ownerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, CommitUtils.getCommitActionType(operationType,
           metaClient.getTableType()), instantTime.get()));
     }
-    boolean requiresInitTable = needsUpgradeOrDowngrade(metaClient) || config.isMetadataTableEnabled();
+    boolean requiresInitTable = needsUpgrade(metaClient) || config.isMetadataTableEnabled();
     if (!requiresInitTable) {
       return;
     }
@@ -1466,7 +1470,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     UpgradeDowngrade upgradeDowngrade =
         new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
 
-    if (upgradeDowngrade.needsUpgradeOrDowngrade(config.getWriteVersion())) {
+    if (upgradeDowngrade.needsUpgrade(config.getWriteVersion())) {
       // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
       List<String> instantsToRollback = tableServiceClient.getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, instantTime);
 
@@ -1485,9 +1489,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
   }
 
-  private boolean needsUpgradeOrDowngrade(HoodieTableMetaClient metaClient) {
+  private boolean needsUpgrade(HoodieTableMetaClient metaClient) {
     UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
-    return upgradeDowngrade.needsUpgradeOrDowngrade(config.getWriteVersion());
+    return upgradeDowngrade.needsUpgrade(config.getWriteVersion());
   }
 
   /**

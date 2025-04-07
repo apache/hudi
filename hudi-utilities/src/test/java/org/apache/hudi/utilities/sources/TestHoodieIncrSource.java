@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -95,7 +94,6 @@ import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -121,18 +119,11 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   @BeforeEach
   public void setUp() throws IOException {
     dataGen = new HoodieTestDataGenerator();
-    String basePath = basePath();
-    metaClient = getHoodieMetaClient(storageConf(), basePath);
   }
 
   @Override
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
-    return HoodieTableMetaClient.newTableBuilder()
-        .setTableName(RAW_TRIPS_TEST_NAME)
-        .setTableType(tableType)
-        .setPayloadClass(HoodieAvroPayload.class)
-        .fromProperties(props)
-        .initTable(storageConf.newInstance(), basePath);
+    return getHoodieMetaClient(storageConf, basePath, props, tableType);
   }
 
   @Test
@@ -150,9 +141,14 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @MethodSource("getArgumentsForHoodieIncrSource")
-  public void testHoodieIncrSource(HoodieTableType tableType, boolean useSourceProfile) throws IOException {
+  public void testHoodieIncrSource(HoodieTableType tableType, boolean useSourceProfile, HoodieTableVersion sourceTableVersion) throws IOException {
     this.tableType = tableType;
+    Properties properties = getPropertiesForKeyGen(true);
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), Integer.toString(sourceTableVersion.versionCode()));
+    metaClient = getHoodieMetaClient(storageConf(), basePath(), properties);
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
+        .withWriteTableVersion(sourceTableVersion.versionCode())
+        .withAutoUpgradeVersion(false)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true).withMaxNumDeltaCommitsBeforeCompaction(3).build())
@@ -176,83 +172,90 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
       // read everything upto latest
       readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 570,
-          insert5.getCompletionTime());
+          insert5.getInstant(), sourceTableVersion);
+
+      StreamerCheckpointV2 instant5CheckpointV2 = new StreamerCheckpointV2(insert5.getCompletionTime());
+      StreamerCheckpointV1 instant5CheckpointV1 = new StreamerCheckpointV1(insert5.getInstantTime());
+      boolean sourceTableVersion8OrAbove = sourceTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, HoodieTableVersion.EIGHT,
-          Option.empty(), 570, new StreamerCheckpointV2(insert5.getCompletionTime()));
+          Option.empty(), 570, sourceTableVersion8OrAbove ? instant5CheckpointV2 : instant5CheckpointV1);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, HoodieTableVersion.SIX,
-          Option.empty(), 570, new StreamerCheckpointV1(insert5.getInstantTime()));
+          Option.empty(), 570, instant5CheckpointV1);
 
       // even if the start completion timestamp is archived (100), full table scan should kick in, but should filter for records having commit time > 100
       readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(insert1.getCompletionTime()), 472, insert5.getCompletionTime());
+          Option.of(insert1.getInstant()), 472, insert5.getInstant(), sourceTableVersion);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, HoodieTableVersion.EIGHT,
           Option.of(new StreamerCheckpointV1(insert1.getInstant().requestedTime())),
-          472, new StreamerCheckpointV2(insert5.getCompletionTime()));
+          472, sourceTableVersion8OrAbove ? instant5CheckpointV2 : instant5CheckpointV1);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, HoodieTableVersion.SIX,
           Option.of(new StreamerCheckpointV2(insert1.getInstant().getCompletionTime())),
-          472, new StreamerCheckpointV1(insert5.getInstantTime()));
+          472, instant5CheckpointV1);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, HoodieTableVersion.SIX,
           Option.of(new StreamerCheckpointV1(insert1.getInstant().requestedTime())),
-          472, new StreamerCheckpointV1(insert5.getInstantTime()));
+          472, instant5CheckpointV1);
 
       // even if the read upto latest is set, if start completion timestamp is in active timeline, only incremental should kick in.
-      readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(insert4.getCompletionTime()),
+      readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(insert4.getInstant()),
           130,
-          insert5.getCompletionTime());
+          insert5.getInstant(),
+          sourceTableVersion);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, HoodieTableVersion.EIGHT,
           Option.of(new StreamerCheckpointV1(insert4.getInstant().requestedTime())),
-          130, new StreamerCheckpointV2(insert5.getCompletionTime()));
+          130, sourceTableVersion8OrAbove ? instant5CheckpointV2 : instant5CheckpointV1);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, HoodieTableVersion.SIX,
           Option.of(new StreamerCheckpointV2(insert4.getInstant().getCompletionTime())),
-          130, new StreamerCheckpointV1(insert5.getInstantTime()));
+          130, instant5CheckpointV1);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, HoodieTableVersion.SIX,
           Option.of(new StreamerCheckpointV1(insert4.getInstant().requestedTime())),
-          130, new StreamerCheckpointV1(insert5.getInstantTime()));
+          130, instant5CheckpointV1);
 
       // read just the latest
-      readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.empty(), 130, insert5.getCompletionTime());
+      readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.empty(), 130, insert5.getInstant(), sourceTableVersion);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, HoodieTableVersion.EIGHT,
-          Option.empty(), 130, new StreamerCheckpointV2(insert5.getCompletionTime()));
+          Option.empty(), 130, sourceTableVersion8OrAbove ? instant5CheckpointV2 : instant5CheckpointV1);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, HoodieTableVersion.SIX,
-          Option.empty(), 130, new StreamerCheckpointV1(insert5.getInstantTime()));
+          Option.empty(), 130, instant5CheckpointV1);
 
       // ensure checkpoint does not move
-      readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(insert5.getCompletionTime()), 0,
-          insert5.getCompletionTime());
+      readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(insert5.getInstant()), 0,
+          insert5.getInstant(), sourceTableVersion);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, HoodieTableVersion.EIGHT,
-          Option.of(new StreamerCheckpointV1(insert5.getInstantTime())), 0, new StreamerCheckpointV1(insert5.getInstantTime()));
+          Option.of(instant5CheckpointV1), 0, instant5CheckpointV1);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, HoodieTableVersion.SIX,
-          Option.of(new StreamerCheckpointV2(insert5.getCompletionTime())), 0, new StreamerCheckpointV1(insert5.getInstantTime()));
+          Option.of(instant5CheckpointV2), 0, instant5CheckpointV1);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, HoodieTableVersion.SIX,
-          Option.of(new StreamerCheckpointV1(insert5.getInstantTime())), 0, new StreamerCheckpointV1(insert5.getInstantTime()));
+          Option.of(instant5CheckpointV1), 0, instant5CheckpointV1);
 
       WriteResult insert6 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime(), 168);
 
       // insert new batch and ensure the checkpoint moves
-      readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(insert5.getCompletionTime()), 168,
-          insert6.getCompletionTime());
+      readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(insert5.getInstant()), 168,
+          insert6.getInstant(), sourceTableVersion);
+      StreamerCheckpointV2 instant6CheckpointV2 = new StreamerCheckpointV2(insert6.getCompletionTime());
+      StreamerCheckpointV1 instant6CheckpointV1 = new StreamerCheckpointV1(insert6.getInstantTime());
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, HoodieTableVersion.EIGHT,
-          Option.of(new StreamerCheckpointV1(insert5.getInstantTime())), 168, new StreamerCheckpointV2(insert6.getCompletionTime()));
+          Option.of(instant5CheckpointV1), 168, sourceTableVersion8OrAbove ? instant6CheckpointV2 : instant6CheckpointV1);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, HoodieTableVersion.SIX,
-          Option.of(new StreamerCheckpointV2(insert5.getCompletionTime())), 168, new StreamerCheckpointV1(insert6.getInstantTime()));
+          Option.of(instant5CheckpointV2), 168, instant6CheckpointV1);
       readAndAssertCheckpointTranslation(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, HoodieTableVersion.SIX,
-          Option.of(new StreamerCheckpointV1(insert5.getInstantTime())), 168, new StreamerCheckpointV1(insert6.getInstantTime()));
+          Option.of(instant5CheckpointV1), 168, instant6CheckpointV1);
 
       if (useSourceProfile) {
         // TODO(yihua): fix this
@@ -264,10 +267,12 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> getArgumentsForHoodieIncrSource() {
     return Stream.of(
-        Arguments.of(COPY_ON_WRITE, true),
-        Arguments.of(MERGE_ON_READ, true),
-        Arguments.of(COPY_ON_WRITE, false),
-        Arguments.of(MERGE_ON_READ, false)
+        Arguments.of(COPY_ON_WRITE, true, HoodieTableVersion.EIGHT),
+        Arguments.of(MERGE_ON_READ, true, HoodieTableVersion.EIGHT),
+        Arguments.of(COPY_ON_WRITE, false, HoodieTableVersion.EIGHT),
+        Arguments.of(MERGE_ON_READ, false, HoodieTableVersion.EIGHT),
+        Arguments.of(COPY_ON_WRITE, true, HoodieTableVersion.SIX),
+        Arguments.of(MERGE_ON_READ, true, HoodieTableVersion.SIX)
     );
   }
 
@@ -314,52 +319,49 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           500,
-          inserts.get(5).getCompletionTime());
+          inserts.get(5).getInstant());
 
       // Even if the start completion timestamp is archived, full table scan should kick in, but should filter for records having commit time > first instant
       // time
       readAndAssertWithLatestTableVersion(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(inserts.get(0).getCompletionTime()),
+          Option.of(inserts.get(0).getInstant()),
           400,
-          inserts.get(5).getCompletionTime());
+          inserts.get(5).getInstant());
 
       // Even if the read upto latest is set, if start completion timestamp is in active timeline, only incremental should kick in.
       readAndAssertWithLatestTableVersion(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(inserts.get(2).getCompletionTime()),
+          Option.of(inserts.get(2).getInstant()),
           200,
-          inserts.get(5).getCompletionTime());
+          inserts.get(5).getInstant());
 
       // Reads just the latest
       readAndAssertWithLatestTableVersion(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
           Option.empty(),
           100,
-          inserts.get(5).getCompletionTime());
+          inserts.get(5).getInstant());
 
       // Ensures checkpoint does not move
       readAndAssertWithLatestTableVersion(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-          Option.of(inserts.get(5).getCompletionTime()),
+          Option.of(inserts.get(5).getInstant()),
           0,
-          inserts.get(5).getCompletionTime());
+          inserts.get(5).getInstant());
 
       activeTimeline.reload().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant4.getAction(), inserts.get(4).getInstantTime()),
           Option.of(instant4CommitData));
 
-      // find instant4's new completion time
-      String instant4CompletionTime = activeTimeline.reload().getInstantsAsStream()
-          .filter(instant -> instant.requestedTime().equals(instant4.requestedTime()))
-          .findFirst().get().getCompletionTime();
-
+      instant4 = activeTimeline.reload()
+          .filter(instant -> instant.requestedTime().equals(inserts.get(4).getInstantTime())).firstInstant().get();
       // After the inflight commit completes, the checkpoint should move on after incremental pull
       readAndAssertWithLatestTableVersion(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-          Option.of(inserts.get(3).getCompletionTime()),
+          Option.of(inserts.get(3).getInstant()),
           200,
-          instant4CompletionTime);
+          instant4);
     }
   }
 
@@ -442,8 +444,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           100,
-          dataBatches.get(0).getCompletionTime(),
-          Option.of(TestSnapshotQuerySplitterImpl.class.getName()), new TypedProperties());
+          dataBatches.get(0).getInstant(),
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()), new TypedProperties(), HoodieTableVersion.EIGHT);
 
       // The pending tables services should not block the incremental pulls
       // Reads everything up to latest
@@ -451,28 +453,28 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           500,
-          dataBatches.get(6).getCompletionTime());
+          dataBatches.get(6).getInstant());
 
       // Even if the read upto latest is set, if start completion timestamp is in active timeline, only incremental should kick in.
       readAndAssertWithLatestTableVersion(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(dataBatches.get(2).getCompletionTime()),
+          Option.of(dataBatches.get(2).getInstant()),
           200,
-          dataBatches.get(6).getCompletionTime());
+          dataBatches.get(6).getInstant());
 
       // Reads just the latest
       readAndAssertWithLatestTableVersion(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
           Option.empty(),
           100,
-          dataBatches.get(6).getCompletionTime());
+          dataBatches.get(6).getInstant());
 
       // Ensures checkpoint does not move
       readAndAssertWithLatestTableVersion(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-          Option.of(dataBatches.get(6).getCompletionTime()),
+          Option.of(dataBatches.get(6).getInstant()),
           0,
-          dataBatches.get(6).getCompletionTime());
+          dataBatches.get(6).getInstant());
     }
   }
 
@@ -503,8 +505,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           100,
-          inserts.getCompletionTime(),
-          Option.of(TestSnapshotQuerySplitterImpl.class.getName()), extraProps);
+          inserts.getInstant(),
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()), extraProps, HoodieTableVersion.EIGHT);
     }
   }
 
@@ -717,19 +719,31 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   }
 
   private void readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,
-                                                   Option<String> checkpointToPull, int expectedCount,
-                                                   String expectedCheckpoint, Option<String> snapshotCheckPointImplClassOpt,
-                                                   TypedProperties extraProps) {
-    readAndAssert(missingCheckpointStrategy,
-        checkpointToPull.isPresent() ? Option.of(new StreamerCheckpointV2(checkpointToPull.get())) : Option.empty(), expectedCount,
-        new StreamerCheckpointV2(expectedCheckpoint), snapshotCheckPointImplClassOpt, extraProps, Option.empty());
+                                                   Option<HoodieInstant> checkpointToPullInstant, int expectedCount,
+                                                   HoodieInstant expectedCheckpointInstant, Option<String> snapshotCheckPointImplClassOpt,
+                                                   TypedProperties extraProps, HoodieTableVersion sourceTableVersion) {
+    Option<Checkpoint> checkpointToPull = sourceTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+        ? checkpointToPullInstant.map(instant -> new StreamerCheckpointV2(instant.getCompletionTime()))
+        : checkpointToPullInstant.map(instant -> new StreamerCheckpointV1(instant.requestedTime()));
+    Checkpoint expectedCheckpoint = sourceTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+        ? new StreamerCheckpointV2(expectedCheckpointInstant.getCompletionTime())
+        : new StreamerCheckpointV1(expectedCheckpointInstant.requestedTime());
+    readAndAssert(missingCheckpointStrategy, checkpointToPull, expectedCount, expectedCheckpoint, snapshotCheckPointImplClassOpt, extraProps, Option.empty());
   }
 
   private void readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,
-                                                   Option<String> checkpointToPull,
-                                                   int expectedCount, String expectedCheckpoint) {
+                                                   Option<HoodieInstant> checkpointToPull,
+                                                   int expectedCount, HoodieInstant expectedCheckpoint) {
     readAndAssertWithLatestTableVersion(missingCheckpointStrategy, checkpointToPull, expectedCount, expectedCheckpoint, Option.empty(),
-        new TypedProperties());
+        new TypedProperties(), HoodieTableVersion.EIGHT);
+  }
+
+  private void readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,
+                                                   Option<HoodieInstant> checkpointToPull,
+                                                   int expectedCount, HoodieInstant expectedCheckpoint,
+                                                   HoodieTableVersion sourceTableVersion) {
+    readAndAssertWithLatestTableVersion(missingCheckpointStrategy, checkpointToPull, expectedCount, expectedCheckpoint, Option.empty(),
+        new TypedProperties(), sourceTableVersion);
   }
 
   private WriteResult writeRecords(SparkRDDWriteClient writeClient,
@@ -756,9 +770,9 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     metaClient.reloadActiveTimeline();
     return new WriteResult(
         metaClient
-          .getCommitsAndCompactionTimeline()
-          .filterCompletedInstants()
-          .lastInstant().get(),
+            .getCommitsAndCompactionTimeline()
+            .filterCompletedInstants()
+            .lastInstant().get(),
         records);
   }
 
@@ -776,9 +790,9 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     metaClient.reloadActiveTimeline();
     return new WriteResult(
         metaClient
-          .getCommitsAndCompactionTimeline()
-          .filterCompletedInstants()
-          .lastInstant().get(),
+            .getCommitsAndCompactionTimeline()
+            .filterCompletedInstants()
+            .lastInstant().get(),
         records);
   }
 

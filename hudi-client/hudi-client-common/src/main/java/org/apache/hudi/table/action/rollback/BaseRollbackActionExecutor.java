@@ -25,6 +25,9 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -33,6 +36,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -123,6 +127,13 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     // Finally, remove the markers post rollback.
     WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.requestedTime())
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+    if (table.getMetaClient().getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)
+        && table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ) {
+      // For MOR table rollbacks in table version 6 and below, rollback command blocks might
+      // generate markers under rollback instant. So, lets clean up the markers if any.
+      WriteMarkersFactory.get(config.getMarkersType(), table, rollbackInstant.requestedTime())
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+    }
 
     return rollbackMetadata;
   }
@@ -221,6 +232,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     }
 
     backupRollbackInstantsIfNeeded();
+    rollbackHashingConfigIfNecessary(instantToRollback);
 
     try {
       List<HoodieRollbackStat> stats = executeRollback(hoodieRollbackPlan);
@@ -235,13 +247,23 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
   }
 
   /**
+   * try to delete hashing config during rollback if using partition level bucket index.
+   * @param instantToRollback
+   */
+  private void rollbackHashingConfigIfNecessary(HoodieInstant instantToRollback) {
+    if (StringUtils.nonEmpty(config.getBucketIndexPartitionExpression()) && instantToRollback.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      PartitionBucketIndexHashingConfig.rollbackHashingConfig(instantToRollback, table.getMetaClient());
+    }
+  }
+
+  /**
    * Execute rollback and fetch rollback stats.
    * @param instantToRollback instant to be rolled back.
    * @param rollbackPlan instance of {@link HoodieRollbackPlan} for which rollback needs to be executed.
    * @return list of {@link HoodieRollbackStat}s.
    */
   protected List<HoodieRollbackStat> executeRollback(HoodieInstant instantToRollback, HoodieRollbackPlan rollbackPlan) {
-    return new BaseRollbackHelper(table.getMetaClient(), config).performRollback(context, instantToRollback, rollbackPlan.getRollbackRequests());
+    return RollbackHelperFactory.getRollBackHelper(table, config).performRollback(context, instantTime, instantToRollback, rollbackPlan.getRollbackRequests());
   }
 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {

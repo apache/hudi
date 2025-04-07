@@ -371,7 +371,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                 Schema tableSchemaWithMetaFields) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream()
         .map(ClusteringOperation::create).collect(Collectors.toList());
-    boolean canUseFileGroupReaderBasedClustering = HoodieReaderConfig.isFileGroupReaderEnabled(getHoodieTable().getMetaClient().getTableConfig().getTableVersion(), getWriteConfig())
+    boolean canUseFileGroupReaderBasedClustering = getWriteConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && getWriteConfig().getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
         && clusteringOps.stream().allMatch(slice -> StringUtils.isNullOrEmpty(slice.getBootstrapFilePath()));
 
@@ -473,20 +473,11 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         Configuration conf = broadcastManager.retrieveStorageConfig().get();
 
         // instantiate FG reader
-        HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-            readerContextOpt.get(),
+        HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(readerContextOpt.get(),
             getHoodieTable().getMetaClient().getStorage().newInstance(new StoragePath(basePath), new HadoopStorageConfiguration(conf)),
-            basePath,
-            instantTime,
-            fileSlice,
-            readerSchema,
-            readerSchema,
-            internalSchemaOption,
-            getHoodieTable().getMetaClient(),
-            getHoodieTable().getMetaClient().getTableConfig().getProps(),
-            0,
-            Long.MAX_VALUE,
-            usePosition);
+            basePath, instantTime, fileSlice, readerSchema, readerSchema, internalSchemaOption,
+            getHoodieTable().getMetaClient(), getHoodieTable().getMetaClient().getTableConfig().getProps(),
+            0, Long.MAX_VALUE, usePosition, false);
         fileGroupReader.initRecordIterators();
         // read records from the FG reader
         HoodieFileGroupReader.HoodieFileGroupReaderIterator<InternalRow> recordIterator

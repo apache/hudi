@@ -59,7 +59,7 @@ import scala.concurrent.duration.Duration
 /**
  * Test cases on partition stats index with Spark datasource.
  */
-@Tag("functional")
+@Tag("functional-b")
 class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
   val sqlTempTable = "hudi_tbl"
