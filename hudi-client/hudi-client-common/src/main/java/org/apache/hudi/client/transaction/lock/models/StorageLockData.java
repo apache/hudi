@@ -22,7 +22,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
- * Pojo for conditional write lock provider.
+ * Pojo for conditional writes-based lock provider.
  */
 public class StorageLockData {
   private final boolean expired;
