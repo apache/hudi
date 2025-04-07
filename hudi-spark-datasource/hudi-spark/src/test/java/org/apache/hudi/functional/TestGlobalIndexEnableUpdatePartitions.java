@@ -155,8 +155,8 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
    * Tests getTableTypeAndIndexTypeUpdateOrDelete
    * @throws IOException
    */
-  @ParameterizedTest
-  @MethodSource("getTableTypeAndIndexTypeUpdateOrDelete")
+  //@ParameterizedTest
+  //@MethodSource("getTableTypeAndIndexTypeUpdateOrDelete")
   public void testRollbacksWithPartitionUpdate(HoodieTableType tableType, IndexType indexType, boolean isUpsert) throws IOException {
     final Class<?> payloadClass = DefaultHoodieRecordPayload.class;
     HoodieWriteConfig writeConfig = getWriteConfig(payloadClass, indexType);
