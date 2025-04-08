@@ -39,7 +39,13 @@ When a transaction attempts to modify a resource that is currently locked by ano
 
 In case of multi-writing in Hudi, the locks are acquired on the Hudi table for a very short duration during specific phases (such as just before committing the writes or before scheduling table services) instead of locking for the entire span of time. This approach allows multiple writers to work on the same table simultaneously, increasing concurrency and avoids conflicts.
 
-There are 4 different lock providers that require different configurations to be set. Please refer to comprehensive locking configs [here](https://hudi.apache.org/docs/next/configurations#LOCK).
+There are 4 different lock providers that require different configurations to be set. 1 lock provider requires no configurations. Please refer to comprehensive locking configs [here](https://hudi.apache.org/docs/next/configurations#LOCK).
+
+#### Conditional writes based
+```
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ConditionalWriteLockProvider
+```
+No configs are required for this lock provider, however as of 1.0.2 this lock provider is only supported for S3.
 
 #### Zookeeper based
 ```
