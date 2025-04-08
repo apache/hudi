@@ -61,7 +61,6 @@ import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, asser
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
-import org.slf4j.LoggerFactory
 
 import java.sql.{Date, Timestamp}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
@@ -75,7 +74,6 @@ import scala.util.matching.Regex
  * Basic tests on the spark datasource for COW table.
  */
 class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSupport {
-  private val log = LoggerFactory.getLogger(classOf[TestCOWDataSource])
   var spark: SparkSession = null
 
   val verificationCol: String = "driver"
@@ -651,7 +649,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
    * Test retries on conflict failures.
    */
   @ParameterizedTest
-  @ValueSource(ints = Array(0, 3))
+  @ValueSource(ints = Array(0, 2))
   def testCopyOnWriteConcurrentUpdates(numRetries: Integer): Unit = {
     initTestDataGenerator()
     val records1 = recordsToStrings(dataGen.generateInserts("000", 1000)).asScala.toList
@@ -676,7 +674,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       thread.setName(x + "00_THREAD")
       thread.start()
     }
-    countDownLatch.await(1, TimeUnit.MINUTES)
+    assertTrue(countDownLatch.await(5, TimeUnit.MINUTES), "Writes failed to complete in 5 minutes");
 
     val snapshotDF2 = spark.read.format("org.apache.hudi").load(basePath)
     if (numRetries > 0) {
@@ -710,11 +708,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
           .option(HoodieWriteConfig.NUM_RETRIES_ON_CONFLICT_FAILURES.key(), numRetries.toString)
           .mode(SaveMode.Append)
           .save(basePath)
-      } catch {
-        case e: Exception =>
-          if (numRetries > 0) {
-            log.error("Failed to write to table after retrying", e)
-          }
       } finally {
         countDownLatch.countDown()
       }
