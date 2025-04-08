@@ -389,10 +389,8 @@ class TestConditionalWriteLockProvider {
             new StorageLockFile(new StorageLockData(true, data.getValidUntil(), ownerId), "v2")));
     assertTrue(lockProvider.tryLock());
     when(mockHeartbeatManager.hasActiveHeartbeat())
-        .thenReturn(true) // when we try to stop the heartbeat we will check if heartbeat is active,
-                          // return true.
-        .thenReturn(false); // when try to set lock to expire we will assert no active heartbeat as a
-                            // precondition.
+        .thenReturn(true) // when we try to stop the heartbeat we will check if heartbeat is active, return true.
+        .thenReturn(false); // when try to set lock to expire we will assert no active heartbeat as a precondition.
     lockProvider.unlock();
     assertNull(lockProvider.getLock());
     lockProvider.unlock();
