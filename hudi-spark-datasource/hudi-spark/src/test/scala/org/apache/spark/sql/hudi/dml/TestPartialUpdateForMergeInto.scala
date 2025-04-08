@@ -594,6 +594,54 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     )
   }
 
+  test("Test MergeInto Partial Updates should fail with CUSTOM payload and merge mode") {
+    withTempDir { tmp =>
+      withSQLConf(
+        "hoodie.index.type" -> "GLOBAL_SIMPLE",
+        "hoodie.write.record.merge.mode" -> "CUSTOM",
+        "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.testutils.reader.HoodieRecordTestPayload") {
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | CREATE TABLE $tableName (
+             |   record_key STRING,
+             |   name STRING,
+             |   age INT,
+             |   department STRING,
+             |   salary DOUBLE,
+             |   ts BIGINT
+             | ) USING hudi
+             | PARTITIONED BY (department)
+             | LOCATION '${tmp.getCanonicalPath}'
+             | TBLPROPERTIES (
+             |   type = 'mor',
+             |   primaryKey = 'record_key',
+             |   preCombineField = 'ts')""".stripMargin)
+
+        spark.sql(
+          s"""
+             | INSERT INTO $tableName
+             | SELECT * FROM (
+             |   SELECT 'emp_001' as record_key, 'John Doe' as name, 30 as age,
+             |          'Sales' as department, 80000.0 as salary, 1598886000 as ts
+             |   UNION ALL
+             |   SELECT 'emp_002', 'Jane Smith', 28, 'Sales', 75000.0, 1598886001
+             |   UNION ALL
+             |   SELECT 'emp_003', 'Bob Wilson', 35, 'Marketing', 85000.0, 1598886002
+             |)""".stripMargin)
+
+        val failedToResolveError = "MERGE INTO field resolution error: No matching assignment found for target table"
+        checkExceptionContain(
+          s"""
+             |merge into $tableName t0
+             |using ( SELECT 'emp_001' as record_key, 'John Doe' as name, 35 as age, cast(1598886200 as BIGINT) as ts) s0
+             |on t0.record_key = s0.record_key
+             |when matched then update set age = s0.age
+      """.stripMargin)(failedToResolveError)
+      }
+    }
+  }
+
   def validateLogBlock(basePath: String,
                        expectedNumLogFile: Int,
                        changedFields: Seq[Seq[String]],
