@@ -21,6 +21,7 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
@@ -46,7 +47,7 @@ public abstract class HoodieEngineContext {
   /**
    * A wrapped hadoop configuration which can be serialized.
    */
-  private StorageConfiguration<?> storageConf;
+  private final StorageConfiguration<?> storageConf;
 
   protected TaskContextSupplier taskContextSupplier;
 
@@ -66,6 +67,8 @@ public abstract class HoodieEngineContext {
   public abstract HoodieAccumulator newAccumulator();
 
   public abstract <T> HoodieData<T> emptyHoodieData();
+
+  public abstract <K, V> HoodiePairData<K, V> emptyHoodiePairData();
 
   public boolean supportsFileGroupReader() {
     return false;

@@ -71,6 +71,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   private final Path path;
   private final String fileId;
   private final boolean preserveHoodieMetadata;
+  private final boolean skipMetadataWrite;
   private final HoodieStorage storage;
   protected final WriteStatus writeStatus;
   private final HoodieRecordLocation newRecordLocation;
@@ -79,7 +80,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
 
   public HoodieRowDataCreateHandle(HoodieTable table, HoodieWriteConfig writeConfig, String partitionPath, String fileId,
                                    String instantTime, int taskPartitionId, long taskId, long taskEpochId,
-                                   RowType rowType, boolean preserveHoodieMetadata) {
+                                   RowType rowType, boolean preserveHoodieMetadata, boolean skipMetadataWrite) {
     this.partitionPath = partitionPath;
     this.table = table;
     this.writeConfig = writeConfig;
@@ -90,6 +91,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.fileId = fileId;
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.preserveHoodieMetadata = preserveHoodieMetadata;
+    this.skipMetadataWrite = skipMetadataWrite;
     this.currTimer = HoodieTimer.start();
     this.storage = table.getStorage();
     this.path = makeNewPath(partitionPath);
@@ -128,14 +130,21 @@ public class HoodieRowDataCreateHandle implements Serializable {
    */
   public void write(String recordKey, String partitionPath, RowData record) throws IOException {
     try {
-      String seqId = preserveHoodieMetadata
-          ? record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString()
-          : HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
-      String commitInstant = preserveHoodieMetadata
-          ? record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString()
-          : instantTime;
-      RowData rowData = HoodieRowDataCreation.create(commitInstant, seqId, recordKey, partitionPath, path.getName(),
-          record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
+      String seqId;
+      String commitInstant;
+      RowData rowData;
+      if (!skipMetadataWrite) {
+        seqId = preserveHoodieMetadata
+            ? record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString()
+            : HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
+        commitInstant = preserveHoodieMetadata
+            ? record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString()
+            : instantTime;
+        rowData = HoodieRowDataCreation.create(commitInstant, seqId, recordKey, partitionPath, path.getName(),
+            record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
+      } else {
+        rowData = record;
+      }
       try {
         fileWriter.writeRow(recordKey, rowData);
         HoodieRecordDelegate recordDelegate = writeStatus.isTrackingSuccessfulWrites()

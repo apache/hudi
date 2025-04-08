@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -73,8 +74,8 @@ public class S3EventsSource extends RowSource implements Closeable {
    * @return A pair of dataset of event records and the next checkpoint instant string
    */
   @Override
-  public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
-    Pair<List<String>, String> selectPathsWithLatestSqsMessage =
+  public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCkptStr, long sourceLimit) {
+    Pair<List<String>, Checkpoint> selectPathsWithLatestSqsMessage =
         pathSelector.getNextEventsFromQueue(sqs, lastCkptStr, processedMessages);
     if (selectPathsWithLatestSqsMessage.getLeft().isEmpty()) {
       return Pair.of(Option.empty(), selectPathsWithLatestSqsMessage.getRight());

@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.Serializable;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -102,6 +103,11 @@ public interface HoodiePairData<K, V> extends Serializable {
   <W> HoodiePairData<K, W> mapValues(SerializableFunction<V, W> func);
 
   /**
+   * Maps values of this {@link HoodiePairData} container leveraging provided mapper
+   */
+  <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func);
+
+  /**
    * @param mapToPairFunc serializable map function to generate another pair.
    * @param <L>           new key type.
    * @param <W>           new value type.
@@ -122,6 +128,23 @@ public interface HoodiePairData<K, V> extends Serializable {
    * @return containing the result of the left outer join
    */
   <W> HoodiePairData<K, Pair<V, Option<W>>> leftOuterJoin(HoodiePairData<K, W> other);
+
+  /**
+   * Performs a union of this dataset with the provided dataset
+   */
+  HoodiePairData<K, V> union(HoodiePairData<K, V> other);
+
+  /**
+   * Performs an inner join of this dataset against {@code other}.
+   *
+   * For each element (k, v) in this, the resulting {@link HoodiePairData} will contain all
+   * pairs {@code (k, (v, Some(w)))} for every {@code w} in the {@code other},
+   *
+   * @param other the other {@link HoodiePairData}
+   * @param <W>   value type of the other {@link HoodiePairData}
+   * @return containing the result of the left outer join
+   */
+  <W> HoodiePairData<K, Pair<V, W>> join(HoodiePairData<K, W> other);
 
   /**
    * Collects results of the underlying collection into a {@link List<Pair<K, V>>}

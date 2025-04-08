@@ -27,8 +27,8 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -218,12 +218,12 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static HoodieTimeline filterInstantsTimeline(HoodieTimeline timeline) {
-    HoodieTimeline commitsAndCompactionTimeline = (HoodieTimeline)timeline.getWriteTimeline();
+    HoodieTimeline commitsAndCompactionTimeline = timeline.getWriteTimeline();
     Option<HoodieInstant> pendingCompactionInstant = commitsAndCompactionTimeline
         .filterPendingCompactionTimeline().firstInstant();
     if (pendingCompactionInstant.isPresent()) {
-      HoodieTimeline instantsTimeline = (HoodieTimeline)(commitsAndCompactionTimeline
-          .findInstantsBefore(pendingCompactionInstant.get().requestedTime()));
+      HoodieTimeline instantsTimeline = commitsAndCompactionTimeline
+          .findInstantsBefore(pendingCompactionInstant.get().requestedTime());
       int numCommitsFilteredByCompaction = commitsAndCompactionTimeline.getCommitsTimeline().countInstants()
           - instantsTimeline.getCommitsTimeline().countInstants();
       LOG.info("Earliest pending compaction instant is: " + pendingCompactionInstant.get().requestedTime()
@@ -251,8 +251,7 @@ public class HoodieInputFormatUtils {
                                                      List<Path> inputPaths) throws IOException {
     Set<String> partitionsToList = new HashSet<>();
     for (HoodieInstant commit : commitsToCheck) {
-      HoodieCommitMetadata commitMetadata = tableMetaClient.getCommitMetadataSerDe().deserialize(commit,
-          timeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(commit);
       partitionsToList.addAll(commitMetadata.getPartitionToWriteStats().keySet());
     }
     if (partitionsToList.isEmpty()) {
@@ -436,44 +435,6 @@ public class HoodieInputFormatUtils {
     return returns;
   }
 
-  /**
-   * Takes in a list of filesStatus and a list of table metadata. Groups the files status list
-   * based on given table metadata.
-   *
-   * @param fileStatuses
-   * @param fileExtension
-   * @param metaClientList
-   * @return
-   * @throws IOException
-   */
-  public static Map<HoodieTableMetaClient, List<FileStatus>> groupFileStatusForSnapshotPaths(
-      FileStatus[] fileStatuses, String fileExtension, Collection<HoodieTableMetaClient> metaClientList) {
-    // This assumes the paths for different tables are grouped together
-    Map<HoodieTableMetaClient, List<FileStatus>> grouped = new HashMap<>();
-    HoodieTableMetaClient metadata = null;
-    for (FileStatus status : fileStatuses) {
-      Path inputPath = status.getPath();
-      if (!inputPath.getName().endsWith(fileExtension)) {
-        //FIXME(vc): skip non data files for now. This wont be needed once log file name start
-        // with "."
-        continue;
-      }
-      if ((metadata == null) || (!inputPath.toString().contains(metadata.getBasePath().toString()))) {
-        for (HoodieTableMetaClient metaClient : metaClientList) {
-          if (inputPath.toString().contains(metaClient.getBasePath().toString())) {
-            metadata = metaClient;
-            if (!grouped.containsKey(metadata)) {
-              grouped.put(metadata, new ArrayList<>());
-            }
-            break;
-          }
-        }
-      }
-      grouped.get(metadata).add(status);
-    }
-    return grouped;
-  }
-
   public static Map<HoodieTableMetaClient, List<Path>> groupSnapshotPathsByMetaClient(
       Collection<HoodieTableMetaClient> metaClientList,
       List<Path> snapshotPaths
@@ -481,9 +442,14 @@ public class HoodieInputFormatUtils {
     Map<HoodieTableMetaClient, List<Path>> grouped = new HashMap<>();
     metaClientList.forEach(metaClient -> grouped.put(metaClient, new ArrayList<>()));
     for (Path path : snapshotPaths) {
+      String inputPathStr = path.toString();
       // Find meta client associated with the input path
-      metaClientList.stream().filter(metaClient -> path.toString().contains(metaClient.getBasePath().toString()))
-          .forEach(metaClient -> grouped.get(metaClient).add(path));
+      Option<HoodieTableMetaClient> matchedMetaClient = Option.fromJavaOptional(metaClientList.stream()
+          .filter(metaClient -> {
+            String basePathStr = metaClient.getBasePath().toString();
+            return inputPathStr.equals(basePathStr) || inputPathStr.startsWith(basePathStr + "/"); })
+          .findFirst());
+      matchedMetaClient.ifPresent(metaClient -> grouped.get(metaClient).add(path));
     }
     return grouped;
   }

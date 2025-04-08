@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -93,10 +94,10 @@ public class CsvDFSSource extends RowSource {
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr,
+  protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint,
       long sourceLimit) {
-    Pair<Option<String>, String> selPathsWithMaxModificationTime =
-        pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
+    Pair<Option<String>, Checkpoint> selPathsWithMaxModificationTime =
+        pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCheckpoint, sourceLimit);
     return Pair.of(fromFiles(
         selPathsWithMaxModificationTime.getLeft()), selPathsWithMaxModificationTime.getRight());
   }

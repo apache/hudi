@@ -27,6 +27,9 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -41,12 +44,12 @@ import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.TestS3EventsHoodieIncrSource.TestSourceProfile;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
+import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSourceHarness.TestSourceProfile;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
@@ -311,6 +314,22 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   }
 
   @Test
+  public void testUnsupportedCheckpoint() {
+    TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
+    GcsEventsHoodieIncrSource incrSource = new GcsEventsHoodieIncrSource(typedProperties, jsc(),
+        spark(),
+        new CloudDataFetcher(typedProperties, jsc(), spark(), metrics, cloudObjectsSelectorCommon),
+        queryRunner,
+        new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
+
+    Exception exception = assertThrows(IllegalArgumentException.class,
+        () -> incrSource.translateCheckpoint(Option.of(new StreamerCheckpointV2("1"))));
+    assertEquals("For GcsEventsHoodieIncrSource, only StreamerCheckpointV1, i.e., requested time-based "
+            + "checkpoint, is supported. Checkpoint provided is: StreamerCheckpointV2{checkpointKey='1'}",
+        exception.getMessage());
+  }
+
+  @Test
   public void testCreateSource() throws IOException {
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
     Source gcsSource = UtilHelpers.createSource(GcsEventsHoodieIncrSource.class.getName(), typedProperties, jsc(), spark(), metrics,
@@ -350,13 +369,14 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
         spark(), new CloudDataFetcher(typedProperties, jsc(), spark(), metrics, cloudObjectsSelectorCommon), queryRunner,
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
-    Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = incrSource.fetchNextBatch(checkpointToPull, sourceLimit);
+    Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint = incrSource.fetchNextBatch(
+        checkpointToPull.isPresent() ? Option.of(new StreamerCheckpointV1(checkpointToPull.get())) : Option.empty(), sourceLimit);
 
     Option<Dataset<Row>> datasetOpt = dataAndCheckpoint.getLeft();
-    String nextCheckPoint = dataAndCheckpoint.getRight();
+    Checkpoint nextCheckPoint = dataAndCheckpoint.getRight();
 
     Assertions.assertNotNull(nextCheckPoint);
-    Assertions.assertEquals(expectedCheckpoint, nextCheckPoint);
+    Assertions.assertEquals(new StreamerCheckpointV1(expectedCheckpoint), nextCheckPoint);
   }
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,

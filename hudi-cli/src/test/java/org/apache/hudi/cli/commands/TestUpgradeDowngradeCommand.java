@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
@@ -126,7 +126,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
     // verify marker files for inflight commit exists
     for (String partitionPath : DEFAULT_PARTITION_PATHS) {
       assertEquals(1,
-          FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
+          FileCreateUtilsLegacy.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
     }
 
     if (fromVersion != HoodieTableVersion.FIVE) {
@@ -140,7 +140,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
     if (toVersion == HoodieTableVersion.ZERO) {
       // verify marker files are non existent
       for (String partitionPath : DEFAULT_PARTITION_PATHS) {
-        assertEquals(0, FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
+        assertEquals(0, FileCreateUtilsLegacy.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
       }
     }
   }

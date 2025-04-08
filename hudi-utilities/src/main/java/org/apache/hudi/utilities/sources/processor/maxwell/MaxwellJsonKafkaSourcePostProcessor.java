@@ -124,8 +124,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
     // we can update the `update_time`(delete time) only when it is in timestamp format.
     if (!preCombineFieldType.equals(NON_TIMESTAMP)) {
-      String preCombineField = this.props.getString(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(),
-          HoodieWriteConfig.PRECOMBINE_FIELD_NAME.defaultValue());
+      String preCombineField = this.props.getString(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), null);
 
       // ts from maxwell
       long ts = inputJson.get(TS).longValue();

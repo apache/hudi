@@ -19,22 +19,23 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS
-import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex}
-import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, GreaterThan, LessThan, Literal}
+
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, IsNotNull, LessThan, Literal, Or}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, StringType}
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.{BeforeAll, Tag}
+import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 
 import scala.collection.JavaConverters._
 
@@ -46,6 +47,62 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
   @BeforeAll
   def init(): Unit = {
     initQueryIndexConf()
+  }
+
+  test("Test drop partition stats index") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        // Create table with date type partition
+        spark.sql(
+          s"""
+             | create table $tableName using hudi
+             | partitioned by (dt)
+             | tblproperties(
+             |    type = '$tableType',
+             |    primaryKey = 'id',
+             |    preCombineField = 'ts',
+             |    'hoodie.metadata.index.partition.stats.enable' = 'true',
+             |    'hoodie.metadata.index.column.stats.enable' = 'true',
+             |    'hoodie.metadata.index.column.stats.column.list' = 'name'
+             | )
+             | location '$tablePath'
+             | AS
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts, cast('2021-05-06' as date) as dt
+         """.stripMargin
+        )
+
+        assertResult(WriteOperationType.BULK_INSERT) {
+          HoodieSparkSqlTestBase.getLastCommitMetadata(spark, tablePath).getOperationType
+        }
+        checkAnswer(s"select id, name, price, ts, cast(dt as string) from $tableName")(
+          Seq(1, "a1", 10, 1000, "2021-05-06")
+        )
+
+        val partitionValue = "2021-05-06"
+        // Test insert into
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, cast('$partitionValue' as date))")
+        checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, price, ts, cast(dt as string) from $tableName order by id")(
+          Seq("1", s"dt=$partitionValue", 1, "a1", 10, 1000, partitionValue),
+          Seq("2", s"dt=$partitionValue", 2, "a2", 10, 1000, partitionValue)
+        )
+
+        var metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(tablePath)
+          .setConf(HoodieTestUtils.getDefaultStorageConf)
+          .build()
+        // Validate partition_stats index exists
+        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
+        spark.sql(s"drop index partition_stats on $tableName")
+        metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(tablePath)
+          .setConf(HoodieTestUtils.getDefaultStorageConf)
+          .build()
+        // Validate partition_stats index does not exist
+        assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
+      }
+    }
   }
 
   test("Test partition stats index following insert, merge into, update and delete") {
@@ -104,7 +161,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              |merge into $tableName h0
-             |using (select 1 as id, 'a1' as name, 11 as price, 1001 as ts, '$partitionValue' as dt) s0
+             |using (select 1 as id, 'a1' as name, 11 as price, 1001 as ts, cast('$partitionValue' as Date) as dt) s0
              |on h0.id = s0.id
              |when matched then update set *
              |""".stripMargin)
@@ -205,6 +262,40 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")),
           HoodieTableMetaClient.reload(metaClient),
           isDataSkippingExpected = true)
+        // Include an isNotNull check
+        verifyFilePruningExpressions(
+          Map(
+            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+            HoodieMetadataConfig.ENABLE.key -> "true"),
+          Seq(IsNotNull(AttributeReference("rider", StringType)()), GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D"))),
+          HoodieTableMetaClient.reload(metaClient),
+          isDataSkippingExpected = true)
+        // if we predicate on a col which is not indexed, we expect full scan.
+        verifyFilePruning(
+          Map(
+            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+            HoodieMetadataConfig.ENABLE.key -> "true"),
+          GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O")),
+          HoodieTableMetaClient.reload(metaClient),
+          isDataSkippingExpected = false)
+
+        // if we predicate on two cols, one of which is indexed, while the other is not indexed. and using `AND` operator
+        verifyFilePruning(
+          Map(
+            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+            HoodieMetadataConfig.ENABLE.key -> "true"),
+          And(GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")), GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O"))),
+          HoodieTableMetaClient.reload(metaClient),
+          isDataSkippingExpected = true) // pruning should happen
+
+        // if we predicate on two cols, one of which is indexed, while the other is not indexed. and using `OR` operator
+        verifyFilePruning(
+          Map(
+            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+            HoodieMetadataConfig.ENABLE.key -> "true"),
+          Or(GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")), GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O"))),
+          HoodieTableMetaClient.reload(metaClient),
+          isDataSkippingExpected = false)
 
         // Test predicate that does not match any partition, should scan no files
         checkAnswer(s"select uuid, rider, city, state from $tableName where rider > 'rider-Z'")()
@@ -543,12 +634,18 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
       isDataSkippingExpected = false)
   }
 
-  private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient, isDataSkippingExpected: Boolean, isNoScanExpected: Boolean = false): Unit = {
+  private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient,
+                                isDataSkippingExpected: Boolean, isNoScanExpected: Boolean = false): Unit = {
+    verifyFilePruningExpressions(opts, Seq(dataFilter), metaClient, isDataSkippingExpected, isNoScanExpected)
+  }
+
+  private def verifyFilePruningExpressions(opts: Map[String, String], dataFilters: Seq[Expression], metaClient: HoodieTableMetaClient,
+                                           isDataSkippingExpected: Boolean, isNoScanExpected: Boolean = false): Unit = {
     // with data skipping
     val commonOpts = opts + ("path" -> metaClient.getBasePath.toString)
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
     try {
-      val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
+      val filteredPartitionDirectories = fileIndex.listFiles(Seq(), dataFilters)
       val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
       val latestDataFilesCount = getLatestDataFilesCount(metaClient = metaClient)
       if (isDataSkippingExpected) {
@@ -564,7 +661,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
 
       // with no data skipping
       fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
-      val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
+      val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), dataFilters).flatMap(s => s.files).size
       assertTrue(filesCountWithNoSkipping == latestDataFilesCount)
     } finally {
       fileIndex.close()
@@ -573,7 +670,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
 
   private def getLatestDataFilesCount(includeLogFiles: Boolean = true, metaClient: HoodieTableMetaClient) = {
     var totalLatestDataFiles = 0L
-    val fsView: HoodieMetadataFileSystemView = getTableFileSystemView(metaClient)
+    val fsView: HoodieTableFileSystemView = getTableFileSystemView(metaClient)
     try {
       fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().requestedTime)
         .values()
@@ -587,12 +684,14 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
     totalLatestDataFiles
   }
 
-  private def getTableFileSystemView(metaClient: HoodieTableMetaClient): HoodieMetadataFileSystemView = {
-    new HoodieMetadataFileSystemView(
-      new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
+  private def getTableFileSystemView(metaClient: HoodieTableMetaClient): HoodieTableFileSystemView = {
+    val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexPartitionStats(true).build()
+    val metadataTable = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(spark.sparkContext),
+      metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
+    new HoodieTableFileSystemView(
+      metadataTable,
       metaClient,
-      metaClient.getActiveTimeline,
-      HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexPartitionStats(true).build())
+      metaClient.getActiveTimeline)
   }
 
 }

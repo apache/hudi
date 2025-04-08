@@ -20,19 +20,55 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
 import org.apache.hudi.SparkAdapterSupport
 
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql._
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
+import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
+import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, Project, UpdateTable}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 
 case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
+  private var sparkSession: SparkSession = _
+
+  private lazy val hoodieCatalogTable = sparkAdapter.resolveHoodieTable(ut.table) match {
+    case Some(catalogTable) => HoodieCatalogTable(sparkSession, catalogTable)
+    case _ =>
+      failAnalysis(s"Failed to resolve update statement into the Hudi table. Got instead: ${ut.table}")
+  }
+
+  /**
+   * Validate there is no assignment clause for the given attribute in the given table.
+   *
+   * @param resolver    The resolver to use
+   * @param fields      The fields from the target table who should not have any assignment clause
+   * @param tableId     Table identifier (for error messages)
+   * @param fieldType   Type of the attribute to be validated (for error messages)
+   * @param assignments The assignments clause
+   *
+   * @throws AnalysisException if assignment clause for the given target table attribute is found
+   */
+  private def validateNoAssignmentsToTargetTableAttr(resolver: Resolver,
+                                                     fields: Seq[String],
+                                                     tableId: String,
+                                                     fieldType: String,
+                                                     assignments: Seq[(AttributeReference, Expression)]
+                                                     ): Unit = {
+    fields.foreach(field => if (assignments.exists {
+      case (attr, _) => resolver(attr.name, field)
+    }) {
+      throw new AnalysisException(s"Detected disallowed assignment clause in UPDATE statement for $fieldType " +
+        s"`$field` for table `$tableId`. Please remove the assignment clause to avoid the error.")
+    })
+  }
+
   override def run(sparkSession: SparkSession): Seq[Row] = {
+    this.sparkSession = sparkSession
     val catalogTable = sparkAdapter.resolveHoodieTable(ut.table)
       .map(HoodieCatalogTable(sparkSession, _))
       .get
@@ -44,6 +80,24 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     val assignedAttributes = ut.assignments.map {
       case Assignment(attr: AttributeReference, value) => attr -> value
     }
+
+    // We don't support update queries changing partition column value.
+    validateNoAssignmentsToTargetTableAttr(
+      sparkSession.sessionState.conf.resolver,
+      hoodieCatalogTable.tableConfig.getPartitionFields.orElse(Array.empty),
+      tableId,
+      "partition field",
+      assignedAttributes
+    )
+
+    // We don't support update queries changing the primary key column value.
+    validateNoAssignmentsToTargetTableAttr(
+      sparkSession.sessionState.conf.resolver,
+      hoodieCatalogTable.tableConfig.getRecordKeyFields.orElse(Array.empty),
+      tableId,
+      "record key field",
+      assignedAttributes
+    )
 
     val filteredOutput = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {

@@ -32,7 +32,6 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -61,13 +60,12 @@ public class BaseFileRecordParsingUtils {
    * @param instantTime          instant time of interest.
    * @param storage              instance of {@link HoodieStorage}.
    * @return Iterator of {@link HoodieRecord}s for RLI Metadata partition.
-   * @throws IOException
    */
   public static Iterator<HoodieRecord> generateRLIMetadataHoodieRecordsForBaseFile(String basePath,
                                                                                    HoodieWriteStat writeStat,
                                                                                    Integer writesFileIdEncoding,
                                                                                    String instantTime,
-                                                                                   HoodieStorage storage) throws IOException {
+                                                                                   HoodieStorage storage) {
     String partition = writeStat.getPartitionPath();
     String latestFileName = FSUtils.getFileNameFromPath(writeStat.getPath());
     String fileId = FSUtils.getFileId(latestFileName);
@@ -100,12 +98,11 @@ public class BaseFileRecordParsingUtils {
    * @param writeStat {@link HoodieWriteStat} instance of interest.
    * @param storage   {@link HoodieStorage} instance of interest.
    * @return list of record keys deleted or updated.
-   * @throws IOException
    */
   @VisibleForTesting
   public static List<String> getRecordKeysDeletedOrUpdated(String basePath,
                                                            HoodieWriteStat writeStat,
-                                                           HoodieStorage storage) throws IOException {
+                                                           HoodieStorage storage) {
     String latestFileName = FSUtils.getFileNameFromPath(writeStat.getPath());
     Set<RecordStatus> recordStatuses = new HashSet<>();
     recordStatuses.add(RecordStatus.UPDATE);
@@ -121,15 +118,14 @@ public class BaseFileRecordParsingUtils {
    * @param basePath base path of the table.
    * @param storage  {@link HoodieStorage} instance of interest.
    * @return list of record keys deleted or updated.
-   * @throws IOException
    */
   @VisibleForTesting
   public static Map<RecordStatus, List<String>> getRecordKeyStatuses(String basePath,
-                                                              String partition,
-                                                              String latestFileName,
-                                                              String prevFileName,
-                                                              HoodieStorage storage,
-                                                              Set<RecordStatus> recordStatusesOfInterest) throws IOException {
+                                                                     String partition,
+                                                                     String latestFileName,
+                                                                     String prevFileName,
+                                                                     HoodieStorage storage,
+                                                                     Set<RecordStatus> recordStatusesOfInterest) {
     Set<String> recordKeysFromLatestBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, latestFileName);
     if (prevFileName == null) {
       if (recordStatusesOfInterest.contains(RecordStatus.INSERT)) {
@@ -171,7 +167,7 @@ public class BaseFileRecordParsingUtils {
     }
   }
 
-  private static Set<String> getRecordKeysFromBaseFile(HoodieStorage storage, String basePath, String partition, String fileName) throws IOException {
+  private static Set<String> getRecordKeysFromBaseFile(HoodieStorage storage, String basePath, String partition, String fileName) {
     StoragePath dataFilePath = new StoragePath(basePath, StringUtils.isNullOrEmpty(partition) ? fileName : (partition + Path.SEPARATOR) + fileName);
     FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(HoodieFileFormat.PARQUET);
     return fileFormatUtils.readRowKeys(storage, dataFilePath);

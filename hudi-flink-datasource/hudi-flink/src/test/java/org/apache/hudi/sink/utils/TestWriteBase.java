@@ -33,12 +33,14 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -47,6 +49,7 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.types.logical.RowType;
 import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -203,6 +206,18 @@ public class TestWriteBase {
           this.pipeline.getEventBuffer().length == 1
               && this.pipeline.getEventBuffer()[0] == null,
           "The coordinator events buffer expect to be empty");
+      return this;
+    }
+
+    /**
+     * Assert the next event exists and handle over it to the coordinator.
+     */
+    public TestHarness assertNextSubTaskEvent() {
+      final OperatorEvent nextEvent = this.pipeline.getNextSubTaskEvent();
+      if (nextEvent != null) {
+        MatcherAssert.assertThat("The Coordinator expect to send an event", nextEvent, instanceOf(CommitAckEvent.class));
+        this.pipeline.getWriteFunction().handleOperatorEvent(nextEvent);
+      }
       return this;
     }
 
@@ -619,6 +634,11 @@ public class TestWriteBase {
 
   protected TestHarness preparePipeline() throws Exception {
     return preparePipeline(conf);
+  }
+
+  protected boolean supportRowDataAppend(Configuration conf) {
+    RowType rowType = (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
+    return OptionsResolver.supportRowDataAppend(conf);
   }
 
   protected TestHarness preparePipeline(Configuration conf) throws Exception {

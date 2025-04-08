@@ -42,11 +42,14 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -145,7 +148,16 @@ public abstract class HoodieLogBlock {
     return LogReaderUtils.decodeRecordPositionsHeader(logBlockHeader.get(HeaderMetadataType.RECORD_POSITIONS));
   }
 
-  protected void addRecordPositionsToHeader(Set<Long> positionSet, int numRecords) {
+  /**
+   * @return base file instant time of the record positions if the record positions are enabled
+   * in the log block; {@code null} otherwise.
+   */
+  public String getBaseFileInstantTimeOfPositions() {
+    return logBlockHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
+  }
+
+  protected void addRecordPositionsToHeader(Set<Long> positionSet,
+                                            int numRecords) {
     if (positionSet.size() == numRecords) {
       try {
         logBlockHeader.put(HeaderMetadataType.RECORD_POSITIONS, LogReaderUtils.encodePositions(positionSet));
@@ -157,6 +169,17 @@ public abstract class HoodieLogBlock {
               + "number of records: {}). Skip writing record positions to the log block header.",
           positionSet.size(), numRecords);
     }
+  }
+
+  protected boolean containsBaseFileInstantTimeOfPositions() {
+    return logBlockHeader.containsKey(
+        HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
+  }
+
+  protected void removeBaseFileInstantTimeOfPositions() {
+    LOG.warn("There are records without valid positions. "
+        + "Skip writing record positions to the block header.");
+    logBlockHeader.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
   }
 
   /**
@@ -208,7 +231,8 @@ public abstract class HoodieLogBlock {
     COMPACTED_BLOCK_TIMES(HoodieTableVersion.FIVE),
     RECORD_POSITIONS(HoodieTableVersion.SIX),
     BLOCK_IDENTIFIER(HoodieTableVersion.SIX),
-    IS_PARTIAL(HoodieTableVersion.EIGHT);
+    IS_PARTIAL(HoodieTableVersion.EIGHT),
+    BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS(HoodieTableVersion.EIGHT);
 
     @SuppressWarnings("unused")
     private final HoodieTableVersion earliestTableVersion;
@@ -319,6 +343,42 @@ public abstract class HoodieLogBlock {
     byte[] content = new byte[contentLength];
     inputStream.readFully(content, 0, contentLength);
     return Option.of(content);
+  }
+
+  protected Supplier<SeekableDataInputStream> getInputStreamSupplier() {
+    return inputStreamSupplier;
+  }
+
+  /**
+   * Adds the record positions if the base file instant time of the positions exists
+   * in the log header and the record positions are all valid.
+   *
+   * @param records         records with valid or invalid positions
+   * @param getPositionFunc function to get the position from the record
+   * @param <T>             type of record
+   */
+  protected <T> void addRecordPositionsIfRequired(List<T> records,
+                                                  Function<T, Long> getPositionFunc) {
+    if (containsBaseFileInstantTimeOfPositions()) {
+      if (!isPositionValid(getPositionFunc.apply(records.get(0)))) {
+        // Short circuit in case all records do not have valid positions,
+        // e.g., BUCKET index cannot identify the record position with low overhead
+        removeBaseFileInstantTimeOfPositions();
+        return;
+      }
+      records.sort((o1, o2) -> {
+        long v1 = getPositionFunc.apply(o1);
+        long v2 = getPositionFunc.apply(o2);
+        return Long.compare(v1, v2);
+      });
+      if (isPositionValid(getPositionFunc.apply(records.get(0)))) {
+        addRecordPositionsToHeader(
+            records.stream().map(getPositionFunc).collect(Collectors.toSet()),
+            records.size());
+      } else {
+        removeBaseFileInstantTimeOfPositions();
+      }
+    }
   }
 
   /**

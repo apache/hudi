@@ -34,6 +34,8 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
+import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,7 +63,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
   }
 
   @Override
-  public Option<HoodieClusteringPlan> generateClusteringPlan() {
+  public Option<HoodieClusteringPlan> generateClusteringPlan(ClusteringPlanActionExecutor executor, Lazy<List<String>> partitions) {
     if (!checkPrecondition()) {
       return Option.empty();
     }
@@ -71,7 +73,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
 
     List<String> partitionPaths = getPartitionPathInActiveTimeline(hoodieTable);
 
-    partitionPaths = filterPartitionPaths(partitionPaths);
+    partitionPaths = filterPartitionPaths(getWriteConfig(), partitionPaths).getLeft();
 
     if (partitionPaths.isEmpty()) {
       // In case no partitions could be picked, return no clustering plan
@@ -82,7 +84,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
             .flatMap(
                     partitionPaths, partitionPath -> {
                     List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-                    return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
+                    return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).getLeft().limit(getWriteConfig().getClusteringMaxNumGroups());
                 },
                     partitionPaths.size())
             .stream()
@@ -118,8 +120,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
     HoodieTimeline cowCommitTimeline = hoodieTable.getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION)).filterCompletedInstants();
     cowCommitTimeline.getInstants().forEach(instant -> {
       try {
-        HoodieCommitMetadata metadata = hoodieTable.getMetaClient().getCommitMetadataSerDe().deserialize(instant,
-            cowCommitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata metadata = cowCommitTimeline.readCommitMetadata(instant);
         partitions.addAll(metadata.getWritePartitionPaths());
       } catch (IOException e) {
         // ignore Exception here

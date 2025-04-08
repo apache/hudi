@@ -23,7 +23,7 @@ import org.apache.hudi.storage.HoodieStorageUtils
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.hudi.{DeDupeType, DedupeSparkJob}
+import org.apache.spark.sql.hudi.{DedupeSparkJob, DeDupeType}
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier

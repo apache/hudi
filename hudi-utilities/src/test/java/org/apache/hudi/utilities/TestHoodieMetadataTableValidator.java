@@ -27,15 +27,23 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -77,20 +85,29 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.hadoop.fs.FileUtil.copy;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
+import static org.apache.hudi.common.util.StringUtils.toStringWithThreshold;
+import static org.apache.hudi.common.util.TestStringUtils.generateRandomString;
 import static org.apache.spark.sql.types.DataTypes.IntegerType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -99,10 +116,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase {
+  private static final Random RANDOM = new Random();
 
   private static Stream<Arguments> lastNFileSlicesTestArgs() {
     return Stream.of(-1, 1, 3, 4, 5).flatMap(i -> Stream.of(Arguments.of(i, true), Arguments.of(i, false)));
   }
+
+  private final int logDetailMaxLength = new HoodieMetadataTableValidator.Config().logDetailMaxLength;
 
   private static Stream<Arguments> viewStorageArgs() {
     return Stream.of(
@@ -111,6 +131,12 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         Arguments.of(FileSystemViewStorageType.SPILLABLE_DISK.name(), FileSystemViewStorageType.SPILLABLE_DISK.name(), false),
         Arguments.of(FileSystemViewStorageType.MEMORY.name(), FileSystemViewStorageType.SPILLABLE_DISK.name(), true)
     );
+  }
+
+  @Test
+  public void testValidationWithoutDataTable() throws IOException {
+    storage.deleteDirectory(metaClient.getBasePath());
+    validateSecondaryIndex();
   }
 
   @Test
@@ -286,9 +312,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
             + "location '" + basePath + "'");
 
     Dataset<Row> rows = getRowDataset(1, "row1", "abc", "p1");
-    rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
+    rows.write().mode(SaveMode.Append).save(basePath);
     rows = getRowDataset(2, "row2", "ghi", "p2");
-    rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
+    rows.write().mode(SaveMode.Append).save(basePath);
     rows = getRowDataset(3, "row3", "def", "p2");
     rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
 
@@ -301,6 +327,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     rows.write().format("hudi")
         .option("hoodie.metadata.enable", "true")
         .option("hoodie.metadata.record.index.enable", "true")
+        .option("hoodie.metadata.index.column.stats.enable", "false")
         .mode(SaveMode.Append)
         .save(basePath);
 
@@ -587,8 +614,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     Path tempFolderPath = new Path(tempFolder);
 
     // lets move one of the log files from latest file slice to the temp dir. so validation w/ latest file slice should fail.
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
-        metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
     FileSlice latestFileSlice = fsView.getLatestFileSlices(StringUtils.EMPTY_STRING).filter(fileSlice -> {
       return fileSlice.getLogFiles().count() > 0;
     }).collect(Collectors.toList()).get(0);
@@ -622,8 +648,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     // no exception should be thrown
 
     // let's delete one of the log files from 1st commit and so FS based listing and MDT based listing diverges when all file slices are validated.
-    fsView = new HoodieTableFileSystemView(
-        metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
+    fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
     HoodieFileGroup fileGroup = fsView.getAllFileGroups(StringUtils.EMPTY_STRING).collect(Collectors.toList()).get(0);
     List<FileSlice> allFileSlices = fileGroup.getAllFileSlices().collect(Collectors.toList());
     FileSlice earliestFileSlice = allFileSlices.get(allFileSlices.size() - 1);
@@ -722,6 +747,406 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     }
   }
 
+  @Test
+  void testHasCommittedLogFiles() throws IOException, InterruptedException {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getBasePath()).thenReturn(new StoragePath(tempDir.toString()));
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    TimeGenerator timeGenerator = TimeGenerators
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
+            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    Map<String, Set<String>> committedFilesMap = new HashMap<>();
+    String baseInstantTime = TimelineUtils.generateInstantTime(true, timeGenerator);
+    String logInstantTime = TimelineUtils.generateInstantTime(true, timeGenerator);
+    String newInstantTime = TimelineUtils.generateInstantTime(true, timeGenerator);
+
+    // Empty log file set
+    assertEquals(Pair.of(false, ""), validator.hasCommittedLogFiles(
+        storage, Collections.emptySet(), metaClient, committedFilesMap));
+    // Empty log file
+    HoodieLogFile logFile = new HoodieLogFile(new StoragePath(
+        tempDir.toString(),
+        FSUtils.makeLogFileName(
+            UUID.randomUUID().toString(), HoodieLogFile.DELTA_EXTENSION, logInstantTime, 1, "1-0-1")));
+    storage.create(logFile.getPath()).close();
+    prepareTimelineAndValidate(metaClient, validator, Collections.emptyList(),
+        logFile, committedFilesMap, Pair.of(false, ""));
+
+    // Log file with command log block
+    logFile = prepareLogFile(
+        UUID.randomUUID().toString(), baseInstantTime, logInstantTime, false);
+    prepareTimelineAndValidate(metaClient, validator, Collections.emptyList(),
+        logFile, committedFilesMap, Pair.of(false, ""));
+
+    // Log file with data log block
+    logFile = prepareLogFile(
+        UUID.randomUUID().toString(), baseInstantTime, logInstantTime, true);
+    // Log block created by completed delta commit in active timeline
+    committedFilesMap.put(logInstantTime, Collections.emptySet());
+    prepareTimelineAndValidate(metaClient, validator,
+        Collections.singletonList(INSTANT_GENERATOR.createNewInstant(
+            HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, logInstantTime)),
+        logFile, committedFilesMap, Pair.of(false, ""));
+
+    // Log block created by completed delta commit but not included in the commit metadata
+    committedFilesMap.put(logInstantTime,
+        new HashSet<>(Collections.singletonList(logFile.getPath().getName())));
+    prepareTimelineAndValidate(metaClient, validator,
+        Collections.singletonList(INSTANT_GENERATOR.createNewInstant(
+            HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, logInstantTime)),
+        logFile, committedFilesMap,
+        Pair.of(true,
+            String.format("Log file is committed in an instant in active timeline: instantTime=%s %s",
+                logInstantTime, logFile.getPath().toString())));
+    committedFilesMap.clear();
+
+    // Log block created by completed delta commit before active timeline starts
+    prepareTimelineAndValidate(metaClient, validator,
+        Collections.singletonList(INSTANT_GENERATOR.createNewInstant(
+            HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, newInstantTime)),
+        logFile, committedFilesMap,
+        Pair.of(true,
+            String.format("Log file is committed in an instant in archived timeline: instantTime=%s %s",
+                logInstantTime, logFile.getPath().toString())));
+
+    // Log block created by inflight delta commit in active timeline
+    prepareTimelineAndValidate(metaClient, validator,
+        Collections.singletonList(INSTANT_GENERATOR.createNewInstant(
+            HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, logInstantTime)),
+        logFile, committedFilesMap, Pair.of(false, ""));
+
+    // Log block created by a delta commit not in active timeline
+    prepareTimelineAndValidate(metaClient, validator,
+        Collections.singletonList(INSTANT_GENERATOR.createNewInstant(
+            HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, baseInstantTime)),
+        logFile, committedFilesMap, Pair.of(false, ""));
+  }
+
+  private void prepareTimelineAndValidate(HoodieTableMetaClient metaClient,
+                                          MockHoodieMetadataTableValidator validator,
+                                          List<HoodieInstant> instantList,
+                                          HoodieLogFile logFile,
+                                          Map<String, Set<String>> committedFilesMap,
+                                          Pair<Boolean, String> expected) {
+    HoodieTimeline timeline = new ActiveTimelineV2();
+    timeline.setInstants(instantList);
+    when(metaClient.getCommitsTimeline()).thenReturn(timeline);
+    assertEquals(expected,
+        validator.hasCommittedLogFiles(
+            storage, new HashSet<>(Collections.singletonList(logFile.getPath().toString())),
+            metaClient, committedFilesMap));
+  }
+
+  private HoodieLogFile prepareLogFile(String fileId,
+                                       String baseInstantTime,
+                                       String instantTime,
+                                       boolean writeDataBlock) throws IOException, InterruptedException {
+    try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
+        .onParentPath(new StoragePath(tempDir.toString()))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withFileId(fileId)
+        .withInstantTime(instantTime)
+        .withStorage(storage)
+        .withSizeThreshold(Long.MAX_VALUE).build()) {
+      Map<HoodieLogBlock.HeaderMetadataType, String> header =
+          new EnumMap<>(HoodieLogBlock.HeaderMetadataType.class);
+      if (writeDataBlock) {
+        header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
+        header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
+        writer.appendBlock(new HoodieAvroDataBlock(
+            Collections.emptyList(), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      } else {
+        header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
+        header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, baseInstantTime);
+        header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
+            String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
+        writer.appendBlock(new HoodieCommandBlock(header));
+      }
+      return writer.getLogFile();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testValidate(boolean oversizeList) {
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    int listSize = oversizeList ? 5000 : 100;
+    String partition = "partition10";
+    String label = "metadata item";
+
+    // Base file list
+    Pair<List<HoodieBaseFile>, List<HoodieBaseFile>> filelistPair = generateTwoEqualBaseFileList(listSize);
+    runValidateAndVerify(
+        validator, oversizeList, partition, label, filelistPair.getLeft(), filelistPair.getRight(),
+        generateRandomBaseFile().getLeft());
+
+    // Column stats list
+    Pair<List<HoodieColumnRangeMetadata<Comparable>>, List<HoodieColumnRangeMetadata<Comparable>>> statsListPair =
+        generateTwoEqualColumnStatsList(listSize);
+    runValidateAndVerify(
+        validator, oversizeList, partition, label, statsListPair.getLeft(), statsListPair.getRight(),
+        generateRandomColumnStats().getLeft());
+  }
+
+  private <T> void runValidateAndVerify(HoodieMetadataTableValidator validator,
+                                        boolean oversizeList, String partition, String label,
+                                        List<T> listMdt, List<T> listFs, T newItem) {
+    assertEquals(
+        oversizeList,
+        toStringWithThreshold(listMdt, Integer.MAX_VALUE).length() > logDetailMaxLength);
+    assertEquals(
+        oversizeList,
+        toStringWithThreshold(listFs, Integer.MAX_VALUE).length() > logDetailMaxLength);
+    // Equal case
+    assertDoesNotThrow(() ->
+        validator.validate(listMdt, listFs, partition, label));
+    // Size mismatch
+    listFs.add(newItem);
+    Exception exception = assertThrows(
+        HoodieValidationException.class,
+        () -> validator.validate(listMdt, listFs, partition, label));
+    assertEquals(
+        String.format(
+            "Validation of %s for partition %s failed for table: %s. "
+                + "Number of %s based on the file system does not match that based on "
+                + "the metadata table. File system-based listing (%s): %s; "
+                + "MDT-based listing (%s): %s.",
+            label, partition, basePath, label, listFs.size(),
+            toStringWithThreshold(listFs, logDetailMaxLength),
+            listMdt.size(), toStringWithThreshold(listMdt, logDetailMaxLength)),
+        exception.getMessage());
+    listFs.remove(listFs.size() - 1);
+    // Item mismatch
+    int i = 35;
+    listFs.set(i, newItem);
+    exception = assertThrows(
+        HoodieValidationException.class,
+        () -> validator.validate(listMdt, listFs, partition, label));
+    assertEquals(
+        String.format(
+            "Validation of %s for partition %s failed for table: %s. "
+                + "%s mismatch. File slice from file system-based listing: %s; "
+                + "File slice from MDT-based listing: %s.",
+            label, partition, basePath, label, listFs.get(i), listMdt.get(i)),
+        exception.getMessage());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testValidateFileSlices(boolean oversizeList) {
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    TimeGenerator timeGenerator = TimeGenerators
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
+            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    int listSize = oversizeList ? 500 : 50;
+    String partition = "partition10";
+    String label = "metadata item";
+
+    // Base file list
+    Pair<List<FileSlice>, List<FileSlice>> filelistPair =
+        generateTwoEqualFileSliceList(listSize, timeGenerator);
+    List<FileSlice> listMdt = filelistPair.getLeft();
+    List<FileSlice> listFs = filelistPair.getRight();
+    // Equal case
+    assertDoesNotThrow(() ->
+        validator.validateFileSlices(listMdt, listFs, partition, metaClient, label));
+    // Size mismatch
+    listFs.add(generateRandomFileSlice(
+        TimelineUtils.generateInstantTime(true, timeGenerator),
+        TimelineUtils.generateInstantTime(true, timeGenerator),
+        TimelineUtils.generateInstantTime(true, timeGenerator)).getLeft());
+    assertEquals(
+        oversizeList,
+        toStringWithThreshold(listMdt, Integer.MAX_VALUE).length() > logDetailMaxLength);
+    assertEquals(
+        oversizeList,
+        toStringWithThreshold(listFs, Integer.MAX_VALUE).length() > logDetailMaxLength);
+    Exception exception = assertThrows(
+        HoodieValidationException.class,
+        () -> validator.validateFileSlices(listMdt, listFs, partition, metaClient, label));
+    assertEquals(
+        String.format(
+            "Validation of %s for partition %s failed for table: %s. "
+                + "Number of file slices based on the file system does not match that based on the "
+                + "metadata table. File system-based listing (%s file slices): %s; "
+                + "MDT-based listing (%s file slices): %s.",
+            label, partition, basePath, listFs.size(),
+            toStringWithThreshold(listFs, logDetailMaxLength),
+            listMdt.size(), toStringWithThreshold(listMdt, logDetailMaxLength)),
+        exception.getMessage());
+    listFs.remove(listFs.size() - 1);
+    // Item mismatch
+    int i = 35;
+    // Instant time mismatch
+    FileSlice originalFileSlice = listMdt.get(i);
+    FileSlice mismatchFileSlice = new FileSlice(
+        originalFileSlice.getFileGroupId(),
+        TimelineUtils.generateInstantTime(true, timeGenerator),
+        originalFileSlice.getBaseFile().get(),
+        originalFileSlice.getLogFiles().collect(Collectors.toList()));
+    listMdt.set(i, mismatchFileSlice);
+    exception = assertThrows(
+        HoodieValidationException.class,
+        () -> validator.validateFileSlices(listMdt, listFs, partition, metaClient, label));
+    assertEquals(
+        String.format(
+            "Validation of %s for partition %s failed for table: %s. "
+                + "File group ID (missing a file group in MDT) "
+                + "or base instant time mismatches. File slice from file system-based listing: %s; "
+                + "File slice from MDT-based listing: %s.",
+            label, partition, basePath, listFs.get(i), listMdt.get(i)),
+        exception.getMessage());
+    // base file mismatch
+    mismatchFileSlice = new FileSlice(
+        originalFileSlice.getFileGroupId(),
+        originalFileSlice.getBaseInstantTime(),
+        generateRandomBaseFile().getLeft(),
+        originalFileSlice.getLogFiles().collect(Collectors.toList()));
+    listMdt.set(i, mismatchFileSlice);
+    exception = assertThrows(
+        HoodieValidationException.class,
+        () -> validator.validateFileSlices(listMdt, listFs, partition, metaClient, label));
+    assertEquals(
+        String.format(
+            "Validation of %s for partition %s failed for table: %s. "
+                + "Base files mismatch. "
+                + "File slice from file system-based listing: %s; "
+                + "File slice from MDT-based listing: %s.",
+            label, partition, basePath, listFs.get(i), listMdt.get(i)),
+        exception.getMessage());
+  }
+
+  Pair<List<HoodieBaseFile>, List<HoodieBaseFile>> generateTwoEqualBaseFileList(int size) {
+    List<HoodieBaseFile> list1 = new ArrayList<>();
+    List<HoodieBaseFile> list2 = new ArrayList<>();
+    IntStream.range(0, size).forEach(i -> {
+      Pair<HoodieBaseFile, HoodieBaseFile> pair = generateRandomBaseFile();
+      list1.add(pair.getLeft());
+      list2.add(pair.getRight());
+    });
+    return Pair.of(
+        list1.stream().sorted(new HoodieMetadataTableValidator.HoodieBaseFileComparator())
+            .collect(Collectors.toList()),
+        list2.stream().sorted(new HoodieMetadataTableValidator.HoodieBaseFileComparator())
+            .collect(Collectors.toList()));
+  }
+
+  Pair<List<HoodieColumnRangeMetadata<Comparable>>,
+      List<HoodieColumnRangeMetadata<Comparable>>> generateTwoEqualColumnStatsList(int size) {
+    List<HoodieColumnRangeMetadata<Comparable>> list1 = new ArrayList<>();
+    List<HoodieColumnRangeMetadata<Comparable>> list2 = new ArrayList<>();
+    IntStream.range(0, size).forEach(i -> {
+      Pair<HoodieColumnRangeMetadata, HoodieColumnRangeMetadata> pair = generateRandomColumnStats();
+      list1.add(pair.getLeft());
+      list2.add(pair.getRight());
+    });
+    return Pair.of(
+        list1.stream().sorted(new HoodieMetadataTableValidator.HoodieColumnRangeMetadataComparator())
+            .collect(Collectors.toList()),
+        list2.stream().sorted(new HoodieMetadataTableValidator.HoodieColumnRangeMetadataComparator())
+            .collect(Collectors.toList()));
+  }
+
+  Pair<List<FileSlice>, List<FileSlice>> generateTwoEqualFileSliceList(int size,
+                                                                       TimeGenerator timeGenerator) {
+    List<FileSlice> list1 = new ArrayList<>();
+    List<FileSlice> list2 = new ArrayList<>();
+    String baseInstantTime = TimelineUtils.generateInstantTime(true, timeGenerator);
+    String logInstantTime1 = TimelineUtils.generateInstantTime(true, timeGenerator);
+    String logInstantTime2 = TimelineUtils.generateInstantTime(true, timeGenerator);
+    IntStream.range(0, size).forEach(i -> {
+      Pair<FileSlice, FileSlice> pair =
+          generateRandomFileSlice(baseInstantTime, logInstantTime1, logInstantTime2);
+      list1.add(pair.getLeft());
+      list2.add(pair.getRight());
+    });
+    return Pair.of(
+        list1.stream().sorted(new HoodieMetadataTableValidator.FileSliceComparator())
+            .collect(Collectors.toList()),
+        list2.stream().sorted(new HoodieMetadataTableValidator.FileSliceComparator())
+            .collect(Collectors.toList()));
+  }
+
+  private Pair<HoodieBaseFile, HoodieBaseFile> generateRandomBaseFile() {
+    String filePath = "/dummy/base/" + FSUtils.makeBaseFileName(
+        "001", "1-0-1", UUID.randomUUID().toString(), HoodieFileFormat.PARQUET.getFileExtension());
+    return Pair.of(new HoodieBaseFile(filePath), new HoodieBaseFile(new String(filePath)));
+  }
+
+  private Pair<HoodieColumnRangeMetadata, HoodieColumnRangeMetadata> generateRandomColumnStats() {
+    long count = RANDOM.nextLong();
+    long size = RANDOM.nextLong();
+    switch (RANDOM.nextInt(3)) {
+      case 0:
+        HoodieColumnRangeMetadata<Integer> intMetadata = HoodieColumnRangeMetadata.create(
+            generateRandomString(30), generateRandomString(5),
+            RANDOM.nextInt() % 30, RANDOM.nextInt() % 1000_000_000 + 30,
+            count / 3L, count, size, size / 8L);
+        return Pair.of(intMetadata,
+            HoodieColumnRangeMetadata.create(
+                new String(intMetadata.getFilePath()), new String(intMetadata.getColumnName()),
+                (int) intMetadata.getMinValue(), (int) intMetadata.getMaxValue(),
+                count / 3L, count, size, size / 8L));
+      case 1:
+        HoodieColumnRangeMetadata<Long> longMetadata = HoodieColumnRangeMetadata.create(
+            generateRandomString(30), generateRandomString(5),
+            RANDOM.nextLong() % 30L, RANDOM.nextInt() % 1000_000_000_000_000L + 30L,
+            count / 3L, count, size, size / 8L);
+        return Pair.of(longMetadata,
+            HoodieColumnRangeMetadata.create(
+                new String(longMetadata.getFilePath()), new String(longMetadata.getColumnName()),
+                (long) longMetadata.getMinValue(), (long) longMetadata.getMaxValue(),
+                count / 3L, count, size, size / 8L));
+      default:
+        String stringValue1 = generateRandomString(20);
+        String stringValue2 = generateRandomString(20);
+        HoodieColumnRangeMetadata<String> stringMetadata = HoodieColumnRangeMetadata.create(
+            generateRandomString(30), generateRandomString(5),
+            stringValue1, stringValue2,
+            count / 3L, count, size, size / 8L);
+        return Pair.of(stringMetadata,
+            HoodieColumnRangeMetadata.create(
+                new String(stringMetadata.getFilePath()), new String(stringMetadata.getColumnName()),
+                new String(stringValue1), new String(stringValue2),
+                count / 3L, count, size, size / 8L));
+    }
+  }
+
+  private Pair<FileSlice, FileSlice> generateRandomFileSlice(String baseInstantTime,
+                                                             String logInstantTime1,
+                                                             String logInstantTime2) {
+    String partition = "partition";
+    String fileId = UUID.randomUUID().toString();
+    Pair<HoodieBaseFile, HoodieBaseFile> baseFilePair = generateRandomBaseFile();
+    List<HoodieLogFile> logFileList = new ArrayList<>();
+    logFileList.add(generateRandomLogFile(fileId, logInstantTime1));
+    logFileList.add(generateRandomLogFile(fileId, logInstantTime2));
+    FileSlice fileSlice = new FileSlice(
+        new HoodieFileGroupId(partition, fileId), baseInstantTime,
+        baseFilePair.getLeft(), logFileList);
+    return Pair.of(fileSlice,
+        new FileSlice(new HoodieFileGroupId(partition, fileId),
+            new String(baseInstantTime), baseFilePair.getRight(),
+            logFileList.stream().map(HoodieLogFile::new).collect(Collectors.toList())));
+  }
+
+  private HoodieLogFile generateRandomLogFile(String fileId, String instantTime) {
+    return new HoodieLogFile("/dummy/base/" + FSUtils.makeLogFileName(
+        fileId, HoodieLogFile.DELTA_EXTENSION, instantTime, 1, "1-0-1"));
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testRecordIndexMismatch(boolean ignoreFailed) throws IOException {
@@ -757,7 +1182,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertFalse(validator.hasValidationFailure());
 
     // lets override one of the latest base file w/ another. so that file slice validation succeeds, but record index comparison fails.
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext,
         metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
     List<HoodieBaseFile> allBaseFiles = fsView.getLatestBaseFiles(StringUtils.EMPTY_STRING).collect(Collectors.toList());
 
@@ -939,5 +1364,184 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  @Test
+  void testLogDetailMaxLength() {
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
+
+    // Create a large dataset to generate long validation messages
+    Dataset<Row> inserts = makeInsertDf("000", 1000).cache();
+    inserts.write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+
+    // Test with default max length
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+
+    // Generate two unequal lists to trigger validation error
+    TimeGenerator timeGenerator = TimeGenerators
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
+            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
+    Pair<List<FileSlice>, List<FileSlice>> filelistPair = generateTwoEqualFileSliceList(500, timeGenerator);
+    List<FileSlice> listMdt = filelistPair.getLeft();
+    List<FileSlice> listFs = new ArrayList<>(filelistPair.getRight());
+    listFs.add(generateRandomFileSlice(TimelineUtils.generateInstantTime(true, timeGenerator),
+        TimelineUtils.generateInstantTime(true, timeGenerator),
+        TimelineUtils.generateInstantTime(true, timeGenerator)).getLeft());
+
+    // Verify default behavior (100,000 chars)
+    MockHoodieMetadataTableValidator finalValidator = validator;
+    Exception exception = assertThrows(
+        HoodieValidationException.class,
+        () -> finalValidator.validateFileSlices(listMdt, listFs, "partition", metaClient, "test"));
+    // The message include 3 parts: Truncated file slice list of MDT, truncated file slice list of File system, other exception message strings.
+    assertTrue(exception.getMessage().length() <= 100_000 * 2 + 1000);
+
+    // Test with custom small max length
+    config.logDetailMaxLength = 1000;
+    validator = new MockHoodieMetadataTableValidator(jsc, config);
+    MockHoodieMetadataTableValidator finalValidator1 = validator;
+    exception = assertThrows(
+        HoodieValidationException.class,
+        () -> finalValidator1.validateFileSlices(listMdt, listFs, "partition", metaClient, "test"));
+    // The message include 3 parts: Truncated file slice list of MDT, truncated file slice list of File system, other exception message strings.
+    assertTrue(exception.getMessage().length() <= 1000 * 2 + 1000);
+
+    // Test with custom large max length
+    config.logDetailMaxLength = 200_000;
+    validator = new MockHoodieMetadataTableValidator(jsc, config);
+    MockHoodieMetadataTableValidator finalValidator2 = validator;
+    exception = assertThrows(
+        HoodieValidationException.class,
+        () -> finalValidator2.validateFileSlices(listMdt, listFs, "partition", metaClient, "test"));
+    // The message include 3 parts: Truncated file slice list of MDT, truncated file slice list of File system, other exception message strings.
+    assertTrue(exception.getMessage().length() <= 200_000 * 2 + 1000);
+  }
+
+  @Test
+  void testValidatePartitionsTruncation() throws IOException {
+    // Setup mock objects
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    config.logDetailMaxLength = 100; // Small length to force truncation
+    
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieStorage fs = mock(HoodieStorage.class);
+    
+    // Generate long partition lists that will exceed the truncation threshold
+    List<String> mdtPartitions = new ArrayList<>();
+    List<String> fsPartitions = new ArrayList<>();
+    for (int i = 0; i < 20; i++) {
+      mdtPartitions.add("partition_" + generateRandomString(20));
+    }
+    for (int i = 0; i < 15; i++) {
+      fsPartitions.add("partition_" + generateRandomString(20));
+    }
+    
+    // Setup mocks
+    when(metaClient.getStorage()).thenReturn(fs);
+    for (String partition : mdtPartitions) {
+      when(fs.exists(new StoragePath(basePath + "/" + partition))).thenReturn(true);
+    }
+    
+    // Mock timeline
+    HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
+    HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
+    when(metaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
+    when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
+    
+    // Setup validator with test data
+    validator.setMetadataPartitionsToReturn(mdtPartitions);
+    validator.setFsPartitionsToReturn(fsPartitions);
+    
+    // Test validation with truncation
+    HoodieValidationException exception = assertThrows(HoodieValidationException.class, () -> {
+      validator.validatePartitions(engineContext, new StoragePath(basePath), metaClient);
+    });
+    
+    // Verify truncation in error message
+    String errorMsg = exception.getMessage();
+    assertTrue(errorMsg.contains("..."));  // Should contain truncation indicator
+    assertTrue(errorMsg.length() <= config.logDetailMaxLength * 2 + 1000); // Account for both lists and additional message text
+    
+    // Verify the error message contains the count of partitions
+    assertTrue(errorMsg.contains(String.format("Additional %d partitions from FS, but missing from MDT : ",
+        fsPartitions.size())));
+    assertTrue(errorMsg.contains(String.format("additional %d partitions from MDT, but missing from FS listing :",
+        mdtPartitions.size())));
+  }
+
+  @Test
+  void testValidateFileSlicesTruncation() {
+    // Setup mock objects
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    config.logDetailMaxLength = 100; // Small length to force truncation
+    
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    
+    // Generate large lists of file slices that will exceed truncation threshold
+    String partition = "partition_" + generateRandomString(10);
+    List<FileSlice> mdtFileSlices = new ArrayList<>();
+    List<FileSlice> fsFileSlices = new ArrayList<>();
+    
+    // Generate 20 file slices for MDT and 15 for FS to ensure they're different
+    TimeGenerator timeGenerator = TimeGenerators
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
+            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
+    for (int i = 0; i < 20; i++) {
+      String fileId = UUID.randomUUID().toString();
+
+      String baseInstantTime = metaClient.createNewInstantTime();
+
+      // Create file slice with base file and log files
+      HoodieBaseFile baseFile = new HoodieBaseFile(FSUtils.makeBaseFileName(
+          baseInstantTime, "1-0-1", fileId, HoodieFileFormat.PARQUET.getFileExtension()));
+      List<HoodieLogFile> logFiles = Arrays.asList(
+        new HoodieLogFile(FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, baseInstantTime, 1, "1-0-1")),
+        new HoodieLogFile(FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, baseInstantTime, 2, "1-0-1"))
+      );
+
+      FileSlice slice = new FileSlice(new HoodieFileGroupId(partition, fileId), baseInstantTime);
+      slice.setBaseFile(baseFile);
+      logFiles.forEach(slice::addLogFile);
+      mdtFileSlices.add(slice);
+
+      // Add to FS list for first 15 entries
+      if (i < 15) {
+        fsFileSlices.add(new FileSlice(slice));
+      }
+    }
+    
+    // Test validation with truncation
+    HoodieValidationException exception = assertThrows(
+        HoodieValidationException.class,
+        () -> validator.validateFileSlices(mdtFileSlices, fsFileSlices, partition, metaClient, "test"));
+    
+    String errorMsg = exception.getMessage();
+    
+    // Verify truncation behavior
+    assertTrue(errorMsg.contains("..."));  // Should contain truncation indicator
+    assertTrue(errorMsg.length() <= config.logDetailMaxLength * 2 + 1000); // Account for both lists and additional message text
+    
+    // Verify error message contains file slice counts
+    assertTrue(errorMsg.contains(String.format("Number of file slices based on the file system does not match that based on the metadata table. File system-based listing (%d file slices)",
+        fsFileSlices.size())));
+    assertTrue(errorMsg.contains(String.format("MDT-based listing (%d file slices)", 
+        mdtFileSlices.size())));
   }
 }

@@ -20,6 +20,8 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -69,7 +71,7 @@ import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.P
  */
 public class DatePartitionPathSelector extends DFSPathSelector {
 
-  private static volatile Logger LOG = LoggerFactory.getLogger(DatePartitionPathSelector.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DatePartitionPathSelector.class);
 
   private final String dateFormat;
   private final int datePartitionDepth;
@@ -111,9 +113,9 @@ public class DatePartitionPathSelector extends DFSPathSelector {
   }
 
   @Override
-  public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(JavaSparkContext sparkContext,
-                                                                             Option<String> lastCheckpointStr,
-                                                                             long sourceLimit) {
+  public Pair<Option<String>, Checkpoint> getNextFilePathsAndMaxModificationTime(JavaSparkContext sparkContext,
+                                                                                 Option<Checkpoint> lastCheckpoint,
+                                                                                 long sourceLimit) {
     // If not specified the current date is assumed by default.
     LocalDate currentDate = LocalDate.parse(
         getStringWithAltKeys(props, DatePartitionPathSelectorConfig.CURRENT_DATE, LocalDate.now().toString()));
@@ -130,7 +132,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
             + numPrevDaysToList
             + " from current date => "
             + currentDate);
-    long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
+    long lastCheckpointTime = lastCheckpoint.map(e -> Long.parseLong(e.getCheckpointKey())).orElse(Long.MIN_VALUE);
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(sparkContext);
     HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(fs.getConf());
     List<String> prunedPartitionPaths = pruneDatePartitionPaths(
@@ -164,13 +166,13 @@ public class DatePartitionPathSelector extends DFSPathSelector {
 
     // no data to read
     if (filteredFiles.isEmpty()) {
-      return new ImmutablePair<>(Option.empty(), String.valueOf(newCheckpointTime));
+      return new ImmutablePair<>(Option.empty(), new StreamerCheckpointV2(String.valueOf(newCheckpointTime)));
     }
 
     // read the files out.
     String pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
 
-    return new ImmutablePair<>(Option.ofNullable(pathStr), String.valueOf(newCheckpointTime));
+    return new ImmutablePair<>(Option.ofNullable(pathStr), new StreamerCheckpointV2(String.valueOf(newCheckpointTime)));
   }
 
   /**

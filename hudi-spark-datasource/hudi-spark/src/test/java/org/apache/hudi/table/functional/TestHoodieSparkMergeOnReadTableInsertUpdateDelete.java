@@ -45,7 +45,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -249,7 +249,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       // verify that there is no new rollback instant generated
       HoodieInstant rollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
       String basePathStr = metaClient.getBasePath().toString();
-      FileCreateUtils.deleteRollbackCommit(basePathStr.substring(basePathStr.indexOf(":") + 1),
+      FileCreateUtilsLegacy.deleteRollbackCommit(basePathStr.substring(basePathStr.indexOf(":") + 1),
           rollbackInstant.requestedTime());
       metaClient.reloadActiveTimeline();
       try (SparkRDDWriteClient client1 = getHoodieWriteClient(cfg)) {
@@ -454,7 +454,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     List<HoodieRecord> hoodieRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
-    return new HoodieAvroDataBlock(hoodieRecords, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    return new HoodieAvroDataBlock(hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   private String generateFakeWriteToken(String correctWriteToken) {

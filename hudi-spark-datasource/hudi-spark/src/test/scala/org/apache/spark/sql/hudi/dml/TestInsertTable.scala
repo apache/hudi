@@ -23,13 +23,15 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -41,6 +43,139 @@ import java.io.File
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 class TestInsertTable extends HoodieSparkSqlTestBase {
+
+  test("Test Insert Into with subset of columns") {
+    // This is only supported by Spark 3.5
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      Seq("cow", "mor").foreach(tableType =>
+        Seq(true, false).foreach(isPartitioned => withTempDir { tmp =>
+          testInsertIntoWithSubsetOfColumns(
+            "hudi", tableType, s"${tmp.getCanonicalPath}/hudi_table", isPartitioned)
+        }))
+    }
+  }
+
+  test("Test Insert Into with subset of columns on Parquet table") {
+    // This is only supported by Spark 3.5
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      // Make sure parquet tables are not affected by the custom rules for
+      // INSERT INTO statements on Hudi tables
+      Seq(true, false).foreach(isPartitioned => withTempDir { tmp =>
+        testInsertIntoWithSubsetOfColumns(
+          "parquet", "", s"${tmp.getCanonicalPath}/parquet_table", isPartitioned)
+      })
+    }
+  }
+
+  private def testInsertIntoWithSubsetOfColumns(format: String,
+                                                tableType: String,
+                                                tablePath: String,
+                                                isPartitioned: Boolean): Unit = {
+    val tableName = generateTableName
+    val createTablePartitionClause = if (isPartitioned) "partitioned by (dt)" else ""
+    // Create a partitioned table
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  dt string,
+         |  name string,
+         |  price double,
+         |  ts long
+         |) using $format
+         | tblproperties (
+         | type = '$tableType',
+         | primaryKey = 'id'
+         | )
+         | $createTablePartitionClause
+         | location '$tablePath'
+       """.stripMargin)
+
+    // INSERT INTO with all columns
+    // Same ordering of columns as the schema
+    spark.sql(
+      s"""
+         | insert into $tableName (id, name, price, ts, dt)
+         | values (1, 'a1', 10, 1000, '2025-01-01'),
+         | (2, 'a2', 20, 2000, '2025-01-02')
+        """.stripMargin)
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+      Seq(2, "a2", 20.0, 2000, "2025-01-02")
+    )
+
+    // Different ordering of columns compared to the schema
+    spark.sql(
+      s"""
+         | insert into $tableName (dt, name, id, price, ts)
+         | values ('2025-01-03', 'a3', 3, 30, 3000)
+        """.stripMargin)
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+      Seq(2, "a2", 20.0, 2000, "2025-01-02"),
+      Seq(3, "a3", 30.0, 3000, "2025-01-03")
+    )
+
+    // INSERT INTO with a subset of columns
+    // Using different ordering of subset of columns in user-specified columns,
+    // and VALUES without column names
+    spark.sql(
+      s"""
+         | insert into $tableName (dt, ts, name, id)
+         | values ('2025-01-04', 4000, 'a4', 4)
+        """.stripMargin)
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+      Seq(2, "a2", 20.0, 2000, "2025-01-02"),
+      Seq(3, "a3", 30.0, 3000, "2025-01-03"),
+      Seq(4, "a4", null, 4000, "2025-01-04")
+    )
+
+    spark.sql(
+      s"""
+         | insert into $tableName (id, price, ts, dt)
+         | values (5, 50.0, 5000, '2025-01-05')
+        """.stripMargin)
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+      Seq(2, "a2", 20.0, 2000, "2025-01-02"),
+      Seq(3, "a3", 30.0, 3000, "2025-01-03"),
+      Seq(4, "a4", null, 4000, "2025-01-04"),
+      Seq(5, null, 50.0, 5000, "2025-01-05")
+    )
+
+    // Using a subset of columns in user-specified columns, and VALUES with column names
+    spark.sql(
+      s"""
+         | insert into $tableName (dt, ts, id, name)
+         | values ('2025-01-06' as dt, 6000 as ts, 6 as id, 'a6' as name)
+        """.stripMargin)
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+      Seq(2, "a2", 20.0, 2000, "2025-01-02"),
+      Seq(3, "a3", 30.0, 3000, "2025-01-03"),
+      Seq(4, "a4", null, 4000, "2025-01-04"),
+      Seq(5, null, 50.0, 5000, "2025-01-05"),
+      Seq(6, "a6", null, 6000, "2025-01-06")
+    )
+
+    if (isPartitioned) {
+      spark.sql(
+        s"""
+           | insert into $tableName partition(dt='2025-01-07') (ts, id, name)
+           | values (7000, 7, 'a7')
+        """.stripMargin)
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+        Seq(2, "a2", 20.0, 2000, "2025-01-02"),
+        Seq(3, "a3", 30.0, 3000, "2025-01-03"),
+        Seq(4, "a4", null, 4000, "2025-01-04"),
+        Seq(5, null, 50.0, 5000, "2025-01-05"),
+        Seq(6, "a6", null, 6000, "2025-01-06"),
+        Seq(7, "a7", null, 7000, "2025-01-07")
+      )
+    }
+  }
 
   test("Test table type name incase-sensitive test") {
     withTempDir { tmp =>
@@ -80,7 +215,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         s"""
            |merge into ${targetTable} as target
            |using (
-           |select '2' as id, 'bb' as name, 456 as dt, '2024-02-19' as `day`, 10 as `hour`
+           |select '2' as id, 'bb' as name, 456L as dt, '2024-02-19' as `day`, 10 as `hour`
            |) as source
            |on target.id = source.id
            |when matched then update set *
@@ -352,7 +487,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test Insert Into Non Partitioned Table") {
     withRecordType(Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))(withTempDir { tmp =>
       val tableName = generateTableName
-      spark.sql(s"set hoodie.sql.insert.mode=strict")
+      spark.sql(s"set hoodie.datasource.insert.dup.policy=fail")
       // Create none partitioned cow table
       spark.sql(
         s"""
@@ -394,7 +529,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
       // Create table with dropDup is true
       val tableName2 = generateTableName
-      spark.sql("set hoodie.datasource.write.insert.drop.duplicates = true")
+      spark.sql("set hoodie.datasource.insert.dup.policy=drop")
       spark.sql(
         s"""
            |create table $tableName2 (
@@ -417,15 +552,15 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10.0, 1000)
       )
       // disable this config to avoid affect other test in this class.
-      spark.sql("set hoodie.datasource.write.insert.drop.duplicates = false")
       spark.sql(s"set hoodie.sql.insert.mode=upsert")
     })
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
   }
 
   test("Test Insert Into None Partitioned Table strict mode with no preCombineField") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      spark.sql(s"set hoodie.sql.insert.mode=strict")
+      spark.sql(s"set hoodie.datasource.insert.dup.policy=fail")
       // Create none partitioned cow table
       spark.sql(
         s"""
@@ -449,7 +584,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10.0),
         Seq(2, "a2", 12.0)
       )
-
       spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
       assertThrows[HoodieDuplicateKeyException] {
         try {
@@ -1153,6 +1287,48 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test bulk insert overwrite with rollback") {
+    withSQLConf("hoodie.spark.sql.insert.into.operation" -> "bulk_insert") {
+      withTempDir { tmp =>
+        withTable(generateTableName) { tableName =>
+          val tableLocation = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  dt int
+               |) using hudi
+               | tblproperties (
+               |  type = 'cow',
+               |  primaryKey = 'id'
+               | ) partitioned by (dt)
+               | location '$tableLocation'
+               | """.stripMargin)
+
+          spark.sql(s"insert overwrite table $tableName partition (dt) values(1, 'a1', 10)")
+          checkAnswer(s"select id, name, dt from $tableName order by id")(
+            Seq(1, "a1", 10)
+          )
+
+          // Simulate a insert overwrite failure
+          val metaClient = createMetaClient(spark, tableLocation)
+          val instant = metaClient.createNewInstantTime()
+          val timeline = HoodieTestUtils.TIMELINE_FACTORY.createActiveTimeline(metaClient)
+          timeline.createNewInstant(metaClient.createNewInstant(
+            HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instant))
+          timeline.createNewInstant(metaClient.createNewInstant(
+            HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, instant))
+
+          spark.sql(s"insert overwrite table $tableName partition (dt) values(1, 'a1', 10)")
+          checkAnswer(s"select id, name, dt from $tableName order by id")(
+            Seq(1, "a1", 10)
+          )
+        }
+      }
+    }
+  }
+
   test("Test insert overwrite partitions with empty dataset") {
     Seq(true, false).foreach { enableBulkInsert =>
       val bulkInsertConf: Array[(String, String)] = if (enableBulkInsert) {
@@ -1329,6 +1505,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test insert pk-table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     Seq("cow", "mor").foreach { tableType =>
       withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
         withRecordType()(withTempDir { tmp =>
@@ -1359,41 +1536,41 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test For read operation's field") {
-      withRecordType()(withTempDir { tmp => {
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        import spark.implicits._
-        val day = "2021-08-02"
-        val df = Seq((1, "a1", 10, 1000, day, 12)).toDF("id", "name", "value", "ts", "day", "hh")
-        // Write a table by spark dataframe.
-        df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "day,hh")
-          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
-          .mode(SaveMode.Overwrite)
-          .save(tablePath)
+    withRecordType()(withTempDir { tmp => {
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      import spark.implicits._
+      val day = "2021-08-02"
+      val df = Seq((1, "a1", 10, 1000, day, 12)).toDF("id", "name", "value", "ts", "day", "hh")
+      // Write a table by spark dataframe.
+      df.write.format("hudi")
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+        .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(PRECOMBINE_FIELD.key, "ts")
+        .option(PARTITIONPATH_FIELD.key, "day,hh")
+        .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
+        .mode(SaveMode.Overwrite)
+        .save(tablePath)
 
-        val metaClient = createMetaClient(spark, tablePath)
+      val metaClient = createMetaClient(spark, tablePath)
 
-        assertResult(true)(new TableSchemaResolver(metaClient).hasOperationField)
+      assertResult(true)(new TableSchemaResolver(metaClient).hasOperationField)
 
-        spark.sql(
-          s"""
-             |create table $tableName using hudi
-             |location '${tablePath}'
-             |""".stripMargin)
+      spark.sql(
+        s"""
+           |create table $tableName using hudi
+           |location '${tablePath}'
+           |""".stripMargin)
 
-        // Note: spark sql batch write currently does not write actual content to the operation field
-        checkAnswer(s"select id, _hoodie_operation from $tableName")(
-          Seq(1, null)
-        )
-      }
-      })
+      // Note: spark sql batch write currently does not write actual content to the operation field
+      checkAnswer(s"select id, _hoodie_operation from $tableName")(
+        Seq(1, null)
+      )
+    }
+    })
   }
 
   test("Test enable hoodie.datasource.write.drop.partition.columns when write") {
@@ -1463,45 +1640,43 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test Insert Into With Catalog Identifier for spark >= 3.2.0") {
+  test("Test Insert Into With Catalog Identifier") {
     Seq("hudi", "parquet").foreach { format =>
       withTempDir { tmp =>
         val tableName = s"spark_catalog.default.$generateTableName"
         // Create a partitioned table
-        if (HoodieSparkUtils.gteqSpark3_3) {
-          spark.sql(
-            s"""
-               |create table $tableName (
-               |  id int,
-               |  name string,
-               |  price double,
-               |  ts long,
-               |  dt string
-               |) using $format
-               | tblproperties (primaryKey = 'id')
-               | partitioned by (dt)
-               | location '${tmp.getCanonicalPath}'
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string
+             |) using $format
+             | tblproperties (primaryKey = 'id')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
        """.stripMargin)
-          // Insert into dynamic partition
-          spark.sql(
-            s"""
-               | insert into $tableName
-               | select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-01-05' as dt
+        // Insert into dynamic partition
+        spark.sql(
+          s"""
+             | insert into $tableName
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-01-05' as dt
         """.stripMargin)
-          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-            Seq(1, "a1", 10.0, 1000, "2021-01-05")
-          )
-          // Insert into static partition
-          spark.sql(
-            s"""
-               | insert into $tableName partition(dt = '2021-01-05')
-               | select 2 as id, 'a2' as name, 10 as price, 1000 as ts
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05")
+        )
+        // Insert into static partition
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt = '2021-01-05')
+             | select 2 as id, 'a2' as name, 10 as price, 1000 as ts
         """.stripMargin)
-          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-            Seq(1, "a1", 10.0, 1000, "2021-01-05"),
-            Seq(2, "a2", 10.0, 1000, "2021-01-05")
-          )
-        }
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+          Seq(2, "a2", 10.0, 1000, "2021-01-05")
+        )
       }
     }
   }
@@ -1531,6 +1706,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test enable hoodie.merge.allow.duplicate.on.inserts when write") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     spark.sql("set hoodie.datasource.write.operation = insert")
     Seq("mor", "cow").foreach { tableType =>
       withTempDir { tmp =>
@@ -1574,6 +1750,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Into Bucket Index Table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     withTempDir { tmp =>
       val tableName = generateTableName
       // Create a partitioned table
@@ -1626,7 +1803,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Bulk Insert Into Bucket Index Table") {
-    withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert", "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
+    withSQLConf(
+      "hoodie.datasource.write.operation" -> "bulk_insert",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
       Seq("mor", "cow").foreach { tableType =>
         Seq("true", "false").foreach { bulkInsertAsRow =>
           withTempDir { tmp =>
@@ -1667,43 +1846,156 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
               Seq(3, "a3,3", 30.0, 3000, "2021-01-07")
             )
 
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1, 'a1', 10, 1000, "2021-01-05"),
-                 | (3, "a3", 30, 3000, "2021-01-07")
-               """.stripMargin)
+            // for COW with disabled Spark native row writer, multiple bulk inserts are restricted
+            if (tableType != "cow" && bulkInsertAsRow != "false") {
+              spark.sql(
+                s"""
+                   | insert into $tableName values
+                   | (1, 'a1', 10, 1000, "2021-01-05"),
+                   | (3, "a3", 30, 3000, "2021-01-07")
+                 """.stripMargin)
 
-            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-              Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
-              Seq(1, "a1", 10.0, 1000, "2021-01-05"),
-              Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-              Seq(3, "a3,3", 30.0, 3000, "2021-01-07"),
-              Seq(3, "a3", 30.0, 3000, "2021-01-07")
-            )
+              checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+                Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+                Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+                Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+                Seq(3, "a3,3", 30.0, 3000, "2021-01-07"),
+                Seq(3, "a3", 30.0, 3000, "2021-01-07")
+              )
 
-            // there are two files in partition(dt = '2021-01-05')
-            checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName where dt = '2021-01-05'")(
-              Seq(2)
-            )
+              // there are two files in partition(dt = '2021-01-05')
+              checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName where dt = '2021-01-05'")(
+                Seq(2)
+              )
 
-            // would generate 6 other files in partition(dt = '2021-01-05')
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (4, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (5, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (6, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (7, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (8, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (10, 'a3,3', 30, 3000, "2021-01-05")
-               """.stripMargin)
+              // would generate 6 other files in partition(dt = '2021-01-05')
+              spark.sql(
+                s"""
+                   | insert into $tableName values
+                   | (4, 'a1,1', 10, 1000, "2021-01-05"),
+                   | (5, 'a1,1', 10, 1000, "2021-01-05"),
+                   | (6, 'a1,1', 10, 1000, "2021-01-05"),
+                   | (7, 'a1,1', 10, 1000, "2021-01-05"),
+                   | (8, 'a1,1', 10, 1000, "2021-01-05"),
+                   | (10, 'a3,3', 30, 3000, "2021-01-05")
+                 """.stripMargin)
 
-            checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName where dt = '2021-01-05'")(
-              Seq(8)
-            )
+              checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName where dt = '2021-01-05'")(
+                Seq(8)
+              )
+            }
           }
         }
+      }
+    }
+  }
+
+  test("Test Insert Overwrite Bucket Index Table") {
+    withSQLConf(
+      "hoodie.datasource.write.operation" -> "bulk_insert",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  dt string,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             | primaryKey = 'id,name',
+             | type = 'cow',
+             | preCombineField = 'ts',
+             | hoodie.index.type = 'BUCKET',
+             | hoodie.bucket.index.hash.field = 'id,name',
+             | hoodie.datasource.write.row.writer.enable = 'true')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+        // Note: Do not write the field alias, the partition field must be placed last.
+        spark.sql(
+          s"""
+             | insert into $tableName values
+             | (1, 'a1,1', 10, 1000, "2021-01-05"),
+             | (2, 'a2', 20, 2000, "2021-01-06"),
+             | (3, 'a3,3', 30, 3000, "2021-01-07")
+       """.stripMargin)
+
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+          Seq(3, "a3,3", 30.0, 3000, "2021-01-07")
+        )
+
+        spark.sql(
+          s"""
+             | insert overwrite $tableName values
+             | (1, 'a1,1', 100, 1000, "2021-01-05")
+       """.stripMargin)
+
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1,1", 100.0, 1000, "2021-01-05")
+        )
+      }
+    }
+  }
+
+  test("Test not supported multiple BULK INSERTs into COW with SIMPLE BUCKET and disabled Spark native row writer") {
+    withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id long,
+             |  name string,
+             |  ts int,
+             |  par string
+             |) using hudi
+             | tblproperties (
+             | primaryKey = 'id,name',
+             | type = 'cow',
+             | preCombineField = 'ts',
+             | hoodie.index.type = 'BUCKET',
+             | hoodie.index.bucket.engine = 'SIMPLE',
+             | hoodie.bucket.index.num.buckets = '4',
+             | hoodie.bucket.index.hash.field = 'id,name',
+             | hoodie.datasource.write.row.writer.enable = 'false')
+             | partitioned by (par)
+             | location '${tmp.getCanonicalPath}'
+             """.stripMargin)
+
+        // Used rows with corresponding `bucketId`s if there are 4 buckets
+        //   `id,name`    `bucketId`
+        //    5,'a1,1' ->    1
+        //    6,'a6,6' ->    2
+        //    9,'a3,3' ->    1
+        // 13,'a13,13' ->    2
+        //     24,'cd' ->    0
+
+        // buckets 1 & 2 into partition 'main', bucket 1 into partition 'side'
+        spark.sql(s"insert into $tableName values (5, 'a1,1', 1, 'main'), (6, 'a6,6', 1, 'main'), (9, 'a3,3', 1, 'side')")
+        // bucket 1 into 'main', bucket 2 into 'side', the whole insert will fail due to existed bucket 1 in 'main'
+        val causeRegex = "Multiple bulk insert.*COW.*Spark native row writer.*not supported.*"
+        checkExceptionMatch(s"insert into $tableName values (9, 'a3,3', 2, 'main'), (13, 'a13,13', 1, 'side')")(causeRegex)
+        checkAnswer(spark.sql(s"select id from $tableName order by id").collect())(Seq(5), Seq(6), Seq(9))
+
+        // bucket 0 into 'main', no bucket into 'side', will also fail,
+        // bulk insert into separate not presented bucket, if there is some other buckets already written, also restricted
+        checkExceptionMatch(s"insert into $tableName values (24, 'cd', 1, 'main')")(causeRegex)
+        checkAnswer(spark.sql(s"select id from $tableName where par = 'main' order by id").collect())(Seq(5), Seq(6))
+
+        // for overwrite mode it's allowed to do multiple bulk inserts
+        spark.sql(s"insert overwrite $tableName values (9, 'a3,3', 3, 'main'), (13, 'a13,13', 2, 'side')")
+        // only data from the latest insert overwrite is available,
+        // because insert overwrite drops the whole table due to [HUDI-4704]
+        checkAnswer(spark.sql(s"select id from $tableName order by id").collect())(Seq(9), Seq(13))
       }
     }
   }
@@ -1826,6 +2118,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Overwrite Into Consistent Bucket Index Table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -1997,6 +2290,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert") {
       Seq("false", "true").foreach { bulkInsertAsRow =>
         withTempDir { tmp =>
@@ -2261,7 +2555,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         countDownLatch.countDown
       }
     }
-
   }
 
   test("Test multiple partition fields pruning") {
@@ -2440,8 +2733,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   def ingestAndValidateDataNoPrecombine(tableType: String, tableName: String, tmp: File,
-                            expectedOperationtype: WriteOperationType,
-                            setOptions: List[String] = List.empty) : Unit = {
+                                        expectedOperationtype: WriteOperationType,
+                                        setOptions: List[String] = List.empty) : Unit = {
     setOptions.foreach(entry => {
       spark.sql(entry)
     })
@@ -2551,7 +2844,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test FAIL insert dup policy with INSERT_INTO explicit new configs") {
     withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val operation = WriteOperationType.UPSERT
+        val operation = WriteOperationType.INSERT
         val dupPolicy = FAIL_INSERT_DUP_POLICY
         withTable(generateTableName) { tableName =>
           ingestAndValidateDataDupPolicy(tableType, tableName, tmp, operation,
@@ -2583,6 +2876,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | PARTITIONED BY (boolean_field, float_field, byte_field, short_field, decimal_field, date_field, string_field, timestamp_field)
            |LOCATION '${tmp.getCanonicalPath}'
      """.stripMargin)
+      // Avoid operation type modification.
+      spark.sql(s"set ${INSERT_DROP_DUPS.key}=false")
+      spark.sql(s"set ${INSERT_DUP_POLICY.key}=$NONE_INSERT_DUP_POLICY")
 
       // Insert data into partitioned table
       spark.sql(
@@ -2600,45 +2896,43 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test INSERT INTO with upsert operation type") {
-    if (HoodieSparkUtils.gteqSpark3_3) {
-      withTempDir { tmp =>
-        Seq("cow", "mor").foreach { tableType =>
-          val tableName = generateTableName
-          spark.sql(
-            s"""
-               |create table $tableName (
-               |  id int,
-               |  name string,
-               |  ts long,
-               |  price int
-               |) using hudi
-               |partitioned by (ts)
-               |tblproperties (
-               |  type = '$tableType',
-               |  primaryKey = 'id',
-               |  preCombineField = 'ts'
-               |)
-               |location '${tmp.getCanonicalPath}/$tableName'
-               |""".stripMargin
-          )
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  ts long,
+             |  price int
+             |) using hudi
+             |partitioned by (ts)
+             |tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             |)
+             |location '${tmp.getCanonicalPath}/$tableName'
+             |""".stripMargin
+        )
 
-          // Test insert into with upsert operation type
-          spark.sql(
-            s"""
-               | insert into $tableName
-               | values (1, 'a1', 1000, 10), (2, 'a2', 2000, 20), (3, 'a3', 3000, 30), (4, 'a4', 2000, 10), (5, 'a5', 3000, 20), (6, 'a6', 4000, 30)
-               | """.stripMargin
-          )
-          checkAnswer(s"select id, name, price, ts from $tableName where price > 3000")(
-            Seq(6, "a6", 4000, 30)
-          )
+        // Test insert into with upsert operation type
+        spark.sql(
+          s"""
+             | insert into $tableName
+             | values (1, 'a1', 1000, 10), (2, 'a2', 2000, 20), (3, 'a3', 3000, 30), (4, 'a4', 2000, 10), (5, 'a5', 3000, 20), (6, 'a6', 4000, 30)
+             | """.stripMargin
+        )
+        checkAnswer(s"select id, name, price, ts from $tableName where price > 3000")(
+          Seq(6, "a6", 4000, 30)
+        )
 
-          // Test update
-          spark.sql(s"update $tableName set price = price + 1 where id = 6")
-          checkAnswer(s"select id, name, price, ts from $tableName where price > 3000")(
-            Seq(6, "a6", 4001, 30)
-          )
-        }
+        // Test update
+        spark.sql(s"update $tableName set price = price + 1 where id = 6")
+        checkAnswer(s"select id, name, price, ts from $tableName where price > 3000")(
+          Seq(6, "a6", 4001, 30)
+        )
       }
     }
   }
@@ -2797,7 +3091,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
   }
 
-  def ingestAndValidateDropDupPolicyBulkInsert(tableType: String, tableName: String, tmp: File,
+  def ingestAndValidateDropDupPolicyBulkInsert(tableType: String,
+                                               tableName: String,
+                                               tmp: File,
                                                setOptions: List[String] = List.empty) : Unit = {
 
     // set additional options
@@ -2841,160 +3137,326 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test insert into with special cols") {
     withTempDir { tmp =>
-      if (HoodieSparkUtils.gteqSpark3_3) {
-        val targetTableA = generateTableName
-        val tablePathA = s"${tmp.getCanonicalPath}/$targetTableA"
-        if (HoodieSparkUtils.isSpark3_4) {
-          spark.sql("set spark.sql.defaultColumn.enabled = false")
-        }
+      val targetTableA = generateTableName
+      val tablePathA = s"${tmp.getCanonicalPath}/$targetTableA"
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = false")
+      }
 
-        spark.sql(
-          s"""
-             |create table if not exists $targetTableA (
-             | id bigint,
-             | name string,
-             | price double
-             |) using hudi
-             |tblproperties (
-             | primaryKey = 'id',
-             | type = 'mor',
-             | preCombineField = 'name'
-             |) location '$tablePathA'
-             |""".stripMargin)
+      spark.sql(
+        s"""
+           |create table if not exists $targetTableA (
+           | id bigint,
+           | name string,
+           | price double
+           |) using hudi
+           |tblproperties (
+           | primaryKey = 'id',
+           | type = 'mor',
+           | preCombineField = 'name'
+           |) location '$tablePathA'
+           |""".stripMargin)
 
-        spark.sql(s"insert into $targetTableA (id, price, name) values (1, 12.1, 'aaa')")
+      spark.sql(s"insert into $targetTableA (id, price, name) values (1, 12.1, 'aaa')")
 
-        checkAnswer(s"select id, price, name from $targetTableA")(
-          Seq(1, 12.1, "aaa")
-        )
+      checkAnswer(s"select id, price, name from $targetTableA")(
+        Seq(1, 12.1, "aaa")
+      )
 
-        val targetTableB = generateTableName
-        val tablePathB = s"${tmp.getCanonicalPath}/$targetTableB"
+      val targetTableB = generateTableName
+      val tablePathB = s"${tmp.getCanonicalPath}/$targetTableB"
 
-        spark.sql(
-          s"""
-             |create table if not exists $targetTableB (
-             | id bigint,
-             | name string,
-             | price double,
-             | day string,
-             | hour string
-             |) using hudi
-             |tblproperties (
-             | primaryKey = 'id',
-             | type = 'mor',
-             | preCombineField = 'name'
-             |) partitioned by (day, hour)
-             |location '$tablePathB'
-             |""".stripMargin)
+      spark.sql(
+        s"""
+           |create table if not exists $targetTableB (
+           | id bigint,
+           | name string,
+           | price double,
+           | day string,
+           | hour string
+           |) using hudi
+           |tblproperties (
+           | primaryKey = 'id',
+           | type = 'mor',
+           | preCombineField = 'name'
+           |) partitioned by (day, hour)
+           |location '$tablePathB'
+           |""".stripMargin)
 
-        spark.sql(s"insert into $targetTableB (id, day, price, name, hour) " +
-          s"values (2, '01', 12.2, 'bbb', '02')")
+      spark.sql(s"insert into $targetTableB (id, day, price, name, hour) " +
+        s"values (2, '01', 12.2, 'bbb', '02')")
 
-        spark.sql(s"insert into $targetTableB (id, day, price, name, hour) " +
-          s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")
+      spark.sql(s"insert into $targetTableB (id, day, price, name, hour) " +
+        s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")
 
-        spark.sql(s"insert into $targetTableB partition(day='02', hour) (id, hour, price, name) " +
-          s"values (3, '01', 12.3, 'ccc')")
+      spark.sql(s"insert into $targetTableB partition(day='02', hour) (id, hour, price, name) " +
+        s"values (3, '01', 12.3, 'ccc')")
 
-        spark.sql(s"insert into $targetTableB partition(day='02', hour='02') (id, price, name) " +
-          s"values (4, 12.4, 'ddd')")
+      spark.sql(s"insert into $targetTableB partition(day='02', hour='02') (id, price, name) " +
+        s"values (4, 12.4, 'ddd')")
 
-        checkAnswer(s"select id, price, name, day, hour from $targetTableB")(
-          Seq(2, 12.2, "bbb", "01", "02"),
-          Seq(1, 12.1, "aaa", "01", "03"),
-          Seq(3, 12.3, "ccc", "02", "01"),
-          Seq(4, 12.4, "ddd", "02", "02")
-        )
+      checkAnswer(s"select id, price, name, day, hour from $targetTableB")(
+        Seq(2, 12.2, "bbb", "01", "02"),
+        Seq(1, 12.1, "aaa", "01", "03"),
+        Seq(3, 12.3, "ccc", "02", "01"),
+        Seq(4, 12.4, "ddd", "02", "02")
+      )
 
-        if (HoodieSparkUtils.isSpark3_4) {
-          spark.sql("set spark.sql.defaultColumn.enabled = true")
-          checkExceptionContain(s"insert into $targetTableB (id, day, price, name, hour) " +
-            s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")(
-            "hudi not support specified cols when enable default columns")
-        }
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = true")
+        checkExceptionContain(s"insert into $targetTableB (id, day, price, name, hour) " +
+          s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")(
+          "hudi not support specified cols when enable default columns")
       }
     }
   }
 
   test("Test insert overwrite with special cols") {
     withTempDir { tmp =>
-      if (HoodieSparkUtils.gteqSpark3_3) {
-        val targetTableA = generateTableName
-        val tablePathA = s"${tmp.getCanonicalPath}/$targetTableA"
-        if (HoodieSparkUtils.isSpark3_4) {
-          spark.sql("set spark.sql.defaultColumn.enabled = false")
-        }
+      val targetTableA = generateTableName
+      val tablePathA = s"${tmp.getCanonicalPath}/$targetTableA"
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = false")
+      }
 
+      spark.sql(
+        s"""
+           |create table if not exists $targetTableA (
+           | id bigint,
+           | name string,
+           | price double
+           |) using hudi
+           |tblproperties (
+           | primaryKey = 'id',
+           | type = 'mor',
+           | preCombineField = 'name'
+           |) location '$tablePathA'
+           |""".stripMargin)
+
+      spark.sql(s"insert overwrite $targetTableA (id, price, name) values (1, 12.1, 'aaa')")
+
+      checkAnswer(s"select id, price, name from $targetTableA")(
+        Seq(1, 12.1, "aaa")
+      )
+
+      val targetTableB = generateTableName
+      val tablePathB = s"${tmp.getCanonicalPath}/$targetTableB"
+
+      spark.sql(
+        s"""
+           |create table if not exists $targetTableB (
+           | id bigint,
+           | name string,
+           | price double,
+           | day string,
+           | hour string
+           |) using hudi
+           |tblproperties (
+           | primaryKey = 'id',
+           | type = 'mor',
+           | preCombineField = 'name'
+           |) partitioned by (day, hour)
+           |location '$tablePathB'
+           |""".stripMargin)
+
+      spark.sql(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
+        s"values (2, '01', 12.2, 'bbb', '02')")
+
+      checkAnswer(s"select id, price, name, day, hour from $targetTableB")(
+        Seq(2, 12.2, "bbb", "01", "02")
+      )
+
+      spark.sql(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
+        s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")
+
+      spark.sql(s"insert overwrite $targetTableB partition(day='02', hour) (id, hour, price, name) " +
+        s"values (3, '01', 12.3, 'ccc')")
+
+      spark.sql(s"insert overwrite $targetTableB partition(day='02', hour='02') (id, price, name) " +
+        s"values (4, 12.4, 'ddd')")
+
+      checkAnswer(s"select id, price, name, day, hour from $targetTableB")(
+        Seq(1, 12.1, "aaa", "01", "03"),
+        Seq(3, 12.3, "ccc", "02", "01"),
+        Seq(4, 12.4, "ddd", "02", "02")
+      )
+
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = true")
+        checkExceptionContain(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
+          s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")(
+          "hudi not support specified cols when enable default columns")
+      }
+    }
+  }
+
+  test("Test SparkKeyGenerator When Bulk Insert") {
+    withSQLConf("hoodie.sql.bulk.insert.enable" -> "true", "hoodie.sql.insert.mode" -> "non-strict") {
+      withRecordType()(withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a multi-level partitioned table
+        // Specify wrong keygenarator by setting hoodie.datasource.write.keygenerator.class = 'org.apache.hudi.keygen.ComplexAvroKeyGenerator'
         spark.sql(
           s"""
-             |create table if not exists $targetTableA (
-             | id bigint,
-             | name string,
-             | price double
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string,
+             |  pt string
              |) using hudi
              |tblproperties (
-             | primaryKey = 'id',
-             | type = 'mor',
-             | preCombineField = 'name'
-             |) location '$tablePathA'
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.ComplexAvroKeyGenerator',
+             |  hoodie.datasource.write.keygenerator.class = 'org.apache.hudi.keygen.ComplexAvroKeyGenerator'
+             |)
+             | partitioned by (dt, pt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+        //Insert data and check the same
+        spark.sql(
+          s"""insert into $tableName  values
+             |(1, 'a', 31, 1000, '2021-01-05', 'A'),
+             |(2, 'b', 18, 1000, '2021-01-05', 'A')
              |""".stripMargin)
-
-        spark.sql(s"insert overwrite $targetTableA (id, price, name) values (1, 12.1, 'aaa')")
-
-        checkAnswer(s"select id, price, name from $targetTableA")(
-          Seq(1, 12.1, "aaa")
+        checkAnswer(s"select id, name, price, ts, dt, pt from $tableName order by dt")(
+          Seq(1, "a", 31, 1000, "2021-01-05", "A"),
+          Seq(2, "b", 18, 1000, "2021-01-05", "A")
         )
+      })
+    }
+  }
 
-        val targetTableB = generateTableName
-        val tablePathB = s"${tmp.getCanonicalPath}/$targetTableB"
+  test("Test table with insert dup policy") {
+    withTempDir { tmp =>
+      Seq(
+        NONE_INSERT_DUP_POLICY,
+        FAIL_INSERT_DUP_POLICY,
+        DROP_INSERT_DUP_POLICY).foreach(policy => {
+        val targetTable = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
 
+        spark.sql(s"set hoodie.datasource.insert.dup.policy=$policy")
         spark.sql(
           s"""
-             |create table if not exists $targetTableB (
-             | id bigint,
-             | name string,
-             | price double,
-             | day string,
-             | hour string
+             |create table ${targetTable} (
+             |  `id` string,
+             |  `name` string,
+             |  `dt` bigint,
+             |  `day` STRING,
+             |  `hour` INT
              |) using hudi
              |tblproperties (
-             | primaryKey = 'id',
-             | type = 'mor',
-             | preCombineField = 'name'
-             |) partitioned by (day, hour)
-             |location '$tablePathB'
+             |  'primaryKey' = 'id',
+             |  'type' = 'MOR',
+             |  'preCombineField'= 'dt',
+             |  'hoodie.bucket.index.hash.field' = 'id',
+             |  'hoodie.bucket.index.num.buckets'= 512
+             | )
+           partitioned by (`day`,`hour`)
+           location '${tablePath}'
+           """.stripMargin)
+
+        spark.sql("set spark.sql.shuffle.partitions = 11")
+        spark.sql(
+          s"""
+             |insert into ${targetTable}
+             |select '1' as id, 'aa' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
              |""".stripMargin)
-
-        spark.sql(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
-          s"values (2, '01', 12.2, 'bbb', '02')")
-
-        checkAnswer(s"select id, price, name, day, hour from $targetTableB")(
-          Seq(2, 12.2, "bbb", "01", "02")
-        )
-
-        spark.sql(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
-          s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")
-
-        spark.sql(s"insert overwrite $targetTableB partition(day='02', hour) (id, hour, price, name) " +
-          s"values (3, '01', 12.3, 'ccc')")
-
-        spark.sql(s"insert overwrite $targetTableB partition(day='02', hour='02') (id, price, name) " +
-          s"values (4, 12.4, 'ddd')")
-
-        checkAnswer(s"select id, price, name, day, hour from $targetTableB")(
-          Seq(1, 12.1, "aaa", "01", "03"),
-          Seq(3, 12.3, "ccc", "02", "01"),
-          Seq(4, 12.4, "ddd", "02", "02")
-        )
-
-        if (HoodieSparkUtils.isSpark3_4) {
-          spark.sql("set spark.sql.defaultColumn.enabled = true")
-          checkExceptionContain(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
-            s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")(
-            "hudi not support specified cols when enable default columns")
+        if (policy.equals(FAIL_INSERT_DUP_POLICY)) {
+          checkExceptionContain(
+            () => spark.sql(
+            s"""
+               |insert into ${targetTable}
+               |select '1' as id, 'aa' as name, 1234 as dt, '2024-02-19' as `day`, 10 as `hour`
+               |""".stripMargin))(s"Duplicate key found for insert statement, key is: 1")
+        } else {
+          spark.sql(s"set hoodie.datasource.write.operation=insert")
+          spark.sql(
+            s"""
+               |insert into ${targetTable}
+               |select '1' as id, 'aa' as name, 1234 as dt, '2024-02-19' as `day`, 10 as `hour`
+               |""".stripMargin)
+          if (policy.equals(NONE_INSERT_DUP_POLICY)) {
+            checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
+              Seq("1", "aa", 123, "2024-02-19", 10),
+              Seq("1", "aa", 1234, "2024-02-19", 10)
+            )
+          } else {
+            checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
+              Seq("1", "aa", 123, "2024-02-19", 10)
+            )
+          }
         }
+      })
+    }
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
+  }
+
+  test("Test throwing error on schema evolution in INSERT INTO") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  dt string,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
+             | """.stripMargin)
+
+        // INSERT INTO with same set of columns as that in the table schema works
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt = '2024-01-14')
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+             | union
+             | select 2 as id, 'a2' as name, 20 as price, 1002 as ts
+             | """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2024-01-14"),
+          Seq(2, "a2", 20.0, 1002, "2024-01-14")
+        )
+
+        // INSERT INTO with an additional column that does not exist in the table schema
+        // throws an error, as INSERT INTO does not allow schema evolution
+        val sqlStatement =
+          s"""
+             | insert into $tableName partition(dt = '2024-01-14')
+             | select 3 as id, 'a3' as name, 30 as price, 1003 as ts, 'x' as new_col
+             | union
+             | select 2 as id, 'a2_updated' as name, 25 as price, 1005 as ts, 'y' as new_col
+             | """.stripMargin
+        val expectedExceptionMessage = if (HoodieSparkUtils.gteqSpark3_5) {
+          "[INSERT_COLUMN_ARITY_MISMATCH.TOO_MANY_DATA_COLUMNS] " +
+            s"Cannot write to `spark_catalog`.`default`.`$tableName`, " +
+            "the reason is too many data columns:\n" +
+            "Table columns: `id`, `name`, `price`, `ts`.\n" +
+            "Data columns: `id`, `name`, `price`, `ts`, `new_col`."
+        } else {
+          val endingStr = if (HoodieSparkUtils.gteqSpark3_4) "." else ""
+          val tableId = if (HoodieSparkUtils.gteqSpark3_4) {
+            s"spark_catalog.default.$tableName"
+          } else {
+            s"default.$tableName"
+          }
+          s"Cannot write to '$tableId', too many data columns:\n" +
+            s"Table columns: 'id', 'name', 'price', 'ts'$endingStr\n" +
+            s"Data columns: 'id', 'name', 'price', 'ts', 'new_col'$endingStr"
+        }
+        checkExceptionContain(sqlStatement)(expectedExceptionMessage)
       }
     }
   }
 }
+

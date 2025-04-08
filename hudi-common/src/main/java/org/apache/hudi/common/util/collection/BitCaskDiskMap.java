@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
+import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.util.BufferedRandomAccessFile;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
@@ -50,6 +51,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
@@ -64,7 +67,7 @@ import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
  * <p>
  * Inspired by https://github.com/basho/bitcask
  */
-public final class BitCaskDiskMap<T extends Serializable, R extends Serializable> extends DiskMap<T, R> {
+public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, R> {
 
   public static final int BUFFER_SIZE = 128 * 1024;  // 128 KB
   private static final Logger LOG = LoggerFactory.getLogger(BitCaskDiskMap.class);
@@ -92,8 +95,9 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   private final Queue<BufferedRandomAccessFile> openedAccessFiles = new ConcurrentLinkedQueue<>();
 
   private final List<ClosableIterator<R>> iterators = new ArrayList<>();
+  private final CustomSerializer<R> valueSerializer;
 
-  public BitCaskDiskMap(String baseFilePath, boolean isCompressionEnabled) throws IOException {
+  public BitCaskDiskMap(String baseFilePath, CustomSerializer<R> valueSerializer, boolean isCompressionEnabled) throws IOException {
     super(baseFilePath, ExternalSpillableMap.DiskMapType.BITCASK.name());
     this.valueMetadataMap = new ConcurrentHashMap<>();
     this.isCompressionEnabled = isCompressionEnabled;
@@ -103,10 +107,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
     this.fileOutputStream = new FileOutputStream(writeOnlyFile, true);
     this.writeOnlyFileHandle = new SizeAwareDataOutputStream(fileOutputStream, BUFFER_SIZE);
     this.filePosition = new AtomicLong(0L);
-  }
-
-  public BitCaskDiskMap(String baseFilePath) throws IOException {
-    this(baseFilePath, false);
+    this.valueSerializer = valueSerializer;
   }
 
   /**
@@ -156,7 +157,18 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
    */
   @Override
   public Iterator<R> iterator() {
-    ClosableIterator<R> iterator = new LazyFileIterable(filePath, valueMetadataMap, isCompressionEnabled).iterator();
+    ClosableIterator<R> iterator = new LazyFileIterable(filePath, valueMetadataMap, valueSerializer, isCompressionEnabled).iterator();
+    this.iterators.add(iterator);
+    return iterator;
+  }
+
+  /**
+   * Custom iterator to iterate over values written to disk with a key filter.
+   */
+  @Override
+  public Iterator<R> iterator(Predicate<T> filter) {
+    Map<T, ValueMetadata> filteredValueMetadata = valueMetadataMap.entrySet().stream().filter(e -> filter.test(e.getKey())).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+    ClosableIterator<R> iterator = new LazyFileIterable(filePath, filteredValueMetadata, valueSerializer, isCompressionEnabled).iterator();
     this.iterators.add(iterator);
     return iterator;
   }
@@ -199,16 +211,16 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   }
 
   private R get(ValueMetadata entry) {
-    return get(entry, getRandomAccessFile(), isCompressionEnabled);
+    return get(entry, getRandomAccessFile(), valueSerializer, isCompressionEnabled);
   }
 
-  public static <R> R get(ValueMetadata entry, RandomAccessFile file, boolean isCompressionEnabled) {
+  public static <V> V get(ValueMetadata entry, RandomAccessFile file, CustomSerializer<V> serializer, boolean isCompressionEnabled) {
     try {
       byte[] bytesFromDisk = SpillableMapUtils.readBytesFromDisk(file, entry.getOffsetOfValue(), entry.getSizeOfValue());
       if (isCompressionEnabled) {
-        return SerializationUtils.deserialize(DISK_COMPRESSION_REF.get().decompressBytes(bytesFromDisk));
+        return serializer.deserialize(DISK_COMPRESSION_REF.get().decompressBytes(bytesFromDisk));
       }
-      return SerializationUtils.deserialize(bytesFromDisk);
+      return serializer.deserialize(bytesFromDisk);
     } catch (IOException e) {
       throw new HoodieIOException("Unable to readFromDisk Hoodie Record from disk", e);
     }
@@ -216,8 +228,8 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
 
   private synchronized R put(T key, R value, boolean flush) {
     try {
-      byte[] val = isCompressionEnabled ? DISK_COMPRESSION_REF.get().compressBytes(SerializationUtils.serialize(value)) :
-          SerializationUtils.serialize(value);
+      byte[] val = isCompressionEnabled ? DISK_COMPRESSION_REF.get().compressBytes(valueSerializer.serialize(value)) :
+          valueSerializer.serialize(value);
       int valueSize = val.length;
       long timestamp = System.currentTimeMillis();
       this.valueMetadataMap.put(key,
@@ -306,7 +318,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   @Override
   public Stream<R> valueStream() {
     final BufferedRandomAccessFile file = getRandomAccessFile();
-    return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> (R) get(valueMetaData, file, isCompressionEnabled));
+    return valueMetadataMap.values().stream().sorted().map(valueMetaData -> get(valueMetaData, file, valueSerializer, isCompressionEnabled));
   }
 
   @Override
@@ -324,17 +336,17 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   public static final class FileEntry {
 
     // Checksum of the value written to disk, compared during every readFromDisk to make sure no corruption
-    private Long crc;
+    private final Long crc;
     // Size (numberOfBytes) of the key written to disk
-    private Integer sizeOfKey;
+    private final Integer sizeOfKey;
     // Size (numberOfBytes) of the value written to disk
-    private Integer sizeOfValue;
+    private final Integer sizeOfValue;
     // Actual key
-    private byte[] key;
+    private final byte[] key;
     // Actual value
-    private byte[] value;
+    private final byte[] value;
     // Current timestamp when the value was written to disk
-    private Long timestamp;
+    private final Long timestamp;
 
     public FileEntry(long crc, int sizeOfKey, int sizeOfValue, byte[] key, byte[] value, long timestamp) {
       this.crc = crc;
@@ -376,13 +388,13 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   public static final class ValueMetadata implements Comparable<ValueMetadata> {
 
     // FilePath to store the spilled data
-    private String filePath;
+    private final String filePath;
     // Size (numberOfBytes) of the value written to disk
-    private Integer sizeOfValue;
+    private final Integer sizeOfValue;
     // FilePosition of the value written to disk
-    private Long offsetOfValue;
+    private final Long offsetOfValue;
     // Current timestamp when the value was written to disk
-    private Long timestamp;
+    private final Long timestamp;
 
     protected ValueMetadata(String filePath, int sizeOfValue, long offsetOfValue, long timestamp) {
       this.filePath = filePath;

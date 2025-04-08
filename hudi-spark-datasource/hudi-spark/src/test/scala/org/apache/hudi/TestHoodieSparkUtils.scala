@@ -23,8 +23,8 @@ import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 
 import org.apache.avro.generic.GenericRecord
-import org.apache.spark.sql.types.{ArrayType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.types.{ArrayType, StructField, StructType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -45,7 +45,6 @@ class TestHoodieSparkUtils {
       case "3.3.0" =>
         assertTrue(vsMock.isSpark3)
         assertTrue(vsMock.isSpark3_3)
-        assertTrue(vsMock.gteqSpark3_3)
 
         assertFalse(vsMock.isSpark3_4)
         assertFalse(vsMock.isSpark3_5)
@@ -56,7 +55,6 @@ class TestHoodieSparkUtils {
       case "3.3.2" =>
         assertTrue(vsMock.isSpark3)
         assertTrue(vsMock.isSpark3_3)
-        assertTrue(vsMock.gteqSpark3_3)
         assertTrue(vsMock.gteqSpark3_3_2)
 
 
@@ -68,7 +66,6 @@ class TestHoodieSparkUtils {
       case "3.4.0" =>
         assertTrue(vsMock.isSpark3)
         assertTrue(vsMock.isSpark3_4)
-        assertTrue(vsMock.gteqSpark3_3)
         assertTrue(vsMock.gteqSpark3_3_2)
         assertTrue(vsMock.gteqSpark3_4)
 
@@ -78,7 +75,6 @@ class TestHoodieSparkUtils {
       case "3.5.0" =>
         assertTrue(vsMock.isSpark3)
         assertTrue(vsMock.isSpark3_5)
-        assertTrue(vsMock.gteqSpark3_3)
         assertTrue(vsMock.gteqSpark3_3_2)
         assertTrue(vsMock.gteqSpark3_4)
         assertTrue(vsMock.gteqSpark3_5)
@@ -194,12 +190,7 @@ class TestHoodieSparkUtils {
       genRecRDD6.collect()
       fail("createRdd should fail, because records don't have a column which is not nullable in the passed in schema")
     } catch {
-      case e: Exception =>
-        if (HoodieSparkUtils.gteqSpark3_3) {
-          assertTrue(e.getMessage.contains("Field nullableInnerStruct.new_nested_col has no default value and is non-nullable"))
-        } else {
-          assertTrue(e.getMessage.contains("null of string in field new_nested_col of test_namespace.test_struct_name.nullableInnerStruct of union"))
-        }
+      case e: Exception => assertTrue(e.getMessage.contains("Field nullableInnerStruct.new_nested_col has no default value and is non-nullable"))
     }
     spark.stop()
   }

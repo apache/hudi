@@ -52,6 +52,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -88,6 +89,18 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
   protected abstract SourceFormatAdapter createSource(TypedProperties props);
 
   protected abstract void sendMessagesToKafka(String topic, int count, int numPartitions);
+  
+  protected void verifyRddsArePersisted(Source source, String sparkPlan, boolean persistSourceRdd) {
+    if (persistSourceRdd) {
+      assertTrue(sparkPlan.contains("CachedPartitions"));
+      assertEquals(1, jsc().getPersistentRDDs().size());
+    } else {
+      assertFalse(sparkPlan.contains("CachedPartitions"));
+      assertEquals(0, jsc().getPersistentRDDs().size());
+    }
+    source.releaseResources();
+    assertEquals(0, jsc().getPersistentRDDs().size());
+  }
 
   @Test
   public void testKafkaSource() {
@@ -214,7 +227,7 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
 
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 599);
     // commit to kafka after first batch
-    kafkaSource.getSource().onCommit(fetch1.getCheckpointForNextBatch());
+    kafkaSource.getSource().onCommit(fetch1.getCheckpointForNextBatch().getCheckpointKey());
     try (KafkaConsumer consumer = new HoodieRetryingKafkaConsumer(props, KafkaOffsetGen.excludeHoodieConfigs(props))) {
       consumer.assign(topicPartitions);
 
@@ -234,7 +247,7 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
           kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
 
       // commit to Kafka after second batch is processed completely
-      kafkaSource.getSource().onCommit(fetch2.getCheckpointForNextBatch());
+      kafkaSource.getSource().onCommit(fetch2.getCheckpointForNextBatch().getCheckpointKey());
 
       offsetAndMetadata = consumer.committed(topicPartition0);
       assertNotNull(offsetAndMetadata);

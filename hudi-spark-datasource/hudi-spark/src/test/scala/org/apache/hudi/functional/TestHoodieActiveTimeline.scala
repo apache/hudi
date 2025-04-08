@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
@@ -25,13 +26,14 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
+
 import org.apache.spark.sql._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue, fail}
 import org.slf4j.LoggerFactory
 
 import java.io.FileNotFoundException
+
 import scala.collection.JavaConverters._
 
 /**
@@ -246,9 +248,8 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
       .save(basePath)
     val metaClient: HoodieTableMetaClient = createMetaClient(basePath)
     val activeTimeline = metaClient.getActiveTimeline
-    assertNotNull(activeTimeline.getInstantDetails(activeTimeline.lastInstant().get()))
     try {
-      activeTimeline.getInstantDetails(HoodieTestUtils.INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT,
+      activeTimeline.getInstantContentStream(HoodieTestUtils.INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT,
         HoodieTimeline.CLUSTERING_ACTION, metaClient.createNewInstantTime()))
     } catch {
       // org.apache.hudi.common.util.ClusteringUtils.getRequestedReplaceMetadata depends upon this behaviour

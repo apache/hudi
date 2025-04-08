@@ -60,7 +60,7 @@ public class InputPathHandler {
   private final Map<HoodieTableMetaClient, List<Path>> groupedIncrementalPaths;
   private final List<Path> snapshotPaths;
   private final List<Path> nonHoodieInputPaths;
-  private boolean isIncrementalUseDatabase;
+  private final boolean isIncrementalUseDatabase;
 
   public InputPathHandler(Configuration conf, Path[] inputPaths, List<String> incrementalTables) throws IOException {
     this.conf = conf;
@@ -94,8 +94,10 @@ public class InputPathHandler {
       throws IOException {
     for (Path inputPath : inputPaths) {
       boolean basePathKnown = false;
+      String inputPathStr = inputPath.toString();
       for (HoodieTableMetaClient metaClient : tableMetaClientMap.values()) {
-        if (inputPath.toString().contains(metaClient.getBasePath().toString())) {
+        String basePathStr = metaClient.getBasePath().toString();
+        if (inputPathStr.equals(basePathStr) || inputPathStr.startsWith(basePathStr + "/")) {
           // We already know the base path for this inputPath.
           basePathKnown = true;
           // Check if this is for a snapshot query

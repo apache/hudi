@@ -24,11 +24,11 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -229,7 +230,7 @@ public class DataSourceUtils {
       case INSERT_OVERWRITE_TABLE:
         return client.insertOverwriteTable(hoodieRecords, instantTime);
       default:
-        throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation.toString());
+        throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation);
     }
   }
 
@@ -241,7 +242,7 @@ public class DataSourceUtils {
       JavaRDD<HoodieRecord> records = hoodieKeysAndLocations.map(tuple -> {
         HoodieRecord record = recordType == HoodieRecord.HoodieRecordType.AVRO
             ? new HoodieAvroRecord(tuple._1, new EmptyHoodieRecordPayload())
-            : new HoodieSparkRecord(tuple._1, null, false);
+            : new HoodieEmptyRecord(tuple._1, HoodieRecord.HoodieRecordType.SPARK);
         record.setCurrentLocation(tuple._2.get());
         return record;
       });
@@ -277,31 +278,69 @@ public class DataSourceUtils {
   }
 
   /**
-   * Drop records already present in the dataset.
+   * Drop records already present in the dataset if {@code failOnDuplicates} is {@code false}.
+   * Otherwise, throw a {@link HoodieDuplicateKeyException} if duplicates are found.
    *
-   * @param jssc JavaSparkContext
-   * @param incomingHoodieRecords HoodieRecords to deduplicate
-   * @param writeConfig HoodieWriteConfig
+   * @param engineContext the Spark engine context
+   * @param incomingHoodieRecords the HoodieRecords to deduplicate
+   * @param writeConfig the HoodieWriteConfig
+   * @param failOnDuplicates a flag indicating whether to fail when duplicates are found
+   * @return a JavaRDD of deduplicated HoodieRecords
    */
   @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
-      HoodieWriteConfig writeConfig) {
+  public static JavaRDD<HoodieRecord> handleDuplicates(HoodieSparkEngineContext engineContext,
+                                                       JavaRDD<HoodieRecord> incomingHoodieRecords,
+                                                       HoodieWriteConfig writeConfig,
+                                                       boolean failOnDuplicates) {
     try {
-      SparkRDDReadClient client = new SparkRDDReadClient<>(new HoodieSparkEngineContext(jssc), writeConfig);
+      SparkRDDReadClient client = new SparkRDDReadClient<>(engineContext, writeConfig);
       return client.tagLocation(incomingHoodieRecords)
-          .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
+          .filter(r -> shouldIncludeRecord((HoodieRecord<HoodieRecordPayload>) r, failOnDuplicates));
     } catch (TableNotFoundException e) {
-      // this will be executed when there is no hoodie table yet
-      // so no dups to drop
+      // No table exists yet, so no duplicates to drop
       return incomingHoodieRecords;
     }
   }
 
+  /**
+   * Determines if a record should be included in the result after deduplication.
+   *
+   * @param record            The Hoodie record to evaluate.
+   * @param failOnDuplicates  Whether to fail on detecting duplicates.
+   * @return true if the record should be included; false otherwise.
+   */
+  private static boolean shouldIncludeRecord(HoodieRecord<?> record, boolean failOnDuplicates) {
+    if (!record.isCurrentLocationKnown()) {
+      return true;
+    }
+    if (failOnDuplicates) {
+      // Fail if duplicates are found and the flag is set
+      throw new HoodieDuplicateKeyException(record.getRecordKey());
+    }
+    return false;
+  }
+
+  /**
+   * Resolves duplicate records in the provided {@code incomingHoodieRecords}.
+   *
+   * <p>If {@code failOnDuplicates} is {@code false}, duplicate records already present in the dataset
+   * are dropped. Otherwise, a {@link HoodieDuplicateKeyException} is thrown if duplicates are found.</p>
+   *
+   * @param jssc the Spark context used for executing the deduplication
+   * @param incomingHoodieRecords the input {@link JavaRDD} of {@link HoodieRecord} objects to process
+   * @param parameters a map of configuration parameters, including the dataset path under the key {@code "path"}
+   * @param failOnDuplicates a flag indicating whether to fail when duplicates are found
+   * @return a {@link JavaRDD} of deduplicated {@link HoodieRecord} objects
+   */
   @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
-      Map<String, String> parameters) {
-    HoodieWriteConfig writeConfig =
-        HoodieWriteConfig.newBuilder().withPath(parameters.get("path")).withProps(parameters).build();
-    return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
+  public static JavaRDD<HoodieRecord> resolveDuplicates(JavaSparkContext jssc,
+                                                        JavaRDD<HoodieRecord> incomingHoodieRecords,
+                                                        Map<String, String> parameters,
+                                                        boolean failOnDuplicates) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(parameters.get("path"))
+        .withProps(parameters).build();
+    return handleDuplicates(
+        new HoodieSparkEngineContext(jssc), incomingHoodieRecords, writeConfig, failOnDuplicates);
   }
 }

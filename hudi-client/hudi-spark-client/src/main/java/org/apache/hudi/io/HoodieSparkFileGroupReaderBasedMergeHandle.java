@@ -20,6 +20,8 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -82,6 +84,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
   protected HoodieReaderContext readerContext;
   protected FileSlice fileSlice;
   protected Configuration conf;
+  protected HoodieReadStats readStats;
 
   public HoodieSparkFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                     CompactionOperation operation, TaskContextSupplier taskContextSupplier,
@@ -178,21 +181,15 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     }
+    TypedProperties props = new TypedProperties();
+    hoodieTable.getMetaClient().getTableConfig().getProps().forEach(props::putIfAbsent);
+    config.getProps().forEach(props::putIfAbsent);
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        readerContext,
+    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
         storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
-        hoodieTable.getMetaClient().getBasePath().toString(),
-        instantTime,
-        fileSlice,
-        writeSchemaWithMetaFields,
-        writeSchemaWithMetaFields,
-        internalSchemaOption,
-        hoodieTable.getMetaClient(),
-        hoodieTable.getMetaClient().getTableConfig().getProps(),
-        0,
-        Long.MAX_VALUE,
-        usePosition)) {
+        hoodieTable.getMetaClient().getBasePath().toString(), instantTime, fileSlice,
+        writeSchemaWithMetaFields, writeSchemaWithMetaFields, internalSchemaOption,
+        hoodieTable.getMetaClient(), props, 0, Long.MAX_VALUE, usePosition, false)) {
       fileGroupReader.initRecordIterators();
       // Reads the records from the file slice
       try (HoodieFileGroupReaderIterator<InternalRow> recordIterator
@@ -225,11 +222,11 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
 
         // The stats of inserts, updates, and deletes are updated once at the end
         // These will be set in the write stat when closing the merge handle
-        HoodieReadStats stats = fileGroupReader.getStats();
-        this.insertRecordsWritten = stats.getNumInserts();
-        this.updatedRecordsWritten = stats.getNumUpdates();
-        this.recordsDeleted = stats.getNumDeletes();
-        this.recordsWritten = stats.getNumInserts() + stats.getNumUpdates();
+        this.readStats = fileGroupReader.getStats();
+        this.insertRecordsWritten = readStats.getNumInserts();
+        this.updatedRecordsWritten = readStats.getNumUpdates();
+        this.recordsDeleted = readStats.getNumDeletes();
+        this.recordsWritten = readStats.getNumInserts() + readStats.getNumUpdates();
       }
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to compact file slice: " + fileSlice, e);
@@ -264,5 +261,26 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
   @Override
   protected void writeIncomingRecords() {
     // no operation.
+  }
+
+  @Override
+  public List<WriteStatus> close() {
+    try {
+      super.close();
+      writeStatus.getStat().setTotalLogReadTimeMs(readStats.getTotalLogReadTimeMs());
+      writeStatus.getStat().setTotalUpdatedRecordsCompacted(readStats.getTotalUpdatedRecordsCompacted());
+      writeStatus.getStat().setTotalLogFilesCompacted(readStats.getTotalLogFilesCompacted());
+      writeStatus.getStat().setTotalLogRecords(readStats.getTotalLogRecords());
+      writeStatus.getStat().setTotalLogBlocks(readStats.getTotalLogBlocks());
+      writeStatus.getStat().setTotalCorruptLogBlock(readStats.getTotalCorruptLogBlock());
+      writeStatus.getStat().setTotalRollbackBlocks(readStats.getTotalRollbackBlocks());
+
+      if (writeStatus.getStat().getRuntimeStats() != null) {
+        writeStatus.getStat().getRuntimeStats().setTotalScanTime(readStats.getTotalLogReadTimeMs());
+      }
+      return Collections.singletonList(writeStatus);
+    } catch (Exception e) {
+      throw new HoodieUpsertException("Failed to close HoodieSparkFileGroupReaderBasedMergeHandle", e);
+    }
   }
 }

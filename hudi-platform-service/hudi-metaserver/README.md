@@ -78,7 +78,7 @@ hoodie.database.name=default
 hoodie.table.name=test
 hoodie.base.path=${path}
 hoodie.metaserver.enabled=true
-hoodie.metadata.enabled=false
+hoodie.metadata.enable=false
 hoodie.metaserver.uris=thrift://${serverIP}:9090
 ```
 

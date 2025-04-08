@@ -32,8 +32,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
-import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -101,9 +99,8 @@ public class TestHoodieDeleteBlock {
             {new Double[] {Double.MIN_VALUE, 0.125, 809.25, Double.MAX_VALUE}},
             {new String[] {"val1", "val2", "val3", null}},
             {new Timestamp[] {new Timestamp(1690766971000L), new Timestamp(1672536571000L)}},
-            {new LocalDate[] {LocalDate.of(2023, 1, 1), LocalDate.of(1980, 7, 1)}},
-            {new BigDecimal[] {new BigDecimal("12345678901234.2948"),
-                new BigDecimal("23456789012345.4856")}}
+            // {new LocalDate[] {LocalDate.of(2023, 1, 1), LocalDate.of(1980, 7, 1)}} // HUDI-8854
+            {new BigDecimal[] {new BigDecimal("12345678901234.2948"), new BigDecimal("23456789012345.4856")}}
         };
     return Stream.of(data).map(Arguments::of);
   }
@@ -124,7 +121,7 @@ public class TestHoodieDeleteBlock {
     for (DeleteRecord dr : deleteRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, new HashMap<>());
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, new HashMap<>());
     byte[] contentBytes = deleteBlock.getContentBytes(HoodieTestUtils.getDefaultStorage());
     HoodieDeleteBlock deserializeDeleteBlock = new HoodieDeleteBlock(
         Option.of(contentBytes), null, true, Option.empty(), new HashMap<>(), new HashMap<>());
@@ -135,7 +132,7 @@ public class TestHoodieDeleteBlock {
       if (deleteRecords[i].getOrderingValue() != null) {
         if (deleteRecords[i].getOrderingValue() instanceof Timestamp) {
           assertEquals(((Timestamp) deleteRecords[i].getOrderingValue()).getTime(),
-              ((Instant) deserializedDeleteRecords[i].getOrderingValue()).toEpochMilli());
+              ((Timestamp) deserializedDeleteRecords[i].getOrderingValue()).getTime());
         } else if (deleteRecords[i].getOrderingValue() instanceof BigDecimal) {
           assertEquals("0.000000000000000",
               ((BigDecimal) deleteRecords[i].getOrderingValue())

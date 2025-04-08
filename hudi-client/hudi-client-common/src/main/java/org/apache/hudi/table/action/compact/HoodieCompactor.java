@@ -94,7 +94,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    *
    * @return the {@link EngineBroadcastManager} if available.
    */
-  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context) {
+  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context,
+                                                                  HoodieTableMetaClient metaClient) {
     return Option.empty();
   }
 
@@ -102,7 +103,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    * Execute compaction operations and report back status.
    */
   public HoodieData<WriteStatus> compact(
-      HoodieEngineContext context, HoodieCompactionPlan compactionPlan,
+      HoodieEngineContext context, WriteOperationType operationType,
+      HoodieCompactionPlan compactionPlan,
       HoodieTable table, HoodieWriteConfig config, String compactionInstantTime,
       HoodieCompactionHandler compactionHandler) {
     if (compactionPlan == null || (compactionPlan.getOperations() == null)
@@ -145,17 +147,16 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     boolean useFileGroupReaderBasedCompaction = context.supportsFileGroupReader()   // the engine needs to support fg reader first
         && !metaClient.isMetadataTable()
         && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+        && operationType == WriteOperationType.COMPACT
         && !hasBootstrapFile(operations)                                            // bootstrap file read for fg reader is not ready
-        && StringUtils.isNullOrEmpty(config.getInternalSchema())                    // schema evolution support for fg reader is not ready
-        && !containsUnsupportedTypesForFileGroupReader(config.getSchema())          // Enum type support by fg reader is not ready
         && config.populateMetaFields();                                             // Virtual key support by fg reader is not ready
 
     if (useFileGroupReaderBasedCompaction) {
-      Option<EngineBroadcastManager> broadcastManagerOpt = getEngineBroadcastManager(context);
+      Option<EngineBroadcastManager> broadcastManagerOpt = getEngineBroadcastManager(context, metaClient);
       // Broadcast required information.
       broadcastManagerOpt.ifPresent(EngineBroadcastManager::prepareAndBroadcast);
       return context.parallelize(operations).map(
-              operation -> compact(compactionHandler, metaClient, operation, compactionInstantTime, broadcastManagerOpt))
+              operation -> compact(compactionHandler, metaClient, config, operation, compactionInstantTime, broadcastManagerOpt))
           .flatMap(List::iterator);
     } else {
       return context.parallelize(operations).map(
@@ -275,7 +276,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
       stat.setTotalLogRecords(scanner.getTotalLogRecords());
       stat.setPartitionPath(operation.getPartitionPath());
-      stat.setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+      stat
+          .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
       stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
       stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
       stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
@@ -296,11 +298,12 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    */
   public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
                                    HoodieTableMetaClient metaClient,
+                                   HoodieWriteConfig writeConfig,
                                    CompactionOperation operation,
                                    String instantTime,
                                    Option<EngineBroadcastManager> broadcastManagerOpt) throws IOException {
-    return compactionHandler.compactUsingFileGroupReader(instantTime,
-        operation, broadcastManagerOpt.get().retrieveFileGroupReaderContext(metaClient.getBasePath()).get(),
+    return compactionHandler.compactUsingFileGroupReader(instantTime, operation,
+        writeConfig, broadcastManagerOpt.get().retrieveFileGroupReaderContext(metaClient.getBasePath()).get(),
         broadcastManagerOpt.get().retrieveStorageConfig().get());
   }
 
@@ -323,9 +326,5 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
   private boolean hasBootstrapFile(List<CompactionOperation> operationList) {
     return operationList.stream().anyMatch(operation -> operation.getBootstrapFilePath().isPresent());
-  }
-
-  private boolean containsUnsupportedTypesForFileGroupReader(String schemaStr) {
-    return HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(new Schema.Parser().parse(schemaStr));
   }
 }

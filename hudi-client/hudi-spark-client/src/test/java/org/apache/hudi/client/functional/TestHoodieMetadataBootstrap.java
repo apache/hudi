@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -93,8 +93,8 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
     doPreBootstrapWriteOperation(testTable, "0000005");
     // add few extra files to table. bootstrap should include those files.
     String fileName = UUID.randomUUID().toString();
-    Path baseFilePath = FileCreateUtils.getBaseFilePath(basePath, "p1", "0000006", fileName);
-    FileCreateUtils.createBaseFile(basePath, "p1", "0000006", fileName, 100);
+    Path baseFilePath = FileCreateUtilsLegacy.getBaseFilePath(basePath, "p1", "0000006", fileName);
+    FileCreateUtilsLegacy.createBaseFile(basePath, "p1", "0000006", fileName, 100);
 
     writeConfig = getWriteConfig(true, true);
     initWriteConfigAndMetatableWriter(writeConfig, true);

@@ -98,6 +98,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
+  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
+    // no op. HUDI-8801 to fix.
+  }
+
+  @Override
   protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
   }
@@ -124,11 +129,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient = (BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>>) getWriteClient();
     // rollback partially failed writes if any.
-    if (writeClient.rollbackFailedWrites()) {
+    if (writeClient.rollbackFailedWrites(metadataMetaClient)) {
       metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
     }
 
-    compactIfNecessary(writeClient);
+    compactIfNecessary(writeClient, Option.empty());
 
     if (!metadataMetaClient.getActiveTimeline().containsInstant(instantTime)) {
       // if this is a new commit being applied to metadata for the first time
@@ -165,7 +170,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // reload timeline
     metadataMetaClient.reloadActiveTimeline();
-    cleanIfNecessary(writeClient);
+    cleanIfNecessary(writeClient, "");
     writeClient.archive();
 
     // Update total size of the metadata and count of base/log files
@@ -202,10 +207,5 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected EngineType getEngineType() {
     return EngineType.FLINK;
-  }
-
-  @Override
-  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieIndexDefinition indexDefinition) {
-    throw new HoodieNotSupportedException("Flink metadata table does not support secondary index yet.");
   }
 }

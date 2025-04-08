@@ -28,6 +28,9 @@ import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.TableChanges;
+import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,7 +45,9 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter.convert;
 
 /**
  * Utils for Avro Schema.
@@ -169,7 +174,18 @@ public class AvroSchemaUtils {
    * </ol>
    */
   public static boolean isStrictProjectionOf(Schema sourceSchema, Schema targetSchema) {
-    return isProjectionOfInternal(sourceSchema, targetSchema, Objects::equals);
+    return isProjectionOfInternal(sourceSchema, targetSchema, AvroSchemaUtils::isAtomicTypeEquals);
+  }
+
+  private static boolean isAtomicTypeEquals(Schema source, Schema target) {
+    // ignore name/namespace for FIXED type
+    if (source.getType() == Schema.Type.FIXED && target.getType() == Schema.Type.FIXED) {
+      return source.getLogicalType().equals(target.getLogicalType())
+          && source.getFixedSize() == target.getFixedSize()
+          && source.getObjectProps().equals(target.getObjectProps());
+    } else {
+      return Objects.equals(source, target);
+    }
   }
 
   private static boolean isProjectionOfInternal(Schema sourceSchema,
@@ -590,5 +606,24 @@ public class AvroSchemaUtils {
 
   public static String createSchemaErrorString(String errorMessage, Schema writerSchema, Schema tableSchema) {
     return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
+  }
+
+  /**
+   * Create a new schema by force changing all the fields as nullable.
+   *
+   * @param schema original schema
+   * @return a new schema with all the fields updated as nullable.
+   */
+  public static Schema asNullable(Schema schema) {
+    List<String> filterCols = schema.getFields().stream()
+            .filter(f -> !f.schema().isNullable()).map(Schema.Field::name).collect(Collectors.toList());
+    if (filterCols.isEmpty()) {
+      return schema;
+    }
+    InternalSchema internalSchema = convert(schema);
+    TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(internalSchema);
+    schemaChange = reduce(filterCols, schemaChange,
+            (change, field) -> change.updateColumnNullability(field, true));
+    return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName());
   }
 }

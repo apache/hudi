@@ -218,13 +218,14 @@ public class StreamReadMonitoringFunction
 
     if (result.isEmpty() && StringUtils.isNullOrEmpty(result.getEndInstant())) {
       // no new instants, returns early
-      LOG.warn("Result is empty, do not update issuedInstant.");
+      LOG.warn("No new instants to read for current run.");
       return;
     }
 
     for (MergeOnReadInputSplit split : result.getInputSplits()) {
       context.collect(split);
     }
+
     // update the issues instant time
     this.issuedInstant = result.getEndInstant();
     this.issuedOffset = result.getOffset();
@@ -234,6 +235,9 @@ public class StreamReadMonitoringFunction
             + "---------- consumed to instant: {}\n"
             + "------------------------------------------------------------",
         conf.getString(FlinkOptions.TABLE_NAME), this.issuedInstant);
+    if (result.isEmpty()) {
+      LOG.warn("No new files to read for current run.");
+    }
   }
 
   @Override

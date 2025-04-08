@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -48,10 +47,10 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
-import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFile;
-import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createBaseFile;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createLogFile;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.logFileName;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
@@ -139,7 +138,7 @@ public class CompactionTestUtils {
       HoodieCompactionPlan compactionPlan) throws IOException {
     metaClient.getActiveTimeline().saveToCompactionRequested(
         INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+        compactionPlan);
   }
 
   public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) {
@@ -192,7 +191,7 @@ public class CompactionTestUtils {
       }
     }).collect(Collectors.toList());
     return new HoodieCompactionPlan(ops.isEmpty() ? null : ops, new HashMap<>(),
-        CompactionUtils.LATEST_COMPACTION_METADATA_VERSION, null, null);
+        CompactionUtils.LATEST_COMPACTION_METADATA_VERSION, null, null, null);
   }
 
   /**

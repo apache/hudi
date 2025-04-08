@@ -30,8 +30,10 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -80,6 +82,7 @@ public class HoodieMetadataWriteUtils {
    * @param writeConfig                {@code HoodieWriteConfig} of the main dataset writer
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    */
+  @VisibleForTesting
   public static HoodieWriteConfig createMetadataWriteConfig(
       HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     String tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
@@ -163,7 +166,8 @@ public class HoodieMetadataWriteUtils {
         .withRecordMergeStrategyId(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(HoodieMetadataPayload.class.getCanonicalName()).build())
-        .withRecordMergeImplClasses(HoodieAvroRecordMerger.class.getCanonicalName());
+        .withRecordMergeImplClasses(HoodieAvroRecordMerger.class.getCanonicalName())
+        .withWriteRecordPositionsEnabled(false);
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();
@@ -184,6 +188,7 @@ public class HoodieMetadataWriteUtils {
           .fromProperties(commonProperties)
           .withReporterType(writeConfig.getMetricsReporterType().toString())
           .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
+          .withMetricsReporterMetricNamePrefix(writeConfig.getMetricReporterMetricsNamePrefix() + "_" + HoodieTableMetaClient.METADATA_STR)
           .on(true).build());
       switch (writeConfig.getMetricsReporterType()) {
         case GRAPHITE:

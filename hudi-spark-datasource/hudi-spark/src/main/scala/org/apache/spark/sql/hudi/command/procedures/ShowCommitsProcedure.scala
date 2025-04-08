@@ -18,14 +18,15 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure with ProcedureBuilder {
@@ -101,7 +102,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
     val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
-      val commitMetadata = layout.getCommitMetadataSerDe.deserialize(commit, timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
+      val commitMetadata = timeline.readCommitMetadata(commit)
       for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet.asScala) {
         for (hoodieWriteStat <- partitionWriteStat.getValue.asScala) {
           rows.add(Row(
@@ -135,7 +136,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
     val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
-      val commitMetadata = layout.getCommitMetadataSerDe.deserialize(commit, timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
+      val commitMetadata = timeline.readCommitMetadata(commit)
       rows.add(Row(commit.requestedTime, commit.getCompletionTime, commit.getAction, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
         commitMetadata.fetchTotalFilesUpdated, commitMetadata.fetchTotalPartitionsWritten,
         commitMetadata.fetchTotalRecordsWritten, commitMetadata.fetchTotalUpdateRecordsWritten,

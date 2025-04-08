@@ -202,9 +202,6 @@ object CDCRelation {
     val endCompletionTime = options.getOrElse(DataSourceReadOptions.END_COMMIT.key(),
       getTimestampOfLatestInstant(metaClient)
     )
-    if (startCompletionTime > endCompletionTime) {
-      throw new HoodieException(s"This is not a valid range between $startCompletionTime and $endCompletionTime")
-    }
 
     new CDCRelation(sqlContext, metaClient, startCompletionTime, endCompletionTime, options, rangeType)
   }

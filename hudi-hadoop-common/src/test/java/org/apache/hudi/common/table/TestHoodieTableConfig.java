@@ -54,14 +54,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
-import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
-import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.getRecordMergeStrategyId;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferRecordMergeModeFromPayloadClass;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -270,7 +272,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieConfig config = new HoodieConfig();
     config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
     config.setValue(HoodieTableConfig.INITIAL_VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
-    config.setValue(RECORD_MERGE_MODE, RECORD_MERGE_MODE.defaultValue().name());
+    config.setValue(RECORD_MERGE_MODE, COMMIT_TIME_ORDERING.name());
 
     HoodieTableConfig.dropInvalidConfigs(config);
     assertTrue(config.contains(HoodieTableConfig.VERSION));
@@ -280,7 +282,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     // test valid ones are not dropped
     config = new HoodieConfig();
     config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
-    config.setValue(RECORD_MERGE_MODE, RECORD_MERGE_MODE.defaultValue().name());
+    config.setValue(RECORD_MERGE_MODE, COMMIT_TIME_ORDERING.name());
     HoodieTableConfig.dropInvalidConfigs(config);
     assertTrue(config.contains(RECORD_MERGE_MODE));
   }
@@ -300,87 +302,178 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     String overwritePayload = OverwriteWithLatestAvroPayload.class.getName();
     String customPayload = "custom_payload";
     String customStrategy = "custom_strategy";
+    String orderingFieldName = "timestamp";
 
     Stream<Arguments> arguments = Stream.of(
         //test empty args with both null and ""
-        arguments(null, null, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
-        arguments(null, "", "", false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+        arguments(null, null, null, null,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, null, null, "",
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, null, null, orderingFieldName,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, "", "", null,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, "", "", orderingFieldName,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
 
         //test legal event time ordering combos
-        arguments(EVENT_TIME_ORDERING, null, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
-        arguments(EVENT_TIME_ORDERING, defaultPayload, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
-        arguments(EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload,
-            DEFAULT_MERGE_STRATEGY_UUID),
-        arguments(EVENT_TIME_ORDERING, null, DEFAULT_MERGE_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
-        arguments(null, defaultPayload, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
-        arguments(null, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
-        arguments(null, null, DEFAULT_MERGE_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, null, null, null,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, null, null, orderingFieldName,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, defaultPayload, null, orderingFieldName,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, defaultPayload, null, null,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, defaultPayload, null, orderingFieldName,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            "false", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
 
-        //test legal overwrite combos
-        arguments(COMMIT_TIME_ORDERING, null, null, false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
-        arguments(COMMIT_TIME_ORDERING, overwritePayload, null, false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
-        arguments(COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, false, COMMIT_TIME_ORDERING, overwritePayload,
-            COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
-        arguments(COMMIT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, false, COMMIT_TIME_ORDERING, overwritePayload,
-            COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
-        arguments(null, overwritePayload, null, false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
-        arguments(null, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, false, COMMIT_TIME_ORDERING, overwritePayload,
-            COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
-        arguments(null, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        //test legal commit time ordering combos
+        arguments(COMMIT_TIME_ORDERING, null, null, null,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(COMMIT_TIME_ORDERING, null, null, "",
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(COMMIT_TIME_ORDERING, null, null, orderingFieldName,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(COMMIT_TIME_ORDERING, overwritePayload, null, null,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(COMMIT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, overwritePayload, null, null,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, overwritePayload, null, "",
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, overwritePayload, null, orderingFieldName,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            "false", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
 
-        //test legal custom payload combos
-        arguments(CUSTOM, customPayload, null, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
-        arguments(CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
-        arguments(null, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
-        arguments(null, customPayload, null, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        //test legal custom merge mode combos
+        arguments(CUSTOM, customPayload, null, null,
+            "false", CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            "false", CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            "false", CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, customPayload, null, null,
+            "false", CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(CUSTOM, null, customStrategy, null,
+            "false", CUSTOM, defaultPayload, customStrategy),
+        arguments(CUSTOM, customPayload, customStrategy, null,
+            "false", CUSTOM, customPayload, null),
 
-        //test legal custom merger combos
-        arguments(CUSTOM, null, customStrategy, false, CUSTOM, defaultPayload, customStrategy),
-        //for now this case is ok but will need to be changed when we add dummy payload for [HUDI-8317]
-        arguments(CUSTOM, defaultPayload, customStrategy, false, CUSTOM, defaultPayload, customStrategy),
+        //test legal configs that work but should not be used usually
+        arguments(CUSTOM, defaultPayload, customStrategy, null,
+            "six-only", CUSTOM, defaultPayload, customStrategy),
+        arguments(CUSTOM, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            "six-only", CUSTOM, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(CUSTOM, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            "six-only", CUSTOM, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            "false", null, defaultPayload, null),
+        arguments(null, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            "false", null, overwritePayload, null),
 
         //test illegal combos due to missing info
-        arguments(CUSTOM, null, null, true, null, null, null),
-        arguments(CUSTOM, null, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
+        arguments(CUSTOM, null, null, null,
+            "true", null, null, null),
+        arguments(CUSTOM, null, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            "true", null, null, null),
 
         //test illegal combos
-        arguments(EVENT_TIME_ORDERING, overwritePayload, null, true, null, null, null),
-        arguments(EVENT_TIME_ORDERING, customPayload, null, true, null, null, null),
-        arguments(EVENT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(EVENT_TIME_ORDERING, null, customStrategy, true, null, null, null),
-        arguments(EVENT_TIME_ORDERING, null, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(COMMIT_TIME_ORDERING, defaultPayload, null, true, null, null, null),
-        arguments(COMMIT_TIME_ORDERING, customPayload, null, true, null, null, null),
-        arguments(COMMIT_TIME_ORDERING, null, DEFAULT_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(COMMIT_TIME_ORDERING, null, customStrategy, true, null, null, null),
-        arguments(COMMIT_TIME_ORDERING, null, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(CUSTOM, defaultPayload, null, true, null, null, null),
-        arguments(CUSTOM, overwritePayload, null, true, null, null, null),
-        arguments(CUSTOM, null, DEFAULT_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(CUSTOM, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(CUSTOM, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(CUSTOM, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(CUSTOM, defaultPayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(CUSTOM, overwritePayload, DEFAULT_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(null, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(null, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(null, defaultPayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
-        arguments(null, overwritePayload, DEFAULT_MERGE_STRATEGY_UUID, true, null, null, null));
+        arguments(EVENT_TIME_ORDERING, overwritePayload, null, orderingFieldName,
+            "true", null, null, null),
+        arguments(EVENT_TIME_ORDERING, customPayload, null, orderingFieldName,
+            "true", null, null, null),
+        arguments(EVENT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            "true", null, null, null),
+        arguments(EVENT_TIME_ORDERING, null, customStrategy, orderingFieldName,
+            "true", null, null, null),
+        arguments(EVENT_TIME_ORDERING, null, PAYLOAD_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            "true", null, null, null),
+        arguments(COMMIT_TIME_ORDERING, defaultPayload, null, null,
+            "true", null, null, null),
+        arguments(COMMIT_TIME_ORDERING, customPayload, null, null,
+            "true", null, null, null),
+        arguments(COMMIT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "true", null, null, null),
+        arguments(COMMIT_TIME_ORDERING, null, customStrategy, null,
+            "true", null, null, null),
+        arguments(COMMIT_TIME_ORDERING, null, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
+            "true", null, null, null),
+        arguments(CUSTOM, defaultPayload, null, null,
+            "true", null, null, null),
+        arguments(CUSTOM, overwritePayload, null, null,
+            "true", null, null, null),
+        arguments(CUSTOM, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "true", null, null, null),
+        arguments(CUSTOM, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "true", null, null, null),
+        arguments(CUSTOM, defaultPayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "true", null, null, null),
+        arguments(CUSTOM, overwritePayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "true", null, null, null),
+
+        // dimensions that should pass validation on table version 6, not table version 8
+        arguments(null, defaultPayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "eight-only", EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, overwritePayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
+            "eight-only", COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)
+    );
     return arguments;
   }
 
   @ParameterizedTest
   @MethodSource("argumentsForInferringRecordMergeMode")
-  public void testInferMergeMode(RecordMergeMode inputMergeMode, String inputPayloadClass, String inputMergeStrategy, boolean shouldThrow,
-                                 RecordMergeMode outputMergeMode, String outputPayloadClass, String outputMergeStrategy) {
-    if (shouldThrow) {
-      assertThrows(IllegalArgumentException.class,
-          () -> HoodieTableConfig.inferCorrectMergingBehavior(inputMergeMode, inputPayloadClass, inputMergeStrategy));
-    } else {
-      Triple<RecordMergeMode, String, String> inferredConfigs = HoodieTableConfig.inferCorrectMergingBehavior(inputMergeMode, inputPayloadClass, inputMergeStrategy);
-      assertEquals(outputMergeMode, inferredConfigs.getLeft());
-      assertEquals(outputPayloadClass, inferredConfigs.getMiddle());
-      assertEquals(outputMergeStrategy, inferredConfigs.getRight());
-    }
+  public void testInferMergeMode(RecordMergeMode inputMergeMode, String inputPayloadClass,
+                                 String inputMergeStrategy, String orderingFieldName,
+                                 String shouldThrowString, RecordMergeMode outputMergeMode,
+                                 String outputPayloadClass, String outputMergeStrategy) throws IOException {
+    Arrays.stream(new HoodieTableVersion[] {HoodieTableVersion.EIGHT, HoodieTableVersion.SIX})
+        .forEach(tableVersion -> {
+          boolean shouldThrow = "eight-only".equals(shouldThrowString)
+              ? tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+              : "six-only".equals(shouldThrowString)
+              ? !tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+              : Boolean.parseBoolean(shouldThrowString);
+          RecordMergeMode expectedMergeMode = outputMergeMode;
+          String expectedMergeStrategy = outputMergeStrategy;
+          if (!shouldThrow && (outputMergeMode == null || outputMergeStrategy == null)) {
+            expectedMergeMode = tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+                ? CUSTOM : inferRecordMergeModeFromPayloadClass(outputPayloadClass);
+            expectedMergeStrategy = getRecordMergeStrategyId(expectedMergeMode, outputPayloadClass, inputMergeStrategy, tableVersion);
+          }
+          if (shouldThrow) {
+            assertThrows(IllegalArgumentException.class,
+                () -> HoodieTableConfig.inferCorrectMergingBehavior(
+                    inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName,
+                    tableVersion));
+          } else {
+            Triple<RecordMergeMode, String, String> inferredConfigs =
+                HoodieTableConfig.inferCorrectMergingBehavior(
+                    inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName,
+                    tableVersion);
+            assertEquals(expectedMergeMode, inferredConfigs.getLeft());
+            assertEquals(outputPayloadClass, inferredConfigs.getMiddle());
+            assertEquals(expectedMergeStrategy, inferredConfigs.getRight());
+          }
+        });
   }
 }

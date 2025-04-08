@@ -29,6 +29,8 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.Objects;
 
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
+
 /**
  * <ol>
  * <li> preCombine - Picks the latest delta record for a key, based on an ordering field;
@@ -43,7 +45,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, 0); // natural order
+    this(record.isPresent() ? record.get() : null, DEFAULT_ORDERING_VALUE); // natural order
   }
 
   @Override
@@ -62,7 +64,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
       return Option.empty();
     }
 
-    return Option.of((IndexedRecord) HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 
   /**

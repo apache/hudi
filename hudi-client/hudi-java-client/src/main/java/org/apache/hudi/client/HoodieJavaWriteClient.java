@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -57,6 +56,11 @@ public class HoodieJavaWriteClient<T> extends
     this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
   }
 
+  @Override
+  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    // no op
+  }
+
   public HoodieJavaWriteClient(HoodieEngineContext context,
                                HoodieWriteConfig writeConfig,
                                boolean rollbackPending,
@@ -68,7 +72,7 @@ public class HoodieJavaWriteClient<T> extends
   @Override
   public List<HoodieRecord<T>> filterExists(List<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieJavaTable<T> table = HoodieJavaTable.create(config, (HoodieJavaEngineContext) context);
+    HoodieJavaTable<T> table = HoodieJavaTable.create(config, context);
     Timer.Context indexTimer = metrics.getIndexCtx();
     List<HoodieRecord<T>> recordsWithLocation = getIndex().tagLocation(HoodieListData.eager(hoodieRecords), context, table).collectAsList();
     metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));

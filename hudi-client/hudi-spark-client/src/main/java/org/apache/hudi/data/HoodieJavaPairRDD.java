@@ -34,6 +34,7 @@ import org.apache.spark.api.java.Optional;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.storage.StorageLevel;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -129,6 +130,10 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
     return HoodieJavaPairRDD.of(pairRDDData.mapValues(func::apply));
   }
 
+  public <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func) {
+    return HoodieJavaPairRDD.of(pairRDDData.flatMapValues(func::apply));
+  }
+
   @Override
   public <L, W> HoodiePairData<L, W> mapToPair(SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc) {
     return HoodieJavaPairRDD.of(pairRDDData.mapToPair(pair -> {
@@ -143,6 +148,19 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
         pairRDDData.leftOuterJoin(HoodieJavaPairRDD.getJavaPairRDD(other))
             .map(tuple -> new Tuple2<>(tuple._1,
                 new ImmutablePair<>(tuple._2._1, Option.ofNullable(tuple._2._2.orElse(null)))))));
+  }
+
+  @Override
+  public HoodiePairData<K, V> union(HoodiePairData<K, V> other) {
+    return HoodieJavaPairRDD.of(pairRDDData.union(HoodieJavaPairRDD.getJavaPairRDD(other)));
+  }
+
+  @Override
+  public <W> HoodiePairData<K, Pair<V, W>> join(HoodiePairData<K, W> other) {
+    return HoodieJavaPairRDD.of(JavaPairRDD.fromJavaRDD(
+        pairRDDData.join(HoodieJavaPairRDD.getJavaPairRDD(other))
+            .map(tuple -> new Tuple2<>(tuple._1,
+                new ImmutablePair<>(tuple._2._1, tuple._2._2)))));
   }
 
   @Override

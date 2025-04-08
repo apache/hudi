@@ -36,7 +36,7 @@ import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
 import org.apache.hadoop.conf.Configuration;
@@ -105,9 +105,9 @@ public abstract class HoodieSparkTable<T>
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
-      HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
+      HoodieTableMetadataWriter metadataWriter = SparkMetadataWriterFactory.create(
           getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
-          Option.of(triggeringInstantTimestamp));
+          Option.of(triggeringInstantTimestamp), metaClient.getTableConfig());
       try {
         if (isMetadataTableExists || metaClient.getStorage().exists(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))) {

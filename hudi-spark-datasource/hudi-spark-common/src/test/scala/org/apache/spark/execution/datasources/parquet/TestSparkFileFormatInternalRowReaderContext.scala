@@ -22,12 +22,16 @@ package org.apache.spark.execution.datasources.parquet
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.filterIsSafeForBootstrap
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
+import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
 import org.apache.spark.sql.sources.{And, IsNotNull, Or}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
+import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito
 
 class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalTestHarness {
 
@@ -68,5 +72,20 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
       requiredSchema, true)
     assertEquals(3, appliedSchema.fields.length)
     assertTrue(appliedSchema.fields.map(f => f.name).contains(ROW_INDEX_TEMPORARY_COLUMN_NAME))
+  }
+
+  @Test
+  def testConvertValueToEngineType(): Unit = {
+    val reader = Mockito.mock(classOf[SparkParquetReader])
+    val stringValue = "string_value"
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty)
+    assertEquals(1, sparkReaderContext.convertValueToEngineType(1))
+    assertEquals(1L, sparkReaderContext.convertValueToEngineType(1L))
+    assertEquals(1.1f, sparkReaderContext.convertValueToEngineType(1.1f))
+    assertEquals(1.1d, sparkReaderContext.convertValueToEngineType(1.1d))
+    assertEquals(UTF8String.fromString(stringValue),
+      sparkReaderContext.convertValueToEngineType(stringValue))
+    assertEquals(UTF8String.fromString(stringValue),
+      sparkReaderContext.convertValueToEngineType(UTF8String.fromString(stringValue)))
   }
 }

@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.SqlSourceConfig;
@@ -74,8 +75,8 @@ public class SqlSource extends RowSource {
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(
-      Option<String> lastCkptStr, long sourceLimit) {
+  protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(
+      Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     LOG.debug(sourceSql);
     Dataset<Row> source = spark.sql(sourceSql);
     LOG.debug(source.showString(10, 0, true));

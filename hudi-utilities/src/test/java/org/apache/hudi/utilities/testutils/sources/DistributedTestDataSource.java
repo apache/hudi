@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.SourceTestConfig;
@@ -51,8 +52,8 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
-    int nextCommitNum = lastCkptStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
+  protected InputBatch<JavaRDD<GenericRecord>> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    int nextCommitNum = lastCheckpoint.map(s -> Integer.parseInt(s.getCheckpointKey()) + 1).orElse(0);
     String instantTime = String.format("%05d", nextCommitNum);
     LOG.info("Source Limit is set to {}", sourceLimit);
 

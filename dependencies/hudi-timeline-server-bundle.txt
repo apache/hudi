@@ -33,7 +33,7 @@ commons-configuration/commons-configuration/1.6//commons-configuration-1.6.jar
 commons-daemon/commons-daemon/1.0.13//commons-daemon-1.0.13.jar
 commons-digester/commons-digester/1.8//commons-digester-1.8.jar
 commons-httpclient/commons-httpclient/3.1//commons-httpclient-3.1.jar
-commons-io/commons-io/2.4//commons-io-2.4.jar
+commons-io/commons-io/2.14.0//commons-io-2.14.0.jar
 commons-lang/commons-lang/2.6//commons-lang-2.6.jar
 commons-logging/commons-logging/1.2//commons-logging-1.2.jar
 commons-math/org.apache.commons/2.2//commons-math-2.2.jar

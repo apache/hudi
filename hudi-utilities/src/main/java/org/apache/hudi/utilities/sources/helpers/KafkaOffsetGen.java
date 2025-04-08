@@ -19,8 +19,10 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
@@ -28,14 +30,23 @@ import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.HoodieRetryingKafkaConsumer;
+import org.apache.hudi.common.util.LogicalClock;
+import org.apache.hudi.common.util.SystemClock;
 
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
@@ -50,6 +61,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -103,12 +116,10 @@ public class KafkaOffsetGen {
     public static String offsetsToStr(OffsetRange[] ranges) {
       // merge the ranges by partition to maintain one offset range map to one topic partition.
       ranges = mergeRangesByTopicPartition(ranges);
-      StringBuilder sb = new StringBuilder();
       // at least 1 partition will be present.
-      sb.append(ranges[0].topic() + ",");
-      sb.append(Arrays.stream(ranges).map(r -> String.format("%s:%d", r.partition(), r.untilOffset()))
-              .collect(Collectors.joining(",")));
-      return sb.toString();
+      return ranges[0].topic() + ","
+          + Arrays.stream(ranges).map(r -> String.format("%s:%d", r.partition(), r.untilOffset()))
+              .collect(Collectors.joining(","));
     }
 
     /**
@@ -229,8 +240,9 @@ public class KafkaOffsetGen {
   protected final String topicName;
   private KafkaSourceConfig.KafkaResetOffsetStrategies autoResetValue;
   private final String kafkaCheckpointType;
+  private final LogicalClock clock;
 
-  public KafkaOffsetGen(TypedProperties props) {
+  public KafkaOffsetGen(TypedProperties props, LogicalClock clock) {
     this.props = props;
     kafkaParams = excludeHoodieConfigs(props);
     checkRequiredConfigProperties(props, Collections.singletonList(KafkaSourceConfig.KAFKA_TOPIC_NAME));
@@ -251,9 +263,14 @@ public class KafkaOffsetGen {
     if (autoResetValue.equals(KafkaSourceConfig.KafkaResetOffsetStrategies.GROUP)) {
       this.kafkaParams.put(KafkaSourceConfig.KAFKA_AUTO_OFFSET_RESET.key(), KafkaSourceConfig.KAFKA_AUTO_OFFSET_RESET.defaultValue().name().toLowerCase());
     }
+    this.clock = clock;
   }
 
-  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieIngestionMetrics metrics) {
+  public KafkaOffsetGen(TypedProperties props) {
+    this(props, new SystemClock());
+  }
+
+  public OffsetRange[] getNextOffsetRanges(Option<Checkpoint> lastCheckpoint, long sourceLimit, HoodieIngestionMetrics metrics) {
     // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
     long maxEventsToReadFromKafka = getLongWithAltKeys(props, KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE);
 
@@ -268,10 +285,10 @@ public class KafkaOffsetGen {
     long minPartitions = getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
     LOG.info("getNextOffsetRanges set config {} to {}", KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), minPartitions);
 
-    return getNextOffsetRanges(lastCheckpointStr, numEvents, minPartitions, metrics);
+    return getNextOffsetRanges(lastCheckpoint, numEvents, minPartitions, metrics);
   }
 
-  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long numEvents, long minPartitions, HoodieIngestionMetrics metrics) {
+  public OffsetRange[] getNextOffsetRanges(Option<Checkpoint> lastCheckpoint, long numEvents, long minPartitions, HoodieIngestionMetrics metrics) {
     // Obtain current metadata for the topic
     Map<TopicPartition, Long> fromOffsets;
     Map<TopicPartition, Long> toOffsets;
@@ -283,14 +300,18 @@ public class KafkaOffsetGen {
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
-      if (KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equalsIgnoreCase(kafkaCheckpointType) && isValidTimestampCheckpointType(lastCheckpointStr)) {
-        lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicPartitions, topicName, Long.parseLong(lastCheckpointStr.get()));
+      Option<String> lastCheckpointStr;
+      if (KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equalsIgnoreCase(kafkaCheckpointType) && isValidTimestampCheckpointType(lastCheckpoint)) {
+        lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicPartitions, topicName,
+            Long.parseLong(lastCheckpoint.get().getCheckpointKey()));
       } else if (KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET.equalsIgnoreCase(kafkaCheckpointType) && partitionInfoList.size() != 1) {
         throw new HoodieException("Kafka topic " + topicName + " has " + partitionInfoList.size()
             + " partitions (more than 1). single_offset checkpoint type is not applicable.");
       } else if (KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET.equalsIgnoreCase(kafkaCheckpointType)
-          && partitionInfoList.size() == 1 && isValidOffsetCheckpointType(lastCheckpointStr)) {
-        lastCheckpointStr = Option.of(topicName + ",0:" + lastCheckpointStr.get());
+          && partitionInfoList.size() == 1 && isValidOffsetCheckpointType(lastCheckpoint)) {
+        lastCheckpointStr = Option.of(topicName + ",0:" + lastCheckpoint.get().getCheckpointKey());
+      } else {
+        lastCheckpointStr = lastCheckpoint.isPresent() ? Option.of(lastCheckpoint.get().getCheckpointKey()) : Option.empty();
       }
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {
@@ -299,7 +320,13 @@ public class KafkaOffsetGen {
       } else {
         switch (autoResetValue) {
           case EARLIEST:
-            fromOffsets = consumer.beginningOffsets(topicPartitions);
+            Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
+            // It is possible that because of retention, "earliest" offsets may expire soon while the job
+            // is progressing and result in OffsetOutOfRange exception. So, instead of reading from "earliest"
+            // offsets, we can take retention into account and skip offsets of certain time interval after
+            // retention time (configured using KafkaSourceConfig.OFFSET_SKIP_BUFFER_MINUTES).
+            // This won't affect the starting offsets if they are already much after the retention time
+            fromOffsets = resolveFromOffsetsWithRetention(consumer, earliestOffsets, topicPartitions);
             break;
           case LATEST:
             fromOffsets = consumer.endOffsets(topicPartitions);
@@ -370,21 +397,27 @@ public class KafkaOffsetGen {
         LOG.warn("{} If you want Hudi Streamer to fail on such cases, set \"{}\" to \"true\".", message, KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key());
       }
     }
-    return isCheckpointOutOfBounds ? earliestOffsets : checkpointOffsets;
+
+    // If checkpoint offsets has expired (isCheckpointOutOfBounds = true) and ENABLE_FAIL_ON_DATA_LOSS is false,
+    // instead of reading from "earliest" offsets, adjust them with retention to avoid OffsetOutOfRange exception
+    // as it is possible that "earliest" offsets may expire soon while the job is progressing. This won't affect
+    // the offsets if they are already much after the retention or OFFSET_SKIP_BUFFER_MINUTES is not set
+    return isCheckpointOutOfBounds ? resolveFromOffsetsWithRetention(consumer, earliestOffsets, topicPartitions) : checkpointOffsets;
   }
 
   /**
    * Check if the checkpoint is a timestamp.
-   * @param lastCheckpointStr
+   * @param lastCheckpoint
    * @return
    */
-  private Boolean isValidTimestampCheckpointType(Option<String> lastCheckpointStr) {
-    if (!lastCheckpointStr.isPresent()) {
+  private Boolean isValidTimestampCheckpointType(Option<Checkpoint> lastCheckpoint) {
+    if (!lastCheckpoint.isPresent()) {
       return false;
     }
+    String checkpointStr = lastCheckpoint.get().getCheckpointKey();
     Pattern pattern = Pattern.compile("[-+]?[0-9]+(\\.[0-9]+)?");
-    Matcher isNum = pattern.matcher(lastCheckpointStr.get());
-    return isNum.matches() && (lastCheckpointStr.get().length() == 13 || lastCheckpointStr.get().length() == 10);
+    Matcher isNum = pattern.matcher(checkpointStr);
+    return isNum.matches() && (checkpointStr.length() == 13 || checkpointStr.length() == 10);
   }
 
   /**
@@ -392,12 +425,12 @@ public class KafkaOffsetGen {
    * @param lastCheckpointStr
    * @return
    */
-  private Boolean isValidOffsetCheckpointType(Option<String> lastCheckpointStr) {
+  private Boolean isValidOffsetCheckpointType(Option<Checkpoint> lastCheckpointStr) {
     if (!lastCheckpointStr.isPresent()) {
       return false;
     }
     try {
-      Long.parseUnsignedLong(lastCheckpointStr.get());
+      Long.parseUnsignedLong(lastCheckpointStr.get().getCheckpointKey());
       return true;
     } catch (NumberFormatException ex) {
       LOG.warn("Checkpoint type is set to single_offset, but provided value of checkpoint=\"{}\" is not a valid number", lastCheckpointStr.get());
@@ -448,6 +481,73 @@ public class KafkaOffsetGen {
       }
     }
     return Option.of(sb.toString());
+  }
+
+  /**
+   * Adjust fromOffsets to take retention into account i.e. skip offsets of certain time interval
+   * after retention time (configured using {@link KafkaSourceConfig#OFFSET_SKIP_BUFFER_MINUTES}).
+   * This won't affect the starting offsets if they are already much after the retention time
+   */
+  @VisibleForTesting
+  Map<TopicPartition, Long> resolveFromOffsetsWithRetention(
+      KafkaConsumer consumer,
+      final Map<TopicPartition, Long> fromOffsets,
+      Set<TopicPartition> topicPartitions) {
+    try {
+      // do not modify offsets if KafkaSourceConfig.OFFSET_SKIP_BUFFER_MINUTES is not set or is <= 0
+      long offsetSkipIntervalMinutes = getLongWithAltKeys(this.props, KafkaSourceConfig.OFFSET_SKIP_BUFFER_MINUTES);
+      if (offsetSkipIntervalMinutes <= 0) {
+        LOG.debug("Not modifying fromOffsets as {} is not configured or set to a value <= 0",
+            KafkaSourceConfig.OFFSET_SKIP_BUFFER_MINUTES.key());
+        return fromOffsets;
+      }
+
+      // do not modify offsets if topic retention by time is not set
+      Long retentionMs = getTopicRetentionMs(getTopicName());
+      if (retentionMs == null || retentionMs <= 0) {
+        LOG.debug("Not modifying fromOffsets as topic {} retention is missing or set to a value <= 0", getTopicName());
+        return fromOffsets;
+      }
+
+      long retentionTs = clock.currentEpoch() - retentionMs + TimeUnit.MINUTES.toMillis(offsetSkipIntervalMinutes);
+      Map<TopicPartition, Long> topicPartitionsTimestamp = topicPartitions.stream()
+          .collect(Collectors.toMap(Function.identity(), v -> retentionTs));
+      Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = consumer.offsetsForTimes(topicPartitionsTimestamp);
+
+      List<TopicPartition> nullPartitions =
+          offsetAndTimestamp.entrySet().stream()
+              .filter(entry -> entry.getValue() == null)
+              .map(Map.Entry::getKey)
+              .collect(Collectors.toList());
+      if (!nullPartitions.isEmpty()) {
+        LOG.warn("OffsetAndTimestamp not available for partitions: {} since {}", nullPartitions, retentionTs);
+      }
+
+      final Map<TopicPartition, Long> skippedOffsetsPerPartition = new HashMap<>();
+      // It is possible that OffsetAndTimestamp is null for some partitions because of message
+      // format version before 0.10.0 or there is no data in the partition. Instead of setting
+      // offset to 0, fallback to the fromOffsets in that partition.
+      //
+      // If OffsetAndTimestamp is not null, return max of offset since retentionTs and fromOffsets.
+      // If fromOffsets are the earliest offsets and already after retentionTs, offsetsForTimes will
+      // return same offset. In case of fromOffsets derived from lastCheckpointStr, we should return
+      // offsets from checkpoint if they are greater than offsetsForTimes
+      Map<TopicPartition, Long> newFromOffsets = offsetAndTimestamp.entrySet().stream()
+          .collect(Collectors.toMap(
+              Map.Entry::getKey,
+              entry -> {
+                Long offset = fromOffsets.get(entry.getKey());
+                long newOffset = entry.getValue() == null ? offset : Math.max(entry.getValue().offset(), offset);
+                skippedOffsetsPerPartition.put(entry.getKey(), Math.max(newOffset - offset, 0));
+                return newOffset;
+              }));
+      LOG.warn("Adjusted fromOffsets with retention; oldFromOffsets: {}, newFromOffsets: {}, "
+          + "skippedOffsetsPerPartition: {}", fromOffsets, newFromOffsets, skippedOffsetsPerPartition);
+      return newFromOffsets;
+    } catch (KafkaException e) {
+      LOG.error("Error resolving fromOffsets with retention, falling back to fromOffsets", e);
+      return fromOffsets;
+    }
   }
 
   /**
@@ -512,5 +612,33 @@ public class KafkaOffsetGen {
       }
     }
     return fromOffsets;
+  }
+
+  /**
+   * <li>Get topic retention ms, return null if not configured or retention is based on bytes</li>
+   * <li>If both retention ms and retention bytes are configured,
+   * we will still return the retention ms</li>
+   */
+  @VisibleForTesting
+  Long getTopicRetentionMs(String topicName) {
+    try (AdminClient client = AdminClient.create(getKafkaParams())) {
+      ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
+      // Using default api timeout
+      DescribeConfigsResult configsResult = client.describeConfigs(Collections.singleton(configResource));
+      Config topicConfigs = configsResult.all().get().get(configResource);
+      ConfigEntry retentionConfig = topicConfigs.get(TopicConfig.RETENTION_MS_CONFIG);
+      if (retentionConfig == null || retentionConfig.value() == null) {
+        LOG.info("{} config missing for topic {}", TopicConfig.RETENTION_MS_CONFIG, topicName);
+        return null;
+      }
+      return Long.parseLong(retentionConfig.value());
+    } catch (KafkaException | ExecutionException e) {
+      LOG.error("Error getting retention config for topic {}", topicName, e);
+      return null;
+    } catch (InterruptedException ex) {
+      LOG.error("Interrupted while fetching topic {} configuration", topicName);
+      Thread.currentThread().interrupt();  // set interrupt flag
+      return null;
+    }
   }
 }

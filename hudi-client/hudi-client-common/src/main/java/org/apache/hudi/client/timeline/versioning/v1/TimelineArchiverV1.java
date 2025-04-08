@@ -67,6 +67,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -85,6 +86,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  */
 public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements HoodieTimelineArchiver<T, I, K, O> {
 
+  public static final String ARCHIVE_LIMIT_INSTANTS = "hoodie.archive.limit.instants";
   private static final Logger LOG = LoggerFactory.getLogger(TimelineArchiverV1.class);
 
   private final StoragePath archiveFilePath;
@@ -139,16 +141,15 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
         // there is no owner or instant time per se for archival.
         txnManager.beginTransaction(Option.empty(), Option.empty());
       }
-      List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
-      boolean success = true;
+      List<HoodieInstant> instantsToArchive = getInstantsToArchive();
       if (!instantsToArchive.isEmpty()) {
         this.writer = openWriter(archiveFilePath.getParent());
-        LOG.info("Archiving instants " + instantsToArchive);
+        LOG.info("Archiving instants {} for table {}", instantsToArchive, config.getBasePath());
         archive(context, instantsToArchive);
-        LOG.info("Deleting archived instants " + instantsToArchive);
-        success = deleteArchivedInstants(instantsToArchive, context);
+        LOG.info("Deleting archived instants {} for table {}", instantsToArchive, config.getBasePath());
+        deleteArchivedInstants(instantsToArchive, context);
       } else {
-        LOG.info("No Instants to archive");
+        LOG.info("No Instants to archive for table {}", config.getBasePath());
       }
 
       return instantsToArchive.size();
@@ -280,21 +281,22 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     }
   }
 
-  private Stream<HoodieInstant> getInstantsToArchive() throws IOException {
-    Stream<HoodieInstant> instants = Stream.concat(getCleanInstantsToArchive(), getCommitInstantsToArchive());
+  private List<HoodieInstant> getInstantsToArchive() throws IOException {
     if (config.isMetaserverEnabled()) {
-      return Stream.empty();
+      return Collections.emptyList();
     }
 
-    // For archiving and cleaning instants, we need to include intermediate state files if they exist
-    HoodieActiveTimeline rawActiveTimeline = new ActiveTimelineV1(metaClient, false);
-    Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstantsAsStream()
-        .collect(Collectors.groupingBy(i -> Pair.of(i.requestedTime(),
-            InstantComparatorV1.getComparableAction(i.getAction()))));
+    List<HoodieInstant> candidates = Stream.concat(getCleanInstantsToArchive(), getCommitInstantsToArchive()).collect(Collectors.toList());
+    if (candidates.isEmpty()) {
+      // exit early to avoid loading meta client for metadata table
+      return Collections.emptyList();
+    }
+
+    Stream<HoodieInstant> instants = candidates.stream();
 
     // If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
-    if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
+    if (config.isMetadataTableEnabled() && table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
       try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), table.getStorage(), config.getMetadataConfig(), config.getBasePath())) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
         if (!latestCompactionTime.isPresent()) {
@@ -339,16 +341,25 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       }
     }
 
-    return instants.flatMap(hoodieInstant -> {
-      List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.requestedTime(),
-          InstantComparatorV1.getComparableAction(hoodieInstant.getAction())));
-      if (instantsToStream != null) {
-        return instantsToStream.stream();
-      } else {
-        // if a concurrent writer archived the instant
-        return Stream.empty();
-      }
-    });
+    List<HoodieInstant> instantsToArchive = instants.collect(Collectors.toList());
+    if (instantsToArchive.isEmpty()) {
+      // Exit early to avoid loading raw timeline
+      return Collections.emptyList();
+    }
+
+    // For archiving and cleaning instants, we need to include intermediate state files if they exist
+    HoodieActiveTimeline rawActiveTimeline = new ActiveTimelineV1(metaClient, false);
+    Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstantsAsStream()
+        .collect(Collectors.groupingBy(i -> Pair.of(i.requestedTime(),
+            InstantComparatorV1.getComparableAction(i.getAction()))));
+
+    return instantsToArchive.stream()
+        .sorted()
+        .limit(config.getProps().getLong(ARCHIVE_LIMIT_INSTANTS, Long.MAX_VALUE))
+        .flatMap(hoodieInstant ->
+            groupByTsAction.getOrDefault(Pair.of(hoodieInstant.requestedTime(),
+                InstantComparatorV1.getComparableAction(hoodieInstant.getAction())), Collections.emptyList()).stream())
+        .collect(Collectors.toList());
   }
 
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {
@@ -432,7 +443,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
       final String keyField = table.getMetaClient().getTableConfig().getRecordKeyFieldProp();
       List<HoodieRecord> indexRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
-      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, false, header, keyField);
+      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, header, keyField);
       writer.appendBlock(block);
       records.clear();
     }

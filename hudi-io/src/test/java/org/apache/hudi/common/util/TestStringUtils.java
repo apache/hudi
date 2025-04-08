@@ -28,11 +28,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
 import static org.apache.hudi.common.util.StringUtils.concatenateWithThreshold;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.toStringWithThreshold;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -58,7 +60,7 @@ public class TestStringUtils {
     return sb.toString();
   }
 
-  private static String generateRandomString(int length) {
+  public static String generateRandomString(int length) {
     if (length < 1) {
       throw new IllegalArgumentException("Length must be greater than 0");
     }
@@ -216,6 +218,45 @@ public class TestStringUtils {
         IllegalArgumentException.class,
         () -> generateRandomString(-1)
     );
+  }
+
+  @Test
+  void testToStringWithThreshold() {
+    String str1 = "string_value1";
+    String str2 = "string_value2";
+    String str3 = "string_value3";
+    assertEquals("",
+        toStringWithThreshold(null, 10));
+    assertEquals("",
+        toStringWithThreshold(Collections.emptyList(), 10));
+    assertEquals("..",
+        toStringWithThreshold(Collections.singletonList(str1), 2));
+    assertEquals("string_...",
+        toStringWithThreshold(Collections.singletonList(str1), str1.length() - 3));
+    assertEquals("[string_value1]",
+        toStringWithThreshold(Collections.singletonList(str1), 0));
+    assertEquals(str1,
+        toStringWithThreshold(Collections.singletonList(str1), str1.length()));
+    assertEquals(str1,
+        toStringWithThreshold(Collections.singletonList(str1), str1.length() + 10));
+    List<String> stringList = new ArrayList<>();
+    stringList.add(str1);
+    stringList.add(str2);
+    stringList.add(str3);
+    assertEquals("string_val...",
+        toStringWithThreshold(stringList, str1.length()));
+    assertEquals("string_valu...",
+        toStringWithThreshold(stringList, str1.length() + 1));
+    assertEquals("string_value1,string...",
+        toStringWithThreshold(stringList, str1.length() + str2.length() - 3));
+    assertEquals("string_value1,string_v...",
+        toStringWithThreshold(stringList, str1.length() + str2.length() - 1));
+    assertEquals("string_value1,string_value2,strin...",
+        toStringWithThreshold(stringList, str1.length() + str2.length() + str3.length() - 3));
+    assertEquals("string_value1,string_value2,string_value3",
+        toStringWithThreshold(stringList, str1.length() + str2.length() + str3.length() + 2));
+    assertEquals("[string_value1, string_value2, string_value3]",
+        toStringWithThreshold(stringList, - 1));
   }
 
   @Test

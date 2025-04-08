@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -47,7 +48,7 @@ public class HoodieTTLJob {
   private final Config cfg;
   private final TypedProperties props;
   private final JavaSparkContext jsc;
-  private HoodieTableMetaClient metaClient;
+  private final HoodieTableMetaClient metaClient;
 
   public HoodieTTLJob(JavaSparkContext jsc, Config cfg) {
     this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs),
@@ -117,12 +118,14 @@ public class HoodieTTLJob {
     String dirName = new Path(cfg.basePath).getName();
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-ttl-job-" + dirName, cfg.sparkMaster);
 
+    int exitCode = 0;
     try {
       new HoodieTTLJob(jssc, cfg).run();
     } catch (Throwable throwable) {
+      exitCode = 1;
       throw new HoodieException("Failed to run ttl for " + cfg.basePath, throwable);
     } finally {
-      jssc.stop();
+      SparkAdapterSupport$.MODULE$.sparkAdapter().stopSparkContext(jssc, exitCode);
     }
 
     LOG.info("Hoodie TTL job ran successfully");

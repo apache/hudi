@@ -149,14 +149,14 @@ public class CompactionUtil {
    *
    * @param table The hoodie table
    */
-  public static void rollbackCompaction(HoodieFlinkTable<?> table) {
+  public static void rollbackCompaction(HoodieFlinkTable<?> table, HoodieFlinkWriteClient writeClient) {
     HoodieTimeline inflightCompactionTimeline = table.getActiveTimeline()
         .filterPendingCompactionTimeline()
         .filter(instant ->
             instant.getState() == HoodieInstant.State.INFLIGHT);
     inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
       LOG.info("Rollback the inflight compaction instant: " + inflightInstant + " for failover");
-      table.rollbackInflightCompaction(inflightInstant);
+      table.rollbackInflightCompaction(inflightInstant, commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
       table.getMetaClient().reloadActiveTimeline();
     });
   }

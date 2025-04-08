@@ -88,7 +88,7 @@ public class TestHoodieMetaSyncMetrics {
   @Test
   void testIncrementRecreateAndSyncFailureCounter() {
     hoodieSyncMetrics.incrementRecreateAndSyncFailureCounter();
-    String metricsName = hoodieSyncMetrics.getMetricsName("counter", "meta_sync.recreate_table.failure");
+    String metricsName = hoodieSyncMetrics.getMetricsName("meta_sync", "meta_sync.recreate_table.failure.counter");
     long count = metrics.getRegistry().getCounters().get(metricsName).getCount();
     assertEquals(1, count, "recreate_table failure counter value should be 1");
   }
@@ -99,7 +99,7 @@ public class TestHoodieMetaSyncMetrics {
     hoodieSyncMetrics = new HoodieMetaSyncMetrics(syncConfig, "TestHiveSyncTool");
     metrics = hoodieSyncMetrics.getMetrics();
     hoodieSyncMetrics.incrementRecreateAndSyncFailureCounter();
-    String metricsName = hoodieSyncMetrics.getMetricsName("counter", "meta_sync.recreate_table.failure");
+    String metricsName = hoodieSyncMetrics.getMetricsName("meta_sync", "meta_sync.recreate_table.failure.counter");
     long count = metrics.getRegistry().getCounters().get(metricsName).getCount();
     assertEquals(1, count, "recreate_table failure counter value should be 1");
   }

@@ -21,8 +21,6 @@ val basePath = "file:///tmp/hudi-bundles/tests/" + tableName
 spark.read.format("hudi").
   option("hoodie.table.name", tableName).
   option("hoodie.database.name", "default").
-  option("hoodie.metadata.enabled", "false").
-  option("hoodie.metaserver.enabled", "true").
-  option("hoodie.metaserver.uris", "thrift://localhost:9090").
+  option("hoodie.metadata.enable", "false").
   load(basePath).coalesce(1).write.csv("/tmp/metaserver-bundle/sparkdatasource/trips/results")
 System.exit(0)

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
@@ -45,14 +46,14 @@ public class CloudObjectIncrCheckpoint {
     return key;
   }
 
-  public static CloudObjectIncrCheckpoint fromString(Option<String> lastCheckpoint) {
+  public static CloudObjectIncrCheckpoint fromString(Option<Checkpoint> lastCheckpoint) {
     if (lastCheckpoint.isPresent()) {
-      Option<String[]> splitResult = lastCheckpoint.map(str -> str.split("#", 2));
+      Option<String[]> splitResult = lastCheckpoint.map(str -> str.getCheckpointKey().split("#", 2));
       if (splitResult.isPresent() && splitResult.get().length == 2) {
         String[] split = splitResult.get();
         return new CloudObjectIncrCheckpoint(split[0], split[1]);
       } else {
-        return new CloudObjectIncrCheckpoint(lastCheckpoint.get(), null);
+        return new CloudObjectIncrCheckpoint(lastCheckpoint.get().getCheckpointKey(), null);
       }
     }
     return new CloudObjectIncrCheckpoint(DEFAULT_START_TIMESTAMP, null);

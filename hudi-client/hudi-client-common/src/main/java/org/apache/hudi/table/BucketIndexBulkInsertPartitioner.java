@@ -19,8 +19,9 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.AppendHandleFactory;
 import org.apache.hudi.io.SingleFileHandleCreateFactory;
 import org.apache.hudi.io.WriteHandleFactory;
@@ -35,36 +36,37 @@ import java.util.List;
 /**
  * Abstract of bucket index bulk_insert partitioner
  */
-public abstract class BucketIndexBulkInsertPartitioner<T> implements BulkInsertPartitioner<T> {
+public abstract class BucketIndexBulkInsertPartitioner<T> extends BucketSortBulkInsertPartitioner<T> {
 
   public static final Logger LOG = LogManager.getLogger(BucketIndexBulkInsertPartitioner.class);
 
   private final boolean preserveHoodieMetadata;
 
-  protected final String[] sortColumnNames;
   protected final boolean consistentLogicalTimestampEnabled;
-  protected final HoodieTable table;
   protected final List<String> indexKeyFields;
   protected final List<Boolean> doAppend = new ArrayList<>();
   protected final List<String> fileIdPfxList = new ArrayList<>();
+  protected boolean isAppendAllowed;
 
   public BucketIndexBulkInsertPartitioner(HoodieTable table, String sortString, boolean preserveHoodieMetadata) {
-
-    this.table = table;
+    super(table, sortString);
     this.indexKeyFields = Arrays.asList(table.getConfig().getBucketIndexHashField().split(","));
     this.consistentLogicalTimestampEnabled = table.getConfig().isConsistentLogicalTimestampEnabled();
-    if (sortString != null) {
-      this.sortColumnNames = sortString.split(",");
-    } else {
-      this.sortColumnNames = null;
-    }
     this.preserveHoodieMetadata = preserveHoodieMetadata;
+    // Multiple bulk inserts into COW using `BucketIndexBulkInsertPartitioner` is restricted, otherwise AppendHandleFactory will produce MOR log files
+    this.isAppendAllowed = !table.getMetaClient().getTableConfig().getTableType().equals(HoodieTableType.COPY_ON_WRITE);
   }
 
   @Override
   public Option<WriteHandleFactory> getWriteHandleFactory(int idx) {
-    return doAppend.get(idx) ? Option.of(new AppendHandleFactory()) :
-        Option.of(new SingleFileHandleCreateFactory(FSUtils.createNewFileId(getFileIdPfx(idx), 0), this.preserveHoodieMetadata));
+    if (!doAppend.get(idx)) {
+      return Option.of(new SingleFileHandleCreateFactory(FSUtils.createNewFileId(getFileIdPfx(idx), 0), this.preserveHoodieMetadata));
+    } else if (isAppendAllowed) {
+      return Option.of(new AppendHandleFactory());
+    } else {
+      throw new HoodieNotSupportedException("Multiple bulk inserts into COW with simple bucket and disabled Spark native row writer is not supported, "
+          + "please, use upsert operation, overwrite mode (already written data will be lost), or turn on Spark native row writer.");
+    }
   }
 
   @Override
@@ -72,9 +74,4 @@ public abstract class BucketIndexBulkInsertPartitioner<T> implements BulkInsertP
     return fileIdPfxList.get(partitionId);
   }
 
-  @Override
-  public boolean arePartitionRecordsSorted() {
-    return (sortColumnNames != null && sortColumnNames.length > 0)
-        || table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE;
-  }
 }

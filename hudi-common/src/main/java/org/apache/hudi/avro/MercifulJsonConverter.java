@@ -35,9 +35,9 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieJsonConversionException;
 import org.apache.hudi.exception.HoodieJsonToAvroConversionException;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalType;
@@ -89,7 +89,7 @@ public class MercifulJsonConverter {
    * Allows enabling sanitization and allows choice of invalidCharMask for sanitization
    */
   public MercifulJsonConverter(boolean shouldSanitize, String invalidCharMask) {
-    this(new ObjectMapper(), shouldSanitize, invalidCharMask);
+    this(new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS), shouldSanitize, invalidCharMask);
   }
 
   /**
@@ -547,14 +547,14 @@ public class MercifulJsonConverter {
     };
   }
 
-  protected HoodieJsonConversionException buildConversionException(Object value, String fieldName, Schema schema, boolean shouldSanitize, String invalidCharMask) {
+  protected HoodieJsonToAvroConversionException buildConversionException(Object value, String fieldName, Schema schema, boolean shouldSanitize, String invalidCharMask) {
     String errorMsg;
     if (shouldSanitize) {
       errorMsg = String.format("Json to Avro Type conversion error for field %s, %s for %s. Field sanitization is enabled with a mask of %s.", fieldName, value, schema, invalidCharMask);
     } else {
       errorMsg = String.format("Json to Avro Type conversion error for field %s, %s for %s", fieldName, value, schema);
     }
-    return new HoodieJsonConversionException(errorMsg);
+    return new HoodieJsonToAvroConversionException(errorMsg);
   }
 
 }

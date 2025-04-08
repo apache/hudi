@@ -17,13 +17,15 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.avro.Schema
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark3RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
+
+import org.apache.avro.Schema
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SparkSession, SQLContext}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
@@ -104,4 +106,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
                                                  name: Option[String])(body: => T): T = {
       SQLExecution.withNewExecutionId(queryExecution, name)(body)
   }
+
+  def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 }

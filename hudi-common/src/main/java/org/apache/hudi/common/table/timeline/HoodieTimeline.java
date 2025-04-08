@@ -18,11 +18,24 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.storage.HoodieInstantWriter;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
@@ -40,7 +53,7 @@ import java.util.stream.Stream;
  * @see HoodieInstant
  * @since 0.3.0
  */
-public interface HoodieTimeline extends Serializable {
+public interface HoodieTimeline extends HoodieInstantReader, Serializable {
 
   String COMMIT_ACTION = "commit";
   String DELTA_COMMIT_ACTION = "deltacommit";
@@ -112,6 +125,192 @@ public interface HoodieTimeline extends Serializable {
   String FULL_BOOTSTRAP_INSTANT_TS = "00000000000002";
 
   /**
+   * Read and deserialize the content of an instant into the specified class type.
+   *
+   * @param instant The instant to read content from
+   * @param clazz   The target class to deserialize into
+   * @return Deserialized instant content
+   * @throws IOException when reading instant content fails
+   */
+  default <T> T readInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException {
+    TimelineLayout layout = TimelineLayout.fromVersion(getTimelineLayoutVersion());
+    return layout.getCommitMetadataSerDe().deserialize(
+        instant, getInstantContentStream(instant), () -> isEmpty(instant), clazz);
+  }
+
+  /**
+   * Read and deserialize the content of an instant into the specified class type
+   * assuming that the instant file must exist and not empty. If the file does not
+   * exist or is empty, IOException is thrown.
+   *
+   * @param instant The instant to read content from
+   * @param clazz   The target class to deserialize into
+   * @return Deserialized instant content
+   * @throws IOException when reading instant content fails
+   */
+  default <T> T readNonEmptyInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException {
+    TimelineLayout layout = TimelineLayout.fromVersion(getTimelineLayoutVersion());
+    return layout.getCommitMetadataSerDe().deserialize(
+        instant, getInstantContentStream(instant), () -> false, clazz);
+  }
+
+  /**
+   * Read and deserialize commit metadata from an instant
+   *
+   * @param instant the instant to read
+   * @return deserialized commit metadata in POJO
+   */
+  default org.apache.hudi.common.model.HoodieCommitMetadata readCommitMetadata(HoodieInstant instant)
+      throws IOException {
+    return readInstantContent(instant, org.apache.hudi.common.model.HoodieCommitMetadata.class);
+  }
+
+  /**
+   * Read and deserialize replacecommit metadata from an instant
+   *
+   * @param instant the instant to read
+   * @return deserialized replacecommit metadata in POJO
+   */
+  default org.apache.hudi.common.model.HoodieReplaceCommitMetadata readReplaceCommitMetadata(
+      HoodieInstant instant) throws IOException {
+    return readInstantContent(instant, org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class);
+  }
+
+  /**
+   * Read and deserialize commit metadata in Avro format from an instant.
+   *
+   * @param instant The instant containing the commit metadata
+   * @return Deserialized HoodieCommitMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default org.apache.hudi.avro.model.HoodieCommitMetadata readCommitMetadataToAvro(HoodieInstant instant)
+      throws IOException {
+    return readInstantContent(instant, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
+  }
+
+  /**
+   * Read and deserialize replace commit metadata in Avro format from an instant.
+   *
+   * @param instant The instant containing the replace commit metadata
+   * @return Deserialized HoodieReplaceCommitMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default org.apache.hudi.avro.model.HoodieReplaceCommitMetadata readReplaceCommitMetadataToAvro(HoodieInstant instant)
+      throws IOException {
+    return readInstantContent(instant, org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class);
+  }
+
+  /**
+   * Read and deserialize cleaner plan from an instant.
+   *
+   * @param instant The instant containing the cleaner plan
+   * @return Deserialized HoodieCleanerPlan
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieCleanerPlan readCleanerPlan(HoodieInstant instant) throws IOException {
+    return readNonEmptyInstantContent(instant, HoodieCleanerPlan.class);
+  }
+
+  /**
+   * Read and deserialize compaction plan from an instant.
+   *
+   * @param instant The instant containing the compaction plan
+   * @return Deserialized HoodieCompactionPlan
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieCompactionPlan readCompactionPlan(HoodieInstant instant) throws IOException {
+    return readNonEmptyInstantContent(instant, HoodieCompactionPlan.class);
+  }
+
+  /**
+   * Read and deserialize clean metadata from an instant.
+   *
+   * @param instant The instant containing the clean metadata
+   * @return Deserialized HoodieCleanMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieCleanMetadata readCleanMetadata(HoodieInstant instant) throws IOException {
+    return readNonEmptyInstantContent(instant, HoodieCleanMetadata.class);
+  }
+
+  /**
+   * Read and deserialize rollback plan from an instant.
+   *
+   * @param instant The instant containing the rollback plan
+   * @return Deserialized HoodieRollbackPlan
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieRollbackPlan readRollbackPlan(HoodieInstant instant) throws IOException {
+    return readNonEmptyInstantContent(instant, HoodieRollbackPlan.class);
+  }
+
+  /**
+   * Read and deserialize rollback metadata from an instant.
+   *
+   * @param instant The instant containing the rollback metadata
+   * @return Deserialized HoodieRollbackMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieRollbackMetadata readRollbackMetadata(HoodieInstant instant) throws IOException {
+    return readNonEmptyInstantContent(instant, HoodieRollbackMetadata.class);
+  }
+
+  /**
+   * Read and deserialize restore plan from an instant.
+   *
+   * @param instant The instant containing the restore plan
+   * @return Deserialized HoodieRestorePlan
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieRestorePlan readRestorePlan(HoodieInstant instant) throws IOException {
+    return readNonEmptyInstantContent(instant, HoodieRestorePlan.class);
+  }
+
+  /**
+   * Read and deserialize restore metadata from an instant.
+   *
+   * @param instant The instant containing the restore metadata
+   * @return Deserialized HoodieRestoreMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieRestoreMetadata readRestoreMetadata(HoodieInstant instant) throws IOException {
+    return readNonEmptyInstantContent(instant, HoodieRestoreMetadata.class);
+  }
+
+  /**
+   * Read and deserialize savepoint metadata from an instant.
+   *
+   * @param instant The instant containing the savepoint metadata
+   * @return Deserialized HoodieSavepointMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieSavepointMetadata readSavepointMetadata(HoodieInstant instant) throws IOException {
+    return readNonEmptyInstantContent(instant, HoodieSavepointMetadata.class);
+  }
+
+  /**
+   * Read and deserialize requested replace metadata from an instant.
+   *
+   * @param instant The instant containing the requested replace metadata
+   * @return Deserialized HoodieRequestedReplaceMetadata
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieRequestedReplaceMetadata readRequestedReplaceMetadata(HoodieInstant instant) throws IOException {
+    return readNonEmptyInstantContent(instant, HoodieRequestedReplaceMetadata.class);
+  }
+
+  /**
+   * Read and deserialize index plan from an instant.
+   *
+   * @param instant The instant containing the index plan
+   * @return Deserialized HoodieIndexPlan
+   * @throws IOException when reading instant content fails
+   */
+  default HoodieIndexPlan readIndexPlan(HoodieInstant instant) throws IOException {
+    return readNonEmptyInstantContent(instant, HoodieIndexPlan.class);
+  }
+
+  /**
    * Filter this timeline to just include the in-flights.
    *
    * @return New instance of HoodieTimeline with just in-flights
@@ -152,6 +351,14 @@ public interface HoodieTimeline extends Serializable {
    * @return New instance of HoodieTimeline with just completed instants
    */
   HoodieTimeline filterCompletedInstants();
+
+  default <T> Option<HoodieInstantWriter> getInstantWriter(Option<T> metadata) {
+    if (metadata.isEmpty()) {
+      return Option.empty();
+    }
+    TimelineLayout layout = TimelineLayout.fromVersion(getTimelineLayoutVersion());
+    return layout.getCommitMetadataSerDe().getInstantWriter(metadata.get());
+  }
 
   // TODO: Check if logcompaction also needs to be included in this API.
 
@@ -405,7 +612,7 @@ public interface HoodieTimeline extends Serializable {
   Option<String> getLatestCompletionTime();
 
   /**
-   * Get the stream of instants in order by state transition timestamp of actions.
+   * Get the stream of instants in order by completion timestamp of actions.
    */
   Stream<HoodieInstant> getInstantsOrderedByCompletionTime();
 
@@ -449,9 +656,11 @@ public interface HoodieTimeline extends Serializable {
   boolean isPendingClusteringInstant(String instantTime);
 
   /**
-   * Read the completed instant details.
+   * Read the instant content to an input stream.
+   * @param instant the instant to fetch
+   * @return stream option with content for instant. If the instant file is empty, return empty option.
    */
-  Option<byte[]> getInstantDetails(HoodieInstant instant);
+  InputStream getInstantContentStream(HoodieInstant instant);
 
   boolean isEmpty(HoodieInstant instant);
 
@@ -533,4 +742,9 @@ public interface HoodieTimeline extends Serializable {
    * @return
    */
   TimelineLayoutVersion getTimelineLayoutVersion();
+
+  /**
+   * Get instant reader
+   * */
+  HoodieInstantReader getInstantReader();
 }

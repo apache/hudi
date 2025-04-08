@@ -20,6 +20,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithTimestampKeyGenerator._
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.slf4j.LoggerFactory
 
@@ -98,6 +99,41 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
           }
         }
       }
+    }
+  }
+  test("Test Spark SQL with default partition path for timestamp key generator") {
+    withTempDir { tmp =>
+      val keyGeneratorSettings = timestampKeyGeneratorSettings(3)
+      val tsType = if (keyGeneratorSettings.contains("DATE_STRING")) "string" else "long"
+      spark.sql(
+        s"""
+           | CREATE TABLE test_default_path_ts (
+           |   id int,
+           |   name string,
+           |   precomb long,
+           |   ts TIMESTAMP
+           | ) USING HUDI
+           | LOCATION '${tmp.getCanonicalPath + "/test_default_path_ts"}'
+           | PARTITIONED BY (ts)
+           | TBLPROPERTIES (
+           |   type = 'COPY_ON_WRITE',
+           |   primaryKey = 'id',
+           |   preCombineField = 'precomb'
+           | )
+           |""".stripMargin)
+      val dataBatches =   Array(
+        "(1, 'a1', 1,TIMESTAMP '2025-01-15 01:02:03')",
+        "(2, 'a3', 1, null)"
+      )
+      val expectedQueryResult: String = "[1,a1,1,2025-01-15 01:02:03.0]; [2,a3,1,null]"
+      spark.sql(s"INSERT INTO test_default_path_ts VALUES ${dataBatches(0)}")
+      // inserting value with partition_timestamp value as null
+      spark.sql(s"INSERT INTO test_default_path_ts VALUES ${dataBatches(1)}")
+
+      val queryResult = spark.sql(s"SELECT id, name, precomb, ts FROM test_default_path_ts ORDER BY id").collect().mkString("; ")
+      LOG.warn(s"Query result: $queryResult")
+      assertResult(expectedQueryResult)(queryResult)
+
     }
   }
 

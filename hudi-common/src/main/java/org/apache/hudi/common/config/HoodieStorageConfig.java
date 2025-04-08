@@ -51,7 +51,7 @@ public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PARQUET_PAGE_SIZE = ConfigProperty
       .key("hoodie.parquet.page.size")
-      .defaultValue(String.valueOf(1 * 1024 * 1024))
+      .defaultValue(String.valueOf(1024 * 1024))
       .markAdvanced()
       .withDocumentation("Parquet page size in bytes. Page is the unit of read within a parquet file. "
           + "Within a block, pages are compressed separately.");
@@ -159,6 +159,14 @@ public class HoodieStorageConfig extends HoodieConfig {
       .sinceVersion("0.15.0")
       .withDocumentation("Control whether to write bloom filter or not. Default true. "
           + "We can set to false in non bloom index cases for CPU resource saving.");
+
+  public static final ConfigProperty<Boolean> PARQUET_WRITE_UTC_TIMEZONE = ConfigProperty
+      .key("hoodie.parquet.write.utc-timezone.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Use UTC timezone or local timezone to the conversion between epoch"
+              + " time and LocalDateTime. Default value is utc timezone for forward compatibility.");
 
   public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM_NAME = ConfigProperty
       .key("hoodie.hfile.compression.algorithm")
@@ -490,6 +498,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder withAvroWriteSupport(String avroWriteSupportClassName) {
       storageConfig.setValue(HOODIE_AVRO_WRITE_SUPPORT_CLASS, avroWriteSupportClassName);
+      return this;
+    }
+
+    public Builder withWriteUtcTimezone(boolean writeUtcTimezone) {
+      storageConfig.setValue(PARQUET_WRITE_UTC_TIMEZONE, String.valueOf(writeUtcTimezone));
       return this;
     }
 

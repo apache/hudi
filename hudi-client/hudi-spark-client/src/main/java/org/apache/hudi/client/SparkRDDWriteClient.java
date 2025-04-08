@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.SparkReleaseResources;
@@ -41,7 +42,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -299,8 +300,8 @@ public class SparkRDDWriteClient<T> extends
       metrics.emitMetadataEnablementMetrics(true, isMetadataColStatsAvailable, isMetadataBloomFilterAvailable, isMetadataRliAvailable);
     }
 
-    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(
-        context.getStorageConf(), config, context, inFlightInstantTimestamp)) {
+    try (HoodieTableMetadataWriter writer = SparkMetadataWriterFactory.create(
+        context.getStorageConf(), config, context, inFlightInstantTimestamp, tableConfig)) {
       if (writer.isInitialized()) {
         writer.performTableServices(inFlightInstantTimestamp);
       }
@@ -334,7 +335,13 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
-  protected void releaseResources(String instantTime) {
+  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    new HoodieSparkIndexClient(config, getEngineContext()).createOrUpdateColumnStatsIndexDefinition(metaClient, columnsToIndex);
+  }
+
+  @Override
+  public void releaseResources(String instantTime) {
+    super.releaseResources(instantTime);
     SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
   }
 }

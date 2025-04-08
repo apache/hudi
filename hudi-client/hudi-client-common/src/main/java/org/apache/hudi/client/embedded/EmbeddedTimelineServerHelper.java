@@ -54,7 +54,7 @@ public class EmbeddedTimelineServerHelper {
                                                          HoodieWriteConfig config) {
     // Allow executor to find this newly instantiated timeline service
     if (config.isEmbeddedTimelineServerEnabled()) {
-      config.setViewStorageConfig(timelineServer.getRemoteFileSystemViewConfig());
+      config.setViewStorageConfig(timelineServer.getRemoteFileSystemViewConfig(config));
     }
   }
 }

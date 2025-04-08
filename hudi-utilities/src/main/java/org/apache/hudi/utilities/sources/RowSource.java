@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -48,11 +49,16 @@ public abstract class RowSource extends Source<Dataset<Row>> {
     super(props, sparkContext, sparkSession, SourceType.ROW, streamContext);
   }
 
-  protected abstract Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit);
+  protected abstract Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit);
 
   @Override
   protected final InputBatch<Dataset<Row>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
-    Pair<Option<Dataset<Row>>, String> res = fetchNextBatch(lastCkptStr, sourceLimit);
+    throw new UnsupportedOperationException("RowSource#fetchNewData should not be called");
+  }
+
+  @Override
+  protected final InputBatch<Dataset<Row>> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    Pair<Option<Dataset<Row>>, Checkpoint> res = fetchNextBatch(lastCheckpoint, sourceLimit);
     return res.getKey().map(dsr -> {
       Dataset<Row> sanitizedRows = SanitizationUtils.sanitizeColumnNamesForAvro(dsr, props);
       SchemaProvider rowSchemaProvider =

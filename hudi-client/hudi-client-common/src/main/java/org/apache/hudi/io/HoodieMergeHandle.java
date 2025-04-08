@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
@@ -245,7 +246,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
           new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(writeSchema),
           config.getCommonConfig().getSpillableDiskMapType(),
-          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
+          new DefaultSerializer<>(),
+          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
+          getClass().getSimpleName());
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
@@ -425,13 +428,18 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   protected void writeIncomingRecords() throws IOException {
     // write out any pending records (this can happen when inserts are turned into updates)
-    Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
-        ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.values().iterator();
+    Iterator<HoodieRecord<T>> newRecordsItr;
+    if (keyToNewRecords instanceof ExternalSpillableMap) {
+      newRecordsItr = ((ExternalSpillableMap) keyToNewRecords).iterator(key -> !writtenRecordKeys.contains(key));
+    } else {
+      newRecordsItr = keyToNewRecords.entrySet().stream()
+          .filter(e -> !writtenRecordKeys.contains(e.getKey()))
+          .map(Map.Entry::getValue)
+          .iterator();
+    }
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> hoodieRecord = newRecordsItr.next();
-      if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
-        writeInsertRecord(hoodieRecord);
-      }
+      writeInsertRecord(hoodieRecord);
     }
   }
 

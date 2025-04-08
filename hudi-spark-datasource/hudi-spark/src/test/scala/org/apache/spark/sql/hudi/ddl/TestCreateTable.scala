@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
@@ -404,96 +403,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test create table like") {
-    if (HoodieSparkUtils.gteqSpark3_3) {
-      // 1. Test create table from an existing HUDI table
-      withTempDir { tmp =>
-        Seq("cow", "mor").foreach { tableType =>
-          withTable(generateTableName) { sourceTable =>
-            spark.sql(
-              s"""
-                 |create table $sourceTable (
-                 |  id int,
-                 |  name string,
-                 |  price double,
-                 |  ts long
-                 |) using hudi
-                 | tblproperties (
-                 |  primaryKey = 'id,name',
-                 |  type = '$tableType'
-                 | )
-                 | location '${tmp.getCanonicalPath}/$sourceTable'""".stripMargin)
-
-            // 1.1 Test Managed table
-            withTable(generateTableName) { targetTable =>
-              spark.sql(
-                s"""
-                   |create table $targetTable
-                   |like $sourceTable
-                   |using hudi""".stripMargin)
-
-              val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
-
-              assertResult(targetTable)(table.identifier.table)
-              assertResult("hudi")(table.provider.get)
-              assertResult(CatalogTableType.MANAGED)(table.tableType)
-              assertResult(
-                HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
-                  ++ Seq(
-                  StructField("id", IntegerType),
-                  StructField("name", StringType),
-                  StructField("price", DoubleType),
-                  StructField("ts", LongType))
-              )(table.schema.fields)
-              assertResult(tableType)(table.properties("type"))
-              assertResult("id,name")(table.properties("primaryKey"))
-
-              // target table already exist
-              assertThrows[IllegalArgumentException] {
-                spark.sql(
-                  s"""
-                     |create table $targetTable
-                     |like $sourceTable
-                     |using hudi""".stripMargin)
-              }
-
-              // should ignore if the table already exist
-              spark.sql(
-                s"""
-                   |create table if not exists $targetTable
-                   |like $sourceTable
-                   |using hudi""".stripMargin)
-            }
-
-            // 1.2 Test External table
-            withTable(generateTableName) { targetTable =>
-              spark.sql(
-                s"""
-                   |create table $targetTable
-                   |like $sourceTable
-                   |using hudi
-                   |location '${tmp.getCanonicalPath}/$targetTable'""".stripMargin)
-              val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
-              assertResult(CatalogTableType.EXTERNAL)(table.tableType)
-            }
-
-
-            // 1.3 New target table options should override source table's
-            withTable(generateTableName) { targetTable =>
-              spark.sql(
-                s"""
-                   |create table $targetTable
-                   |like $sourceTable
-                   |using hudi
-                   |tblproperties (primaryKey = 'id')""".stripMargin)
-              val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
-              assertResult("id")(table.properties("primaryKey"))
-            }
-          }
-        }
-      }
-
-      // 2. Test create table from an existing non-HUDI table
-      withTempDir { tmp =>
+    // 1. Test create table from an existing HUDI table
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
         withTable(generateTableName) { sourceTable =>
           spark.sql(
             s"""
@@ -502,22 +414,21 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
                |  name string,
                |  price double,
                |  ts long
-               |) using parquet
+               |) using hudi
                | tblproperties (
-               |  non.hoodie.property='value'
+               |  primaryKey = 'id,name',
+               |  type = '$tableType'
                | )
                | location '${tmp.getCanonicalPath}/$sourceTable'""".stripMargin)
 
+          // 1.1 Test Managed table
           withTable(generateTableName) { targetTable =>
             spark.sql(
               s"""
                  |create table $targetTable
                  |like $sourceTable
-                 |using hudi
-                 |tblproperties (
-                 | primaryKey = 'id,name',
-                 | type = 'cow'
-                 |)""".stripMargin)
+                 |using hudi""".stripMargin)
+
             val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
 
             assertResult(targetTable)(table.identifier.table)
@@ -531,13 +442,99 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
                 StructField("price", DoubleType),
                 StructField("ts", LongType))
             )(table.schema.fields)
-
-            // Should not include non.hoodie.property
-            assertResult(4)(table.properties.size)
-            assertResult("cow")(table.properties("type"))
+            assertResult(tableType)(table.properties("type"))
             assertResult("id,name")(table.properties("primaryKey"))
-            assertResult("hudi")(table.properties("provider"))
+
+            // target table already exist
+            assertThrows[IllegalArgumentException] {
+              spark.sql(
+                s"""
+                   |create table $targetTable
+                   |like $sourceTable
+                   |using hudi""".stripMargin)
+            }
+
+            // should ignore if the table already exist
+            spark.sql(
+              s"""
+                 |create table if not exists $targetTable
+                 |like $sourceTable
+                 |using hudi""".stripMargin)
           }
+
+          // 1.2 Test External table
+          withTable(generateTableName) { targetTable =>
+            spark.sql(
+              s"""
+                 |create table $targetTable
+                 |like $sourceTable
+                 |using hudi
+                 |location '${tmp.getCanonicalPath}/$targetTable'""".stripMargin)
+            val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
+            assertResult(CatalogTableType.EXTERNAL)(table.tableType)
+          }
+
+
+          // 1.3 New target table options should override source table's
+          withTable(generateTableName) { targetTable =>
+            spark.sql(
+              s"""
+                 |create table $targetTable
+                 |like $sourceTable
+                 |using hudi
+                 |tblproperties (primaryKey = 'id')""".stripMargin)
+            val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
+            assertResult("id")(table.properties("primaryKey"))
+          }
+        }
+      }
+    }
+
+    // 2. Test create table from an existing non-HUDI table
+    withTempDir { tmp =>
+      withTable(generateTableName) { sourceTable =>
+        spark.sql(
+          s"""
+             |create table $sourceTable (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using parquet
+             | tblproperties (
+             |  non.hoodie.property='value'
+             | )
+             | location '${tmp.getCanonicalPath}/$sourceTable'""".stripMargin)
+
+        withTable(generateTableName) { targetTable =>
+          spark.sql(
+            s"""
+               |create table $targetTable
+               |like $sourceTable
+               |using hudi
+               |tblproperties (
+               | primaryKey = 'id,name',
+               | type = 'cow'
+               |)""".stripMargin)
+          val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
+
+          assertResult(targetTable)(table.identifier.table)
+          assertResult("hudi")(table.provider.get)
+          assertResult(CatalogTableType.MANAGED)(table.tableType)
+          assertResult(
+            HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
+              ++ Seq(
+              StructField("id", IntegerType),
+              StructField("name", StringType),
+              StructField("price", DoubleType),
+              StructField("ts", LongType))
+          )(table.schema.fields)
+
+          // Should not include non.hoodie.property
+          assertResult(4)(table.properties.size)
+          assertResult("cow")(table.properties("type"))
+          assertResult("id,name")(table.properties("primaryKey"))
+          assertResult("hudi")(table.properties("provider"))
         }
       }
     }
@@ -1110,26 +1107,24 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     )
   }
 
-  if (HoodieSparkUtils.gteqSpark3_3) {
-    test("Test create table with comment") {
-      val tableName = generateTableName
-      spark.sql(
-        s"""
-           | create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           | ) using hudi
-           | comment "This is a simple hudi table"
-           | tblproperties (
-           |   primaryKey = 'id',
-           |   preCombineField = 'ts'
-           | )
+  test("Test create table with comment") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using hudi
+         | comment "This is a simple hudi table"
+         | tblproperties (
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts'
+         | )
        """.stripMargin)
-      val shown = spark.sql(s"show create table $tableName").head.getString(0)
-      assertResult(true)(shown.contains("COMMENT 'This is a simple hudi table'"))
-    }
+    val shown = spark.sql(s"show create table $tableName").head.getString(0)
+    assertResult(true)(shown.contains("COMMENT 'This is a simple hudi table'"))
   }
 
   test("Test CTAS using an illegal definition -- a COW table with compaction enabled.") {

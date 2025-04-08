@@ -21,8 +21,11 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -32,28 +35,37 @@ import java.util.List;
  */
 public class CompositeCompactionStrategy extends CompactionStrategy {
 
-  private List<CompactionStrategy> strategies;
+  private final List<CompactionStrategy> strategies;
 
   public CompositeCompactionStrategy(List<CompactionStrategy> strategies) {
     this.strategies = strategies;
   }
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig,
+                                                                            List<HoodieCompactionOperation> operations,
+                                                                            List<HoodieCompactionPlan> pendingCompactionPlans) {
     List<HoodieCompactionOperation> finalOperations = operations;
+    List<String> missingPartitions = new ArrayList<>();
     for (CompactionStrategy strategy : strategies) {
-      finalOperations = strategy.orderAndFilter(writeConfig, finalOperations, pendingCompactionPlans);
+      Pair<List<HoodieCompactionOperation>, List<String>> resPair = strategy.orderAndFilter(writeConfig, finalOperations, pendingCompactionPlans);
+      finalOperations = resPair.getLeft();
+      missingPartitions.addAll(resPair.getRight());
     }
-    return finalOperations;
+    return Pair.of(finalOperations, missingPartitions);
   }
 
   @Override
-  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
-    List<String> finalPartitionPaths = allPartitionPaths;
+  public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+    List<String> partitionsToProcess = allPartitionPaths;
+    List<String> missingPartitions = new ArrayList<>();
+
     for (CompactionStrategy strategy : strategies) {
-      finalPartitionPaths = strategy.filterPartitionPaths(writeConfig, finalPartitionPaths);
+      Pair<List<String>, List<String>> innerRes = strategy.filterPartitionPaths(writeConfig, partitionsToProcess);
+      partitionsToProcess = innerRes.getLeft();
+      missingPartitions.addAll(innerRes.getRight());
     }
-    return finalPartitionPaths;
+    return writeConfig.isIncrementalTableServiceEnabled() ? Pair.of(partitionsToProcess, missingPartitions) : Pair.of(partitionsToProcess, Collections.emptyList());
   }
 
   @Override

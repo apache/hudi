@@ -26,11 +26,12 @@ import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.execution.bulkinsert.ConsistentBucketIndexBulkInsertPartitionerWithRows;
 import org.apache.hudi.execution.bulkinsert.RDDConsistentBucketBulkInsertPartitioner;
-import org.apache.hudi.table.ConsistentHashingBucketInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
 import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
@@ -41,6 +42,7 @@ import org.apache.spark.sql.Row;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -72,15 +74,14 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
 
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
 
-    ConsistentBucketIndexBulkInsertPartitionerWithRows partitioner =
-        new ConsistentBucketIndexBulkInsertPartitionerWithRows(getHoodieTable(), strategyParams, shouldPreserveHoodieMetadata);
-
-    addHashingChildNodes(partitioner, extraMetadata);
+    Pair<String, List<ConsistentHashingNode>> childNodesPair = extractChildNodes(extraMetadata);
+    ConsistentBucketIndexBulkInsertPartitionerWithRows partitioner = new ConsistentBucketIndexBulkInsertPartitionerWithRows(getHoodieTable(), strategyParams, shouldPreserveHoodieMetadata,
+        Collections.singletonMap(childNodesPair.getKey(), childNodesPair.getValue()));
 
     Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
 
     return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
-        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
+        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata, WriteOperationType.CLUSTER);
   }
 
   @Override
@@ -94,20 +95,21 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
     props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), Boolean.FALSE.toString());
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
 
-    RDDConsistentBucketBulkInsertPartitioner<T> partitioner = new RDDConsistentBucketBulkInsertPartitioner<>(getHoodieTable(), strategyParams, preserveHoodieMetadata);
-    addHashingChildNodes(partitioner, extraMetadata);
+    Pair<String, List<ConsistentHashingNode>> childNodesPair = extractChildNodes(extraMetadata);
+    RDDConsistentBucketBulkInsertPartitioner<T> partitioner = new RDDConsistentBucketBulkInsertPartitioner<>(getHoodieTable(), strategyParams, preserveHoodieMetadata,
+        Collections.singletonMap(childNodesPair.getKey(), childNodesPair.getValue()));
 
     return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance()
         .bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig, false, partitioner, true, numOutputGroups);
   }
 
-  private void addHashingChildNodes(ConsistentHashingBucketInsertPartitioner partitioner, Map<String, String> extraMetadata) {
+  private Pair<String/*partition*/, List<ConsistentHashingNode>> extractChildNodes(Map<String, String> extraMetadata) {
     try {
       List<ConsistentHashingNode> nodes = ConsistentHashingNode.fromJsonString(extraMetadata.get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
-      partitioner.addHashingChildrenNodes(extraMetadata.get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY), nodes);
+      return Pair.of(extraMetadata.get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY), nodes);
     } catch (Exception e) {
-      LOG.error("Failed to add hashing children nodes", e);
-      throw new HoodieClusteringException("Failed to add hashing children nodes", e);
+      LOG.error("Failed to extract hashing children nodes", e);
+      throw new HoodieClusteringException("Failed to extract hashing children nodes", e);
     }
   }
 }

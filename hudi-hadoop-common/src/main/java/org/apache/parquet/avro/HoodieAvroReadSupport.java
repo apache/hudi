@@ -102,25 +102,23 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
    *      }
    *    }
    */
-  private boolean checkLegacyMode(List<Type> parquetFields) {
-    for (Type type : parquetFields) {
+  private static boolean checkLegacyMode(List<Type> parquetFields) {
+    return parquetFields.stream().anyMatch(type -> {
       if (!type.isPrimitive()) {
         GroupType groupType = type.asGroupType();
         OriginalType originalType = groupType.getOriginalType();
         if (originalType == OriginalType.MAP
-            && groupType.getFields().get(0).getOriginalType() != OriginalType.MAP_KEY_VALUE) {
-          return false;
+            && !groupType.getFields().get(0).getName().equals("key_value")) {
+          return true;
         }
         if (originalType == OriginalType.LIST
-            && !groupType.getType(0).getName().equals("array")) {
-          return false;
+            && !groupType.getType(0).getName().equals("list")) {
+          return true;
         }
-        if (!checkLegacyMode(groupType.getFields())) {
-          return false;
-        }
+        return checkLegacyMode(groupType.getFields());
       }
-    }
-    return true;
+      return false;
+    });
   }
 
   /**

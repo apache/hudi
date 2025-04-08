@@ -59,6 +59,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -107,16 +108,24 @@ public class HoodieTableMetaClient implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableMetaClient.class);
+  public static final String METADATA_STR = "metadata";
   public static final String METAFOLDER_NAME = ".hoodie";
   public static final String TIMELINEFOLDER_NAME = "timeline";
+  public static final String BUCKET_INDEX_METAFOLDER_NAME = ".bucket_index";
   public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".temp";
   public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".aux";
   public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + ".bootstrap";
   public static final String SAMPLE_WRITES_FOLDER_PATH = AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + ".sample_writes";
   public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".heartbeat";
-  public static final String METADATA_TABLE_FOLDER_PATH = METAFOLDER_NAME + StoragePath.SEPARATOR + "metadata";
+  public static final String METADATA_TABLE_FOLDER_PATH = METAFOLDER_NAME + StoragePath.SEPARATOR + METADATA_STR;
   public static final String HASHING_METADATA_FOLDER_NAME =
-      ".bucket_index" + StoragePath.SEPARATOR + "consistent_hashing_metadata";
+      BUCKET_INDEX_METAFOLDER_NAME + StoragePath.SEPARATOR + "consistent_hashing_metadata";
+  public static final String PARTITION_BUCKET_INDEX_HASHING_FOLDER =
+      BUCKET_INDEX_METAFOLDER_NAME + StoragePath.SEPARATOR + "partition_bucket_index_meta";
+  public static final String BUCKET_INDEX_METAFOLDER_CONFIG_FOLDER =
+      PARTITION_BUCKET_INDEX_HASHING_FOLDER + StoragePath.SEPARATOR + "configs";
+  public static final String BUCKET_INDEX_METAFOLDER_CONFIG_ARCHIVE_FOLDER =
+      PARTITION_BUCKET_INDEX_HASHING_FOLDER + StoragePath.SEPARATOR + "archive";
   public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH
       + StoragePath.SEPARATOR + ".partitions";
   public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH =
@@ -210,26 +219,44 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Builds expression index definition and writes to index definition file.
+   * Builds index definition and writes to index definition file. Support mutable and immutable index definition.
+   * For instance, if index definition is mutable (like column stats), list of source columns (or list of columns to index) could also change.
+   * If an index definition is present for the index name, it will be updated only when there is difference between present and new index definition.
+   *
+   * @return true if index definition is updated.
    */
-  public void buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
+  public boolean buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
-    checkState(
-        !indexMetadataOpt.isPresent() || !indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName),
-        "Index metadata is already present");
     String indexMetaPath = getIndexDefinitionPath();
+    boolean updateIndexDefn = true;
     if (indexMetadataOpt.isPresent()) {
-      indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
+      // if index definition is present, lets check for difference and only update if required.
+      if (indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)) {
+        if (!indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields().equals(indexDefinition.getSourceFields())) {
+          LOG.info("List of columns to index is changing. Old value {}. New value {}", indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields(),
+              indexDefinition.getSourceFields());
+          indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
+        } else {
+          updateIndexDefn = false;
+        }
+      } else {
+        indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
+      }
     } else {
       Map<String, HoodieIndexDefinition> indexDefinitionMap = new HashMap<>();
       indexDefinitionMap.put(indexName, indexDefinition);
       indexMetadataOpt = Option.of(new HoodieIndexMetadata(indexDefinitionMap));
     }
-    try {
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
+    if (updateIndexDefn) {
+      try {
+        // TODO[HUDI-9094]: should not write byte array directly
+        FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath),
+            Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadataOpt.get().toJson()))));
+      }  catch (IOException e) {
+        throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
+      }
     }
+    return updateIndexDefn;
   }
 
   /**
@@ -242,8 +269,10 @@ public class HoodieTableMetaClient implements Serializable {
     indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
     String indexMetaPath = getIndexDefinitionPath();
     try {
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
-    } catch (IOException e) {
+      // TODO[HUDI-9094]: should not write byte array directly
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath),
+          Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadataOpt.get().toJson()))));
+    }  catch (IOException e) {
       throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
     }
   }
@@ -259,23 +288,17 @@ public class HoodieTableMetaClient implements Serializable {
       StoragePath indexDefinitionPath =
           new StoragePath(basePath, tableConfig.getRelativeIndexDefinitionPath().get());
       try {
-        return Option.of(HoodieIndexMetadata.fromJson(
-            new String(FileIOUtils.readDataFromPath(storage, indexDefinitionPath).get())));
+        Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
+        if (bytesOpt.isPresent()) {
+          return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
+        } else {
+          return Option.of(new HoodieIndexMetadata());
+        }
       } catch (IOException e) {
-        throw new HoodieIOException("Could not load expression index metadata at path: " + tableConfig.getRelativeIndexDefinitionPath().get(), e);
+        throw new HoodieIOException("Could not load index definition at path: " + tableConfig.getRelativeIndexDefinitionPath().get(), e);
       }
     }
     return Option.empty();
-  }
-
-  public void updateIndexMetadata(HoodieIndexMetadata newExpressionIndexMetadata, String indexMetaPath) {
-    this.indexMetadataOpt = Option.of(newExpressionIndexMetadata);
-    try {
-      // update the index metadata file as well
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
-    }
   }
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
@@ -343,6 +366,17 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getHashingMetadataPath() {
     return new StoragePath(metaPath, HASHING_METADATA_FOLDER_NAME).toString();
+  }
+
+  /**
+   * Used for partition level bucket index to save hashing_config.
+   */
+  public String getHashingMetadataConfigPath() {
+    return new StoragePath(metaPath, BUCKET_INDEX_METAFOLDER_CONFIG_FOLDER).toString();
+  }
+
+  public String getArchiveHashingMetadataConfigPath() {
+    return new StoragePath(metaPath, BUCKET_INDEX_METAFOLDER_CONFIG_ARCHIVE_FOLDER).toString();
   }
 
   /**
@@ -784,12 +818,10 @@ public class HoodieTableMetaClient implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieTableMetaClient{");
-    sb.append("basePath='").append(basePath).append('\'');
-    sb.append(", metaPath='").append(metaPath).append('\'');
-    sb.append(", tableType=").append(tableType);
-    sb.append('}');
-    return sb.toString();
+    return "HoodieTableMetaClient{" + "basePath='" + basePath + '\''
+        + ", metaPath='" + metaPath + '\''
+        + ", tableType=" + tableType
+        + '}';
   }
 
   public void initializeBootstrapDirsIfNotExists() throws IOException {
@@ -1004,7 +1036,7 @@ public class HoodieTableMetaClient implements Serializable {
      * Persist the configs that is written at the first time, and should not be changed.
      * Like KeyGenerator's configs.
      */
-    private Properties others = new Properties();
+    private final Properties others = new Properties();
 
     TableBuilder() {
     }
@@ -1302,6 +1334,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)) {
         setRecordKeyFields(hoodieConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.TIMELINE_TIMEZONE)) {
+        setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.CDC_ENABLED)) {
         setCDCEnabled(hoodieConfig.getBoolean(HoodieTableConfig.CDC_ENABLED));
       }
@@ -1358,22 +1393,23 @@ public class HoodieTableMetaClient implements Serializable {
 
       tableConfig.setAll(others);
 
-      if (databaseName != null) {
+      if (!StringUtils.isNullOrEmpty(databaseName)) {
         tableConfig.setValue(HoodieTableConfig.DATABASE_NAME, databaseName);
       }
       tableConfig.setValue(HoodieTableConfig.NAME, tableName);
       tableConfig.setValue(HoodieTableConfig.TYPE, tableType.name());
 
-      if (null != tableVersion) {
-        tableConfig.setTableVersion(tableVersion);
-        tableConfig.setInitialVersion(tableVersion);
-      } else {
-        tableConfig.setTableVersion(HoodieTableVersion.current());
-        tableConfig.setInitialVersion(HoodieTableVersion.current());
+      if (null == tableVersion) {
+        tableVersion = HoodieTableVersion.current();
       }
 
+      tableConfig.setTableVersion(tableVersion);
+      tableConfig.setInitialVersion(tableVersion);
+
       Triple<RecordMergeMode, String, String> mergeConfigs =
-          HoodieTableConfig.inferCorrectMergingBehavior(recordMergeMode, payloadClassName, recordMergerStrategyId);
+          HoodieTableConfig.inferCorrectMergingBehavior(
+              recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineField,
+              tableVersion);
       tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
       tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
       tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());

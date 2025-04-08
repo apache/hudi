@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTable;
@@ -50,6 +51,8 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
   private final Map<Pair<UTF8String, Integer>, HoodieRowCreateHandle> handles;
   protected final String indexKeyFields;
   protected final int bucketNum;
+  private final boolean isNonBlockingConcurrencyControl;
+  private final NumBucketsFunction numBucketsFunction;
 
   public BucketBulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                                   String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
@@ -64,13 +67,15 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     this.indexKeyFields = writeConfig.getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     this.bucketNum = writeConfig.getInt(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
     this.handles = new HashMap<>();
+    this.isNonBlockingConcurrencyControl = writeConfig.isNonBlockingConcurrencyControl();
+    this.numBucketsFunction = NumBucketsFunction.fromWriteConfig(writeConfig);
   }
 
   public void write(InternalRow row) throws IOException {
     try {
       UTF8String partitionPath = extractPartitionPath(row);
       UTF8String recordKey = extractRecordKey(row);
-      int bucketId = BucketIdentifier.getBucketId(String.valueOf(recordKey), indexKeyFields, bucketNum);
+      int bucketId = BucketIdentifier.getBucketId(String.valueOf(recordKey), indexKeyFields, numBucketsFunction.getNumBuckets(partitionPath.toString()));
       if (lastFileId == null || !Objects.equals(lastFileId.getKey(), partitionPath) || !Objects.equals(lastFileId.getValue(), bucketId)) {
         // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
         //       a mutable underlying buffer
@@ -126,6 +131,6 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
   }
 
   protected String getNextBucketFileId(int bucketInt) {
-    return BucketIdentifier.newBucketFileIdPrefix(getNextFileId(), bucketInt);
+    return BucketIdentifier.newBucketFileIdPrefix(bucketInt, isNonBlockingConcurrencyControl);
   }
 }

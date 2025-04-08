@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -54,9 +55,9 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
 import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
@@ -110,7 +111,7 @@ public class BootstrapExecutor implements Serializable {
    */
   private transient FileSystem fs;
 
-  private String bootstrapBasePath;
+  private final String bootstrapBasePath;
 
   /**
    * Bootstrap Executor.
@@ -207,8 +208,7 @@ public class BootstrapExecutor implements Serializable {
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
-        .setPreCombineField(props.getString(
-            PRECOMBINE_FIELD_NAME.key(), PRECOMBINE_FIELD_NAME.defaultValue()))
+        .setPreCombineField(props.getString(PRECOMBINE_FIELD_NAME.key(), null))
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
         .setPopulateMetaFields(props.getBoolean(
             POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue()))
@@ -234,7 +234,7 @@ public class BootstrapExecutor implements Serializable {
         .setPartitionMetafileUseBaseFormat(props.getBoolean(
             PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()));
-    String partitionColumnsForKeyGenerator = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props);
+    String partitionColumnsForKeyGenerator = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props, HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION)));
     if (!StringUtils.isNullOrEmpty(partitionColumnsForKeyGenerator)) {
       builder.setPartitionFields(partitionColumnsForKeyGenerator).setKeyGeneratorClassProp(
           props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName()));

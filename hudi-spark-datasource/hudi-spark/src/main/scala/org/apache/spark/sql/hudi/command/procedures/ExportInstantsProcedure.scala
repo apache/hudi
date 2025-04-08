@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
@@ -115,7 +115,6 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
   @throws[Exception]
   private def copyArchivedInstants(basePath: String, statuses: util.List[FileStatus], actionSet: util.Set[String], limit: Int, localFolder: String) = {
-    import scala.collection.JavaConverters._
     var copyCount = 0
     val storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
     for (fs <- statuses.asScala) {
@@ -176,7 +175,6 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
   @throws[Exception]
   private def copyNonArchivedInstants(metaClient: HoodieTableMetaClient, instants: util.List[HoodieInstant], limit: Int, localFolder: String): Int = {
-    import scala.collection.JavaConverters._
     var copyCount = 0
     if (!instants.isEmpty) {
       val timeline = metaClient.getActiveTimeline
@@ -186,7 +184,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
         val localPath = localFolder + StoragePath.SEPARATOR + instantFileNameGenerator.getFileName(instant)
         val data: Array[Byte] = instant.getAction match {
           case HoodieTimeline.CLEAN_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = timeline.readCleanMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.DELTA_COMMIT_ACTION =>
@@ -202,11 +200,11 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
             timeline.getInstantDetails(instant).get
 
           case HoodieTimeline.ROLLBACK_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = timeline.readRollbackMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.SAVEPOINT_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = timeline.readSavepointMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case _ => null

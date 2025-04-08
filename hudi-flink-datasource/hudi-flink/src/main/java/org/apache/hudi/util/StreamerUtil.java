@@ -270,6 +270,7 @@ public class StreamerUtil {
           .setUrlEncodePartitioning(conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING))
           .setCDCEnabled(conf.getBoolean(FlinkOptions.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
+          .setPopulateMetaFields(OptionsResolver.isPopulateMetaFields(conf))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
       LOG.info("Table initialized under base path {}", basePath);
     } else {

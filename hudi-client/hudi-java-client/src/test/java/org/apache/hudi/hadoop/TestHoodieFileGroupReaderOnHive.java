@@ -249,6 +249,11 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
     }
   }
 
+  @Override
+  public void assertRecordsEqual(Schema schema, ArrayWritable expected, ArrayWritable actual) {
+    ArrayWritableTestUtil.assertArrayWritableEqual(schema, expected, actual, false);
+  }
+
   private static boolean isLogFileRec(HoodieReaderContext<ArrayWritable> readerContext, Schema schema, ArrayWritable record) {
     return !readerContext.getValue(record, schema, HoodieRecord.FILENAME_METADATA_FIELD).toString().contains(".parquet");
   }

@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -70,6 +71,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
+  @Override
   @BeforeEach
   public void setup() throws Exception {
     dfsRoot = UtilitiesTestBase.basePath + "/parquetFiles";
@@ -81,6 +83,7 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
     generateTestTable("1", "001", 10000);
   }
 
+  @Override
   @AfterEach
   public void teardown() throws Exception {
     super.teardown();
@@ -199,11 +202,11 @@ public class TestSqlFileBasedSource extends UtilitiesTestBase {
     props.setProperty(sqlFileSourceConfigEmitChkPointConf, "true");
 
     sqlFileSource = new SqlFileBasedSource(props, jsc, sparkSession, schemaProvider);
-    Pair<Option<Dataset<Row>>, String> nextBatch = sqlFileSource.fetchNextBatch(Option.empty(), Long.MAX_VALUE);
+    Pair<Option<Dataset<Row>>, Checkpoint> nextBatch = sqlFileSource.fetchNextBatch(Option.empty(), Long.MAX_VALUE);
 
     assertEquals(10000, nextBatch.getLeft().get().count());
     long currentTimeInMillis = System.currentTimeMillis();
-    long checkpointToBeUsed = Long.parseLong(nextBatch.getRight());
+    long checkpointToBeUsed = Long.parseLong(nextBatch.getRight().getCheckpointKey());
     assertTrue((currentTimeInMillis - checkpointToBeUsed) / 1000 < 60);
     assertTrue(currentTimeInMillis > checkpointToBeUsed);
   }

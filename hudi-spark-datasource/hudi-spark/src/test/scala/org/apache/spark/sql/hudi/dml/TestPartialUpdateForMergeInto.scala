@@ -17,22 +17,23 @@
 
 package org.apache.spark.sql.hudi.dml
 
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
-import org.apache.hudi.common.engine.HoodieLocalEngineContext
+import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.CompactionUtils
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.exception.HoodieNotSupportedException
+
 import org.apache.avro.Schema
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getMetaClientAndFileSystemView
+import org.apache.spark.sql.types.{DoubleType, IntegerType, StringType, StructField}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.util.{Collections, List, Optional}
@@ -65,6 +66,17 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     testPartialUpdateWithInserts("mor", "parquet")
   }
 
+  test("Test partial update with schema on read enabled") {
+    withSQLConf(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key() -> "true") {
+      try {
+        testPartialUpdate("mor", "parquet")
+        fail("Expected exception to be thrown")
+      } catch {
+        case t: Throwable => assertTrue(t.isInstanceOf[HoodieNotSupportedException])
+      }
+    }
+  }
+
   test("Test fallback to full update with MOR even if partial updates are enabled") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -80,7 +92,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -130,7 +142,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -169,6 +181,80 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test MERGE INTO with partial updates containing non-existent columns on COW table") {
+    testPartialUpdateWithNonExistentColumns("cow")
+  }
+
+  test("Test MERGE INTO with partial updates containing non-existent columns on MOR table") {
+    testPartialUpdateWithNonExistentColumns("mor")
+  }
+
+  def testPartialUpdateWithNonExistentColumns(tableType: String): Unit = {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = tmp.getCanonicalPath + "/" + tableName
+      spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
+      spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
+
+      // Create a table with five data fields
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | price double,
+           | _ts int,
+           | description string
+           |) using hudi
+           |tblproperties(
+           | type ='$tableType',
+           | primaryKey = 'id',
+           | preCombineField = '_ts'
+           |)
+           |location '$basePath'
+        """.stripMargin)
+      val structFields = scala.collection.immutable.List(
+        StructField("id", IntegerType, nullable = true),
+        StructField("name", StringType, nullable = true),
+        StructField("price", DoubleType, nullable = true),
+        StructField("_ts", IntegerType, nullable = true),
+        StructField("description", StringType, nullable = true))
+
+      spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
+        "(2, 'a2', 20, 1200, 'a2: desc2'), (3, 'a3', 30, 1250, 'a3: desc3')")
+      validateTableSchema(tableName, structFields)
+
+      // Partial updates using MERGE INTO statement with changed fields: "price", "_ts"
+      // This is OK since the "UPDATE SET" clause does not contain the new column
+      spark.sql(
+        s"""
+           |merge into $tableName t0
+           |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as ts, 'x' as new_col
+           |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as ts, 'y' as new_col) s0
+           |on t0.id = s0.id
+           |when matched then update set price = s0.price, _ts = s0.ts
+           |""".stripMargin)
+
+      validateTableSchema(tableName, structFields)
+      checkAnswer(s"select id, name, price, _ts, description from $tableName")(
+        Seq(1, "a1", 12.0, 1001, "a1: desc1"),
+        Seq(2, "a2", 20.0, 1200, "a2: desc2"),
+        Seq(3, "a3", 25.0, 1260, "a3: desc3")
+      )
+
+      // Partial updates using MERGE INTO statement with changed fields: "price", "_ts", "new_col"
+      // This throws an error since the "UPDATE SET" clause contains the new column
+      checkExceptionContain(
+        s"""
+           |merge into $tableName
+           |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as ts, 'x' as new_col
+           |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as ts, 'y' as new_col) s0
+           |on $tableName.id = s0.id
+           |when matched then update set price = s0.price, _ts = s0.ts, new_col = s0.new_col
+           |""".stripMargin)(getExpectedUnresolvedColumnExceptionMessage("new_col", tableName))
+    }
+  }
+
   def testPartialUpdate(tableType: String,
                         logDataBlockFormat: String): Unit = {
     withTempDir { tmp =>
@@ -186,7 +272,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -196,19 +282,27 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            |)
            |location '$basePath'
         """.stripMargin)
+      val structFields = scala.collection.immutable.List(
+        StructField("id", IntegerType, nullable = true),
+        StructField("name", StringType, nullable = true),
+        StructField("price", DoubleType, nullable = true),
+        StructField("_ts", IntegerType, nullable = true),
+        StructField("description", StringType, nullable = true))
       spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
         "(2, 'a2', 20, 1200, 'a2: desc2'), (3, 'a3', 30, 1250, 'a3: desc3')")
+      validateTableSchema(tableName, structFields)
 
       // Partial updates using MERGE INTO statement with changed fields: "price" and "_ts"
       spark.sql(
         s"""
            |merge into $tableName t0
-           |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as _ts
-           |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as _ts) s0
+           |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as ts
+           |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as ts) s0
            |on t0.id = s0.id
-           |when matched then update set price = s0.price, _ts = s0._ts
+           |when matched then update set price = s0.price, _ts = s0.ts
            |""".stripMargin)
 
+      validateTableSchema(tableName, structFields)
       checkAnswer(s"select id, name, price, _ts, description from $tableName")(
         Seq(1, "a1", 12.0, 1001, "a1: desc1"),
         Seq(2, "a2", 20.0, 1200, "a2: desc2"),
@@ -223,12 +317,13 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |merge into $tableName t0
-           |using ( select 1 as id, 'a1' as name, 'a1: updated desc1' as description, 1023 as _ts
-           |union select 2 as id, 'a2' as name, 'a2: updated desc2' as description, 1270 as _ts) s0
+           |using ( select 1 as id, 'a1' as name, 'a1: updated desc1' as new_description, 1023 as _ts
+           |union select 2 as id, 'a2' as name, 'a2: updated desc2' as new_description, 1270 as _ts) s0
            |on t0.id = s0.id
-           |when matched then update set description = s0.description, _ts = s0._ts
+           |when matched then update set description = s0.new_description, _ts = s0._ts
            |""".stripMargin)
 
+      validateTableSchema(tableName, structFields)
       checkAnswer(s"select id, name, price, _ts, description from $tableName")(
         Seq(1, "a1", 12.0, 1023, "a1: updated desc1"),
         Seq(2, "a2", 20.0, 1270, "a2: updated desc2"),
@@ -243,12 +338,13 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              |merge into $tableName t0
-             |using ( select 2 as id, '_a2' as name, 18.0 as price, 1275 as _ts
-             |union select 3 as id, '_a3' as name, 28.0 as price, 1280 as _ts) s0
+             |using ( select 2 as id, '_a2' as name, 18.0 as _price, 1275 as _ts
+             |union select 3 as id, '_a3' as name, 28.0 as _price, 1280 as _ts) s0
              |on t0.id = s0.id
-             |when matched then update set price = s0.price, _ts = s0._ts
+             |when matched then update set price = s0._price, _ts = s0._ts
              |""".stripMargin)
         validateCompactionExecuted(basePath)
+        validateTableSchema(tableName, structFields)
         checkAnswer(s"select id, name, price, _ts, description from $tableName")(
           Seq(1, "a1", 12.0, 1023, "a1: updated desc1"),
           Seq(2, "a2", 18.0, 1275, "a2: updated desc2"),
@@ -261,13 +357,14 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              |merge into $tableName t0
-             |using ( select 2 as id, '_a2' as name, 48.0 as price, 1275 as _ts
-             |union select 3 as id, '_a3' as name, 58.0 as price, 1280 as _ts) s0
+             |using ( select 2 as id, '_a2' as name, 48.0 as _price, 1275 as _ts
+             |union select 3 as id, '_a3' as name, 58.0 as _price, 1280 as _ts) s0
              |on t0.id = s0.id
-             |when matched then update set price = s0.price, _ts = s0._ts
+             |when matched then update set price = s0._price, _ts = s0._ts
              |""".stripMargin)
 
         validateClusteringExecuted(basePath)
+        validateTableSchema(tableName, structFields)
         checkAnswer(s"select id, name, price, _ts, description from $tableName")(
           Seq(1, "a1", 12.0, 1023, "a1: updated desc1"),
           Seq(2, "a2", 48.0, 1275, "a2: updated desc2"),
@@ -345,7 +442,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            | id int,
            | name string,
            | price double,
-           | _ts long,
+           | _ts int,
            | description string
            |) using hudi
            |tblproperties(
@@ -399,11 +496,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
          | preCombineField = '_ts'
          |)""".stripMargin)
 
-    val failedToResolveErrorMessage = if (HoodieSparkUtils.gteqSpark3_3) {
-      "Failed to resolve pre-combine field `_ts` w/in the source-table output"
-    } else {
-      "Failed to resolve pre-combine field `_ts` w/in the source-table output;"
-    }
+    val failedToResolveErrorMessage = "Failed to resolve precombine field `_ts` w/in the source-table output"
 
     checkExceptionContain(
       s"""
@@ -429,24 +522,83 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
          |)""".stripMargin)
   }
 
+  test("Partial updates for table version 6 and 8 handled gracefully in MIT") {
+    Seq(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.EIGHT.versionCode()).foreach(
+      tableVersion => withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | CREATE TABLE $tableName (
+             |   record_key STRING,
+             |   name STRING,
+             |   age INT,
+             |   department STRING,
+             |   salary DOUBLE,
+             |   ts BIGINT
+             | ) USING hudi
+             | PARTITIONED BY (department)
+             | LOCATION '${tmp.getCanonicalPath}'
+             | TBLPROPERTIES (
+             |   type = 'mor',
+             |   hoodie.write.table.version = '$tableVersion',
+             |   hoodie.index.type = 'GLOBAL_SIMPLE',
+             |   hoodie.index.global.index.enable = 'true',
+             |   hoodie.bloom.index.use.metadata = 'true',
+             |   primaryKey = 'record_key',
+             |   preCombineField = 'ts')""".stripMargin)
+
+        spark.sql(
+          s"""
+             | INSERT INTO $tableName
+             | SELECT * FROM (
+             |   SELECT 'emp_001' as record_key, 'John Doe' as name, 30 as age,
+             |          'Sales' as department, 80000.0 as salary, 1598886000 as ts
+             |   UNION ALL
+             |   SELECT 'emp_002', 'Jane Smith', 28, 'Sales', 75000.0, 1598886001
+             |   UNION ALL
+             |   SELECT 'emp_003', 'Bob Wilson', 35, 'Marketing', 85000.0, 1598886002
+             |)""".stripMargin)
+
+        spark.sql(
+          s"""
+             | UPDATE $tableName
+             | SET
+             |     ts = 1598000000
+             | WHERE record_key = 'emp_001'
+             |""".stripMargin)
+
+        spark.sql(
+          s"""
+             | CREATE OR REPLACE TEMPORARY VIEW source_updates AS
+             | SELECT * FROM (
+             |   SELECT 'emp_001' as record_key, 'John Doe' as name, 30 as age,
+             |          'Engineering' as department, CAST(95000.0 as DOUBLE) as salary, cast(1598886200 as BIGINT) as ts
+             |   UNION ALL
+             |   SELECT 'emp_004', 'Alice Brown', 29, 'Engineering', CAST(82000.0 as DOUBLE), cast(1598886201 as BIGINT)
+             |)""".stripMargin)
+
+        spark.sql(
+          s"""
+             | MERGE INTO $tableName t
+             | USING source_updates s
+             | ON t.record_key = s.record_key
+             | WHEN MATCHED THEN
+             |   UPDATE SET
+             |     record_key = s.record_key,
+             |     department = s.department,
+             |     salary = s.salary,
+             |     ts = s.ts
+             | WHEN NOT MATCHED THEN
+             |   INSERT *""".stripMargin)
+      }
+    )
+  }
+
   def validateLogBlock(basePath: String,
                        expectedNumLogFile: Int,
                        changedFields: Seq[Seq[String]],
                        isPartial: Boolean): Unit = {
-    val storageConf = HoodieTestUtils.getDefaultStorageConf
-    val metaClient: HoodieTableMetaClient =
-      HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
-    val metadataConfig = HoodieMetadataConfig.newBuilder.build
-    val engineContext = new HoodieLocalEngineContext(storageConf)
-    val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
-      engineContext, FileSystemViewStorageConfig.newBuilder.build,
-      HoodieCommonConfig.newBuilder.build,
-      (v1: HoodieTableMetaClient) => {
-        HoodieTableMetadata.create(
-          engineContext, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
-      }
-    )
-    val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
+    val (metaClient, fsView) = getMetaClientAndFileSystemView(basePath)
     val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("")
       .filter((fileSlice: FileSlice) => {
         HoodieTestUtils.getLogFileListFromFileSlice(fileSlice).size() == expectedNumLogFile

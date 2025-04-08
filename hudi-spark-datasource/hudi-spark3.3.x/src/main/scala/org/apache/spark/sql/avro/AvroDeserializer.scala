@@ -17,18 +17,18 @@
 
 package org.apache.spark.sql.avro
 
+import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.util.Utf8
-import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
-import org.apache.spark.sql.avro.AvroDeserializer.{RebaseSpec, createDateRebaseFuncInRead, createTimestampRebaseFuncInRead}
-import org.apache.spark.sql.avro.AvroUtils.{AvroMatchedField, toFieldStr}
-import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData}
-import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
-import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, DateTimeUtils, GenericArrayData, RebaseDateTime}
+import org.apache.spark.sql.avro.AvroDeserializer.{createDateRebaseFuncInRead, createTimestampRebaseFuncInRead, RebaseSpec}
+import org.apache.spark.sql.avro.AvroUtils.{toFieldStr, AvroMatchedField}
 import org.apache.spark.sql.catalyst.{InternalRow, NoopFilters, StructFilters}
+import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData}
+import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, DateTimeUtils, GenericArrayData, RebaseDateTime}
+import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.types._

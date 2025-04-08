@@ -18,7 +18,6 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -30,7 +29,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -42,7 +40,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
@@ -108,7 +105,7 @@ public class HoodieClientTestUtils {
       sparkConf.set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
     }
 
-    if (canLoadClass("org.apache.spark.sql.hudi.catalog.HoodieCatalog") && HoodieSparkUtils.gteqSpark3_3()) {
+    if (canLoadClass("org.apache.spark.sql.hudi.catalog.HoodieCatalog")) {
       sparkConf.set("spark.sql.catalog.spark_catalog",
           "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
     }
@@ -140,10 +137,8 @@ public class HoodieClientTestUtils {
   private static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
                                                                     List<HoodieInstant> commitsToReturn) throws IOException {
     HashMap<String, String> fileIdToFullPath = new HashMap<>();
-    TimelineLayout layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion());
     for (HoodieInstant commit : commitsToReturn) {
-      HoodieCommitMetadata metadata =
-          layout.getCommitMetadataSerDe().deserialize(commit, commitTimeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = commitTimeline.readCommitMetadata(commit);
       fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new StoragePath(basePath)));
     }
     return fileIdToFullPath;
@@ -289,8 +284,7 @@ public class HoodieClientTestUtils {
       TimelineService timelineService = new TimelineService(context, HadoopFSUtils.getStorageConf(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          HoodieStorageUtils.getStorage(HoodieTestUtils.getDefaultStorageConf()),
-          FileSystemViewManager.createViewManager(context, config.getViewStorageConfig(), config.getCommonConfig()));
+          FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();
       LOG.info("Timeline service server port: " + timelineServicePort);
       return timelineService;
@@ -326,11 +320,10 @@ public class HoodieClientTestUtils {
     return HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(spark.sessionState().newHadoopConf()), basePath);
   }
 
-  private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+  public static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     try {
       HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-      byte[] data = timeline.getInstantDetails(instant).get();
-      return Option.of(metaClient.getCommitMetadataSerDe().deserialize(instant, data, HoodieCommitMetadata.class));
+      return Option.of(timeline.readCommitMetadata(instant));
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema from commit metadata", e);
     }

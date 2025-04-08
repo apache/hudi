@@ -20,7 +20,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -83,9 +83,9 @@
             <import>${basedir}/src/main/avro/HoodiePath.avsc</import>
             <import>${basedir}/src/main/avro/HoodieFSPermission.avsc</import>
             <import>${basedir}/src/main/avro/HoodieFileStatus.avsc</import>
-            <import>${basedir}/src/main/avro/HoodieBootstrapSourceFilePartitionInfo.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieBootstrapFilePartitionInfo.avsc</import>
             <import>${basedir}/src/main/avro/HoodieBootstrapIndexInfo.avsc</import>
-            <import>${basedir}/src/main/avro/HoodieBootstrapMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieBootstrapPartitionMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieSliceInfo.avsc</import>
             <import>${basedir}/src/main/avro/HoodieClusteringGroup.avsc</import>
             <import>${basedir}/src/main/avro/HoodieClusteringStrategy.avsc</import>
@@ -223,6 +223,16 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-server</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-servlet</artifactId>
+    </dependency>
+
     <!-- HBase -->
     <dependency>
       <groupId>org.apache.hbase</groupId>
@@ -344,6 +354,5 @@
       <artifactId>tally-core</artifactId>
       <version>${tally.version}</version>
     </dependency>
-
   </dependencies>
 </project>

@@ -17,14 +17,15 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.avro.Schema
 import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
-import org.apache.hudi.common.util.CommitUtils
+import org.apache.hudi.common.util.{CommitUtils, Option}
+import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
 import org.apache.hudi.table.HoodieSparkTable
+
+import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
@@ -99,7 +100,11 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport with Loggin
       hoodieCatalogTable.tableLocation,
       hoodieCatalogTable.tableName,
       HoodieWriterUtils.parametersWithWriteDefaults(HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(
-        hoodieCatalogTable.catalogProperties) ++ sparkSession.sqlContext.conf.getAllConfs).asJava
+        hoodieCatalogTable.catalogProperties) ++ sparkSession.sqlContext.conf.getAllConfs ++ Map(
+        HoodieCleanConfig.AUTO_CLEAN.key -> "false",
+        HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.NEVER.name,
+        HoodieArchivalConfig.AUTO_ARCHIVE.key -> "false"
+      )).asJava
     )
 
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, hoodieCatalogTable.tableType)
@@ -113,7 +118,7 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport with Loggin
     val requested = hoodieTable.getInstantGenerator.createNewInstant(State.REQUESTED, commitActionType, instantTime)
     val metadata = new HoodieCommitMetadata
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
-    timeLine.transitionRequestedToInflight(requested, serializeCommitMetadata(hoodieTable.getMetaClient.getTimelineLayout.getCommitMetadataSerDe, metadata))
+    timeLine.transitionRequestedToInflight(requested, Option.of(metadata))
 
     client.commit(instantTime, jsc.emptyRDD)
   }

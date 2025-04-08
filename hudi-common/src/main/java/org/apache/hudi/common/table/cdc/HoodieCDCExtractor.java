@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -217,6 +218,11 @@ public class HoodieCDCExtractor {
     try {
       Set<String> requiredActions = new HashSet<>(Arrays.asList(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION));
       HoodieActiveTimeline activeTimeLine = metaClient.getActiveTimeline();
+      if (instantRange.getStartInstant().isPresent() && !metaClient.getArchivedTimeline().empty()
+          && InstantComparison.compareTimestamps(metaClient.getArchivedTimeline().lastInstant().get().requestedTime(), InstantComparison.GREATER_THAN, instantRange.getStartInstant().get())) {
+        throw new HoodieException("Start instant time " + instantRange.getStartInstant().get()
+            + " for CDC query has to be in the active timeline. Beginning of active timeline " + activeTimeLine.firstInstant().get().requestedTime());
+      }
       this.commits = activeTimeLine.getInstantsAsStream()
           .filter(instant ->
               instant.isCompleted()
@@ -324,7 +330,7 @@ public class HoodieCDCExtractor {
       String currentLogFileName = new StoragePath(currentLogFile).getName();
       Option<Pair<String, List<String>>> fileSliceOpt =
           HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-              metaClient.getActiveTimeline().getInstantDetails(instant).get(), fgId);
+              metaClient.getActiveTimeline().getInstantContentStream(instant), fgId);
       if (fileSliceOpt.isPresent()) {
         Pair<String, List<String>> fileSlice = fileSliceOpt.get();
         try {

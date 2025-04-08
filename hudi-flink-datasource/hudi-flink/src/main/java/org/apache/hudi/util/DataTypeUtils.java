@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.model.HoodieRecord;
+
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
@@ -167,4 +169,40 @@ public class DataTypeUtils {
     return DataTypes.ROW(fields.stream().toArray(DataTypes.Field[]::new)).notNull();
   }
 
+  /**
+   * Adds the Hoodie metadata fields to the given row type.
+   */
+  public static RowType addMetadataFields(
+      RowType rowType,
+      boolean withOperationField) {
+    List<RowType.RowField> mergedFields = new ArrayList<>();
+    LogicalType metadataFieldType = DataTypes.STRING().getLogicalType();
+
+    RowType.RowField commitTimeField =
+        new RowType.RowField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, metadataFieldType, "commit time");
+    RowType.RowField commitSeqnoField =
+        new RowType.RowField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, metadataFieldType, "commit seqno");
+    RowType.RowField recordKeyField =
+        new RowType.RowField(HoodieRecord.RECORD_KEY_METADATA_FIELD, metadataFieldType, "record key");
+    RowType.RowField partitionPathField =
+        new RowType.RowField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, metadataFieldType, "partition path");
+    RowType.RowField fileNameField =
+        new RowType.RowField(HoodieRecord.FILENAME_METADATA_FIELD, metadataFieldType, "field name");
+
+    mergedFields.add(commitTimeField);
+    mergedFields.add(commitSeqnoField);
+    mergedFields.add(recordKeyField);
+    mergedFields.add(partitionPathField);
+    mergedFields.add(fileNameField);
+
+    if (withOperationField) {
+      RowType.RowField operationField =
+          new RowType.RowField(HoodieRecord.OPERATION_METADATA_FIELD, metadataFieldType, "operation");
+      mergedFields.add(operationField);
+    }
+
+    mergedFields.addAll(rowType.getFields());
+
+    return new RowType(false, mergedFields);
+  }
 }

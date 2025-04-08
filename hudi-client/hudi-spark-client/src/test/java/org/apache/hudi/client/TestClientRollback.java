@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -408,7 +408,8 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withRollbackUsingMarkers(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build()).build(); // HUDI-8815
 
     try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context)) {
       HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
@@ -553,7 +554,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       HoodieInstant rollbackInstant = rollbackInstants.get(0);
 
       // delete rollback completed meta file and retry rollback.
-      FileCreateUtils.deleteRollbackCommit(basePath, rollbackInstant.requestedTime());
+      FileCreateUtilsLegacy.deleteRollbackCommit(basePath, rollbackInstant.requestedTime());
 
       if (instantToRollbackExists) {
         // recreate actual commit files if needed
@@ -633,7 +634,8 @@ public class TestClientRollback extends HoodieClientTestBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build()).build();
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build()).build();
 
     try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context)) {
       HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
@@ -668,7 +670,8 @@ public class TestClientRollback extends HoodieClientTestBase {
       // Set Failed Writes rollback to EAGER
       config = HoodieWriteConfig.newBuilder().withPath(basePath)
           .withRollbackUsingMarkers(false)
-          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+          .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build()).build();
       final String commitTime5 = "20160506030631";
       try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
         client.startCommitWithTime(commitTime5);
@@ -748,19 +751,19 @@ public class TestClientRollback extends HoodieClientTestBase {
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       if (isRollbackPlanCorrupted) {
         // Add a corrupted requested rollback plan
-        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, new byte[] {0, 1, 2});
+        FileCreateUtilsLegacy.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, new byte[] {0, 1, 2});
       } else {
         // Add a valid requested rollback plan to roll back commitTime3
         HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
         List<HoodieRollbackRequest> rollbackRequestList = partitionAndFileId3.keySet().stream()
             .map(partition -> new HoodieRollbackRequest(partition, EMPTY_STRING, EMPTY_STRING,
                 Collections.singletonList(metaClient.getBasePath() + "/" + partition + "/"
-                    + FileCreateUtils.baseFileName(commitTime3, partitionAndFileId3.get(p1))),
+                    + FileCreateUtilsLegacy.baseFileName(commitTime3, partitionAndFileId3.get(p1))),
                 Collections.emptyMap()))
             .collect(Collectors.toList());
         rollbackPlan.setRollbackRequests(rollbackRequestList);
         rollbackPlan.setInstantToRollback(new HoodieInstantInfo(commitTime3, HoodieTimeline.COMMIT_ACTION));
-        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, rollbackPlan);
+        FileCreateUtilsLegacy.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, rollbackPlan);
       }
 
       // Rollback commit3
@@ -824,7 +827,8 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withRollbackUsingMarkers(true) // rollback using markers to test fallback to listing based rollback for completed instant
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build()).build();
 
     // create test table with all commits completed
     try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(metaClient.getStorageConf(), config, context)) {

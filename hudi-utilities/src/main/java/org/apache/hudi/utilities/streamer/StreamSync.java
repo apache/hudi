@@ -39,23 +39,22 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -89,7 +88,6 @@ import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback;
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
-import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.exception.HoodieStreamerException;
@@ -130,7 +128,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -139,16 +136,15 @@ import scala.Tuple2;
 
 import static org.apache.hudi.DataSourceUtils.createUserDefinedBulkInsertPartitioner;
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
-import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
-import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.buildCheckpointFromGeneralSource;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ENABLE_ERROR_TABLE_WRITE_UNIFICATION;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
@@ -160,10 +156,9 @@ import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getK
 import static org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.CHECKPOINT_FORCE_SKIP;
-import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
-import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
+import static org.apache.hudi.utilities.streamer.StreamerCheckpointUtils.getLatestInstantWithValidCheckpointInfo;
 
 /**
  * Sync's one batch of data to hoodie table.
@@ -200,7 +195,7 @@ public class StreamSync implements Serializable, Closeable {
    */
   private transient Option<Transformer> transformer;
 
-  private String keyGenClassName;
+  private final String keyGenClassName;
 
   /**
    * Filesystem used.
@@ -210,12 +205,12 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Spark context Wrapper.
    */
-  private final transient HoodieSparkEngineContext hoodieSparkContext;
+  private transient HoodieSparkEngineContext hoodieSparkContext;
 
   /**
    * Spark Session.
    */
-  private transient SparkSession sparkSession;
+  private final transient SparkSession sparkSession;
 
   /**
    * Hive Config.
@@ -265,6 +260,7 @@ public class StreamSync implements Serializable, Closeable {
   private transient HoodieMetrics hoodieMetrics;
 
   private final boolean autoGenerateRecordKeys;
+  private final boolean isErrorTableWriteUnificationEnabled;
 
   @VisibleForTesting
   StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession,
@@ -285,6 +281,7 @@ public class StreamSync implements Serializable, Closeable {
     this.conf = conf;
 
     this.errorTableWriter = errorTableWriter;
+    this.isErrorTableWriteUnificationEnabled = getBooleanWithAltKeys(props, ENABLE_ERROR_TABLE_WRITE_UNIFICATION);
     this.formatAdapter = formatAdapter;
     this.transformer = transformer;
   }
@@ -325,6 +322,7 @@ public class StreamSync implements Serializable, Closeable {
           cfg, sparkSession, props, hoodieSparkContext, fs, Option.of(metrics));
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
+    this.isErrorTableWriteUnificationEnabled = getBooleanWithAltKeys(props, ENABLE_ERROR_TABLE_WRITE_UNIFICATION);
     initializeMetaClient();
     Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, streamContext);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
@@ -422,7 +420,7 @@ public class StreamSync implements Serializable, Closeable {
 
   private HoodieTableMetaClient initializeEmptyTable() throws IOException {
     return initializeEmptyTable(HoodieTableMetaClient.newTableBuilder(),
-        SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props),
+        SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props, HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))),
         HadoopFSUtils.getStorageConfWithCopy(hoodieSparkContext.hadoopConfiguration()));
   }
 
@@ -465,66 +463,72 @@ public class StreamSync implements Serializable, Closeable {
     Pair<Option<String>, JavaRDD<WriteStatus>> result = null;
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
 
-    // Refresh Timeline
-    HoodieTableMetaClient metaClient = initializeMetaClientAndRefreshTimeline();
-    String instantTime = metaClient.createNewInstantTime();
+    try {
+      // Refresh Timeline
+      HoodieTableMetaClient metaClient = initializeMetaClientAndRefreshTimeline();
+      String instantTime = metaClient.createNewInstantTime();
 
-    Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(instantTime, metaClient);
+      Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(instantTime, metaClient);
 
-    if (inputBatchAndUseRowWriter != null) {
-      InputBatch inputBatch = inputBatchAndUseRowWriter.getLeft();
-      boolean useRowWriter = inputBatchAndUseRowWriter.getRight();
+      if (inputBatchAndUseRowWriter != null) {
+        InputBatch inputBatch = inputBatchAndUseRowWriter.getLeft();
+        boolean useRowWriter = inputBatchAndUseRowWriter.getRight();
+        initializeWriteClientAndRetryTableServices(inputBatch, metaClient);
+        result = writeToSinkAndDoMetaSync(instantTime, inputBatch, useRowWriter, metrics, overallTimerContext);
+      }
+      // refresh schemas if need be before next batch
+      if (schemaProvider != null) {
+        schemaProvider.refresh();
+      }
+      metrics.updateStreamerSyncMetrics(System.currentTimeMillis());
+      return result;
+    } finally {
+      this.formatAdapter.getSource().releaseResources();
+    }
+  }
 
-      // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
-      // compactor
-      if (writeClient == null) {
-        this.schemaProvider = inputBatch.getSchemaProvider();
-        // Setup HoodieWriteClient and compaction now that we decided on schema
-        setupWriteClient(inputBatch.getBatch(), metaClient);
-      } else {
-        Schema newSourceSchema = inputBatch.getSchemaProvider().getSourceSchema();
-        Schema newTargetSchema = inputBatch.getSchemaProvider().getTargetSchema();
-        if ((newSourceSchema != null && !processedSchema.isSchemaPresent(newSourceSchema))
-            || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
-          String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
-          String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
-          LOG.info("Seeing new schema. Source: {}, Target: {}", sourceStr, targetStr);
-          // We need to recreate write client with new schema and register them.
-          reInitWriteClient(newSourceSchema, newTargetSchema, inputBatch.getBatch(), metaClient);
-          if (newSourceSchema != null) {
-            processedSchema.addSchema(newSourceSchema);
-          }
-          if (newTargetSchema != null) {
-            processedSchema.addSchema(newTargetSchema);
-          }
+  private void initializeWriteClientAndRetryTableServices(InputBatch inputBatch, HoodieTableMetaClient metaClient) throws IOException {
+    // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
+    // compactor
+    if (writeClient == null) {
+      this.schemaProvider = inputBatch.getSchemaProvider();
+      // Setup HoodieWriteClient and compaction now that we decided on schema
+      setupWriteClient(inputBatch.getBatch(), metaClient);
+    } else {
+      Schema newSourceSchema = inputBatch.getSchemaProvider().getSourceSchema();
+      Schema newTargetSchema = inputBatch.getSchemaProvider().getTargetSchema();
+      if ((newSourceSchema != null && !processedSchema.isSchemaPresent(newSourceSchema))
+          || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
+        String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
+        String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
+        LOG.info("Seeing new schema. Source: {}, Target: {}", sourceStr, targetStr);
+        // We need to recreate write client with new schema and register them.
+        reInitWriteClient(newSourceSchema, newTargetSchema, inputBatch.getBatch(), metaClient);
+        if (newSourceSchema != null) {
+          processedSchema.addSchema(newSourceSchema);
+        }
+        if (newTargetSchema != null) {
+          processedSchema.addSchema(newTargetSchema);
         }
       }
+    }
 
-      // complete the pending compaction before writing to sink
-      if (cfg.retryLastPendingInlineCompactionJob && writeClient.getConfig().inlineCompactionEnabled()) {
-        Option<String> pendingCompactionInstant = getLastPendingCompactionInstant(allCommitsTimelineOpt);
-        if (pendingCompactionInstant.isPresent()) {
-          HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
-          writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
-          initializeMetaClientAndRefreshTimeline();
-          reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null, metaClient);
-        }
-      } else if (cfg.retryLastPendingInlineClusteringJob && writeClient.getConfig().inlineClusteringEnabled()) {
-        // complete the pending clustering before writing to sink
-        Option<String> pendingClusteringInstant = getLastPendingClusteringInstant(allCommitsTimelineOpt);
-        if (pendingClusteringInstant.isPresent()) {
-          writeClient.cluster(pendingClusteringInstant.get());
-        }
+    // complete the pending compaction before writing to sink
+    if (cfg.retryLastPendingInlineCompactionJob && writeClient.getConfig().inlineCompactionEnabled()) {
+      Option<String> pendingCompactionInstant = getLastPendingCompactionInstant(allCommitsTimelineOpt);
+      if (pendingCompactionInstant.isPresent()) {
+        HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
+        writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
+        initializeMetaClientAndRefreshTimeline();
+        reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null, metaClient);
       }
-
-      result = writeToSinkAndDoMetaSync(instantTime, inputBatch, useRowWriter, metrics, overallTimerContext);
+    } else if (cfg.retryLastPendingInlineClusteringJob && writeClient.getConfig().inlineClusteringEnabled()) {
+      // complete the pending clustering before writing to sink
+      Option<String> pendingClusteringInstant = getLastPendingClusteringInstant(allCommitsTimelineOpt);
+      if (pendingClusteringInstant.isPresent()) {
+        writeClient.cluster(pendingClusteringInstant.get());
+      }
     }
-    // refresh schemas if need be before next batch
-    if (schemaProvider != null) {
-      schemaProvider.refresh();
-    }
-    metrics.updateStreamerSyncMetrics(System.currentTimeMillis());
-    return result;
   }
 
   private Option<String> getLastPendingClusteringInstant(Option<HoodieTimeline> commitTimelineOpt) {
@@ -551,23 +555,15 @@ public class StreamSync implements Serializable, Closeable {
    */
   public Pair<InputBatch, Boolean> readFromSource(String instantTime, HoodieTableMetaClient metaClient) throws IOException {
     // Retrieve the previous round checkpoints, if any
-    Option<String> resumeCheckpointStr = Option.empty();
-    if (commitsTimelineOpt.isPresent()) {
-      resumeCheckpointStr = getCheckpointToResume(commitsTimelineOpt);
-    }
-
-    LOG.debug("Checkpoint from config: " + cfg.checkpoint);
-    if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
-      resumeCheckpointStr = Option.of(cfg.checkpoint);
-    }
-    LOG.info("Checkpoint to resume from : " + resumeCheckpointStr);
+    Option<Checkpoint> checkpointToResume = StreamerCheckpointUtils.resolveCheckpointToResumeFrom(commitsTimelineOpt, cfg, props, metaClient);
+    LOG.info("Checkpoint to resume from : " + checkpointToResume);
 
     int maxRetryCount = cfg.retryOnSourceFailures ? cfg.maxRetryCount : 1;
     int curRetryCount = 0;
     Pair<InputBatch, Boolean> sourceDataToSync = null;
     while (curRetryCount++ < maxRetryCount && sourceDataToSync == null) {
       try {
-        sourceDataToSync = fetchFromSourceAndPrepareRecords(resumeCheckpointStr, instantTime, metaClient);
+        sourceDataToSync = fetchFromSourceAndPrepareRecords(checkpointToResume, instantTime, metaClient);
       } catch (HoodieSourceTimeoutException e) {
         if (curRetryCount >= maxRetryCount) {
           throw e;
@@ -584,7 +580,7 @@ public class StreamSync implements Serializable, Closeable {
     return sourceDataToSync;
   }
 
-  private Pair<InputBatch, Boolean> fetchFromSourceAndPrepareRecords(Option<String> resumeCheckpointStr, String instantTime,
+  private Pair<InputBatch, Boolean> fetchFromSourceAndPrepareRecords(Option<Checkpoint> resumeCheckpoint, String instantTime,
         HoodieTableMetaClient metaClient) {
     hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Fetching next batch: " + cfg.targetTableName);
     HoodieRecordType recordType = createRecordMerger(props).getRecordType();
@@ -595,16 +591,16 @@ public class StreamSync implements Serializable, Closeable {
       throw new UnsupportedOperationException("Spark record only support parquet log.");
     }
 
-    Pair<InputBatch, Boolean> inputBatchAndRowWriterEnabled = fetchNextBatchFromSource(resumeCheckpointStr, metaClient);
+    Pair<InputBatch, Boolean> inputBatchAndRowWriterEnabled = fetchNextBatchFromSource(resumeCheckpoint, metaClient);
     InputBatch inputBatch = inputBatchAndRowWriterEnabled.getLeft();
     boolean useRowWriter = inputBatchAndRowWriterEnabled.getRight();
-    final String checkpointStr = inputBatch.getCheckpointForNextBatch();
+    final Checkpoint checkpoint = inputBatch.getCheckpointForNextBatch();
     final SchemaProvider schemaProvider = inputBatch.getSchemaProvider();
 
     // handle no new data and no change in checkpoint
-    if (!cfg.allowCommitOnNoCheckpointChange && Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
+    if (!cfg.allowCommitOnNoCheckpointChange && checkpoint.equals(resumeCheckpoint.orElse(null))) {
       LOG.info("No new data, source checkpoint has not changed. Nothing to commit. Old checkpoint=("
-          + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
+          + resumeCheckpoint + "). New Checkpoint=(" + checkpoint + ")");
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
       hoodieMetrics.updateMetricsForEmptyData(commitActionType);
       return null;
@@ -618,7 +614,7 @@ public class StreamSync implements Serializable, Closeable {
     } else {
       Option<JavaRDD<HoodieRecord>> recordsOpt = HoodieStreamerUtils.createHoodieRecords(cfg, props, inputBatch.getBatch(), schemaProvider,
           recordType, autoGenerateRecordKeys, instantTime, errorTableWriter);
-      return Pair.of(new InputBatch(recordsOpt, checkpointStr, schemaProvider), false);
+      return Pair.of(new InputBatch(recordsOpt, checkpoint, schemaProvider), false);
     }
   }
 
@@ -637,14 +633,14 @@ public class StreamSync implements Serializable, Closeable {
 
   /**
    * Fetch data from source, apply transformations if any, align with schema from schema provider if need be and return the input batch.
-   * @param resumeCheckpointStr checkpoint to resume from source.
+   * @param resumeCheckpoint checkpoint to resume from source.
    * @return Pair with {@link InputBatch} containing the new batch of data from source along with new checkpoint and schema provider instance to use,
    *         and a boolean set to `true` if row writer can be used.
    */
   @VisibleForTesting
-  Pair<InputBatch, Boolean> fetchNextBatchFromSource(Option<String> resumeCheckpointStr, HoodieTableMetaClient metaClient) {
+  Pair<InputBatch, Boolean> fetchNextBatchFromSource(Option<Checkpoint> resumeCheckpoint, HoodieTableMetaClient metaClient) {
     Option<JavaRDD<GenericRecord>> avroRDDOptional = null;
-    String checkpointStr = null;
+    Checkpoint checkpoint = null;
     SchemaProvider schemaProvider = null;
     InputBatch inputBatchForWriter = null; // row writer
     boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
@@ -652,7 +648,7 @@ public class StreamSync implements Serializable, Closeable {
       // Transformation is needed. Fetch New rows in Row Format, apply transformation and then convert them
       // to generic records for writing
       InputBatch<Dataset<Row>> dataAndCheckpoint =
-          formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
+          formatAdapter.fetchNewDataInRowFormat(resumeCheckpoint, cfg.sourceLimit);
 
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(hoodieSparkContext.jsc(), sparkSession, data, props));
@@ -660,14 +656,14 @@ public class StreamSync implements Serializable, Closeable {
       transformed = formatAdapter.processErrorEvents(transformed,
           ErrorEvent.ErrorReason.CUSTOM_TRANSFORMER_FAILURE);
 
-      checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
+      checkpoint = dataAndCheckpoint.getCheckpointForNextBatch();
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null
           && this.userProvidedSchemaProvider.getTargetSchema() != InputBatch.NULL_SCHEMA) {
         // Let's deduce the schema provider for writer side first!
         schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetSchema(), this.userProvidedSchemaProvider, metaClient);
         boolean useRowWriter = canUseRowWriter(schemaProvider.getTargetSchema());
         if (useRowWriter) {
-          inputBatchForWriter = new InputBatch(transformed, checkpointStr, schemaProvider);
+          inputBatchForWriter = new InputBatch(transformed, checkpoint, schemaProvider);
         } else {
           // non row writer path
           SchemaProvider finalSchemaProvider = schemaProvider;
@@ -703,7 +699,7 @@ public class StreamSync implements Serializable, Closeable {
         schemaProvider = getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient);
 
         if (canUseRowWriter(schemaProvider.getTargetSchema())) {
-          inputBatchForWriter = new InputBatch(transformed, checkpointStr, schemaProvider);
+          inputBatchForWriter = new InputBatch(transformed, checkpoint, schemaProvider);
         } else {
           // Rewrite transformed records into the expected target schema
           SchemaProvider finalSchemaProvider = schemaProvider;
@@ -712,7 +708,7 @@ public class StreamSync implements Serializable, Closeable {
       }
     } else {
       if (isRowWriterEnabled()) {
-        InputBatch inputBatchNeedsDeduceSchema = formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
+        InputBatch inputBatchNeedsDeduceSchema = formatAdapter.fetchNewDataInRowFormat(resumeCheckpoint, cfg.sourceLimit);
         if (canUseRowWriter(inputBatchNeedsDeduceSchema.getSchemaProvider().getTargetSchema())) {
           inputBatchForWriter = new InputBatch<>(inputBatchNeedsDeduceSchema.getBatch(), inputBatchNeedsDeduceSchema.getCheckpointForNextBatch(),
               getDeducedSchemaProvider(inputBatchNeedsDeduceSchema.getSchemaProvider().getTargetSchema(), inputBatchNeedsDeduceSchema.getSchemaProvider(), metaClient));
@@ -723,8 +719,8 @@ public class StreamSync implements Serializable, Closeable {
       // if row writer was enabled but the target schema prevents us from using it, do not use the row writer
       if (inputBatchForWriter == null) {
         // Pull the data from the source & prepare the write
-        InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint = formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
-        checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
+        InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint = formatAdapter.fetchNewDataInAvroFormat(resumeCheckpoint, cfg.sourceLimit);
+        checkpoint = dataAndCheckpoint.getCheckpointForNextBatch();
         // Rewrite transformed records into the expected target schema
         schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getTargetSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
         String serializedTargetSchema = schemaProvider.getTargetSchema().toString();
@@ -748,7 +744,7 @@ public class StreamSync implements Serializable, Closeable {
     if (inputBatchForWriter != null) {
       return Pair.of(inputBatchForWriter, true);
     } else {
-      return Pair.of(new InputBatch(avroRDDOptional, checkpointStr, schemaProvider), false);
+      return Pair.of(new InputBatch(avroRDDOptional, checkpoint, schemaProvider), false);
     }
   }
 
@@ -781,91 +777,6 @@ public class StreamSync implements Serializable, Closeable {
         Option.ofNullable(readerSchema)).toJavaRDD();
   }
 
-  /**
-   * Process previous commit metadata and checkpoint configs set by user to determine the checkpoint to resume from.
-   *
-   * @param commitsTimelineOpt commits timeline of interest, including .commit and .deltacommit.
-   * @return the checkpoint to resume from if applicable.
-   * @throws IOException
-   */
-  @VisibleForTesting
-  Option<String> getCheckpointToResume(Option<HoodieTimeline> commitsTimelineOpt) throws IOException {
-    Option<String> resumeCheckpointStr = Option.empty();
-    // try get checkpoint from commits(including commit and deltacommit)
-    // in COW migrating to MOR case, the first batch of the deltastreamer will lost the checkpoint from COW table, cause the dataloss
-    HoodieTimeline deltaCommitTimeline = commitsTimelineOpt.get().filter(instant -> instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
-    // has deltacommit and this is a MOR table, then we should get checkpoint from .deltacommit
-    // if changing from mor to cow, before changing we must do a full compaction, so we can only consider .commit in such case
-    if (cfg.tableType.equals(HoodieTableType.MERGE_ON_READ.name()) && !deltaCommitTimeline.empty()) {
-      commitsTimelineOpt = Option.of(deltaCommitTimeline);
-    }
-    Option<HoodieInstant> lastCommit = commitsTimelineOpt.get().lastInstant();
-    if (lastCommit.isPresent()) {
-      // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
-      Option<HoodieCommitMetadata> commitMetadataOption = getLatestCommitMetadataWithValidCheckpointInfo(commitsTimelineOpt.get());
-      if (commitMetadataOption.isPresent()) {
-        HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
-        LOG.debug("Checkpoint reset from metadata: " + commitMetadata.getMetadata(CHECKPOINT_RESET_KEY));
-        if (cfg.ignoreCheckpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_IGNORE_KEY))
-            || !cfg.ignoreCheckpoint.equals(commitMetadata.getMetadata(CHECKPOINT_IGNORE_KEY)))) {
-          // we ignore any existing checkpoint and start ingesting afresh
-          resumeCheckpointStr = Option.empty();
-        } else if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
-            || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
-          resumeCheckpointStr = Option.of(cfg.checkpoint);
-        } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
-          //if previous checkpoint is an empty string, skip resume use Option.empty()
-          String value = commitMetadata.getMetadata(CHECKPOINT_KEY);
-          resumeCheckpointStr = Option.of(value);
-        } else if (compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
-            LESSER_THAN, lastCommit.get().requestedTime())) {
-          throw new HoodieStreamerException(
-              "Unable to find previous checkpoint. Please double check if this table "
-                  + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
-                  + commitsTimelineOpt.get().getInstants());
-        }
-        // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
-        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          removeConfigFromProps(props, KafkaSourceConfig.KAFKA_CHECKPOINT_TYPE);
-        }
-      } else if (cfg.checkpoint != null) { // getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get()) will never return a commit metadata w/o any checkpoint key set.
-        resumeCheckpointStr = Option.of(cfg.checkpoint);
-      }
-    }
-    return resumeCheckpointStr;
-  }
-
-  protected Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
-    return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
-      try {
-        TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
-        HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
-            .deserialize(instant, timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY)) || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          return Option.of(Pair.of(instant.toString(), commitMetadata));
-        } else {
-          return Option.empty();
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
-      }
-    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
-  }
-
-  protected Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
-    return getLatestInstantAndCommitMetadataWithValidCheckpointInfo(timeline).map(pair -> pair.getRight());
-  }
-
-  protected Option<String> getLatestInstantWithValidCheckpointInfo(Option<HoodieTimeline> timelineOpt) {
-    return timelineOpt.map(timeline -> {
-      try {
-        return getLatestInstantAndCommitMetadataWithValidCheckpointInfo(timeline).map(pair -> pair.getLeft());
-      } catch (IOException e) {
-        throw new HoodieIOException("failed to get latest instant with ValidCheckpointInfo", e);
-      }
-    }).orElse(Option.empty());
-  }
-
   private HoodieWriteConfig prepareHoodieConfigForRowWriter(Schema writerSchema) {
     HoodieConfig hoodieConfig = new HoodieConfig(HoodieStreamer.Config.getProps(conf, cfg));
     hoodieConfig.setValue(DataSourceWriteOptions.TABLE_TYPE(), cfg.tableType);
@@ -892,95 +803,122 @@ public class StreamSync implements Serializable, Closeable {
                                                                               boolean useRowWriter,
                                                                               HoodieIngestionMetrics metrics,
                                                                               Timer.Context overallTimerContext) {
-    Option<String> scheduledCompactionInstant = Option.empty();
-    // write to hudi and fetch result
-    WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
-    JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
-    Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
-
-    // process write status
-    long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
-    long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
-    long totalSuccessfulRecords = totalRecords - totalErrorRecords;
-    LOG.info(String.format("instantTime=%s, totalRecords=%d, totalErrorRecords=%d, totalSuccessfulRecords=%d",
-        instantTime, totalRecords, totalErrorRecords, totalSuccessfulRecords));
-    if (totalRecords == 0) {
-      LOG.info("No new data, perform empty commit.");
-    }
-    boolean hasErrors = totalErrorRecords > 0;
-    if (!hasErrors || cfg.commitOnErrors) {
-      HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
-      if (!getBooleanWithAltKeys(props, CHECKPOINT_FORCE_SKIP)) {
-        if (inputBatch.getCheckpointForNextBatch() != null) {
-          checkpointCommitMetadata.put(CHECKPOINT_KEY, inputBatch.getCheckpointForNextBatch());
-        }
-        if (cfg.checkpoint != null) {
-          checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
-        }
-        if (cfg.ignoreCheckpoint != null) {
-          checkpointCommitMetadata.put(CHECKPOINT_IGNORE_KEY, cfg.ignoreCheckpoint);
-        }
+    boolean releaseResourcesInvoked = false;
+    try {
+      Option<String> scheduledCompactionInstant = Option.empty();
+      // write to hudi and fetch result
+      WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
+      Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
+      // write to error table
+      JavaRDD<WriteStatus> dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
+      JavaRDD<WriteStatus> writeStatusRDD = dataTableWriteStatusRDD;
+      String errorTableInstantTime = writeClient.createNewInstantTime();
+      Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
+      if (errorTableWriter.isPresent() && isErrorTableWriteUnificationEnabled) {
+        errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, getLatestCommittedInstant()));
+        writeStatusRDD = errorTableWriteStatusRDDOpt.map(errorTableWriteStatus -> errorTableWriteStatus.union(dataTableWriteStatusRDD)).orElse(dataTableWriteStatusRDD);
       }
-
-      if (hasErrors) {
-        LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
-            + totalErrorRecords + "/" + totalRecords);
+      // process write status
+      long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
+      long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
+      long totalSuccessfulRecords = totalRecords - totalErrorRecords;
+      LOG.info(String.format("instantTime=%s, totalRecords=%d, totalErrorRecords=%d, totalSuccessfulRecords=%d",
+          instantTime, totalRecords, totalErrorRecords, totalSuccessfulRecords));
+      if (totalRecords == 0) {
+        LOG.info("No new data, perform empty commit.");
       }
-      String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-      if (errorTableWriter.isPresent()) {
-        // Commit the error events triggered so far to the error table
-        Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
-        boolean errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
-        if (!errorTableSuccess) {
-          switch (errorWriteFailureStrategy) {
-            case ROLLBACK_COMMIT:
-              LOG.info("Commit " + instantTime + " failed!");
-              writeClient.rollback(instantTime);
-              throw new HoodieStreamerWriteException("Error table commit failed");
-            case LOG_ERROR:
-              LOG.error("Error Table write failed for instant " + instantTime);
-              break;
-            default:
-              throw new HoodieStreamerWriteException("Write failure strategy not implemented for " + errorWriteFailureStrategy);
+      boolean hasErrors = totalErrorRecords > 0;
+      if (!hasErrors || cfg.commitOnErrors) {
+        Map<String, String> checkpointCommitMetadata = extractCheckpointMetadata(inputBatch, props, writeClient.getConfig().getWriteVersion().versionCode(), cfg);
+
+        if (hasErrors) {
+          LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
+              + totalErrorRecords + "/" + totalRecords);
+        }
+        String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
+        if (errorTableWriter.isPresent()) {
+          boolean errorTableSuccess = true;
+          // Commit the error events triggered so far to the error table
+          if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
+            errorTableSuccess = errorTableWriter.get().commit(errorTableInstantTime, errorTableWriteStatusRDDOpt.get());
+          } else if (!isErrorTableWriteUnificationEnabled) {
+            errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, getLatestCommittedInstant());
+          }
+          if (!errorTableSuccess) {
+            switch (errorWriteFailureStrategy) {
+              case ROLLBACK_COMMIT:
+                LOG.info("Commit " + instantTime + " failed!");
+                writeClient.rollback(instantTime);
+                throw new HoodieStreamerWriteException("Error table commit failed");
+              case LOG_ERROR:
+                LOG.error("Error Table write failed for instant " + instantTime);
+                break;
+              default:
+                throw new HoodieStreamerWriteException("Write failure strategy not implemented for " + errorWriteFailureStrategy);
+            }
           }
         }
-      }
-      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
-      if (success) {
-        LOG.info("Commit " + instantTime + " successful!");
-        this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch());
-        // Schedule compaction if needed
-        if (cfg.isAsyncCompactionEnabled()) {
-          scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());
-        }
+        boolean success = writeClient.commit(instantTime, dataTableWriteStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
+        releaseResourcesInvoked = true;
+        if (success) {
+          LOG.info("Commit " + instantTime + " successful!");
+          this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch() != null
+              ? inputBatch.getCheckpointForNextBatch().getCheckpointKey() : null);
+          // Schedule compaction if needed
+          if (cfg.isAsyncCompactionEnabled()) {
+            scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());
+          }
 
-        if ((totalSuccessfulRecords > 0) || cfg.forceEmptyMetaSync) {
-          runMetaSync();
+          if ((totalSuccessfulRecords > 0) || cfg.forceEmptyMetaSync) {
+            runMetaSync();
+          } else {
+            LOG.info(String.format("Not running metaSync totalSuccessfulRecords=%d", totalSuccessfulRecords));
+          }
         } else {
-          LOG.info(String.format("Not running metaSync totalSuccessfulRecords=%d", totalSuccessfulRecords));
+          LOG.info("Commit " + instantTime + " failed!");
+          throw new HoodieStreamerWriteException("Commit " + instantTime + " failed!");
         }
       } else {
-        LOG.info("Commit " + instantTime + " failed!");
-        throw new HoodieStreamerWriteException("Commit " + instantTime + " failed!");
+        LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
+        LOG.error("Printing out the top 100 errors");
+        dataTableWriteStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
+          LOG.error("Global error :", ws.getGlobalError());
+          if (ws.getErrors().size() > 0) {
+            ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
+          }
+        });
+        // Rolling back instant
+        writeClient.rollback(instantTime);
+        throw new HoodieStreamerWriteException("Commit " + instantTime + " failed and rolled-back !");
       }
-    } else {
-      LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
-      LOG.error("Printing out the top 100 errors");
-      writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
-        LOG.error("Global error :", ws.getGlobalError());
-        if (ws.getErrors().size() > 0) {
-          ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
-        }
-      });
-      // Rolling back instant
-      writeClient.rollback(instantTime);
-      throw new HoodieStreamerWriteException("Commit " + instantTime + " failed and rolled-back !");
-    }
-    long overallTimeNanos = overallTimerContext != null ? overallTimerContext.stop() : 0;
+      long overallTimeNanos = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
-    // Send DeltaStreamer Metrics
-    metrics.updateStreamerMetrics(overallTimeNanos);
-    return Pair.of(scheduledCompactionInstant, writeStatusRDD);
+      // Send DeltaStreamer Metrics
+      metrics.updateStreamerMetrics(overallTimeNanos);
+      return Pair.of(scheduledCompactionInstant, dataTableWriteStatusRDD);
+    } finally {
+      if (!releaseResourcesInvoked) {
+        releaseResources(instantTime);
+      }
+    }
+  }
+
+  Map<String, String> extractCheckpointMetadata(InputBatch inputBatch, TypedProperties props, int versionCode, HoodieStreamer.Config cfg) {
+    // If checkpoint force skip is enabled, return empty map
+    if (getBooleanWithAltKeys(props, CHECKPOINT_FORCE_SKIP)) {
+      return Collections.emptyMap();
+    }
+
+    // If we have a next checkpoint batch, use its metadata
+    if (inputBatch.getCheckpointForNextBatch() != null) {
+      return inputBatch.getCheckpointForNextBatch()
+          .getCheckpointCommitMetadata(cfg.checkpoint, cfg.ignoreCheckpoint);
+    }
+
+    // Otherwise create new checkpoint based on version
+    Checkpoint checkpoint = buildCheckpointFromGeneralSource(cfg.sourceClassName, versionCode, null);
+
+    return checkpoint.getCheckpointCommitMetadata(cfg.checkpoint, cfg.ignoreCheckpoint);
   }
 
   /**
@@ -1030,7 +968,7 @@ public class StreamSync implements Serializable, Closeable {
       JavaRDD<HoodieRecord> records = (JavaRDD<HoodieRecord>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.emptyRDD());
       // filter dupes if needed
       if (cfg.filterDupes) {
-        records = DataSourceUtils.dropDuplicates(hoodieSparkContext.jsc(), records, writeClient.getConfig());
+        records = DataSourceUtils.handleDuplicates(hoodieSparkContext, records, writeClient.getConfig(), false);
       }
 
       HoodieWriteResult writeResult = null;
@@ -1175,6 +1113,11 @@ public class StreamSync implements Serializable, Closeable {
     }
     writeClient = new SparkRDDWriteClient<>(hoodieSparkContext, writeConfig, embeddedTimelineService);
     onInitializingHoodieWriteClient.apply(writeClient);
+  }
+
+  protected void releaseResources(String instantTime) {
+    // if commitStats is not invoked, lets release resources from StreamSync layer so that we close all corresponding resources like stopping heart beats for failed writes.
+    writeClient.releaseResources(instantTime);
   }
 
   /**
@@ -1380,9 +1323,21 @@ public class StreamSync implements Serializable, Closeable {
     }
   }
 
+  private Option<String> getLatestCommittedInstant() {
+    try {
+      // If timelineLayout version changes, initialize the meta client again.
+      if (commitsTimelineOpt.get().getTimelineLayoutVersion() != writeClient.getConfig().getWriteVersion().getTimelineLayoutVersion()) {
+        initializeMetaClientAndRefreshTimeline();
+      }
+      return getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to load meta client", e);
+    }
+  }
+
   class WriteClientWriteResult {
     private Map<String, List<String>> partitionToReplacedFileIds = Collections.emptyMap();
-    private JavaRDD<WriteStatus> writeStatusRDD;
+    private final JavaRDD<WriteStatus> writeStatusRDD;
 
     public WriteClientWriteResult(JavaRDD<WriteStatus> writeStatusRDD) {
       this.writeStatusRDD = writeStatusRDD;

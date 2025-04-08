@@ -19,6 +19,7 @@
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -75,6 +76,7 @@ public class RollbackNode extends DagNode<Option<HoodieInstant>> {
         metaClient.getStorage().deleteDirectory(new StoragePath(
             executionContext.getWriterContext().getCfg().inputBasePath,
             executionContext.getWriterContext().getHoodieTestSuiteWriter().getLastCheckpoint()
+                .map(Checkpoint::getCheckpointKey)
                 .orElse("")));
         this.result = lastInstant;
       }

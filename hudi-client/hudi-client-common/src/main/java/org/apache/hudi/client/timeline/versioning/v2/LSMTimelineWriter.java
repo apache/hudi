@@ -42,6 +42,7 @@ import org.apache.hudi.io.hadoop.HoodieAvroParquetReader;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -187,7 +188,7 @@ public class LSMTimelineWriter {
     int newVersion = currentVersion < 0 ? 1 : currentVersion + 1;
     // create manifest file
     final StoragePath manifestFilePath = LSMTimeline.getManifestFilePath(newVersion, archivePath);
-    metaClient.getStorage().createImmutableFileInPath(manifestFilePath, Option.of(content));
+    metaClient.getStorage().createImmutableFileInPath(manifestFilePath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(content)));
     // update version file
     updateVersionFile(newVersion);
   }
@@ -196,7 +197,7 @@ public class LSMTimelineWriter {
     byte[] content = getUTF8Bytes(String.valueOf(newVersion));
     final StoragePath versionFilePath = LSMTimeline.getVersionFilePath(archivePath);
     metaClient.getStorage().deleteFile(versionFilePath);
-    metaClient.getStorage().createImmutableFileInPath(versionFilePath, Option.of(content));
+    metaClient.getStorage().createImmutableFileInPath(versionFilePath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(content)));
   }
 
   /**

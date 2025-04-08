@@ -89,6 +89,6 @@ public class S3EventsHoodieIncrSourceConfig extends HoodieConfig {
       .noDefaultValue()
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.s3incr.spark.datasource.options")
       .markAdvanced()
-      .withDocumentation("Json string, passed to the reader while loading dataset. Example Hudi Streamer conf \n"
-          + " --hoodie-conf hoodie.streamer.source.s3incr.spark.datasource.options={\"header\":\"true\",\"encoding\":\"UTF-8\"}");
+      .withDocumentation("Json string, passed to the reader while loading dataset. Example Hudi Streamer conf "
+          + "`--hoodie-conf hoodie.streamer.source.s3incr.spark.datasource.options={\"header\":\"true\",\"encoding\":\"UTF-8\"}`");
 }

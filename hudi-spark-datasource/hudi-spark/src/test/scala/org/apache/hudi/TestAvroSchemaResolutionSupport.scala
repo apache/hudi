@@ -25,8 +25,8 @@ import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.HoodieClientTestBase
 
 import org.apache.spark.SparkException
-import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
@@ -875,7 +875,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     // after implicit type change, read the table with vectorized read enabled
     //fg reader with mor does not support vectorized currently and will auto read by row
-    if (HoodieSparkUtils.gteqSpark3_3 && (isCow || !useFileGroupReader)) {
+    if (isCow || !useFileGroupReader) {
       assertThrows(classOf[SparkException]){
         withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
           readTable(tempRecordPath, useFileGroupReader)

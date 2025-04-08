@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -230,6 +231,7 @@ public class TestHoodieHiveCatalog {
 
     CatalogBaseTable table2 = hoodieCatalog.getTable(tablePath);
     assertEquals("id", table2.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
+    options.remove(RECORDKEY_FIELD_NAME.key());
 
     // validate key generator for partitioned table
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
@@ -484,6 +486,42 @@ public class TestHoodieHiveCatalog {
 
     Table hiveTable = hoodieCatalog.getHiveTable(tablePath);
     assertEquals("false", hiveTable.getParameters().get("hadoop.hive.metastore.schema.verification"));
+  }
+
+  @Test
+  public void checkParameterSemantic() throws TableAlreadyExistException, DatabaseNotExistException {
+    HoodieHiveCatalog catalog = HoodieCatalogTestUtils.createHiveCatalog("myCatalog", true);
+    catalog.open();
+    Map<String, String> originOptions = new HashMap<>();
+    originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
+
+    // validate pk: same quantity but different values
+    String pkError = String.format("Primary key fields definition has inconsistency between pk statement and option '%s'",
+        FlinkOptions.RECORD_KEY_FIELD.key());
+    originOptions.put(FlinkOptions.RECORD_KEY_FIELD.key(), "name");
+    CatalogTable pkTable = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, pkTable, false), pkError);
+    originOptions.remove(FlinkOptions.RECORD_KEY_FIELD.key());
+
+    // validate pk: the pk field exist in options but not in pk statement.
+    originOptions.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid,name");
+    CatalogTable pkTable1 = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, pkTable1, false), pkError);
+    originOptions.remove(FlinkOptions.RECORD_KEY_FIELD.key());
+
+    // validate partition key: same quantity but different values
+    String partitionKeyError = String.format("Partition key fields definition has inconsistency between partition key statement and option '%s'",
+        FlinkOptions.PARTITION_PATH_FIELD.key());
+    originOptions.put(FlinkOptions.PARTITION_PATH_FIELD.key(), "name");
+    CatalogTable partitionKeytable = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, partitionKeytable, false), partitionKeyError);
+    originOptions.remove(FlinkOptions.PARTITION_PATH_FIELD.key());
+
+    // validate partition key: the partition key field exist in options but not in partition key statement.
+    originOptions.put(FlinkOptions.PARTITION_PATH_FIELD.key(), "par1,name");
+    CatalogTable partitionKeytable1 = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, partitionKeytable1, false), partitionKeyError);
+    originOptions.remove(FlinkOptions.PARTITION_PATH_FIELD.key());
   }
 
   private Partition getHivePartition(CatalogPartitionSpec partitionSpec) throws Exception {

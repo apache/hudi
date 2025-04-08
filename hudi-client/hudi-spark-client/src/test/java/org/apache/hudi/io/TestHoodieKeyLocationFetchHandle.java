@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -50,7 +51,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -107,10 +107,11 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
     for (Tuple2<String, HoodieBaseFile> entry : partitionPathFileIdPairs) {
       HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2),
           populateMetaFields ? Option.empty() : Option.of(keyGenerator));
-      Iterator<Pair<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations().iterator();
-      List<Tuple2<HoodieKey, HoodieRecordLocation>> actualList = new ArrayList<>();
-      result.forEachRemaining(x -> actualList.add(new Tuple2<>(x.getLeft(), x.getRight())));
-      assertEquals(expectedList.get(new Tuple2<>(entry._1, entry._2.getFileId())), actualList);
+      try (ClosableIterator<Pair<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations()) {
+        List<Tuple2<HoodieKey, HoodieRecordLocation>> actualList = new ArrayList<>();
+        result.forEachRemaining(x -> actualList.add(new Tuple2<>(x.getLeft(), x.getRight())));
+        assertEquals(expectedList.get(new Tuple2<>(entry._1, entry._2.getFileId())), actualList);
+      }
     }
   }
 

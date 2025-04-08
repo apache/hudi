@@ -23,14 +23,18 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.index.expression.HoodieExpressionIndex;
 
 import org.apache.avro.generic.GenericRecord;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -81,6 +85,9 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_REC
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_NAME_METADATA;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_FIELD_IS_DELETED;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.combineFileSystemMetadata;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsRecords;
 
@@ -166,7 +173,10 @@ public enum MetadataPartitionType {
     @Override
     public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
       GenericRecord recordIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_RECORD_INDEX);
-      Object recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_FIELD_POSITION);
+      Object recordIndexPosition = null;
+      if (recordIndexRecord.hasField(RECORD_INDEX_FIELD_POSITION)) {
+        recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_FIELD_POSITION);
+      }
       payload.recordIndexMetadata = new HoodieRecordIndexInfo(recordIndexRecord.get(RECORD_INDEX_FIELD_PARTITION).toString(),
           Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS).toString()),
           Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS).toString()),
@@ -177,7 +187,7 @@ public enum MetadataPartitionType {
           recordIndexPosition != null ? Long.parseLong(recordIndexPosition.toString()) : null);
     }
   },
-  EXPRESSION_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX, "expr-index-", -1) {
+  EXPRESSION_INDEX(PARTITION_NAME_EXPRESSION_INDEX_PREFIX, "expr-index-", -1) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
       return getBooleanWithAltKeys(writeConfig, EXPRESSION_INDEX_ENABLE_PROP);
@@ -187,7 +197,7 @@ public enum MetadataPartitionType {
     public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
       if (metaClient.getIndexMetadata().isPresent()) {
         return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
-            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX));
+            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(PARTITION_NAME_EXPRESSION_INDEX_PREFIX));
       }
       return false;
     }
@@ -335,13 +345,6 @@ public enum MetadataPartitionType {
     return partitionType.equals(SECONDARY_INDEX) || partitionType.equals(EXPRESSION_INDEX);
   }
 
-  public static String getGenericIndexNameWithoutPrefix(String indexName) {
-    String prefix = indexName.startsWith(SECONDARY_INDEX.getPartitionPath())
-        ? SECONDARY_INDEX.getPartitionPath()
-        : EXPRESSION_INDEX.getPartitionPath();
-    return indexName.substring(prefix.length());
-  }
-
   // Partition path in metadata table.
   private final String partitionPath;
   // FileId prefix used for all file groups in this partition.
@@ -468,6 +471,59 @@ public enum MetadataPartitionType {
       }
     }
     throw new IllegalArgumentException("No MetadataPartitionType for partition path: " + partitionPath);
+  }
+
+  /**
+   * Given metadata config and table config, determine whether a new secondary index definition is required.
+   */
+  public static boolean isNewSecondaryIndexDefinitionRequired(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
+    String secondaryIndexColumn = metadataConfig.getSecondaryIndexColumn();
+    if (StringUtils.isNullOrEmpty(secondaryIndexColumn)) {
+      return false;
+    }
+    // check the index definition already exists or not for this column
+    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(secondaryIndexColumn, PARTITION_NAME_SECONDARY_INDEX, dataMetaClient);
+    return indexDefinitions.isEmpty();
+  }
+
+  /**
+   * Given metadata config and table config, determine whether a new expression index definition is required.
+   */
+  public static boolean isNewExpressionIndexDefinitionRequired(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
+    String expressionIndexColumn = metadataConfig.getExpressionIndexColumn();
+    if (StringUtils.isNullOrEmpty(expressionIndexColumn)) {
+      return false;
+    }
+
+    // check that expr is present in index options
+    Map<String, String> expressionIndexOptions = metadataConfig.getExpressionIndexOptions();
+    if (expressionIndexOptions.isEmpty()) {
+      return false;
+    }
+
+    // get all index definitions for this column and index type
+    // check if none of the index definitions has index function matching the expression
+    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(expressionIndexColumn, PARTITION_NAME_EXPRESSION_INDEX, dataMetaClient);
+    return indexDefinitions.isEmpty()
+        || indexDefinitions.stream().noneMatch(indexDefinition -> indexDefinition.getIndexFunction().equals(expressionIndexOptions.get(HoodieExpressionIndex.EXPRESSION_OPTION)));
+  }
+
+  /**
+   * Return all the index definitions for the given column with the same indexType.
+   */
+  private static List<HoodieIndexDefinition> getIndexDefinitions(String indexType, String sourceField, HoodieTableMetaClient metaClient) {
+    List<HoodieIndexDefinition> indexDefinitions = new ArrayList<>();
+    if (metaClient.getIndexMetadata().isPresent()) {
+      metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+          .filter(indexDefinition -> indexDefinition.getSourceFields().contains(sourceField) && indexDefinition.getIndexType().equals(indexType))
+          .forEach(indexDefinitions::add);
+    }
+    return indexDefinitions;
+  }
+
+  private static boolean isIndexDefinitionPresentForColumn(String indexedColumn, String indexType, HoodieTableMetaClient dataMetaClient) {
+    return dataMetaClient.getIndexMetadata().isPresent() && dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+        .anyMatch(indexDefinition -> indexDefinition.getSourceFields().contains(indexedColumn) && indexDefinition.getIndexType().equals(indexType));
   }
 
   @Override

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -42,7 +43,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -70,40 +70,23 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   private final boolean enablePointLookups;
 
   protected Schema readerSchema;
-  protected final boolean shouldWriteRecordPositions;
 
   //  Map of string schema to parsed schema.
-  private static ConcurrentHashMap<String, Schema> schemaMap = new ConcurrentHashMap<>();
+  private static final ConcurrentHashMap<String, Schema> SCHEMA_MAP = new ConcurrentHashMap<>();
 
   /**
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
   public HoodieDataBlock(List<HoodieRecord> records,
-                         boolean shouldWriteRecordPositions,
                          Map<HeaderMetadataType, String> header,
                          Map<FooterMetadataType, String> footer,
                          String keyFieldName) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
-    if (shouldWriteRecordPositions) {
-      records.sort((o1, o2) -> {
-        long v1 = o1.getCurrentPosition();
-        long v2 = o2.getCurrentPosition();
-        return Long.compare(v1, v2);
-      });
-      if (isPositionValid(records.get(0).getCurrentPosition())) {
-        addRecordPositionsToHeader(
-            records.stream().map(HoodieRecord::getCurrentPosition).collect(Collectors.toSet()),
-            records.size());
-      } else {
-        LOG.warn("There are records without valid positions. "
-            + "Skip writing record positions to the data block header.");
-      }
-    }
+    addRecordPositionsIfRequired(records, HoodieRecord::getCurrentPosition);
     this.records = Option.of(records);
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
-    this.readerSchema = getWriterSchema(super.getLogBlockHeader());
-    this.shouldWriteRecordPositions = shouldWriteRecordPositions;
+    this.readerSchema = AvroSchemaCache.intern(getWriterSchema(super.getLogBlockHeader()));
     this.enablePointLookups = false;
   }
 
@@ -120,17 +103,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                             String keyFieldName,
                             boolean enablePointLookups) {
     super(headers, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
-    // Setting `shouldWriteRecordPositions` to false as this constructor is only used by the reader
-    this.shouldWriteRecordPositions = false;
     this.records = Option.empty();
     this.keyFieldName = keyFieldName;
     this.readerSchema = containsPartialUpdates()
         // When the data block contains partial updates, we need to strictly use the writer schema
         // from the log block header, as we need to use the partial schema to indicate which
         // fields are updated during merging.
-        ? getWriterSchema(super.getLogBlockHeader())
+        ? AvroSchemaCache.intern(getWriterSchema(super.getLogBlockHeader()))
         // If no reader-schema has been provided assume writer-schema as one
-        : readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
+        : AvroSchemaCache.intern(readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader())));
     this.enablePointLookups = enablePointLookups;
   }
 
@@ -162,16 +143,38 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   /**
-   * Returns all the records iterator contained w/in this block.
+   * Returns an iterator over all the records contained within this block.
+   * This method uses a default buffer size of 0, which means it will read
+   * the entire Data Block content at once.
+   *
+   * @param type The type of HoodieRecord.
+   * @param <T>  The type parameter for HoodieRecord.
+   * @return A ClosableIterator over HoodieRecord<T>.
    */
   public final <T> ClosableIterator<HoodieRecord<T>> getRecordIterator(HoodieRecordType type) {
+    return getRecordIterator(type, 0);
+  }
+
+  /**
+   * Returns an iterator over all the records contained within this block.
+   *
+   * @param type       The type of HoodieRecord.
+   * @param bufferSize The size of the buffer for streaming read.
+   *                   A bufferSize less than or equal to 0 means that streaming read is disabled and
+   *                   the entire block content will be read at once.
+   *                   A bufferSize greater than 0 enables streaming read with the specified buffer size.
+   * @param <T>        The type parameter for HoodieRecord.
+   * @return A ClosableIterator over HoodieRecord<T>.
+   * @throws HoodieIOException If there is an error reading records from the block payload.
+   */
+  public final <T> ClosableIterator<HoodieRecord<T>> getRecordIterator(HoodieRecordType type, int bufferSize) {
     if (records.isPresent()) {
       // TODO need convert record type
       return list2Iterator(unsafeCast(records.get()));
     }
     try {
       // in case records are absent, read content lazily and then convert to IndexedRecords
-      return readRecordsFromBlockPayload(type);
+      return readRecordsFromBlockPayload(type, bufferSize);
     } catch (IOException io) {
       throw new HoodieIOException("Unable to convert content bytes to records", io);
     }
@@ -190,6 +193,23 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @throws IOException in case of failures encountered when reading/parsing records
    */
   public final <T> ClosableIterator<HoodieRecord<T>> getRecordIterator(List<String> keys, boolean fullKey, HoodieRecordType type) throws IOException {
+    return getRecordIterator(keys, fullKey, type, 0);
+  }
+
+  /**
+   * Batch get of keys of interest. Implementation can choose to either do full scan and return matched entries or
+   * do a seek based parsing and return matched entries.
+   *
+   * @param keys keys of interest.
+   * @param bufferSize The size of the buffer for streaming read.
+   *                   A bufferSize less than or equal to 0 means that streaming read is disabled and
+   *                   the entire block content will be read at once.
+   *                   A bufferSize greater than 0 enables streaming read with the specified buffer size.
+   * @param <T>        The type parameter for HoodieRecord.
+   * @return List of IndexedRecords for the keys of interest.
+   * @throws IOException in case of failures encountered when reading/parsing records
+   */
+  public final <T> ClosableIterator<HoodieRecord<T>> getRecordIterator(List<String> keys, boolean fullKey, HoodieRecordType type, int bufferSize) throws IOException {
     boolean fullScan = keys.isEmpty();
     if (enablePointLookups && !fullScan) {
       return lookupRecords(keys, fullKey);
@@ -197,7 +217,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
     // Otherwise, we fetch all the records and filter out all the records, but the
     // ones requested
-    ClosableIterator<HoodieRecord<T>> allRecords = getRecordIterator(type);
+    ClosableIterator<HoodieRecord<T>> allRecords = getRecordIterator(type, bufferSize);
     if (fullScan) {
       return allRecords;
     }
@@ -266,6 +286,26 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
   }
 
+  /**
+   * Reads records from the block payload using a specified buffer size.
+   * This method attempts to read serialized records from the block payload, leveraging a buffer size for streaming reads.
+   * If the buffer size is less than or equal to 0, it reads the entire block content at once.
+   *
+   * @param bufferSize The size of the buffer for streaming read.
+   *                   A bufferSize less than or equal to 0 means that streaming read is disabled and
+   *                   the entire block content will be read at once.
+   *                   A bufferSize greater than 0 enables streaming read with the specified buffer size.
+   * @return A ClosableIterator over HoodieRecord<T>.
+   * @throws IOException If there is an error reading or deserializing the records.
+   */
+  protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecordType type, int bufferSize) throws IOException {
+    if (getContent().isPresent() || bufferSize <= 0) {
+      return readRecordsFromBlockPayload(type);
+    }
+
+    return deserializeRecords(getInputStreamSupplier().get(), getBlockContentLocation().get(), type, bufferSize);
+  }
+
   protected <T> ClosableIterator<T> readRecordsFromBlockPayload(HoodieReaderContext<T> readerContext) throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
@@ -291,6 +331,22 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   protected abstract <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException;
 
   /**
+   * Streaming deserialization of records.
+   *
+   * @param inputStream The input stream from which to read the records.
+   * @param contentLocation The location within the input stream where the content starts.
+   * @param bufferSize The size of the buffer to use for reading the records.
+   * @return A ClosableIterator over HoodieRecord<T>.
+   * @throws IOException If there is an error reading or deserializing the records.
+   */
+  protected abstract <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(
+      SeekableDataInputStream inputStream,
+      HoodieLogBlockContentLocation contentLocation,
+      HoodieRecordType type,
+      int bufferSize
+  ) throws IOException;
+
+  /**
    * Deserializes the content bytes of the data block to the records in engine-specific representation.
    *
    * @param readerContext Hudi reader context with engine-specific implementation.
@@ -313,8 +369,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected Schema getSchemaFromHeader() {
     String schemaStr = getLogBlockHeader().get(HeaderMetadataType.SCHEMA);
-    schemaMap.computeIfAbsent(schemaStr, (schemaString) -> new Schema.Parser().parse(schemaString));
-    return schemaMap.get(schemaStr);
+    SCHEMA_MAP.computeIfAbsent(schemaStr, (schemaString) -> new Schema.Parser().parse(schemaString));
+    return SCHEMA_MAP.get(schemaStr);
   }
 
   /**

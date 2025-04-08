@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -36,6 +37,8 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -44,11 +47,13 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -63,13 +68,21 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryOrExpressionIndex;
 import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDeleteRecord;
 
 /**
@@ -328,7 +341,7 @@ public class HoodieIndexUtils {
           .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()), config.getProps());
       // after prepend the meta fields, convert the record back to the original payload
       HoodieRecord incomingWithMetaFields = incomingPrepended
-          .wrapIntoHoodieRecordPayloadWithParams(writeSchema, config.getProps(), Option.empty(), config.allowOperationMetadataField(), Option.empty(), false, Option.empty());
+          .wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(), config.allowOperationMetadataField(), Option.empty(), false, Option.empty());
       Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger
           .merge(existing, existingSchema, incomingWithMetaFields, writeSchemaWithMetaFields, config.getProps());
       if (mergeResult.isPresent()) {
@@ -459,5 +472,70 @@ public class HoodieIndexUtils {
       default:
         throw new HoodieIndexException("Unsupported record type: " + recordType);
     }
+  }
+
+  /**
+   * Register a metadata index.
+   * Index definitions are stored in user-specified path or, by default, in .hoodie/.index_defs/index.json.
+   * For the first time, the index definition file will be created if not exists.
+   * For the second time, the index definition file will be updated if exists.
+   * Table Config is updated if necessary.
+   */
+  public static void register(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
+    LOG.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
+    // build HoodieIndexMetadata and then add to index definition file
+    boolean indexDefnUpdated = metaClient.buildIndexDefinition(indexDefinition);
+    if (indexDefnUpdated) {
+      String indexMetaPath = metaClient.getIndexDefinitionPath();
+      // update table config if necessary
+      if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key())
+          || !metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()) {
+        metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(indexMetaPath)));
+        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+      }
+    }
+  }
+
+  static HoodieIndexDefinition getSecondaryOrExpressionIndexDefinition(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns,
+                                                                       Map<String, String> options, Map<String, String> tableProperties) throws Exception {
+    String fullIndexName = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
+        ? PARTITION_NAME_SECONDARY_INDEX_PREFIX + userIndexName
+        : PARTITION_NAME_EXPRESSION_INDEX_PREFIX + userIndexName;
+    if (indexExists(metaClient, fullIndexName)) {
+      throw new HoodieMetadataIndexException("Index already exists: " + userIndexName);
+    }
+    checkArgument(columns.size() == 1, "Only one column can be indexed for functional or secondary index.");
+
+    if (!isEligibleForSecondaryOrExpressionIndex(metaClient, indexType, tableProperties, columns)) {
+      throw new HoodieMetadataIndexException("Not eligible for indexing: " + indexType + ", indexName: " + userIndexName);
+    }
+
+    return HoodieIndexDefinition.newBuilder()
+        .withIndexName(fullIndexName)
+        .withIndexType(indexType)
+        .withIndexFunction(options.getOrDefault(EXPRESSION_OPTION, IDENTITY_TRANSFORM))
+        .withSourceFields(new ArrayList<>(columns.keySet()))
+        .withIndexOptions(options)
+        .build();
+  }
+
+  static boolean indexExists(HoodieTableMetaClient metaClient, String indexName) {
+    return metaClient.getTableConfig().getMetadataPartitions().stream().anyMatch(partition -> partition.equals(indexName));
+  }
+
+  private static boolean isEligibleForSecondaryOrExpressionIndex(HoodieTableMetaClient metaClient,
+                                                                 String indexType,
+                                                                 Map<String, String> options,
+                                                                 Map<String, Map<String, String>> columns) throws Exception {
+    if (!validateDataTypeForSecondaryOrExpressionIndex(new ArrayList<>(columns.keySet()), new TableSchemaResolver(metaClient).getTableAvroSchema())) {
+      return false;
+    }
+    // for secondary index, record index is a must
+    if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX)) {
+      // either record index is enabled or record index partition is already present
+      return metaClient.getTableConfig().getMetadataPartitions().stream().anyMatch(partition -> partition.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath()))
+          || Boolean.parseBoolean(options.getOrDefault(RECORD_INDEX_ENABLE_PROP.key(), RECORD_INDEX_ENABLE_PROP.defaultValue().toString()));
+    }
+    return true;
   }
 }

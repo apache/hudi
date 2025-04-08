@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
@@ -43,12 +44,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCleanerPlan;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeHoodieCleanMetadata;
 
 public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieSavepointMetadata> {
 
@@ -80,13 +78,12 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       String lastCommitRetained = cleanInstant.map(instant -> {
         try {
           if (instant.isCompleted()) {
-            return deserializeHoodieCleanMetadata(
-                table.getActiveTimeline().getInstantDetails(instant).get())
+            return table.getActiveTimeline().readCleanMetadata(instant)
                 .getEarliestCommitToRetain();
           } else {
             // clean is pending or inflight
-            return deserializeCleanerPlan(
-                table.getActiveTimeline().getInstantDetails(instantGenerator.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime())).get())
+            return table.getActiveTimeline().readCleanerPlan(
+                    instantGenerator.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime()))
                 .getEarliestInstantToRetain().getTimestamp();
           }
         } catch (IOException e) {
@@ -110,7 +107,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       // (2) using direct file system listing:  we parallelize the partition listing so that
       // each partition can be listed on the file system concurrently through Spark.
       // Note that
-      if (shouldUseBatchLookup(table.getMetaClient().getTableConfig(), config)) {
+      if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
         latestFilesMap = view.getAllLatestFileSlicesBeforeOrOn(instantTime).entrySet().stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,
@@ -147,12 +144,11 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
       table.getActiveTimeline()
           .saveAsComplete(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime),
-              TimelineMetadataUtils.serializeSavepointMetadata(metadata));
+              Option.of(metadata));
       LOG.info("Savepoint " + instantTime + " created");
       return metadata;
-    } catch (IOException e) {
+    } catch (HoodieIOException e) {
       throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
     }
   }
-
 }

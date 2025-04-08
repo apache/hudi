@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -131,7 +132,8 @@ public class FormatUtils {
 
   public static ExternalSpillableMap<String, byte[]> spillableMap(
       HoodieWriteConfig writeConfig,
-      long maxCompactionMemoryInBytes) {
+      long maxCompactionMemoryInBytes,
+      String loggingContext) {
     try {
       return new ExternalSpillableMap<>(
           maxCompactionMemoryInBytes,
@@ -139,7 +141,9 @@ public class FormatUtils {
           new DefaultSizeEstimator<>(),
           new DefaultSizeEstimator<>(),
           writeConfig.getCommonConfig().getSpillableDiskMapType(),
-          writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
+          new DefaultSerializer<>(),
+          writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
+          loggingContext);
     } catch (IOException e) {
       throw new HoodieIOException(
           "IOException when creating ExternalSpillableMap at " + writeConfig.getSpillableMapBasePath(), e);
@@ -310,8 +314,7 @@ public class FormatUtils {
   public static boolean getBooleanWithAltKeys(org.apache.flink.configuration.Configuration conf,
                                               ConfigProperty<?> configProperty) {
     Option<String> rawValue = getRawValueWithAltKeys(conf, configProperty);
-    boolean defaultValue = configProperty.hasDefaultValue()
-        ? Boolean.parseBoolean(configProperty.defaultValue().toString()) : false;
+    boolean defaultValue = configProperty.hasDefaultValue() && Boolean.parseBoolean(configProperty.defaultValue().toString());
     return rawValue.map(Boolean::parseBoolean).orElse(defaultValue);
   }
 

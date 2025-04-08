@@ -17,11 +17,11 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.util.CollectionUtils.createImmutableList
 
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.plans.logical.{CallCommand, NamedArgument, PositionalArgument}
+import org.apache.spark.sql.hudi.command.procedures.HelpProcedure
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{DataType, DataTypes}
 
@@ -33,8 +33,8 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
   private val parser = spark.sessionState.sqlParser
 
   test("Test Call Produce with Positional Arguments") {
-    val call = parser.parsePlan("CALL c.n.func(1, '2', 3L, true, 1.0D, 9.0e1, 900e-1BD)").asInstanceOf[CallCommand]
-    assertResult(createImmutableList("c", "n", "func"))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
+    val call = parser.parsePlan(s"CALL c.n.${HelpProcedure.NAME}(1, '2', 3L, true, 1.0D, 9.0e1, 900e-1BD)").asInstanceOf[CallCommand]
+    assertResult(createImmutableList("c", "n", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
 
     assertResult(7)(call.args.size)
 
@@ -48,8 +48,8 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
   }
 
   test("Test Call Produce with Named Arguments") {
-    val call = parser.parsePlan("CALL system.func(c1 => 1, c2 => '2', c3 => true)").asInstanceOf[CallCommand]
-    assertResult(createImmutableList("system", "func"))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
+    val call = parser.parsePlan(s"CALL system.${HelpProcedure.NAME}(c1 => 1, c2 => '2', c3 => true)").asInstanceOf[CallCommand]
+    assertResult(createImmutableList("system", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
 
     assertResult(3)(call.args.size)
 
@@ -59,8 +59,8 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
   }
 
   test("Test Call Produce with Var Substitution") {
-    val call = parser.parsePlan("CALL system.func('${spark.extra.prop}')").asInstanceOf[CallCommand]
-    assertResult(createImmutableList("system", "func"))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
+    val call = parser.parsePlan(s"CALL system.${HelpProcedure.NAME}('$${spark.extra.prop}')").asInstanceOf[CallCommand]
+    assertResult(createImmutableList("system", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
 
     assertResult(1)(call.args.size)
 
@@ -68,8 +68,8 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
   }
 
   test("Test Call Produce with Mixed Arguments") {
-    val call = parser.parsePlan("CALL system.func(c1 => 1, '2')").asInstanceOf[CallCommand]
-    assertResult(createImmutableList("system", "func"))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
+    val call = parser.parsePlan(s"CALL system.${HelpProcedure.NAME}(c1 => 1, '2')").asInstanceOf[CallCommand]
+    assertResult(createImmutableList("system", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
 
     assertResult(2)(call.args.size)
 
@@ -78,16 +78,12 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
   }
 
   test("Test Call Parse Error") {
-    if (HoodieSparkUtils.gteqSpark3_3) {
-      checkParseExceptionContain("CALL cat.system radish kebab")("Syntax error at or near 'CALL'")
-    } else {
-      checkParseExceptionContain("CALL cat.system radish kebab")("mismatched input 'CALL' expecting")
-    }
+    checkParseExceptionContain("CALL cat.system radish kebab")("Syntax error at or near 'CALL'")
   }
 
   test("Test Call Produce with semicolon") {
-    val call = parser.parsePlan("CALL system.func(c1 => 1, c2 => '2', c3 => true)").asInstanceOf[CallCommand]
-    assertResult(createImmutableList("system", "func"))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
+    val call = parser.parsePlan(s"CALL system.${HelpProcedure.NAME}(c1 => 1, c2 => '2', c3 => true)").asInstanceOf[CallCommand]
+    assertResult(createImmutableList("system", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
 
     assertResult(3)(call.args.size)
 
@@ -95,8 +91,8 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
     checkArg(call, 1, "c2", "2", DataTypes.StringType)
     checkArg(call, 2, "c3", true, DataTypes.BooleanType)
 
-    val call2 = parser.parsePlan("CALL system.func2(c1 => 1, c2 => '2', c3 => true);").asInstanceOf[CallCommand]
-    assertResult(createImmutableList("system", "func2"))(JavaConverters.seqAsJavaListConverter(call2.name).asJava)
+    val call2 = parser.parsePlan(s"CALL system.${HelpProcedure.NAME}(c1 => 1, c2 => '2', c3 => true);").asInstanceOf[CallCommand]
+    assertResult(createImmutableList("system", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call2.name).asJava)
 
     assertResult(3)(call2.args.size)
 

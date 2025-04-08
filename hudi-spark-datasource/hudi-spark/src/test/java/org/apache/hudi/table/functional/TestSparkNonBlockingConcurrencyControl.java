@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -299,12 +300,58 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     }
   }
 
-  // case1: txn1 is upsert writer, txn2 is bulk_insert writer.
-  //      |----------- txn1 -----------|
-  //                       |----- txn2 ------|
-  // the txn2 would fail to commit caused by conflict
+  /**
+   * case1:
+   * 1. insert start
+   * 2. insert commit
+   * 3. bulk_insert start
+   * 4. bulk_insert commit
+   *
+   *  |------ txn1: insert ------|
+   *                             |------ txn2: bulk_insert ------|
+   *
+   *  both two txn would success to commit
+   */
   @Test
-  public void testBulkInsertInMultiWriter() throws Exception {
+  public void testBulkInsertAndInsertConcurrentCase1() throws Exception {
+    HoodieWriteConfig config = createHoodieWriteConfig();
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+
+    // start the 1st txn and insert record: [id1,Danny,null,1,par1], commit the 1st txn
+    SparkRDDWriteClient client1 = getHoodieWriteClient(config);
+    List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
+    String insertTime1 = client1.createNewInstantTime();
+    writeData(client1, insertTime1, dataset1, true, WriteOperationType.INSERT);
+
+    // start the 2nd txn and bulk_insert record: [id1,null,23,2,par1], commit the 2nd txn
+    SparkRDDWriteClient client2 = getHoodieWriteClient(config);
+    List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
+    String insertTime2 = client2.createNewInstantTime();
+    writeData(client2, insertTime2, dataset2, true, WriteOperationType.BULK_INSERT);
+
+    // do compaction
+    String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
+    client1.compact(compactionTime);
+
+    // result is [(id1,Danny,23,2,par1)]
+    Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
+    checkWrittenData(result, 1);
+  }
+
+  /**
+   * case2:
+   * 1. insert start
+   * 2. bulk_insert start
+   * 3. insert commit
+   * 4. bulk_insert commit
+   *
+   *  |------ txn1: insert ------|
+   *                      |------ txn2: bulk_insert ------|
+   *
+   *  the txn2 should be fail to commit caused by conflict
+   */
+  @Test
+  public void testBulkInsertAndInsertConcurrentCase2() throws Exception {
     HoodieWriteConfig config = createHoodieWriteConfig();
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
     SparkRDDWriteClient client1 = getHoodieWriteClient(config);
@@ -337,12 +384,170 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     });
   }
 
-  // case1: txn1 is upsert writer, txn2 is bulk_insert writer.
-  //                       |----- txn1 ------|
-  //      |--- txn2 ----|
-  // both two txn would success to commit
+  /**
+   * case3:
+   * 1. bulk_insert start
+   * 2. insert start
+   * 3. insert commit
+   * 4. bulk_insert commit
+   *
+   *          |------ txn2: insert ------|
+   *    |---------- txn1: bulk_insert ----------|
+   *
+   *  the txn2 should be fail to commit caused by conflict
+   */
   @Test
-  public void testBulkInsertInSequence() throws Exception {
+  public void testBulkInsertAndInsertConcurrentCase3() throws Exception {
+    HoodieWriteConfig config = createHoodieWriteConfig();
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+    SparkRDDWriteClient client1 = getHoodieWriteClient(config);
+
+    // start the 1st txn and bulk insert record: [id1,null,23,2,par1], suspend the tx commit
+    SparkRDDWriteClient client2 = getHoodieWriteClient(config);
+    List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
+    String insertTime2 = client2.createNewInstantTime();
+    List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.BULK_INSERT);
+
+    // start the 2nd txn and insert record: [id1,Danny,null,1,par1], suspend the tx commit
+    List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
+    String insertTime1 = client1.createNewInstantTime();
+    List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT);
+
+    // step to commit the 2nd txn
+    client1.commitStats(
+        insertTime1,
+        writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(),
+        metaClient.getCommitActionType());
+
+    // step to commit the 1st txn
+    assertThrows(HoodieWriteConflictException.class, () -> {
+      client2.commitStats(
+          insertTime2,
+          writeStatuses2.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+          Option.empty(),
+          metaClient.getCommitActionType());
+    });
+  }
+
+  /**
+   * case4:
+   * 1. insert start
+   * 2. bulk_insert start
+   * 3. bulk_insert commit
+   * 4. insert commit
+   *
+   *  |------------ txn1: insert ------------|
+   *      |------ txn2: bulk_insert ------|
+   *
+   *  both two txn would success to commit
+   */
+  @Test
+  public void testBulkInsertAndInsertConcurrentCase4() throws Exception {
+    HoodieWriteConfig config = createHoodieWriteConfig();
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+    SparkRDDWriteClient client1 = getHoodieWriteClient(config);
+
+    // start the 1st txn and insert record: [id1,Danny,null,1,par1], suspend the tx commit
+    List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
+    String insertTime1 = client1.createNewInstantTime();
+    List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT);
+
+    // start the 2nd txn and bulk insert record: [id1,null,23,2,par1], suspend the tx commit
+    SparkRDDWriteClient client2 = getHoodieWriteClient(config);
+    List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
+    String insertTime2 = client2.createNewInstantTime();
+    List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.BULK_INSERT);
+
+    // step to commit the 2nd txn
+    client2.commitStats(
+        insertTime2,
+        writeStatuses2.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(),
+        metaClient.getCommitActionType());
+
+    // step to commit the 1st txn
+    client1.commitStats(
+        insertTime1,
+        writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(),
+        metaClient.getCommitActionType());
+
+    // do compaction
+    String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
+    client1.compact(compactionTime);
+
+    // result is [(id1,Danny,23,2,par1)]
+    Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
+    checkWrittenData(result, 1);
+  }
+
+  /**
+   * case5:
+   * 1. bulk_insert start
+   * 2. insert start
+   * 3. bulk_insert commit
+   * 4. insert commit
+   *
+   *                          |------ txn2: insert ------|
+   *    |---------- txn1: bulk_insert ----------|
+   *
+   *  both two txn would success to commit
+   */
+  @Test
+  public void testBulkInsertAndInsertConcurrentCase5() throws Exception {
+    HoodieWriteConfig config = createHoodieWriteConfig();
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+    SparkRDDWriteClient client1 = getHoodieWriteClient(config);
+
+    // start the 1st txn and bulk insert record: [id1,null,23,2,par1], suspend the tx commit
+    SparkRDDWriteClient client2 = getHoodieWriteClient(config);
+    List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
+    String insertTime2 = client2.createNewInstantTime();
+    List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.BULK_INSERT);
+
+    // start the 2nd txn and insert record: [id1,Danny,null,1,par1], suspend the tx commit
+    List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
+    String insertTime1 = client1.createNewInstantTime();
+    List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT);
+
+    // step to commit the 1st txn
+    client2.commitStats(
+        insertTime2,
+        writeStatuses2.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(),
+        metaClient.getCommitActionType());
+
+    // step to commit the 2nd txn
+    client1.commitStats(
+        insertTime1,
+        writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(),
+        metaClient.getCommitActionType());
+
+    // do compaction
+    String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
+    client1.compact(compactionTime);
+
+    // result is [(id1,Danny,23,2,par1)]
+    Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
+    checkWrittenData(result, 1);
+  }
+
+  /**
+   * case6:
+   * 1. bulk_insert start
+   * 2. bulk_insert commit
+   * 3. insert start
+   * 4. insert commit
+   *
+   *                                   |------ txn2: insert ------|
+   *  |------ txn1: bulk_insert ------|
+   *
+   *  both two txn would success to commit
+   */
+  @Test
+  public void testBulkInsertAndInsertConcurrentCase6() throws Exception {
     HoodieWriteConfig config = createHoodieWriteConfig();
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
 
@@ -352,7 +557,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     String insertTime1 = client1.createNewInstantTime();
     writeData(client1, insertTime1, dataset1, true, WriteOperationType.BULK_INSERT);
 
-    // start the 1st txn and insert record: [id1,null,23,2,par1], commit the 2nd txn
+    // start the 2nd txn and insert record: [id1,null,23,2,par1], commit the 2nd txn
     SparkRDDWriteClient client2 = getHoodieWriteClient(config);
     List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
     String insertTime2 = client2.createNewInstantTime();
@@ -380,6 +585,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     props.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     String basePath = basePath();
     return HoodieWriteConfig.newBuilder()
+        .withProps(Collections.singletonMap(HoodieTableConfig.PRECOMBINE_FIELD.key(), "ts"))
         .forTable("test")
         .withPath(basePath)
         .withSchema(jsonSchema)
@@ -389,7 +595,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         .withPayloadConfig(
             HoodiePayloadConfig.newBuilder()
                 .withPayloadClass(payloadClassName)
-                .withPayloadOrderingField("ts")
                 .build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())

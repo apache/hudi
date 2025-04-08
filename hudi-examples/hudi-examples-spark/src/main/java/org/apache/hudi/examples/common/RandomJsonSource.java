@@ -21,6 +21,7 @@ package org.apache.hudi.examples.common;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -48,7 +49,8 @@ public class RandomJsonSource extends JsonSource {
             HadoopFSUtils.getStorageConf(sparkContext.hadoopConfiguration()));
   }
 
-  protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
+  @Override
+  protected InputBatch<JavaRDD<String>> readFromCheckpoint(Option<Checkpoint> lastCkptStr, long sourceLimit) {
     String commitTime = TimelineUtils.generateInstantTime(true, timeGenerator);
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
 

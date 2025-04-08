@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -34,13 +33,12 @@ import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.estimator.RecordSizeEstimator;
+import org.apache.hudi.estimator.RecordSizeEstimatorFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.PairFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,18 +75,19 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   /**
    * Helps decide which bucket an incoming update should go to.
    */
-  private HashMap<String, Integer> updateLocationToBucket;
+  private final HashMap<String, Integer> updateLocationToBucket;
   /**
    * Helps us pack inserts into 1 or more buckets depending on number of incoming records.
    */
-  private HashMap<String, List<InsertBucketCumulativeWeightPair>> partitionPathToInsertBucketInfos;
+  private final HashMap<String, List<InsertBucketCumulativeWeightPair>> partitionPathToInsertBucketInfos;
   /**
    * Remembers what type each bucket is for later.
    */
-  private HashMap<Integer, BucketInfo> bucketInfoMap;
+  private final HashMap<Integer, BucketInfo> bucketInfoMap;
 
   protected final HoodieWriteConfig config;
   private final WriteOperationType operationType;
+  private final RecordSizeEstimator recordSizeEstimator;
 
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
                            HoodieWriteConfig config, WriteOperationType operationType) {
@@ -98,6 +97,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
     bucketInfoMap = new HashMap<>();
     this.config = config;
     this.operationType = operationType;
+    this.recordSizeEstimator = RecordSizeEstimatorFactory.createRecordSizeEstimator(config);
     assignUpdates(profile);
     long totalInserts = profile.getInputPartitionPathStatMap().values().stream().mapToLong(stat -> stat.getNumInserts()).sum();
     if (!WriteOperationType.isPreppedWriteOperation(operationType) || totalInserts > 0) { // skip if its prepped write operation. or if totalInserts = 0.
@@ -178,9 +178,9 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
      * may result in OOM by making spark underestimate the actual input record sizes.
      */
     TimelineLayout layout = TimelineLayout.fromVersion(table.getActiveTimeline().getTimelineLayoutVersion());
-    long averageRecordSize = AverageRecordSizeUtils.averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
+    long averageRecordSize = recordSizeEstimator.averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
         .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION))
-        .filterCompletedInstants(), config,  layout.getCommitMetadataSerDe());
+        .filterCompletedInstants(),  layout.getCommitMetadataSerDe());
     LOG.info("AvgRecordSize => " + averageRecordSize);
 
     Map<String, List<SmallFile>> partitionSmallFilesMap =
@@ -279,7 +279,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   }
 
   private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, HoodieEngineContext context) {
-    if (config.getParquetSmallFileLimit() <= 0) {
+    if (config.getParquetSmallFileLimit() <= 0 || (partitionPaths == null || partitionPaths.isEmpty())) {
       return Collections.emptyMap();
     }
 
@@ -287,16 +287,10 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
       return Collections.emptyMap();
     }
 
-    JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
-    Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
-
-    if (partitionPaths != null && partitionPaths.size() > 0) {
-      context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
-      JavaRDD<String> partitionPathRdds = jsc.parallelize(partitionPaths, partitionPaths.size());
-      partitionSmallFilesMap = partitionPathRdds.mapToPair((PairFunction<String, String, List<SmallFile>>)
-          partitionPath -> new Tuple2<>(partitionPath, getSmallFiles(partitionPath))).collectAsMap();
-    }
-
+    context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
+    long startTimeMs = System.currentTimeMillis();
+    Map<String, List<SmallFile>> partitionSmallFilesMap = context.mapToPair(partitionPaths, paritionPath -> Pair.of(paritionPath, getSmallFiles(paritionPath)), partitionPaths.size());
+    LOG.info("Fetched small files in {}ms", System.currentTimeMillis() - startTimeMs);
     return partitionSmallFilesMap;
   }
 

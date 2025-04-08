@@ -26,8 +26,10 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -42,7 +44,6 @@ import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.table.log.TestLogReaderUtils;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -51,7 +52,7 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HadoopMapRedUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -81,12 +82,12 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -109,8 +110,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieRecordLocation.INVALID_POSITION;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.useExternalHdfs;
@@ -713,10 +717,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     if (produceUncommittedLogBlocks) {
       List<IndexedRecord> toBeSkippedRecords = testUtil.generateHoodieTestRecords(0, 200);
       logFiles.addAll(writeLogFiles(partitionPath, schema, toBeSkippedRecords, 2, storage, "test-fileid1", "100", "150"));
-      FileCreateUtils.createInflightDeltaCommit(basePath, "150", storage);
+      FileCreateUtilsLegacy.createInflightDeltaCommit(basePath, "150", storage);
     }
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage, preTableVersion8);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage, preTableVersion8);
 
     // scan all log blocks (across multiple log files)
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -762,7 +766,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     List<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, 3, storage);
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     // scan all log blocks (across multiple log files)
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -850,7 +854,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     List<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, 3, storage);
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     // scan all log blocks (across multiple log files)
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -1165,7 +1169,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     copyOfRecords1.addAll(copyOfRecords2);
     Set<String> originalKeys =
@@ -1228,8 +1232,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
-    FileCreateUtils.createDeltaCommit(basePath, "102", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "102", storage);
 
     copyOfRecords1.addAll(copyOfRecords3);
     Set<String> originalKeys =
@@ -1299,8 +1303,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
-    FileCreateUtils.createDeltaCommit(basePath, "103", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "103", storage);
 
     copyOfRecords1.addAll(copyOfRecords3);
     Set<String> originalKeys =
@@ -1358,16 +1362,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deletedRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock);
 
     List<String> allLogFiles =
         FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
-    FileCreateUtils.createDeltaCommit(basePath, "101", storage);
-    FileCreateUtils.createDeltaCommit(basePath, "102", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "101", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "102", storage);
 
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
@@ -1412,7 +1416,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer.appendBlock(commandBlock);
 
-    FileCreateUtils.deleteDeltaCommit(basePath, "101", storage);
+    FileCreateUtilsLegacy.deleteDeltaCommit(basePath, "101", storage);
 
     readKeys.clear();
     scanner.close();
@@ -1499,7 +1503,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       deleteRecordList.add(Pair.of(
           DeleteRecord.create(deletedKey.getRecordKey(), deletedKey.getPartitionPath()), -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock);
 
     List<String> allLogFiles =
@@ -1522,10 +1526,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       deleteRecordList.add(Pair.of(
           DeleteRecord.create(deletedKey.getRecordKey(), deletedKey.getPartitionPath()), -1L));
     }
-    deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, deleteBlockHeader);
+    deleteBlock = new HoodieDeleteBlock(deleteRecordList, deleteBlockHeader);
     writer.appendBlock(deleteBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "102", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "102", storage);
 
     final List<String> readKeys = new ArrayList<>();
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -1614,7 +1618,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deleteRecords1) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock1 = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock1 = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock1);
 
     // Delete another 10 keys with -1 as orderingVal.
@@ -1626,7 +1630,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(), -1), -1L))
         .collect(Collectors.toList());
 
-    HoodieDeleteBlock deleteBlock2 = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock2 = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock2);
 
     // Delete another 10 keys with +1 as orderingVal.
@@ -1641,18 +1645,18 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deletedRecords3) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock3 = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock3 = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock3);
 
     List<String> allLogFiles =
         FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
-    FileCreateUtils.createDeltaCommit(basePath, "101", storage);
-    FileCreateUtils.createDeltaCommit(basePath, "102", storage);
-    FileCreateUtils.createDeltaCommit(basePath, "103", storage);
-    FileCreateUtils.createDeltaCommit(basePath, "104", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "101", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "102", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "103", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "104", storage);
 
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
@@ -1740,10 +1744,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deleteRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     // Attempt 1 : Write rollback block for a failed write
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
@@ -1762,7 +1766,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     checkLogBlocksAndKeys("100", schema, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
         0, 0, Option.empty());
-    FileCreateUtils.deleteDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.deleteDeltaCommit(basePath, "100", storage);
   }
 
   @ParameterizedTest
@@ -1802,10 +1806,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deleteRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     // Write 2 rollback blocks (1 data block + 1 delete bloc) for a failed write
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
@@ -1817,7 +1821,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     checkLogBlocksAndKeys("100", schema, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
         0, 0, Option.empty());
-    FileCreateUtils.deleteDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.deleteDeltaCommit(basePath, "100", storage);
   }
 
   @ParameterizedTest
@@ -1842,7 +1846,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieDataBlock dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records1, header);
     writer.appendBlock(dataBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     // Write invalid rollback for a failed write (possible for in-flight commits)
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "101");
@@ -1895,10 +1899,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deleteRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
     writer.appendBlock(deleteBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     // Write 1 rollback block for a failed write
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "101");
@@ -1913,12 +1917,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         0, 0, Option.empty());
   }
 
-  @Disabled("HUDI-7375")
   @ParameterizedTest
   @MethodSource("testArguments")
-  public void testLogReaderWithDifferentVersionsOfDeleteBlocks(ExternalSpillableMap.DiskMapType diskMapType,
-                                                               boolean isCompressionEnabled,
-                                                               boolean enableOptimizedLogBlocksScan)
+  void testLogReaderWithDifferentVersionsOfDeleteBlocks(ExternalSpillableMap.DiskMapType diskMapType,
+                                                        boolean isCompressionEnabled,
+                                                        boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
@@ -1980,7 +1983,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (DeleteRecord dr : deletedRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    writer.appendBlock(new HoodieDeleteBlock(deleteRecordList, false, header));
+    writer.appendBlock(new HoodieDeleteBlock(deleteRecordList, header));
 
     copyOfRecords2.addAll(copyOfRecords1);
     List<String> originalKeys =
@@ -1991,10 +1994,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
-    FileCreateUtils.createDeltaCommit(basePath, "101", storage);
-    FileCreateUtils.createDeltaCommit(basePath, "102", storage);
-    FileCreateUtils.createDeltaCommit(basePath, "103", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "101", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "102", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "103", storage);
 
     try (HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
@@ -2059,7 +2062,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     HoodieDataBlock dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records1, header);
     writer.appendBlock(dataBlock);
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     // Write 2
     List<IndexedRecord> records2 = testUtil.generateHoodieTestRecords(100, 10);
@@ -2067,7 +2070,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records2, header);
     writer.appendBlock(dataBlock);
-    FileCreateUtils.createDeltaCommit(basePath, "101", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "101", storage);
 
     // Should be able to read all 110 records
     checkLogBlocksAndKeys("101", schema, ExternalSpillableMap.DiskMapType.BITCASK, false,
@@ -2124,7 +2127,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
 
     writer.close();
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     // Append some arbitrary byte[] to the end of the log (mimics a partially written commit)
     FSDataOutputStream outputStream =
@@ -2186,7 +2189,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     checkLogBlocksAndKeys("101", schema, ExternalSpillableMap.DiskMapType.BITCASK, false,
         false, 0, 0, Option.empty());
-    FileCreateUtils.deleteDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.deleteDeltaCommit(basePath, "100", storage);
   }
 
   @ParameterizedTest
@@ -2219,7 +2222,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieDataBlock dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, new ArrayList<>(records1), header);
     writer.appendBlock(dataBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     // Write 2nd data block
     List<IndexedRecord> records2 = testUtil.generateHoodieTestRecords(0, 100);
@@ -2232,7 +2235,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, new ArrayList<>(records2), header);
     writer.appendBlock(dataBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "101", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "101", storage);
 
     // Write 3rd data block
     List<IndexedRecord> records3 = testUtil.generateHoodieTestRecords(0, 100);
@@ -2247,7 +2250,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
 
     writer.close();
-    FileCreateUtils.createDeltaCommit(basePath, "102", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "102", storage);
 
     // Append some arbitrary byte[] to the end of the log (mimics a partially written commit)
     FSDataOutputStream outputStream =
@@ -2291,7 +2294,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, new ArrayList<>(compactedRecords), header);
     writer.appendBlock(dataBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "103", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "103", storage);
 
     // Create compacted block CB5
     List<IndexedRecord> secondCompactedRecords = Stream.of(compactedRecords, records3).flatMap(Collection::stream)
@@ -2303,7 +2306,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, new ArrayList<>(secondCompactedRecords), header);
     writer.appendBlock(dataBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "104", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "104", storage);
 
     // Write 6th data block
     List<IndexedRecord> records6 = testUtil.generateHoodieTestRecords(0, 100);
@@ -2313,7 +2316,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, new ArrayList<>(records6), header);
     writer.appendBlock(dataBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "105", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "105", storage);
 
     // Write 7th data block
     List<IndexedRecord> records7 = testUtil.generateHoodieTestRecords(0, 100);
@@ -2323,7 +2326,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, new ArrayList<>(records7), header);
     writer.appendBlock(dataBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "106", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "106", storage);
 
     // Write 8th data block
     List<IndexedRecord> records8 = testUtil.generateHoodieTestRecords(0, 100);
@@ -2333,7 +2336,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, new ArrayList<>(records8), header);
     writer.appendBlock(dataBlock);
 
-    FileCreateUtils.createDeltaCommit(basePath, "107", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "107", storage);
 
     // Create compacted block CB9
     List<IndexedRecord> thirdCompactedBlockRecords = Stream.of(records7, records8).flatMap(Collection::stream)
@@ -2346,7 +2349,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    FileCreateUtils.createDeltaCommit(basePath, "108", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "108", storage);
 
     List<String> allLogFiles =
         FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
@@ -2433,7 +2436,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       // Get the size of the block
       writer2.close();
 
-      FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+      FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
       // From the two log files generated, read the records
       List<String> allLogFiles = FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1",
@@ -2534,7 +2537,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(), storage.getPathInfo(writer.getLogFile().getPath()).getLength());
     try (HoodieLogFileReader reader = new HoodieLogFileReader(storage, logFile, SchemaTestUtil.getSimpleSchema(), BUFFER_SIZE, true)) {
@@ -2587,7 +2590,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     // Append some arbitrary byte[] to the end of the log (mimics a partially written commit)
     FSDataOutputStream outputStream =
@@ -2659,7 +2662,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtilsLegacy.createDeltaCommit(basePath, "100", storage);
 
     HoodieLogFile logFile = new HoodieLogFile(writer.getLogFile().getPath(),
         storage.getPathInfo(writer.getLogFile().getPath()).getLength());
@@ -2790,19 +2793,51 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  public void testGetRecordPositions(boolean addRecordPositionsHeader) throws IOException {
+  @CsvSource(value = {"false,false,false", "false,false,true",
+      "true,false,false", "true,false,true", "true,true,false", "true,true,true"})
+  public void testGetRecordPositions(boolean recordWithPositions,
+                                     boolean allValidPositions,
+                                     boolean addBaseFileInstantTimeOfPositions) throws IOException {
     Map<HeaderMetadataType, String> header = new HashMap<>();
-    Set<Long> positions = new HashSet<>();
-    if (addRecordPositionsHeader) {
-      positions = TestLogReaderUtils.generatePositions();
-      String content = LogReaderUtils.encodePositions(positions);
-      header.put(HeaderMetadataType.RECORD_POSITIONS, content);
+    List<Long> positions = new ArrayList<>();
+    if (recordWithPositions) {
+      positions.addAll(TestLogReaderUtils.generatePositions());
+      if (!allValidPositions) {
+        positions.add(INVALID_POSITION);
+        positions.set(positions.size() / 2, INVALID_POSITION);
+      }
     }
-    HoodieLogBlock logBlock = new HoodieDeleteBlock(Collections.emptyList(), addRecordPositionsHeader, header);
-    if (addRecordPositionsHeader) {
-      TestLogReaderUtils.assertPositionEquals(positions, logBlock.getRecordPositions());
+
+    List<Pair<DeleteRecord, Long>> deleteRecordList = positions.isEmpty()
+        ? IntStream.range(0, 10).boxed()
+        .map(i -> Pair.of(DeleteRecord.create("key" + i, "partition"), INVALID_POSITION))
+        .collect(Collectors.toList())
+        : IntStream.range(0, positions.size()).boxed()
+        .map(i -> Pair.of(DeleteRecord.create("key" + i, "partition"), positions.get(i)))
+        .collect(Collectors.toList());
+    List<HoodieRecord> recordList = positions.isEmpty()
+        ? IntStream.range(0, 10).boxed()
+        .map(i -> new HoodieAvroRecord(new HoodieKey("key" + i, "partition"), null, HoodieOperation.INSERT,
+            new HoodieRecordLocation("001", "file1", INVALID_POSITION), null))
+        .collect(Collectors.toList())
+        : IntStream.range(0, positions.size()).boxed()
+        .map(i -> new HoodieAvroRecord(new HoodieKey("key" + i, "partition"), null, HoodieOperation.INSERT,
+            new HoodieRecordLocation("001", "file1", positions.get(i)), null))
+        .collect(Collectors.toList());
+
+    header.put(HeaderMetadataType.SCHEMA, NULL_SCHEMA);
+    if (addBaseFileInstantTimeOfPositions) {
+      header.put(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS, "001");
     }
+    HoodieLogBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, header);
+    HoodieLogBlock dataBlock = new HoodieAvroDataBlock(recordList, header, "key");
+    boolean hasPositions = (recordWithPositions && allValidPositions && addBaseFileInstantTimeOfPositions);
+    String expectedInstantTime = hasPositions ? "001" : null;
+    Set<Long> expectedPositions = hasPositions ? new HashSet<>(positions) : Collections.emptySet();
+    assertEquals(expectedInstantTime, deleteBlock.getBaseFileInstantTimeOfPositions());
+    TestLogReaderUtils.assertPositionEquals(expectedPositions, deleteBlock.getRecordPositions());
+    assertEquals(expectedInstantTime, dataBlock.getBaseFileInstantTimeOfPositions());
+    TestLogReaderUtils.assertPositionEquals(expectedPositions, dataBlock.getRecordPositions());
   }
 
   private static Stream<Arguments> testArguments() {

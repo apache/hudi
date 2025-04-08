@@ -20,6 +20,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -158,32 +160,32 @@ public class JdbcSource extends RowSource {
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) throws HoodieException {
+  protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) throws HoodieException {
     try {
       checkRequiredConfigProperties(props, Arrays.asList(JdbcSourceConfig.URL, JdbcSourceConfig.DRIVER_CLASS,
           JdbcSourceConfig.USER, JdbcSourceConfig.RDBMS_TABLE_NAME, JdbcSourceConfig.IS_INCREMENTAL));
-      return fetch(lastCkptStr, sourceLimit);
+      return fetch(lastCheckpoint, sourceLimit);
     } catch (HoodieException e) {
       LOG.error("Exception while running JDBCSource ", e);
       throw e;
     } catch (Exception e) {
       LOG.error("Exception while running JDBCSource ", e);
-      throw new HoodieException("Error fetching next batch from JDBC source. Last checkpoint: " + lastCkptStr.orElse(null), e);
+      throw new HoodieException("Error fetching next batch from JDBC source. Last checkpoint: " + lastCheckpoint.orElse(null), e);
     }
   }
 
   /**
-   * Decide to do a full RDBMS table scan or an incremental scan based on the lastCkptStr. If previous checkpoint
+   * Decide to do a full RDBMS table scan or an incremental scan based on the lastCheckpoint. If previous checkpoint
    * value exists then we do an incremental scan with a PPD query or else we do a full scan. In certain cases where the
    * incremental query fails, we fallback to a full scan.
    *
-   * @param lastCkptStr Last checkpoint.
+   * @param lastCheckpoint Last checkpoint.
    * @return The pair of {@link Dataset} and current checkpoint.
    */
-  private Pair<Option<Dataset<Row>>, String> fetch(Option<String> lastCkptStr, long sourceLimit) {
+  private Pair<Option<Dataset<Row>>, Checkpoint> fetch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     Dataset<Row> dataset;
-    if (lastCkptStr.isPresent() && !StringUtils.isNullOrEmpty(lastCkptStr.get())) {
-      dataset = incrementalFetch(lastCkptStr, sourceLimit);
+    if (lastCheckpoint.isPresent() && !StringUtils.isNullOrEmpty(lastCheckpoint.get().getCheckpointKey())) {
+      dataset = incrementalFetch(lastCheckpoint, sourceLimit);
     } else {
       LOG.info("No checkpoint references found. Doing a full rdbms table fetch");
       dataset = fullFetch(sourceLimit);
@@ -191,7 +193,7 @@ public class JdbcSource extends RowSource {
     dataset.persist(StorageLevel.fromString(
         getStringWithAltKeys(props, JdbcSourceConfig.STORAGE_LEVEL, "MEMORY_AND_DISK_SER")));
     boolean isIncremental = getBooleanWithAltKeys(props, JdbcSourceConfig.IS_INCREMENTAL);
-    Pair<Option<Dataset<Row>>, String> pair = Pair.of(Option.of(dataset), checkpoint(dataset, isIncremental, lastCkptStr));
+    Pair<Option<Dataset<Row>>, Checkpoint> pair = Pair.of(Option.of(dataset), checkpoint(dataset, isIncremental, lastCheckpoint));
     dataset.unpersist();
     return pair;
   }
@@ -203,12 +205,13 @@ public class JdbcSource extends RowSource {
    *                       Note that the records fetched will be exclusive of the last checkpoint (i.e. incremental column value > lastCheckpoint).
    * @return The {@link Dataset} after incremental fetch from RDBMS.
    */
-  private Dataset<Row> incrementalFetch(Option<String> lastCheckpoint, long sourceLimit) {
+  private Dataset<Row> incrementalFetch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     try {
       final String ppdQuery = "(%s) rdbms_table";
       final SqlQueryBuilder queryBuilder = SqlQueryBuilder.select("*")
           .from(getStringWithAltKeys(props, JdbcSourceConfig.RDBMS_TABLE_NAME))
-          .where(String.format(" %s > '%s'", getStringWithAltKeys(props, JdbcSourceConfig.INCREMENTAL_COLUMN), lastCheckpoint.get()));
+          .where(String.format(" %s > '%s'", getStringWithAltKeys(props, JdbcSourceConfig.INCREMENTAL_COLUMN),
+              lastCheckpoint.get().getCheckpointKey()));
 
       if (sourceLimit > 0) {
         URI jdbcURI = URI.create(getStringWithAltKeys(props, JdbcSourceConfig.URL).substring(URI_JDBC_PREFIX.length()));
@@ -254,22 +257,23 @@ public class JdbcSource extends RowSource {
     return validatePropsAndGetDataFrameReader(sparkSession, props).option(Config.RDBMS_TABLE_PROP, query).load();
   }
 
-  private String checkpoint(Dataset<Row> rowDataset, boolean isIncremental, Option<String> lastCkptStr) {
+  private Checkpoint checkpoint(Dataset<Row> rowDataset, boolean isIncremental, Option<Checkpoint> lastCheckpoint) {
     try {
       if (isIncremental) {
         Column incrementalColumn = rowDataset.col(getStringWithAltKeys(props, JdbcSourceConfig.INCREMENTAL_COLUMN));
         final String max = rowDataset.agg(functions.max(incrementalColumn).cast(DataTypes.StringType)).first().getString(0);
         LOG.info(String.format("Checkpointing column %s with value: %s ", incrementalColumn, max));
         if (max != null) {
-          return max;
+          return new StreamerCheckpointV2(max);
         }
-        return lastCkptStr.isPresent() && !StringUtils.isNullOrEmpty(lastCkptStr.get()) ? lastCkptStr.get() : StringUtils.EMPTY_STRING;
+        return lastCheckpoint.isPresent() && !StringUtils.isNullOrEmpty(lastCheckpoint.get().getCheckpointKey())
+            ? lastCheckpoint.get() : new StreamerCheckpointV2(StringUtils.EMPTY_STRING);
       } else {
-        return StringUtils.EMPTY_STRING;
+        return new StreamerCheckpointV2(StringUtils.EMPTY_STRING);
       }
     } catch (Exception e) {
       LOG.error("Failed to checkpoint");
-      throw new HoodieReadFromSourceException("Failed to checkpoint. Last checkpoint: " + lastCkptStr.orElse(null), e);
+      throw new HoodieReadFromSourceException("Failed to checkpoint. Last checkpoint: " + lastCheckpoint.orElse(null), e);
     }
   }
 

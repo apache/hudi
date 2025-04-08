@@ -120,6 +120,16 @@ object DataSourceReadOptions {
       + "completion_time <= END_COMMIT are fetched out. "
       + "Point in time type queries make more sense with begin and end completion times specified.")
 
+  val STREAMING_READ_TABLE_VERSION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.streaming.table.version")
+    .noDefaultValue()
+    .withDocumentation("The table version assumed for streaming read")
+
+  val INCREMENTAL_READ_TABLE_VERSION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.incr.table.version")
+    .noDefaultValue()
+    .withDocumentation("The table version assumed for incremental read")
+
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.schema.use.end.instanttime")
     .defaultValue("false")
@@ -140,6 +150,20 @@ object DataSourceReadOptions {
     .markAdvanced()
     .withDocumentation("For the use-cases like users only want to incremental pull from certain partitions "
       + "instead of the full table. This option allows using glob pattern to directly filter on path.")
+
+  val INCREMENTAL_READ_SKIP_COMPACT: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.read.incr.skip_compact")
+    .defaultValue(false)
+    .markAdvanced()
+    .withDocumentation("Whether to skip compaction instants and avoid reading compacted base files for streaming "
+      + "read to improve read performance.")
+
+  val INCREMENTAL_READ_SKIP_CLUSTER: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.read.incr.skip_cluster")
+    .defaultValue(false)
+    .markAdvanced()
+    .withDocumentation("Whether to skip clustering instants to avoid reading base files of clustering operations "
+      + "for streaming read to improve read performance.")
 
   val TIME_TRAVEL_AS_OF_INSTANT: ConfigProperty[String] = HoodieCommonConfig.TIMESTAMP_AS_OF
 
@@ -191,7 +215,7 @@ object DataSourceReadOptions {
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
-    .defaultValue("false")
+    .defaultValue("true")
     .markAdvanced()
     .withDocumentation("When doing an incremental query whether we should fall back to full table scans if file does not exist.")
 
@@ -700,7 +724,7 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("Controls whether spark sql prepped update, delete, and merge are enabled.")
+    .withDocumentation("Controls whether spark sql prepped update and delete are enabled.")
 
   val OVERWRITE_MODE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.overwrite.mode")
@@ -833,9 +857,6 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link PRECOMBINE_FIELD} and its methods instead */
   @Deprecated
   val PRECOMBINE_FIELD_OPT_KEY = HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()
-  /** @deprecated Use {@link PRECOMBINE_FIELD} and its methods instead */
-  @Deprecated
-  val DEFAULT_PRECOMBINE_FIELD_OPT_VAL = PRECOMBINE_FIELD.defaultValue()
 
   /** @deprecated Use {@link HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated

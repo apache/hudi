@@ -20,8 +20,10 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -34,12 +36,30 @@ public class LogFileNumBasedCompactionStrategy extends BoundedIOCompactionStrate
     implements Comparator<HoodieCompactionOperation> {
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig,
+                                                                            List<HoodieCompactionOperation> operations,
+                                                                            List<HoodieCompactionPlan> pendingCompactionPlans) {
     Long numThreshold = writeConfig.getCompactionLogFileNumThreshold();
+    ArrayList<String> missingPartitions = new ArrayList<>();
+    boolean incrementalTableServiceEnabled = writeConfig.isIncrementalTableServiceEnabled();
     List<HoodieCompactionOperation> filterOperator = operations.stream()
-        .filter(e -> e.getDeltaFilePaths().size() >= numThreshold)
+        .filter(e -> {
+          if (incrementalTableServiceEnabled && e.getDeltaFilePaths().size() < numThreshold) {
+            missingPartitions.add(e.getPartitionPath());
+          }
+          return e.getDeltaFilePaths().size() >= numThreshold;
+        })
         .sorted(this).collect(Collectors.toList());
-    return super.orderAndFilter(writeConfig, filterOperator, pendingCompactionPlans);
+
+    if (incrementalTableServiceEnabled) {
+      Pair<List<HoodieCompactionOperation>, List<String>> resPair = super.orderAndFilter(writeConfig, filterOperator, pendingCompactionPlans);
+      List<HoodieCompactionOperation> compactOperations = resPair.getLeft();
+      List<String> innerMissingPartitions = resPair.getRight();
+      missingPartitions.addAll(innerMissingPartitions);
+      return Pair.of(compactOperations, missingPartitions);
+    } else {
+      return super.orderAndFilter(writeConfig, filterOperator, pendingCompactionPlans);
+    }
   }
 
   @Override

@@ -19,6 +19,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -58,7 +60,7 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
   protected FilebasedSchemaProvider schemaProvider;
   private TypedProperties props;
 
-  private static final String CHECKPOINT_VALUE_ZERO = "0";
+  private static final Checkpoint CHECKPOINT_VALUE_ZERO = new StreamerCheckpointV2("0");
 
   @BeforeAll
   public static void beforeAll() throws Exception {
@@ -82,8 +84,8 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
     GcsEventsSource source = new GcsEventsSource(props, jsc, sparkSession, null,
             pubsubMessagesFetcher);
 
-    Pair<Option<Dataset<Row>>, String> expected = Pair.of(Option.empty(), "0");
-    Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = source.fetchNextBatch(Option.of("0"), 100);
+    Pair<Option<Dataset<Row>>, Checkpoint> expected = Pair.of(Option.empty(), CHECKPOINT_VALUE_ZERO);
+    Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint = fetchNextBatch(source, "0", 100);
 
     assertEquals(expected, dataAndCheckpoint);
   }
@@ -127,8 +129,8 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
     GcsEventsSource source = new GcsEventsSource(props, jsc, sparkSession, schemaProvider,
             pubsubMessagesFetcher);
-    Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = source.fetchNextBatch(Option.of("0"), 100);
-    source.onCommit(dataAndCheckpoint.getRight());
+    Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint = fetchNextBatch(source, "0", 100);
+    source.onCommit(dataAndCheckpoint.getRight().getCheckpointKey());
 
     assertEquals(CHECKPOINT_VALUE_ZERO, dataAndCheckpoint.getRight());
 
@@ -155,16 +157,16 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
     GcsEventsSource source = new GcsEventsSource(props, jsc, sparkSession, null,
             pubsubMessagesFetcher);
-    Pair<Option<Dataset<Row>>, String> dataAndCheckpoint1 = source.fetchNextBatch(Option.of("0"), 100);
-    source.onCommit(dataAndCheckpoint1.getRight());
+    Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint1 = fetchNextBatch(source, "0", 100);
+    source.onCommit(dataAndCheckpoint1.getRight().getCheckpointKey());
 
     assertEquals(CHECKPOINT_VALUE_ZERO, dataAndCheckpoint1.getRight());
     List<Row> result1 = dataAndCheckpoint1.getLeft().get().collectAsList();
     assertBucket(result1.get(0), "bucket-1");
     assertBucket(result1.get(1), "bucket-2");
 
-    Pair<Option<Dataset<Row>>, String> dataAndCheckpoint2 = source.fetchNextBatch(Option.of("0"), 100);
-    source.onCommit(dataAndCheckpoint2.getRight());
+    Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint2 = fetchNextBatch(source, "0", 100);
+    source.onCommit(dataAndCheckpoint2.getRight().getCheckpointKey());
 
     List<Row> result2 = dataAndCheckpoint2.getLeft().get().collectAsList();
     assertBucket(result2.get(0), "bucket-3");
@@ -183,8 +185,8 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
     GcsEventsSource source = new GcsEventsSource(props, jsc, sparkSession, null,
             pubsubMessagesFetcher);
-    Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = source.fetchNextBatch(Option.of("0"), 100);
-    source.onCommit(dataAndCheckpoint.getRight());
+    Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint = fetchNextBatch(source, "0", 100);
+    source.onCommit(dataAndCheckpoint.getRight().getCheckpointKey());
     assertEquals(CHECKPOINT_VALUE_ZERO, dataAndCheckpoint.getRight());
 
     Dataset<Row> resultDs = dataAndCheckpoint.getLeft().get();
@@ -205,8 +207,8 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
     GcsEventsSource source = new GcsEventsSource(props, jsc, sparkSession, null,
             pubsubMessagesFetcher);
-    Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = source.fetchNextBatch(Option.of("0"), 100);
-    source.onCommit(dataAndCheckpoint.getRight());
+    Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint = fetchNextBatch(source, "0", 100);
+    source.onCommit(dataAndCheckpoint.getRight().getCheckpointKey());
 
     assertEquals(CHECKPOINT_VALUE_ZERO, dataAndCheckpoint.getRight());
 
@@ -217,6 +219,12 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
     assertBucket(result.get(1), "bucket-1");
 
     verify(pubsubMessagesFetcher).fetchMessages();
+  }
+
+  private Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(GcsEventsSource source,
+                                                                String lastCheckpoint,
+                                                                long sourceLimit) {
+    return source.fetchNextBatch(Option.of(new StreamerCheckpointV2(lastCheckpoint)), sourceLimit);
   }
 
   private ReceivedMessage fileCreateMessageWithOverwroteGen(String objectId, String payload) {

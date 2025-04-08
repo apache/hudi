@@ -39,8 +39,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createDeltaCommit;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 
 /**
@@ -91,7 +91,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     HoodieCommitMetadata commitMetadata = super.doWriteOperation(commitTime, operationType, newPartitionsToAdd,
         partitionToFilesNameLengthMap, bootstrap, true);
     if (writer != null && !createInflightCommit) {
-      writer.performTableServices(Option.of(commitTime));
+      writer.performTableServices(Option.of(commitTime), true);
       writer.update(commitMetadata, commitTime);
     }
     // DT should be committed after MDT.
@@ -183,8 +183,9 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   }
 
   @Override
-  public HoodieTestTable addCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata,
-                                    HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
+  public HoodieTestTable addCluster(
+      String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata,
+      HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     super.addCluster(instantTime, requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
     if (writer != null) {
       writer.update(completeReplaceMetadata, instantTime);

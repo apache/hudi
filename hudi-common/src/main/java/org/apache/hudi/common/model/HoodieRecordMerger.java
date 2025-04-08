@@ -20,9 +20,11 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -35,6 +37,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+
 /**
  * HoodieMerge defines how to merge two records. It is a stateless component.
  * It can implement the merging logic of HoodieRecord of different engines
@@ -44,7 +48,7 @@ import java.util.List;
 public interface HoodieRecordMerger extends Serializable {
 
   // Uses event time ordering to determine which record is chosen
-  String DEFAULT_MERGE_STRATEGY_UUID = "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5";
+  String EVENT_TIME_BASED_MERGE_STRATEGY_UUID = "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5";
 
   // Always chooses the most recently written record
   String COMMIT_TIME_BASED_MERGE_STRATEGY_UUID = "ce9acb64-bde0-424c-9b91-f6ebba25356d";
@@ -116,7 +120,7 @@ public interface HoodieRecordMerger extends Serializable {
    * @throws IOException upon merging error.
    */
   default Option<Pair<HoodieRecord, Schema>> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
-    throw new UnsupportedOperationException("Partial merging logic is not implemented.");
+    throw new UnsupportedOperationException("Partial merging logic is not implemented by " + this.getClass().getName());
   }
 
   /**
@@ -138,7 +142,7 @@ public interface HoodieRecordMerger extends Serializable {
    * Merges two records with the same key in full outer merge fashion i.e. all fields from both records are included.
    */
   default List<Pair<HoodieRecord, Schema>> fullOuterMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    throw new UnsupportedOperationException("Partial merging logic is not implemented.");
+    throw new UnsupportedOperationException("Full outer merging logic is not implemented by " + this.getClass().getName());
   }
 
   /**
@@ -183,4 +187,36 @@ public interface HoodieRecordMerger extends Serializable {
    */
   String getMergingStrategy();
 
+  static String getRecordMergeStrategyId(RecordMergeMode mergeMode, String payloadClassName,
+                                         String recordMergeStrategyId, HoodieTableVersion tableVersion) {
+    switch (mergeMode) {
+      case COMMIT_TIME_ORDERING:
+        return COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+      case EVENT_TIME_ORDERING:
+        return EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+      case CUSTOM:
+      default:
+        return getCustomRecordMergeStrategyId(payloadClassName, recordMergeStrategyId, tableVersion);
+    }
+  }
+
+  static String getCustomRecordMergeStrategyId(String payloadClassName, String recordMergeStrategyId, HoodieTableVersion tableVersion) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      // For table version 8, we give preference to input recordMergeStrategyId over payload based strategy
+      if (nonEmpty(recordMergeStrategyId)) {
+        return recordMergeStrategyId;
+      } else if (nonEmpty(payloadClassName)) {
+        return PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+      }
+      return null;
+    } else {
+      // For table version 6, we give preference to payload based strategy over input recordMergeStrategyId
+      if (nonEmpty(payloadClassName)) {
+        return PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+      } else if (nonEmpty(recordMergeStrategyId)) {
+        return recordMergeStrategyId;
+      }
+      return null;
+    }
+  }
 }

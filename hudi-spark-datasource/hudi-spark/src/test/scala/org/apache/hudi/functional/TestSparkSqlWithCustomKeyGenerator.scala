@@ -20,9 +20,6 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH
-import org.apache.hudi.HoodieSparkUtils
-
-import org.apache.avro.Schema
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
@@ -32,6 +29,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.util.SparkKeyGenUtils
 
+import org.apache.avro.Schema
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.joda.time.DateTime
@@ -227,21 +225,18 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                    |""".stripMargin)
               validatePartitions(tableName, Seq(droppedPartition), expectedPartitions)
 
-              if (HoodieSparkUtils.isSpark3) {
-                // Test INSERT OVERWRITE, only supported in Spark 3.x
-                spark.sql(
-                  s"""
-                     | INSERT OVERWRITE $tableName
-                     | SELECT 100 as id, 'a100' as name, 299.0 as price, 1706800227 as ts, 'cat10' as segment
-                     | """.stripMargin)
-                validateResults(
-                  tableName,
-                  sqlStr,
-                  partitionGenFunc,
-                  Seq(),
-                  Seq(100, "a100", "299.0", 1706800227, "cat10")
-                )
-              }
+              spark.sql(
+                s"""
+                   | INSERT OVERWRITE $tableName
+                   | SELECT 100 as id, 'a100' as name, 299.0 as price, 1706800227 as ts, 'cat10' as segment
+                   | """.stripMargin)
+              validateResults(
+                tableName,
+                sqlStr,
+                partitionGenFunc,
+                Seq(),
+                Seq(100, "a100", "299.0", 1706800227, "cat10")
+              )
 
               // Validate ts field is still of type int in the table
               validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
@@ -256,76 +251,71 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test table property isolation for partition path field config "
-    + "with custom key generator for Spark 3.3 and above") {
-    // Only testing Spark 3.3 and above as lower Spark versions do not support
-    // ALTER TABLE .. SET TBLPROPERTIES .. to store table-level properties in Hudi Catalog
-    if (HoodieSparkUtils.gteqSpark3_3) {
-      for (extractPartition <- Seq(false)) {
-        withSQLConf(EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key() -> extractPartition.toString) {
-          withTempDir { tmp => {
-            val tableNameNonPartitioned = generateTableName
-            val tableNameSimpleKey = generateTableName
-            val tableNameCustom1 = generateTableName
-            val tableNameCustom2 = generateTableName
+  test("Test table property isolation for partition path field config with custom key generator") {
+    for (extractPartition <- Seq(false)) {
+      withSQLConf(EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key() -> extractPartition.toString) {
+        withTempDir { tmp => {
+          val tableNameNonPartitioned = generateTableName
+          val tableNameSimpleKey = generateTableName
+          val tableNameCustom1 = generateTableName
+          val tableNameCustom2 = generateTableName
 
-            val tablePathNonPartitioned = tmp.getCanonicalPath + "/" + tableNameNonPartitioned
-            val tablePathSimpleKey = tmp.getCanonicalPath + "/" + tableNameSimpleKey
-            val tablePathCustom1 = tmp.getCanonicalPath + "/" + tableNameCustom1
-            val tablePathCustom2 = tmp.getCanonicalPath + "/" + tableNameCustom2
+          val tablePathNonPartitioned = tmp.getCanonicalPath + "/" + tableNameNonPartitioned
+          val tablePathSimpleKey = tmp.getCanonicalPath + "/" + tableNameSimpleKey
+          val tablePathCustom1 = tmp.getCanonicalPath + "/" + tableNameCustom1
+          val tablePathCustom2 = tmp.getCanonicalPath + "/" + tableNameCustom2
 
-            val tableType = "MERGE_ON_READ"
-            val writePartitionFields1 = "segment:simple"
-            val writePartitionFields2 = "ts:timestamp,segment:simple"
+          val tableType = "MERGE_ON_READ"
+          val writePartitionFields1 = "segment:simple"
+          val writePartitionFields2 = "ts:timestamp,segment:simple"
 
-            prepareTableWithKeyGenerator(
-              tableNameNonPartitioned, tablePathNonPartitioned, tableType,
-              NONPARTITIONED_KEY_GEN_CLASS_NAME, "", Map())
-            prepareTableWithKeyGenerator(
-              tableNameSimpleKey, tablePathSimpleKey, tableType,
-              SIMPLE_KEY_GEN_CLASS_NAME, "segment", Map())
-            prepareTableWithKeyGenerator(
-              tableNameCustom1, tablePathCustom1, tableType,
-              CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields1, Map())
-            prepareTableWithKeyGenerator(
-              tableNameCustom2, tablePathCustom2, tableType,
-              CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields2, TS_KEY_GEN_CONFIGS)
+          prepareTableWithKeyGenerator(
+            tableNameNonPartitioned, tablePathNonPartitioned, tableType,
+            NONPARTITIONED_KEY_GEN_CLASS_NAME, "", Map())
+          prepareTableWithKeyGenerator(
+            tableNameSimpleKey, tablePathSimpleKey, tableType,
+            SIMPLE_KEY_GEN_CLASS_NAME, "segment", Map())
+          prepareTableWithKeyGenerator(
+            tableNameCustom1, tablePathCustom1, tableType,
+            CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields1, Map())
+          prepareTableWithKeyGenerator(
+            tableNameCustom2, tablePathCustom2, tableType,
+            CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields2, TS_KEY_GEN_CONFIGS)
 
-            // Non-partitioned table does not require additional partition path field write config
-            createTableWithSql(tableNameNonPartitioned, tablePathNonPartitioned, "")
-            // Partitioned table with simple key generator does not require additional partition path field write config
-            createTableWithSql(tableNameSimpleKey, tablePathSimpleKey, "")
-            // Partitioned table with custom key generator requires additional partition path field write config
-            // Without that, right now the SQL DML fails
-            createTableWithSql(tableNameCustom1, tablePathCustom1, "")
-            createTableWithSql(tableNameCustom2, tablePathCustom2,
-              s"hoodie.datasource.write.partitionpath.field = '$writePartitionFields2', "
-                + TS_KEY_GEN_CONFIGS.map(e => e._1 + " = '" + e._2 + "'").mkString(", "))
+          // Non-partitioned table does not require additional partition path field write config
+          createTableWithSql(tableNameNonPartitioned, tablePathNonPartitioned, "")
+          // Partitioned table with simple key generator does not require additional partition path field write config
+          createTableWithSql(tableNameSimpleKey, tablePathSimpleKey, "")
+          // Partitioned table with custom key generator requires additional partition path field write config
+          // Without that, right now the SQL DML fails
+          createTableWithSql(tableNameCustom1, tablePathCustom1, "")
+          createTableWithSql(tableNameCustom2, tablePathCustom2,
+            s"hoodie.datasource.write.partitionpath.field = '$writePartitionFields2', "
+              + TS_KEY_GEN_CONFIGS.map(e => e._1 + " = '" + e._2 + "'").mkString(", "))
 
-            val segmentPartitionFunc = (_: Integer, segment: String) => segment
-            val customPartitionFunc = (ts: Integer, segment: String) => TS_FORMATTER_FUNC.apply(ts) + "/" + segment
+          val segmentPartitionFunc = (_: Integer, segment: String) => segment
+          val customPartitionFunc = (ts: Integer, segment: String) => TS_FORMATTER_FUNC.apply(ts) + "/" + segment
 
-            testFirstRoundInserts(tableNameNonPartitioned, (_, _) => "")
-            testFirstRoundInserts(tableNameSimpleKey, segmentPartitionFunc)
-            testFirstRoundInserts(tableNameCustom2, customPartitionFunc)
+          testFirstRoundInserts(tableNameNonPartitioned, (_, _) => "")
+          testFirstRoundInserts(tableNameSimpleKey, segmentPartitionFunc)
+          testFirstRoundInserts(tableNameCustom2, customPartitionFunc)
 
-            // INSERT INTO should succeed for tableNameCustom1 even if write partition path field config is not set
-            // It should pick up the partition fields from table config
-            val sourceTableName = tableNameCustom1 + "_source"
-            prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
-            testFirstRoundInserts(tableNameCustom1, segmentPartitionFunc)
+          // INSERT INTO should succeed for tableNameCustom1 even if write partition path field config is not set
+          // It should pick up the partition fields from table config
+          val sourceTableName = tableNameCustom1 + "_source"
+          prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
+          testFirstRoundInserts(tableNameCustom1, segmentPartitionFunc)
 
-            // All tables should be able to do INSERT INTO without any problem,
-            // since the scope of the added write config is at the catalog table level
-            testSecondRoundInserts(tableNameNonPartitioned, (_, _) => "")
-            testSecondRoundInserts(tableNameSimpleKey, segmentPartitionFunc)
-            testSecondRoundInserts(tableNameCustom2, customPartitionFunc)
+          // All tables should be able to do INSERT INTO without any problem,
+          // since the scope of the added write config is at the catalog table level
+          testSecondRoundInserts(tableNameNonPartitioned, (_, _) => "")
+          testSecondRoundInserts(tableNameSimpleKey, segmentPartitionFunc)
+          testSecondRoundInserts(tableNameCustom2, customPartitionFunc)
 
-            // Validate ts field is still of type int in the table
-            validateTsFieldSchema(tablePathCustom1, "ts", Schema.Type.INT)
-            validateTsFieldSchema(tablePathCustom2, "ts", Schema.Type.INT)
-          }
-          }
+          // Validate ts field is still of type int in the table
+          validateTsFieldSchema(tablePathCustom1, "ts", Schema.Type.INT)
+          validateTsFieldSchema(tablePathCustom2, "ts", Schema.Type.INT)
+        }
         }
       }
     }
@@ -373,18 +363,14 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                  | """.stripMargin)
           }
 
-          // Only testing Spark 3.3 and above as lower Spark versions do not support
-          // ALTER TABLE .. SET TBLPROPERTIES .. to store table-level properties in Hudi Catalog
-          if (HoodieSparkUtils.gteqSpark3_3) {
-            // Now fix the partition path field write config for tableName
-            spark.sql(
-              s"""ALTER TABLE $tableName
-                 | SET TBLPROPERTIES (hoodie.datasource.write.partitionpath.field = '$writePartitionFields')
-                 | """.stripMargin)
+          // Now fix the partition path field write config for tableName
+          spark.sql(
+            s"""ALTER TABLE $tableName
+               | SET TBLPROPERTIES (hoodie.datasource.write.partitionpath.field = '$writePartitionFields')
+               | """.stripMargin)
 
-            // INSERT INTO should succeed now
-            testFirstRoundInserts(tableName, customPartitionFunc)
-          }
+          // INSERT INTO should succeed now
+          testFirstRoundInserts(tableName, customPartitionFunc)
 
           // Validate ts field is still of type int in the table
           validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)

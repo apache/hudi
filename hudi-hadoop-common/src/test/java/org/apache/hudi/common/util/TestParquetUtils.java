@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
@@ -154,8 +155,13 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     writeParquetFile(typeCode, filePath, rowKeys, schema, true, partitionPath);
 
     // Read and verify
-    List<Pair<HoodieKey, Long>> fetchedRows = parquetUtils.fetchRecordKeysWithPositions(
-        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath));
+    List<Pair<HoodieKey, Long>> fetchedRows = new ArrayList<>();
+    try (ClosableIterator<Pair<HoodieKey, Long>> iter = parquetUtils.fetchRecordKeysWithPositions(
+        HoodieTestUtils.getStorage(filePath), new StoragePath(filePath))) {
+      while (iter.hasNext()) {
+        fetchedRows.add(iter.next());
+      }
+    }
     assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
 
     for (Pair<HoodieKey, Long> entry : fetchedRows) {
@@ -180,9 +186,14 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
         false, "abc", "def");
 
     // Read and verify
-    List<Pair<HoodieKey, Long>> fetchedRows = parquetUtils.fetchRecordKeysWithPositions(
+    List<Pair<HoodieKey, Long>> fetchedRows = new ArrayList<>();
+    try (ClosableIterator<Pair<HoodieKey, Long>> iter = parquetUtils.fetchRecordKeysWithPositions(
         HoodieTestUtils.getStorage(filePath), new StoragePath(filePath),
-        Option.of(new TestBaseKeyGen("abc", "def")));
+        Option.of(new TestBaseKeyGen("abc", "def")), Option.empty())) {
+      while (iter.hasNext()) {
+        fetchedRows.add(iter.next());
+      }
+    }
     assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
 
     for (Pair<HoodieKey, Long> entry : fetchedRows) {

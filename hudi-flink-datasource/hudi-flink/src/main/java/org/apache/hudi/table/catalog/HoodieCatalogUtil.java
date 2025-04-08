@@ -20,6 +20,7 @@ package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
@@ -300,5 +301,15 @@ public class HoodieCatalogUtil {
       throw new HoodieCatalogException("Hoodie catalog does not support to alter table type and index type");
     }
     return true;
+  }
+
+  public static boolean initPartitionBucketIndexMeta(HoodieTableMetaClient metaClient, CatalogBaseTable catalogTable) {
+    Map<String, String> options = catalogTable.getOptions();
+    String expressions = options.getOrDefault(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS.key(), "");
+    String rule = options.getOrDefault(FlinkOptions.BUCKET_INDEX_PARTITION_RULE.key(), FlinkOptions.BUCKET_INDEX_PARTITION_RULE.defaultValue());
+    int bucketNumber = options.containsKey(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key())
+        ? Integer.valueOf(options.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key())) : FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
+
+    return PartitionBucketIndexHashingConfig.saveHashingConfig(metaClient, expressions, rule, bucketNumber, null);
   }
 }

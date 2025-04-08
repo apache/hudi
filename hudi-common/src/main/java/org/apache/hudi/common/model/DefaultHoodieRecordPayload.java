@@ -36,6 +36,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
+
 /**
  * Default payload.
  * {@link HoodieRecordPayload} impl that honors ordering field in both preCombine and combineAndGetUpdateValue.
@@ -48,7 +50,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   public static final String DELETE_KEY = "hoodie.payload.delete.field";
   public static final String DELETE_MARKER = "hoodie.payload.delete.marker";
   private Option<Object> eventTime = Option.empty();
-  private AtomicBoolean isDeleteComputed = new AtomicBoolean(false);
+  private final AtomicBoolean isDeleteComputed = new AtomicBoolean(false);
   private boolean isDefaultRecordPayloadDeleted = false;
 
   public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
@@ -56,7 +58,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public DefaultHoodieRecordPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, 0); // natural order
+    this(record.isPresent() ? record.get() : null, DEFAULT_ORDERING_VALUE); // natural order
   }
 
   @Override

@@ -61,11 +61,11 @@ public abstract class PartitionTTLStrategy implements TTLStrategy, Serializable 
    * @return all partitions paths for the dataset.
    */
   protected List<String> getPartitionPathsForTTL() {
-    String partitionSelected = writeConfig.getClusteringPartitionSelected();
+    String partitionSelected = writeConfig.getPartitionTTLPartitionSelected();
     HoodieTimer timer = HoodieTimer.start();
     List<String> partitionsForTTL;
     if (StringUtils.isNullOrEmpty(partitionSelected)) {
-      // Return All partition paths
+      // Return all partition paths.
       partitionsForTTL = FSUtils.getAllPartitionPaths(
           hoodieTable.getContext(), hoodieTable.getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath());
     } else {

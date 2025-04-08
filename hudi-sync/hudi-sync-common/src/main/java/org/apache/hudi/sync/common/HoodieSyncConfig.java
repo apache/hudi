@@ -201,7 +201,7 @@ public class HoodieSyncConfig extends HoodieConfig {
           + "obtained from Hudi's internal metadata table. Note, " + HoodieMetadataConfig.ENABLE + " must be set to true.");
 
   private Configuration hadoopConf;
-  private HoodieMetricsConfig metricsConfig;
+  private final HoodieMetricsConfig metricsConfig;
 
   public HoodieSyncConfig(Properties props) {
     this(props, HadoopConfigUtils.createHadoopConf(props));

@@ -156,8 +156,8 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     return HoodieColumnRangeMetadata.<Comparable>create(
         columnStats.getFileName(),
         columnStats.getColumnName(),
-        unwrapAvroValueWrapper(columnStats.getMinValue()),
-        unwrapAvroValueWrapper(columnStats.getMaxValue()),
+        unwrapAvroValueWrapper(columnStats.getMinValue()), // misses for special handling.
+        unwrapAvroValueWrapper(columnStats.getMaxValue()), // misses for special handling.
         columnStats.getNullCount(),
         columnStats.getValueCount(),
         columnStats.getTotalSize(),
@@ -176,6 +176,10 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> merge(
       HoodieColumnRangeMetadata<T> left,
       HoodieColumnRangeMetadata<T> right) {
+    if (left == null || right == null) {
+      return left == null ? right : left;
+    }
+
     ValidationUtils.checkArgument(left.getColumnName().equals(right.getColumnName()),
         "Column names should be the same for merging column ranges");
     String filePath = left.getFilePath();

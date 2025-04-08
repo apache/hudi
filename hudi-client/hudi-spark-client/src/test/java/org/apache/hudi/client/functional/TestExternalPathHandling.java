@@ -37,7 +37,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
@@ -47,7 +46,7 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -159,8 +158,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     String cleanTime = writeClient.createNewInstantTime();
     HoodieCleanerPlan cleanerPlan = cleanerPlan(new HoodieActionInstant(instantTime2, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieInstant.State.COMPLETED.name()), instantTime3,
         Collections.singletonMap(partitionPath1, Collections.singletonList(new HoodieCleanFileInfo(filePath1, false))));
-    metaClient.getActiveTimeline().saveToCleanRequested(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime),
-        TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+    metaClient.getActiveTimeline().saveToCleanRequested(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.of(cleanerPlan));
     HoodieInstant inflightClean = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.empty());
     List<HoodieCleanStat> cleanStats = Collections.singletonList(createCleanStat(partitionPath1, Arrays.asList(filePath1), instantTime2, instantTime3));
@@ -171,8 +169,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
         Collections.EMPTY_MAP);
     try (HoodieTableMetadataWriter hoodieTableMetadataWriter = (HoodieTableMetadataWriter) writeClient.initTable(WriteOperationType.UPSERT, Option.of(cleanTime)).getMetadataWriter(cleanTime).get()) {
       hoodieTableMetadataWriter.update(cleanMetadata, cleanTime);
-      metaClient.getActiveTimeline().transitionCleanInflightToComplete(true, inflightClean,
-          TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
+      metaClient.getActiveTimeline().transitionCleanInflightToComplete(true, inflightClean, Option.of(cleanMetadata));
       // make sure we still get the same results as before
       assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, partitionPath2.isEmpty() ? 2 : 1);
       assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
@@ -219,7 +216,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
   }
 
   private void assertFileGroupCorrectness(String instantTime, String partitionPath, String filePath, String fileId, int expectedSize) {
-    HoodieTableFileSystemView fsView = new HoodieMetadataFileSystemView(context, metaClient, metaClient.reloadActiveTimeline(), writeConfig.getMetadataConfig());
+    HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(context, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath().toString());
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata, metaClient, metaClient.reloadActiveTimeline());
     List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     Assertions.assertEquals(expectedSize, fileGroups.size());
     Option<HoodieFileGroup> fileGroupOption = Option.fromJavaOptional(fileGroups.stream().filter(fg -> fg.getFileGroupId().getFileId().equals(fileId)).findFirst());

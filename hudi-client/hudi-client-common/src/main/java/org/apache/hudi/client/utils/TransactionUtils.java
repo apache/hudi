@@ -20,6 +20,7 @@ package org.apache.hudi.client.utils;
 
 import org.apache.hudi.client.transaction.ConcurrentOperation;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.SimpleSchemaConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -34,6 +35,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +44,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
 
 public class TransactionUtils {
 
@@ -56,7 +60,6 @@ public class TransactionUtils {
    * @param config
    * @param lastCompletedTxnOwnerInstant
    * @param pendingInstants
-   *
    * @return
    * @throws HoodieWriteConflictException
    */
@@ -66,20 +69,22 @@ public class TransactionUtils {
       final Option<HoodieCommitMetadata> thisCommitMetadata,
       final HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
-      boolean reloadActiveTimeline,
+      boolean timelineRefreshedWithinTransaction,
       Set<String> pendingInstants) throws HoodieWriteConflictException {
     WriteOperationType operationType = thisCommitMetadata.map(HoodieCommitMetadata::getOperationType).orElse(null);
     if (config.needResolveWriteConflict(operationType)) {
       // deal with pendingInstants
-      Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
-
-      ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
-      if (reloadActiveTimeline) {
+      if (!timelineRefreshedWithinTransaction) {
         table.getMetaClient().reloadActiveTimeline();
       }
+      Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation =
+          getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
+      ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
+      Option<Schema> newTableSchema = resolveSchemaConflictIfNeeded(table, config, lastCompletedTxnOwnerInstant, currentTxnOwnerInstant);
+
       Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(
-          table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
-              completedInstantsDuringCurrentWriteOperation);
+              table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
+          completedInstantsDuringCurrentWriteOperation);
 
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElseGet(HoodieCommitMetadata::new));
       instantStream.forEach(instant -> {
@@ -96,9 +101,33 @@ public class TransactionUtils {
       });
       LOG.info("Successfully resolved conflicts, if any");
 
+      if (newTableSchema.isPresent()) {
+        thisOperation.getCommitMetadataOption().get().addMetadata(
+            HoodieCommitMetadata.SCHEMA_KEY, newTableSchema.get().toString());
+      }
       return thisOperation.getCommitMetadataOption();
     }
     return thisCommitMetadata;
+  }
+
+  /**
+   * Resolves conflict of schema evolution if there is any.
+   *
+   * @param table                        {@link HoodieTable} instance
+   * @param config                       write config
+   * @param lastCompletedTxnOwnerInstant last completed instant
+   * @param currentTxnOwnerInstant       current instant
+   * @return new table schema after successful schema resolution; empty if nothing to be resolved.
+   */
+  public static Option<Schema> resolveSchemaConflictIfNeeded(final HoodieTable table,
+                                                             final HoodieWriteConfig config,
+                                                             final Option<HoodieInstant> lastCompletedTxnOwnerInstant,
+                                                             final Option<HoodieInstant> currentTxnOwnerInstant) {
+    if (config.getBoolean(ENABLE_SCHEMA_CONFLICT_RESOLUTION)) {
+      return new SimpleSchemaConflictResolutionStrategy().resolveConcurrentSchemaEvolution(
+          table, config, lastCompletedTxnOwnerInstant, currentTxnOwnerInstant);
+    }
+    return Option.empty();
   }
 
   /**
@@ -146,12 +175,17 @@ public class TransactionUtils {
         .collect(Collectors.toSet());
   }
 
+  /**
+   * Helper to find the instants that completed during this operation.
+   * @param metaClient client that was created or refreshed within the transaction
+   * @param pendingInstants pending instants to compare
+   * @return instants that completed during this operation
+   */
   public static Stream<HoodieInstant> getCompletedInstantsDuringCurrentWriteOperation(HoodieTableMetaClient metaClient, Set<String> pendingInstants) {
     // deal with pendingInstants
     // some pending instants maybe finished during current write operation,
     // we should check the conflict of those pending operation
     return metaClient
-        .reloadActiveTimeline()
         .getCommitsTimeline()
         .filterCompletedInstants()
         .getInstantsAsStream()

@@ -17,15 +17,16 @@
 
 package org.apache.spark.sql.hudi.ddl
 
-import org.apache.avro.Schema
+import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
+import org.apache.hudi.common.util.{Option => HOption, PartitionPathEncodeUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
+
+import org.apache.avro.Schema
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCleanMetadata
@@ -44,7 +45,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     // And available public methods does not allow to specify exact instant to get schema from, only latest after some filtering
     // which may lead to false positives in test scenarios.
     val lastInstant = metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant().get()
-    val commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(lastInstant, metaClient.getActiveTimeline.getInstantDetails(lastInstant).get(), classOf[HoodieCommitMetadata])
+    val commitMetadata = metaClient.getActiveTimeline.readCommitMetadata(lastInstant)
     val schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)
     val schema = new Schema.Parser().parse(schemaStr)
     val fields = schema.getFields.asScala.map(_.name())
@@ -265,13 +266,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     spark.sql(s"""insert into $tableName values (1, "z3", "v1", "2021-10-01"), (2, "l4", "v1", "2021-10-02")""")
 
     // specify duplicate partition columns
-    if (HoodieSparkUtils.gteqSpark3_3) {
-      checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01', dt='2021-10-02')")(
-        "Found duplicate keys `dt`")
-    } else {
-      checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01', dt='2021-10-02')")(
-        "Found duplicate keys 'dt'")
-    }
+    checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01', dt='2021-10-02')")(
+      "Found duplicate keys `dt`")
 
     // insert data
     spark.sql(s"""insert into $tableName values (3, "z5", "v1", "2021-10-01"), (4, "l5", "v1", "2021-10-02")""")
@@ -505,8 +501,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         // check schema
         val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
         val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.lastInstant()
-        val commitMetadata = metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(lastInstant.get(), metaClient.getActiveTimeline.getInstantDetails(
-          lastInstant.get()).get(), classOf[HoodieCommitMetadata])
+        val commitMetadata =
+          metaClient.getActiveTimeline.readCommitMetadata(lastInstant.get())
         val schemaStr = commitMetadata.getExtraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY)
         Assertions.assertFalse(StringUtils.isNullOrEmpty(schemaStr))
 

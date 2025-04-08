@@ -656,7 +656,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // Metadata table should automatically compact and clean
     // versions are +1 as autoClean / compaction happens end of commits
     int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metadataMetaClient, metadataMetaClient.getActiveTimeline());
     metadataTablePartitions.forEach(partition -> {
       List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
       assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).filter(Objects::nonNull).count() > 0, "Should have a single latest base file");

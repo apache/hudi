@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.DefaultSparkRecordMerger
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
@@ -45,6 +45,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
     .config("spark.executor.memory", "4G")
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
     .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
     .config("hoodie.insert.shuffle.parallelism", "2")
     .config("hoodie.upsert.shuffle.parallelism", "2")
     .config("hoodie.delete.shuffle.parallelism", "2")
@@ -54,10 +55,6 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
 
   def sparkConf(): SparkConf = {
     val sparkConf = new SparkConf()
-    if (HoodieSparkUtils.gteqSpark3_3) {
-      sparkConf.set("spark.sql.catalog.spark_catalog",
-        "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
-    }
     sparkConf
   }
 

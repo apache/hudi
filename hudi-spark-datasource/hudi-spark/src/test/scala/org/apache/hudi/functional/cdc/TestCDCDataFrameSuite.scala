@@ -19,21 +19,23 @@
 package org.apache.hudi.functional.cdc
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, RECORD_MERGE_MODE}
+import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.common.config.RecordMergeMode
+import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
+import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
-import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
-import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieException
 
 import org.apache.avro.generic.GenericRecord
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SaveMode}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
@@ -205,7 +207,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalInsertedCnt = 60 + insertedCnt7
     totalUpdatedCnt = updatedCnt7
     totalDeletedCnt = 0
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame((commitTime4.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Bulk_Insert Operation With Clean Operation
@@ -225,10 +227,14 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val cdcDataOnly8 = cdcDataFrame((commitTime8.toLong - 1).toString)
     assertCDCOpCnt(cdcDataOnly8, 20, 0, 0)
     totalInsertedCnt += 20
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame((commitTime4.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
-  }
 
+    // test start commit time in archived timeline. cdc query should fail
+    assertThrows(classOf[HoodieException], () => {
+      cdcDataFrame((commitTime1.toLong - 1).toString)
+    })
+  }
 
   /**
    * Step1: Insert 100
@@ -632,9 +638,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
   }
 
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
-  def testCDCWithAWSDMSPayload(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
+  @Test
+  def testCDCWithAWSDMSPayload(): Unit = {
     val options = Map(
       "hoodie.table.name" -> "test",
       "hoodie.datasource.write.recordkey.field" -> "id",

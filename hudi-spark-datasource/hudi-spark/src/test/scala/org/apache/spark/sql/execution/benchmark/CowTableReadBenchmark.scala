@@ -18,14 +18,12 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hudi.HoodieSparkUtils
-
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
+import org.apache.spark.sql.{DataFrame, RowFactory, SparkSession}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, RowFactory, SparkSession}
 
 import java.sql.{Date, Timestamp}
 
@@ -41,6 +39,7 @@ object CowTableReadBenchmark extends HoodieBenchmarkBase {
     .withExtensions(new HoodieSparkSessionExtension)
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
     .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
     .config("hoodie.insert.shuffle.parallelism", "2")
     .config("hoodie.upsert.shuffle.parallelism", "2")
     .config("hoodie.delete.shuffle.parallelism", "2")
@@ -50,10 +49,6 @@ object CowTableReadBenchmark extends HoodieBenchmarkBase {
 
   def sparkConf(): SparkConf = {
     val sparkConf = new SparkConf()
-    if (HoodieSparkUtils.gteqSpark3_3) {
-      sparkConf.set("spark.sql.catalog.spark_catalog",
-        "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
-    }
     sparkConf
   }
 

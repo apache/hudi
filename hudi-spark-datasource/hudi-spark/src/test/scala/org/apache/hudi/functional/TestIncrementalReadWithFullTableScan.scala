@@ -20,13 +20,13 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparison}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, InstantComparison}
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis
-import InstantComparison.compareTimestamps
+import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -179,12 +179,12 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
   private def shouldThrowIfFallbackIsFalse(fn: () => Unit): Unit = {
     val msg = "Should fail with Path does not exist"
-    val exp = assertThrows(classOf[HoodieIOException], new Executable {
+    val exp = assertThrows(classOf[SparkException], new Executable {
       override def execute(): Unit = {
         fn()
       }
     }, msg)
-    assertTrue(exp.getMessage.contains("Could not read commit details"),
-      "Expected to fail with 'Could not read commit details' but the message was: " + exp.getMessage)
+    assertTrue(exp.getMessage.contains("FileNotFoundException"),
+      "Expected to fail with 'FileNotFoundException' but the message was: " + exp.getMessage)
   }
 }

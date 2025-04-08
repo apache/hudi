@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -41,7 +40,6 @@ import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -273,8 +271,7 @@ public class FileSystemViewCommand {
       instantsStream = instantsStream.filter(is -> predicate.test(maxInstant, is.requestedTime()));
     }
     TimelineFactory timelineFactory = metaClient.getTimelineLayout().getTimelineFactory();
-    HoodieTimeline filteredTimeline = timelineFactory.createDefaultTimeline(instantsStream,
-        (Function<HoodieInstant, Option<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails);
+    HoodieTimeline filteredTimeline = timelineFactory.createDefaultTimeline(instantsStream, metaClient.getActiveTimeline());
     return new HoodieTableFileSystemView(metaClient, filteredTimeline, pathInfoList);
   }
 }

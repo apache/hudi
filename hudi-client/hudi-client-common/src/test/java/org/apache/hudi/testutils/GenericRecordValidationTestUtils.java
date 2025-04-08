@@ -81,6 +81,10 @@ public class GenericRecordValidationTestUtils {
               HoodieRealtimeRecordReaderUtils.arrayWritableToString((ArrayWritable) value2));
         } else if (value1 instanceof Text && value2 instanceof BytesWritable) {
           assertArrayEquals(((Text) value1).getBytes(), ((BytesWritable) value2).getBytes());
+        } else if (f.schema().getType() == Schema.Type.ENUM
+            && value1 instanceof BytesWritable && value2 instanceof Text) {
+          // TODO(HUDI-8660): Revisit ENUM handling in Spark parquet reader and writer
+          assertArrayEquals(((BytesWritable) value1).getBytes(), ((Text) value2).getBytes());
         } else {
           assertEquals(value1, value2, "Field name " + fieldName + " is not same."
               + " Val1: " + value1 + ", Val2:" + value2);

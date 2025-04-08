@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -34,8 +34,8 @@
     <jakarta.el.version>3.0.3</jakarta.el.version>
     <jakarta.validation.version>2.0.2</jakarta.validation.version>
     <jline.version>3.21.0</jline.version>
-    <hudi.cli.gson.version>2.6.2</hudi.cli.gson.version>
-    <commons-configuration-2.version>2.8.0</commons-configuration-2.version>
+    <hudi.cli.gson.version>2.11.0</hudi.cli.gson.version>
+    <commons-configuration-2.version>2.11.0</commons-configuration-2.version>
   </properties>
 
   <build>
@@ -267,17 +267,17 @@
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>fluent-hc</artifactId>
-      <version>${http.version}</version>
+      <version>${httpclient.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpcore</artifactId>
-      <version>${http.version}</version>
+      <version>${httpcore.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpclient</artifactId>
-      <version>${http.version}</version>
+      <version>${httpclient.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>

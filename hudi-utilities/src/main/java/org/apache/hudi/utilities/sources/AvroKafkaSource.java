@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
@@ -27,6 +28,7 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
+import org.apache.hudi.utilities.sources.helpers.KafkaSourceUtil;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
@@ -47,7 +49,6 @@ import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREF
 import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS;
-import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_VALUE_DESERIALIZER_SCHEMA;
 
 /**
  * Reads avro serialized Kafka data, based on the confluent schema-registry.
@@ -91,18 +92,18 @@ public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
     }
 
     if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
-      configureSchemaDeserializer();
+      KafkaSourceUtil.configureSchemaDeserializer(schemaProvider, props);
     }
     offsetGen = new KafkaOffsetGen(props);
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
-      configureSchemaDeserializer();
+      KafkaSourceUtil.configureSchemaDeserializer(schemaProvider, props);
       offsetGen = new KafkaOffsetGen(props);
     }
-    return super.fetchNewData(lastCheckpointStr, sourceLimit);
+    return super.readFromCheckpoint(lastCheckpoint, sourceLimit);
   }
 
   @Override
@@ -133,12 +134,5 @@ public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
     } else {
       return kafkaRDD.map(consumerRecord -> (GenericRecord) consumerRecord.value());
     }
-  }
-
-  private void configureSchemaDeserializer() {
-    if (schemaProvider == null) {
-      throw new HoodieReadFromSourceException("SchemaProvider has to be set to use KafkaAvroSchemaDeserializer");
-    }
-    props.put(KAFKA_VALUE_DESERIALIZER_SCHEMA.key(), schemaProvider.getSourceSchema().toString());
   }
 }

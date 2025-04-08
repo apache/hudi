@@ -1,0 +1,80 @@
+{
+  "type": "record",
+  "name": "ComplexRecord",
+  "fields": [
+    {
+      "name": "primitiveField",
+      "type": "string"
+    },
+    {
+      "name": "logicalTypeField",
+      "type": {
+        "type": "int",
+        "logicalType": "date"
+      }
+    },
+    {
+      "name": "decimalField",
+      "type": {
+        "type": "fixed",
+        "name": "FixedDecimal",
+        "size": 16,
+        "logicalType": "decimal",
+        "precision": 10,
+        "scale": 2
+      }
+    },
+    {
+      "name": "enumField",
+      "type": {
+        "type": "enum",
+        "name": "Colors",
+        "symbols": [
+          "RED",
+          "GREEN",
+          "BLUE"
+        ]
+      }
+    },
+    {
+      "name": "arrayField",
+      "type": {
+        "type": "array",
+        "items": "long"
+      }
+    },
+    {
+      "name": "mapField",
+      "type": {
+        "type": "map",
+        "values": "double"
+      }
+    },
+    {
+      "name": "unionField",
+      "type": [
+        "null",
+        "string",
+        "int"
+      ]
+    },
+    {
+      "name": "recordField",
+      "type": {
+        "type": "record",
+        "name": "SubRecord",
+        "fields": [
+          {
+            "name": "subField1",
+            "type": "boolean"
+          },
+          {
+            "name": "subField2",
+            "type": "bytes",
+            "order": "descending"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<String, Long>>
     implements Registry, Serializable {
-  private String name;
+  private final String name;
   ConcurrentHashMap<String, Long> counters = new ConcurrentHashMap<>();
 
   public DistributedRegistry(String name) {

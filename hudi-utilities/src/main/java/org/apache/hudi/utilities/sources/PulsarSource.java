@@ -20,6 +20,8 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -112,8 +114,8 @@ public class PulsarSource extends RowSource implements Closeable {
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCheckpointStr, long sourceLimit) {
-    Pair<MessageId, MessageId> startingEndingOffsetsPair = computeOffsets(lastCheckpointStr, sourceLimit);
+  protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    Pair<MessageId, MessageId> startingEndingOffsetsPair = computeOffsets(lastCheckpoint, sourceLimit);
 
     MessageId startingOffset = startingEndingOffsetsPair.getLeft();
     MessageId endingOffset = startingEndingOffsetsPair.getRight();
@@ -130,7 +132,7 @@ public class PulsarSource extends RowSource implements Closeable {
         .option("endingOffsets", endingOffsetStr)
         .load();
 
-    return Pair.of(Option.of(transform(sourceRows)), endingOffsetStr);
+    return Pair.of(Option.of(transform(sourceRows)), new StreamerCheckpointV2(endingOffsetStr));
   }
 
   @Override
@@ -143,8 +145,8 @@ public class PulsarSource extends RowSource implements Closeable {
     return rows.drop(PULSAR_META_FIELDS);
   }
 
-  private Pair<MessageId, MessageId> computeOffsets(Option<String> lastCheckpointStrOpt, long sourceLimit) {
-    MessageId startingOffset = decodeStartingOffset(lastCheckpointStrOpt);
+  private Pair<MessageId, MessageId> computeOffsets(Option<Checkpoint> lastCheckpointOpt, long sourceLimit) {
+    MessageId startingOffset = decodeStartingOffset(lastCheckpointOpt);
     MessageId endingOffset = fetchLatestOffset();
 
     if (endingOffset.compareTo(startingOffset) < 0) {
@@ -159,9 +161,9 @@ public class PulsarSource extends RowSource implements Closeable {
     return Pair.of(startingOffset, endingOffset);
   }
 
-  private MessageId decodeStartingOffset(Option<String> lastCheckpointStrOpt) {
-    return lastCheckpointStrOpt
-        .map(lastCheckpoint -> JsonUtils.topicOffsets(lastCheckpoint).apply(topicName))
+  private MessageId decodeStartingOffset(Option<Checkpoint> lastCheckpointOpt) {
+    return lastCheckpointOpt
+        .map(lastCheckpoint -> JsonUtils.topicOffsets(lastCheckpoint.getCheckpointKey()).apply(topicName))
         .orElseGet(() -> {
           PulsarSourceConfig.OffsetAutoResetStrategy autoResetStrategy = PulsarSourceConfig.OffsetAutoResetStrategy.valueOf(
               getStringWithAltKeys(props, PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY,

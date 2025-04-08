@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex.IndexType;
@@ -44,12 +44,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,13 +61,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestBucketStreamWrite {
 
+  private static final Map<String, List<String>> EXPECTED_AS_LIST = new HashMap<>();
   private static final Map<String, String> EXPECTED = new HashMap<>();
 
   static {
-    EXPECTED.put("par1", "[id1,par1,id1,Danny,23,1000,par1, id2,par1,id2,Stephen,33,2000,par1]");
-    EXPECTED.put("par2", "[id3,par2,id3,Julian,53,3000,par2, id4,par2,id4,Fabian,31,4000,par2]");
-    EXPECTED.put("par3", "[id5,par3,id5,Sophia,18,5000,par3, id6,par3,id6,Emma,20,6000,par3]");
-    EXPECTED.put("par4", "[id7,par4,id7,Bob,44,7000,par4, id8,par4,id8,Han,56,8000,par4]");
+    EXPECTED_AS_LIST.put("par1", Arrays.asList("id1,par1,id1,Danny,23,1000,par1", "id2,par1,id2,Stephen,33,2000,par1"));
+    EXPECTED_AS_LIST.put("par2", Arrays.asList("id3,par2,id3,Julian,53,3000,par2", "id4,par2,id4,Fabian,31,4000,par2"));
+    EXPECTED_AS_LIST.put("par3", Arrays.asList("id5,par3,id5,Sophia,18,5000,par3", "id6,par3,id6,Emma,20,6000,par3"));
+    EXPECTED_AS_LIST.put("par4", Arrays.asList("id7,par4,id7,Bob,44,7000,par4", "id8,par4,id8,Han,56,8000,par4"));
+
+    for (Map.Entry<String, List<String>> entry : EXPECTED_AS_LIST.entrySet()) {
+      String value = entry.getValue().stream().map(Object::toString).collect(Collectors.joining(", "));
+      EXPECTED.put(entry.getKey(), "[" + value + "]");
+    }
   }
 
   @TempDir
@@ -78,10 +85,10 @@ public class ITTestBucketStreamWrite {
     // this test is to ensure that the correct fileId can be fetched when recovering from a rollover when a new
     // fileGroup is created for a bucketId
     String tablePath = tempFile.getAbsolutePath();
-    doWrite(tablePath, isCow);
-    doDeleteCommit(tablePath, isCow);
-    doWrite(tablePath, isCow);
-    doWrite(tablePath, isCow);
+    doWrite(tablePath, isCow, 1);
+    doDeleteCommit(tablePath);
+    doWrite(tablePath, isCow, 1);
+    doWrite(tablePath, isCow, 1);
 
     if (isCow) {
       TestData.checkWrittenData(tempFile, EXPECTED, 4);
@@ -91,7 +98,20 @@ public class ITTestBucketStreamWrite {
     }
   }
 
-  private static void doDeleteCommit(String tablePath, boolean isCow) throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testBucketWriteIntoMultipleBuckets(boolean isCow) throws Exception {
+    String tablePath = tempFile.getAbsolutePath();
+    doWrite(tablePath, isCow, 2);
+    if (isCow) {
+      TestData.checkWrittenDataCOW(tempFile, EXPECTED_AS_LIST);
+    } else {
+      HoodieStorage storage = HoodieTestUtils.getStorage(tempFile.getAbsolutePath());
+      TestData.checkWrittenDataMOR(storage, tempFile, EXPECTED, 4);
+    }
+  }
+
+  private static void doDeleteCommit(String tablePath) throws Exception {
     // create metaClient
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(tablePath);
 
@@ -104,9 +124,7 @@ public class ITTestBucketStreamWrite {
     String commitInstant = instant.requestedTime();
     String filename = INSTANT_FILE_NAME_GENERATOR.getFileName(activeCompletedTimeline.getInstants().get(0));
 
-    HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe()
-        .deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(),
-            HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().readCommitMetadata(instant);
 
     // delete successful commit to simulate an unsuccessful write
     HoodieStorage storage = metaClient.getStorage();
@@ -119,25 +137,16 @@ public class ITTestBucketStreamWrite {
       String partition = partitionFileNameSplit[0];
       String fileName = partitionFileNameSplit[1];
       try {
-        String markerFileName = FileCreateUtils.markerFileName(fileName, IOType.CREATE);
-        FileCreateUtils.createMarkerFile(tablePath, partition, commitInstant, markerFileName);
+        String markerFileName = FileCreateUtilsLegacy.markerFileName(fileName, IOType.CREATE);
+        FileCreateUtilsLegacy.createMarkerFile(tablePath, partition, commitInstant, markerFileName);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
     });
   }
 
-  private static String getWriteToken(String relativeFilePath) {
-    Pattern writeTokenPattern = Pattern.compile("_((\\d+)-(\\d+)-(\\d+))_");
-    Matcher matcher = writeTokenPattern.matcher(relativeFilePath);
-    if (!matcher.find()) {
-      throw new RuntimeException("Invalid relative file path: " + relativeFilePath);
-    }
-    return matcher.group(1);
-  }
-
-  private static void doWrite(String path, boolean isCow) throws InterruptedException, ExecutionException {
-    // create hoodie table and perform writes
+  private static void doWrite(String path, boolean isCow, int bucketNum)
+      throws InterruptedException, ExecutionException {
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
     Map<String, String> options = new HashMap<>();
@@ -146,8 +155,9 @@ public class ITTestBucketStreamWrite {
     // use bucket index
     options.put(FlinkOptions.TABLE_TYPE.key(), isCow ? FlinkOptions.TABLE_TYPE_COPY_ON_WRITE : FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     options.put(FlinkOptions.INDEX_TYPE.key(), IndexType.BUCKET.name());
-    options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), "1");
+    options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), String.valueOf(bucketNum));
 
+    // create hoodie table and perform writes
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
     tableEnv.executeSql(TestSQL.INSERT_T1).await();

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -64,6 +65,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
     super(jsc, props, cfg, schema);
   }
 
+  @Override
   public void shutdownResources() {
     if (this.deltaStreamerWrapper != null) {
       log.info("Shutting down DS wrapper gracefully ");
@@ -75,18 +77,21 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
     }
   }
 
+  @Override
   public RDD<GenericRecord> getNextBatch() throws Exception {
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+    Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
     lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
     JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
     return inputRDD.map(r -> (GenericRecord) ((HoodieAvroRecord) r).getData()
         .getInsertValue(new Schema.Parser().parse(schema)).get()).rdd();
   }
 
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
+  @Override
+  public Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
     return this.deltaStreamerWrapper.fetchSource();
   }
 
+  @Override
   public Option<String> startCommit() {
     if (cfg.useDeltaStreamer) {
       return Option.of(writeClient.createNewInstantTime());
@@ -95,56 +100,62 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
     }
   }
 
+  @Override
   public JavaRDD<WriteStatus> upsert(Option<String> instantTime) throws Exception {
     if (cfg.useDeltaStreamer) {
       return deltaStreamerWrapper.upsert(WriteOperationType.UPSERT);
     } else {
-      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
       lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
       return writeClient.upsert(nextBatch.getRight().getRight(), instantTime.get());
     }
   }
 
+  @Override
   public JavaRDD<WriteStatus> insert(Option<String> instantTime) throws Exception {
     if (cfg.useDeltaStreamer) {
       return deltaStreamerWrapper.insert();
     } else {
-      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
       lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
       return writeClient.insert(nextBatch.getRight().getRight(), instantTime.get());
     }
   }
 
+  @Override
   public JavaRDD<WriteStatus> insertOverwrite(Option<String> instantTime) throws Exception {
     if (cfg.useDeltaStreamer) {
       return deltaStreamerWrapper.insertOverwrite();
     } else {
-      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
       lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
       return writeClient.insertOverwrite(nextBatch.getRight().getRight(), instantTime.get()).getWriteStatuses();
     }
   }
 
+  @Override
   public JavaRDD<WriteStatus> insertOverwriteTable(Option<String> instantTime) throws Exception {
     if (cfg.useDeltaStreamer) {
       return deltaStreamerWrapper.insertOverwriteTable();
     } else {
-      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
       lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
       return writeClient.insertOverwriteTable(nextBatch.getRight().getRight(), instantTime.get()).getWriteStatuses();
     }
   }
 
+  @Override
   public JavaRDD<WriteStatus> bulkInsert(Option<String> instantTime) throws Exception {
     if (cfg.useDeltaStreamer) {
       return deltaStreamerWrapper.bulkInsert();
     } else {
-      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
       lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
       return writeClient.bulkInsert(nextBatch.getRight().getRight(), instantTime.get());
     }
   }
 
+  @Override
   public JavaRDD<WriteStatus> compact(Option<String> instantTime) throws Exception {
     if (cfg.useDeltaStreamer) {
       return deltaStreamerWrapper.compact();
@@ -166,6 +177,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
     }
   }
 
+  @Override
   public void inlineClustering() {
     if (!cfg.useDeltaStreamer) {
       Option<String> clusteringInstantOpt = writeClient.scheduleClustering(Option.empty());
@@ -180,6 +192,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
     }
   }
 
+  @Override
   public Option<String> scheduleCompaction(Option<Map<String, String>> previousCommitExtraMetadata) throws
       Exception {
     if (cfg.useDeltaStreamer) {
@@ -190,13 +203,14 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
     }
   }
 
+  @Override
   public void commit(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
                      Option<String> instantTime) {
     if (!cfg.useDeltaStreamer) {
       Map<String, String> extraMetadata = new HashMap<>();
       /** Store the checkpoint in the commit metadata just like
        * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
-      extraMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, lastCheckpoint.get());
+      extraMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, lastCheckpoint.get().getCheckpointKey());
       if (generatedDataStats != null && generatedDataStats.count() > 1) {
         // Just stores the path where this batch of data is generated to
         extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
@@ -205,13 +219,14 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
     }
   }
 
+  @Override
   public void commitCompaction(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
                                Option<String> instantTime) throws IOException {
     if (!cfg.useDeltaStreamer) {
       Map<String, String> extraMetadata = new HashMap<>();
       /** Store the checkpoint in the commit metadata just like
        * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
-      extraMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, lastCheckpoint.get());
+      extraMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, lastCheckpoint.get().getCheckpointKey());
       if (generatedDataStats != null && generatedDataStats.count() > 1) {
         // Just stores the path where this batch of data is generated to
         extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));

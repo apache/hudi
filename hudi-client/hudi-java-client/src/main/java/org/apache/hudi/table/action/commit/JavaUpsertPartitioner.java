@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -67,19 +66,19 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
   /**
    * Stat for the input and output workload. Describe the workload before and after being assigned buckets.
    */
-  private WorkloadProfile workloadProfile;
+  private final WorkloadProfile workloadProfile;
   /**
    * Helps decide which bucket an incoming update should go to.
    */
-  private HashMap<String, Integer> updateLocationToBucket;
+  private final HashMap<String, Integer> updateLocationToBucket;
   /**
    * Helps us pack inserts into 1 or more buckets depending on number of incoming records.
    */
-  private HashMap<String, List<InsertBucketCumulativeWeightPair>> partitionPathToInsertBucketInfos;
+  private final HashMap<String, List<InsertBucketCumulativeWeightPair>> partitionPathToInsertBucketInfos;
   /**
    * Remembers what type each bucket is for later.
    */
-  private HashMap<Integer, BucketInfo> bucketInfoMap;
+  private final HashMap<Integer, BucketInfo> bucketInfoMap;
 
   protected final HoodieTable table;
 
@@ -321,9 +320,7 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
         Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
         while (instants.hasNext()) {
           HoodieInstant instant = instants.next();
-          TimelineLayout layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion());
-          HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
-              .deserialize(instant, commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+          HoodieCommitMetadata commitMetadata = commitTimeline.readCommitMetadata(instant);
           long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
           long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
           if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {

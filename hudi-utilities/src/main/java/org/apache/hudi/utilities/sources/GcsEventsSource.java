@@ -19,6 +19,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -108,7 +110,7 @@ public class GcsEventsSource extends RowSource {
 
   private final List<String> messagesToAck = new ArrayList<>();
 
-  private static final String CHECKPOINT_VALUE_ZERO = "0";
+  private static final Checkpoint CHECKPOINT_VALUE_ZERO = new StreamerCheckpointV2("0");
 
   private static final Logger LOG = LoggerFactory.getLogger(GcsEventsSource.class);
 
@@ -137,8 +139,8 @@ public class GcsEventsSource extends RowSource {
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
-    LOG.info("fetchNextBatch(): Input checkpoint: " + lastCkptStr);
+  protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    LOG.info("fetchNextBatch(): Input checkpoint: " + lastCheckpoint);
     MessageBatch messageBatch;
     try {
       messageBatch = fetchFileMetadata();

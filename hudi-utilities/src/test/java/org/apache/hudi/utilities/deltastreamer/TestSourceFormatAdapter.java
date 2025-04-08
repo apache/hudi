@@ -21,6 +21,8 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
@@ -100,7 +102,7 @@ public class TestSourceFormatAdapter {
     typedProperties.put(HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
     setupRowSource(spark.read().schema(unsanitizedSchema).json(rdd), typedProperties, schemaProvider);
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testRowDataSource, Option.empty(), Option.of(typedProperties));
-    return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(DUMMY_CHECKPOINT), 10L);
+    return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(new StreamerCheckpointV2(DUMMY_CHECKPOINT)), 10L);
   }
 
   private InputBatch<Dataset<Row>> fetchJsonData(JavaRDD<String> rdd, StructType sanitizedSchema) {
@@ -109,7 +111,7 @@ public class TestSourceFormatAdapter {
     typedProperties.put(HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
     setupJsonSource(rdd, SchemaConverters.toAvroType(sanitizedSchema, false, "record", ""));
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testJsonDataSource, Option.empty(), Option.of(typedProperties));
-    return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(DUMMY_CHECKPOINT), 10L);
+    return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(new StreamerCheckpointV2(DUMMY_CHECKPOINT)), 10L);
   }
 
   private void verifySanitization(InputBatch<Dataset<Row>> inputBatch, String sanitizedDataFile, StructType sanitizedSchema) {
@@ -151,7 +153,7 @@ public class TestSourceFormatAdapter {
     }
 
     @Override
-    protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
+    protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCkptStr, long sourceLimit) {
       return Pair.of(batch.getBatch(), batch.getCheckpointForNextBatch());
     }
   }

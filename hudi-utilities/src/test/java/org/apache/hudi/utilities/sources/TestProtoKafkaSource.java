@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.schema.ProtoClassBasedSchemaProvider;
@@ -56,7 +57,8 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -81,6 +83,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
   private static final Random RANDOM = new Random();
   private static final String MOCK_REGISTRY_URL = "mock://127.0.0.1:8081";
 
+  @Override
   protected TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.streamer.source.kafka.topic", topic);
@@ -102,9 +105,10 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     return new SourceFormatAdapter(protoKafkaSource);
   }
 
-  @Test
-  public void testProtoKafkaSourceWithConfluentProtoDeserialization() {
-    final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceWithConfluentDeserializer";
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testProtoKafkaSourceWithConfluentProtoDeserialization(boolean persistSourceRdd) {
+    final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceWithConfluentDeserializer_" + persistSourceRdd;
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
     props.put(KAFKA_PROTO_VALUE_DESERIALIZER_CLASS.key(),
@@ -112,6 +116,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     props.put("schema.registry.url", MOCK_REGISTRY_URL);
     props.put("hoodie.streamer.schemaprovider.registry.url", MOCK_REGISTRY_URL);
     props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
+    props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(persistSourceRdd));
     // class name is not required so we'll remove it
     props.remove(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key());
     SchemaProvider schemaProvider = new SchemaRegistryProvider(props, jsc());
@@ -124,14 +129,15 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
         new HashSet<>(messagesRead.map(message -> PRINTER.print(message)).collect()));
   }
 
-  @Test
-  public void testProtoKafkaSourceWithFlattenWrappedPrimitives() {
-
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testProtoKafkaSourceWithFlattenWrappedPrimitives(boolean persistSourceRdd) {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceFlatten";
+    final String topic = TEST_TOPIC_PREFIX + "test_proto_kafka_source_flatten_persist_source_rdd_" + persistSourceRdd;
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
     props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
+    props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD.key(), Boolean.toString(persistSourceRdd));
     SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
     Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(protoKafkaSource);
