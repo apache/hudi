@@ -69,6 +69,7 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+      <scope>compile</scope>
     </dependency>
 
     <!-- Orc -->
