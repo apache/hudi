@@ -185,7 +185,11 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
         for (Long recordPosition : recordPositions) {
-          records.putIfAbsent(recordPosition,
+          // IMPORTANT:
+          // use #put for log files with regular order(see HoodieLogFile.LOG_FILE_COMPARATOR);
+          // use #putIfAbsent for log files with reverse order(see HoodieLogFile.LOG_FILE_COMPARATOR_REVERSED),
+          // the delete block would be parsed ahead of a data block if they are in different log files.
+          records.put(recordPosition,
               Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
                   null, "", DEFAULT_ORDERING_VALUE)));
         }
@@ -246,12 +250,11 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     Map<String, Object> metadata = readerContext.generateMetadataForRecord(
         baseRecord, readerSchema);
 
-    Option<T> resultRecord = Option.empty();
+    final Option<T> resultRecord;
     if (logRecordInfo != null) {
       resultRecord = merge(
           Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight());
       if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
         readStats.incrementNumUpdates();
       } else {
         readStats.incrementNumDeletes();
