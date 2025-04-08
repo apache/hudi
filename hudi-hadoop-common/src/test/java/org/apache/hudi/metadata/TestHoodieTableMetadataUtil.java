@@ -666,6 +666,13 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     decimalType.addToSchema(schema);
     // Expect the column to be unsupported.
     assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO)));
+
+    // Test for logical decimal type with precision exceeding limit after upscaling
+    schema = Schema.create(Schema.Type.BYTES);
+    decimalType = LogicalTypes.decimal(28, 10);
+    decimalType.addToSchema(schema);
+    // Expect the column to be unsupported.
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO)));
   }
 
   @Test
