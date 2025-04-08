@@ -82,7 +82,6 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
   private static final String GCS_LOCK_SERVICE_CLASS_NAME = "org.apache.hudi.gcp.transaction.lock.GCSStorageLock";
   private static final String S3_LOCK_SERVICE_CLASS_NAME = "org.apache.hudi.aws.transaction.lock.S3StorageLock";
 
-  // The static logger to be shared across contexts
   private static final Logger LOGGER = LoggerFactory.getLogger(ConditionalWriteLockProvider.class);
   private static final String LOCK_STATE_LOGGER_MSG = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}";
   private static final String LOCK_STATE_LOGGER_MSG_WITH_INFO = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}, {}";
@@ -98,7 +97,6 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
   // The lock service implementation which interacts with storage
   private final StorageLock lockService;
 
-  // Local variables
   private final long heartbeatIntervalMs;
   private final long lockValidityMs;
   private final String ownerId;
@@ -108,13 +106,12 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
 
   @GuardedBy("this")
   private StorageLockFile currentLockObj = null;
-  // Ensures we do not try to lock after being closed.
   @GuardedBy("this")
   private boolean isClosed = false;
 
   private synchronized void setLock(StorageLockFile lockObj) {
     if (lockObj != null && !Objects.equals(lockObj.getOwner(), this.ownerId)) {
-      throw new HoodieLockException("Owners do not match! Current LP owner: " + this.ownerId + " lock path: "
+      throw new HoodieLockException("Owners do not match! Current lock owner: " + this.ownerId + " lock path: "
           + this.lockFilePath + " owner: " + lockObj.getOwner());
     }
     this.currentLockObj = lockObj;
@@ -137,7 +134,9 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
     // Determine if the provided locks location is relative.
     String configuredLocksLocation = config.getLocksLocation();
 
-    // If using base path, recalculate the locks location as .hoodie/.locks
+    // If not configured, recalculate the locks location as .hoodie/.locks;
+    // otherwise (the lock location is configured), the configuration location is used as the folder
+    // to which the lock file is written to, and the lock file name is determined by the table's base path
     String locksLocation = StringUtils.isNullOrEmpty(configuredLocksLocation)
         ? String.format("%s%s%s", config.getHudiTableBasePath(), StoragePath.SEPARATOR, LOCKS_FOLDER_NAME)
         : configuredLocksLocation;
@@ -167,7 +166,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
       throw new HoodieLockException("Failed to load and initialize StorageLock", e);
     }
 
-    logger.info("Instantiated new Conditional Write LP, owner: {}, lockfilePath: {}", ownerId, lockFilePath);
+    logger.info("Instantiated new storage-based lock provider, owner: {}, lockfilePath: {}", ownerId, lockFilePath);
   }
 
   private URI parseURI(String location) {
@@ -424,7 +423,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
     }
   }
 
-  private void assertHeartBeatManagerExists() {
+  private void assertHeartbeatManagerExists() {
     if (heartbeatManager == null) {
       // broken function precondition.
       throw new HoodieLockException("Unexpected null heartbeatManager");
