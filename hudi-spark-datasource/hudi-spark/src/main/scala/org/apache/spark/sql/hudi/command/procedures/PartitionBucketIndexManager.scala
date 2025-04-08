@@ -183,14 +183,14 @@ class PartitionBucketIndexManager extends BaseProcedure
     val rescalePartitionsMap = getDifferentPartitions(partition2BucketWithNewHashingConfig.asScala, partition2BucketWithLatestHashingConfig.asScala)
     if (dryRun) {
       logInfo("Dry run OVERWRITE")
-      val rows = rescalePartitionsMap.map(entry => {
+      val content = rescalePartitionsMap.map(entry => {
         val details =
           s"""
              |${entry._1} => ${entry._2}
              |""".stripMargin
         details
-      }).toSeq
-      Seq(Row("SUCCESS", "DRY_RUN_OVERWRITE", s"""DETAILS:[$rows]"""))
+      }).toSeq.mkString(";")
+      Seq(Row("SUCCESS", "DRY_RUN_OVERWRITE", content))
     } else {
       logInfo("Perform OVERWRITE with dry-run disabled.")
       val partitionsToRescale = rescalePartitionsMap.keys
@@ -323,7 +323,7 @@ class PartitionBucketIndexManager extends BaseProcedure
     val hashingConfigs = PartitionBucketIndexHashingConfig.getAllHashingConfig(metaClient)
     val res = hashingConfigs.asScala.map(config => {
       config.toString
-    }).mkString("\\n")
+    }).mkString(";")
     Seq(Row("SUCCESS", "SHOW_CONFIG", res))
   }
 

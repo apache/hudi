@@ -178,13 +178,13 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
           val rule = "regex"
           val defaultBucketNumber = 1
           val sql = s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucketNumber => $defaultBucketNumber)"
-          val resExpect = ArrayBuffer(
+          val resExpect =
             s"""
                |dt=2021-01-05 => 2
-               |""".stripMargin)
+               |""".stripMargin
 
           checkAnswer(sql)(
-            Seq("SUCCESS", "DRY_RUN_OVERWRITE", s"""DETAILS:[$resExpect]""")
+            Seq("SUCCESS", "DRY_RUN_OVERWRITE", resExpect)
           )
 
           val metaClient = createMetaClient(spark, tablePath)
@@ -630,7 +630,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
           // take care of showConfig command
           val expected = PartitionBucketIndexHashingConfig.getAllHashingConfig(metaClient).asScala.map(config => {
             config.toString
-          }).mkString("\\n")
+          }).mkString(";")
           checkAnswer(s"call partition_bucket_index_manager(table => '$tableName', showConfig => true)")(
             Seq("SUCCESS", "SHOW_CONFIG", expected)
           )
