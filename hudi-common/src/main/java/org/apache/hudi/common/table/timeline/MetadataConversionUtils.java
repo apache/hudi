@@ -178,6 +178,7 @@ public class MetadataConversionUtils {
     archivedMetaWrapper.setStateTransitionTime(completionTime);
     String actionType = lsmTimelineRecord.get(ArchivedTimelineV2.ACTION_ARCHIVED_META_FIELD).toString();
     HoodieInstant hoodieInstant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, actionType, instantTime, completionTime);
+    metaClient.getArchivedTimeline().loadCompletedInstantDetailsInMemory();
     switch (actionType) {
       case HoodieTimeline.CLEAN_ACTION: {
         archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(metaClient, new ByteArrayInputStream(instantDetails.get())));

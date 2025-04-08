@@ -753,9 +753,13 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     Map<String, Integer> cleanStats = new HashMap<>();
     cleanStats.put("p1", 1);
     cleanStats.put("p2", 2);
-    for (int i = 1; i < 11; i += 2) {
+    for (int i = 1; i < 15; i += 2) {
       if (i == 3) {
+        testTable.doRollback(String.format("%08d", 1), String.format("%08d", 3));
+      } else if (i == 5) {
         testTable.doCluster(String.format("%08d", i), Collections.emptyMap(), Arrays.asList("p1", "p2"), 20);
+      } else if (i == 7) {
+        testTable.doCompaction(String.format("%08d", i), Arrays.asList("p1", "p2"));
       } else {
         testTable.doWriteOperation(String.format("%08d", i), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
         testTable.doClean(String.format("%08d", i + 1), cleanStats, Collections.emptyMap());
@@ -764,15 +768,17 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     archiveAndGetCommitsList(writeConfig);
     // loading archived timeline instants
     HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline();
+    archivedTimeLine.loadCompletedInstantDetailsInMemory();
 
     // Downgrade to table version 6
     new UpgradeDowngrade(metaClient, writeConfig, context, SparkUpgradeDowngradeHelper.getInstance())
         .run(HoodieTableVersion.SIX, null);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTimeline downgradedArchivedTimeline = metaClient.getArchivedTimeline();
+    metaClient.getArchivedTimeline().loadCompletedInstantDetailsInMemory();
     for (HoodieInstant instant : archivedTimeLine.getInstants()) {
-      assertEquals(archivedTimeLine.getInstantReader().getInstantDetails(instant),
-          downgradedArchivedTimeline.getInstantReader().getInstantDetails(instant));
+      assertTrue(Arrays.equals(archivedTimeLine.getInstantReader().getInstantDetails(instant).get(),
+          downgradedArchivedTimeline.getInstantReader().getInstantDetails(instant).get()));
     }
   }
 
