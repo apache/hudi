@@ -28,65 +28,66 @@ import java.util.HashSet;
  */
 public enum StorageSchemes {
   // Local filesystem
-  FILE("file", false, true),
+  FILE("file", false, true, false),
   // Hadoop File System
-  HDFS("hdfs", false, true),
+  HDFS("hdfs", false, true, false),
   // Baidu Advanced File System
-  AFS("afs", null, null),
+  AFS("afs", null, null, false),
   // Mapr File System
-  MAPRFS("maprfs", null, null),
+  MAPRFS("maprfs", null, null, false),
   // Apache Ignite FS
-  IGNITE("igfs", null, null),
+  IGNITE("igfs", null, null, false),
   // AWS S3
-  S3A("s3a", true, null),
-  S3("s3", true, null),
+  S3A("s3a", true, null, true),
+  S3("s3", true, null, true),
   // Google Cloud Storage
-  GCS("gs", true, null),
+  GCS("gs", true, null, true),
   // Azure WASB
-  WASB("wasb", null, null),
-  WASBS("wasbs", null, null),
+  WASB("wasb", null, null, false),
+  WASBS("wasbs", null, null, false),
   // Azure ADLS
-  ADL("adl", null, null),
+  ADL("adl", null, null, false),
   // Azure ADLS Gen2
-  ABFS("abfs", null, null),
-  ABFSS("abfss", null, null),
+  ABFS("abfs", null, null, false),
+  ABFSS("abfss", null, null, false),
   // Aliyun OSS
-  OSS("oss", null, null),
-  // View FS for federated setups. If federating across cloud stores, then append support is false
+  OSS("oss", null, null, false),
+  // View FS for federated setups. If federating across cloud stores, then append
+  // support is false
   // View FS support atomic creation
-  VIEWFS("viewfs", null, true),
-  //ALLUXIO
-  ALLUXIO("alluxio", null, null),
+  VIEWFS("viewfs", null, true, false),
+  // ALLUXIO
+  ALLUXIO("alluxio", null, null, false),
   // Tencent Cloud Object Storage
-  COSN("cosn", null, null),
+  COSN("cosn", null, null, false),
   // Tencent Cloud HDFS
-  CHDFS("ofs", null, null),
+  CHDFS("ofs", null, null, false),
   // Tencent Cloud CacheFileSystem
-  GOOSEFS("gfs", null, null),
+  GOOSEFS("gfs", null, null, false),
   // Databricks file system
-  DBFS("dbfs", null, null),
+  DBFS("dbfs", null, null, false),
   // IBM Cloud Object Storage
-  COS("cos", null, null),
+  COS("cos", null, null, false),
   // Huawei Cloud Object Storage
-  OBS("obs", null, null),
+  OBS("obs", null, null, false),
   // Kingsoft Standard Storage ks3
-  KS3("ks3", null, null),
+  KS3("ks3", null, null, false),
   // Netease Object Storage nos
-  NOS("nos", null, null),
+  NOS("nos", null, null, false),
   // JuiceFileSystem
-  JFS("jfs", null, null),
+  JFS("jfs", null, null, false),
   // Baidu Object Storage
-  BOS("bos", null, null),
+  BOS("bos", null, null, false),
   // Oracle Cloud Infrastructure Object Storage
-  OCI("oci", null, null),
+  OCI("oci", null, null, false),
   // Volcengine Object Storage
-  TOS("tos", null, null),
+  TOS("tos", null, null, false),
   // Volcengine Cloud HDFS
-  CFS("cfs", null, null),
+  CFS("cfs", null, null, false),
   // Aliyun Apsara File Storage for HDFS
-  DFS("dfs", false, true),
+  DFS("dfs", false, true, false),
   // Hopsworks File System
-  HOPSFS("hopsfs", false, true);
+  HOPSFS("hopsfs", false, true, false);
 
   // list files may bring pressure to storage with centralized meta service like HDFS.
   // when we want to get only part of files under a directory rather than all files, use getStatus may be more friendly than listStatus.
@@ -98,11 +99,17 @@ public enum StorageSchemes {
   private final Boolean isWriteTransactional;
   // null for uncertain if dfs support atomic create&delete, please update this for each FS
   private final Boolean supportAtomicCreation;
+  private final Boolean supportsConditionalWrite;
 
-  StorageSchemes(String scheme, Boolean isWriteTransactional, Boolean supportAtomicCreation) {
+  StorageSchemes(
+      String scheme,
+      Boolean isWriteTransactional,
+      Boolean supportAtomicCreation,
+      Boolean supportsConditionalWrite) {
     this.scheme = scheme;
     this.isWriteTransactional = isWriteTransactional;
     this.supportAtomicCreation = supportAtomicCreation;
+    this.supportsConditionalWrite = supportsConditionalWrite;
   }
 
   public String getScheme() {
@@ -115,6 +122,10 @@ public enum StorageSchemes {
 
   public boolean isAtomicCreationSupported() {
     return supportAtomicCreation != null && supportAtomicCreation;
+  }
+
+  public boolean isConditionalWriteSupported() {
+    return supportsConditionalWrite != null && supportsConditionalWrite;
   }
 
   public static boolean isSchemeSupported(String scheme) {
@@ -142,5 +153,13 @@ public enum StorageSchemes {
     }
 
     return LIST_STATUS_FRIENDLY_SCHEMES.contains(scheme);
+  }
+
+  public static boolean isConditionalWriteSupported(String scheme) {
+    if (!isSchemeSupported(scheme)) {
+      throw new IllegalArgumentException("Unsupported scheme :" + scheme);
+    }
+    return Arrays.stream(StorageSchemes.values())
+        .anyMatch(s -> s.isConditionalWriteSupported() && s.scheme.equals(scheme));
   }
 }
