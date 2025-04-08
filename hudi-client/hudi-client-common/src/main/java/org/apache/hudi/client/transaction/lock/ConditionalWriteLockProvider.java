@@ -95,7 +95,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
   @VisibleForTesting
   Logger logger;
 
-  // The lock service implementation which interacts with cloud storage.
+  // The lock service implementation which interacts with storage
   private final StorageLock lockService;
 
   // Local variables
