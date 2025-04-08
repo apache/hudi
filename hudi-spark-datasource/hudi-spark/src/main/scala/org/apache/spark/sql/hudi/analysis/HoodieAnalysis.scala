@@ -110,7 +110,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // NOTE: By default all commands are converted into corresponding Hudi implementations during
       //       "post-hoc resolution" phase
-      session => ResolveImplementations(),
+      session => ResolveImplementations(session),
       session => HoodiePostAnalysisRule(session)
     )
 
@@ -421,7 +421,7 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
  * NOTE: This is executed in "post-hoc resolution" phase to make sure all of the commands have
  *       been resolved prior to that
  */
-case class ResolveImplementations() extends Rule[LogicalPlan] {
+case class ResolveImplementations(sparkSession: SparkSession) extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
     AnalysisHelper.allowInvokingTransformsInAnalyzer {
@@ -432,7 +432,9 @@ case class ResolveImplementations() extends Rule[LogicalPlan] {
 
         // Convert to UpdateHoodieTableCommand
         case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
-          UpdateHoodieTableCommand(ut)
+          val plan = UpdateHoodieTableCommand.inputPlan(sparkSession, ut)
+          UpdateHoodieTableCommand(ut, plan)
+
 
         // Convert to DeleteHoodieTableCommand
         case dft@DeleteFromTable(plan@ResolvesToHudiTable(_), _) if dft.resolved =>
