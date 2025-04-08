@@ -45,7 +45,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -389,7 +395,7 @@ class TestConditionalWriteLockProvider {
             new StorageLockFile(new StorageLockData(true, data.getValidUntil(), ownerId), "v2")));
     assertTrue(lockProvider.tryLock());
     when(mockHeartbeatManager.hasActiveHeartbeat())
-        .thenReturn(true) // when we try to stop the heartbeat we will check if heartbeat is active, return true.
+        .thenReturn(true) // when we try to stop the heartbeat we will check if heartbeat is active return true.
         .thenReturn(false); // when try to set lock to expire we will assert no active heartbeat as a precondition.
     lockProvider.unlock();
     assertNull(lockProvider.getLock());
