@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -70,6 +71,8 @@ import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.junit.jupiter.api.AfterEach;
@@ -739,6 +742,37 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     // parse the compaction plan for each instant
     for (Option<byte[]> planDetails : planDetailsList) {
       assertDoesNotThrow(() -> deserializeAvroMetadata(new ByteArrayInputStream(planDetails.get()), HoodieCompactionPlan.class));
+    }
+  }
+
+  @Test
+  public void testDowngradeArchivedTimeline() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 1, 2, 5, HoodieTableType.COPY_ON_WRITE);
+
+    // do ingestion and trigger archive actions here.
+    Map<String, Integer> cleanStats = new HashMap<>();
+    cleanStats.put("p1", 1);
+    cleanStats.put("p2", 2);
+    for (int i = 1; i < 11; i += 2) {
+      if (i == 3) {
+        testTable.doCluster(String.format("%08d", i), Collections.emptyMap(), Arrays.asList("p1", "p2"), 20);
+      } else {
+        testTable.doWriteOperation(String.format("%08d", i), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+        testTable.doClean(String.format("%08d", i+1), cleanStats, Collections.emptyMap());
+      }
+    }
+    archiveAndGetCommitsList(writeConfig);
+    // loading archived timeline instants
+    HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline();
+
+    // Downgrade to table version 6
+    new UpgradeDowngrade(metaClient, writeConfig, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.SIX, null);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTimeline downgradedArchivedTimeline = metaClient.getArchivedTimeline();
+    for (HoodieInstant instant : archivedTimeLine.getInstants()) {
+      assertEquals(archivedTimeLine.getInstantReader().getInstantDetails(instant),
+          downgradedArchivedTimeline.getInstantReader().getInstantDetails(instant));
     }
   }
 
