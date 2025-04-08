@@ -25,6 +25,7 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -59,7 +60,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -311,13 +313,72 @@ public class HoodieIndexUtils {
       return Option.of(result);
     }
 
+    // At this point, result.getData() contains a partial record update.
+    IndexedRecord existingRecord = existing.toIndexedRecord(existingSchema, config.getProps())
+        .map(HoodieAvroIndexedRecord::getData).get();
+    IndexedRecord partialRecord = (IndexedRecord) result.getData();
+
+    // Merge the partial record with the complete record to fill in missing fields.
+    // Here, we use writeSchemaWithMetaFields as the merged schema.
+    IndexedRecord mergedRecord = mergePartialWithExisting(
+        partialRecord, partialRecord.getSchema(),
+        existingRecord, existingRecord.getSchema(),
+        writeSchemaWithMetaFields);
+    HoodieAvroIndexedRecord mergedResult = new HoodieAvroIndexedRecord(incoming.getKey(), mergedRecord);
+
+
     //record is inserted or updated
-    String partitionPath = keyGenerator.getPartitionPath((GenericRecord) result.getData());
-    HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
-            new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
+    HoodieRecord<R> withMeta = mergedResult.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
+        new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getKey().getPartitionPath()), config.getProps());
     return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
         config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
 
+  }
+
+  /**
+   * Merges a partial record with an existing complete record.
+   * <p>
+   * For each field in the merged schema, if the partial record (with its own schema) has the field,
+   * then its value is used; otherwise, the value from the complete (existing) record is taken.
+   *
+   * @param partial        The partial update record.
+   * @param partialSchema  The Avro schema of the partial record.
+   * @param existing       The full existing record.
+   * @param existingSchema The Avro schema of the existing record.
+   * @param mergedSchema   The schema containing all fields (e.g. writeSchemaWithMetaFields).
+   * @return A merged IndexedRecord containing values from both records.
+   */
+  private static IndexedRecord mergePartialWithExisting(IndexedRecord partial,
+                                                        Schema partialSchema,
+                                                        IndexedRecord existing,
+                                                        Schema existingSchema,
+                                                        Schema mergedSchema) {
+    // Create a new record using GenericData.Record (which implements IndexedRecord)
+    IndexedRecord mergedRecord = new GenericData.Record(mergedSchema);
+    for (Schema.Field field : mergedSchema.getFields()) {
+      // If this field is a meta field, then put null value in the merged record.
+      // We will prepend record key and partition path later.
+      if (HoodieAvroUtils.isMetadataField(field.name())) {
+        mergedRecord.put(field.pos(), null);
+        continue;
+      }
+      // Check if the partial record's schema contains the field.
+      Schema.Field partialField = partialSchema.getField(field.name());
+      if (partialField != null) {
+        // Use value from the partial record.
+        mergedRecord.put(field.pos(), partial.get(partialField.pos()));
+      } else {
+        // Otherwise, use value from the full existing record.
+        Schema.Field existingField = existingSchema.getField(field.name());
+        if (existingField != null) {
+          mergedRecord.put(field.pos(), existing.get(existingField.pos()));
+        } else {
+          // Field not found in either record, set to null.
+          mergedRecord.put(field.pos(), null);
+        }
+      }
+    }
+    return mergedRecord;
   }
 
   /**
@@ -330,7 +391,7 @@ public class HoodieIndexUtils {
       HoodieWriteConfig config,
       HoodieRecordMerger recordMerger,
       Option<BaseKeyGenerator> expressionPayloadKeygen) throws IOException {
-    Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+    Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
     Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     if (expressionPayloadKeygen.isPresent()) {
       return mergeIncomingWithExistingRecordWithExpressionPayload(incoming, existing, writeSchema,
