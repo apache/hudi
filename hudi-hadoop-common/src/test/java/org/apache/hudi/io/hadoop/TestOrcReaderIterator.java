@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.util.AvroOrcUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -39,7 +40,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.util.Iterator;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -84,15 +84,16 @@ public class TestOrcReaderIterator {
 
     Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
     RecordReader recordReader = reader.rows(new Reader.Options(conf).schema(orcSchema));
-    Iterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, avroSchema, orcSchema);
-    int recordCount = 0;
-    while (iterator.hasNext()) {
-      GenericRecord record = iterator.next();
-      assertEquals("name" + recordCount, record.get("name").toString());
-      assertEquals("color" + recordCount, record.get("favorite_color").toString());
-      assertEquals(recordCount, record.get("favorite_number"));
-      recordCount++;
+    try (ClosableIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, avroSchema, orcSchema)) {
+      int recordCount = 0;
+      while (iterator.hasNext()) {
+        GenericRecord record = iterator.next();
+        assertEquals("name" + recordCount, record.get("name").toString());
+        assertEquals("color" + recordCount, record.get("favorite_color").toString());
+        assertEquals(recordCount, record.get("favorite_number"));
+        recordCount++;
+      }
+      assertEquals(5, recordCount);
     }
-    assertEquals(5, recordCount);
   }
 }

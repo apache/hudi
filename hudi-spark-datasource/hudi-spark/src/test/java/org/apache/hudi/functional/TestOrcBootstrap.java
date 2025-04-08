@@ -43,6 +43,7 @@ import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -87,7 +88,6 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -444,18 +444,18 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
 
         Schema avroSchema = AvroOrcUtils.createAvroSchemaWithDefaultValue(orcSchema, "test_orc_record", null, true);
 
-        Iterator<GenericRecord> recIterator = new OrcReaderIterator(recordReader, avroSchema, orcSchema);
-
-        return StreamSupport.stream(Spliterators.spliteratorUnknownSize(recIterator, 0), false).map(gr -> {
-          try {
-            String key = gr.get("_row_key").toString();
-            String pPath = p.getKey();
-            return new HoodieAvroRecord<>(new HoodieKey(key, pPath), new RawTripTestPayload(gr.toString(), key, pPath,
-                HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
-          } catch (IOException e) {
-            throw new HoodieIOException(e.getMessage(), e);
-          }
-        });
+        try (ClosableIterator<GenericRecord> recIterator = new OrcReaderIterator(recordReader, avroSchema, orcSchema)) {
+          return StreamSupport.stream(Spliterators.spliteratorUnknownSize(recIterator, 0), false).map(gr -> {
+            try {
+              String key = gr.get("_row_key").toString();
+              String pPath = p.getKey();
+              return new HoodieAvroRecord<>(new HoodieKey(key, pPath), new RawTripTestPayload(gr.toString(), key, pPath,
+                  HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
+            } catch (IOException e) {
+              throw new HoodieIOException(e.getMessage(), e);
+            }
+          });
+        }
       } catch (IOException ioe) {
         throw new HoodieIOException(ioe.getMessage(), ioe);
       }

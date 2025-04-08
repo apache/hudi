@@ -51,6 +51,7 @@ public interface HoodieFileReader<T> extends AutoCloseable {
 
   ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
 
+  // FIXME-vc: this is a big spot to ensure things are closed.
   default ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema readerSchema) throws IOException {
     return getRecordIterator(readerSchema, readerSchema);
   }

@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
@@ -247,20 +248,19 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
               .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toList());
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
-      Iterator<HoodieRecord<IndexedRecord>> iterator =
-          hfileReader.getRecordsByKeysIterator(keys, avroSchema);
-
-      List<Integer> expectedIds =
-          IntStream.concat(IntStream.range(40, NUM_RECORDS), IntStream.range(10, 20))
-              .boxed().collect(Collectors.toList());
-      int index = 0;
-      while (iterator.hasNext()) {
-        GenericRecord record = (GenericRecord) iterator.next().getData();
-        String key = "key" + String.format("%02d", expectedIds.get(index));
-        assertEquals(key, record.get("_row_key").toString());
-        assertEquals(Integer.toString(expectedIds.get(index)), record.get("time").toString());
-        assertEquals(expectedIds.get(index), record.get("number"));
-        index++;
+      try (ClosableIterator<HoodieRecord<IndexedRecord>> iterator = hfileReader.getRecordsByKeysIterator(keys, avroSchema)) {
+        List<Integer> expectedIds =
+            IntStream.concat(IntStream.range(40, NUM_RECORDS), IntStream.range(10, 20))
+                .boxed().collect(Collectors.toList());
+        int index = 0;
+        while (iterator.hasNext()) {
+          GenericRecord record = (GenericRecord) iterator.next().getData();
+          String key = "key" + String.format("%02d", expectedIds.get(index));
+          assertEquals(key, record.get("_row_key").toString());
+          assertEquals(Integer.toString(expectedIds.get(index)), record.get("time").toString());
+          assertEquals(expectedIds.get(index), record.get("number"));
+          index++;
+        }
       }
     }
   }

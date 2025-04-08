@@ -84,6 +84,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     }
     val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     if (FSUtils.isLogFile(filePath)) {
+      // FIXME-vc: whos closing all this.
       new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
         .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(structType).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
