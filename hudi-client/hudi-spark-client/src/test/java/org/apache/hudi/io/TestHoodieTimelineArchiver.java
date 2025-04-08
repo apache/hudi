@@ -776,6 +776,11 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTimeline downgradedArchivedTimeline = metaClient.getArchivedTimeline();
     metaClient.getArchivedTimeline().loadCompletedInstantDetailsInMemory();
+    // verify that commits till 11th instant are all archived
+    for (int i = 1; i < 13; i += 2) {
+      assertTrue(downgradedArchivedTimeline.containsInstant(String.format("%08d", i)));
+    }
+    // verify the contents of older archived timeline and downgraded archived timeline
     for (HoodieInstant instant : archivedTimeLine.getInstants()) {
       assertTrue(Arrays.equals(archivedTimeLine.getInstantReader().getInstantDetails(instant).get(),
           downgradedArchivedTimeline.getInstantReader().getInstantDetails(instant).get()));
