@@ -106,7 +106,6 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
   private final String bucketName;
   private final HeartbeatManager heartbeatManager;
 
-  // Provide a place to store the "current lock object".
   @GuardedBy("this")
   private StorageLockFile currentLockObj = null;
   // Ensures we do not try to lock after being closed.
