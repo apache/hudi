@@ -83,7 +83,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
   private static final String S3_LOCK_SERVICE_CLASS_NAME = "org.apache.hudi.aws.transaction.lock.S3StorageLock";
 
   // The static logger to be shared across contexts
-  private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(ConditionalWriteLockProvider.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(ConditionalWriteLockProvider.class);
   private static final String LOCK_STATE_LOGGER_MSG = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}";
   private static final String LOCK_STATE_LOGGER_MSG_WITH_INFO = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}, {}";
 
