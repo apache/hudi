@@ -53,12 +53,12 @@ public class ConditionalWriteLockConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion(SINCE_VERSION_1_0_2)
       .withDocumentation(
-          "For storage based conditional write lock provider, the amount of time each new lock is valid for."
-              + "The lock provider will attempt to renew its lock until it successful extends the lock lease period"
+          "For storage-based lock provider, the amount of time each new lock is valid for. "
+              + "The lock provider will attempt to renew its lock until it successfully extends the lock lease period "
               + "or the validity timeout is reached.");
 
   public static final ConfigProperty<Long> HEARTBEAT_POLL_MS = ConfigProperty
-      .key(CONDITIONAL_WRITE_LOCK_PROPERTY_PREFIX + "heartbeat_poll_ms")
+      .key(CONDITIONAL_WRITE_LOCK_PROPERTY_PREFIX + "heartbeat.poll.ms")
       .defaultValue(TimeUnit.SECONDS.toMillis(30))
       .markAdvanced()
       .sinceVersion(SINCE_VERSION_1_0_2)
@@ -75,7 +75,7 @@ public class ConditionalWriteLockConfig extends HoodieConfig {
 
   public String getHudiTableBasePath() {
     // Required!!
-    return getString(BASE_PATH.key());
+    return getString(BASE_PATH);
   }
 
   public String getLocksLocation() {
