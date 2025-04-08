@@ -390,7 +390,7 @@ public class MetadataCommand {
   }
 
   private HoodieWriteConfig getWriteConfig() {
-    return HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
+    return HoodieWriteConfig.newBuilder().withAutoCommit(true).withPath(HoodieCLI.basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
   }
 

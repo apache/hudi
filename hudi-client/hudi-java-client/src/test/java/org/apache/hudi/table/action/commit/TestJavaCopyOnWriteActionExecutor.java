@@ -117,6 +117,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
     // Prepare the AvroParquetIO
     return HoodieWriteConfig.newBuilder()
+        .withAutoCommit(true)
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
         .withSchema(SCHEMA.toString());
