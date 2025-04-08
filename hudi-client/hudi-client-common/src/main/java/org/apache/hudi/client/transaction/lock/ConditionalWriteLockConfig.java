@@ -42,7 +42,7 @@ public class ConditionalWriteLockConfig extends HoodieConfig {
       .sinceVersion(SINCE_VERSION_1_0_2)
       .withDocumentation(
           "For conditional write based lock provider, the optional URI where lock files are written. "
-              + "Must be the same filesystem as the table path and should conditional writes. "
+              + "Must be the same filesystem as the table path and should support conditional writes. "
               + "By default, writes to " + LOCKS_FOLDER_NAME + Path.SEPARATOR
               + DEFAULT_TABLE_LOCK_FILE_NAME + ".json under the table base path.");
 
