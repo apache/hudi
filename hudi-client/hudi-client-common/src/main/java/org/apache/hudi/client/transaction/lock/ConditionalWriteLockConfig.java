@@ -62,7 +62,7 @@ public class ConditionalWriteLockConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion(SINCE_VERSION_1_0_2)
       .withDocumentation(
-          "For storage based conditional write lock provider, the amount of time to wait before renewing the lock. Defaults to 30 seconds.");
+          "For storage-based conditional write lock provider, the amount of time to wait before renewing the lock. Defaults to 30 seconds.");
 
   public long getLockValidityTimeoutMs() {
     return getLong(LOCK_VALIDITY_TIMEOUT_MS);
