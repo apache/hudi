@@ -47,7 +47,7 @@ public class ConditionalWriteLockConfig extends HoodieConfig {
               + DEFAULT_TABLE_LOCK_FILE_NAME + ".json under the table base path.");
 
   public static final ConfigProperty<Long> LOCK_VALIDITY_TIMEOUT_MS = ConfigProperty
-      .key(CONDITIONAL_WRITE_LOCK_PROPERTY_PREFIX + "lock_validity_timeout_ms")
+      .key(CONDITIONAL_WRITE_LOCK_PROPERTY_PREFIX + "validity.timeout.ms")
       .defaultValue(TimeUnit.MINUTES.toMillis(5))
       .markAdvanced()
       .sinceVersion(SINCE_VERSION_1_0_2)
