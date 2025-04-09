@@ -400,6 +400,9 @@ stages:
       - job: UT_FT_8
         displayName: UT hudi-hadoop-common & Hudi Utilities others
         timeoutInMinutes: '75'
+        # trying with specific container image
+        container:
+          image: '20250323.1.0'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
