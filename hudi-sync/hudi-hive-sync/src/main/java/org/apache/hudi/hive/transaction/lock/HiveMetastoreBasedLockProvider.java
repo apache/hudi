@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hive.transaction.lock;
 
+import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.StringUtils;
@@ -90,10 +91,21 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
 
   public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     this(lockConfiguration);
+    Configuration hadoopConf = conf.unwrapAs(Configuration.class);
+    try {
+      if (hadoopConf.get(HiveConf.ConfVars.METASTOREPWD.varname) == null || hadoopConf.get(HiveConf.ConfVars.METASTOREPWD.varname).isEmpty()) {
+        String passwd = ShimLoader.getHadoopShims().getPassword(hadoopConf, HiveConf.ConfVars.METASTOREPWD.varname);
+        if (passwd != null && !passwd.isEmpty()) {
+          hadoopConf.set(HiveConf.ConfVars.METASTOREPWD.varname, passwd);
+        }
+      }
+    } catch (Exception e) {
+      LOG.info("Exception while trying to get Meta Sync password from hadoop credential store", e);
+    }
     try {
       HiveConf hiveConf = new HiveConf();
       setHiveLockConfs(hiveConf);
-      hiveConf.addResource(conf.unwrapAs(Configuration.class));
+      hiveConf.addResource(hadoopConf);
       this.hiveClient = IMetaStoreClientUtil.getMSC(hiveConf);
     } catch (MetaException | HiveException e) {
       throw new HoodieLockException("Failed to create HiveMetaStoreClient", e);
