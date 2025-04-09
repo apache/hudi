@@ -42,7 +42,8 @@ public class StorageBasedLockConfig extends HoodieConfig {
       .sinceVersion(SINCE_VERSION_1_0_2)
       .withDocumentation(
           "For storage-based lock provider, the optional URI where lock files are written. "
-          + "For example, if `/lock/location` is specified, `/lock/location/<lock_file_name>` is used as the lock file, where the lock file name `lock_file_name` is determined based on the table's base path. "
+          + "For example, if `/lock/location` is specified, `/lock/location/<lock_file_name>` is used as the lock file,"
+              + "where the lock file name `lock_file_name` is determined based on the table's base path. "
               + "Must be the same filesystem as the table path and should support conditional writes. "
               + "By default, writes to " + LOCKS_FOLDER_NAME + Path.SEPARATOR
               + DEFAULT_TABLE_LOCK_FILE_NAME + ".json under the table base path.");
