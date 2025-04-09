@@ -106,7 +106,9 @@ instead of proceeding to completion.
 
 Note that with cancellable clustering plans we are opting for a concurrency model where ingestion writers are given precdence. The tradeoff here
 is that when a clustering plan is cancellable we aren't allowing it to optionally force proceed or force ingestion to wait, but instead minimize 
-the chance of having it block ingestion.
+the chance of having it block ingestion. Because of this users should ensure that they don't enable the `cancellable` flag if they want to guarantee
+that a clustering plan will be committed within a given time window, since frequent ingestion jobs targeting the same file groups will "starve" the
+cancellable clustering write from committing (which is intended and by design as mentioned above, but something the user should be aware of)
 
 ### Adding a cancel action and aborted state for cancellable plans
 
@@ -166,8 +168,8 @@ service flow are grey-ed out)
 Having this new .hoodie/.cancel folder (in addition to only having the .aborted state) is needed not only to allow any
 caller to forcebily block an instant from being committed, but also to prevent the need for table service workers to
 also perform write conflict detection (that ingestion already will perform) or unnecessarily re-attempt execution of the
-instant if it has been already been requested for cancellation but not succefully aborted yet. The below visualized
-scenario shows how this clustering attempt will "short circuit" in this manner by checking /.cancel to see if clustering
+instant if it has been already been requested for cancellation (by an ingestion job targeting same file groups) but not succefully aborted yet. 
+The below visualized scenario shows how this clustering attempt will "short circuit" in this manner by checking /.cancel to see if clustering
 execution should even proceed. This scenario also includes an example of concurrent writers to show how transaction and
 heartbeating in the above proposed flow will allow correct behavior even in the face of concurrent writers attempting to
 execute and/or cancel the instant.
