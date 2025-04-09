@@ -398,6 +398,9 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_8
+        runs-on: ubuntu-22.04
+        container:
+            image: 20250323.1.0
         displayName: UT hudi-hadoop-common & Hudi Utilities others
         timeoutInMinutes: '75'
         steps:
