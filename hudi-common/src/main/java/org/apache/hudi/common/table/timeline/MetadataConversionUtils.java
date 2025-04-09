@@ -23,6 +23,8 @@ import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -178,7 +180,6 @@ public class MetadataConversionUtils {
     archivedMetaWrapper.setStateTransitionTime(completionTime);
     String actionType = lsmTimelineRecord.get(ArchivedTimelineV2.ACTION_ARCHIVED_META_FIELD).toString();
     HoodieInstant hoodieInstant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, actionType, instantTime, completionTime);
-    metaClient.getArchivedTimeline().loadCompletedInstantDetailsInMemory();
     switch (actionType) {
       case HoodieTimeline.CLEAN_ACTION: {
         archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(metaClient, new ByteArrayInputStream(instantDetails.get())));
@@ -187,8 +188,9 @@ public class MetadataConversionUtils {
         break;
       }
       case HoodieTimeline.COMMIT_ACTION: {
-        getArchivedCommitMetadata(metaClient, hoodieInstant, HoodieCommitMetadata.class)
-            .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadataToAvro(commitMetadata)));
+        HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(hoodieInstant, new ByteArrayInputStream(instantDetails.get()),
+            () -> instantDetails.get().length == 0, HoodieCommitMetadata.class);
+        archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadataToAvro(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
 
         if (planBytes.isPresent()) {
@@ -199,8 +201,9 @@ public class MetadataConversionUtils {
         break;
       }
       case HoodieTimeline.DELTA_COMMIT_ACTION: {
-        getArchivedCommitMetadata(metaClient, hoodieInstant, HoodieCommitMetadata.class)
-            .ifPresent(commitMetadata -> archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadataToAvro(commitMetadata)));
+        HoodieCommitMetadata deltaCommitMetadata = metaClient.getCommitMetadataSerDe().deserialize(hoodieInstant, new ByteArrayInputStream(instantDetails.get()),
+            () -> instantDetails.get().length == 0, HoodieCommitMetadata.class);
+        archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadataToAvro(deltaCommitMetadata));
         archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
 
         if (planBytes.isPresent()) {
@@ -212,13 +215,14 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
       case HoodieTimeline.CLUSTERING_ACTION: {
-        getArchivedCommitMetadata(metaClient, hoodieInstant, HoodieReplaceCommitMetadata.class)
-            .ifPresent(replaceCommitMetadata -> archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertCommitMetadataToAvro(replaceCommitMetadata)));
+        HoodieCommitMetadata replaceCommitMetadata = metaClient.getCommitMetadataSerDe().deserialize(hoodieInstant, new ByteArrayInputStream(instantDetails.get()),
+            () -> instantDetails.get().length == 0, HoodieReplaceCommitMetadata.class);
+        archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertCommitMetadataToAvro(replaceCommitMetadata));
 
         // inflight replacecommit files have the same metadata body as HoodieCommitMetadata
         // so we could re-use it without further creating an inflight extension.
         // Or inflight replacecommit files are empty under clustering circumstance
-        Option<HoodieCommitMetadata> inflightCommitMetadata = getArchivedCommitMetadata(metaClient, hoodieInstant, HoodieCommitMetadata.class);
+        Option<HoodieCommitMetadata> inflightCommitMetadata = getInflightCommitMetadata(metaClient, hoodieInstant, instantDetails);
         if (inflightCommitMetadata.isPresent()) {
           archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadataToAvro(inflightCommitMetadata.get()));
         }
@@ -227,13 +231,13 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
         archivedMetaWrapper.setHoodieRollbackMetadata(
-            metaClient.getArchivedTimeline().readRollbackMetadata(hoodieInstant));
+            TimelineMetadataUtils.deserializeAvroMetadata(new ByteArrayInputStream(instantDetails.get()), HoodieRollbackMetadata.class));
         archivedMetaWrapper.setActionType(ActionType.rollback.name());
         break;
       }
       case HoodieTimeline.SAVEPOINT_ACTION: {
         archivedMetaWrapper.setHoodieSavePointMetadata(
-            metaClient.getArchivedTimeline().readSavepointMetadata(hoodieInstant));
+            TimelineMetadataUtils.deserializeAvroMetadata(new ByteArrayInputStream(instantDetails.get()), HoodieSavepointMetadata.class));
         archivedMetaWrapper.setActionType(ActionType.savepoint.name());
         break;
       }
@@ -255,6 +259,16 @@ public class MetadataConversionUtils {
       }
     }
     return archivedMetaWrapper;
+  }
+
+  private static Option<HoodieCommitMetadata> getInflightCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant,
+                                                                        Option<byte[]> inflightContent) throws IOException {
+    if (!inflightContent.isPresent() || inflightContent.get().length == 0) {
+      // inflight files can be empty in some certain cases, e.g. when users opt in clustering
+      return Option.empty();
+    }
+    return Option.of(metaClient.getCommitMetadataSerDe().deserialize(instant, new ByteArrayInputStream(inflightContent.get()),
+        () -> inflightContent.get().length == 0, HoodieCommitMetadata.class));
   }
 
   public static HoodieLSMTimelineInstant createLSMTimelineInstant(ActiveAction activeAction, HoodieTableMetaClient metaClient) {
@@ -337,15 +351,6 @@ public class MetadataConversionUtils {
       }
     }
     return archivedMetaWrapper;
-  }
-
-  private static <T extends HoodieCommitMetadata> Option<T> getArchivedCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant, Class<T> clazz) throws IOException {
-    T commitMetadata = metaClient.getArchivedTimeline().readInstantContent(instant, clazz);
-    // an empty file will return the default instance with an UNKNOWN operation type and in that case we return an empty option
-    if (commitMetadata.getOperationType() == WriteOperationType.UNKNOWN) {
-      return Option.empty();
-    }
-    return Option.of(commitMetadata);
   }
 
   private static <T extends HoodieCommitMetadata> Option<T> getCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant, Class<T> clazz) throws IOException {
