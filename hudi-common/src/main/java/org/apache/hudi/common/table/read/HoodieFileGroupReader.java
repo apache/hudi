@@ -89,6 +89,17 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // considers the log records which are inflight.
   private boolean allowInflightInstants;
 
+  public HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage,
+      String tablePath,
+      String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
+      Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient,
+      TypedProperties props,
+      long start, long length, boolean shouldUseRecordPosition) {
+    this(readerContext, storage, tablePath, latestCommitTime, fileSlice, dataSchema,
+        requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props, start, length,
+        shouldUseRecordPosition, false);
+  }
+
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
                                Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
