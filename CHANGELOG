@@ -708,3 +708,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 
 --- [2025-04-05 21:08:08] [release-v1.108.0] ---
 [AUDIT-1263]: Changelog for release-v1.107.0 (#1311)
+
+--- [2025-04-09 16:04:13] [release-v1.110.0] ---
+[ENG-25226][INTERNAL] Exclude parquet-avro from hudi-utilities and hudi-gcp bundles (#1320)
+[AUDIT-1276]: Changelog for release-v1.108.0 (#1318)
