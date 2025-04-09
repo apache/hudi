@@ -278,7 +278,22 @@ executes the rollback of any failed ingestion writes. Specifically, clean will n
 2. Iterate through each instant in /.cancel , and call execute_abort. The execute_abort call will implictly check that the target instant doesn't have an active heartbeat.
    This will prevent CLEAN from executing cancellation of an instant that is being worked on by an active writer
 
+### Summarizing performance overheads
 
+Since this proposal will add more cases where transactions are taken and internal HUDI metadata files are read, it is important to assess the potential impact to latency for
+ingestion/clustering writes:
+
+- For ingestion, currently ingestion (during write-conflict detection) already iterates through all pending/potentially conflicting clustering instants and deserializing them while
+  holding the table lock. If this proposal is implemented, then for all of these plans that are inflight and cancellable, ingestion will spend a little bit more time creating the
+  empty file for each instant in /.cancel folder. This should only increase the time window that the lock (and overall ingestion runtime) in taken by 2-3 DFS calls per pending cancellable
+  instant (checking that the instant isn't already cancellable/aborted and adding the corresponding empty file to /.cancel folder)
+
+- For clustering, this proposal will now update clustering execution to take an additional lock 1-2 times at the start of execution (when checking for heartbeat to see if
+  ongoing writer exists/instant has been cancelled and again transitioning the instant to .aborted if instant has been cancelled). The most expensive operation done
+  while the table lock is held will most likely be the scheduling of the rollback plan (if instant is cancelled) since the runtime/spark resources will be proportional to
+  the number of file groups targeting by the clustering plan. This should only have a notable impact in the worst case where the clustering write was previously about to finish
+  its commit before it was cancelled. 
+  
 
 ### Summarizing proposed internal timeline/instant format changes
 
