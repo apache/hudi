@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, LogicalPlan, Project, UpdateTable}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{castIfNeeded, removeMetaFields}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 
@@ -45,10 +45,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
   }
 
   override def run(sparkSession: SparkSession, plan: SparkPlan): Seq[Row] = {
-    val catalogTable = sparkAdapter.resolveHoodieTable(ut.table)
-      .map(HoodieCatalogTable(sparkSession, _))
-      .get
-
+    val catalogTable = UpdateHoodieTableCommand.catalogTable(sparkSession, ut)
     val tableId = catalogTable.table.qualifiedName
 
     logInfo(s"Executing 'UPDATE' command for $tableId")
@@ -60,9 +57,9 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
       buildHoodieConfig(catalogTable)
     }
 
-    val sparkRowSerDe = sparkAdapter.createSparkRowSerDe(query.schema)
+    val sparkRowSerDe = sparkAdapter.createSparkRowSerDe(plan.schema)
     val rows = plan.execute().map(sparkRowSerDe.deserializeRow)
-    val df = sparkSession.createDataFrame(rows, query.schema)
+    val df = sparkSession.createDataFrame(rows, plan.schema)
     HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
 
     sparkSession.catalog.refreshTable(tableId)
@@ -75,7 +72,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
   override def withNewChildInternal(newChild: LogicalPlan): LogicalPlan = {copy(query = newChild)}
 }
 
-object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging{
+object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
 
   /**
    * Validate there is no assignment clause for the given attribute in the given table.
@@ -102,19 +99,17 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging{
     })
   }
 
-
-  def inputPlan(sparkSession: SparkSession, ut: UpdateTable): LogicalPlan = {
-    val hoodieCatalogTable = sparkAdapter.resolveHoodieTable(ut.table) match {
+  private def catalogTable(sparkSession: SparkSession, ut: UpdateTable): HoodieCatalogTable = {
+    sparkAdapter.resolveHoodieTable(ut.table) match {
       case Some(catalogTable) => HoodieCatalogTable(sparkSession, catalogTable)
       case _ =>
         failAnalysis(s"Failed to resolve update statement into the Hudi table. Got instead: ${ut.table}")
     }
+  }
 
-    val catalogTable = sparkAdapter.resolveHoodieTable(ut.table)
-      .map(HoodieCatalogTable(sparkSession, _))
-      .get
-
-    val tableId = catalogTable.table.qualifiedName
+  def inputPlan(sparkSession: SparkSession, ut: UpdateTable): LogicalPlan = {
+    val hoodieCatalogTable = catalogTable(sparkSession, ut)
+    val tableId = hoodieCatalogTable.table.qualifiedName
 
     logInfo(s"Executing 'UPDATE' command for $tableId")
 
@@ -157,6 +152,6 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging{
     }
 
     val condition = ut.condition.getOrElse(TrueLiteral)
-    Filter(condition, Project(targetExprs, ut.table))
+    Project(targetExprs, Filter(condition, ut.table))
   }
 }

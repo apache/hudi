@@ -432,8 +432,8 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
 
         // Convert to UpdateHoodieTableCommand
         case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
-          val plan = UpdateHoodieTableCommand.inputPlan(sparkSession, ut)
-          UpdateHoodieTableCommand(ut, plan)
+          val inputPlan = UpdateHoodieTableCommand.inputPlan(sparkSession, ut)
+          UpdateHoodieTableCommand(ut, inputPlan)
 
 
         // Convert to DeleteHoodieTableCommand
