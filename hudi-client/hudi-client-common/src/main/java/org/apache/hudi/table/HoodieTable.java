@@ -87,6 +87,7 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -686,7 +687,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           LOG.info("Deleting invalid data file=" + partitionFilePair);
           // Delete
           try {
-            fileSystem.delete(new Path(partitionFilePair.getValue()), false);
+            Path pathToDelete = new Path(partitionFilePair.getValue());
+            boolean deletionSuccess = fileSystem.delete(pathToDelete, false);
+            if (!deletionSuccess && fileSystem.exists(pathToDelete)) {
+              throw new HoodieIOException("Failed to delete invalid path during marker reconciliaton " + pathToDelete);
+            }
+          } catch (FileNotFoundException fnfe) {
+            // no op
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
           }
