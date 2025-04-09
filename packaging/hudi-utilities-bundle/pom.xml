@@ -114,7 +114,6 @@
                   <include>org.jetbrains.kotlin:*</include>
                   <include>org.rocksdb:rocksdbjni</include>
                   <include>org.antlr:stringtemplate</include>
-                  <include>org.apache.parquet:parquet-avro</include>
                   <include>org.roaringbitmap:RoaringBitmap</include>
                   <!-- Bundle Jackson JSR310 library since it is not present in spark 2.x. For spark 3.x this will
                        bundle the same JSR310 version that is included in spark runtime -->
