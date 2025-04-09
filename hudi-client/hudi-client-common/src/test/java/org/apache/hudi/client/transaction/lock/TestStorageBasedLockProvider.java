@@ -68,8 +68,8 @@ import static org.mockito.Mockito.when;
 /**
  * Unit test class for ConditionalWriteLockProvider
  */
-class TestConditionalWriteLockProvider {
-  private ConditionalWriteLockProvider lockProvider;
+class TestStorageBasedLockProvider {
+  private StorageBasedLockProvider lockProvider;
   private StorageLock mockLockService;
   private HeartbeatManager mockHeartbeatManager;
   private Logger mockLogger;
@@ -82,9 +82,9 @@ class TestConditionalWriteLockProvider {
     mockHeartbeatManager = mock(HeartbeatManager.class);
     mockLogger = mock(Logger.class);
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
-    lockProvider = spy(new ConditionalWriteLockProvider(
-        1000,
-        DEFAULT_LOCK_VALIDITY_MS,
+    lockProvider = spy(new StorageBasedLockProvider(
+        1,
+        DEFAULT_LOCK_VALIDITY_MS / 1000,
         "my-bucket",
         "gs://bucket/lake/db/tbl-default",
         ownerId,
@@ -105,7 +105,7 @@ class TestConditionalWriteLockProvider {
     LockConfiguration lockConf = new LockConfiguration(props);
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
     HoodieLockException ex = assertThrows(HoodieLockException.class,
-        () -> new ConditionalWriteLockProvider(lockConf, storageConf));
+        () -> new StorageBasedLockProvider(lockConf, storageConf));
     assertTrue(ex.getCause().getMessage().contains("No implementation of StorageLock supports this scheme"));
   }
 
@@ -113,13 +113,13 @@ class TestConditionalWriteLockProvider {
   void testValidLockStorageLocation() {
     TypedProperties props = new TypedProperties();
     props.put(BASE_PATH.key(), "s3://bucket/lake/db/tbl-default");
-    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/locks");
+    props.put(StorageBasedLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/locks");
 
     LockConfiguration lockConf = new LockConfiguration(props);
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
 
     HoodieLockException ex = assertThrows(HoodieLockException.class,
-        () -> new ConditionalWriteLockProvider(lockConf, storageConf));
+        () -> new StorageBasedLockProvider(lockConf, storageConf));
     assertTrue(ex.getMessage().contains("Failed to load and initialize StorageLock"));
   }
 
@@ -127,13 +127,13 @@ class TestConditionalWriteLockProvider {
   void testInvalidLockStorageLocation() {
     TypedProperties props = new TypedProperties();
     props.put(BASE_PATH.key(), "s3://bucket/lake/db/tbl-default");
-    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(),
+    props.put(StorageBasedLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(),
         "s3://bucket/lake/db/tbl-default/.hoodie/.metadata");
 
     LockConfiguration lockConf = new LockConfiguration(props);
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
 
-    assertThrows(IllegalArgumentException.class, () -> new ConditionalWriteLockProvider(lockConf, storageConf));
+    assertThrows(IllegalArgumentException.class, () -> new StorageBasedLockProvider(lockConf, storageConf));
   }
 
   @ParameterizedTest
@@ -147,23 +147,23 @@ class TestConditionalWriteLockProvider {
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
 
     HoodieLockException ex = assertThrows(HoodieLockException.class,
-        () -> new ConditionalWriteLockProvider(lockConf, storageConf));
+        () -> new StorageBasedLockProvider(lockConf, storageConf));
     assertTrue(ex.getMessage().contains("Failed to load and initialize StorageLock"));
   }
 
   @Test
   void testInvalidLocksLocationForWriteService() {
     TypedProperties props = new TypedProperties();
-    props.put(ConditionalWriteLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "not a uri");
+    props.put(StorageBasedLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "not a uri");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
-    props.put(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), "5000");
-    props.put(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), "1000");
+    props.put(StorageBasedLockConfig.LOCK_VALIDITY_TIMEOUT.key(), "5");
+    props.put(StorageBasedLockConfig.HEARTBEAT_POLL.key(), "1");
 
     LockConfiguration lockConf = new LockConfiguration(props);
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
 
     HoodieLockException ex = assertThrows(HoodieLockException.class,
-        () -> new ConditionalWriteLockProvider(lockConf, storageConf));
+        () -> new StorageBasedLockProvider(lockConf, storageConf));
     Throwable cause = ex.getCause();
     assertNotNull(cause);
     assertInstanceOf(URISyntaxException.class, cause);
@@ -252,7 +252,7 @@ class TestConditionalWriteLockProvider {
         .thenReturn(Pair.of(LockUpdateResult.SUCCESS, returnedLockFile));
 
     HoodieLockException ex = assertThrows(HoodieLockException.class, () -> lockProvider.tryLock());
-    assertTrue(ex.getMessage().contains("Owners do not match!"));
+    assertTrue(ex.getMessage().contains("Owners do not match"));
   }
 
   @Test

@@ -27,7 +27,7 @@ import org.apache.hudi.client.transaction.lock.models.LockUpdateResult;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
-import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -48,7 +48,6 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
@@ -62,12 +61,18 @@ import static org.apache.hudi.common.lock.LockState.RELEASED;
 import static org.apache.hudi.common.lock.LockState.RELEASING;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NAME;
 
+/**
+ * A distributed filesystem storage based lock provider. This {@link LockProvider} implementation
+ * leverages conditional writes to ensure transactional consistency for multi-writer scenarios.
+ * The underlying storage client interface {@link StorageLock} is pluggable so it can be implemented for any
+ * filesystem which supports conditional writes.
+ */
 @ThreadSafe
-public class ConditionalWriteLockProvider implements LockProvider<StorageLockFile> {
+public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
   public static final String DEFAULT_TABLE_LOCK_FILE_NAME = "table_lock";
   // How long to wait before retrying lock acquisition in blocking calls.
-  private static final long DEFAULT_LOCK_ACQUISITION_BUFFER = 1000;
+  private static final long DEFAULT_LOCK_ACQUISITION_BUFFER_MS = 1000;
   // Maximum expected clock drift between two nodes.
   // This is similar idea as SkewAdjustingTimeGenerator.
   // In reality, within a single cloud provider all nodes share the same ntp
@@ -79,26 +84,15 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
   // When we retry lock upserts, do so 5 times
   private static final long LOCK_UPSERT_RETRY_COUNT = 5;
 
-  private static final String GCS_LOCK_SERVICE_CLASS_NAME = "org.apache.hudi.gcp.transaction.lock.GCSStorageLock";
-  private static final String S3_LOCK_SERVICE_CLASS_NAME = "org.apache.hudi.aws.transaction.lock.S3StorageLock";
+  private static final Logger LOGGER = LoggerFactory.getLogger(StorageBasedLockProvider.class);
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(ConditionalWriteLockProvider.class);
-  private static final String LOCK_STATE_LOGGER_MSG = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}";
-  private static final String LOCK_STATE_LOGGER_MSG_WITH_INFO = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}, {}";
-
-  private static final Map<String, String> SUPPORTED_LOCK_SERVICE_IMPLEMENTATIONS = CollectionUtils.createImmutableMap(
-      Pair.of(StorageSchemes.GCS.getScheme(), GCS_LOCK_SERVICE_CLASS_NAME),
-      Pair.of(StorageSchemes.S3A.getScheme(), S3_LOCK_SERVICE_CLASS_NAME),
-      Pair.of(StorageSchemes.S3.getScheme(), S3_LOCK_SERVICE_CLASS_NAME));
-
-  @VisibleForTesting
   Logger logger;
 
   // The lock service implementation which interacts with storage
   private final StorageLock lockService;
 
-  private final long heartbeatIntervalMs;
-  private final long lockValidityMs;
+  private final long heartbeatInterval;
+  private final long lockValidity;
   private final String ownerId;
   private final String lockFilePath;
   private final String bucketName;
@@ -111,7 +105,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
 
   private synchronized void setLock(StorageLockFile lockObj) {
     if (lockObj != null && !Objects.equals(lockObj.getOwner(), this.ownerId)) {
-      throw new HoodieLockException("Owners do not match! Current lock owner: " + this.ownerId + " lock path: "
+      throw new HoodieLockException("Owners do not match. Current lock owner: " + this.ownerId + " lock path: "
           + this.lockFilePath + " owner: " + lockObj.getOwner());
     }
     this.currentLockObj = lockObj;
@@ -125,13 +119,12 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
    *                          ConditionalWriteLockConfig
    * @param conf              Storage config, ignored.
    */
-  public ConditionalWriteLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
-    ConditionalWriteLockConfig config = new ConditionalWriteLockConfig.Builder()
+  public StorageBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
+    StorageBasedLockConfig config = new StorageBasedLockConfig.Builder()
         .fromProperties(lockConfiguration.getConfig()).build();
-    heartbeatIntervalMs = config.getHeartbeatPollMs();
-    lockValidityMs = config.getLockValidityTimeoutMs();
+    heartbeatInterval = config.getHeartbeatPoll();
+    lockValidity = config.getLockValidityTimeout();
 
-    // Determine if the provided locks location is relative.
     String configuredLocksLocation = config.getLocksLocation();
 
     // If not configured, recalculate the locks location as .hoodie/.locks;
@@ -151,10 +144,10 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
 
     lockFilePath = buildLockObjectPath(folderName, fileName);
     ownerId = UUID.randomUUID().toString();
-    this.logger = DEFAULT_LOGGER;
+    this.logger = LOGGER;
     this.heartbeatManager = new LockProviderHeartbeatManager(
         ownerId,
-        heartbeatIntervalMs,
+        heartbeatInterval,
         this::renewLock);
 
     try {
@@ -178,26 +171,26 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
   }
 
   private static @NotNull String getLockServiceClassName(String scheme) {
-    if (SUPPORTED_LOCK_SERVICE_IMPLEMENTATIONS.containsKey(scheme)
-        && StorageSchemes.isConditionalWriteSupported(scheme)) {
-      return SUPPORTED_LOCK_SERVICE_IMPLEMENTATIONS.get(scheme);
+    Option<StorageSchemes> schemeOptional = StorageSchemes.getStorageLockImplementationIfExists(scheme);
+    if (schemeOptional.isPresent()) {
+      return schemeOptional.get().getStorageLockClass();
     } else {
       throw new HoodieNotSupportedException("No implementation of StorageLock supports this scheme: " + scheme);
     }
   }
 
   @VisibleForTesting
-  ConditionalWriteLockProvider(
-      int heartbeatIntervalMs,
-      int lockValidityMs,
+  StorageBasedLockProvider(
+      int heartbeatInterval,
+      int lockValidity,
       String bucketName,
       String lockFilePath,
       String ownerId,
       HeartbeatManager heartbeatManager,
       StorageLock lockService,
       Logger logger) {
-    this.heartbeatIntervalMs = heartbeatIntervalMs;
-    this.lockValidityMs = lockValidityMs;
+    this.heartbeatInterval = heartbeatInterval;
+    this.lockValidity = lockValidity;
     this.bucketName = bucketName;
     this.lockFilePath = lockFilePath;
     this.heartbeatManager = heartbeatManager;
@@ -228,13 +221,8 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
         if (tryLock()) {
           return true;
         }
-        logger.debug(
-            LOCK_STATE_LOGGER_MSG,
-            ownerId,
-            lockFilePath,
-            Thread.currentThread(),
-            ACQUIRING);
-        Thread.sleep(DEFAULT_LOCK_ACQUISITION_BUFFER);
+        logDebugLockState(ACQUIRING);
+        Thread.sleep(DEFAULT_LOCK_ACQUISITION_BUFFER_MS);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new HoodieLockException(generateLockStateMessage(LockState.FAILED_TO_ACQUIRE), e);
@@ -276,9 +264,9 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
    */
   @Override
   public synchronized boolean tryLock() {
-    assertHeartBeatManagerExists();
+    assertHeartbeatManagerExists();
     assertUnclosed();
-    logger.debug(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), ACQUIRING);
+    logDebugLockState(ACQUIRING);
     if (actuallyHoldsLock()) {
       // Supports reentrant locks
       return true;
@@ -293,13 +281,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
 
     Pair<LockGetResult, StorageLockFile> latestLock = this.lockService.readCurrentLockFile();
     if (latestLock.getLeft() == LockGetResult.UNKNOWN_ERROR) {
-      logger.info(
-          LOCK_STATE_LOGGER_MSG_WITH_INFO,
-          ownerId,
-          lockFilePath,
-          Thread.currentThread(),
-          FAILED_TO_ACQUIRE,
-          "Failed to get the latest lock status");
+      logInfoLockState(FAILED_TO_ACQUIRE, "Failed to get the latest lock status");
       // We were not able to determine whether a lock was present.
       return false;
     }
@@ -307,28 +289,17 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
     if (latestLock.getLeft() == LockGetResult.SUCCESS && isLockStillValid(latestLock.getRight())) {
       String msg = String.format("Lock already held by %s", latestLock.getRight().getOwner());
       // Lock held by others.
-      logger.info(
-          LOCK_STATE_LOGGER_MSG_WITH_INFO,
-          ownerId,
-          lockFilePath,
-          Thread.currentThread(),
-          FAILED_TO_ACQUIRE,
-          msg);
+      logInfoLockState(FAILED_TO_ACQUIRE, msg);
       return false;
     }
 
     // Try to acquire the lock
-    StorageLockData newLockData = new StorageLockData(false, System.currentTimeMillis() + lockValidityMs, ownerId);
+    StorageLockData newLockData = new StorageLockData(false, System.currentTimeMillis() + lockValidity, ownerId);
     Pair<LockUpdateResult, StorageLockFile> lockUpdateStatus = this.lockService.tryCreateOrUpdateLockFile(
         newLockData, latestLock.getLeft() == LockGetResult.NOT_EXISTS ? null : latestLock.getRight());
     if (lockUpdateStatus.getLeft() != LockUpdateResult.SUCCESS) {
       // failed to acquire the lock, indicates concurrent contention
-      logger.info(
-          LOCK_STATE_LOGGER_MSG,
-          ownerId,
-          lockFilePath,
-          Thread.currentThread(),
-          FAILED_TO_ACQUIRE);
+      logInfoLockState(FAILED_TO_ACQUIRE);
       return false;
     }
     this.setLock(lockUpdateStatus.getRight());
@@ -344,23 +315,12 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
       // Precondition "no active heartbeat" is checked previously, so when
       // startHeartbeatForThread returns false,
       // we are confident no heartbeat thread is running.
-      logger.error(
-          LOCK_STATE_LOGGER_MSG_WITH_INFO,
-          ownerId,
-          lockFilePath,
-          Thread.currentThread(),
-          RELEASING,
-          "We were unable to start the heartbeat!");
+      logErrorLockState(RELEASING, "We were unable to start the heartbeat!");
       tryExpireCurrentLock();
       return false;
     }
 
-    logger.info(
-        LOCK_STATE_LOGGER_MSG,
-        ownerId,
-        lockFilePath,
-        Thread.currentThread(),
-        ACQUIRED);
+    logInfoLockState(ACQUIRED);
     return true;
   }
 
@@ -393,7 +353,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
    *
    * @return {@code true} if this provider has a non-null lock object,
    *         {@code false} otherwise
-   * @see ConditionalWriteLockProvider#actuallyHoldsLock()
+   * @see StorageBasedLockProvider#actuallyHoldsLock()
    */
   private boolean believesLockMightBeHeld() {
     return this.getLock() != null;
@@ -404,7 +364,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
    */
   @Override
   public synchronized void unlock() {
-    assertHeartBeatManagerExists();
+    assertHeartbeatManagerExists();
     if (!believesLockMightBeHeld()) {
       return;
     }
@@ -449,7 +409,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
       // broken function precondition.
       throw new HoodieLockException("Must stop heartbeat before expire lock file");
     }
-    logger.debug(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), RELEASING);
+    logDebugLockState(RELEASING);
     // Upload metadata that will unlock this lock.
     Pair<LockUpdateResult, StorageLockFile> result = this.lockService.tryCreateOrUpdateLockFileWithRetry(
         () -> new StorageLockData(true, this.getLock().getValidUntil(), ownerId),
@@ -459,16 +419,16 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
     switch (result.getLeft()) {
       case UNKNOWN_ERROR:
         // Here we do not know the state of the lock.
-        logger.error(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), FAILED_TO_RELEASE);
+        logErrorLockState(FAILED_TO_RELEASE, "Lock state is unknown.");
         return false;
       case SUCCESS:
-        logger.info(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), RELEASED);
+        logInfoLockState(RELEASED);
         setLock(null);
         return true;
       case ACQUIRED_BY_OTHERS:
-        // As we are confident no lock is held by itself, clean up the cached lock
-        // object.
-        logger.warn(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), RELEASED);
+        // As we are confident no lock is held by itself, clean up the cached lock object.
+        // However this is an edge case, so warn.
+        logWarnLockState(RELEASED, "lock should not have been acquired by others.");
         setLock(null);
         return true;
       default:
@@ -480,6 +440,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
    * Renews (heartbeats) the current lock if we are the holder, it forcefully set
    * the expiration flag
    * to false and the lock expiration time to a later time in the future.
+   * @return True if we successfully renewed the lock, false if not.
    */
   @VisibleForTesting
   protected synchronized boolean renewLock() {
@@ -491,7 +452,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
         return false;
       }
 
-      long oldExpirationMs = getLock().getValidUntil();
+      long oldExpiration = getLock().getValidUntil();
       // Attempt conditional update, extend lock. There are 3 cases:
       // 1. Happy case: lock has not expired yet, we extend the lease to a longer
       // period.
@@ -504,7 +465,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
       // prevents further data corruption by
       // letting someone else acquire the lock.
       Pair<LockUpdateResult, StorageLockFile> currentLock = this.lockService.tryCreateOrUpdateLockFileWithRetry(
-          () -> new StorageLockData(false, System.currentTimeMillis() + lockValidityMs, ownerId),
+          () -> new StorageLockData(false, System.currentTimeMillis() + lockValidity, ownerId),
           getLock(),
           LOCK_UPSERT_RETRY_COUNT);
       switch (currentLock.getLeft()) {
@@ -523,7 +484,7 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
           // Only positive outcome
           this.setLock(currentLock.getRight());
           logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
-              ownerId, oldExpirationMs - System.currentTimeMillis(), lockFilePath);
+              ownerId, oldExpiration - System.currentTimeMillis(), lockFilePath);
           // Let heartbeat continue to renew lock lease again later.
           return true;
         default:
@@ -543,8 +504,8 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
    * Method to calculate whether a timestamp from a distributed source has
    * definitively occurred yet.
    */
-  protected boolean isCurrentTimeCertainlyOlderThanDistributedTime(long epochMs) {
-    return System.currentTimeMillis() > epochMs + CLOCK_DRIFT_BUFFER_MS;
+  protected boolean isCurrentTimeCertainlyOlderThanDistributedTime(long epoch) {
+    return System.currentTimeMillis() > epoch + CLOCK_DRIFT_BUFFER_MS;
   }
 
   private String buildLockObjectPath(String lockFolderName, String lockTableFileName) {
@@ -575,5 +536,29 @@ public class ConditionalWriteLockProvider implements LockProvider<StorageLockFil
     String threadName = Thread.currentThread().getName();
     return String.format("Owner %s: Lock file path %s, Thread %s, Conditional Write lock state %s", ownerId,
         lockFilePath, threadName, state.toString());
+  }
+
+  private static final String LOCK_STATE_LOGGER_MSG = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}";
+  private static final String LOCK_STATE_LOGGER_MSG_WITH_INFO = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}, {}";
+
+  private void logDebugLockState(LockState state) {
+    logger.debug(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), state);
+  }
+
+  private void logInfoLockState(LockState state) {
+    logger.info(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), state);
+  }
+
+  private void logInfoLockState(LockState state, String msg) {
+    logger.info(LOCK_STATE_LOGGER_MSG_WITH_INFO, ownerId, lockFilePath, Thread.currentThread(), state, msg);
+  }
+
+  private void logWarnLockState(LockState state, String msg) {
+    logger.warn(LOCK_STATE_LOGGER_MSG_WITH_INFO, ownerId, lockFilePath, Thread.currentThread(), state, msg);
+  }
+
+  private void logErrorLockState(LockState state, String msg) {
+    logger.warn(LOCK_STATE_LOGGER_MSG_WITH_INFO, ownerId, lockFilePath, Thread.currentThread(), state, msg);
+
   }
 }
