@@ -171,6 +171,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_IS_TIGHT_BOUND;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
@@ -2793,7 +2794,7 @@ public class HoodieTableMetadataUtil {
             .max(Comparator.naturalOrder())
             .orElse(null);
 
-    return HoodieMetadataColumnStats.newBuilder(HoodieMetadataPayload.METADATA_COLUMN_STATS_BUILDER_STUB.get())
+    HoodieMetadataColumnStats.Builder columnStatsBuilder = HoodieMetadataColumnStats.newBuilder(HoodieMetadataPayload.METADATA_COLUMN_STATS_BUILDER_STUB.get())
         .setFileName(newColumnStats.getFileName())
         .setColumnName(newColumnStats.getColumnName())
         .setMinValue(wrapValueIntoAvro(minValue))
@@ -2802,9 +2803,11 @@ public class HoodieTableMetadataUtil {
         .setNullCount(prevColumnStats.getNullCount() + newColumnStats.getNullCount())
         .setTotalSize(prevColumnStats.getTotalSize() + newColumnStats.getTotalSize())
         .setTotalUncompressedSize(prevColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize())
-        .setIsDeleted(newColumnStats.getIsDeleted())
-        .setIsTightBound(newColumnStats.getIsTightBound())
-        .build();
+        .setIsDeleted(newColumnStats.getIsDeleted());
+    if (newColumnStats.hasField(COLUMN_STATS_FIELD_IS_TIGHT_BOUND)) {
+      columnStatsBuilder.setIsTightBound(newColumnStats.getIsTightBound());
+    }
+    return columnStatsBuilder.build();
   }
 
   public static Map<String, HoodieMetadataFileInfo> combineFileSystemMetadata(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
