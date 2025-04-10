@@ -54,7 +54,6 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -184,10 +183,22 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
+        int commitTimeBasedRecordIndex = 0;
+        DeleteRecord[] deleteRecords = deleteBlock.getRecordsToDelete();
         for (Long recordPosition : recordPositions) {
-          records.putIfAbsent(recordPosition,
+          // IMPORTANT:
+          // use #put for log files with regular order(see HoodieLogFile.LOG_FILE_COMPARATOR);
+          // use #putIfAbsent for log files with reverse order(see HoodieLogFile.LOG_FILE_COMPARATOR_REVERSED),
+          // the delete block would be parsed ahead of a data block if they are in different log files.
+
+          // set up the record key for key-based fallback handling, this is needed
+          // because under hybrid strategy in #doHasNextFallbackBaseRecord, if the record keys are not set up,
+          // this delete-vector could be kept in the records cache(see the check in #fallbackToKeyBasedBuffer),
+          // and these keys would be deleted no matter whether there are following-up inserts/updates.
+          DeleteRecord deleteRecord = deleteRecords[commitTimeBasedRecordIndex++];
+          records.put(recordPosition,
               Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-                  null, "", DEFAULT_ORDERING_VALUE)));
+                  deleteRecord.getRecordKey(), "", deleteRecord.getOrderingValue())));
         }
         return;
       case EVENT_TIME_ORDERING:
@@ -246,12 +257,11 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     Map<String, Object> metadata = readerContext.generateMetadataForRecord(
         baseRecord, readerSchema);
 
-    Option<T> resultRecord = Option.empty();
+    final Option<T> resultRecord;
     if (logRecordInfo != null) {
       resultRecord = merge(
           Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight());
       if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
         readStats.incrementNumUpdates();
       } else {
         readStats.incrementNumDeletes();
@@ -275,7 +285,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
       Pair<Option<T>, Map<String, Object>> logRecordInfo  = records.remove(nextRecordPosition++);
       if (logRecordInfo != null) {
-        //we have a delete that was not able to be converted. Since it is the newest version, the record is deleted
+        //we have a delete that was not to be able to be converted. Since it is the newest version, the record is deleted
         //remove a key based record if it exists
         records.remove(readerContext.getRecordKey(baseRecord, readerSchema));
         return false;

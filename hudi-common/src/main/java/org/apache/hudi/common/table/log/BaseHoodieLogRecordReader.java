@@ -223,13 +223,13 @@ public abstract class BaseHoodieLogRecordReader<T> {
     totalCorruptBlocks = new AtomicLong(0);
     totalLogBlocks = new AtomicLong(0);
     totalLogRecords = new AtomicLong(0);
-    HoodieLogFormatReverseReader logFormatReaderWrapper = null;
+    HoodieLogFormatReader logFormatReaderWrapper = null;
     HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
     HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReverseReader(storage,
+      logFormatReaderWrapper = new HoodieLogFormatReader(storage,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new StoragePath(logFile))).collect(Collectors.toList()),
           readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
