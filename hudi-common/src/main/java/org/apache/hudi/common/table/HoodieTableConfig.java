@@ -1097,7 +1097,7 @@ public class HoodieTableConfig extends HoodieConfig {
     setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
-    LOG.info("MDT {} partition {} has been {}", metaClient.getBasePath(), partitionPath, enabled ? "enabled" : "disabled"));
+    LOG.info("MDT {} partition {} has been {}", metaClient.getBasePath(), partitionPath, enabled ? "enabled" : "disabled");
   }
 
   /**
