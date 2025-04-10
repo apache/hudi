@@ -35,7 +35,7 @@ import java.util.function.Supplier;
 
 /**
  * LockProviderHeartbeatManager is a helper class which handles the scheduling and stopping of heartbeat
- * tasks. This is intended for use with the conditional write lock provider, which requires
+ * tasks. This is intended for use with the storage based lock provider, which requires
  * a separate thread to spawn and renew the lock repeatedly.
  * It should be responsible for the entire lifecycle of the heartbeat task.
  * Importantly, a new instance should be created for each lock provider.
