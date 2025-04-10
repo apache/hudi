@@ -108,6 +108,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.AvroTypeException;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -202,6 +203,11 @@ public class HoodieTableMetadataUtil {
       HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(),
       HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName(),
       HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName()));
+
+  // The maximum allowed precision and scale as per the payload schema. See DecimalWrapper in HoodieMetadata.avsc:
+  // https://github.com/apache/hudi/blob/45dedd819e56e521148bde51a3dfa4e472ea70cd/hudi-common/src/main/avro/HoodieMetadata.avsc#L247
+  private static final int DECIMAL_MAX_PRECISION = 30;
+  private static final int DECIMAL_MAX_SCALE = 15;
 
   private HoodieTableMetadataUtil() {
   }
@@ -1908,6 +1914,15 @@ public class HoodieTableMetadataUtil {
 
   public static boolean isColumnTypeSupported(Schema schema, Option<HoodieRecordType> recordType) {
     Schema schemaToCheck = resolveNullableSchema(schema);
+    // Check for precision and scale if the schema has a logical decimal type.
+    LogicalType logicalType = schemaToCheck.getLogicalType();
+    if (logicalType != null && logicalType instanceof LogicalTypes.Decimal) {
+      LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) logicalType;
+      if (decimalType.getPrecision() + (DECIMAL_MAX_SCALE - decimalType.getScale()) > DECIMAL_MAX_PRECISION || decimalType.getScale() > DECIMAL_MAX_SCALE) {
+        return false;
+      }
+    }
+
     // if record type is set and if its AVRO, MAP, ARRAY, RECORD and ENUM types are unsupported.
     if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
       return (schemaToCheck.getType() != Schema.Type.RECORD && schemaToCheck.getType() != Schema.Type.ARRAY && schemaToCheck.getType() != Schema.Type.MAP
