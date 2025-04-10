@@ -91,6 +91,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  */
 public abstract class TestHoodieFileGroupReaderBase<T> {
   private static final String KEY_FIELD_NAME = "_row_key";
+  private static final String NESTED_KEY_FIELD_NAME = "fare";
   private static final String PRECOMBINE_FIELD_NAME = "timestamp";
   private static final String PARTITION_FIELD_NAME = "partition_path";
   private static final String RIDER_FIELD_NAME = "rider";
@@ -242,7 +243,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private Map<String, String> getCommonConfigs(RecordMergeMode recordMergeMode, boolean populateMetaFields) {
     Map<String, String> configMapping = new HashMap<>();
-    configMapping.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), KEY_FIELD_NAME);
+    configMapping.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), populateMetaFields ? NESTED_KEY_FIELD_NAME : KEY_FIELD_NAME);
     configMapping.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), PARTITION_FIELD_NAME);
     configMapping.put("hoodie.datasource.write.precombine.field", PRECOMBINE_FIELD_NAME);
     configMapping.put("hoodie.payload.ordering.field", PRECOMBINE_FIELD_NAME);
