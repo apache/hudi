@@ -226,9 +226,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
         }
       } else {
         // files is at < 3 level depth in FS tree, can't be hoodie dataset
-        if (LOG.isDebugEnabled()) {
-          LOG.debug(String.format("(2) Caching non-hoodie path under %s \n", folder));
-        }
+        LOG.debug("(2) Caching non-hoodie path under{}", folder);
         nonHoodiePathCache.add(folder.toString());
         return true;
       }

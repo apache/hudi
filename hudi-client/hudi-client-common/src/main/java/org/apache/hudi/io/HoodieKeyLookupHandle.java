@@ -73,7 +73,7 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
     } catch (IOException e) {
       throw new HoodieIndexException(String.format("Error reading bloom filter from %s", getPartitionPathFileIDPair()), e);
     }
-    LOG.info(String.format("Read bloom filter from %s in %d ms", partitionPathFileIDPair, timer.endTimer()));
+    LOG.info("Read bloom filter from {} in {} ms", partitionPathFileIDPair, timer.endTimer());
     return bloomFilter;
   }
 

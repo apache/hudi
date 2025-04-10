@@ -822,8 +822,8 @@ public class StreamSync implements Serializable, Closeable {
       long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
       long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
       long totalSuccessfulRecords = totalRecords - totalErrorRecords;
-      LOG.info(String.format("instantTime=%s, totalRecords=%d, totalErrorRecords=%d, totalSuccessfulRecords=%d",
-          instantTime, totalRecords, totalErrorRecords, totalSuccessfulRecords));
+      LOG.info("instantTime={}, totalRecords={}, totalErrorRecords={}, totalSuccessfulRecords={}",
+          instantTime, totalRecords, totalErrorRecords, totalSuccessfulRecords);
       if (totalRecords == 0) {
         LOG.info("No new data, perform empty commit.");
       }

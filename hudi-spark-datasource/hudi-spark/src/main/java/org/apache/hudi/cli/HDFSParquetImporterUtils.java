@@ -314,14 +314,14 @@ public class HDFSParquetImporterUtils implements Serializable {
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
-        LOG.error(String.format("Error processing records :writeStatus:%s", writeStatus.getStat().toString()));
+        LOG.error("Error processing records :writeStatus:{}", writeStatus.getStat());
       }
     });
     if (errors.value() == 0) {
-      LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
+      LOG.info("Table imported into hoodie with {} instant time.", instantTime);
       return 0;
     }
-    LOG.error(String.format("Import failed with %d errors.", errors.value()));
+    LOG.error("Import failed with {} errors.", errors.value());
     return -1;
   }
 }

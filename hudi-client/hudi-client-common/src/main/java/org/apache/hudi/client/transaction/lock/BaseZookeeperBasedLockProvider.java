@@ -96,7 +96,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
   private void createPathIfNotExists() {
     try {
       String lockPath = getLockPath();
-      LOG.info(String.format("Creating zookeeper path %s if not exists", lockPath));
+      LOG.info("Creating zookeeper path {} if not exists", lockPath);
       String[] parts = lockPath.split("/");
       StringBuilder currentPath = new StringBuilder();
       for (String part : parts) {
@@ -106,7 +106,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
         }
       }
     } catch (Exception e) {
-      LOG.error("Failed to create ZooKeeper path: " + e.getMessage());
+      LOG.error("Failed to create ZooKeeper path", e);
       throw new HoodieLockException("Failed to initialize ZooKeeper path", e);
     }
   }

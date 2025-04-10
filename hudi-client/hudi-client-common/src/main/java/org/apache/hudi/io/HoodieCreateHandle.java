@@ -217,9 +217,9 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       setupWriteStatus();
 
-      LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.",
+      LOG.info("CreateHandle for partitionPath {} fileID {}, took {} ms.",
           writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
-          writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));
+          writeStatus.getStat().getRuntimeStats().getTotalCreateTime());
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {

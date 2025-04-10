@@ -411,14 +411,14 @@ public class UtilHelpers {
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
-        LOG.error(String.format("Error processing records :writeStatus:%s", writeStatus.getStat().toString()));
+        LOG.error("Error processing records :writeStatus:{}", writeStatus.getStat().toString());
       }
     });
     if (errors.value() == 0) {
-      LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
+      LOG.info("Table imported into hoodie with {} instant time.", instantTime);
       return 0;
     }
-    LOG.error(String.format("Import failed with %d errors.", errors.value()));
+    LOG.error("Import failed with {} errors.", errors.value());
     return -1;
   }
 
@@ -426,11 +426,11 @@ public class UtilHelpers {
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     long errorsCount = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (errorsCount == 0) {
-      LOG.info(String.format("Finish job with %s instant time.", instantTime));
+      LOG.info("Finish job with {} instant time.", instantTime);
       return 0;
     }
 
-    LOG.error(String.format("Job failed with %d errors.", errorsCount));
+    LOG.error("Job failed with {} errors.", errorsCount);
     return -1;
   }
 
