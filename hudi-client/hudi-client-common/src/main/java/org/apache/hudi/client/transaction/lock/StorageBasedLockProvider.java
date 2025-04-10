@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.HashID;
+import org.apache.hudi.config.StorageBasedLockConfig;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.StorageConfiguration;

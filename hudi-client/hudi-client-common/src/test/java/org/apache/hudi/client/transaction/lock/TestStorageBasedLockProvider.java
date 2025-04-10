@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.StorageBasedLockConfig;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 

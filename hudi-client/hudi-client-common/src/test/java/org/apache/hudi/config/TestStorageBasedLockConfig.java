@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.lock;
+package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.TypedProperties;
 
