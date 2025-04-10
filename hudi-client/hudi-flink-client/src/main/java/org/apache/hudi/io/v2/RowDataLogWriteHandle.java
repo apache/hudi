@@ -149,6 +149,7 @@ public class RowDataLogWriteHandle<T, I, K, O>
     assert stat.getRuntimeStats() != null;
     LOG.info("WriteHandle for partitionPath {} filePath {}, took {} ms.",
         partitionPath, stat.getPath(), stat.getRuntimeStats().getTotalUpsertTime());
+    timer.startTimer();
   }
 
   /**
