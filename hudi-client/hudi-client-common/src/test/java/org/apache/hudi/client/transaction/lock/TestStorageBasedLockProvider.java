@@ -73,7 +73,6 @@ class TestStorageBasedLockProvider {
   private StorageBasedLockProvider lockProvider;
   private StorageLock mockLockService;
   private HeartbeatManager mockHeartbeatManager;
-  @Mock
   private Logger mockLogger;
 
   private final String ownerId = UUID.randomUUID().toString();
@@ -83,6 +82,7 @@ class TestStorageBasedLockProvider {
   void setupLockProvider() {
     mockLockService = mock(StorageLock.class);
     mockHeartbeatManager = mock(HeartbeatManager.class);
+    mockLogger = mock(Logger.class);
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
     lockProvider = spy(new StorageBasedLockProvider(
         1,
