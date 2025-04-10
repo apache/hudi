@@ -17,30 +17,62 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
-import org.apache.hudi.SparkAdapterSupport
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, Project, UpdateTable}
+import org.apache.spark.sql.catalyst.plans.QueryPlan
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, LogicalPlan, Project, UpdateTable}
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 
-case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableCommand
+case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends DataWritingCommand
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
-  private var sparkSession: SparkSession = _
+  override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
 
-  private lazy val hoodieCatalogTable = sparkAdapter.resolveHoodieTable(ut.table) match {
-    case Some(catalogTable) => HoodieCatalogTable(sparkSession, catalogTable)
-    case _ =>
-      failAnalysis(s"Failed to resolve update statement into the Hudi table. Got instead: ${ut.table}")
+  override def outputColumnNames: Seq[String] = {
+    query.output.map(_.name)
   }
+
+  override def run(sparkSession: SparkSession, plan: SparkPlan): Seq[Row] = {
+    val catalogTable = UpdateHoodieTableCommand.catalogTable(sparkSession, ut)
+    val tableId = catalogTable.table.qualifiedName
+
+    logInfo(s"Executing 'UPDATE' command for $tableId")
+    val config = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
+      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+      // Set config to show that this is a prepped write.
+      buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
+    } else {
+      buildHoodieConfig(catalogTable)
+    }
+
+    val sparkRowSerDe = sparkAdapter.createSparkRowSerDe(plan.schema)
+    val rows = plan.execute().map(sparkRowSerDe.deserializeRow)
+    val df = sparkSession.createDataFrame(rows, plan.schema)
+    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
+
+    sparkSession.catalog.refreshTable(tableId)
+
+    logInfo(s"Finished executing 'UPDATE' command for $tableId")
+
+    Seq.empty[Row]
+  }
+
+  override def withNewChildInternal(newChild: LogicalPlan): LogicalPlan = {copy(query = newChild)}
+}
+
+object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
 
   /**
    * Validate there is no assignment clause for the given attribute in the given table.
@@ -58,7 +90,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
                                                      tableId: String,
                                                      fieldType: String,
                                                      assignments: Seq[(AttributeReference, Expression)]
-                                                     ): Unit = {
+                                                    ): Unit = {
     fields.foreach(field => if (assignments.exists {
       case (attr, _) => resolver(attr.name, field)
     }) {
@@ -67,13 +99,17 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     })
   }
 
-  override def run(sparkSession: SparkSession): Seq[Row] = {
-    this.sparkSession = sparkSession
-    val catalogTable = sparkAdapter.resolveHoodieTable(ut.table)
-      .map(HoodieCatalogTable(sparkSession, _))
-      .get
+  private def catalogTable(sparkSession: SparkSession, ut: UpdateTable): HoodieCatalogTable = {
+    sparkAdapter.resolveHoodieTable(ut.table) match {
+      case Some(catalogTable) => HoodieCatalogTable(sparkSession, catalogTable)
+      case _ =>
+        failAnalysis(s"Failed to resolve update statement into the Hudi table. Got instead: ${ut.table}")
+    }
+  }
 
-    val tableId = catalogTable.table.qualifiedName
+  def inputPlan(sparkSession: SparkSession, ut: UpdateTable): LogicalPlan = {
+    val hoodieCatalogTable = catalogTable(sparkSession, ut)
+    val tableId = hoodieCatalogTable.table.qualifiedName
 
     logInfo(s"Executing 'UPDATE' command for $tableId")
 
@@ -116,28 +152,6 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     }
 
     val condition = ut.condition.getOrElse(TrueLiteral)
-    val filteredPlan = Filter(condition, Project(targetExprs, ut.table))
-
-    val config = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
-      // Set config to show that this is a prepped write.
-      buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
-    } else {
-      buildHoodieConfig(catalogTable)
-    }
-
-    val df = Dataset.ofRows(sparkSession, filteredPlan)
-
-    df.write.format("hudi")
-      .mode(SaveMode.Append)
-      .options(config)
-      .save()
-
-    sparkSession.catalog.refreshTable(tableId)
-
-    logInfo(s"Finished executing 'UPDATE' command for $tableId")
-
-    Seq.empty[Row]
+    Project(targetExprs, Filter(condition, ut.table))
   }
-
 }
