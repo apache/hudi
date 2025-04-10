@@ -112,11 +112,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   }
 
   /**
-   * Default constructor for ConditionalWriteLockProvider, required by LockManager
+   * Default constructor for StorageBasedLockProvider, required by LockManager
    * to instantiate it using reflection.
    * 
    * @param lockConfiguration The lock configuration, should be transformable into
-   *                          ConditionalWriteLockConfig
+   *                          StorageBasedLockConfig
    * @param conf              Storage config, ignored.
    */
   public StorageBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
@@ -197,7 +197,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     this.lockService = lockService;
     this.ownerId = ownerId;
     this.logger = logger;
-    logger.debug("Instantiating new Conditional Write LP, owner: {}", ownerId);
+    logger.debug("Instantiating new Storage Based LP, owner: {}", ownerId);
   }
 
   // -----------------------------------------
@@ -345,11 +345,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    * <p>
    * A non-null lock object indicates that this provider has previously
    * **successfully** acquired a lock via
-   * ConditionalWriteLockProvider##lock and has not yet **successfully** released
-   * it via ConditionalWriteLockProvider#unlock().
+   * StorageBasedLockProvider##lock and has not yet **successfully** released
+   * it via StorageBasedLockProvider#unlock().
    * It is merely an indicator that the lock might be held by this provider. To
    * truly certify we are the owner of the lock,
-   * ConditionalWriteLockProvider#actuallyHoldsLock should be used.
+   * StorageBasedLockProvider#actuallyHoldsLock should be used.
    *
    * @return {@code true} if this provider has a non-null lock object,
    *         {@code false} otherwise
@@ -534,12 +534,12 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
   private String generateLockStateMessage(LockState state) {
     String threadName = Thread.currentThread().getName();
-    return String.format("Owner %s: Lock file path %s, Thread %s, Conditional Write lock state %s", ownerId,
+    return String.format("Owner %s: Lock file path %s, Thread %s, Storage based lock state %s", ownerId,
         lockFilePath, threadName, state.toString());
   }
 
-  private static final String LOCK_STATE_LOGGER_MSG = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}";
-  private static final String LOCK_STATE_LOGGER_MSG_WITH_INFO = "Owner {}: Lock file path {}, Thread {}, Conditional Write lock state {}, {}";
+  private static final String LOCK_STATE_LOGGER_MSG = "Owner {}: Lock file path {}, Thread {}, Storage based lock state {}";
+  private static final String LOCK_STATE_LOGGER_MSG_WITH_INFO = "Owner {}: Lock file path {}, Thread {}, Storage based lock state {}, {}";
 
   private void logDebugLockState(LockState state) {
     logger.debug(LOCK_STATE_LOGGER_MSG, ownerId, lockFilePath, Thread.currentThread(), state);
