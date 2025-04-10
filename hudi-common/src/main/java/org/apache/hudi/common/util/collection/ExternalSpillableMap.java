@@ -40,6 +40,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * An external map that spills content to disk when there is insufficient space for it to grow.
@@ -156,7 +158,16 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
    */
   @Override
   public Iterator<R> iterator() {
-    // TODO - do we need an eager fetch of values here?
+    if (requiresThreadSafety) {
+      // eagerly read data
+      acquireReadLock();
+      try {
+        return diskBasedMap == null ? new ArrayList<>(inMemoryMap.values()).iterator()
+            : Stream.concat(inMemoryMap.values().stream(), diskBasedMap.values().stream()).collect(Collectors.toList()).iterator();
+      } finally {
+        releaseReadLock();
+      }
+    }
     return diskBasedMap == null ? inMemoryMap.values().iterator() : new IteratorWrapper<>(inMemoryMap.values().iterator(), diskBasedMap.iterator());
   }
 
@@ -165,7 +176,17 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
    */
   @Override
   public Iterator<R> iterator(Predicate<T> filter) {
-    // TODO - do we need an eager fetch of values here?
+    if (requiresThreadSafety) {
+      // eagerly read data
+      acquireReadLock();
+      try {
+        return diskBasedMap == null ? inMemoryMap.entrySet().stream().filter(entry -> filter.test(entry.getKey())).map(Map.Entry::getValue).collect(Collectors.toList()).iterator()
+            : Stream.concat(inMemoryMap.entrySet().stream(), diskBasedMap.entrySet().stream()).filter(entry -> filter.test(entry.getKey()))
+            .map(Entry::getValue).collect(Collectors.toList()).iterator();
+      } finally {
+        releaseReadLock();
+      }
+    }
     return diskBasedMap == null ? inMemoryMapIterator(filter) : new IteratorWrapper<>(inMemoryMapIterator(filter), diskBasedMap.iterator(filter));
   }
 
@@ -211,8 +232,8 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public boolean isEmpty() {
+    acquireReadLock();
     try {
-      acquireReadLock();
       return inMemoryMap.isEmpty() && getDiskBasedMapNumEntries() == 0;
     } finally {
       releaseReadLock();
@@ -221,8 +242,8 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public boolean containsKey(Object key) {
+    acquireReadLock();
     try {
-      acquireReadLock();
       return inMemoryMap.containsKey(key) || inDiskContainsKey(key);
     } finally {
       releaseReadLock();
@@ -231,8 +252,8 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public boolean containsValue(Object value) {
+    acquireReadLock();
     try {
-      acquireReadLock();
       return inMemoryMap.containsValue(value) || (diskBasedMap != null && diskBasedMap.containsValue(value));
     } finally {
       releaseReadLock();
@@ -245,8 +266,8 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public R get(Object key) {
+    acquireReadLock();
     try {
-      acquireReadLock();
       if (inMemoryMap.containsKey(key)) {
         return inMemoryMap.get(key);
       } else if (inDiskContainsKey(key)) {
@@ -260,8 +281,8 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public R put(T key, R value) {
+    acquireWriteLock();
     try {
-      acquireWriteLock();
       if (this.estimatedPayloadSize == 0) {
         // At first, use the sizeEstimate of a record being inserted into the spillable map.
         // Note, the converter may over-estimate the size of a record in the JVM
@@ -297,8 +318,8 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public R remove(Object key) {
+    acquireWriteLock();
     try {
-      acquireWriteLock();
       // NOTE : getDiskBasedMap().remove does not delete the data from disk
       if (inMemoryMap.containsKey(key)) {
         currentInMemoryMapSize -= estimatedPayloadSize;
@@ -321,8 +342,8 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public void clear() {
+    acquireWriteLock();
     try {
-      acquireWriteLock();
       inMemoryMap.clear();
       if (diskBasedMap != null) {
         diskBasedMap.clear();
@@ -349,8 +370,8 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public Set<T> keySet() {
+    acquireReadLock();
     try {
-      acquireReadLock();
       if (diskBasedMap == null) {
         return inMemoryMap.keySet();
       }
@@ -365,8 +386,8 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public Collection<R> values() {
+    acquireReadLock();
     try {
-      acquireReadLock();
       if (diskBasedMap == null) {
         return inMemoryMap.values();
       }
@@ -384,8 +405,8 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public Set<Entry<T, R>> entrySet() {
+    acquireReadLock();
     try {
-      acquireReadLock();
       if (diskBasedMap == null) {
         return inMemoryMap.entrySet();
       }
