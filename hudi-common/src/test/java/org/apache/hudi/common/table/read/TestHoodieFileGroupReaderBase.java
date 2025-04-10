@@ -115,34 +115,52 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private static Stream<Arguments> testArguments() {
     return Stream.of(
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro"),
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "parquet"),
-        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "avro"),
-        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet"),
-        arguments(RecordMergeMode.CUSTOM, "avro"),
-        arguments(RecordMergeMode.CUSTOM, "parquet")
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro", false),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "parquet", false),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "avro", false),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet", false),
+        arguments(RecordMergeMode.CUSTOM, "avro", false),
+        arguments(RecordMergeMode.CUSTOM, "parquet", false),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro", true),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "parquet", true),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "avro", true),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet", true),
+        arguments(RecordMergeMode.CUSTOM, "avro", true),
+        arguments(RecordMergeMode.CUSTOM, "parquet", true)
     );
   }
 
   @ParameterizedTest
   @MethodSource("testArguments")
-  public void testReadFileGroupInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode));
+  public void testReadFileGroupInMergeOnReadTable(RecordMergeMode recordMergeMode,
+                                                  String logDataBlockFormat,
+                                                  Boolean useNestedKey) throws Exception {
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode, useNestedKey));
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
+      List<HoodieRecord> baseRecords = useNestedKey
+          ? dataGen.generateInsertsWithKeyFieldSpecified("001", "fare", 100)
+          : dataGen.generateInserts("001", 100);
+
       // One commit; reading one file group containing a base file only
-      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
+      commitToTable(baseRecords, INSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0, recordMergeMode);
 
       // Two commits; reading one file group containing a base file and a log file
-      commitToTable(dataGen.generateUpdates("002", 100), UPSERT.value(), writeConfigs);
+      List<HoodieRecord> firstUpdate = useNestedKey
+          ? dataGen.generateUpdates("002", baseRecords, "fare")
+          : dataGen.generateUpdates("002", 100);
+      commitToTable(firstUpdate, UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 1, recordMergeMode);
 
       // Three commits; reading one file group containing a base file and two log files
-      commitToTable(dataGen.generateUpdates("003", 100), UPSERT.value(), writeConfigs);
+      List<HoodieRecord> secondUpdates = useNestedKey
+          ? dataGen.generateUpdates("003", baseRecords, "fare")
+          : dataGen.generateUpdates("003", 100);
+      commitToTable(secondUpdates, UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 2, recordMergeMode);
     }
@@ -150,20 +168,28 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   @ParameterizedTest
   @MethodSource("testArguments")
-  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode));
+  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode,
+                                                     String logDataBlockFormat,
+                                                     Boolean useNestedKey) throws Exception {
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode, useNestedKey));
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
     // Use InMemoryIndex to generate log only mor table
     writeConfigs.put("hoodie.index.type", "INMEMORY");
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
-      // One commit; reading one file group containing a base file only
-      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
+      // One commit; reading one file group containing one log file
+      List<HoodieRecord> baseRecords = useNestedKey
+          ? dataGen.generateInsertsWithKeyFieldSpecified("001", "fare", 100)
+          : dataGen.generateInserts("001", 100);
+      commitToTable(baseRecords, INSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 1, recordMergeMode);
 
-      // Two commits; reading one file group containing a base file and a log file
-      commitToTable(dataGen.generateUpdates("002", 100), UPSERT.value(), writeConfigs);
+      // Two commits; reading two log files
+      List<HoodieRecord> updateRecords = useNestedKey
+          ? dataGen.generateUpdates("002", baseRecords, "fare")
+          : dataGen.generateUpdates("002", 100);
+      commitToTable(updateRecords, UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 2, recordMergeMode);
     }
@@ -172,7 +198,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   @ParameterizedTest
   @EnumSource(value = ExternalSpillableMap.DiskMapType.class)
   public void testSpillableMapUsage(ExternalSpillableMap.DiskMapType diskMapType) throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.COMMIT_TIME_ORDERING));
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.COMMIT_TIME_ORDERING, false));
     Option<Schema.Type> orderingFieldType = Option.of(Schema.Type.STRING);
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
@@ -230,9 +256,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
-  private Map<String, String> getCommonConfigs(RecordMergeMode recordMergeMode) {
+  private Map<String, String> getCommonConfigs(RecordMergeMode recordMergeMode, Boolean useNestedKey) {
     Map<String, String> configMapping = new HashMap<>();
-    configMapping.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    configMapping.put(
+        KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(),
+        useNestedKey ? "fare" : "_row_key");
     configMapping.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
     configMapping.put("hoodie.datasource.write.precombine.field", "timestamp");
     configMapping.put("hoodie.payload.ordering.field", "timestamp");

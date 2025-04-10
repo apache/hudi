@@ -90,7 +90,9 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
 
   @Override
   @Disabled("[HUDI-8072]")
-  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
+  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode,
+                                                     String logDataBlockFormat,
+                                                     Boolean useNestedKey) throws Exception {
   }
 
   private static final String PARTITION_COLUMN = "datestr";
