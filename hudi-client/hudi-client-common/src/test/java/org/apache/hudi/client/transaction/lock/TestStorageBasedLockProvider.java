@@ -35,6 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mock;
 import org.slf4j.Logger;
 
 import java.net.URISyntaxException;
@@ -72,7 +73,9 @@ class TestStorageBasedLockProvider {
   private StorageBasedLockProvider lockProvider;
   private StorageLock mockLockService;
   private HeartbeatManager mockHeartbeatManager;
+  @Mock
   private Logger mockLogger;
+
   private final String ownerId = UUID.randomUUID().toString();
   private static final int DEFAULT_LOCK_VALIDITY_MS = 5000;
 
@@ -80,7 +83,6 @@ class TestStorageBasedLockProvider {
   void setupLockProvider() {
     mockLockService = mock(StorageLock.class);
     mockHeartbeatManager = mock(HeartbeatManager.class);
-    mockLogger = mock(Logger.class);
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
     lockProvider = spy(new StorageBasedLockProvider(
         1,
