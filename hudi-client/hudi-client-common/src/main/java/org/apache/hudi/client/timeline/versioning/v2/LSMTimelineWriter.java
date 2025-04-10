@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.hadoop.HoodieAvroParquetReader;
 import org.apache.hudi.io.storage.HoodieFileWriter;
@@ -116,10 +117,27 @@ public class LSMTimelineWriter {
   public void write(
       List<ActiveAction> activeActions,
       Option<Consumer<ActiveAction>> preWriteCallback,
-      Option<Consumer<Exception>> exceptionHandler) throws HoodieCommitException {
+      Option<Consumer<Exception>> exceptionHandler) {
     ValidationUtils.checkArgument(!activeActions.isEmpty(), "The instant actions to write should not be empty");
     StoragePath filePath = new StoragePath(this.archivePath,
         newFileName(activeActions.get(0).getInstantTime(), activeActions.get(activeActions.size() - 1).getInstantTime(), FILE_LAYER_ZERO));
+    try {
+      if (this.metaClient.getStorage().exists(filePath)) {
+        // there are 2 cases this could happen:
+        // 1. the file was created but did not flush/close correctly and left as corrupt;
+        // 2. the file was in complete state but the archiving fails during the deletion of active metadata files.
+        if (isFileCommitted(filePath.getName())) {
+          // case2: the last archiving succeeded for committing to the archive timeline, just returns early.
+          LOG.warn("Skip archiving for the redundant file: {}", filePath);
+          return;
+        } else {
+          // case1: delete the corrupt file and retry.
+          this.metaClient.getStorage().deleteFile(filePath);
+        }
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Failed to check archiving file before write: " + filePath, ioe);
+    }
     try (HoodieFileWriter writer = openWriter(filePath)) {
       Schema wrapperSchema = HoodieLSMTimelineInstant.getClassSchema();
       LOG.info("Writing schema " + wrapperSchema.toString());
@@ -139,8 +157,8 @@ public class LSMTimelineWriter {
     }
     try {
       updateManifest(filePath.getName());
-    } catch (Exception e) {
-      throw new HoodieCommitException("Failed to update archiving manifest", e);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to update archiving manifest", e);
     }
   }
 
@@ -330,6 +348,15 @@ public class LSMTimelineWriter {
       HadoopFSUtils.deleteFilesParallelize(metaClient, dataFilesToClean, context,
           config.getArchiveDeleteParallelism(), false);
     }
+  }
+
+  /**
+   * Returns whether the archiving file is committed(visible to the timeline reader).
+   */
+  private boolean isFileCommitted(String fileName) throws IOException {
+    HoodieLSMTimelineManifest latestManifest = LSMTimeline.latestSnapshotManifest(metaClient, archivePath);
+    return latestManifest.getFiles()
+        .stream().anyMatch(fileEntry -> fileEntry.getFileName().equals(fileName));
   }
 
   private HoodieLSMTimelineManifest.LSMFileEntry getFileEntry(String fileName) throws IOException {
