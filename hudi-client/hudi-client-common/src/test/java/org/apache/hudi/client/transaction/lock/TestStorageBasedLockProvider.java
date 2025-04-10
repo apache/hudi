@@ -35,8 +35,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentMatchers;
 import org.slf4j.Logger;
 
+import java.lang.reflect.Method;
 import java.net.URISyntaxException;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -61,6 +63,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -559,6 +562,46 @@ class TestStorageBasedLockProvider {
     verify(mockLogger).error(eq("Owner {}: Heartbeat manager failed to close."), eq(ownerId),
         any(RuntimeException.class));
     assertNull(lockProvider.getLock());
+  }
+
+  @Test
+  public void testShutdownHookViaReflection() throws Exception {
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
+    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
+            .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+
+    boolean acquired = lockProvider.tryLock();
+    assertTrue(acquired);
+    assertEquals(realLockFile, lockProvider.getLock());
+    verify(mockLockService, atLeastOnce()).tryCreateOrUpdateLockFile(any(), any());
+
+    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(ArgumentMatchers.any(), eq(realLockFile), anyLong()))
+            .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+
+    // Mock shutdown
+    Method shutdownMethod = lockProvider.getClass().getDeclaredMethod("shutdown", boolean.class);
+    shutdownMethod.setAccessible(true);
+    shutdownMethod.invoke(lockProvider, true);
+
+    // Verify that the expected shutdown behaviors occurred.
+    assertNull(lockProvider.getLock());
+    verify(mockLockService, atLeastOnce()).close();
+    verify(mockHeartbeatManager, atLeastOnce()).close();
+  }
+
+  @Test
+  public void testShutdownHookWhenNoLockPresent() throws Exception {
+    // Now, when calling shutdown(true), the method should immediately return.
+    Method shutdownMethod = lockProvider.getClass().getDeclaredMethod("shutdown", boolean.class);
+    shutdownMethod.setAccessible(true);
+    shutdownMethod.invoke(lockProvider, true);
+
+    // Verify that unlock or close methods are NOT invoked, or adjust expectations accordingly.
+    verify(mockLockService, never()).close();
+    verify(mockHeartbeatManager, never()).close();
   }
 
   public static class StubStorageLock implements StorageLock {

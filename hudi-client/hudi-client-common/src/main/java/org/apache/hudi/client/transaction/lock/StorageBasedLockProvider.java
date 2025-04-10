@@ -97,6 +97,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   private final String lockFilePath;
   private final String bucketName;
   private final HeartbeatManager heartbeatManager;
+  private transient Thread shutdownThread = null;
 
   @GuardedBy("this")
   private StorageLockFile currentLockObj = null;
@@ -158,7 +159,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     } catch (Throwable e) {
       throw new HoodieLockException("Failed to load and initialize StorageLock", e);
     }
-
+    shutdownThread = new Thread(() -> shutdown(true));
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
     logger.info("Instantiated new storage-based lock provider, owner: {}, lockfilePath: {}", ownerId, lockFilePath);
   }
 
@@ -198,6 +200,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     this.ownerId = ownerId;
     this.logger = logger;
     logger.debug("Instantiating new Storage Based LP, owner: {}", ownerId);
+    shutdownThread = new Thread(() -> shutdown(true));
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
   }
 
   // -----------------------------------------
@@ -234,6 +238,18 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
   @Override
   public synchronized void close() {
+    shutdown(false);
+  }
+
+  private synchronized void shutdown(boolean fromShutdownHook) {
+    if (fromShutdownHook) {
+      if (isClosed || !actuallyHoldsLock()) {
+        return;
+      }
+      // Ensure we release the lock before shutdown
+    } else {
+      Runtime.getRuntime().removeShutdownHook(shutdownThread);
+    }
     try {
       this.unlock();
     } catch (Exception e) {
