@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.lock;
+package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -34,7 +34,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NA
 public class StorageBasedLockConfig extends HoodieConfig {
   private static final String SINCE_VERSION_1_0_2 = "1.0.2";
   private static final String STORAGE_BASED_LOCK_PROPERTY_PREFIX = LockConfiguration.LOCK_PREFIX
-      + "storage";
+      + "storage.";
   public static final ConfigProperty<String> LOCK_INTERNAL_STORAGE_LOCATION = ConfigProperty
       .key(STORAGE_BASED_LOCK_PROPERTY_PREFIX + "locks_location")
       .defaultValue("")
