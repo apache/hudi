@@ -33,6 +33,7 @@ import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 import scala.collection.JavaConverters._
 
@@ -51,7 +52,7 @@ case class CreateHoodieTableAsSelectCommand(
 
     val hasQueryAsProp = (table.storage.properties ++ table.properties).contains(ConfigUtils.IS_QUERY_AS_RO_TABLE)
     if (hasQueryAsProp) {
-      throw new AnalysisException("Not support CTAS for the ro/rt table")
+      throw new HoodieAnalysisException("Not support CTAS for the ro/rt table")
     }
 
     val sessionState = sparkSession.sessionState
@@ -64,7 +65,7 @@ case class CreateHoodieTableAsSelectCommand(
         s"Expect the table $tableName has been dropped when the save mode is Overwrite")
 
       if (mode == SaveMode.ErrorIfExists) {
-        throw new AnalysisException(s"Table $tableName already exists. You need to drop it first.")
+        throw new HoodieAnalysisException(s"Table $tableName already exists. You need to drop it first.")
       }
 
       if (mode == SaveMode.Ignore) {
@@ -102,7 +103,8 @@ case class CreateHoodieTableAsSelectCommand(
         HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES.key -> ConfigUtils.configToString(updatedTable.properties.asJava),
         HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> "false",
         DataSourceWriteOptions.SQL_INSERT_MODE.key -> InsertMode.NON_STRICT.value(),
-        DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key -> "true"
+        DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key -> "true",
+        "path" -> tablePath
       )
       val partitionSpec = updatedTable.partitionColumnNames.map((_, None)).toMap
       val success = InsertIntoHoodieTableCommand.run(sparkSession, updatedTable, plan, partitionSpec,
