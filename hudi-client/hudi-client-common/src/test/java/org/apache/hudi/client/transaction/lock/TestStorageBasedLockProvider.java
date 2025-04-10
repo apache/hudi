@@ -66,7 +66,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit test class for ConditionalWriteLockProvider
+ * Unit test class for StorageBasedLockProvider
  */
 class TestStorageBasedLockProvider {
   private StorageBasedLockProvider lockProvider;
