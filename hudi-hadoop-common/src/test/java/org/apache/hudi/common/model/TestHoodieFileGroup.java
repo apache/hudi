@@ -18,9 +18,11 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
+import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +32,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -50,7 +53,30 @@ public class TestHoodieFileGroup {
       fileGroup.addBaseFile(baseFile);
     }
     assertEquals(2, fileGroup.getAllFileSlices().count());
-    assertTrue(!fileGroup.getAllFileSlices().anyMatch(s -> s.getBaseInstantTime().equals("002")));
+    assertEquals(2, fileGroup.getAllFileSlicesBeforeOn("002").count());
+    assertFalse(fileGroup.getAllFileSlices().anyMatch(s -> s.getBaseInstantTime().equals("002")));
+    assertEquals(3, fileGroup.getAllFileSlicesIncludingInflight().count());
+    assertEquals("001", fileGroup.getLatestFileSlice().get().getBaseInstantTime());
+    assertEquals("001", (new HoodieFileGroup(fileGroup)).getLatestFileSlice().get().getBaseInstantTime());
+  }
+
+  @Test
+  public void testCommittedFileSlicesWithSavepoint() {
+    // "000" is archived
+    Stream<String> completed = Stream.of("001");
+    Stream<String> inflight = Stream.of("002");
+    MockHoodieTimeline activeTimeline = new MockHoodieTimeline(completed, inflight);
+    HoodieFileGroup fileGroup = new HoodieFileGroup("", "data",
+        activeTimeline.getCommitsTimeline().filterCompletedInstants());
+    for (int i = 0; i < 3; i++) {
+      HoodieBaseFile baseFile = new HoodieBaseFile("data_1_00" + i);
+      fileGroup.addBaseFile(baseFile);
+      fileGroup.addLogFile(new HoodieLogFile(new StoragePath(FSUtils.makeLogFileName(
+          "001", HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseFile.getCommitTime(), i, "data"))));
+    }
+
+    assertEquals(2, fileGroup.getAllFileSlices().count());
+    assertFalse(fileGroup.getAllFileSlices().anyMatch(s -> s.getBaseInstantTime().equals("002")));
     assertEquals(3, fileGroup.getAllFileSlicesIncludingInflight().count());
     assertTrue(fileGroup.getLatestFileSlice().get().getBaseInstantTime().equals("001"));
     assertTrue((new HoodieFileGroup(fileGroup)).getLatestFileSlice().get().getBaseInstantTime().equals("001"));
