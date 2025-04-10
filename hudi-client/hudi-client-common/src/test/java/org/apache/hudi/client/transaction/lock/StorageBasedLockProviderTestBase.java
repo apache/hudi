@@ -20,6 +20,7 @@
 package org.apache.hudi.client.transaction.lock;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.config.StorageBasedLockConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.junit.jupiter.api.AfterEach;
