@@ -21,6 +21,7 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -136,10 +137,12 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
                             Collector<CompactionCommitEvent> collector,
                             HoodieWriteConfig writeConfig) throws IOException {
     compactionMetrics.startCompaction();
-    HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
+    HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>(new HoodieFlinkEngineContext(conf));
     HoodieTableMetaClient metaClient = writeClient.getHoodieTable().getMetaClient();
+
     String maxInstantTime = compactor.getMaxInstantTime(metaClient);
     List<WriteStatus> writeStatuses = compactor.compact(
+        writeClient.getEngineContext(),
         new HoodieFlinkCopyOnWriteTable<>(
             writeConfig,
             writeClient.getEngineContext(),
@@ -147,7 +150,8 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
         metaClient,
         writeClient.getConfig(),
         compactionOperation,
-        instantTime, maxInstantTime,
+        instantTime,
+        maxInstantTime,
         writeClient.getHoodieTable().getTaskContextSupplier());
     compactionMetrics.endCompaction();
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));

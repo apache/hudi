@@ -106,6 +106,20 @@ public class CompactionUtil {
   }
 
   /**
+   * Sets up the partition field into the given configuration {@code conf}
+   * through reading from the hoodie table metadata.
+   *
+   * @param conf The configuration
+   * @param metaClient The meta client
+   */
+  public static void setPartitionField(Configuration conf, HoodieTableMetaClient metaClient) {
+    Option<String[]> partitionKeys = metaClient.getTableConfig().getPartitionFields();
+    if (partitionKeys.isPresent()) {
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", partitionKeys.get()));
+    }
+  }
+
+  /**
    * Infers the changelog mode based on the data file schema(including metadata fields).
    *
    * <p>We can improve the code if the changelog mode is set up as table config.

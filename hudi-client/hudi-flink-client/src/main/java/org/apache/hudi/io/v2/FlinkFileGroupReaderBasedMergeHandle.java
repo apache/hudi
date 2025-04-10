@@ -7,81 +7,74 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.io.v2;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader.HoodieFileGroupReaderIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.io.BaseFileGroupReaderBasedMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.flink.table.data.RowData;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.concurrent.NotThreadSafe;
-
 import java.io.IOException;
-
-import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
+import java.util.Map;
 
 /**
- * A merge handle implementation based on the {@link HoodieFileGroupReader}.
+ * An implementation of merge handle for Flink based on the {@link HoodieFileGroupReader}.
  * <p>
- * This merge handle is used for compaction on Spark, which passes a file slice from the
+ * This merge handle is used for compaction on Flink, which passes a file slice from the
  * compaction operation of a single file group to a file group reader, get an iterator of
- * the records, and writes the records to a new base file.
+ * the RowData records, and writes the records to a new base file.
  */
-@NotThreadSafe
-public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGroupReaderBasedMergeHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkFileGroupReaderBasedMergeHandle.class);
+public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGroupReaderBasedMergeHandle<T, I, K, O> {
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkFileGroupReaderBasedMergeHandle.class);
 
-  public HoodieSparkFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                                    CompactionOperation operation, TaskContextSupplier taskContextSupplier,
-                                                    Option<BaseKeyGenerator> keyGeneratorOpt,
-                                                    HoodieReaderContext readerContext, Configuration conf) {
-    super(config, instantTime, hoodieTable, operation, taskContextSupplier, keyGeneratorOpt, readerContext, conf);
+  public FlinkFileGroupReaderBasedMergeHandle(
+      HoodieWriteConfig config,
+      String instantTime,
+      HoodieTable<T, I, K, O> hoodieTable,
+      CompactionOperation operation,
+      TaskContextSupplier taskContextSupplier,
+      Option<BaseKeyGenerator> keyGeneratorOpt,
+      HoodieReaderContext readerContext,
+      Configuration conf) {
+    super(config, instantTime, hoodieTable, operation,
+        taskContextSupplier, keyGeneratorOpt, readerContext, conf);
   }
 
   @Override
   protected HoodieRecord.HoodieRecordType getRecordType() {
-    return HoodieRecord.HoodieRecordType.SPARK;
+    return HoodieRecord.HoodieRecordType.FLINK;
   }
 
-  /**
-   * Reads the file slice of a compaction operation using a file group reader,
-   * by getting an iterator of the records; then writes the records to a new base file
-   * using Spark parquet writer.
-   */
   @Override
   public void write() {
-    boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchemaOption = Option.empty();
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
@@ -90,24 +83,34 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Base
     hoodieTable.getMetaClient().getTableConfig().getProps().forEach(props::putIfAbsent);
     config.getProps().forEach(props::putIfAbsent);
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
+    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
+        readerContext,
         storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
-        hoodieTable.getMetaClient().getBasePath().toString(), instantTime, fileSlice,
-        writeSchemaWithMetaFields, writeSchemaWithMetaFields, internalSchemaOption,
-        hoodieTable.getMetaClient(), props, 0, Long.MAX_VALUE, usePosition, false)) {
+        hoodieTable.getMetaClient().getBasePath().toString(),
+        instantTime,
+        fileSlice,
+        writeSchemaWithMetaFields,
+        writeSchemaWithMetaFields,
+        internalSchemaOption,
+        hoodieTable.getMetaClient(),
+        props,
+        0,
+        Long.MAX_VALUE,
+        false,
+        false)) {
       fileGroupReader.initRecordIterators();
       // Reads the records from the file slice
-      try (HoodieFileGroupReaderIterator<InternalRow> recordIterator
-               = (HoodieFileGroupReaderIterator<InternalRow>) fileGroupReader.getClosableIterator()) {
-        StructType sparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(writeSchemaWithMetaFields);
+      try (HoodieFileGroupReader.HoodieFileGroupReaderIterator<RowData> recordIterator =
+               (HoodieFileGroupReader.HoodieFileGroupReaderIterator<RowData>) fileGroupReader.getClosableIterator()) {
         while (recordIterator.hasNext()) {
-          // Constructs Spark record for the Spark Parquet file writer
-          InternalRow row = recordIterator.next();
+          // Constructs Flink record for the Flink Parquet file writer
+          RowData row = recordIterator.next();
           HoodieKey recordKey = new HoodieKey(
-              row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
-              row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD));
-          HoodieSparkRecord record = new HoodieSparkRecord(recordKey, row, sparkSchema, false);
-          Option recordMetadata = record.getMetadata();
+              row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD).toString(),
+              row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD).toString());
+          HoodieFlinkRecord record = new HoodieFlinkRecord(recordKey, row);
+
+          Option<Map<String, String>> recordMetadata = record.getMetadata();
           if (!partitionPath.equals(record.getPartitionPath())) {
             HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
                 + record.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
@@ -116,8 +119,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Base
           }
           // Writes the record
           try {
-            writeToFile(recordKey, record, writeSchemaWithMetaFields,
-                config.getPayloadConfig().getProps(), preserveMetadata);
+            writeToFile(recordKey, record, writeSchemaWithMetaFields, config.getPayloadConfig().getProps(), preserveMetadata);
             writeStatus.markSuccess(record, recordMetadata);
           } catch (Exception e) {
             LOG.error("Error writing record  " + record, e);

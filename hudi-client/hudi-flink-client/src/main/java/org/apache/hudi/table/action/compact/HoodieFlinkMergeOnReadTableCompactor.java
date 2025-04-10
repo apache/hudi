@@ -19,17 +19,32 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.FlinkRowDataReaderContext;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.EngineBroadcastManager;
+import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.format.InternalSchemaManager;
 
+import org.apache.hadoop.conf.Configuration;
+
+import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -42,6 +57,12 @@ import java.util.List;
 @SuppressWarnings("checkstyle:LineLength")
 public class HoodieFlinkMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+  private final HoodieFlinkEngineContext flinkEngineContext;
+
+  public HoodieFlinkMergeOnReadTableCompactor(HoodieEngineContext engineContext) {
+    ValidationUtils.checkArgument(engineContext instanceof HoodieFlinkEngineContext);
+    this.flinkEngineContext = (HoodieFlinkEngineContext) engineContext;
+  }
 
   @Override
   public void preCompact(
@@ -59,5 +80,55 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
   @Override
   public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     // No OP
+  }
+
+  @Override
+  public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
+                                   HoodieTableMetaClient metaClient,
+                                   HoodieWriteConfig writeConfig,
+                                   CompactionOperation operation,
+                                   String instantTime,
+                                   Option<EngineBroadcastManager> broadcastManagerOpt) throws IOException {
+    Configuration conf = metaClient.getStorage().getConf().unwrapAs(Configuration.class);
+    FlinkRowDataReaderContext readerContext = new FlinkRowDataReaderContext(
+        flinkEngineContext.getFlinkConf(),
+        InternalSchemaManager.get(flinkEngineContext.getFlinkConf(), metaClient),
+        Collections.emptyList());
+    return compactionHandler.compactUsingFileGroupReader(instantTime, operation, writeConfig, readerContext, conf);
+  }
+
+  public List<WriteStatus> compact(HoodieEngineContext context,
+                                   HoodieCompactionHandler compactionHandler,
+                                   HoodieTableMetaClient metaClient,
+                                   HoodieWriteConfig writeConfig,
+                                   CompactionOperation operation,
+                                   String instantTime,
+                                   String maxInstantTime,
+                                   TaskContextSupplier taskContextSupplier) throws IOException {
+    boolean useFileGroupReaderBasedCompaction = context.supportsFileGroupReader()                   // the engine needs to support fg reader first
+        && !metaClient.isMetadataTable()
+        && writeConfig.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+        && operation.getBootstrapFilePath().isEmpty()
+        && writeConfig.populateMetaFields()                                                         // Virtual key support by fg reader is not ready
+        && !(metaClient.getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor());  // do not support produce cdc log during fg reader
+
+    if (useFileGroupReaderBasedCompaction) {
+      return compact(
+          compactionHandler,
+          metaClient,
+          writeConfig,
+          operation,
+          instantTime,
+          Option.empty());
+    } else {
+      return compact(
+          compactionHandler,
+          metaClient,
+          writeConfig,
+          operation,
+          instantTime,
+          maxInstantTime,
+          taskContextSupplier);
+    }
   }
 }
