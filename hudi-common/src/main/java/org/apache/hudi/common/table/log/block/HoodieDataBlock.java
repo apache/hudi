@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -71,7 +72,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   protected Schema readerSchema;
 
   //  Map of string schema to parsed schema.
-  private static ConcurrentHashMap<String, Schema> schemaMap = new ConcurrentHashMap<>();
+  private static final ConcurrentHashMap<String, Schema> SCHEMA_MAP = new ConcurrentHashMap<>();
 
   /**
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
@@ -85,7 +86,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     this.records = Option.of(records);
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
-    this.readerSchema = getWriterSchema(super.getLogBlockHeader());
+    this.readerSchema = AvroSchemaCache.intern(getWriterSchema(super.getLogBlockHeader()));
     this.enablePointLookups = false;
   }
 
@@ -108,9 +109,9 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
         // When the data block contains partial updates, we need to strictly use the writer schema
         // from the log block header, as we need to use the partial schema to indicate which
         // fields are updated during merging.
-        ? getWriterSchema(super.getLogBlockHeader())
+        ? AvroSchemaCache.intern(getWriterSchema(super.getLogBlockHeader()))
         // If no reader-schema has been provided assume writer-schema as one
-        : readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
+        : AvroSchemaCache.intern(readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader())));
     this.enablePointLookups = enablePointLookups;
   }
 
@@ -368,8 +369,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected Schema getSchemaFromHeader() {
     String schemaStr = getLogBlockHeader().get(HeaderMetadataType.SCHEMA);
-    schemaMap.computeIfAbsent(schemaStr, (schemaString) -> new Schema.Parser().parse(schemaString));
-    return schemaMap.get(schemaStr);
+    SCHEMA_MAP.computeIfAbsent(schemaStr, (schemaString) -> new Schema.Parser().parse(schemaString));
+    return SCHEMA_MAP.get(schemaStr);
   }
 
   /**

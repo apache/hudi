@@ -18,6 +18,7 @@
 package org.apache.hudi.util
 
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -37,11 +38,12 @@ object SparkKeyGenUtils {
 
   /**
    * @param properties config properties
+   * @param writerTableVersion table version used by writer
    * @return partition columns
    */
-  def getPartitionColumnsForKeyGenerator(props: TypedProperties): String = {
+  def getPartitionColumnsForKeyGenerator(props: TypedProperties, writerTableVersion: HoodieTableVersion): String = {
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
-    getPartitionColumns(keyGenerator, props, true)
+    getPartitionColumns(keyGenerator, props, writerTableVersion.versionCode() > HoodieTableVersion.SIX.versionCode())
   }
 
   /**

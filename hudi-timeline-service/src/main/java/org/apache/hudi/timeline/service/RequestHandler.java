@@ -38,7 +38,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
@@ -91,22 +90,22 @@ public class RequestHandler {
   private final ScheduledExecutorService asyncResultService;
 
   public RequestHandler(Javalin app, StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
-                        HoodieEngineContext hoodieEngineContext, HoodieStorage storage,
-                        FileSystemViewManager viewManager) throws IOException {
+                        HoodieEngineContext hoodieEngineContext,
+                        FileSystemViewManager viewManager) {
     this.timelineServiceConfig = timelineServiceConfig;
     this.viewManager = viewManager;
     this.app = app;
-    this.instantHandler = new TimelineHandler(conf, timelineServiceConfig, storage, viewManager);
-    this.sliceHandler = new FileSliceHandler(conf, timelineServiceConfig, storage, viewManager);
-    this.dataFileHandler = new BaseFileHandler(conf, timelineServiceConfig, storage, viewManager);
+    this.instantHandler = new TimelineHandler(conf, timelineServiceConfig, viewManager);
+    this.sliceHandler = new FileSliceHandler(conf, timelineServiceConfig, viewManager);
+    this.dataFileHandler = new BaseFileHandler(conf, timelineServiceConfig, viewManager);
     if (timelineServiceConfig.enableMarkerRequests) {
       this.markerHandler = new MarkerHandler(
-          conf, timelineServiceConfig, hoodieEngineContext, storage, viewManager, metricsRegistry);
+          conf, timelineServiceConfig, hoodieEngineContext, viewManager, metricsRegistry);
     } else {
       this.markerHandler = null;
     }
     if (timelineServiceConfig.enableInstantStateRequests) {
-      this.instantStateHandler = new InstantStateHandler(conf, timelineServiceConfig, storage, viewManager);
+      this.instantStateHandler = new InstantStateHandler(conf, timelineServiceConfig, viewManager);
     } else {
       this.instantStateHandler = null;
     }
@@ -513,6 +512,14 @@ public class RequestHandler {
     app.get(MarkerOperation.CREATE_AND_MERGE_MARKERS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("CREATE_AND_MERGE_MARKERS", 1);
       Set<String> markers = markerHandler.getCreateAndMergeMarkers(getMarkerDirParam(ctx));
+      writeValueAsString(ctx, markers);
+    }, false));
+
+    // Operation is used only for version 6 tables
+    app.get(MarkerOperation.APPEND_MARKERS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("APPEND_MARKERS", 1);
+      Set<String> markers = markerHandler.getAppendMarkers(
+          ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, markers);
     }, false));
 

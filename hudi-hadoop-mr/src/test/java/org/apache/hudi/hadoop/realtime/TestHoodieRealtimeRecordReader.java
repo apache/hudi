@@ -34,7 +34,6 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -48,6 +47,7 @@ import org.apache.hudi.hadoop.RealtimeFileStatus;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -99,7 +99,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP;
@@ -802,10 +801,10 @@ public class TestHoodieRealtimeRecordReader {
     File file = basePath.resolve(".hoodie/timeline")
         .resolve(commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".replacecommit").toFile();
     file.createNewFile();
-    FileOutputStream fileOutputStream = new FileOutputStream(file);
-    fileOutputStream.write(serializeCommitMetadata(COMMIT_METADATA_SER_DE, replaceMetadata).get());
-    fileOutputStream.flush();
-    fileOutputStream.close();
+    try (FileOutputStream fileOutputStream = new FileOutputStream(file)) {
+      COMMIT_METADATA_SER_DE.getInstantWriter(replaceMetadata).get().writeToStream(fileOutputStream);
+      fileOutputStream.flush();
+    }
   }
 
   private HoodieWriteStat createHoodieWriteStat(java.nio.file.Path basePath, String commitNumber, String partitionPath, String filePath, String fileId) {
@@ -845,10 +844,10 @@ public class TestHoodieRealtimeRecordReader {
     File file = basePath.resolve(".hoodie/timeline")
         .resolve(commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".deltacommit").toFile();
     file.createNewFile();
-    FileOutputStream fileOutputStream = new FileOutputStream(file);
-    fileOutputStream.write(serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
-    fileOutputStream.flush();
-    fileOutputStream.close();
+    try (FileOutputStream fileOutputStream = new FileOutputStream(file)) {
+      COMMIT_METADATA_SER_DE.getInstantWriter(commitMetadata).get().writeToStream(fileOutputStream);
+      fileOutputStream.flush();
+    }
   }
 
   @Test
@@ -980,14 +979,12 @@ public class TestHoodieRealtimeRecordReader {
     File file = basePath.resolve(".hoodie/timeline")
         .resolve(INSTANT_FILE_NAME_GENERATOR.makeRequestedCompactionFileName(commitTime)).toFile();
     assertTrue(file.createNewFile());
-    FileOutputStream os = new FileOutputStream(file);
-    try {
+    try (FileOutputStream os = new FileOutputStream(file)) {
       HoodieCompactionPlan compactionPlan = HoodieCompactionPlan.newBuilder().setVersion(2).build();
       // Write empty commit metadata
-      os.write(TimelineMetadataUtils.serializeCompactionPlan(compactionPlan).get());
+      HoodieInstantWriter writer = COMMIT_METADATA_SER_DE.getInstantWriter(compactionPlan).get();
+      writer.writeToStream(os);
       return file;
-    } finally {
-      os.close();
     }
   }
 }

@@ -32,21 +32,22 @@ import org.apache.hudi.common.util.collection
 import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.util.JavaScalaConverters.convertScalaListToJavaList
+
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.generic.GenericData
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import java.nio.ByteBuffer
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable.ListBuffer
@@ -454,10 +455,10 @@ object ColumnStatsIndexSupport {
       case w: LongWrapper => w.getValue
       case w: FloatWrapper => w.getValue
       case w: DoubleWrapper => w.getValue
+      case w: DecimalWrapper => w.getValue  // Moved above BytesWrapper to ensure proper matching
       case w: BytesWrapper => w.getValue
       case w: StringWrapper => w.getValue
       case w: DateWrapper => w.getValue
-      case w: DecimalWrapper => w.getValue
       case w: TimeMicrosWrapper => w.getValue
       case w: TimestampMicrosWrapper => w.getValue
 
@@ -489,13 +490,18 @@ object ColumnStatsIndexSupport {
       case ShortType => value.asInstanceOf[Int].toShort
       case ByteType => value.asInstanceOf[Int].toByte
 
-      // TODO fix
-      case _: DecimalType =>
+      case dt: DecimalType =>
         value match {
           case buffer: ByteBuffer =>
             val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
-            decConv.fromBytes(buffer, null, logicalType)
-          case _ => value
+            decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+          case bd: BigDecimal =>
+            // Scala BigDecimal: convert to java.math.BigDecimal and enforce the scale
+            bd.bigDecimal.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+          case bd: java.math.BigDecimal =>
+            bd.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+          case other =>
+            throw new UnsupportedOperationException(s"Cannot deserialize value for DecimalType: unexpected type ${other.getClass.getName}")
         }
       case BinaryType =>
         value match {

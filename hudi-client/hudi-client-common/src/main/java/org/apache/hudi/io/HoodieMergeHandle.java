@@ -247,7 +247,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
           new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(writeSchema),
           config.getCommonConfig().getSpillableDiskMapType(),
           new DefaultSerializer<>(),
-          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
+          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
+          getClass().getSimpleName());
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }

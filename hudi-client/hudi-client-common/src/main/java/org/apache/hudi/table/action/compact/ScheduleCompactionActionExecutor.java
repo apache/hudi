@@ -26,19 +26,19 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
-import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator;
 
 import org.slf4j.Logger;
@@ -47,12 +47,9 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.CollectionUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -60,7 +57,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServicePlanActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ScheduleCompactionActionExecutor.class);
-  private WriteOperationType operationType;
+  private final WriteOperationType operationType;
   private final Option<Map<String, String>> extraMetadata;
   private BaseHoodieCompactionPlanGenerator planGenerator;
 
@@ -80,7 +77,8 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
 
   private void initPlanGenerator(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     if (WriteOperationType.COMPACT.equals(operationType)) {
-      planGenerator = new HoodieCompactionPlanGenerator(table, context, config, this);
+      String planGeneratorClass = ConfigUtils.getStringWithAltKeys(config.getProps(), HoodieCompactionConfig.COMPACTION_PLAN_GENERATOR, true);
+      planGenerator = createCompactionPlanGenerator(planGeneratorClass, table, context, config);
     } else {
       planGenerator = new HoodieLogCompactionPlanGenerator(table, context, config, this);
     }
@@ -104,34 +102,20 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
           return Option.empty();
         }
       }
-      // Committed and pending compaction instants should have strictly lower timestamps
-      List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
-          .getWriteTimeline().filterCompletedAndCompactionInstants().getInstantsAsStream()
-          .filter(instant -> compareTimestamps(instant.requestedTime(), GREATER_THAN_OR_EQUALS, instantTime))
-          .collect(Collectors.toList());
-      ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
-          "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
-              + conflictingInstants);
     }
 
     HoodieCompactionPlan plan = scheduleCompaction();
     Option<HoodieCompactionPlan> option = Option.empty();
     if (plan != null && nonEmpty(plan.getOperations())) {
       extraMetadata.ifPresent(plan::setExtraMetadata);
-      try {
-        if (operationType.equals(WriteOperationType.COMPACT)) {
-          HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
-              HoodieTimeline.COMPACTION_ACTION, instantTime);
-          table.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-              TimelineMetadataUtils.serializeCompactionPlan(plan));
-        } else {
-          HoodieInstant logCompactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
-              HoodieTimeline.LOG_COMPACTION_ACTION, instantTime);
-          table.getActiveTimeline().saveToLogCompactionRequested(logCompactionInstant,
-              TimelineMetadataUtils.serializeCompactionPlan(plan));
-        }
-      } catch (IOException ioe) {
-        throw new HoodieIOException("Exception scheduling compaction", ioe);
+      if (operationType.equals(WriteOperationType.COMPACT)) {
+        HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
+            HoodieTimeline.COMPACTION_ACTION, instantTime);
+        table.getActiveTimeline().saveToCompactionRequested(compactionInstant, plan);
+      } else {
+        HoodieInstant logCompactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
+            HoodieTimeline.LOG_COMPACTION_ACTION, instantTime);
+        table.getActiveTimeline().saveToLogCompactionRequested(logCompactionInstant, plan);
       }
       option = Option.of(plan);
     }
@@ -241,5 +225,10 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
   private Long parsedToSeconds(String time) {
     return TimelineUtils.parseDateFromInstantTimeSafely(time).orElseThrow(() -> new HoodieCompactionException("Failed to parse timestamp " + time))
             .getTime() / 1000;
+  }
+
+  private BaseHoodieCompactionPlanGenerator createCompactionPlanGenerator(String planGeneratorClass, HoodieTable table, HoodieEngineContext context, HoodieWriteConfig config) {
+    return (BaseHoodieCompactionPlanGenerator) ReflectionUtils.loadClass(planGeneratorClass,
+        new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class, BaseTableServicePlanActionExecutor.class}, table, context, config, this);
   }
 }

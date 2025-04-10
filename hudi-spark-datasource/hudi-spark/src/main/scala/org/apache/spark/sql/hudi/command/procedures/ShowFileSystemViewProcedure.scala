@@ -22,15 +22,16 @@ import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparison}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.util
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.util.function.{Function, Supplier}
-import java.util.stream.{Collectors, Stream => JStream}
 import java.util.{ArrayList => JArrayList, List => JList}
+import java.util.function.Supplier
+import java.util.stream.{Collectors, Stream => JStream}
+
 import scala.collection.JavaConverters._
 
 class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure with ProcedureBuilder {
@@ -114,15 +115,8 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       instants = instants.filter(instant => predicate.test(maxInstant, instant.requestedTime))
     }
 
-    val details = new Function[HoodieInstant, org.apache.hudi.common.util.Option[Array[Byte]]]
-      with java.io.Serializable {
-      override def apply(instant: HoodieInstant): util.Option[Array[Byte]] = {
-        metaClient.getActiveTimeline.getInstantDetails(instant)
-      }
-    }
-
     val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(
-      new JArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
+      new JArrayList[HoodieInstant](instants.toList.asJava).stream(), metaClient.getActiveTimeline.getInstantReader)
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
   }
 

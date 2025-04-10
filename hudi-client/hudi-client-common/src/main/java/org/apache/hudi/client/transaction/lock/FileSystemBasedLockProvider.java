@@ -67,8 +67,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   private final transient HoodieStorage storage;
   private final transient StoragePath lockFile;
   protected LockConfiguration lockConfiguration;
-  private SimpleDateFormat sdf;
-  private LockInfo lockInfo;
+  private final SimpleDateFormat sdf;
+  private final LockInfo lockInfo;
   private String currentOwnerLockInfo;
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {

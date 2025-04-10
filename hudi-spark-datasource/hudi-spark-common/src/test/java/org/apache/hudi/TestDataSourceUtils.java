@@ -37,6 +37,7 @@ import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestDataSourceUtils extends HoodieClientTestBase {
+
   @Test
   void testDeduplicationAgainstRecordsAlreadyInTable() {
     HoodieWriteConfig config = getConfig();

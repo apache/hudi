@@ -76,7 +76,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 /**
  * The common hoodie test harness to provide the basic infrastructure.
@@ -127,6 +126,34 @@ public class HoodieCommonTestHarness {
   }
 
   /**
+   * Pads a string number with leading zeros until it reaches the specified length.
+   *
+   * @param number The string number to pad
+   * @param length The desired total length after padding
+   * @return The padded string number
+   * @throws IllegalArgumentException if the input number is longer than the desired length
+   */
+  protected static String padWithLeadingZeros(String number, int length) {
+    if (number == null) {
+      throw new IllegalArgumentException("Input number cannot be null");
+    }
+    if (number.length() > length) {
+      throw new IllegalArgumentException("Input number length " + number.length()
+          + " is greater than desired length " + length);
+    }
+    return String.format("%0" + length + "d", Long.parseLong(number));
+  }
+
+  /**
+   * Given a timestamp string, plus one numerically and convert it back to string with the same prefix 0 padding
+   * to ensure the string length remains the same.
+   * Example: 0010 -> 0011.
+   * */
+  public static String incTimestampStrByOne(String timestamp) {
+    return padWithLeadingZeros(Integer.toString(Integer.parseInt(timestamp) + 1), timestamp.length());
+  }
+
+  /**
    * Initializes a test data generator which used to generate test data.
    */
   protected void initTestDataGenerator() {
@@ -160,10 +187,14 @@ public class HoodieCommonTestHarness {
   }
 
   protected void initMetaClient(boolean preTableVersion8) throws IOException {
+    initMetaClient(preTableVersion8, getTableType());
+  }
+
+  protected void initMetaClient(boolean preTableVersion8, HoodieTableType tableType) throws IOException {
     if (basePath == null) {
       initPath();
     }
-    metaClient = HoodieTestUtils.init(basePath, getTableType(), "", false, null, "datestr",
+    metaClient = HoodieTestUtils.init(basePath, tableType, "", false, null, "datestr",
         preTableVersion8 ? Option.of(HoodieTableVersion.SIX) : Option.of(HoodieTableVersion.current()));
   }
 
@@ -269,20 +300,23 @@ public class HoodieCommonTestHarness {
     return metaClient.getActiveTimeline();
   }
 
-  protected Boolean hasPendingCommits() {
+  protected Boolean hasPendingCommitsOrRollbacks() {
     HoodieActiveTimeline timeline = getActiveTimeline();
-    HoodieTimeline completedTimeline = timeline.filterCompletedInstants();
-    Set<String> completedInstants = completedTimeline
-        .getInstants()
-        .stream()
-        .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
-    List<String> pendingInstants = timeline
-        .getInstants()
-        .stream()
-        .map(HoodieInstant::requestedTime)
-        .filter(t -> !completedInstants.contains(t))
-        .collect(Collectors.toList());
-    return !pendingInstants.isEmpty();
+    if (timeline.getRollbackTimeline().empty()) {
+      HoodieTimeline completedTimeline = timeline.filterCompletedInstants();
+      Set<String> completedInstants = completedTimeline
+          .getInstants()
+          .stream()
+          .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
+      List<String> pendingInstants = timeline
+          .getInstants()
+          .stream()
+          .map(HoodieInstant::requestedTime)
+          .filter(t -> !completedInstants.contains(t))
+          .collect(Collectors.toList());
+      return !pendingInstants.isEmpty();
+    }
+    return true;
   }
 
   protected HoodieEngineContext getEngineContext() {
@@ -393,12 +427,12 @@ public class HoodieCommonTestHarness {
     }
   }
 
-  public byte[] getCommitMetadata(String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
+  public Option<HoodieCommitMetadata> getCommitMetadata(String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
       throws IOException {
     return getCommitMetadata(metaClient, basePath, partition, commitTs, count, extraMetadata);
   }
 
-  public static byte[] getCommitMetadata(HoodieTableMetaClient metaClient, String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
+  public static Option<HoodieCommitMetadata> getCommitMetadata(HoodieTableMetaClient metaClient, String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
       throws IOException {
     HoodieCommitMetadata commit = new HoodieCommitMetadata();
     for (int i = 1; i <= count; i++) {
@@ -411,6 +445,6 @@ public class HoodieCommonTestHarness {
     for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
       commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
     }
-    return serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commit).get();
+    return Option.of(commit);
   }
 }

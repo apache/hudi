@@ -300,12 +300,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieRecord{");
-    sb.append("key=").append(key);
-    sb.append(", currentLocation='").append(currentLocation).append('\'');
-    sb.append(", newLocation='").append(newLocation).append('\'');
-    sb.append('}');
-    return sb.toString();
+    return "HoodieRecord{" + "key=" + key
+        + ", currentLocation='" + currentLocation + '\''
+        + ", newLocation='" + newLocation + '\''
+        + '}';
   }
 
   public String getPartitionPath() {
@@ -483,6 +481,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   }
 
   public enum HoodieRecordType {
-    AVRO, SPARK, HIVE
+    AVRO, SPARK, HIVE, FLINK
   }
 }

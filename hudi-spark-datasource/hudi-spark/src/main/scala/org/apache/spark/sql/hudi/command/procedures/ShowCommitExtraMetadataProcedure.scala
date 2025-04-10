@@ -18,16 +18,18 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata}
+import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.util.ClusteringUtils
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBuilder {
@@ -121,11 +123,9 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
     val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     if (hoodieInstant.isDefined) {
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
-        Option(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
-          classOf[HoodieReplaceCommitMetadata]))
+        Option(timeline.readReplaceCommitMetadata(hoodieInstant.get))
       } else {
-        Option(layout.getCommitMetadataSerDe.deserialize(hoodieInstant.get, timeline.getInstantDetails(hoodieInstant.get).get,
-          classOf[HoodieCommitMetadata]))
+        Option(timeline.readCommitMetadata(hoodieInstant.get))
       }
     } else {
       Option.empty

@@ -17,10 +17,10 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
+import org.apache.hadoop.fs.Path
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import scala.collection.JavaConverters._
@@ -94,8 +94,7 @@ class TestTruncateTableProcedure extends HoodieSparkProcedureTestBase {
       val replaceCommitInstant = metaClient.getActiveTimeline.getWriteTimeline
         .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
         .get()
-      val partitions = HoodieReplaceCommitMetadata
-        .fromBytes(metaClient.getActiveTimeline.getInstantDetails(replaceCommitInstant).get(), classOf[HoodieReplaceCommitMetadata])
+      val partitions = metaClient.getActiveTimeline.readReplaceCommitMetadata(replaceCommitInstant)
         .getPartitionToReplaceFileIds
         .keySet()
       //Step3: check number of truncated partitions and location startWith

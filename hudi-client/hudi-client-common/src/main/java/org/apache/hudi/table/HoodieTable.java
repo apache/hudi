@@ -95,6 +95,7 @@ import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -155,6 +156,18 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.viewManager = getViewManager();
     this.metaClient = metaClient;
     this.taskContextSupplier = context.getTaskContextSupplier();
+  }
+
+  protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager, TaskContextSupplier supplier) {
+    this.config = config;
+    this.context = context;
+    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
+    this.instantGenerator = metaClient.getInstantGenerator();
+    this.instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
+    this.instantFileNameParser = metaClient.getInstantFileNameParser();
+    this.viewManager = viewManager;
+    this.metaClient = metaClient;
+    this.taskContextSupplier = supplier;
   }
 
   public boolean isMetadataTable() {
@@ -727,7 +740,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
   public void finalizeWrite(HoodieEngineContext context, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {
-    reconcileAgainstMarkers(context, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled(), config.shouldFailOnDuplicateDataFileDetection());
+    reconcileAgainstMarkers(context, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled(), config.shouldFailOnDuplicateDataFileDetection(),
+        WriteMarkersFactory.get(config.getMarkersType(), this, instantTs));
   }
 
   private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
@@ -741,7 +755,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           LOG.info("Deleting invalid data file=" + partitionFilePair);
           // Delete
           try {
-            storage.deleteFile(new StoragePath(partitionFilePair.getValue()));
+            StoragePath pathToDelete = new StoragePath(partitionFilePair.getValue());
+            boolean deletionSuccess = storage.deleteFile(pathToDelete);
+            if (!deletionSuccess && storage.exists(pathToDelete)) {
+              throw new HoodieIOException("Failed to delete invalid path during marker reconciliaton " + pathToDelete);
+            }
+          } catch (FileNotFoundException fnfe) {
+            // no op
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
           }
@@ -766,16 +786,16 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param consistencyCheckEnabled Consistency Check Enabled
    * @throws HoodieIOException
    */
-  protected void reconcileAgainstMarkers(HoodieEngineContext context,
+  void reconcileAgainstMarkers(HoodieEngineContext context,
                                          String instantTs,
                                          List<HoodieWriteStat> stats,
                                          boolean consistencyCheckEnabled,
-                                         boolean shouldFailOnDuplicateDataFileDetection) throws HoodieIOException {
+                                         boolean shouldFailOnDuplicateDataFileDetection,
+                               WriteMarkers markers) throws HoodieIOException {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
       String basePath = getMetaClient().getBasePath().toString();
-      WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
 
       if (!markers.doesMarkerDirExist()) {
         // can happen if it was an empty write say.

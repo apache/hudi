@@ -140,7 +140,8 @@ public class HoodieCDCLogger implements Closeable {
           new DefaultSizeEstimator<>(),
           config.getCommonConfig().getSpillableDiskMapType(),
           new DefaultSerializer<>(),
-          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
+          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
+          getClass().getSimpleName());
       this.transformer = getTransformer();
       this.maxBlockSize = config.getLogFileDataBlockMaxSize();
 

@@ -67,6 +67,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
+import org.apache.hudi.estimator.AverageRecordSizeEstimator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -112,6 +113,7 @@ import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREA
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
 import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarlyConflictDetectionStrategy;
 
 /**
@@ -211,6 +213,29 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator` "
           + "extract a key out of incoming records.");
 
+  public static final ConfigProperty<String> RECORD_SIZE_ESTIMATOR_CLASS_NAME = ConfigProperty
+      .key("hoodie.record.size.estimator.class")
+      .defaultValue(AverageRecordSizeEstimator.class.getName())
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Class that estimates the size of records written by implementing "
+          + "`org.apache.hudi.estimator.RecordSizeEstimator`. Default implementation is `org.apache.hudi.estimator.AverageRecordSizeEstimator`");
+
+  public static final ConfigProperty<Integer> RECORD_SIZE_ESTIMATOR_MAX_COMMITS = ConfigProperty
+      .key("_hoodie.record.size.estimator.max.commits")
+      .defaultValue(5)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("The maximum number of commits that will be read to estimate the avg record size. "
+          + "This makes sure we parse a limited number of commit metadata, as parsing the entire active timeline can be expensive and unnecessary.");
+
+  public static final ConfigProperty<String> RECORD_SIZE_ESTIMATOR_AVERAGE_METADATA_SIZE = ConfigProperty
+      .key("hoodie.record.size.estimator.average.metadata.size")
+      .defaultValue("0")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("The approximate metadata size in bytes to subtract from the file size when estimating the record size.");
+
   public static final ConfigProperty<String> WRITE_EXECUTOR_TYPE = ConfigProperty
       .key("hoodie.write.executor.type")
       .defaultValue(ExecutorType.SIMPLE.name())
@@ -274,6 +299,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Schema string representing the latest schema of the table. Hudi passes this to "
           + "implementations of evolution of schema");
+
+  public static final ConfigProperty<Boolean> ENABLE_SCHEMA_CONFLICT_RESOLUTION = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "schema.conflict.resolution.enable")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("If turned on, we detect and abort incompatible concurrent schema evolution.");
 
   public static final ConfigProperty<String> AVRO_SCHEMA_VALIDATE_ENABLE = ConfigProperty
       .key("hoodie.avro.schema.validate")
@@ -856,7 +888,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private HoodieStorageConfig storageConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private HoodieIndexingConfig indexingConfig;
-  private EngineType engineType;
+  private final EngineType engineType;
 
   /**
    * @deprecated Use {@link #TBL_NAME} and its methods instead
@@ -1320,6 +1352,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(TAGGED_RECORD_STORAGE_LEVEL_VALUE);
   }
 
+  public Boolean isSourceRddPersisted() {
+    return getBoolean(ERROR_TABLE_PERSIST_SOURCE_RDD);
+  }
+
   public String getInternalSchema() {
     return getString(INTERNAL_SCHEMA_STRING);
   }
@@ -1649,6 +1685,18 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE);
   }
 
+  public String getRecordSizeEstimator() {
+    return getStringOrDefault(RECORD_SIZE_ESTIMATOR_CLASS_NAME);
+  }
+
+  public int getRecordSizeEstimatorMaxCommits() {
+    return getIntOrDefault(RECORD_SIZE_ESTIMATOR_MAX_COMMITS);
+  }
+
+  public long getRecordSizeEstimatorAverageMetadataSize() {
+    return Long.parseLong(getStringOrDefault(RECORD_SIZE_ESTIMATOR_AVERAGE_METADATA_SIZE));
+  }
+
   public boolean allowMultipleCleans() {
     return getBoolean(HoodieCleanConfig.ALLOW_MULTIPLE_CLEANS);
   }
@@ -1907,6 +1955,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieIndex.IndexType.valueOf(getString(HoodieIndexConfig.INDEX_TYPE));
   }
 
+  public String getBucketIndexPartitionExpression() {
+    return getString(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS);
+  }
+
+  public String getBucketIndexPartitionRuleType() {
+    return getString(HoodieIndexConfig.BUCKET_INDEX_PARTITION_RULE_TYPE);
+  }
+
   public String getIndexClass() {
     return getString(HoodieIndexConfig.INDEX_CLASS_NAME);
   }
@@ -2062,6 +2118,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean useBloomIndexBucketizedChecking() {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING);
+  }
+
+  public boolean isBloomIndexFileGroupIdKeySortingEnabled() {
+    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_FILE_GROUP_ID_KEY_SORTING);
   }
 
   /**
@@ -2894,7 +2954,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isCleanConfigSet = false;
     private boolean isArchivalConfigSet = false;
     private boolean isClusteringConfigSet = false;
-    private boolean isOptimizeConfigSet = false;
+    private final boolean isOptimizeConfigSet = false;
     private boolean isMetricsConfigSet = false;
     private boolean isBootstrapConfigSet = false;
     private boolean isMemoryConfigSet = false;
@@ -3013,6 +3073,21 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withKeyGenerator(String keyGeneratorClass) {
       writeConfig.setValue(KEYGENERATOR_CLASS_NAME, keyGeneratorClass);
+      return this;
+    }
+
+    public Builder withRecordSizeEstimator(String recordSizeEstimator) {
+      writeConfig.setValue(RECORD_SIZE_ESTIMATOR_CLASS_NAME, recordSizeEstimator);
+      return this;
+    }
+
+    public Builder withRecordSizeEstimatorMaxCommits(int maxCommits) {
+      writeConfig.setValue(RECORD_SIZE_ESTIMATOR_MAX_COMMITS, String.valueOf(maxCommits));
+      return this;
+    }
+
+    public Builder withRecordSizeEstimatorAverageMetadataSize(long avgMetadataSize) {
+      writeConfig.setValue(RECORD_SIZE_ESTIMATOR_AVERAGE_METADATA_SIZE, String.valueOf(avgMetadataSize));
       return this;
     }
 
@@ -3542,11 +3617,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     private void validate() {
-      if (HoodieTableVersion.SIX.equals(writeConfig.getWriteVersion())) {
-        LOG.warn("HoodieTableVersion.SIX is not yet fully supported by the writer. "
-            + "Please expect some unexpected behavior, until its fully implemented.");
-      }
-
       String layoutVersion = writeConfig.getString(TIMELINE_LAYOUT_VERSION_NUM);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));

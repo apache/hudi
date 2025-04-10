@@ -28,9 +28,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
@@ -38,8 +38,6 @@ import org.apache.hudi.table.HoodieTable;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
-
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 /**
  * Base class helps to perform compact.
@@ -64,9 +62,8 @@ public class CompactHelpers<T, I, K, O> {
       HoodieTable table, String compactionInstantTime, HoodieData<WriteStatus> writeStatuses,
       String schema) throws IOException {
     InstantGenerator instantGenerator = table.getInstantGenerator();
-    byte[] planBytes = table.getActiveTimeline().readCompactionPlanAsBytes(
-        instantGenerator.getCompactionRequestedInstant(compactionInstantTime)).get();
-    HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(planBytes);
+    HoodieCompactionPlan compactionPlan = table.getActiveTimeline().readCompactionPlan(
+        instantGenerator.getCompactionRequestedInstant(compactionInstantTime));
     List<HoodieWriteStat> updateStatusMap = writeStatuses.map(WriteStatus::getStat).collectAsList();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
     for (HoodieWriteStat stat : updateStatusMap) {
@@ -86,9 +83,8 @@ public class CompactHelpers<T, I, K, O> {
       InstantGenerator instantGenerator = table.getInstantGenerator();
       // Callers should already guarantee the lock.
       activeTimeline.transitionCompactionInflightToComplete(false,
-          instantGenerator.getCompactionInflightInstant(compactionCommitTime),
-          serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), commitMetadata));
-    } catch (IOException e) {
+          instantGenerator.getCompactionInflightInstant(compactionCommitTime), commitMetadata);
+    } catch (HoodieIOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + compactionCommitTime, e);
     }
@@ -100,9 +96,8 @@ public class CompactHelpers<T, I, K, O> {
       // Callers should already guarantee the lock.
       InstantGenerator instantGenerator = table.getInstantGenerator();
       activeTimeline.transitionLogCompactionInflightToComplete(false,
-          instantGenerator.getLogCompactionInflightInstant(logCompactionCommitTime),
-          serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), commitMetadata));
-    } catch (IOException e) {
+          instantGenerator.getLogCompactionInflightInstant(logCompactionCommitTime), commitMetadata);
+    } catch (HoodieIOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + logCompactionCommitTime, e);
     }

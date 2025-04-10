@@ -236,12 +236,10 @@ public class HoodieFileGroup implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieFileGroup {");
-    sb.append("id=").append(fileGroupId);
-    sb.append(", fileSlices='").append(fileSlices).append('\'');
-    sb.append(", lastInstant='").append(lastInstant).append('\'');
-    sb.append('}');
-    return sb.toString();
+    return "HoodieFileGroup {" + "id=" + fileGroupId
+        + ", fileSlices='" + fileSlices + '\''
+        + ", lastInstant='" + lastInstant + '\''
+        + '}';
   }
 
   public void addFileSlice(FileSlice slice) {

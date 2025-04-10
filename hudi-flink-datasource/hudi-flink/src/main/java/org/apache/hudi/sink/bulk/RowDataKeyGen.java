@@ -30,6 +30,7 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -270,6 +271,10 @@ public class RowDataKeyGen implements Serializable {
     if (val == null) {
       // should match the default partition path when STRING partition path re-format is supported
       return keyGenerator.getDefaultPartitionVal();
+    }
+    if (val instanceof StringData) {
+      // case of `TimestampType.DATE_STRING`, need to convert to string for consequent processing in `hudi-client-common` module
+      return val.toString();
     }
     return val;
   }

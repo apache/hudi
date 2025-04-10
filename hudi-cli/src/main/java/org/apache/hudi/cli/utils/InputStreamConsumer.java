@@ -32,7 +32,7 @@ import java.nio.charset.StandardCharsets;
 public class InputStreamConsumer extends Thread {
 
   private static final Logger LOG = LoggerFactory.getLogger(InputStreamConsumer.class);
-  private InputStream is;
+  private final InputStream is;
 
   public InputStreamConsumer(InputStream is) {
     this.is = is;

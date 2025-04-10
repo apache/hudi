@@ -1117,7 +1117,7 @@ public class HoodieAvroUtils {
           return String.valueOf(oldValue);
         }
         if (oldSchema.getType() == Schema.Type.BYTES) {
-          return String.valueOf(((ByteBuffer) oldValue));
+          return String.valueOf(oldValue);
         }
         if (oldSchema.getLogicalType() == LogicalTypes.date()) {
           return toJavaDate((Integer) oldValue).toString();
@@ -1149,12 +1149,24 @@ public class HoodieAvroUtils {
             // due to Java, there will be precision problems in direct conversion, we should use string instead of use double
             BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), RoundingMode.HALF_UP);
             return DECIMAL_CONVERSION.toFixed(bigDecimal, newSchema, newSchema.getLogicalType());
+          } else if (oldSchema.getType() == Schema.Type.BYTES) {
+            return convertBytesToFixed(((ByteBuffer) oldValue).array(), newSchema);
           }
         }
         break;
       default:
     }
     throw new HoodieAvroSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
+  }
+
+  /**
+   * bytes is the result of BigDecimal.unscaledValue().toByteArray();
+   * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
+   */
+  public static Object convertBytesToFixed(byte[] bytes, Schema schema) {
+    LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) schema.getLogicalType();
+    BigDecimal bigDecimal = convertBytesToBigDecimal(bytes, decimal);
+    return DECIMAL_CONVERSION.toFixed(bigDecimal, schema, decimal);
   }
 
   /**
@@ -1166,6 +1178,10 @@ public class HoodieAvroUtils {
   public static BigDecimal convertBytesToBigDecimal(byte[] value, LogicalTypes.Decimal decimal) {
     return new BigDecimal(new BigInteger(value),
         decimal.getScale(), new MathContext(decimal.getPrecision(), RoundingMode.HALF_UP));
+  }
+
+  public static boolean hasDecimalField(Schema schema) {
+    return hasDecimalWithCondition(schema, unused -> true);
   }
 
   /**

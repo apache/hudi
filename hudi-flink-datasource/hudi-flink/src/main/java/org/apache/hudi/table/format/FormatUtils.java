@@ -132,7 +132,8 @@ public class FormatUtils {
 
   public static ExternalSpillableMap<String, byte[]> spillableMap(
       HoodieWriteConfig writeConfig,
-      long maxCompactionMemoryInBytes) {
+      long maxCompactionMemoryInBytes,
+      String loggingContext) {
     try {
       return new ExternalSpillableMap<>(
           maxCompactionMemoryInBytes,
@@ -141,7 +142,8 @@ public class FormatUtils {
           new DefaultSizeEstimator<>(),
           writeConfig.getCommonConfig().getSpillableDiskMapType(),
           new DefaultSerializer<>(),
-          writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
+          writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
+          loggingContext);
     } catch (IOException e) {
       throw new HoodieIOException(
           "IOException when creating ExternalSpillableMap at " + writeConfig.getSpillableMapBasePath(), e);
@@ -312,8 +314,7 @@ public class FormatUtils {
   public static boolean getBooleanWithAltKeys(org.apache.flink.configuration.Configuration conf,
                                               ConfigProperty<?> configProperty) {
     Option<String> rawValue = getRawValueWithAltKeys(conf, configProperty);
-    boolean defaultValue = configProperty.hasDefaultValue()
-        ? Boolean.parseBoolean(configProperty.defaultValue().toString()) : false;
+    boolean defaultValue = configProperty.hasDefaultValue() && Boolean.parseBoolean(configProperty.defaultValue().toString());
     return rawValue.map(Boolean::parseBoolean).orElse(defaultValue);
   }
 

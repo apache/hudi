@@ -19,6 +19,7 @@ package org.apache.spark.sql.execution.datasources.parquet;
 
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.util.collection.Pair;
+
 import org.apache.spark.memory.MemoryMode;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.execution.vectorized.OffHeapColumnVector;
@@ -38,7 +39,7 @@ import java.util.Map;
 public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquetRecordReader {
 
   // save the col type change info.
-  private Map<Integer, Pair<DataType, DataType>> typeChangeInfos;
+  private final Map<Integer, Pair<DataType, DataType>> typeChangeInfos;
 
   private ColumnarBatch columnarBatch;
 
@@ -47,13 +48,15 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
   private ColumnVector[] columnVectors;
 
   // The capacity of vectorized batch.
-  private int capacity;
+  private final int capacity;
 
   // If true, this class returns batches instead of rows.
   private boolean returnColumnarBatch;
 
   // The memory mode of the columnarBatch.
   private final MemoryMode memoryMode;
+
+  private Field batchIdxField;
 
   public Spark3HoodieVectorizedParquetRecordReader(
       ZoneId convertTz,
@@ -160,8 +163,10 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
 
   private int batchIdxFromSuper() {
     try {
-      Field batchIdxField = VectorizedParquetRecordReader.class.getDeclaredField("batchIdx");
-      batchIdxField.setAccessible(true);
+      if (batchIdxField == null) {
+        batchIdxField = VectorizedParquetRecordReader.class.getDeclaredField("batchIdx");
+        batchIdxField.setAccessible(true);
+      }
       return (Integer) batchIdxField.get(this);
     } catch (NoSuchFieldException | IllegalAccessException e) {
       throw new RuntimeException(e);

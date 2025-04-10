@@ -25,8 +25,8 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{TRIP_EXAMPLE_SCHEMA, getCommitTimeAtUTC}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{getCommitTimeAtUTC, TRIP_EXAMPLE_SCHEMA}
 import org.apache.hudi.config.HoodieWriteConfig
 
 import org.apache.spark.api.java.JavaSparkContext

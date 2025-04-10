@@ -32,6 +32,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -39,6 +40,7 @@ import org.apache.hudi.table.marker.WriteMarkers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,20 +51,16 @@ import java.util.Objects;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
- * Performs rollback using marker files generated during the write..
+ * Performs rollback using marker files generated during the writes.
  */
 public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlanActionExecutor.RollbackStrategy {
 
   private static final Logger LOG = LoggerFactory.getLogger(MarkerBasedRollbackStrategy.class);
 
   protected final HoodieTable<?, ?, ?, ?> table;
-
   protected final transient HoodieEngineContext context;
-
   protected final HoodieWriteConfig config;
-
   protected final String basePath;
-
   protected final String instantTime;
 
   public MarkerBasedRollbackStrategy(HoodieTable<?, ?, ?, ?> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
@@ -175,11 +173,34 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
         }
       } else {
         HoodieLogFile logFileToRollback = new HoodieLogFile(fullFilePath);
-        // this is actually the base commit time for tableVersion < 8.
+        fileId = logFileToRollback.getFileId();
+        // For tbl version 6, deltaCommitTime is the commit time of the base file for the file slice
         baseCommitTime = logFileToRollback.getDeltaCommitTime();
-        // NOTE: We don't strictly need the exact size, but this size needs to be positive to pass metadata payload validation.
-        //       Therefore, we simply stub this value (1L), instead of doing a fs call to get the exact size.
-        logBlocksToBeDeleted = Collections.singletonMap(logFileToRollback.getPath().getName(), 1L);
+        try {
+          StoragePathInfo pathInfo = table.getMetaClient().getStorage().getPathInfo(logFileToRollback.getPath());
+          if (pathInfo != null) {
+            if (baseCommitTime.equals(instantToRollback.requestedTime())) {
+              // delete the log file that creates a new file group
+              return new HoodieRollbackRequest(relativePartitionPath, EMPTY_STRING, EMPTY_STRING,
+                  Collections.singletonList(logFileToRollback.getPath().toString()),
+                  Collections.emptyMap());
+            }
+            // append a rollback block to the log block that is added to an existing file group
+            logBlocksToBeDeleted = Collections.singletonMap(
+                logFileToRollback.getPath().getName(), pathInfo.getLength());
+          } else {
+            LOG.debug(
+                "File info of {} is null indicating the file does not exist;"
+                    + " there is no need to include it in the rollback.",
+                fullFilePath);
+          }
+        } catch (FileNotFoundException e) {
+          LOG.debug(
+              "Log file {} is not found so there is no need to include it in the rollback.",
+              fullFilePath);
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to get the file status of " + fullFilePath, e);
+        }
       }
       return new HoodieRollbackRequest(relativePartitionPath, fileId, baseCommitTime, Collections.emptyList(), logBlocksToBeDeleted);
     }

@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.DefaultSparkRecordMerger;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -53,7 +54,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
-import org.apache.hudi.common.table.timeline.versioning.DefaultCommitMetadataSerDe;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -73,11 +73,13 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.io.hadoop.HoodieAvroParquetReader;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
+import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.metrics.Metrics;
@@ -178,6 +180,7 @@ import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREA
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -470,6 +473,21 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getHiveStylePartitioningEnable()));
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getUrlEncodePartitioning()));
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  public void testPartitionKeyFieldsBasedOnVersion(HoodieTableVersion version) throws IOException {
+    String tablePath = basePath + "/partition_key_fields_meta_client" + version.versionCode();
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
+    cfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + version.versionCode());
+    cfg.configs.add(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() + "=" + CustomKeyGenerator.class.getName());
+    cfg.configs.add("hoodie.datasource.write.partitionpath.field=partition_path:simple");
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamer.getIngestionService().ingestOnce();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
+    String expectedPartitionFields = version.equals(HoodieTableVersion.SIX) ? "partition_path" : "partition_path:simple";
+    assertEquals(expectedPartitionFields, metaClient.getTableConfig().getString(HoodieTableConfig.PARTITION_FIELDS));
   }
 
   @ParameterizedTest
@@ -944,9 +962,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTimeline replacedTimeline = meta.reloadActiveTimeline().getCompletedReplaceTimeline();
     Option<HoodieInstant> firstReplaceHoodieInstant = replacedTimeline.nthFromLastInstant(1);
     assertTrue(firstReplaceHoodieInstant.isPresent());
-
-    Option<byte[]> firstReplaceHoodieInstantDetails = replacedTimeline.getInstantDetails(firstReplaceHoodieInstant.get());
-    HoodieReplaceCommitMetadata firstReplaceMetadata = HoodieReplaceCommitMetadata.fromBytes(firstReplaceHoodieInstantDetails.get(), HoodieReplaceCommitMetadata.class);
+    HoodieReplaceCommitMetadata firstReplaceMetadata =
+        replacedTimeline.readReplaceCommitMetadata(firstReplaceHoodieInstant.get());
     Map<String, List<String>> partitionToReplaceFileIds = firstReplaceMetadata.getPartitionToReplaceFileIds();
     String partitionName = null;
     List replacedFileIDs = null;
@@ -1024,6 +1041,75 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       assertFalse(meta.getStorage().exists(new StoragePath(replacedFilePath)));
     }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  /**
+   * Tests that we release resources even on failures scenarios.
+   * @param testFailureCase
+   * @throws Exception
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testReleaseResources(boolean testFailureCase) throws Exception {
+    String tableBasePath = basePath + "/inlineClusteringPending_" + testFailureCase;
+    int totalRecords = 1000;
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    cfg.continuousMode = false;
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+    cfg.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    ds.sync();
+    ds.shutdownGracefully();
+    // assert ingest successful
+    TestHelpers.assertAtLeastNCommits(1, tableBasePath);
+
+    // schedule a clustering job to build a clustering plan and leave it in pending state.
+    HoodieClusteringJob clusteringJob = initialHoodieClusteringJob(tableBasePath, null, false, "schedule");
+    clusteringJob.cluster(0);
+    HoodieTableMetaClient tableMetaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf()).setBasePath(tableBasePath).build();
+    assertEquals(1, tableMetaClient.getActiveTimeline().filterPendingClusteringTimeline().getInstants().size());
+
+    // do another ingestion with inline clustering enabled
+    cfg.configs.addAll(getTableServicesConfigs(totalRecords, "false", "true", "2", "", ""));
+    // based on if we want to test happy path or failure scenario, set the right value for retryLastPendingInlineClusteringJob.
+    cfg.retryLastPendingInlineClusteringJob = !testFailureCase;
+    TypedProperties properties = HoodieStreamer.combineProperties(cfg, Option.empty(), jsc.hadoopConfiguration());
+    SchemaProvider schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, properties, jsc),
+        properties, jsc, cfg.transformerClassNames);
+
+    try (TestReleaseResourcesStreamSync streamSync = new TestReleaseResourcesStreamSync(cfg, sparkSession, schemaProvider, properties,
+        jsc, fs, jsc.hadoopConfiguration(), client -> true)) {
+      assertTrue(streamSync.releaseResourcesCalledSet.isEmpty());
+      try {
+        streamSync.syncOnce();
+        if (testFailureCase) {
+          fail("Should not reach here when there is conflict w/ pending clustering and when retryLastPendingInlineClusteringJob is set to false");
+        }
+      } catch (HoodieException e) {
+        if (!testFailureCase) {
+          fail("Should not reach here when retryLastPendingInlineClusteringJob is set to true");
+        }
+      }
+
+      tableMetaClient = HoodieTableMetaClient.reload(tableMetaClient);
+      Option<HoodieInstant> failedInstant = tableMetaClient.getActiveTimeline().getCommitTimeline().lastInstant();
+      assertTrue(failedInstant.isPresent());
+      assertTrue(testFailureCase ? !failedInstant.get().isCompleted() : failedInstant.get().isCompleted());
+
+      if (testFailureCase) {
+        // validate that release resource is invoked
+        assertEquals(1, streamSync.releaseResourcesCalledSet.size());
+        assertTrue(streamSync.releaseResourcesCalledSet.contains(failedInstant.get().requestedTime()));
+      } else {
+        assertTrue(streamSync.releaseResourcesCalledSet.isEmpty());
+      }
+
+      // validate heartbeat is closed or expired.
+      HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(tableMetaClient.getStorage(), this.basePath,
+          (long) HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS.defaultValue(), HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES.defaultValue());
+      assertTrue(heartbeatClient.isHeartbeatExpired(failedInstant.get().requestedTime()));
+      heartbeatClient.close();
+    }
   }
 
   private List<String> getAllMultiWriterConfigs() {
@@ -1892,8 +1978,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     ));
 
     // Ensure it is empty
-    HoodieCommitMetadata commitMetadata = new DefaultCommitMetadataSerDe()
-        .deserialize(newLastFinished, mClient.getActiveTimeline().getInstantDetails(newLastFinished).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata =
+        mClient.getActiveTimeline().readCommitMetadata(newLastFinished);
     LOG.info("New Commit Metadata={}", commitMetadata);
     assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
 
@@ -1916,15 +2002,22 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     new HoodieDeltaStreamer(cfg, jsc).sync();
   }
 
-  @Test
-  public void testDistributedTestDataSource() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testDistributedTestDataSource(boolean persistSourceRdd) {
     TypedProperties props = new TypedProperties();
     props.setProperty(SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), "1000");
     props.setProperty(SourceTestConfig.NUM_SOURCE_PARTITIONS_PROP.key(), "1");
     props.setProperty(SourceTestConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS.key(), "true");
+    props.setProperty(ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(persistSourceRdd));
     DistributedTestDataSource distributedTestDataSource = new DistributedTestDataSource(props, jsc, sparkSession, null);
     InputBatch<JavaRDD<GenericRecord>> batch = distributedTestDataSource.fetchNext(Option.empty(), 10000000);
-    batch.getBatch().get().cache();
+    if (persistSourceRdd) {
+      Exception actualException = assertThrows(UnsupportedOperationException.class, () -> batch.getBatch().get().cache());
+      assertTrue(actualException.getMessage().contains("Cannot change storage level of an RDD after it was already assigned a level"));
+    } else {
+      batch.getBatch().get().cache();
+    }
     long c = batch.getBatch().get().count();
     assertEquals(1000, c);
   }
@@ -2007,8 +2100,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                                                                  HoodieTableMetaClient metaClient,
                                                                  WriteOperationType operationType) {
     try {
-      HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe()
-          .deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata =
+          metaClient.getActiveTimeline().readCommitMetadata(instant);
       assertFalse(StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)));
       assertEquals(operationType, commitMetadata.getOperationType());
     } catch (IOException ioException) {
@@ -2260,21 +2353,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     List<HoodieInstant> instants = metaClient.getCommitsTimeline().getInstants();
 
     ObjectMapper objectMapper = new ObjectMapper();
-    HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe()
-        .deserialize(instants.get(0), metaClient.getCommitsTimeline().getInstantDetails(instants.get(0)).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata =
+        metaClient.getCommitsTimeline().readCommitMetadata(instants.get(0));
     Map<String, String> checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(HoodieDeltaStreamer.CHECKPOINT_KEY), Map.class);
 
     String parquetFirstcheckpoint = checkpointVals.get("parquet");
     assertNotNull(parquetFirstcheckpoint);
-    commitMetadata = metaClient.getCommitMetadataSerDe()
-        .deserialize(instants.get(1), metaClient.getCommitsTimeline().getInstantDetails(instants.get(1)).get(), HoodieCommitMetadata.class);
+    commitMetadata = metaClient.getCommitsTimeline().readCommitMetadata(instants.get(1));
     checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(HoodieDeltaStreamer.CHECKPOINT_KEY), Map.class);
     String kafkaCheckpoint = checkpointVals.get("kafka");
     assertNotNull(kafkaCheckpoint);
     assertEquals(parquetFirstcheckpoint, checkpointVals.get("parquet"));
 
-    commitMetadata = metaClient.getCommitMetadataSerDe()
-        .deserialize(instants.get(2), metaClient.getCommitsTimeline().getInstantDetails(instants.get(2)).get(), HoodieCommitMetadata.class);
+    commitMetadata = metaClient.getCommitsTimeline().readCommitMetadata(instants.get(2));
     checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(HoodieDeltaStreamer.CHECKPOINT_KEY), Map.class);
     String parquetSecondCheckpoint = checkpointVals.get("parquet");
     assertNotNull(parquetSecondCheckpoint);
@@ -3173,6 +3264,52 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
+  @ParameterizedTest
+  @MethodSource("generateErrorTablePersistSourceRddArgs")
+  void testErrorTableSourcePersist(WriteOperationType writeOperationType, boolean persistSourceRdd) throws Exception {
+    String tableBasePath = basePath + "/test_table_error_table" + persistSourceRdd + writeOperationType;
+    TypedProperties tableProps =
+        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+    tableProps.setProperty(ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(persistSourceRdd));
+    switch (writeOperationType) {
+      case BULK_INSERT:
+        tableProps.setProperty("hoodie.datasource.write.partitionpath.field", "");
+        tableProps.setProperty("hoodie.datasource.write.keygenerator.class", NonpartitionedKeyGenerator.class.getName());
+        tableProps.setProperty("hoodie.bulkinsert.sort.mode", BulkInsertSortMode.GLOBAL_SORT.name());
+        break;
+      case UPSERT:
+        tableProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+        tableProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
+        break;
+      case INSERT:
+        tableProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
+        break;
+      default:
+        throw new UnsupportedOperationException("Invalid write operationType " + writeOperationType);
+    }
+    String tablePropsFileName = "table_specific.properties";
+    UtilitiesTestBase.Helpers.savePropsToDFS(tableProps, storage, basePath + "/" + tablePropsFileName);
+    // Initialize table config.
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, writeOperationType,
+        Collections.singletonList(TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()), tablePropsFileName, false);
+    HoodieStreamer deltaStreamer = new HoodieStreamer(cfg, jsc);
+    HoodieStreamer.StreamSyncService streamSyncService = (HoodieStreamer.StreamSyncService) deltaStreamer.getIngestionService();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(HoodieTestUtils.getDefaultStorageConf()).setBasePath(tableBasePath).build();
+    InputBatch inputBatch = streamSyncService.getStreamSync().readFromSource("00000", metaClient).getLeft();
+    // Read from source and validate persistRdd call.
+    JavaRDD<GenericRecord> sourceRdd = (JavaRDD<GenericRecord>) inputBatch.getBatch().get();
+    assertEquals(1000, sourceRdd.count());
+    if (persistSourceRdd) {
+      assertTrue(sourceRdd.toDebugString().contains("CachedPartitions"));
+    } else {
+      assertFalse(sourceRdd.toDebugString().contains("CachedPartitions"));
+    }
+    streamSyncService.close();
+    // Ingest data.
+    streamSyncService.ingestOnce();
+    assertRecordCount(950, tableBasePath, sqlContext);
+  }
+
   private Set<String> getAllFileIDsInTable(String tableBasePath, Option<String> partition) {
     HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
     final HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getCommitsAndCompactionTimeline());
@@ -3186,6 +3323,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                            JavaSparkContext jssc, FileSystem fs, Configuration conf,
                            Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
       super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
+    }
+  }
+
+  class TestReleaseResourcesStreamSync extends DeltaSync {
+
+    private final Set<String> releaseResourcesCalledSet = new HashSet<>();
+
+    public TestReleaseResourcesStreamSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider, TypedProperties props,
+                                          JavaSparkContext jssc, FileSystem fs, Configuration conf,
+                                          Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+      super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
+    }
+
+    @Override
+    protected void releaseResources(String instantTime) {
+      super.releaseResources(instantTime);
+      releaseResourcesCalledSet.add(instantTime);
     }
   }
 
@@ -3317,5 +3471,16 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     public Schema getSourceSchema() {
       return null;
     }
+  }
+
+  private static Stream<Arguments> generateErrorTablePersistSourceRddArgs() {
+    return Stream.of(
+        Arguments.of(WriteOperationType.BULK_INSERT, false),
+        Arguments.of(WriteOperationType.BULK_INSERT, true),
+        Arguments.of(WriteOperationType.INSERT, false),
+        Arguments.of(WriteOperationType.INSERT, true),
+        Arguments.of(WriteOperationType.UPSERT, false),
+        Arguments.of(WriteOperationType.UPSERT, true)
+    );
   }
 }

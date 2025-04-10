@@ -300,7 +300,7 @@ public class StringUtils {
     increase *= (max < 0 ? 16 : (max > 64 ? 64 : max));
     StringBuilder buf = new StringBuilder(text.length() + increase);
     while (end != INDEX_NOT_FOUND) {
-      buf.append(text.substring(start, end)).append(replacement);
+      buf.append(text, start, end).append(replacement);
       start = end + replLength;
       if (--max == 0) {
         break;
@@ -382,6 +382,10 @@ public class StringUtils {
   public static <T> String toStringWithThreshold(List<T> objectList, int lengthThreshold) {
     if (objectList == null || objectList.isEmpty()) {
       return "";
+    }
+    // For non-positive value, we will not do any truncation.
+    if (lengthThreshold <= 0) {
+      return objectList.toString();
     }
     StringBuilder sb = new StringBuilder();
 

@@ -103,7 +103,7 @@ public class TestHoodieWriteConfig {
           Properties props = new Properties();
           props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(version.versionCode()));
           assertThrows(IllegalArgumentException.class, () -> HoodieWriteConfig.newBuilder()
-              .withPath("/tmp").withProperties(props).build());
+              .withPath("/tmp").withProperties(props).build().getWriteVersion());
         });
     Arrays.stream(HoodieTableVersion.values())
         .filter(supportedVersions::contains)
@@ -615,6 +615,18 @@ public class TestHoodieWriteConfig {
     assertEquals("org.apache.hudi.table.action.commit.UpsertPartitioner", overwritePartitioner.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME));
   }
 
+  @Test
+  void testBloomIndexFileIdKeySortingConfig() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props)
+            .withIndexType(HoodieIndex.IndexType.BLOOM)
+            .enableBloomIndexFileGroupIdKeySorting(true).build())
+        .build();
+    assertTrue(writeConfig.isBloomIndexFileGroupIdKeySortingEnabled());
+  }
+  
   @Test
   public void testAutoAdjustCleanPolicyForNonBlockingConcurrencyControl() {
     TypedProperties props = new TypedProperties();

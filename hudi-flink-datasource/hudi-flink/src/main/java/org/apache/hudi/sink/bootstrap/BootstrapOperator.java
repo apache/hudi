@@ -19,13 +19,11 @@
 package org.apache.hudi.sink.bootstrap;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -82,8 +80,9 @@ import static org.apache.hudi.util.StreamerUtil.metadataConfig;
  *
  * <p>The output records should then shuffle by the recordKey and thus do scalable write.
  */
-public class BootstrapOperator<I, O extends HoodieRecord<?>>
-    extends AbstractStreamOperator<O> implements OneInputStreamOperator<I, O> {
+public class BootstrapOperator
+    extends AbstractStreamOperator<HoodieFlinkInternalRow>
+    implements OneInputStreamOperator<HoodieFlinkInternalRow, HoodieFlinkInternalRow> {
 
   private static final Logger LOG = LoggerFactory.getLogger(BootstrapOperator.class);
 
@@ -179,9 +178,8 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
   }
 
   @Override
-  @SuppressWarnings("unchecked")
-  public void processElement(StreamRecord<I> element) throws Exception {
-    output.collect((StreamRecord<O>) element);
+  public void processElement(StreamRecord<HoodieFlinkInternalRow> element) throws Exception {
+    output.collect(element);
   }
 
   /**
@@ -189,7 +187,6 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
    *
    * @param partitionPath The partition path
    */
-  @SuppressWarnings("unchecked")
   protected void loadRecords(String partitionPath) throws Exception {
     long start = System.currentTimeMillis();
 
@@ -226,9 +223,8 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
           }
           try (ClosableIterator<HoodieKey> iterator = fileUtils.getHoodieKeyIterator(
               hoodieTable.getStorage(), baseFile.getStoragePath())) {
-            iterator.forEachRemaining(hoodieKey -> {
-              output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
-            });
+            iterator.forEachRemaining(hoodieKey ->
+                insertIndexStreamRecord(hoodieKey.getRecordKey(), hoodieKey.getPartitionPath(), fileSlice));
           }
         });
 
@@ -243,7 +239,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
         try (HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(logPaths, schema, latestCommitTime.get().requestedTime(),
             writeConfig, hadoopConf)) {
           for (String recordKey : scanner.getRecords().keySet()) {
-            output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(new HoodieKey(recordKey, partitionPath), fileSlice))));
+            insertIndexStreamRecord(recordKey, partitionPath, fileSlice);
           }
         } catch (Exception e) {
           throw new HoodieException(String.format("Error when loading record keys from files: %s", logPaths), e);
@@ -256,13 +252,14 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
         this.getClass().getSimpleName(), taskID, partitionPath, cost);
   }
 
-  @SuppressWarnings("unchecked")
-  public static HoodieRecord generateHoodieRecord(HoodieKey hoodieKey, FileSlice fileSlice) {
-    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, null);
-    hoodieRecord.setCurrentLocation(new HoodieRecordGlobalLocation(hoodieKey.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId()));
-    hoodieRecord.seal();
-
-    return hoodieRecord;
+  protected void insertIndexStreamRecord(String recordKey, String partitionPath, FileSlice fileSlice) {
+    output.collect(
+        new StreamRecord<>(
+            new HoodieFlinkInternalRow(
+                recordKey,
+                partitionPath,
+                fileSlice.getFileId(),
+                fileSlice.getBaseInstantTime())));
   }
 
   protected boolean shouldLoadFile(String fileId,

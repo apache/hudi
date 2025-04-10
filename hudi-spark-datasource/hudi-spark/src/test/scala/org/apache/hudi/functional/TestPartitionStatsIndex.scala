@@ -19,13 +19,14 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, PartitionStatsIndexSupport}
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -34,30 +35,31 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, Hoodie
 import org.apache.hudi.exception.{HoodieException, HoodieWriteConflictException}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
-import org.apache.hudi.util.{JFunction, JavaConversions}
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, PartitionStatsIndexSupport}
+import org.apache.hudi.util.{JavaConversions, JFunction}
+
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualNullSafe, EqualTo, Expression, GreaterThanOrEqual, IsNotNull, IsNull, LessThanOrEqual, Literal, Not, Or}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 import org.scalatest.Assertions.assertThrows
 
 import java.util.concurrent.Executors
 import java.util.stream.Stream
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration.Duration
 
 /**
  * Test cases on partition stats index with Spark datasource.
  */
-@Tag("functional")
+@Tag("functional-b")
 class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
   val sqlTempTable = "hudi_tbl"
@@ -271,7 +273,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
     if (useUpsert) {
       pollForTimeline(basePath, storageConf, 2)
-      assertTrue(hasPendingCommits)
+      assertTrue(hasPendingCommitsOrRollbacks())
     } else {
       pollForTimeline(basePath, storageConf, 3)
       assertTrue(checkIfCommitsAreConcurrent())
@@ -465,7 +467,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
       val lastCompactionInstant = compactionTimeline
         .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-          metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant, compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+          compactionTimeline.readCommitMetadata(instant)
             .getOperationType == WriteOperationType.COMPACT))
         .lastInstant()
       val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.PARTITION_STATS.getPartitionPath)
@@ -677,6 +679,7 @@ object TestPartitionStatsIndex {
       Arguments.of(HoodieTableType.MERGE_ON_READ, java.lang.Boolean.TRUE),
       Arguments.of(HoodieTableType.MERGE_ON_READ, java.lang.Boolean.FALSE),
       Arguments.of(HoodieTableType.COPY_ON_WRITE, java.lang.Boolean.TRUE),
-      Arguments.of(HoodieTableType.COPY_ON_WRITE, java.lang.Boolean.FALSE)).asJava.stream()
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, java.lang.Boolean.FALSE)
+    ).asJava.stream()
   }
 }

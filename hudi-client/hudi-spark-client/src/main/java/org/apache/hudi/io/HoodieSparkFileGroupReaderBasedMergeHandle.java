@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -180,21 +181,15 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     }
+    TypedProperties props = new TypedProperties();
+    hoodieTable.getMetaClient().getTableConfig().getProps().forEach(props::putIfAbsent);
+    config.getProps().forEach(props::putIfAbsent);
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        readerContext,
+    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
         storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
-        hoodieTable.getMetaClient().getBasePath().toString(),
-        instantTime,
-        fileSlice,
-        writeSchemaWithMetaFields,
-        writeSchemaWithMetaFields,
-        internalSchemaOption,
-        hoodieTable.getMetaClient(),
-        hoodieTable.getMetaClient().getTableConfig().getProps(),
-        0,
-        Long.MAX_VALUE,
-        usePosition)) {
+        hoodieTable.getMetaClient().getBasePath().toString(), instantTime, fileSlice,
+        writeSchemaWithMetaFields, writeSchemaWithMetaFields, internalSchemaOption,
+        hoodieTable.getMetaClient(), props, 0, Long.MAX_VALUE, usePosition, false)) {
       fileGroupReader.initRecordIterators();
       // Reads the records from the file slice
       try (HoodieFileGroupReaderIterator<InternalRow> recordIterator

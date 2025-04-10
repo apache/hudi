@@ -48,8 +48,7 @@ public class ScheduleCompactNode extends DagNode<Option<String>> {
         .build();
     Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline().getCommitsTimeline().lastInstant();
     if (lastInstant.isPresent()) {
-      HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(
-          lastInstant.get(), metaClient.getActiveTimeline().getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = metaClient.getActiveTimeline().readCommitMetadata(lastInstant.get());
       Option<String> scheduledInstant = executionContext.getHoodieTestSuiteWriter().scheduleCompaction(Option.of(metadata
           .getExtraMetadata()));
       if (scheduledInstant.isPresent()) {

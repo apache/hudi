@@ -118,8 +118,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
           && readColNames.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
     } else {
       return readColNames.contains(hoodieVirtualKeyInfo.get().getRecordKeyField())
-          && (hoodieVirtualKeyInfo.get().getPartitionPathField().isPresent() ? readColNames.contains(hoodieVirtualKeyInfo.get().getPartitionPathField().get())
-          : true);
+          && (!hoodieVirtualKeyInfo.get().getPartitionPathField().isPresent() || readColNames.contains(hoodieVirtualKeyInfo.get().getPartitionPathField().get()));
     }
   }
 

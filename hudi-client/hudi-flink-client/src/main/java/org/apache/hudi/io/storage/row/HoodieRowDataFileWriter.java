@@ -18,14 +18,20 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.io.storage.HoodieFileWriter;
+
+import org.apache.avro.Schema;
 import org.apache.flink.table.data.RowData;
 
 import java.io.IOException;
+import java.util.Properties;
 
 /**
  * Abstraction to assist in writing {@link RowData}s to be used in datasource implementation.
  */
-public interface HoodieRowDataFileWriter {
+public interface HoodieRowDataFileWriter extends HoodieFileWriter {
 
   /**
    * Returns {@code true} if this RowFileWriter can take in more writes. else {@code false}.
@@ -50,4 +56,12 @@ public interface HoodieRowDataFileWriter {
    * Closes the {@link HoodieRowDataFileWriter} and may not take in any more writes.
    */
   void close() throws IOException;
+
+  default void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException {
+    writeRow(key.getRecordKey(), (RowData) record.getData());
+  }
+
+  default void write(String recordKey, HoodieRecord record, Schema schema, Properties props) throws IOException {
+    this.writeRow(recordKey, (RowData) record.getData());
+  }
 }

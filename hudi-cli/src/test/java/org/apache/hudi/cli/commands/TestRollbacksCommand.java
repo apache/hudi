@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.util.Option;
@@ -138,8 +137,7 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
     rollback.sorted().forEach(instant -> {
       try {
         // get pair of rollback time and instant time
-        HoodieRollbackMetadata metadata = TimelineMetadataUtils
-            .deserializeAvroMetadata(activeTimeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+        HoodieRollbackMetadata metadata = activeTimeline.readRollbackMetadata(instant);
         metadata.getCommitsRollback().forEach(c -> {
           Comparable[] row = new Comparable[5];
           row[0] = metadata.getStartRollbackTime();
@@ -182,8 +180,7 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
 
     List<Comparable[]> rows = new ArrayList<>();
     // get metadata of instant
-    HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
-        activeTimeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+    HoodieRollbackMetadata metadata = activeTimeline.readRollbackMetadata(instant);
     // generate expect result
     metadata.getPartitionMetadata().forEach((key, value) -> Stream
         .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),

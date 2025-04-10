@@ -74,7 +74,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
    * Its quite common, to have all files from a given partition path be passed into accept(), cache the check for hoodie
    * metadata for known partition paths and the latest versions of files.
    */
-  private Map<String, HashSet<Path>> hoodiePathCache;
+  private final Map<String, HashSet<Path>> hoodiePathCache;
 
   /**
    * Paths that are known to be non-hoodie tables.
@@ -227,7 +227,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       } else {
         // files is at < 3 level depth in FS tree, can't be hoodie dataset
         if (LOG.isDebugEnabled()) {
-          LOG.debug(String.format("(2) Caching non-hoodie path under %s \n", folder.toString()));
+          LOG.debug(String.format("(2) Caching non-hoodie path under %s \n", folder));
         }
         nonHoodiePathCache.add(folder.toString());
         return true;

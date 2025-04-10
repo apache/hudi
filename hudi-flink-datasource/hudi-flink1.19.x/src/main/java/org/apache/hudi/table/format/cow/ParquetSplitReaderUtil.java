@@ -411,13 +411,19 @@ public class ParquetSplitReaderUtil {
       case ARRAY:
         ArrayType arrayType = (ArrayType) fieldType;
         if (arrayType.getElementType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)) {
+          boolean isThreeLevelList = isThreeLevelList(physicalType);
+          // 3-level List structure, drill down 2 level to get type for `element`
+          Type elementType = isThreeLevelList
+              ? physicalType.asGroupType().getType(0).asGroupType().getType(0)
+              : physicalType.asGroupType().getType(0);
+          int elementDepth = isThreeLevelList ? depth + 2 : depth + 1;
           return new ArrayGroupReader(createColumnReader(
               utcTimestamp,
               arrayType.getElementType(),
-              physicalType.asGroupType().getType(0),
+              elementType,
               descriptors,
               pages,
-              depth + 1));
+              elementDepth));
         } else {
           return new ArrayColumnReader(
               descriptor,
@@ -567,14 +573,20 @@ public class ParquetSplitReaderUtil {
       case ARRAY:
         ArrayType arrayType = (ArrayType) fieldType;
         if (arrayType.getElementType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)) {
+          boolean isThreeLevelList = isThreeLevelList(physicalType);
+          // 3-level List structure, drill down 2 level to get type for `element`
+          Type elementType = isThreeLevelList
+              ? physicalType.asGroupType().getType(0).asGroupType().getType(0)
+              : physicalType.asGroupType().getType(0);
+          int elementDepth = isThreeLevelList ? depth + 2 : depth + 1;
           return new HeapArrayGroupColumnVector(
               batchSize,
               createWritableColumnVector(
                   batchSize,
                   arrayType.getElementType(),
-                  physicalType.asGroupType().getType(0),
+                  elementType,
                   descriptors,
-                  depth + 1));
+                  elementDepth));
         } else {
           return new HeapArrayVector(
               batchSize,
@@ -676,6 +688,28 @@ public class ParquetSplitReaderUtil {
   private static int getFieldIndexInPhysicalType(String fieldName, GroupType groupType) {
     // get index from fileSchema type, else, return -1
     return groupType.containsField(fieldName) ? groupType.getFieldIndex(fieldName) : -1;
+  }
+
+  /**
+   * Check whether the given list type is a three-level list type.
+   * <p>
+   * <list-repetition> group <name> (LIST) {
+   *   repeated group list {
+   *     <element-repetition> <element-type> element;
+   *   }
+   * }
+   *
+   * @param type list type
+   * @return true if the list type is a three-level list type
+   */
+  private static boolean isThreeLevelList(Type type) {
+    if (type.isPrimitive()) {
+      return false;
+    }
+    GroupType groupType = type.asGroupType();
+    OriginalType originalType = groupType.getOriginalType();
+    return originalType == OriginalType.LIST
+        && groupType.getType(0).getName().equals("list");
   }
 
   /**

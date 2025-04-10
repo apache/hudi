@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -59,9 +58,9 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -247,9 +246,8 @@ public class TestAsyncCompaction extends CompactionTestBase {
       moveCompactionFromRequestedToInflight(compactionInstantTime, cfg);
 
       // validate the compaction plan does not include pending log files.
-      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
-          metaClient.reloadActiveTimeline()
-              .readCompactionPlanAsBytes(INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime)).get());
+      HoodieCompactionPlan compactionPlan = metaClient.reloadActiveTimeline().readCompactionPlan(
+          INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime));
       assertTrue(compactionPlan.getOperations().stream()
               .noneMatch(op -> op.getDeltaFilePaths().stream().anyMatch(deltaFile -> getCommitTime(deltaFile).equals(pendingInstantTime))),
           "compaction plan should not include pending log files. Data file paths " + new HashSet<>(compactionPlan.getOperations()));

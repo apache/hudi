@@ -60,7 +60,7 @@ public class CompletionTimeQueryViewV1 implements CompletionTimeQueryView, Seria
    * a completion query for t5 would trigger lazy loading with this cursor instant updated to t5.
    * This sliding window model amortizes redundant loading from different queries.
    */
-  private volatile String cursorInstant;
+  private final String cursorInstant;
 
   /**
    * The first write instant on the active timeline, used for query optimization.
