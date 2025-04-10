@@ -233,14 +233,14 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   /**
    * Merge two log data records if needed.
    *
-   * @param record                     The record
+   * @param newRecord                  The new incoming record
    * @param metadata                   The metadata
    * @param existingRecordMetadataPair The existing record metadata pair
    *
    * @return The pair of the record that needs to be updated with and its metadata,
    * returns empty to skip the update.
    */
-  protected Option<Pair<Option<T>, Map<String, Object>>> doProcessNextDataRecord(T record,
+  protected Option<Pair<Option<T>, Map<String, Object>>> doProcessNextDataRecord(T newRecord,
                                                                                  Map<String, Object> metadata,
                                                                                  Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair)
       throws IOException {
@@ -254,7 +254,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
             readerContext.constructHoodieRecord(
                 existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
             readerContext.getSchemaFromMetadata(existingRecordMetadataPair.getRight()),
-            readerContext.constructHoodieRecord(Option.of(record), metadata),
+            readerContext.constructHoodieRecord(Option.of(newRecord), metadata),
             readerContext.getSchemaFromMetadata(metadata),
             readerSchema,
             props);
@@ -274,10 +274,10 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       } else {
         switch (recordMergeMode) {
           case COMMIT_TIME_ORDERING:
-            return Option.of(Pair.of(Option.ofNullable(record), metadata));
+            return Option.of(Pair.of(Option.ofNullable(newRecord), metadata));
           case EVENT_TIME_ORDERING:
-            if (shouldKeepNewerRecord(existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), Option.ofNullable(record), metadata)) {
-              return Option.of(Pair.of(Option.of(record), metadata));
+            if (shouldKeepNewerRecord(existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), Option.ofNullable(newRecord), metadata)) {
+              return Option.of(Pair.of(Option.of(newRecord), metadata));
             }
             return Option.empty();
           case CUSTOM:
@@ -285,14 +285,14 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
             // Merge and store the combined record
             if (payloadClass.isPresent()) {
               if (existingRecordMetadataPair.getLeft().isEmpty()
-                  && shouldKeepNewerRecord(existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), Option.ofNullable(record), metadata)) {
+                  && shouldKeepNewerRecord(existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), Option.ofNullable(newRecord), metadata)) {
                 // IMPORTANT:
                 // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
                 // return Option.empty when the old payload data is empty(a delete) and ignores its ordering value directly.
-                return Option.of(Pair.of(Option.of(record), metadata));
+                return Option.of(Pair.of(Option.of(newRecord), metadata));
               }
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt =
-                  getMergedRecord(existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), Option.of(record), metadata);
+                  getMergedRecord(existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), Option.of(newRecord), metadata);
               if (combinedRecordAndSchemaOpt.isPresent()) {
                 T combinedRecordData = readerContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchemaOpt.get().getLeft().getData());
                 // If pre-combine does not return existing record, update it
@@ -303,17 +303,17 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
               return Option.empty();
             } else {
               if (existingRecordMetadataPair.getLeft().isEmpty()
-                  && shouldKeepNewerRecord(existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), Option.ofNullable(record), metadata)) {
+                  && shouldKeepNewerRecord(existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), Option.ofNullable(newRecord), metadata)) {
                 // IMPORTANT:
                 // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
                 // return Option.empty when the old payload data is empty(a delete) and ignores its ordering value directly.
-                return Option.of(Pair.of(Option.of(record), metadata));
+                return Option.of(Pair.of(Option.of(newRecord), metadata));
               }
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
                   readerContext.constructHoodieRecord(
                       existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
                   readerContext.getSchemaFromMetadata(existingRecordMetadataPair.getRight()),
-                  readerContext.constructHoodieRecord(Option.of(record), metadata),
+                  readerContext.constructHoodieRecord(Option.of(newRecord), metadata),
                   readerContext.getSchemaFromMetadata(metadata),
                   props);
 
@@ -337,7 +337,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
-      return Option.of(Pair.of(Option.ofNullable(record), metadata));
+      return Option.of(Pair.of(Option.ofNullable(newRecord), metadata));
     }
   }
 

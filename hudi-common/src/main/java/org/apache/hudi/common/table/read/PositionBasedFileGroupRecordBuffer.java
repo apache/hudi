@@ -183,7 +183,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
-        int recordIndex1 = 0;
+        int commitTimeBasedRecordIndex = 0;
         DeleteRecord[] deleteRecords = deleteBlock.getRecordsToDelete();
         for (Long recordPosition : recordPositions) {
           // IMPORTANT:
@@ -195,7 +195,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           // because under hybrid strategy in #doHasNextFallbackBaseRecord, if the record keys are not set up,
           // this delete-vector could be kept in the records cache(see the check in #fallbackToKeyBasedBuffer),
           // and these keys would be deleted no matter whether there are following-up inserts/updates.
-          DeleteRecord deleteRecord = deleteRecords[recordIndex1++];
+          DeleteRecord deleteRecord = deleteRecords[commitTimeBasedRecordIndex++];
           records.put(recordPosition,
               Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
                   deleteRecord.getRecordKey(), "", deleteRecord.getOrderingValue())));
