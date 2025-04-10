@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -184,6 +185,8 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     TypedProperties props = new TypedProperties();
     hoodieTable.getMetaClient().getTableConfig().getProps().forEach(props::putIfAbsent);
     config.getProps().forEach(props::putIfAbsent);
+    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
+    props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
     // Initializes file group reader
     try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
         storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
