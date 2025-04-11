@@ -52,7 +52,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -215,12 +214,12 @@ public class HFileUtils extends FileFormatUtils {
 
     // Write the records
     sortedRecordsMap.forEach((recordKey, recordBytes) -> {
-        try {
-          KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, recordBytes);
-          writer.append(kv);
-        } catch (IOException e) {
-          throw new HoodieIOException("IOException serializing records", e);
-        }
+      try {
+        KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, recordBytes);
+        writer.append(kv);
+      } catch (IOException e) {
+        throw new HoodieIOException("IOException serializing records", e);
+      }
     });
 
     writer.appendFileInfo(

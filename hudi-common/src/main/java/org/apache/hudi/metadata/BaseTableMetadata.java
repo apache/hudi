@@ -324,7 +324,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param secondaryKeys The list of secondary keys to read
    */
   @Override
-  public Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys, String partitionName) {
+  public Map<String, HoodieRecordGlobalLocation> readSecondaryIndex(List<String> secondaryKeys, String partitionName) {
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "Record index is not initialized in MDT");
     ValidationUtils.checkState(
