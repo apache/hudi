@@ -29,6 +29,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.StorageBasedLockConfig;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterEach;
@@ -36,11 +37,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.ArgumentMatchers;
 import org.slf4j.Logger;
 
 import java.lang.reflect.Method;
-import java.net.URISyntaxException;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -87,14 +86,16 @@ class TestStorageBasedLockProvider {
     mockHeartbeatManager = mock(HeartbeatManager.class);
     mockLogger = mock(Logger.class);
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    TypedProperties props = new TypedProperties();
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "5");
+    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
+
     lockProvider = spy(new StorageBasedLockProvider(
-        1,
-        DEFAULT_LOCK_VALIDITY_MS / 1000,
-        "my-bucket",
-        "gs://bucket/lake/db/tbl-default",
         ownerId,
-        mockHeartbeatManager,
-        mockLockService,
+        props,
+        (a,b,c) -> mockHeartbeatManager,
+        (a,b,c) -> mockLockService,
         mockLogger));
   }
 
@@ -118,7 +119,6 @@ class TestStorageBasedLockProvider {
   void testValidLockStorageLocation() {
     TypedProperties props = new TypedProperties();
     props.put(BASE_PATH.key(), "s3://bucket/lake/db/tbl-default");
-    props.put(StorageBasedLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/locks");
 
     LockConfiguration lockConf = new LockConfiguration(props);
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
@@ -126,19 +126,6 @@ class TestStorageBasedLockProvider {
     HoodieLockException ex = assertThrows(HoodieLockException.class,
         () -> new StorageBasedLockProvider(lockConf, storageConf));
     assertTrue(ex.getMessage().contains("Failed to load and initialize StorageLock"));
-  }
-
-  @Test
-  void testInvalidLockStorageLocation() {
-    TypedProperties props = new TypedProperties();
-    props.put(BASE_PATH.key(), "s3://bucket/lake/db/tbl-default");
-    props.put(StorageBasedLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(),
-        "s3://bucket/lake/db/tbl-default/.hoodie/.metadata");
-
-    LockConfiguration lockConf = new LockConfiguration(props);
-    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
-
-    assertThrows(IllegalArgumentException.class, () -> new StorageBasedLockProvider(lockConf, storageConf));
   }
 
   @ParameterizedTest
@@ -159,10 +146,9 @@ class TestStorageBasedLockProvider {
   @Test
   void testInvalidLocksLocationForWriteService() {
     TypedProperties props = new TypedProperties();
-    props.put(StorageBasedLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "not a uri");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
-    props.put(StorageBasedLockConfig.LOCK_VALIDITY_TIMEOUT.key(), "5");
-    props.put(StorageBasedLockConfig.HEARTBEAT_POLL.key(), "1");
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "5");
+    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
 
     LockConfiguration lockConf = new LockConfiguration(props);
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
@@ -171,8 +157,7 @@ class TestStorageBasedLockProvider {
         () -> new StorageBasedLockProvider(lockConf, storageConf));
     Throwable cause = ex.getCause();
     assertNotNull(cause);
-    assertInstanceOf(URISyntaxException.class, cause);
-    assertTrue(ex.getMessage().contains("Unable to parse locks location as a URI"));
+    assertInstanceOf(HoodieNotSupportedException.class, cause);
   }
 
   @Test
@@ -524,7 +509,7 @@ class TestStorageBasedLockProvider {
 
     verify(mockLogger).info(
         eq("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}."),
-        eq(this.ownerId), anyLong(), eq("gs://bucket/lake/db/tbl-default"));
+        eq(this.ownerId), anyLong(), eq("gs://bucket/lake/db/tbl-default/.hoodie/.locks"));
   }
 
   @Test
@@ -580,7 +565,7 @@ class TestStorageBasedLockProvider {
     assertEquals(realLockFile, lockProvider.getLock());
     verify(mockLockService, atLeastOnce()).tryCreateOrUpdateLockFile(any(), any());
 
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(ArgumentMatchers.any(), eq(realLockFile), anyLong()))
+    when(mockLockService.tryCreateOrUpdateLockFile(any(StorageLockData.class), eq(realLockFile)))
             .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
 
     // Mock shutdown
@@ -590,8 +575,9 @@ class TestStorageBasedLockProvider {
 
     // Verify that the expected shutdown behaviors occurred.
     assertNull(lockProvider.getLock());
-    verify(mockLockService, atLeastOnce()).close();
-    verify(mockHeartbeatManager, atLeastOnce()).close();
+    // We do not execute additional actions
+    verify(mockLockService, never()).close();
+    verify(mockHeartbeatManager, never()).close();
   }
 
   @Test

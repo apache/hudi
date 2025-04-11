@@ -23,33 +23,17 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 
-import org.apache.hadoop.fs.Path;
-
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
-import static org.apache.hudi.client.transaction.lock.StorageBasedLockProvider.DEFAULT_TABLE_LOCK_FILE_NAME;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NAME;
 
 public class StorageBasedLockConfig extends HoodieConfig {
   private static final String SINCE_VERSION_1_0_2 = "1.0.2";
   private static final String STORAGE_BASED_LOCK_PROPERTY_PREFIX = LockConfiguration.LOCK_PREFIX
       + "storage.";
-  public static final ConfigProperty<String> LOCK_INTERNAL_STORAGE_LOCATION = ConfigProperty
-      .key(STORAGE_BASED_LOCK_PROPERTY_PREFIX + "locks_location")
-      .defaultValue("")
-      .markAdvanced()
-      .sinceVersion(SINCE_VERSION_1_0_2)
-      .withDocumentation(
-          "For storage-based lock provider, the optional URI where lock files are written. "
-          + "For example, if `/lock/location` is specified, `/lock/location/<lock_file_name>` is used as the lock file,"
-              + "where the lock file name `lock_file_name` is determined based on the table's base path. "
-              + "Must be the same filesystem as the table path and should support conditional writes. "
-              + "By default, writes to " + LOCKS_FOLDER_NAME + Path.SEPARATOR
-              + DEFAULT_TABLE_LOCK_FILE_NAME + ".json under the table base path.");
 
-  public static final ConfigProperty<Long> LOCK_VALIDITY_TIMEOUT = ConfigProperty
-      .key(STORAGE_BASED_LOCK_PROPERTY_PREFIX + "validity.timeout")
+  public static final ConfigProperty<Long> VALIDITY_TIMEOUT_SECONDS = ConfigProperty
+      .key(STORAGE_BASED_LOCK_PROPERTY_PREFIX + "validity.timeout.secs")
       .defaultValue(TimeUnit.MINUTES.toSeconds(5))
       .markAdvanced()
       .sinceVersion(SINCE_VERSION_1_0_2)
@@ -58,8 +42,8 @@ public class StorageBasedLockConfig extends HoodieConfig {
               + "The lock provider will attempt to renew its lock until it successfully extends the lock lease period "
               + "or the validity timeout is reached.");
 
-  public static final ConfigProperty<Long> HEARTBEAT_POLL = ConfigProperty
-      .key(STORAGE_BASED_LOCK_PROPERTY_PREFIX + "heartbeat.poll")
+  public static final ConfigProperty<Long> HEARTBEAT_POLL_SECONDS = ConfigProperty
+      .key(STORAGE_BASED_LOCK_PROPERTY_PREFIX + "heartbeat.poll.secs")
       .defaultValue(TimeUnit.SECONDS.toSeconds(30))
       .markAdvanced()
       .sinceVersion(SINCE_VERSION_1_0_2)
@@ -67,20 +51,16 @@ public class StorageBasedLockConfig extends HoodieConfig {
           "For storage-based conditional write lock provider, the amount of time in seconds to wait before renewing the lock."
                   + "Defaults to 30 seconds.");
 
-  public long getLockValidityTimeout() {
-    return getLong(LOCK_VALIDITY_TIMEOUT);
+  public long getValiditySeconds() {
+    return getLong(VALIDITY_TIMEOUT_SECONDS);
   }
 
-  public long getHeartbeatPoll() {
-    return getLong(HEARTBEAT_POLL);
+  public long getHeartbeatPollSeconds() {
+    return getLong(HEARTBEAT_POLL_SECONDS);
   }
 
   public String getHudiTableBasePath() {
     return getString(BASE_PATH);
-  }
-
-  public String getLocksLocation() {
-    return getString(LOCK_INTERNAL_STORAGE_LOCATION);
   }
 
   public static class Builder {
@@ -102,23 +82,18 @@ public class StorageBasedLockConfig extends HoodieConfig {
       if (!lockConfig.contains(BASE_PATH)) {
         throw new IllegalArgumentException(BASE_PATH.key() + notExistsMsg);
       }
-      if (lockConfig.getStringOrDefault(LOCK_INTERNAL_STORAGE_LOCATION)
-          .startsWith(lockConfig.getHudiTableBasePath())) {
-        throw new IllegalArgumentException(
-            LOCK_INTERNAL_STORAGE_LOCATION.key() + " cannot start with the hudi table base path.");
-      }
-      if (lockConfig.getLongOrDefault(LOCK_VALIDITY_TIMEOUT) < lockConfig.getLongOrDefault(HEARTBEAT_POLL)
+      if (lockConfig.getLongOrDefault(VALIDITY_TIMEOUT_SECONDS) < lockConfig.getLongOrDefault(HEARTBEAT_POLL_SECONDS)
           * 3) {
         throw new IllegalArgumentException(
-            LOCK_VALIDITY_TIMEOUT.key() + " should be more than triple " + HEARTBEAT_POLL.key());
+            VALIDITY_TIMEOUT_SECONDS.key() + " should be more than triple " + HEARTBEAT_POLL_SECONDS.key());
       }
-      if (lockConfig.getLongOrDefault(LOCK_VALIDITY_TIMEOUT) < 5) {
+      if (lockConfig.getLongOrDefault(VALIDITY_TIMEOUT_SECONDS) < 5) {
         throw new IllegalArgumentException(
-            LOCK_VALIDITY_TIMEOUT.key() + " should be greater than or equal to 5 seconds.");
+            VALIDITY_TIMEOUT_SECONDS.key() + " should be greater than or equal to 5 seconds.");
       }
-      if (lockConfig.getLongOrDefault(HEARTBEAT_POLL) < 1) {
+      if (lockConfig.getLongOrDefault(HEARTBEAT_POLL_SECONDS) < 1) {
         throw new IllegalArgumentException(
-            HEARTBEAT_POLL.key() + " should be greater than or equal to 1 second.");
+            HEARTBEAT_POLL_SECONDS.key() + " should be greater than or equal to 1 second.");
       }
     }
   }

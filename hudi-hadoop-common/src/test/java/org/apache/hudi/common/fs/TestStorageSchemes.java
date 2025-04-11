@@ -39,9 +39,14 @@ public class TestStorageSchemes {
     assertTrue(StorageSchemes.isSchemeSupported("afs"));
     assertFalse(StorageSchemes.isSchemeSupported("s2"));
 
-    assertTrue(StorageSchemes.getStorageLockImplementationIfExists("s3").isPresent());
-    assertTrue(StorageSchemes.getStorageLockImplementationIfExists("s3a").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("gs").isPresent());
+    for (StorageSchemes scheme : StorageSchemes.values()) {
+      String schemeName = scheme.getScheme();
+      if (scheme.getScheme().startsWith("s3")) {
+        assertTrue(StorageSchemes.getStorageLockImplementationIfExists(schemeName).isPresent());
+      } else {
+        assertFalse(StorageSchemes.getStorageLockImplementationIfExists(schemeName).isPresent());
+      }
+    }
 
     assertTrue(StorageSchemes.isAtomicCreationSupported("file"));
     assertTrue(StorageSchemes.isAtomicCreationSupported("hdfs"));
