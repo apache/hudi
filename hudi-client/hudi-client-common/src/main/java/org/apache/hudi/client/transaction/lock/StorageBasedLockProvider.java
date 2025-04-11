@@ -125,11 +125,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
             UUID.randomUUID().toString(),
             lockConfiguration.getConfig(),
             LockProviderHeartbeatManager::new,
-            tryLoadLockService(),
+            getLockService(),
             LOGGER);
   }
 
-  private static Functions.Function3<String, String, TypedProperties, StorageLock> tryLoadLockService() {
+  private static Functions.Function3<String, String, TypedProperties, StorageLock> getLockService() {
     return (ownerId, lockFilePath, lockConfig) -> {
       try {
         return (StorageLock) ReflectionUtils.loadClass(

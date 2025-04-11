@@ -39,30 +39,14 @@ public class TestStorageSchemes {
     assertTrue(StorageSchemes.isSchemeSupported("afs"));
     assertFalse(StorageSchemes.isSchemeSupported("s2"));
 
-    assertTrue(StorageSchemes.getStorageLockImplementationIfExists("s3").isPresent());
-    assertTrue(StorageSchemes.getStorageLockImplementationIfExists("s3a").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("gs").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("file").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("hdfs").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("afs").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("wasb").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("adl").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("abfs").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("oss").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("viewfs").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("alluxio").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("cosn").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("dbfs").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("cos").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("jfs").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("bos").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("ks3").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("nos").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("ofs").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("oci").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("tos").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("cfs").isPresent());
-    assertFalse(StorageSchemes.getStorageLockImplementationIfExists("hopsfs").isPresent());
+    for (StorageSchemes scheme : StorageSchemes.values()) {
+      String schemeName = scheme.getScheme();
+      if (scheme.getScheme().startsWith("s3")) {
+        assertTrue(StorageSchemes.getStorageLockImplementationIfExists(schemeName).isPresent());
+      } else {
+        assertFalse(StorageSchemes.getStorageLockImplementationIfExists(schemeName).isPresent());
+      }
+    }
 
     assertTrue(StorageSchemes.isAtomicCreationSupported("file"));
     assertTrue(StorageSchemes.isAtomicCreationSupported("hdfs"));
