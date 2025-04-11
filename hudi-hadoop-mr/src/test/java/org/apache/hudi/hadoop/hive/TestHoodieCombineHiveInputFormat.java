@@ -64,7 +64,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -239,7 +238,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     jobConf.set(HAS_MAP_WORK, "true");
     // The following config tells Hive to choose ExecMapper to read the MAP_WORK
     jobConf.set(MAPRED_MAPPER_CLASS, ExecMapper.class.getName());
-    // setting the split size to be 3 to create one split for 3 file groups
+    // set SPLIT_MAXSIZE larger  to create one split for 3 files groups
     jobConf.set(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MAXSIZE, "128000000");
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
@@ -247,7 +246,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     InputFormatTestUtil.setPropsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
 
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
-    // Since the SPLIT_SIZE is 3, we should create only 1 split with all 3 file groups
+    // Since the SPLIT_SIZE is large enough, we should create only 1 split with all 3 file groups
     assertEquals(1, splits.length);
 
     RecordReader<NullWritable, ArrayWritable> recordReader =
@@ -323,7 +322,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     jobConf.set(HAS_MAP_WORK, "true");
     // The following config tells Hive to choose ExecMapper to read the MAP_WORK
     jobConf.set(MAPRED_MAPPER_CLASS, ExecMapper.class.getName());
-    // setting the split size to be 3 to create one split for 3 file groups
+    // set SPLIT_MAXSIZE larger  to create one split for 3 files groups
     jobConf.set(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MAXSIZE, "128000000");
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
@@ -343,7 +342,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // unset META_TABLE_PARTITION_COLUMNS to trigger HUDI-1718
     jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
-    // Since the SPLIT_SIZE is 3, we should create only 1 split with all 3 file groups
+    // Since the SPLIT_SIZE is large enough, we should create only 1 split with all 3 file groups
     assertEquals(1, splits.length);
 
     // if HUDI-1718 is not fixed, the follow code will throw exception
@@ -415,7 +414,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
     InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
-    // Since the SPLIT_SIZE is 3, we should create only 1 split with all 3 file groups
+    // Since the SPLIT_SIZE is large enough, we should create only 1 split with all 3 file groups
     assertEquals(1, splits.length);
     RecordReader<NullWritable, ArrayWritable> recordReader =
         combineHiveInputFormat.getRecordReader(splits[0], jobConf, null);
@@ -432,7 +431,6 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   }
 
   @Test
-  @Disabled
   public void testHoodieRealtimeCombineHoodieInputFormat() throws Exception {
 
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
@@ -447,34 +445,43 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
     FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, tempDir.toString(), commitTime, Option.of(commitMetadata));
 
+    long writtenBytes = 0;
     // insert 1000 update records to log file 0
     String newCommitTime = "101";
     HoodieLogFormat.Writer writer =
         InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid0",
             commitTime, newCommitTime,
             numRecords, numRecords, 0);
+    writtenBytes += writer.getCurrentSize();
     writer.close();
     // insert 1000 update records to log file 1
     writer =
         InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid1",
             commitTime, newCommitTime,
             numRecords, numRecords, 0);
+    writtenBytes += writer.getCurrentSize();
     writer.close();
     // insert 1000 update records to log file 2
     writer =
         InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid2",
             commitTime, newCommitTime,
             numRecords, numRecords, 0);
+    writtenBytes += writer.getCurrentSize();
     writer.close();
 
     TableDesc tblDesc = Utilities.defaultTd;
     // Set the input format
-    tblDesc.setInputFileFormatClass(HoodieCombineHiveInputFormat.class);
+    tblDesc.setInputFileFormatClass(HoodieParquetRealtimeInputFormat.class);
     PartitionDesc partDesc = new PartitionDesc(tblDesc, null);
     LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
     pt.put(new Path(tempDir.toAbsolutePath().toString()), partDesc);
+    LinkedHashMap<Path, ArrayList<String>> tableAlias = new LinkedHashMap<>();
+    ArrayList<String> alias = new ArrayList<>();
+    alias.add(tempDir.toAbsolutePath().toString());
+    tableAlias.put(new Path(tempDir.toAbsolutePath().toString()), alias);
     MapredWork mrwork = new MapredWork();
     mrwork.getMapWork().setPathToPartitionInfo(pt);
+    mrwork.getMapWork().setPathToAliases(tableAlias);
     Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
     Utilities.setMapRedWork(conf.unwrap(), mrwork, mapWorkPath);
     JobConf jobConf = new JobConf(conf.unwrap());
@@ -483,14 +490,24 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     jobConf.set(HAS_MAP_WORK, "true");
     // The following config tells Hive to choose ExecMapper to read the MAP_WORK
     jobConf.set(MAPRED_MAPPER_CLASS, ExecMapper.class.getName());
-    // setting the split size to be 3 to create one split for 3 file groups
-    jobConf.set(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MAXSIZE, "3");
+    // set SPLIT_MAXSIZE larger  to create one split for 3 files groups
 
-    HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
     InputFormatTestUtil.setPropsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
+
+    HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
-    // Since the SPLIT_SIZE is 3, we should create only 1 split with all 3 file groups
+    // We should get 3 split by default (SPLIT_MAXSIZE is not set)
+    assertEquals(3, splits.length);
+
+    jobConf.set(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MAXSIZE, String.valueOf(writtenBytes / 2));
+    splits = combineHiveInputFormat.getSplits(jobConf, 1);
+    // Since the SPLIT_SIZE is set half of writtenBytes, we should create 2 split with all 3 file groups
+    assertEquals(2, splits.length);
+
+    jobConf.set(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MAXSIZE, "128000000");
+    splits = combineHiveInputFormat.getSplits(jobConf, 1);
+    // Since the SPLIT_SIZE is large enough, we should create only 1 split with all 3 file groups
     assertEquals(1, splits.length);
     RecordReader<NullWritable, ArrayWritable> recordReader =
         combineHiveInputFormat.getRecordReader(splits[0], jobConf, null);
