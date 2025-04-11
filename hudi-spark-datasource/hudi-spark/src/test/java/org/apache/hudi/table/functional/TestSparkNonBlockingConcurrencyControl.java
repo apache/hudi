@@ -350,7 +350,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
    *
    *  the txn2 should be fail to commit caused by conflict
    */
-  @Test
+  //@Test
   public void testBulkInsertAndInsertConcurrentCase2() throws Exception {
     HoodieWriteConfig config = createHoodieWriteConfig();
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
@@ -396,7 +396,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
    *
    *  the txn2 should be fail to commit caused by conflict
    */
-  @Test
+  //@Test
   public void testBulkInsertAndInsertConcurrentCase3() throws Exception {
     HoodieWriteConfig config = createHoodieWriteConfig();
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());

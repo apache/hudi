@@ -63,6 +63,7 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
   private HoodieWriteConfig getWriteConfig(boolean useLockProviderWithRuntimeError) {
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
+        .withAutoCommit(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
         .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
         .build())

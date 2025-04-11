@@ -1810,6 +1810,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
     client.startCommitWithTime(newCommitTime);
     List<WriteStatus> writeStatuses = client.insert(records, newCommitTime);
+    client.commit(newCommitTime, writeStatuses);
     assertNoWriteErrors(writeStatuses);
     validateMetadata(client);
 
@@ -1818,6 +1819,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     client.startCommitWithTime(newCommitTime);
     records = dataGen.generateInserts(newCommitTime, 20);
     writeStatuses = client.insert(records, newCommitTime);
+    client.commit(newCommitTime, writeStatuses);
     assertNoWriteErrors(writeStatuses);
     validateMetadata(client);
 
@@ -1851,6 +1853,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     client.startCommitWithTime(newCommitTime);
     records = dataGen.generateInserts(newCommitTime, 20);
     writeStatuses = client.insert(records, newCommitTime);
+    client.commit(newCommitTime, writeStatuses);
     assertNoWriteErrors(writeStatuses);
     validateMetadata(client);
 
@@ -1886,6 +1889,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
     client.startCommitWithTime(newCommitTime);
     List<WriteStatus> writeStatuses = client.insert(records, newCommitTime);
+    client.commit(newCommitTime, writeStatuses);
     assertNoWriteErrors(writeStatuses);
     validateMetadata(client);
 
@@ -1894,6 +1898,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     client.startCommitWithTime(newCommitTime);
     records = dataGen.generateInserts(newCommitTime, 20);
     writeStatuses = client.insert(records, newCommitTime);
+    client.commit(newCommitTime, writeStatuses);
     assertNoWriteErrors(writeStatuses);
     validateMetadata(client);
 
@@ -1928,6 +1933,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     client.startCommitWithTime(newCommitTime);
     records = dataGen.generateInserts(newCommitTime, 20);
     writeStatuses = client.insert(records, newCommitTime);
+    client.commit(newCommitTime, writeStatuses);
     assertNoWriteErrors(writeStatuses);
     validateMetadata(client, Option.of(clusteringCommitTime));
   }
@@ -2535,6 +2541,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
+        .withAutoCommit(true)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)

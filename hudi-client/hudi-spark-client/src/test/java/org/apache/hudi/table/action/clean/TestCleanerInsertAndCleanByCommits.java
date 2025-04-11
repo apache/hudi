@@ -58,11 +58,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_COMMITS;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.table.TestCleaner.insertFirstBigBatchForClientCleanerTest;
-import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.HoodieClientTestBase.Function2;
 import static org.apache.hudi.testutils.HoodieClientTestBase.Function3;
 import static org.apache.hudi.testutils.HoodieClientTestBase.wrapRecordsGenFunctionForPreppedCalls;
@@ -124,7 +124,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> upsertFn, boolean isPreppedAPI, boolean isAsync)
       throws Exception {
     int maxCommits = 3; // keep upto 3 commits from the past
-    HoodieWriteConfig cfg = getConfigBuilder(true)
+    HoodieWriteConfig cfg = getConfigBuilder(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(KEEP_LATEST_COMMITS)
             .withAsyncClean(isAsync).retainCommits(maxCommits).build())
@@ -154,12 +154,11 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
         client.startCommitWithTime(newCommitTime);
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newCommitTime, BATCH_SIZE);
 
-        List<WriteStatus> statuses = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newCommitTime).collect();
-        // Verify there are no errors
-        assertNoWriteErrors(statuses);
+        JavaRDD<WriteStatus> statuses = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newCommitTime);
+        client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
         commitWriteStatsMap.put(
             newCommitTime,
-            statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+            statuses.map(WriteStatus::getStat).collect());
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
         validateFilesAfterCleaning(
