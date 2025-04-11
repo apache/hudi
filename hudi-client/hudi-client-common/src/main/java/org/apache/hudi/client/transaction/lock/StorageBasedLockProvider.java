@@ -526,7 +526,6 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   }
 
   private void logErrorLockState(LockState state, String msg) {
-    logger.warn(LOCK_STATE_LOGGER_MSG_WITH_INFO, ownerId, lockFilePath, Thread.currentThread(), state, msg);
-
+    logger.error(LOCK_STATE_LOGGER_MSG_WITH_INFO, ownerId, lockFilePath, Thread.currentThread(), state, msg);
   }
 }
