@@ -40,6 +40,7 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -296,7 +297,7 @@ public class DataSourceUtils {
       SparkRDDReadClient client = new SparkRDDReadClient<>(engineContext, writeConfig);
       return client.tagLocation(incomingHoodieRecords)
           .filter(r -> shouldIncludeRecord((HoodieRecord<HoodieRecordPayload>) r, failOnDuplicates));
-    } catch (TableNotFoundException e) {
+    } catch (TableNotFoundException | InvalidTableException e) {
       // No table exists yet, so no duplicates to drop
       return incomingHoodieRecords;
     }
