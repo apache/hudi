@@ -82,8 +82,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
 
   @Override
   public void sync() {
+    writeLock.lock();
     try {
-      writeLock.lock();
       maySyncIncrementally();
       tableMetadata.reset();
     } finally {
