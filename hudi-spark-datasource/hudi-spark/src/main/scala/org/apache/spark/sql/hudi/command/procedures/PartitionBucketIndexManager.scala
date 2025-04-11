@@ -61,11 +61,11 @@ class PartitionBucketIndexManager extends BaseProcedure
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "overwrite", DataTypes.StringType),
-    ProcedureParameter.optional(2, "bucketNumber", DataTypes.IntegerType, -1),
+    ProcedureParameter.optional(2, "bucket_number", DataTypes.IntegerType, -1),
     ProcedureParameter.optional(3, "add", DataTypes.StringType),
-    ProcedureParameter.optional(4, "dryRun", DataTypes.BooleanType, true),
+    ProcedureParameter.optional(4, "dry_run", DataTypes.BooleanType, true),
     ProcedureParameter.optional(5, "rollback", DataTypes.StringType),
-    ProcedureParameter.optional(6, "showConfig", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(6, "show_config", DataTypes.BooleanType, false),
     ProcedureParameter.optional(7, "rule", DataTypes.StringType, "regex"),
     // params => key=value, key2=value2
     ProcedureParameter.optional(8, "options", DataTypes.StringType)

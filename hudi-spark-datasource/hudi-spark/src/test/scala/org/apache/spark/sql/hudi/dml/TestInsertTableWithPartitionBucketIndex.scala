@@ -26,7 +26,6 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 
 class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
 
@@ -93,7 +92,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
               val expressions = "dt=(2021\\-01\\-05|2021\\-01\\-07),2"
               val rule = "regex"
               val defaultBucketNumber = 1
-              spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+              spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
               checkAnswer(s"select id, name, price, ts, dt from $tableName")(
                 Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
@@ -177,7 +176,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
           val expressions = "dt=(2021\\-01\\-05|2021\\-01\\-08),2"
           val rule = "regex"
           val defaultBucketNumber = 1
-          val sql = s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucketNumber => $defaultBucketNumber)"
+          val sql = s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucket_number => $defaultBucketNumber)"
           val resExpect =
             s"""
                |dt=2021-01-05 => 2
@@ -236,7 +235,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
             val expressions = "dt=2021\\-01\\-07,2"
             val rule = "regex"
             val defaultBucketNumber = 1
-            spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+            spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
             checkAnswer(s"select id, name, price, ts, dt from $tableName")(
               Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
@@ -330,7 +329,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
             val expressions = "dt=(2021\\-01\\-05|2021\\-01\\-07),2"
             val rule = "regex"
             val defaultBucketNumber = 1
-            spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+            spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
             checkAnswer(s"select id, name, price, ts, dt from $tableName")(
               Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
@@ -416,7 +415,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
           // do bucket rescale commit 2
           val expressions = "dt=(2021\\-01\\-05|2021\\-01\\-07),4"
           val rule = "regex"
-          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
           // do commit 3 update id = 1111
           spark.sql(
@@ -428,7 +427,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
           // do bucket rescale commit 4
           val expressions2 = "dt=(2021\\-01\\-05|2021\\-01\\-07),3"
           val rule2 = "regex"
-          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions2', rule => '$rule2', bucketNumber => $defaultBucketNumber, dryRun => false)")
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions2', rule => '$rule2', bucket_number => $defaultBucketNumber, dry_run => false)")
 
           // do commit 5 update id = 1111
           spark.sql(
@@ -516,10 +515,10 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
             val expressions = "dt=(2021\\-01\\-05|2021\\-01\\-07),2"
             val rule = "regex"
             val defaultBucketNumber = 1
-            spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+            spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
             val expressions2 = "dt=(2021\\-01\\-05|2021\\-01\\-07),3"
-            spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions2', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+            spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions2', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
             // delete latest replace commit
             val replaceCommit = metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant().get()
@@ -607,22 +606,22 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
           val expressions = "dt=(2021\\-01\\-05|2021\\-01\\-07),2"
           val rule = "regex"
           val defaultBucketNumber = 1
-          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
           val expressions2 = "dt=(2021\\-01\\-05|2021\\-01\\-07),3"
-          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions2', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions2', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
           val expressions3 = "dt=(2021\\-01\\-05|2021\\-01\\-07),4"
-          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions3', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions3', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
           val expressions4 = "dt=(2021\\-01\\-05|2021\\-01\\-07),5"
-          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions4', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions4', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
           val expressions5 = "dt=(2021\\-01\\-05|2021\\-01\\-07),6"
-          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions5', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions5', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
           val expressions6 = "dt=(2021\\-01\\-05|2021\\-01\\-07),6"
-          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions6', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions6', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
           assert(PartitionBucketIndexHashingConfig.getArchiveHashingConfigInstants(metaClient).size() == 2)
           assert(PartitionBucketIndexHashingConfig.getCommittedHashingConfigInstants(metaClient).size() == 4)
@@ -631,7 +630,7 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
           val expected = PartitionBucketIndexHashingConfig.getAllHashingConfig(metaClient).asScala.map(config => {
             config.toString
           }).mkString(";")
-          checkAnswer(s"call partition_bucket_index_manager(table => '$tableName', showConfig => true)")(
+          checkAnswer(s"call partition_bucket_index_manager(table => '$tableName', show_config => true)")(
             Seq("SUCCESS", "SHOW_CONFIG", expected)
           )
         }
@@ -680,10 +679,10 @@ class TestInsertTableWithPartitionBucketIndex extends HoodieSparkSqlTestBase {
           val expressions = "dt=(2021\\-01\\-07|2021\\-01\\-08),2"
           val rule = "regex"
           val defaultBucketNumber = 1
-          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucketNumber => $defaultBucketNumber, dryRun => false)")
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', overwrite => '$expressions', rule => '$rule', bucket_number => $defaultBucketNumber, dry_run => false)")
 
           val expressions2 = "dt=(2021\\-01\\-09|2021\\-01\\-10),3"
-          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', add => '$expressions2', dryRun => false)")
+          spark.sql(s"call partition_bucket_index_manager(table => '$tableName', add => '$expressions2', dry_run => false)")
 
           val actualExpression = PartitionBucketIndexHashingConfig.loadingLatestHashingConfig(metaClient).getExpressions
           val expectedExpression = s"""$expressions2;$expressions"""
