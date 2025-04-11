@@ -43,12 +43,18 @@ public class TransactionManager implements Serializable {
   private Option<HoodieInstant> lastCompletedTxnOwnerInstant = Option.empty();
 
   public TransactionManager(HoodieWriteConfig config, HoodieStorage storage) {
-    this(new LockManager(config, (FileSystem) storage.getFileSystem()), config.isLockRequired());
+    this(createLockManager(config, storage), config.isLockRequired());
   }
 
   protected TransactionManager(LockManager lockManager, boolean isLockRequired) {
     this.lockManager = lockManager;
     this.isLockRequired = isLockRequired;
+  }
+
+  private static LockManager createLockManager(HoodieWriteConfig config, HoodieStorage storage) {
+    FileSystem fs = (FileSystem) storage.getFileSystem();
+    fs.getConf().addResource(storage.getConf().unwrapAs(org.apache.hadoop.conf.Configuration.class));
+    return new LockManager(config, fs);
   }
 
   public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,
