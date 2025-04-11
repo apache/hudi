@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hive.transaction.lock;
 
+import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
@@ -87,14 +88,15 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
   public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     this(lockConfiguration);
     try {
-      if (conf.get(HiveConf.ConfVars.METASTOREPWD.varname) == null || conf.get(HiveConf.ConfVars.METASTOREPWD.varname).isEmpty()) {
+      if (!StringUtils.isNullOrEmpty(conf.get(CommonConfigurationKeysPublic.HADOOP_SECURITY_CREDENTIAL_PROVIDER_PATH))
+          && StringUtils.isNullOrEmpty(conf.get(HiveConf.ConfVars.METASTOREPWD.varname))) {
         String passwd = ShimLoader.getHadoopShims().getPassword(conf, HiveConf.ConfVars.METASTOREPWD.varname);
-        if (passwd != null && !passwd.isEmpty()) {
+        if (!StringUtils.isNullOrEmpty(passwd)) {
           conf.set(HiveConf.ConfVars.METASTOREPWD.varname, passwd);
         }
       }
     } catch (Exception e) {
-      LOG.info("Exception while trying to get Meta Sync password from hadoop credential store", e);
+      LOG.info("Exception while trying to get Hive password from hadoop credential store", e);
     }
     try {
       HiveConf hiveConf = new HiveConf();
