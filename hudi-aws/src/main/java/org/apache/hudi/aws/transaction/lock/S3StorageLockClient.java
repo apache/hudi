@@ -156,9 +156,6 @@ public class S3StorageLockClient implements StorageLockClient {
 
   /**
    * Internal helper to create or update the lock file with optional ETag precondition.
-   * // to fix. try to keep public methods at top followed by private or utility methods. While reviewing, the reader/developer
-   * // should get a quick sense of all important apis, impl, how they interact etc. and try to maintain causality in the order of methods.
-   * // for eg, if method1 invokes method2, we should have method1 ahead of method2. If not, developer need to keep scrolling back and forth ;)
    */
   private StorageLockFile createOrUpdateLockFileInternal(StorageLockData lockData, String expectedEtag) {
     byte[] bytes = StorageLockFile.toByteArray(lockData);
@@ -191,8 +188,7 @@ public class S3StorageLockClient implements StorageLockClient {
   private Pair<LockUpdateResult, StorageLockFile> handleS3ExceptionOnCreate(S3Exception e) {
     int status = e.statusCode();
     if (status == PRECONDITION_FAILURE_ERROR_CODE || status == CONDITIONAL_REQUEST_CONFLICT_ERROR_CODE) {
-      logger.error("OwnerId: {}, Lockfile modified by another process: {}", ownerId, lockFilePath);
-      // having returns in few of the `if` blocks makes it hard to maintain.
+      logger.warn("OwnerId: {}, Lockfile modified by another process: {}", ownerId, lockFilePath);
       return Pair.of(LockUpdateResult.ACQUIRED_BY_OTHERS, null);
     } else if (status == RATE_LIMIT_ERROR_CODE) {
       logger.warn("OwnerId: {}, Rate limit exceeded for: {}", ownerId, lockFilePath);

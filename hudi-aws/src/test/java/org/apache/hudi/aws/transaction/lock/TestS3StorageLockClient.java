@@ -191,7 +191,7 @@ class TestS3StorageLockClient {
 
     assertEquals(LockUpdateResult.ACQUIRED_BY_OTHERS, result.getLeft());
     assertNull(result.getRight());
-    verify(mockLogger).error(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
+    verify(mockLogger).warn(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
   @Test
@@ -207,7 +207,7 @@ class TestS3StorageLockClient {
 
     assertEquals(LockUpdateResult.ACQUIRED_BY_OTHERS, result.getLeft());
     assertNull(result.getRight());
-    verify(mockLogger).error(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
+    verify(mockLogger).warn(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
   @Test
