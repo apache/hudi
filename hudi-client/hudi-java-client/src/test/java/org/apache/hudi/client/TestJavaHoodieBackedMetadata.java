@@ -2535,6 +2535,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
+        .withAutoCommit(true)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
