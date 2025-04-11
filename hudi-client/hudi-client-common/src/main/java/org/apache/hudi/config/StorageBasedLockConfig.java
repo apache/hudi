@@ -44,12 +44,12 @@ public class StorageBasedLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<Long> HEARTBEAT_POLL_SECONDS = ConfigProperty
       .key(STORAGE_BASED_LOCK_PROPERTY_PREFIX + "heartbeat.poll.secs")
-      .defaultValue(TimeUnit.SECONDS.toSeconds(30))
+      .defaultValue(30L)
       .markAdvanced()
       .sinceVersion(SINCE_VERSION_1_0_2)
       .withDocumentation(
-          "For storage-based conditional write lock provider, the amount of time in seconds to wait before renewing the lock."
-                  + "Defaults to 30 seconds.");
+          "For storage-based lock provider, the amount of time in seconds to wait before renewing the lock. "
+              + "Defaults to 30 seconds.");
 
   public long getValiditySeconds() {
     return getLong(VALIDITY_TIMEOUT_SECONDS);

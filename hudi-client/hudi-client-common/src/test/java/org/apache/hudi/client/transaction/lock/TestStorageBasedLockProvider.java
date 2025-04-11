@@ -76,7 +76,6 @@ class TestStorageBasedLockProvider {
   private StorageLock mockLockService;
   private HeartbeatManager mockHeartbeatManager;
   private Logger mockLogger;
-
   private final String ownerId = UUID.randomUUID().toString();
   private static final int DEFAULT_LOCK_VALIDITY_MS = 5000;
 

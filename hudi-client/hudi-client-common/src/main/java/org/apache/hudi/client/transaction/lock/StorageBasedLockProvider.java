@@ -18,12 +18,12 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.models.StorageLockData;
-import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
 import org.apache.hudi.client.transaction.lock.models.HeartbeatManager;
 import org.apache.hudi.client.transaction.lock.models.LockGetResult;
 import org.apache.hudi.client.transaction.lock.models.LockProviderHeartbeatManager;
 import org.apache.hudi.client.transaction.lock.models.LockUpdateResult;
+import org.apache.hudi.client.transaction.lock.models.StorageLockData;
+import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
@@ -526,7 +526,6 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   }
 
   private void logErrorLockState(LockState state, String msg) {
-    logger.warn(LOCK_STATE_LOGGER_MSG_WITH_INFO, ownerId, lockFilePath, Thread.currentThread(), state, msg);
-
+    logger.error(LOCK_STATE_LOGGER_MSG_WITH_INFO, ownerId, lockFilePath, Thread.currentThread(), state, msg);
   }
 }
