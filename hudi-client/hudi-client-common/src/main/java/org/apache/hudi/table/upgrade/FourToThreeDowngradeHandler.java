@@ -21,6 +21,7 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -40,6 +41,11 @@ public class FourToThreeDowngradeHandler implements DowngradeHandler {
       // Metadata Table in version 4 has a schema that is not forward compatible.
       // Hence, it is safe to delete the metadata table, which will be re-initialized in subsequent commit.
       HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+    }
+    HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
+    // TIMELINE_TIMEZONE was added in version 0.11.0 (Table version 4). Remove it to downgrade to version 3.
+    if (tableConfig.contains(HoodieTableConfig.TIMELINE_TIMEZONE)) {
+      tableConfig.getProps().remove(HoodieTableConfig.TIMELINE_TIMEZONE);
     }
     return Pair.of(Collections.emptyMap(), Collections.emptyList());
   }
