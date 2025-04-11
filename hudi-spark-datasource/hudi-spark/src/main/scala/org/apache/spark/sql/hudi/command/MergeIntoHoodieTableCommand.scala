@@ -493,7 +493,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PAYLOAD_ORIGINAL_AVRO_PAYLOAD -> hoodieCatalogTable.tableConfig.getPayloadClass
     )
 
-    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDF)
+    val (success, _, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDF)
     if (!success) {
       throw new HoodieException("Merge into Hoodie table command failed")
     }
