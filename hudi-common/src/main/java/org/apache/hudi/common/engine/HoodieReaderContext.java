@@ -66,6 +66,8 @@ public abstract class HoodieReaderContext<T> implements Closeable {
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
+
+  // should we do position based merging for mor
   private Boolean shouldMergeUseRecordPosition = null;
 
   // for encoding and decoding schemas to the spillable map
