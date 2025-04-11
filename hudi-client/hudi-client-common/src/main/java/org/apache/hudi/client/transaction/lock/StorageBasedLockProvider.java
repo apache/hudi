@@ -134,7 +134,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       try {
         return (StorageLock) ReflectionUtils.loadClass(
                 getLockServiceClassName(new URI(lockFilePath).getScheme()),
-                new Class<?>[]{String.class, String.class, String.class, Properties.class},
+                new Class<?>[]{String.class, String.class, Properties.class},
                 new Object[]{ownerId, lockFilePath, lockConfig});
       } catch (Throwable e) {
         throw new HoodieLockException("Failed to load and initialize StorageLock", e);

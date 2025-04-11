@@ -41,8 +41,8 @@ public enum StorageSchemes {
   // Apache Ignite FS
   IGNITE("igfs", null, null, null),
   // AWS S3
-  S3A("s3a", true, null, "org.apache.hudi.aws.transaction.lock.S3StorageLock"),
-  S3("s3", true, null, "org.apache.hudi.aws.transaction.lock.S3StorageLock"),
+  S3A("s3a", true, null, "org.apache.hudi.aws.transaction.lock.S3StorageLockClient"),
+  S3("s3", true, null, "org.apache.hudi.aws.transaction.lock.S3StorageLockClient"),
   // Google Cloud Storage
   GCS("gs", true, null, null),
   // Azure WASB
