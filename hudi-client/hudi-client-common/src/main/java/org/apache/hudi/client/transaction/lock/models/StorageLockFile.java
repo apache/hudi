@@ -111,7 +111,7 @@ public class StorageLockFile {
    * Gets the expiration time in ms.
    * @return A long representing the expiration.
    */
-  public long getValidUntil() {
+  public long getValidUntilMs() {
     return this.data.getValidUntil();
   }
 

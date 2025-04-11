@@ -115,7 +115,7 @@ class TestS3StorageLockClient {
     PutObjectResponse putResp = PutObjectResponse.builder().eTag("new-etag-123").build();
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenReturn(putResp);
 
-    Pair<LockUpdateResult, StorageLockFile> result = lockService.tryCreateOrUpdateLockFile(lockData, null);
+    Pair<LockUpdateResult, StorageLockFile> result = lockService.tryCreateLockFile(lockData, null);
 
     assertEquals(LockUpdateResult.SUCCESS, result.getLeft());
     assertNotNull(result.getRight());
@@ -170,7 +170,7 @@ class TestS3StorageLockClient {
     )).thenReturn(putResp);
 
     Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateOrUpdateLockFile(lockData, prevLockFile);
+            lockService.tryCreateLockFile(lockData, prevLockFile);
 
     assertEquals(LockUpdateResult.SUCCESS, result.getLeft());
     assertNotNull(result.getRight());
@@ -187,11 +187,11 @@ class TestS3StorageLockClient {
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex412);
 
     Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateOrUpdateLockFile(lockData, prevLockFile);
+            lockService.tryCreateLockFile(lockData, prevLockFile);
 
     assertEquals(LockUpdateResult.ACQUIRED_BY_OTHERS, result.getLeft());
     assertNull(result.getRight());
-    verify(mockLogger).info(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
+    verify(mockLogger).error(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
   @Test
@@ -203,11 +203,11 @@ class TestS3StorageLockClient {
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex409);
 
     Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateOrUpdateLockFile(lockData, prevLockFile);
+            lockService.tryCreateLockFile(lockData, prevLockFile);
 
     assertEquals(LockUpdateResult.ACQUIRED_BY_OTHERS, result.getLeft());
     assertNull(result.getRight());
-    verify(mockLogger).info(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
+    verify(mockLogger).error(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
   @Test
@@ -217,7 +217,7 @@ class TestS3StorageLockClient {
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex429);
 
     Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateOrUpdateLockFile(lockData, null);
+            lockService.tryCreateLockFile(lockData, null);
 
     assertEquals(UNKNOWN_ERROR, result.getLeft());
     assertNull(result.getRight());
@@ -231,7 +231,7 @@ class TestS3StorageLockClient {
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex503);
 
     Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateOrUpdateLockFile(lockData, null);
+            lockService.tryCreateLockFile(lockData, null);
 
     assertEquals(UNKNOWN_ERROR, result.getLeft());
     assertNull(result.getRight());
@@ -244,7 +244,7 @@ class TestS3StorageLockClient {
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex400);
 
     StorageLockData lockData = new StorageLockData(false, 6000L, "myTxOwner");
-    assertThrows(S3Exception.class, () -> lockService.tryCreateOrUpdateLockFile(lockData, null));
+    assertThrows(S3Exception.class, () -> lockService.tryCreateLockFile(lockData, null));
   }
 
   @Test
@@ -260,7 +260,7 @@ class TestS3StorageLockClient {
             .thenReturn(successResp);
 
     Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateOrUpdateLockFileWithRetry(() -> lockData, null, 5);
+            lockService.tryUpdateLockFile(() -> lockData, null, 5);
 
     assertEquals(LockUpdateResult.SUCCESS, result.getLeft());
     assertNotNull(result.getRight());
@@ -275,7 +275,7 @@ class TestS3StorageLockClient {
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex412);
 
     Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateOrUpdateLockFileWithRetry(() -> lockData, null, 5);
+            lockService.tryUpdateLockFile(() -> lockData, null, 5);
 
     assertEquals(LockUpdateResult.ACQUIRED_BY_OTHERS, result.getLeft());
     assertNull(result.getRight());
@@ -289,7 +289,7 @@ class TestS3StorageLockClient {
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex400);
 
     Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateOrUpdateLockFileWithRetry(() -> lockData, null, 3);
+            lockService.tryUpdateLockFile(() -> lockData, null, 3);
 
     assertEquals(LockUpdateResult.UNKNOWN_ERROR, result.getLeft());
     assertNull(result.getRight());
@@ -308,7 +308,7 @@ class TestS3StorageLockClient {
     }).when(mockS3Client).putObject(any(PutObjectRequest.class), any(RequestBody.class));
 
     Thread t = new Thread(() -> {
-      Pair<LockUpdateResult, StorageLockFile> result = lockService.tryCreateOrUpdateLockFileWithRetry(
+      Pair<LockUpdateResult, StorageLockFile> result = lockService.tryUpdateLockFile(
               () -> new StorageLockData(false, 9999L, "myTxOwner"),
               null,
               3

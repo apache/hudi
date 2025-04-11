@@ -65,7 +65,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NA
 /**
  * A distributed filesystem storage based lock provider. This {@link LockProvider} implementation
  * leverages conditional writes to ensure transactional consistency for multi-writer scenarios.
- * The underlying storage client interface {@link StorageLock} is pluggable so it can be implemented for any
+ * The underlying storage client interface {@link StorageLockClient} is pluggable so it can be implemented for any
  * filesystem which supports conditional writes.
  */
 @ThreadSafe
@@ -91,7 +91,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   private final Logger logger;
 
   // The lock service implementation which interacts with storage
-  private final StorageLock lockService;
+  private final StorageLockClient storageLockClient;
 
   private final long validitySeconds;
   private final String ownerId;
@@ -125,14 +125,14 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
             UUID.randomUUID().toString(),
             lockConfiguration.getConfig(),
             LockProviderHeartbeatManager::new,
-            getLockService(),
+            getStorageLockService(),
             LOGGER);
   }
 
-  private static Functions.Function3<String, String, TypedProperties, StorageLock> getLockService() {
+  private static Functions.Function3<String, String, TypedProperties, StorageLockClient> getStorageLockService() {
     return (ownerId, lockFilePath, lockConfig) -> {
       try {
-        return (StorageLock) ReflectionUtils.loadClass(
+        return (StorageLockClient) ReflectionUtils.loadClass(
                 getLockServiceClassName(new URI(lockFilePath).getScheme()),
                 new Class<?>[]{String.class, String.class, Properties.class},
                 new Object[]{ownerId, lockFilePath, lockConfig});
@@ -156,14 +156,14 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       String ownerId,
       TypedProperties properties,
       Functions.Function3<String, Long, Supplier<Boolean>, HeartbeatManager> heartbeatManagerLoader,
-      Functions.Function3<String, String, TypedProperties, StorageLock> lockServiceLoader,
+      Functions.Function3<String, String, TypedProperties, StorageLockClient> storageLockSupplier,
       Logger logger) {
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder().fromProperties(properties).build();
     long heartbeatPollSeconds = config.getHeartbeatPollSeconds();
     this.validitySeconds = config.getValiditySeconds();
     this.lockFilePath = String.format("%s%s%s", config.getHudiTableBasePath(), StoragePath.SEPARATOR, LOCKS_FOLDER_NAME);
     this.heartbeatManager = heartbeatManagerLoader.apply(ownerId, heartbeatPollSeconds * 1000, this::renewLock);
-    this.lockService = lockServiceLoader.apply(ownerId, lockFilePath, properties);
+    this.storageLockClient = storageLockSupplier.apply(ownerId, lockFilePath, properties);
     this.ownerId = ownerId;
     this.logger = logger;
     shutdownThread = new Thread(() -> shutdown(true));
@@ -225,7 +225,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       logger.error("Owner {}: Failed to unlock current lock.", ownerId, e);
     }
     try {
-      this.lockService.close();
+      this.storageLockClient.close();
     } catch (Exception e) {
       logger.error("Owner {}: Lock service failed to close.", ownerId, e);
     }
@@ -239,7 +239,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   }
 
   private synchronized boolean isLockStillValid(StorageLockFile lock) {
-    return !lock.isExpired() && !isCurrentTimeCertainlyOlderThanDistributedTime(lock.getValidUntil());
+    return !lock.isExpired() && !isCurrentTimeCertainlyOlderThanDistributedTime(lock.getValidUntilMs());
   }
 
   /**
@@ -264,7 +264,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       throw new HoodieLockException(generateLockStateMessage(FAILED_TO_ACQUIRE));
     }
 
-    Pair<LockGetResult, StorageLockFile> latestLock = this.lockService.readCurrentLockFile();
+    Pair<LockGetResult, StorageLockFile> latestLock = this.storageLockClient.readCurrentLockFile();
     if (latestLock.getLeft() == LockGetResult.UNKNOWN_ERROR) {
       logInfoLockState(FAILED_TO_ACQUIRE, "Failed to get the latest lock status");
       // We were not able to determine whether a lock was present.
@@ -280,7 +280,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
     // Try to acquire the lock
     StorageLockData newLockData = new StorageLockData(false, System.currentTimeMillis() + validitySeconds, ownerId);
-    Pair<LockUpdateResult, StorageLockFile> lockUpdateStatus = this.lockService.tryCreateOrUpdateLockFile(
+    Pair<LockUpdateResult, StorageLockFile> lockUpdateStatus = this.storageLockClient.tryCreateLockFile(
         newLockData, latestLock.getLeft() == LockGetResult.NOT_EXISTS ? null : latestLock.getRight());
     if (lockUpdateStatus.getLeft() != LockUpdateResult.SUCCESS) {
       // failed to acquire the lock, indicates concurrent contention
@@ -396,13 +396,13 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     }
     logDebugLockState(RELEASING);
     // Upload metadata that will unlock this lock.
-    StorageLockData expiredLockData = new StorageLockData(true, this.getLock().getValidUntil(), ownerId);
+    StorageLockData expiredLockData = new StorageLockData(true, this.getLock().getValidUntilMs(), ownerId);
     Pair<LockUpdateResult, StorageLockFile> result;
     if (fromShutdownHook) {
       // Only try once for shutdown hook, then return immediately
-      result = this.lockService.tryCreateOrUpdateLockFile(expiredLockData, this.getLock());
+      result = this.storageLockClient.tryCreateLockFile(expiredLockData, this.getLock());
     } else {
-      result = this.lockService.tryCreateOrUpdateLockFileWithRetry(
+      result = this.storageLockClient.tryUpdateLockFile(
               () -> expiredLockData,
               this.getLock(),
               // Keep retrying for the normal validity time.
@@ -444,7 +444,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         return false;
       }
 
-      long oldExpiration = getLock().getValidUntil();
+      long oldExpirationMs = getLock().getValidUntilMs();
       // Attempt conditional update, extend lock. There are 3 cases:
       // 1. Happy case: lock has not expired yet, we extend the lease to a longer
       // period.
@@ -456,7 +456,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       // Action taken for corner case 2 is just a best effort mitigation. At least it
       // prevents further data corruption by
       // letting someone else acquire the lock.
-      Pair<LockUpdateResult, StorageLockFile> currentLock = this.lockService.tryCreateOrUpdateLockFileWithRetry(
+      Pair<LockUpdateResult, StorageLockFile> currentLock = this.storageLockClient.tryUpdateLockFile(
           () -> new StorageLockData(false, System.currentTimeMillis() + validitySeconds, ownerId),
           getLock(),
           LOCK_UPSERT_RETRY_COUNT);
@@ -476,7 +476,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           // Only positive outcome
           this.setLock(currentLock.getRight());
           logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
-              ownerId, oldExpiration - System.currentTimeMillis(), lockFilePath);
+              ownerId, oldExpirationMs - System.currentTimeMillis(), lockFilePath);
           // Let heartbeat continue to renew lock lease again later.
           return true;
         default:

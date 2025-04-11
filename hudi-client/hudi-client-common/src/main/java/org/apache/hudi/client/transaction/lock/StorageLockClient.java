@@ -31,16 +31,33 @@ import java.util.function.Supplier;
  * It expects to be interacting with a single lock file per context (table), and will be competing with other instances
  * to perform writes, so it should handle these cases accordingly (using conditional writes).
  */
-public interface StorageLock extends AutoCloseable {
+public interface StorageLockClient extends AutoCloseable {
   /**
    * Tries once to create or update a lock file.
    * @param newLockData The new data to update the lock file with.
    * @param previousLockFile The previous lock file, use this to conditionally update the lock file.
    * @return A pair containing the result state and the new lock file (if successful)
    */
-  Pair<LockUpdateResult, StorageLockFile> tryCreateOrUpdateLockFile(
+  default Pair<LockUpdateResult, StorageLockFile> tryCreateLockFile(
       StorageLockData newLockData,
-      StorageLockFile previousLockFile);
+      StorageLockFile previousLockFile) {
+    return tryCreateOrUpdateLockFile(() -> newLockData, previousLockFile, true, 1);
+  }
+
+  /**
+   * Tries to update a lock file while retrying N times.
+   * All non pre-condition failure related errors should be retried.
+   * @param newLockDataSupplier The new data supplier
+   * @param previousLockFile The previous lock file
+   * @param retryCount Number of retries to attempt
+   * @return A pair containing the result state and the new lock file (if successful)
+   */
+  default Pair<LockUpdateResult, StorageLockFile> tryUpdateLockFile(
+      Supplier<StorageLockData> newLockDataSupplier,
+      org.apache.hudi.client.transaction.lock.models.StorageLockFile previousLockFile,
+      long retryCount) {
+    return tryCreateOrUpdateLockFile(newLockDataSupplier, previousLockFile, false, retryCount);
+  }
 
   /**
    * Tries to create or update a lock file while retrying N times.
@@ -50,9 +67,10 @@ public interface StorageLock extends AutoCloseable {
    * @param retryCount Number of retries to attempt
    * @return A pair containing the result state and the new lock file (if successful)
    */
-  Pair<LockUpdateResult, StorageLockFile> tryCreateOrUpdateLockFileWithRetry(
+  Pair<LockUpdateResult, StorageLockFile> tryCreateOrUpdateLockFile(
       Supplier<StorageLockData> newLockDataSupplier,
       StorageLockFile previousLockFile,
+      boolean isCreate,
       long retryCount);
 
   /**
