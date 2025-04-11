@@ -26,9 +26,11 @@ import org.apache.hudi.client.transaction.lock.models.LockUpdateResult;
 import org.apache.hudi.client.transaction.lock.StorageLock;
 import org.apache.hudi.client.transaction.lock.models.StorageLockData;
 import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.hudi.exception.HoodieLockException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
@@ -48,6 +50,8 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Properties;
 import java.util.function.Supplier;
 
@@ -74,28 +78,39 @@ public class S3StorageLockClient implements StorageLock {
 
   /** Constructor that is used by reflection to instantiate an S3-based storage locking client.
    * @param ownerId The owner id.
-   * @param bucketName The name of the bucket.
-   * @param lockFilePath The path within the bucket where to write lock files.
+   * @param lockFileUri The full table base path where the lock will be written.
    * @param props The properties for the lock config, can be used to customize client.
    */
-  public S3StorageLockClient(String ownerId, String bucketName, String lockFilePath, Properties props) {
+  public S3StorageLockClient(String ownerId, String lockFileUri, Properties props) {
     this(
             ownerId,
-            bucketName,
-            lockFilePath,
+            lockFileUri,
             createDefaultS3Client(props),
             LOG);
   }
 
   @VisibleForTesting
   S3StorageLockClient(String ownerId,
-                                String bucketName,
-                                String lockFilePath,
-                                S3Client s3Client,
-                                Logger logger) {
+                      String lockFileUri,
+                      S3Client s3Client,
+                      Logger logger) {
     this.s3Client = s3Client;
-    this.lockFilePath = lockFilePath;
-    this.bucketName = bucketName;
+    try {
+      // This logic can likely be extended to other lock client implementations.
+      // Consider creating base class with utilities, incl error handling.
+      URI uri = new URI(lockFileUri);
+      this.bucketName = uri.getHost();
+      this.lockFilePath = uri.getPath().replaceFirst("/", "");
+    } catch (URISyntaxException e) {
+      throw new HoodieLockException(e);
+    }
+
+    if (StringUtils.isNullOrEmpty(this.bucketName)) {
+      throw new IllegalArgumentException("lockFileUri does not contain a valid bucket name.");
+    }
+    if (StringUtils.isNullOrEmpty(this.lockFilePath)) {
+      throw new IllegalArgumentException("lockFileUri does not contain a valid lock file path.");
+    }
     this.ownerId = ownerId;
     this.logger = logger;
   }

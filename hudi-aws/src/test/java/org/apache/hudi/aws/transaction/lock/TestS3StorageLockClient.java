@@ -27,6 +27,7 @@ import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.hudi.exception.HoodieLockException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -69,7 +70,7 @@ import static org.mockito.Mockito.when;
 class TestS3StorageLockClient {
 
   private static final String OWNER_ID = "ownerId";
-  private static final String BUCKET_NAME = "bucketName";
+  private static final String LOCK_FILE_URI = "s3://bucket/lockFilePath";
   private static final String LOCK_FILE_PATH = "lockFilePath";
 
   @Mock
@@ -84,8 +85,7 @@ class TestS3StorageLockClient {
   void setUp() {
     lockService = new S3StorageLockClient(
             OWNER_ID,
-            BUCKET_NAME,
-            LOCK_FILE_PATH,
+            LOCK_FILE_URI,
             mockS3Client,
             mockLogger
     );
@@ -125,12 +125,44 @@ class TestS3StorageLockClient {
   }
 
   @Test
+  void testInitializeWithInvalidUri() {
+    assertThrows(HoodieLockException.class, () -> new S3StorageLockClient(
+            OWNER_ID,
+            "\\",
+            mockS3Client,
+            mockLogger
+    ));
+  }
+
+  @Test
+  void testInitializeWithNoLockFilePath() {
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> new S3StorageLockClient(
+            OWNER_ID,
+            "s3://bucket/",
+            mockS3Client,
+            mockLogger
+    ));
+    assertTrue(ex.getMessage().contains("lock file path"));
+  }
+
+  @Test
+  void testInitializeWithNoBucketName() {
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> new S3StorageLockClient(
+            OWNER_ID,
+            "s3:///path",
+            mockS3Client,
+            mockLogger
+    ));
+    assertTrue(ex.getMessage().contains("bucket name"));
+  }
+
+  @Test
   void testTryCreateOrUpdateLockFile_withPreviousLock_success() {
     StorageLockData lockData = new StorageLockData(false, 1000L, "myTxOwner");
     StorageLockFile prevLockFile = new StorageLockFile(lockData, "old-etag-999");
     PutObjectResponse putResp = PutObjectResponse.builder().eTag("new-etag-456").build();
     when(mockS3Client.putObject(
-            eq(PutObjectRequest.builder().bucket(BUCKET_NAME)
+            eq(PutObjectRequest.builder().bucket("bucket")
                     .key(LOCK_FILE_PATH)
                     .ifMatch("old-etag-999")
                     .build()),
