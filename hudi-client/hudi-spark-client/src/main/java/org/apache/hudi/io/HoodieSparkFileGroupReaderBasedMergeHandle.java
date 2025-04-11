@@ -117,7 +117,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
   }
 
   private void init(CompactionOperation operation, String partitionPath, Option<HoodieBaseFile> baseFileToMerge) {
-    LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
+    LOG.info("partitionPath:{}, fileId to be merged:{}", partitionPath, fileId);
     this.baseFileToMerge = baseFileToMerge.orElse(null);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
@@ -146,8 +146,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
       makeOldAndNewFilePaths(partitionPath,
           latestValidFilePath.isPresent() ? latestValidFilePath.get() : null, newFileName);
 
-      LOG.info(String.format(
-          "Merging data from file group %s, to a new base file %s", fileId, newFilePath.toString()));
+      LOG.info("Merging data from file group {}, to a new base file {}", fileId, newFilePath);
       // file name is same for all records, in this bunch
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);

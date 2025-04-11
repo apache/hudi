@@ -115,7 +115,7 @@ public class StreamerCheckpointUtils {
 
   private static Option<Checkpoint> useCkpFromOverrideConfigIfAny(
       HoodieStreamer.Config streamerConfig, TypedProperties props, Option<Checkpoint> checkpoint) {
-    LOG.debug("Checkpoint from config: " + streamerConfig.checkpoint);
+    LOG.debug("Checkpoint from config: {}", streamerConfig.checkpoint);
     if (!checkpoint.isPresent() && streamerConfig.checkpoint != null) {
       int writeTableVersion = ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION);
       checkpoint = Option.of(buildCheckpointFromConfigOverride(streamerConfig.sourceClassName, writeTableVersion, streamerConfig.checkpoint));
@@ -156,7 +156,7 @@ public class StreamerCheckpointUtils {
       if (commitMetadataOption.isPresent()) {
         HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
         Checkpoint checkpointFromCommit = CheckpointUtils.getCheckpoint(commitMetadata);
-        LOG.debug("Checkpoint reset from metadata: " + checkpointFromCommit.getCheckpointResetKey());
+        LOG.debug("Checkpoint reset from metadata: {}", checkpointFromCommit.getCheckpointResetKey());
         if (ignoreCkpCfgPrevailsOverCkpFromPrevCommit(streamerConfig, checkpointFromCommit)) {
           // we ignore any existing checkpoint and start ingesting afresh
           resumeCheckpoint = Option.empty();

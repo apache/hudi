@@ -187,7 +187,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       }
 
       if (!shouldUpdate) {
-        LOG.debug("Table " + tableName + " serdeProperties and formatClass already up to date, skip update.");
+        LOG.debug("Table {} serdeProperties and formatClass already up to date, skip update.", tableName);
         return false;
       }
 

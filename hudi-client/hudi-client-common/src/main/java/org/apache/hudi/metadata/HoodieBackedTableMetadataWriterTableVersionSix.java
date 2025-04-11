@@ -149,9 +149,9 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
 
     if (!pendingInstants.isEmpty()) {
       checkNumDeltaCommits(metadataMetaClient, dataWriteConfig.getMetadataConfig().getMaxNumDeltacommitsWhenPending());
-      LOG.info(String.format(
-          "Cannot compact metadata table as there are %d inflight instants in data table before latest deltacommit in metadata table: %s. Inflight instants in data table: %s",
-          pendingInstants.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstants.toArray())));
+      LOG.info(
+          "Cannot compact metadata table as there are {} inflight instants in data table before latest deltacommit in metadata table: {}. Inflight instants in data table: {}",
+          pendingInstants.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstants.toArray()));
       return false;
     }
 

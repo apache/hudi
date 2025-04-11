@@ -135,7 +135,7 @@ public abstract class AbstractRealtimeRecordReader {
         if (writerSchemaColNames.contains(lastColName)) {
           break;
         }
-        LOG.debug(String.format("remove virtual column: %s", lastColName));
+        LOG.debug("remove virtual column: {}", lastColName);
         columnNameList.remove(columnNameList.size() - 1);
         columnTypeList.remove(columnTypeList.size() - 1);
       }
@@ -189,14 +189,14 @@ public abstract class AbstractRealtimeRecordReader {
       } else {
         // Hive has some extra virtual columns like BLOCK__OFFSET__INSIDE__FILE which do not exist in table schema.
         // They will get skipped as they won't be found in the original schema.
-        LOG.debug("Skipping Hive Column => " + columnName);
+        LOG.debug("Skipping Hive Column => {}", columnName);
       }
     }
 
     Schema hiveSchema = Schema.createRecord(writerSchema.getName(), writerSchema.getDoc(), writerSchema.getNamespace(),
         writerSchema.isError());
     hiveSchema.setFields(hiveSchemaFields);
-    LOG.debug("HIVE Schema is :" + hiveSchema.toString(true));
+    LOG.debug("HIVE Schema is :{}", hiveSchema);
     return hiveSchema;
   }
 

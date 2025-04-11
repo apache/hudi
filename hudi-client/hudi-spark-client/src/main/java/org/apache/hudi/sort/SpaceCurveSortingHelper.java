@@ -107,7 +107,7 @@ public class SpaceCurveSortingHelper {
     // ordering altogether (since it will match linear ordering anyway)
     if (orderByCols.size() == 1) {
       String orderByColName = orderByCols.get(0);
-      LOG.debug(String.format("Single column to order by (%s), skipping space-curve ordering", orderByColName));
+      LOG.debug("Single column to order by ({}), skipping space-curve ordering", orderByColName);
 
       // TODO validate if we need Spark to re-partition
       return df.repartitionByRange(targetPartitionCount, new Column(orderByColName));

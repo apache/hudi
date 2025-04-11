@@ -310,7 +310,7 @@ public class CloudObjectsSelectorCommon {
       } catch (IOException e) {
         throw new HoodieException(String.format("Failed to parse sparkOptions: %s", datasourceOpts), e);
       }
-      LOG.info(String.format("sparkOptions loaded: %s", sparkOptionsMap));
+      LOG.info("SparkOptions loaded: {}", sparkOptionsMap);
       reader = reader.options(sparkOptionsMap);
     }
     List<String> paths = new ArrayList<>();

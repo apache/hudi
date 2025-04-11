@@ -153,7 +153,7 @@ public class HoodieClientTestUtils {
     try {
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
-      LOG.info("Path :" + paths.values());
+      LOG.info("Path :{}", paths.values());
       Dataset<Row> unFilteredRows = null;
       if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.PARQUET)) {
         unFilteredRows = sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]));
@@ -286,7 +286,7 @@ public class HoodieClientTestUtils {
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();
-      LOG.info("Timeline service server port: " + timelineServicePort);
+      LOG.info("Timeline service server port: {}", timelineServicePort);
       return timelineService;
     } catch (Exception ex) {
       throw new RuntimeException(ex);

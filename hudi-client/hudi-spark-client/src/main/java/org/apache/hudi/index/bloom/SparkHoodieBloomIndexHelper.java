@@ -98,7 +98,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     int targetParallelism =
         configuredBloomIndexParallelism > 0 ? configuredBloomIndexParallelism : inputParallelism;
 
-    LOG.info(String.format("Input parallelism: %d, Index parallelism: %d", inputParallelism, targetParallelism));
+    LOG.info("Input parallelism: {}, Index parallelism: {}", inputParallelism, targetParallelism);
 
     JavaPairRDD<HoodieFileGroupId, String> fileComparisonsRDD = HoodieJavaRDD.getJavaRDD(fileComparisonPairs);
     JavaRDD<List<HoodieKeyLookupResult>> keyLookupResultRDD;

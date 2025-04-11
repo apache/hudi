@@ -139,7 +139,7 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
       writeOnlyFile.getParentFile().mkdir();
     }
     writeOnlyFile.createNewFile();
-    LOG.debug("Spilling to file location " + writeOnlyFile.getAbsolutePath());
+    LOG.debug("Spilling to file location {}", writeOnlyFile.getAbsolutePath());
     // Make sure file is deleted when JVM exits
     writeOnlyFile.deleteOnExit();
   }

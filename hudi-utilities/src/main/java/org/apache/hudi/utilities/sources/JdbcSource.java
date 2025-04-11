@@ -104,7 +104,7 @@ public class JdbcSource extends RowSource {
             getStringWithAltKeys(properties, JdbcSourceConfig.PASSWORD));
       } else if (containsConfigProperty(properties, JdbcSourceConfig.PASSWORD_FILE)
           && !StringUtils.isNullOrEmpty(getStringWithAltKeys(properties, JdbcSourceConfig.PASSWORD_FILE))) {
-        LOG.info(String.format("Reading JDBC password from password file %s", getStringWithAltKeys(properties, JdbcSourceConfig.PASSWORD_FILE)));
+        LOG.info("Reading JDBC password from password file {}", getStringWithAltKeys(properties, JdbcSourceConfig.PASSWORD_FILE));
         FileSystem fileSystem = FileSystem.get(session.sparkContext().hadoopConfiguration());
         passwordFileStream = fileSystem.open(new Path(getStringWithAltKeys(properties, JdbcSourceConfig.PASSWORD_FILE)));
         byte[] bytes = new byte[passwordFileStream.available()];
@@ -152,7 +152,7 @@ public class JdbcSource extends RowSource {
         String key = keyOption.get();
         String value = properties.getString(prop);
         if (!StringUtils.isNullOrEmpty(value)) {
-          LOG.info(String.format("Adding %s -> %s to jdbc options", key, value));
+          LOG.info("Adding {} -> {} to jdbc options", key, value);
           dataFrameReader.option(key, value);
         }
       }
@@ -220,8 +220,8 @@ public class JdbcSource extends RowSource {
         }
       }
       String query = String.format(ppdQuery, queryBuilder.toString());
-      LOG.info("PPD QUERY: " + query);
-      LOG.info(String.format("Referenced last checkpoint and prepared new predicate pushdown query for jdbc pull %s", query));
+      LOG.info("PPD QUERY: {}", query);
+      LOG.info("Referenced last checkpoint and prepared new predicate pushdown query for jdbc pull {}", query);
       return validatePropsAndGetDataFrameReader(sparkSession, props).option(Config.RDBMS_TABLE_PROP, query).load();
     } catch (Exception e) {
       LOG.error("Error while performing an incremental fetch. Not all database support the PPD query we generate to do an incremental scan", e);
@@ -262,7 +262,7 @@ public class JdbcSource extends RowSource {
       if (isIncremental) {
         Column incrementalColumn = rowDataset.col(getStringWithAltKeys(props, JdbcSourceConfig.INCREMENTAL_COLUMN));
         final String max = rowDataset.agg(functions.max(incrementalColumn).cast(DataTypes.StringType)).first().getString(0);
-        LOG.info(String.format("Checkpointing column %s with value: %s ", incrementalColumn, max));
+        LOG.info("Checkpointing column {} with value: {}", incrementalColumn, max);
         if (max != null) {
           return new StreamerCheckpointV2(max);
         }

@@ -356,10 +356,10 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     for (HoodieInstant instant : instantsToBackup) {
       try {
         activeTimeline.copyInstant(instant, backupDir);
-        LOG.info(String.format("Copied instant %s to backup dir %s during rollback at %s", instant, backupDir, instantTime));
+        LOG.info("Copied instant {} to backup dir {} during rollback at {}", instant, backupDir, instantTime);
       } catch (HoodieIOException e) {
         // Ignoring error in backing up
-        LOG.warn("Failed to backup rollback instant: " + e.getMessage());
+        LOG.warn("Failed to backup rollback instant", e);
       }
     }
   }

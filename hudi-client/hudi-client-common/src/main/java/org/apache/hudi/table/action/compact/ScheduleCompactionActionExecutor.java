@@ -179,7 +179,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
       case NUM_COMMITS:
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft();
         if (compactable) {
-          LOG.info(String.format("The delta commits >= %s, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
+          LOG.info("The delta commits >= {}, trigger compaction scheduler.", inlineCompactDeltaCommitMax);
         }
         break;
       case NUM_COMMITS_AFTER_LAST_REQUEST:
@@ -191,29 +191,29 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
         latestDeltaCommitInfo = latestDeltaCommitInfoOption.get();
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft();
         if (compactable) {
-          LOG.info(String.format("The delta commits >= %s since the last compaction request, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
+          LOG.info("The delta commits >= {} since the last compaction request, trigger compaction scheduler.", inlineCompactDeltaCommitMax);
         }
         break;
       case TIME_ELAPSED:
         compactable = inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
         if (compactable) {
-          LOG.info(String.format("The elapsed time >=%ss, trigger compaction scheduler.", inlineCompactDeltaSecondsMax));
+          LOG.info("The elapsed time >={}s, trigger compaction scheduler.", inlineCompactDeltaSecondsMax);
         }
         break;
       case NUM_OR_TIME:
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft()
             || inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
         if (compactable) {
-          LOG.info(String.format("The delta commits >= %s or elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
-              inlineCompactDeltaSecondsMax));
+          LOG.info("The delta commits >= {} or elapsed_time >={}s, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
+              inlineCompactDeltaSecondsMax);
         }
         break;
       case NUM_AND_TIME:
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft()
             && inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
         if (compactable) {
-          LOG.info(String.format("The delta commits >= %s and elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
-              inlineCompactDeltaSecondsMax));
+          LOG.info("The delta commits >= {} and elapsed_time >={}s, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
+              inlineCompactDeltaSecondsMax);
         }
         break;
       default:

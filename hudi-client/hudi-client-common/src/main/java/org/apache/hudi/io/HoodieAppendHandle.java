@@ -467,8 +467,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
     resetWriteCounts();
     assert stat.getRuntimeStats() != null;
-    LOG.info(String.format("AppendHandle for partitionPath %s filePath %s, took %d ms.", partitionPath,
-        stat.getPath(), stat.getRuntimeStats().getTotalUpsertTime()));
+    LOG.info("AppendHandle for partitionPath {} filePath {}, took {} ms.", partitionPath,
+        stat.getPath(), stat.getRuntimeStats().getTotalUpsertTime());
     timer.startTimer();
   }
 

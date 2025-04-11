@@ -212,8 +212,8 @@ public class MarkerDirState implements Serializable {
       return;
     }
 
-    LOG.debug("timeMs=" + System.currentTimeMillis() + " markerDirPath=" + markerDirPath
-        + " numRequests=" + pendingMarkerCreationFutures.size() + " fileIndex=" + fileIndex);
+    LOG.debug("timeMs={} markerDirPath={} numRequests={} fileIndex={}",
+        System.currentTimeMillis(), markerDirPath, pendingMarkerCreationFutures.size(), fileIndex);
     boolean shouldFlushMarkers = false;
     
     synchronized (markerCreationProcessingLock) {
@@ -230,7 +230,7 @@ public class MarkerDirState implements Serializable {
               future.setResult(false);
               continue;
             } catch (Exception e) {
-              LOG.warn("Failed to execute early conflict detection." + e.getMessage());
+              LOG.warn("Failed to execute early conflict detection.", e);
               // When early conflict detection fails to execute, we still allow the marker creation
               // to continue
               addMarkerToMap(fileIndex, markerName);
@@ -362,7 +362,7 @@ public class MarkerDirState implements Serializable {
    * @param markerFileIndex  file index to use.
    */
   private void flushMarkersToFile(int markerFileIndex) {
-    LOG.debug("Write to " + markerDirPath + "/" + MARKERS_FILENAME_PREFIX + markerFileIndex);
+    LOG.debug("Write to {}/{}{}", markerDirPath, MARKERS_FILENAME_PREFIX, markerFileIndex);
     HoodieTimer timer = HoodieTimer.start();
     StoragePath markersFilePath = new StoragePath(
         markerDirPath, MARKERS_FILENAME_PREFIX + markerFileIndex);
@@ -378,6 +378,6 @@ public class MarkerDirState implements Serializable {
       closeQuietly(bufferedWriter);
       closeQuietly(outputStream);
     }
-    LOG.debug(markersFilePath + " written in " + timer.endTimer() + " ms");
+    LOG.debug("{} written in {} ms", markersFilePath, timer.endTimer());
   }
 }

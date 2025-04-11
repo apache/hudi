@@ -114,7 +114,6 @@ public class TestHoodieDeltaStreamerDAGExecution extends HoodieDeltaStreamerTest
 
     @Override
     public void onStageCompleted(SparkListenerStageCompleted stageCompleted) {
-      System.out.println("stage details: " + stageCompleted.stageInfo().details());
       if (stageCompleted.stageInfo().details().contains(eventToTrack)) {
         triggerCount += 1;
       }

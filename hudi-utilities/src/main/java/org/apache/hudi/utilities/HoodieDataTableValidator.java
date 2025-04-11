@@ -350,8 +350,8 @@ public class HoodieDataTableValidator implements Serializable {
         }, hoodieInstants.size()).stream().collect(Collectors.toList());
 
         if (!danglingFiles.isEmpty()) {
-          LOG.error("Data table validation failed due to extra files found for completed commits " + danglingFiles.size());
-          danglingFiles.forEach(entry -> LOG.error("Dangling file: " + entry));
+          LOG.error("Data table validation failed due to extra files found for completed commits {}", danglingFiles.size());
+          danglingFiles.forEach(entry -> LOG.error("Dangling file: {}", entry));
           finalResult = false;
           if (!cfg.ignoreFailed) {
             throw new HoodieValidationException("Data table validation failed due to dangling files " + danglingFiles.size());
@@ -359,7 +359,7 @@ public class HoodieDataTableValidator implements Serializable {
         }
       }
     } catch (Exception e) {
-      LOG.error("Data table validation failed due to " + e.getMessage(), e);
+      LOG.error("Data table validation failed", e);
       if (!cfg.ignoreFailed) {
         throw new HoodieValidationException("Data table validation failed due to " + e.getMessage(), e);
       }

@@ -551,7 +551,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       runFullValidation(table.getConfig().getMetadataConfig(), writeConfig, metadataTableBasePath, engineContext);
     }
 
-    LOG.info("Validation time=" + timer.endTimer());
+    LOG.info("Validation time={}", timer.endTimer());
   }
 
   public void syncTableMetadata(HoodieWriteConfig writeConfig) {

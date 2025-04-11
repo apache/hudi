@@ -246,7 +246,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String partitionPath = "2019/01/01/";
     String fileName = UUID.randomUUID().toString();
     String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1");
-    System.out.println("Log File =" + logFile);
     StoragePath rlPath = new StoragePath(new StoragePath(partitionPath), logFile);
     StoragePath inlineFsPath = HadoopInLineFSUtils.getInlineFilePath(
         new StoragePath(rlPath.toUri()), "file", 0, 100);

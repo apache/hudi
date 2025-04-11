@@ -92,7 +92,6 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
 
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
     HoodieCompactionPlan plan = inputAndPlan.getRight();
-    System.out.println("Plan=" + plan.getOperations());
     assertEquals(LATEST_COMPACTION_METADATA_VERSION, plan.getVersion());
     HoodieCompactionPlan oldPlan = migrator.migrateToVersion(plan, plan.getVersion(), COMPACTION_METADATA_VERSION_1);
     // Check with older version of compaction plan
