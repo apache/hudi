@@ -18,6 +18,8 @@
  */
 
 SET 'table.dml-sync' = 'true';
+SET 'sql-client.execution.result-mode'='TABLEAU';
+SET 'execution.runtime-mode' = 'batch';
 
 CREATE TABLE t1
 (
@@ -29,7 +31,6 @@ CREATE TABLE t1
 ) PARTITIONED BY (`partition`)
 WITH (
   'connector' = 'hudi',
-  'table.type' = 'MERGE_ON_READ',
   'metadata.enabled' = 'false', -- avoid classloader issue, class HFile can not be found
   'path' = '/tmp/hudi-flink-bundle-test'
 );
@@ -38,3 +39,5 @@ WITH (
 INSERT INTO t1
 VALUES ('id1', 'Danny', 23, TIMESTAMP '1970-01-01 00:00:01', 'par1'),
        ('id8', 'Han', 56, TIMESTAMP '1970-01-01 00:00:08', 'par4');
+
+select * from t1;
