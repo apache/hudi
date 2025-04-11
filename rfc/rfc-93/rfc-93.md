@@ -1,5 +1,5 @@
 
-# RFC-92: Pluggable Table Formats in Hudi
+# RFC-93: Pluggable Table Formats in Hudi
 
 ## Proposers
 
