@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
@@ -185,7 +186,7 @@ public class HFileUtils extends FileFormatUtils {
     int keyWidth = useIntegerKey ? (int) Math.ceil(Math.log(records.size())) + 1 : -1;
 
     // Serialize records into bytes
-    Map<String, List<byte[]>> sortedRecordsMap = new TreeMap<>();
+    Map<String, byte[]> sortedRecordsMap = new TreeMap<>();
 
     Iterator<HoodieRecord> itr = records.iterator();
     int id = 0;
@@ -199,27 +200,27 @@ public class HFileUtils extends FileFormatUtils {
       }
 
       final byte[] recordBytes = serializeRecord(record, writerSchema, keyFieldName);
-      // If key exists in the map, append to its list. If not, create a new list.
-      // Get the existing list of recordBytes for the recordKey, or an empty list if it doesn't exist
-      List<byte[]> recordBytesList = sortedRecordsMap.getOrDefault(recordKey, new ArrayList<>());
-      recordBytesList.add(recordBytes);
-      // Put the updated list back into the map
-      sortedRecordsMap.put(recordKey, recordBytesList);
+      if (sortedRecordsMap.containsKey(recordKey)) {
+        LOG.error("Found duplicate record with recordKey: " + recordKey);
+        printRecord("Previous record", sortedRecordsMap.get(recordKey), writerSchema);
+        printRecord("Current record", recordBytes, writerSchema);
+        throw new HoodieException(String.format("Writing multiple records with same key %s not supported for %s",
+            recordKey, this.getClass().getName()));
+      }
+      sortedRecordsMap.put(recordKey, recordBytes);
     }
 
     HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
         .withOutputStream(ostream).withFileContext(context).create();
 
     // Write the records
-    sortedRecordsMap.forEach((recordKey, recordBytesList) -> {
-      for (byte[] recordBytes : recordBytesList) {
+    sortedRecordsMap.forEach((recordKey, recordBytes) -> {
         try {
           KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, recordBytes);
           writer.append(kv);
         } catch (IOException e) {
           throw new HoodieIOException("IOException serializing records", e);
         }
-      }
     });
 
     writer.appendFileInfo(
@@ -230,6 +231,15 @@ public class HFileUtils extends FileFormatUtils {
     ostream.close();
 
     return baos.toByteArray();
+  }
+
+  /**
+   * Print the record in json format
+   */
+  private void printRecord(String msg, byte[] bs, Schema schema) throws IOException {
+    GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema);
+    byte[] json = HoodieAvroUtils.avroToJson(record, true);
+    LOG.error(String.format("%s: %s", msg, new String(json)));
   }
 
   @Override

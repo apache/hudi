@@ -29,7 +29,6 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -297,7 +296,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return partitionedKeys;
   }
 
-  @Override
+  /*@Override
   public Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> keys, String partitionName) {
     if (keys.isEmpty()) {
       return Collections.emptyMap();
@@ -330,7 +329,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
 
     return result;
-  }
+  }*/
 
   /**
    * Lookup list of keys from a single file slice.
@@ -440,7 +439,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return result;
   }
 
-  private Map<String, List<HoodieRecord<HoodieMetadataPayload>>> lookupAllKeysFromFileSlice(String partitionName, List<String> keys, FileSlice fileSlice) {
+  /*private Map<String, List<HoodieRecord<HoodieMetadataPayload>>> lookupAllKeysFromFileSlice(String partitionName, List<String> keys, FileSlice fileSlice) {
     Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers = getOrCreateReaders(partitionName, fileSlice);
     try {
       List<Long> timings = new ArrayList<>();
@@ -462,9 +461,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         closeReader(readers);
       }
     }
-  }
+  }*/
 
-  private Map<String, List<HoodieRecord<HoodieMetadataPayload>>> readAllLogRecords(HoodieMetadataLogRecordReader logRecordReader,
+  /*private Map<String, List<HoodieRecord<HoodieMetadataPayload>>> readAllLogRecords(HoodieMetadataLogRecordReader logRecordReader,
                                                                                    List<String> sortedKeys,
                                                                                    List<Long> timings) {
     HoodieTimer timer = HoodieTimer.start();
@@ -479,9 +478,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     } finally {
       timings.add(timer.endTimer());
     }
-  }
+  }*/
 
-  private Map<String, List<HoodieRecord<HoodieMetadataPayload>>> readFromBaseAndMergeWithAllLogRecords(HoodieSeekingFileReader<?> reader,
+  /*private Map<String, List<HoodieRecord<HoodieMetadataPayload>>> readFromBaseAndMergeWithAllLogRecords(HoodieSeekingFileReader<?> reader,
                                                                                                        List<String> sortedKeys,
                                                                                                        boolean fullKeys,
                                                                                                        Map<String, List<HoodieRecord<HoodieMetadataPayload>>> logRecords,
@@ -533,9 +532,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     timings.add(timer.endTimer());
     return records;
-  }
+  }*/
 
-  private Map<String, List<HoodieRecord<HoodieMetadataPayload>>> fetchBaseFileAllRecordsByKeys(HoodieSeekingFileReader reader,
+  /*private Map<String, List<HoodieRecord<HoodieMetadataPayload>>> fetchBaseFileAllRecordsByKeys(HoodieSeekingFileReader reader,
                                                                                                List<String> sortedKeys,
                                                                                                boolean fullKeys,
                                                                                                String partitionName) throws IOException {
@@ -551,7 +550,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
               composeRecord(data, partitionName));
         })
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
-  }
+  }*/
 
   private HoodieRecord<HoodieMetadataPayload> composeRecord(GenericRecord avroRecord, String partitionName) {
     if (metadataTableConfig.populateMetaFields()) {

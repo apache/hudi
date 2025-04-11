@@ -185,15 +185,6 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     }
   }
 
-  /**
-   * Print the record in json format
-   */
-  private void printRecord(String msg, byte[] bs, Schema schema) throws IOException {
-    GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema);
-    byte[] json = HoodieAvroUtils.avroToJson(record, true);
-    LOG.error(String.format("%s: %s", msg, new String(json)));
-  }
-
   private HoodieConfig getHFileReaderConfig(boolean useNativeHFileReader) {
     HoodieConfig config = new HoodieConfig();
     config.setValue(

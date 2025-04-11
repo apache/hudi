@@ -18,6 +18,9 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -112,24 +115,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
       return sortedKeys.stream()
           .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
           .filter(Objects::nonNull)
-          .collect(Collectors.toMap(HoodieRecord::getRecordKey, r -> r, (r1, r2) -> r2));
-    }
-  }
-
-  public Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> sortedKeys) {
-    if (sortedKeys.isEmpty()) {
-      return Collections.emptyMap();
-    }
-
-    // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
-    //       materialized state, to make sure there's no concurrent access
-    synchronized (this) {
-      logRecordScanner.scanByFullKeys(sortedKeys);
-      Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
-      return sortedKeys.stream()
-          .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
-          .filter(Objects::nonNull)
-          .collect(Collectors.groupingBy(HoodieRecord::getRecordKey));
+          .collect(Collectors.toMap(HoodieRecord::getRecordKey, r -> r));
     }
   }
 

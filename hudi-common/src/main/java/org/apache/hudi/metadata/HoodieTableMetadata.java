@@ -189,6 +189,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   /**
    * Fetch all files for given partition paths.
+   *
    * NOTE: Absolute partition paths are expected here
    */
   Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths)
@@ -255,9 +256,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   /**
    * Returns the location of record keys which are found in the record index.
-   * Records that are not found are ignored and won't be part of map object that is returned.
+   * Records that are not found are ignored and wont be part of map object that is returned.
    */
-  Map<String, List<HoodieRecordGlobalLocation>> readRecordIndex(List<String> recordKeys);
+  Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys);
 
   /**
    * Returns the location of records which the provided secondary keys maps to.
@@ -276,15 +277,6 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
                                                                           String partitionName,
                                                                           boolean shouldLoadInMemory);
-
-  /**
-   * Fetch records for given keys. A key could have multiple records associated with it. This method returns all the records for given keys.
-   *
-   * @param keys          list of key for which interested records are looked up for.
-   * @param partitionName partition name in metadata table where the records are looked up for.
-   * @return Map of key to {@link List} of {@link HoodieRecord}s with records matching the passed in keys.
-   */
-  Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> keys, String partitionName);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.
