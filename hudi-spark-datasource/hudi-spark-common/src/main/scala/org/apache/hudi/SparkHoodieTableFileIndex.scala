@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.BaseHoodieTableFileIndex.{NoopCache, PartitionPath}
+import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
@@ -529,7 +529,7 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
     } else {
       LOG.warn("Use no-op file status cache instead because the FileStatusCache APIs at runtime "
         + "are different from open-source Spark")
-      new NoopCache
+      new BaseHoodieTableFileIndex.NoopCache
     }
   }
 
