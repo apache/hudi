@@ -40,27 +40,24 @@ class TestStorageBasedLockConfig {
         .fromProperties(props)
         .build();
 
-    assertEquals("", config.getLocksLocation());
-    assertEquals(5 * 60, config.getLockValidityTimeout(), "Default lock validity should be 5 minutes");
-    assertEquals(30, config.getHeartbeatPoll(), "Default heartbeat poll time should be 30 seconds");
+    assertEquals(5 * 60, config.getValiditySeconds(), "Default lock validity should be 5 minutes");
+    assertEquals(30, config.getHeartbeatPollSeconds(), "Default heartbeat poll time should be 30 seconds");
   }
 
   @Test
   void testCustomValues() {
     // Testing that custom values which differ from defaults can be read properly
     TypedProperties props = new TypedProperties();
-    props.setProperty(StorageBasedLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/path/locks");
-    props.setProperty(StorageBasedLockConfig.LOCK_VALIDITY_TIMEOUT.key(), "120");
-    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL.key(), "10");
+    props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "120");
+    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "10");
     props.setProperty(BASE_PATH.key(), "/hudi/table/basepath");
 
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder()
         .fromProperties(props)
         .build();
 
-    assertEquals("s3://bucket/path/locks", config.getLocksLocation());
-    assertEquals(120, config.getLockValidityTimeout());
-    assertEquals(10, config.getHeartbeatPoll());
+    assertEquals(120, config.getValiditySeconds());
+    assertEquals(10, config.getHeartbeatPollSeconds());
     assertEquals("/hudi/table/basepath", config.getHudiTableBasePath());
   }
 
@@ -68,26 +65,13 @@ class TestStorageBasedLockConfig {
   void testBasePathPropertiesValidation() {
     // Tests that validations around the base path are present.
     TypedProperties props = new TypedProperties();
-    props.setProperty(StorageBasedLockConfig.LOCK_VALIDITY_TIMEOUT.key(), "120000");
+    props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "120");
     StorageBasedLockConfig.Builder propsBuilder = new StorageBasedLockConfig.Builder();
 
     // Missing base path
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
         () -> propsBuilder.fromProperties(props));
     assertTrue(exception.getMessage().contains(BASE_PATH.key()));
-    props.setProperty(BASE_PATH.key(), "s3://bucket/path/locks");
-    // Ensure we cannot write to the same lock location as the base path.
-    props.setProperty(StorageBasedLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/path/locks");
-    assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
-    // Ensure we cannot write to the metadata directory.
-    props.setProperty(StorageBasedLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/path/locks/.hoodie/.metadata");
-    assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
-    // Ensure we cannot write to a partition.
-    props.setProperty(StorageBasedLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/path/locks/partition");
-    assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
-    // Ensure we do not throw an exception.
-    props.setProperty(StorageBasedLockConfig.LOCK_INTERNAL_STORAGE_LOCATION.key(), "s3://bucket/other-path");
-    propsBuilder.fromProperties(props);
   }
 
   @Test
@@ -95,20 +79,20 @@ class TestStorageBasedLockConfig {
     // Ensure that validations which restrict the time-based inputs are working.
     TypedProperties props = new TypedProperties();
     props.setProperty(BASE_PATH.key(), "/hudi/table/basepath");
-    props.setProperty(StorageBasedLockConfig.LOCK_VALIDITY_TIMEOUT.key(), "5");
-    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL.key(), "3");
+    props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "5");
+    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "3");
     StorageBasedLockConfig.Builder propsBuilder = new StorageBasedLockConfig.Builder();
 
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
         () -> propsBuilder.fromProperties(props));
-    assertTrue(exception.getMessage().contains(StorageBasedLockConfig.LOCK_VALIDITY_TIMEOUT.key()));
-    props.setProperty(StorageBasedLockConfig.LOCK_VALIDITY_TIMEOUT.key(), "4");
-    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL.key(), "1");
+    assertTrue(exception.getMessage().contains(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key()));
+    props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "4");
+    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
     exception = assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
-    assertTrue(exception.getMessage().contains(StorageBasedLockConfig.LOCK_VALIDITY_TIMEOUT.key()));
-    props.setProperty(StorageBasedLockConfig.LOCK_VALIDITY_TIMEOUT.key(), "5");
-    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL.key(), "0");
+    assertTrue(exception.getMessage().contains(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key()));
+    props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "5");
+    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "0");
     exception = assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
-    assertTrue(exception.getMessage().contains(StorageBasedLockConfig.HEARTBEAT_POLL.key()));
+    assertTrue(exception.getMessage().contains(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key()));
   }
 }
