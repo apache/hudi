@@ -23,13 +23,9 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 
-import org.apache.hadoop.fs.Path;
-
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
-import static org.apache.hudi.client.transaction.lock.StorageBasedLockProvider.DEFAULT_TABLE_LOCK_FILE_NAME;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NAME;
 
 public class StorageBasedLockConfig extends HoodieConfig {
   private static final String SINCE_VERSION_1_0_2 = "1.0.2";

@@ -129,8 +129,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
             LOGGER);
   }
 
-  private static Functions.Function3<String, String, TypedProperties, StorageLock> tryLoadLockService()
-  {
+  private static Functions.Function3<String, String, TypedProperties, StorageLock> tryLoadLockService() {
     return (ownerId, lockFilePath, lockConfig) -> {
       try {
         return (StorageLock) ReflectionUtils.loadClass(
