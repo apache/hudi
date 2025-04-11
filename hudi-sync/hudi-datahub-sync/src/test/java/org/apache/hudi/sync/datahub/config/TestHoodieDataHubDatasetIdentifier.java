@@ -30,6 +30,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATASET_ENV;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -143,5 +144,57 @@ class TestHoodieDataHubDatasetIdentifier {
     assertThrows(IllegalArgumentException.class, () -> {
       new HoodieDataHubDatasetIdentifier(props);
     });
+  }
+
+  @Test
+  @DisplayName("Test constructor with platform instance")
+  void testConstructorWithPlatformInstance() {
+    String expectedDatabaseUrnWithPlatformInstance = "urn:li:container:ee430d6d2a1fb6336b0e972809e41e55";
+    String expectedDatabaseUrnWithEnvAsInstance = "urn:li:container:ec7465a48d93b5c5e57eca1f44febed5";
+
+    // Given both platform instance and env
+    props.setProperty(META_SYNC_DATABASE_NAME.key(), "test_db");
+    props.setProperty(META_SYNC_TABLE_NAME.key(), "test_table");
+    props.setProperty(META_SYNC_DATAHUB_DATAPLATFORM_NAME.key(), "custom_platform");
+    props.setProperty(META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME.key(), "custom_instance");
+    props.setProperty(META_SYNC_DATAHUB_DATASET_ENV.key(), "PROD");
+
+    // When
+    HoodieDataHubDatasetIdentifier identifier = new HoodieDataHubDatasetIdentifier(props);
+
+    // Then
+    assertEquals("custom_platform", identifier.getDataPlatform());
+    assertEquals("urn:li:dataPlatform:custom_platform", identifier.getDataPlatformUrn().toString());
+    assertEquals("custom_instance", identifier.getDataPlatformInstance().get());
+    assertEquals("urn:li:dataPlatformInstance:(urn:li:dataPlatform:custom_platform,custom_instance)", identifier.getDataPlatformInstanceUrn().get().toString());
+    assertEquals(expectedDatabaseUrnWithPlatformInstance, identifier.getDatabaseUrn().toString());
+
+    // Given platform instance only
+    props.remove(META_SYNC_DATAHUB_DATASET_ENV.key());
+
+    // When
+    identifier = new HoodieDataHubDatasetIdentifier(props);
+
+    // Then
+    assertEquals("custom_platform", identifier.getDataPlatform());
+    assertEquals("urn:li:dataPlatform:custom_platform", identifier.getDataPlatformUrn().toString());
+    assertEquals("custom_instance", identifier.getDataPlatformInstance().get());
+    assertEquals("urn:li:dataPlatformInstance:(urn:li:dataPlatform:custom_platform,custom_instance)", identifier.getDataPlatformInstanceUrn().get().toString());
+    assertEquals(expectedDatabaseUrnWithPlatformInstance, identifier.getDatabaseUrn().toString());
+
+    // Given env only
+    props.remove(META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME.key());
+    props.setProperty(META_SYNC_DATAHUB_DATASET_ENV.key(), "PROD");
+
+    // When
+    identifier = new HoodieDataHubDatasetIdentifier(props);
+
+    // Then
+    assertEquals("custom_platform", identifier.getDataPlatform());
+    assertEquals("urn:li:dataPlatform:custom_platform", identifier.getDataPlatformUrn().toString());
+    assertTrue(identifier.getDataPlatformInstance().isEmpty());
+    assertTrue(identifier.getDataPlatformInstanceUrn().isEmpty());
+    assertEquals(expectedDatabaseUrnWithEnvAsInstance, identifier.getDatabaseUrn().toString());
+
   }
 }

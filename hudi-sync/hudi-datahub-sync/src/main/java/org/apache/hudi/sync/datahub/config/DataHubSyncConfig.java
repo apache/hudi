@@ -78,6 +78,13 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .withDocumentation("String used to represent Hudi when creating its corresponding DataPlatform entity "
           + "within Datahub");
 
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME = ConfigProperty
+      .key("hoodie.meta.sync.datahub.dataplatform_instance.name")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("String used to represent Hudi instance when emitting Container and Dataset entities "
+          + "with the corresponding DataPlatformInstance, only if given.");
+
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATASET_ENV = ConfigProperty
       .key("hoodie.meta.sync.datahub.dataset.env")
       .defaultValue(DEFAULT_DATAHUB_ENV.name())
@@ -174,6 +181,10 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
         + "corresponding DataPlatform entity within Datahub")
     public String dataPlatformName;
 
+    @Parameter(names = {"--data-platform-instance-name"}, description = "String used to represent Hudi instance when emitting Container and Dataset entities "
+        + "with the corresponding DataPlatformInstance, only if given.")
+    public String dataPlatformInstanceName;
+
     @Parameter(names = {"--dataset-env"}, description = "Which Datahub Environment to use when pushing entities")
     public String datasetEnv;
 
@@ -196,6 +207,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_TOKEN.key(), emitterToken);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), emitterSupplierClass);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATAPLATFORM_NAME.key(), dataPlatformName);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME.key(), dataPlatformInstanceName);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATASET_ENV.key(), datasetEnv);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DOMAIN_IDENTIFIER.key(), domainIdentifier);
       // We want the default behavior of DataHubSync Tool when run as command line to NOT suppress exceptions
