@@ -18,6 +18,7 @@
 
 package org.apache.hudi.spark3.internal;
 
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -45,10 +46,11 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
   private final boolean arePartitionRecordsSorted;
   private final Map<String, String> properties;
   private final boolean populateMetaFields;
+  private final WriteOperationType writeOperationType;
 
   public HoodieDataSourceInternalTable(String instantTime, HoodieWriteConfig config,
                                        StructType schema, SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties,
-                                       boolean populateMetaFields, boolean arePartitionRecordsSorted) {
+                                       boolean populateMetaFields, boolean arePartitionRecordsSorted, WriteOperationType writeOperationType) {
     this.instantTime = instantTime;
     this.writeConfig = config;
     this.structType = schema;
@@ -57,6 +59,7 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
     this.properties = properties;
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
+    this.writeOperationType = writeOperationType;
   }
 
   @Override
@@ -82,6 +85,6 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
   @Override
   public WriteBuilder newWriteBuilder(LogicalWriteInfo logicalWriteInfo) {
     return new HoodieDataSourceInternalBatchWriteBuilder(instantTime, writeConfig, structType, jss,
-        storageConf, properties, populateMetaFields, arePartitionRecordsSorted);
+        storageConf, properties, populateMetaFields, arePartitionRecordsSorted, writeOperationType);
   }
 }
