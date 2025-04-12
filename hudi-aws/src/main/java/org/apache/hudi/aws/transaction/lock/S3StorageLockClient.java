@@ -236,8 +236,8 @@ public class S3StorageLockClient implements StorageLockClient {
           // Close existing client and create another.
           s3Client.close();
           return S3Client.builder().credentialsProvider(
-                          HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props)).
-                  region(Region.of(regionString)).build();
+                          HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
+                          .region(Region.of(regionString)).build();
         }
       }
 
