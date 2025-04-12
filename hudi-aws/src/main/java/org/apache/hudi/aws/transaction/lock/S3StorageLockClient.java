@@ -56,7 +56,10 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Duration;
 import java.util.Properties;
+
+import static org.apache.hudi.config.StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS;
 
 /**
  * S3-based distributed lock client using ETag checks (AWS SDK v2).
@@ -226,23 +229,41 @@ public class S3StorageLockClient implements StorageLockClient {
         requiredFallbackRegion = true;
       }
 
-      S3Client s3Client = S3Client.builder().credentialsProvider(
-              HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props)).region(region).build();
+      // Set all request timeouts to be 1/5 of the default validity.
+      // Each call to acquire a lock requires 2 requests.
+      // Each renewal requires 1 request.
+      long defaultValiditySeconds = VALIDITY_TIMEOUT_SECONDS.defaultValue();
+      if (props.contains(VALIDITY_TIMEOUT_SECONDS.key())) {
+        defaultValiditySeconds = (long) props.get(VALIDITY_TIMEOUT_SECONDS.key());
+      }
+      long configuredS3TimeoutSeconds = defaultValiditySeconds / 5;
+      S3Client s3Client = createS3Client(region, configuredS3TimeoutSeconds, props);
       if (requiredFallbackRegion) {
         GetBucketLocationResponse bucketLocationResponse = s3Client.getBucketLocation(
                 GetBucketLocationRequest.builder().bucket(bucketName).build());
+        // This is null when the region is US_EAST_1, so we do not need to worry about duplicate logic.
         String regionString = bucketLocationResponse.locationConstraintAsString();
         if (!StringUtils.isNullOrEmpty(regionString)) {
           // Close existing client and create another.
           s3Client.close();
-          return S3Client.builder().credentialsProvider(
-                          HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
-                          .region(Region.of(regionString)).build();
+          return createS3Client(
+                  Region.of(regionString),
+                  configuredS3TimeoutSeconds,
+                  props);
         }
       }
 
       return s3Client;
     };
+  }
+
+  private static S3Client createS3Client(Region region, long timeout, Properties props) {
+    // Set the timeout, credentials, and region
+    return S3Client.builder()
+            .overrideConfiguration(
+                    b -> b.apiCallTimeout(Duration.ofSeconds(timeout)))
+            .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
+            .region(region).build();
   }
 
   @Override

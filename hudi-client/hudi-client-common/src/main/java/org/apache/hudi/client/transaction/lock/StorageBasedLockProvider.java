@@ -122,11 +122,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
             UUID.randomUUID().toString(),
             lockConfiguration.getConfig(),
             LockProviderHeartbeatManager::new,
-            getStorageLockService(),
+            getStorageLockClient(),
             LOGGER);
   }
 
-  private static Functions.Function3<String, String, TypedProperties, StorageLockClient> getStorageLockService() {
+  private static Functions.Function3<String, String, TypedProperties, StorageLockClient> getStorageLockClient() {
     return (ownerId, lockFilePath, lockConfig) -> {
       try {
         return (StorageLockClient) ReflectionUtils.loadClass(
@@ -153,7 +153,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       String ownerId,
       TypedProperties properties,
       Functions.Function3<String, Long, Supplier<Boolean>, HeartbeatManager> heartbeatManagerLoader,
-      Functions.Function3<String, String, TypedProperties, StorageLockClient> storageLockSupplier,
+      Functions.Function3<String, String, TypedProperties, StorageLockClient> storageLockClientLoader,
       Logger logger) {
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder().fromProperties(properties).build();
     long heartbeatPollSeconds = config.getHeartbeatPollSeconds();
@@ -166,7 +166,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
             StoragePath.SEPARATOR,
             DEFAULT_TABLE_LOCK_FILE_NAME);
     this.heartbeatManager = heartbeatManagerLoader.apply(ownerId, heartbeatPollSeconds * 1000, this::renewLock);
-    this.storageLockClient = storageLockSupplier.apply(ownerId, lockFilePath, properties);
+    this.storageLockClient = storageLockClientLoader.apply(ownerId, lockFilePath, properties);
     this.ownerId = ownerId;
     this.logger = logger;
     shutdownThread = new Thread(() -> shutdown(true));
