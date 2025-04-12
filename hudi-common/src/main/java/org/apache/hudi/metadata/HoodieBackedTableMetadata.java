@@ -65,6 +65,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -270,14 +271,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     } else {
       // Parallel lookup for large sized partitions with many file slices
       // Partition the keys by the file slice which contains it
-      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keys, numFileSlices);
+      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keys, numFileSlices, partitionName);
       result = new HashMap<>(keys.size());
       getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
       getEngineContext().map(partitionedKeys, keysList -> {
         if (keysList.isEmpty()) {
           return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
         }
-        int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
+        int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices, partitionName);
         return lookupKeysFromFileSlice(partitionName, keysList, partitionFileSlices.get(shardIndex));
       }, partitionedKeys.size()).forEach(result::putAll);
     }
@@ -285,13 +286,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return result;
   }
 
-  private static ArrayList<ArrayList<String>> partitionKeysByFileSlices(List<String> keys, int numFileSlices) {
+  private static ArrayList<ArrayList<String>> partitionKeysByFileSlices(List<String> keys, int numFileSlices, String partitionName) {
     ArrayList<ArrayList<String>> partitionedKeys = new ArrayList<>(numFileSlices);
     for (int i = 0; i < numFileSlices; ++i) {
       partitionedKeys.add(new ArrayList<>());
     }
     keys.forEach(key -> {
-      int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, numFileSlices);
+      int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, numFileSlices, partitionName);
       partitionedKeys.get(shardIndex).add(key);
     });
     return partitionedKeys;
@@ -317,14 +318,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     } else {
       // Parallel lookup for large sized partitions with many file slices
       // Partition the keys by the file slice which contains it
-      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keys, numFileSlices);
+      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keys, numFileSlices, partitionName);
       result = new HashMap<>(keys.size());
       getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
       getEngineContext().map(partitionedKeys, keysList -> {
         if (keysList.isEmpty()) {
           return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
         }
-        int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
+        int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices, partitionName);
         return lookupAllKeysFromFileSlice(partitionName, keysList, partitionFileSlices.get(shardIndex));
       }, partitionedKeys.size()).forEach(map -> result.putAll((Map<String, List<HoodieRecord<HoodieMetadataPayload>>>) map));
     }
@@ -824,7 +825,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return Collections.emptyMap();
     }
 
-    return getRecordsByKeyPrefixes(keys, partitionName, false).map(
+    return getAllRecordsByKeys(keys, partitionName).values().stream().flatMap(Collection::stream)
+        .map(
             record -> {
               if (!record.getData().isDeleted()) {
                 String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
@@ -834,8 +836,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
               return null;
             })
         .filter(Objects::nonNull)
-        .collectAsList()
-        .stream()
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toSet())));
   }
 }
