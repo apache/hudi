@@ -426,7 +426,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           .map(record -> {
             GenericRecord data = (GenericRecord) record.getData();
             return Pair.of(
-                (String) data.get(HoodieMetadataPayload.KEY_FIELD_INDEX),
+                (String) (data).get(HoodieMetadataPayload.KEY_FIELD_NAME),
                 composeRecord(data, partitionName));
           })
           .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
@@ -541,14 +541,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .map(record -> {
           GenericRecord data = (GenericRecord) record.getData();
           return Pair.of(
-              (String) data.get(HoodieMetadataPayload.KEY_FIELD_INDEX),
+              (String) (data).get(HoodieMetadataPayload.KEY_FIELD_NAME),
               composeRecord(data, partitionName));
         })
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
   }
 
   private HoodieRecord<HoodieMetadataPayload> composeRecord(GenericRecord avroRecord, String partitionName) {
-    return new HoodieAvroRecord<>(new HoodieKey(avroRecord.get(HoodieMetadataPayload.KEY_FIELD_INDEX).toString(), partitionName),
+    return new HoodieAvroRecord<>(new HoodieKey(avroRecord.get(HoodieMetadataPayload.KEY_FIELD_NAME).toString(), partitionName),
         new HoodieMetadataPayload(avroRecord, 0L), null);
   }
 
