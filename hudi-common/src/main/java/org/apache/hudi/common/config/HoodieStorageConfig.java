@@ -245,6 +245,14 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "and it is loaded at runtime. This is only required when trying to "
           + "override the existing write context when `hoodie.datasource.write.row.writer.enable=true`.");
 
+  public static final ConfigProperty<String> HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS = ConfigProperty
+      .key("hoodie.parquet.flink.rowdata.write.support.class")
+      .defaultValue("org.apache.hudi.io.storage.row.HoodieRowDataParquetWriteSupport")
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Provided write support class should extend HoodieRowDataParquetWriteSupport class "
+          + "and it is loaded at runtime. This is only required when trying to override the existing write support.");
+
   public static final ConfigProperty<String> HOODIE_STORAGE_CLASS = ConfigProperty
       .key("hoodie.storage.class")
       .defaultValue("org.apache.hudi.storage.hadoop.HoodieHadoopStorage")
@@ -498,6 +506,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder withAvroWriteSupport(String avroWriteSupportClassName) {
       storageConfig.setValue(HOODIE_AVRO_WRITE_SUPPORT_CLASS, avroWriteSupportClassName);
+      return this;
+    }
+
+    public Builder withRowDataWriteSupport(String rowDataWriteSupportClassName) {
+      storageConfig.setValue(HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS, rowDataWriteSupportClassName);
       return this;
     }
 

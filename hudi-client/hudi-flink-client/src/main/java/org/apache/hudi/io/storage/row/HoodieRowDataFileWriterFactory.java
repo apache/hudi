@@ -23,6 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
@@ -115,8 +116,12 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
         writeConfig.getBloomFilterFPP(),
         writeConfig.getDynamicBloomFilterMaxNumEntries(),
         writeConfig.getBloomFilterType());
-    HoodieRowDataParquetWriteSupport writeSupport =
-        new HoodieRowDataParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), rowType, filter);
+
+    HoodieRowDataParquetWriteSupport writeSupport = (HoodieRowDataParquetWriteSupport) ReflectionUtils.loadClass(
+        writeConfig.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS),
+        new Class<?>[] {Configuration.class, RowType.class, BloomFilter.class},
+        (Configuration) table.getStorageConf().unwrap(), rowType, filter);
+
     return new HoodieRowDataParquetWriter(
         convertToStoragePath(path),
         new HoodieParquetConfig<>(
