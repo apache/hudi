@@ -23,9 +23,10 @@ package org.apache.hudi.aws.transaction.lock;
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
 import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.LockUpdateResult;
+import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
 import org.apache.hudi.client.transaction.lock.models.StorageLockData;
 import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -41,6 +42,8 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.regions.providers.DefaultAwsRegionProviderChain;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetBucketLocationRequest;
+import software.amazon.awssdk.services.s3.model.GetBucketLocationResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
@@ -54,7 +57,6 @@ import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Properties;
-import java.util.function.Supplier;
 
 /**
  * S3-based distributed lock client using ETag checks (AWS SDK v2).
@@ -64,7 +66,6 @@ import java.util.function.Supplier;
 public class S3StorageLockClient implements StorageLockClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(S3StorageLockClient.class);
-  private static final long WAIT_TIME_FOR_RETRY_MS = 1000L;
   private static final int PRECONDITION_FAILURE_ERROR_CODE = 412;
   private static final int NOT_FOUND_ERROR_CODE = 404;
   private static final int CONDITIONAL_REQUEST_CONFLICT_ERROR_CODE = 409;
@@ -85,18 +86,18 @@ public class S3StorageLockClient implements StorageLockClient {
    * @param props       The properties for the lock config, can be used to customize client.
    */
   public S3StorageLockClient(String ownerId, String lockFileUri, Properties props) {
-    this(ownerId, lockFileUri, createDefaultS3Client(props), LOG);
+    this(ownerId, lockFileUri, props, createDefaultS3Client(), LOG);
   }
 
   @VisibleForTesting
-  S3StorageLockClient(String ownerId, String lockFileUri, S3Client s3Client, Logger logger) {
+  S3StorageLockClient(String ownerId, String lockFileUri, Properties props, Functions.Function2<String, Properties, S3Client> s3ClientSupplier, Logger logger) {
     try {
-      this.s3Client = s3Client;
       // This logic can likely be extended to other lock client implementations.
       // Consider creating base class with utilities, incl error handling.
       URI uri = new URI(lockFileUri);
       this.bucketName = uri.getHost();
       this.lockFilePath = uri.getPath().replaceFirst("/", "");
+      this.s3Client = s3ClientSupplier.apply(bucketName, props);
 
       if (StringUtils.isNullOrEmpty(this.bucketName)) {
         throw new IllegalArgumentException("LockFileUri does not contain a valid bucket name.");
@@ -112,46 +113,56 @@ public class S3StorageLockClient implements StorageLockClient {
   }
 
   @Override
-  public Pair<LockUpdateResult, StorageLockFile> tryCreateOrUpdateLockFile(Supplier<StorageLockData> newLockDataSupplier, StorageLockFile previousLockFile,
-      boolean isCreate, long maxAttempts) {
-    String currentEtag = (previousLockFile != null) ? previousLockFile.getVersionId() : null;
-    maxAttempts = isCreate ? 1 : maxAttempts;
-    long attempts = 0;
-
-    while (attempts < maxAttempts) { // check for closed.
-      attempts++;
-      try {
-        StorageLockFile updated =
-            createOrUpdateLockFileInternal(newLockDataSupplier.get(), currentEtag);
-        return Pair.of(LockUpdateResult.SUCCESS, updated);
-      } catch (S3Exception e) {
-        if (isCreate) {
-          // create has to return a value
-          return handleS3ExceptionOnCreate(e);
-        } else {
-          // where as, update can sometime may not have any return value. On which case we will move onto to next retry attempt.
-          Option<Pair<LockUpdateResult, StorageLockFile>> result = handleS3ExceptionOnUpdate(e);
-          if (result.isPresent()) {
-            return result.get();
-          }
-        }
-      } catch (AwsServiceException | SdkClientException e) {
-        logger.warn("OwnerId: {}, Unexpected SDK error while writing lock file: {}", ownerId, lockFilePath, e);
-        // todo. do we want to throw here for create ?
+  public Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile() {
+    try (ResponseInputStream<GetObjectResponse> in = s3Client.getObject(
+            GetObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(lockFilePath)
+                    .build())) {
+      String eTag = in.response().eTag();
+      return Pair.of(LockGetResult.SUCCESS, Option.of(StorageLockFile.createFromStream(in, eTag)));
+    } catch (S3Exception e) {
+      int status = e.statusCode();
+      // Default to unknown error
+      LockGetResult result = LockGetResult.UNKNOWN_ERROR;
+      if (status == NOT_FOUND_ERROR_CODE) {
+        logger.info("OwnerId: {}, Object not found: {}", ownerId, lockFilePath);
+        result = LockGetResult.NOT_EXISTS;
+      } else if (status == CONDITIONAL_REQUEST_CONFLICT_ERROR_CODE) {
+        logger.info("OwnerId: {}, Conflicting operation has occurred: {}", ownerId, lockFilePath);
+      } else if (status == RATE_LIMIT_ERROR_CODE) {
+        logger.warn("OwnerId: {}, Rate limit exceeded: {}", ownerId, lockFilePath);
+      } else if (status >= INTERNAL_SERVER_ERROR_CODE_MIN) {
+        logger.warn("OwnerId: {}, S3 internal server error: {}", ownerId, lockFilePath, e);
+      } else {
+        throw e;
       }
-      // proceed to next round only if we are within threshold
-      if (attempts < maxAttempts) {
-        try {
-          Thread.sleep(WAIT_TIME_FOR_RETRY_MS);
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
-          break;
-        }
+      return Pair.of(result, Option.empty());
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed reading lock file from S3: " + lockFilePath, e);
+    }
+  }
+
+  @Override
+  public Pair<LockUpsertResult, Option<StorageLockFile>> tryUpsertLockFile(StorageLockData newLockData, Option<StorageLockFile> previousLockFile) {
+    boolean isCreate = previousLockFile.isEmpty();
+    String currentEtag = isCreate ? null : previousLockFile.get().getVersionId();
+    LockUpsertResult result = LockUpsertResult.UNKNOWN_ERROR;
+    try {
+      StorageLockFile updated = createOrUpdateLockFileInternal(newLockData, currentEtag);
+      return Pair.of(LockUpsertResult.SUCCESS, Option.of(updated));
+    } catch (S3Exception e) {
+      result = handleUpsertS3Exception(e);
+    } catch (AwsServiceException | SdkClientException e) {
+      logger.warn("OwnerId: {}, Unexpected SDK error while writing lock file: {}", ownerId, lockFilePath, e);
+      if (isCreate) {
+        // We should always throw errors early when we are creating the lock file.
+        // This is likely indicative of a larger issue that should bubble up sooner.
+        throw e;
       }
     }
 
-    logger.warn("OwnerId: {}, {} for lockfile {} failed after {} attempts.", ownerId, isCreate ? "Create" : "Update", lockFilePath, attempts);
-    return Pair.of(LockUpdateResult.UNKNOWN_ERROR, null);
+    return Pair.of(result, Option.empty());
   }
 
   /**
@@ -185,79 +196,53 @@ public class S3StorageLockClient implements StorageLockClient {
     return new StorageLockFile(lockData, newEtag);
   }
 
-  private Pair<LockUpdateResult, StorageLockFile> handleS3ExceptionOnCreate(S3Exception e) {
-    int status = e.statusCode();
-    if (status == PRECONDITION_FAILURE_ERROR_CODE || status == CONDITIONAL_REQUEST_CONFLICT_ERROR_CODE) {
-      logger.warn("OwnerId: {}, Lockfile modified by another process: {}", ownerId, lockFilePath);
-      return Pair.of(LockUpdateResult.ACQUIRED_BY_OTHERS, null);
-    } else if (status == RATE_LIMIT_ERROR_CODE) {
-      logger.warn("OwnerId: {}, Rate limit exceeded for: {}", ownerId, lockFilePath);
-      return Pair.of(LockUpdateResult.UNKNOWN_ERROR, null);
-    } else if (status >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-      logger.warn("OwnerId: {}, S3 internal server error for: {}", ownerId, lockFilePath, e);
-      return Pair.of(LockUpdateResult.UNKNOWN_ERROR, null);
-    } else {
-      throw e;
-    }
-  }
-
-  private Option<Pair<LockUpdateResult, StorageLockFile>> handleS3ExceptionOnUpdate(S3Exception e) {
+  private LockUpsertResult handleUpsertS3Exception(S3Exception e) {
     int status = e.statusCode();
     if (status == PRECONDITION_FAILURE_ERROR_CODE) {
       logger.warn("OwnerId: {}, Lockfile modified by another process: {}", ownerId, lockFilePath);
-      return Option.of(Pair.of(LockUpdateResult.ACQUIRED_BY_OTHERS, null));
+      return LockUpsertResult.ACQUIRED_BY_OTHERS;
+    } else if (status == CONDITIONAL_REQUEST_CONFLICT_ERROR_CODE) {
+      logger.warn("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFilePath);
     } else if (status == RATE_LIMIT_ERROR_CODE) {
       logger.warn("OwnerId: {}, Rate limit exceeded for: {}", ownerId, lockFilePath);
     } else if (status >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-      logger.warn("OwnerId: {}, S3 internal server error for: {}", ownerId, lockFilePath, e);
+      logger.warn("OwnerId: {}, internal server error for: {}", ownerId, lockFilePath, e);
     } else {
-      logger.warn("OwnerId: {}, Error writing lock file: {}", ownerId, lockFilePath, e);
+      logger.error("OwnerId: {}, Error writing lock file: {}", ownerId, lockFilePath, e);
     }
-    return Option.empty();
+
+    return LockUpsertResult.UNKNOWN_ERROR;
   }
 
-  @Override
-  public Pair<LockGetResult, StorageLockFile> readCurrentLockFile() {
-    try (ResponseInputStream<GetObjectResponse> in = s3Client.getObject(
-        GetObjectRequest.builder()
-            .bucket(bucketName)
-            .key(lockFilePath)
-            .build())) {
-      String eTag = in.response().eTag();
-      return Pair.of(LockGetResult.SUCCESS, StorageLockFile.createFromStream(in, eTag));
-    } catch (S3Exception e) {
-      int status = e.statusCode();
-      if (status == NOT_FOUND_ERROR_CODE) {
-        logger.info("OwnerId: {}, Object not found: {}", ownerId, lockFilePath);
-        return Pair.of(LockGetResult.NOT_EXISTS, null);
-      } else if (status == CONDITIONAL_REQUEST_CONFLICT_ERROR_CODE) {
-        logger.info("OwnerId: {}, Conflicting operation has occurred: {}", ownerId, lockFilePath);
-        return Pair.of(LockGetResult.UNKNOWN_ERROR, null);
-      } else if (status == RATE_LIMIT_ERROR_CODE) {
-        logger.warn("OwnerId: {}, Rate limit exceeded: {}", ownerId, lockFilePath);
-        return Pair.of(LockGetResult.UNKNOWN_ERROR, null);
-      } else if (status >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-        logger.warn("OwnerId: {}, S3 internal server error: {}", ownerId, lockFilePath, e);
-        return Pair.of(LockGetResult.UNKNOWN_ERROR, null);
-      } else {
-        throw e;
+  private static Functions.Function2<String, Properties, S3Client> createDefaultS3Client() {
+    return (bucketName, props) -> {
+      Region region;
+      boolean requiredFallbackRegion = false;
+      try {
+        region = DefaultAwsRegionProviderChain.builder().build().getRegion();
+      } catch (SdkClientException e) {
+        // Fallback to us-east-1 if no region is found
+        region = Region.US_EAST_1;
+        requiredFallbackRegion = true;
       }
-    } catch (IOException e) {
-      throw new UncheckedIOException("Failed reading lock file from S3: " + lockFilePath, e);
-    }
-  }
 
-  private static S3Client createDefaultS3Client(Properties props) {
-    Region region;
-    try {
-      // to fix.
-      // is it not possible to deduce the region based on the s3 uri?
-      region = DefaultAwsRegionProviderChain.builder().build().getRegion();
-    } catch (SdkClientException e) {
-      // Fallback to us-east-1 if no region is found
-      region = Region.US_EAST_1;
-    }
-    return S3Client.builder().credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props)).region(region).build();
+      S3Client s3Client = S3Client.builder().credentialsProvider(
+              HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props)).region(region).build();
+      if (requiredFallbackRegion) {
+        GetBucketLocationResponse bucketLocationResponse = s3Client.getBucketLocation(
+                GetBucketLocationRequest.builder().bucket(bucketName).build());
+        String regionString = bucketLocationResponse.locationConstraintAsString();
+        if (!StringUtils.isNullOrEmpty(regionString)) {
+          // Close existing client and create another.
+          s3Client.close();
+          return S3Client.builder().credentialsProvider(
+                          HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props)).
+                  region(Region.of(regionString)).build();
+        }
+      }
+
+      return s3Client;
+    };
   }
 
   @Override

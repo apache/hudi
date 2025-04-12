@@ -21,7 +21,7 @@ package org.apache.hudi.client.transaction.lock;
 import org.apache.hudi.client.transaction.lock.models.HeartbeatManager;
 import org.apache.hudi.client.transaction.lock.models.LockGetResult;
 import org.apache.hudi.client.transaction.lock.models.LockProviderHeartbeatManager;
-import org.apache.hudi.client.transaction.lock.models.LockUpdateResult;
+import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
 import org.apache.hudi.client.transaction.lock.models.StorageLockData;
 import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
 import org.apache.hudi.common.config.LockConfiguration;
@@ -54,6 +54,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS;
 import static org.apache.hudi.common.lock.LockState.ACQUIRED;
 import static org.apache.hudi.common.lock.LockState.ACQUIRING;
 import static org.apache.hudi.common.lock.LockState.FAILED_TO_ACQUIRE;
@@ -71,9 +72,8 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NA
 @ThreadSafe
 public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
-  public static final String DEFAULT_TABLE_LOCK_FILE_NAME = "table_lock";
+  public static final String DEFAULT_TABLE_LOCK_FILE_NAME = "table_lock.json";
   // How long to wait before retrying lock acquisition in blocking calls.
-  private static final long DEFAULT_LOCK_ACQUISITION_BUFFER_MS = 1000;
   // Maximum expected clock drift between two nodes.
   // This is similar idea as SkewAdjustingTimeGenerator.
   // In reality, within a single cloud provider all nodes share the same ntp
@@ -81,9 +81,6 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   // therefore we do not expect drift more than a few ms.
   // However, since our lock leases are pretty long, we can use a high buffer.
   private static final long CLOCK_DRIFT_BUFFER_MS = 500;
-
-  // When we retry lock upserts, do so 5 times
-  private static final long LOCK_UPSERT_RETRY_COUNT = 5;
 
   private static final Logger LOGGER = LoggerFactory.getLogger(StorageBasedLockProvider.class);
 
@@ -161,7 +158,13 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder().fromProperties(properties).build();
     long heartbeatPollSeconds = config.getHeartbeatPollSeconds();
     this.validitySeconds = config.getValiditySeconds();
-    this.lockFilePath = String.format("%s%s%s", config.getHudiTableBasePath(), StoragePath.SEPARATOR, LOCKS_FOLDER_NAME);
+    this.lockFilePath = String.format(
+            "%s%s%s%s%s",
+            config.getHudiTableBasePath(),
+            StoragePath.SEPARATOR,
+            LOCKS_FOLDER_NAME,
+            StoragePath.SEPARATOR,
+            DEFAULT_TABLE_LOCK_FILE_NAME);
     this.heartbeatManager = heartbeatManagerLoader.apply(ownerId, heartbeatPollSeconds * 1000, this::renewLock);
     this.storageLockClient = storageLockSupplier.apply(ownerId, lockFilePath, properties);
     this.ownerId = ownerId;
@@ -193,7 +196,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         if (tryLock()) {
           return true;
         }
-        Thread.sleep(DEFAULT_LOCK_ACQUISITION_BUFFER_MS);
+        Thread.sleep(Long.parseLong(DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS));
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new HoodieLockException(generateLockStateMessage(LockState.FAILED_TO_ACQUIRE), e);
@@ -264,15 +267,15 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       throw new HoodieLockException(generateLockStateMessage(FAILED_TO_ACQUIRE));
     }
 
-    Pair<LockGetResult, StorageLockFile> latestLock = this.storageLockClient.readCurrentLockFile();
+    Pair<LockGetResult, Option<StorageLockFile>> latestLock = this.storageLockClient.readCurrentLockFile();
     if (latestLock.getLeft() == LockGetResult.UNKNOWN_ERROR) {
       logInfoLockState(FAILED_TO_ACQUIRE, "Failed to get the latest lock status");
       // We were not able to determine whether a lock was present.
       return false;
     }
 
-    if (latestLock.getLeft() == LockGetResult.SUCCESS && isLockStillValid(latestLock.getRight())) {
-      String msg = String.format("Lock already held by %s", latestLock.getRight().getOwner());
+    if (latestLock.getLeft() == LockGetResult.SUCCESS && isLockStillValid(latestLock.getRight().get())) {
+      String msg = String.format("Lock already held by %s", latestLock.getRight().get().getOwner());
       // Lock held by others.
       logInfoLockState(FAILED_TO_ACQUIRE, msg);
       return false;
@@ -280,14 +283,15 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
     // Try to acquire the lock
     StorageLockData newLockData = new StorageLockData(false, System.currentTimeMillis() + validitySeconds, ownerId);
-    Pair<LockUpdateResult, StorageLockFile> lockUpdateStatus = this.storageLockClient.tryCreateLockFile(
-        newLockData, latestLock.getLeft() == LockGetResult.NOT_EXISTS ? null : latestLock.getRight());
-    if (lockUpdateStatus.getLeft() != LockUpdateResult.SUCCESS) {
+    Pair<LockUpsertResult, Option<StorageLockFile>> lockUpdateStatus = this.storageLockClient.tryUpsertLockFile(
+        newLockData,
+        latestLock.getRight());
+    if (lockUpdateStatus.getLeft() != LockUpsertResult.SUCCESS) {
       // failed to acquire the lock, indicates concurrent contention
       logInfoLockState(FAILED_TO_ACQUIRE);
       return false;
     }
-    this.setLock(lockUpdateStatus.getRight());
+    this.setLock(lockUpdateStatus.getRight().get());
 
     // There is a remote chance that
     // - after lock is acquired but before heartbeat starts the lock is expired.
@@ -397,17 +401,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     logDebugLockState(RELEASING);
     // Upload metadata that will unlock this lock.
     StorageLockData expiredLockData = new StorageLockData(true, this.getLock().getValidUntilMs(), ownerId);
-    Pair<LockUpdateResult, StorageLockFile> result;
-    if (fromShutdownHook) {
-      // Only try once for shutdown hook, then return immediately
-      result = this.storageLockClient.tryCreateLockFile(expiredLockData, this.getLock());
-    } else {
-      result = this.storageLockClient.tryUpdateLockFile(
-              () -> expiredLockData,
-              this.getLock(),
-              // Keep retrying for the normal validity time.
-              LOCK_UPSERT_RETRY_COUNT);
-    }
+    Pair<LockUpsertResult, Option<StorageLockFile>> result;
+    result = this.storageLockClient.tryUpsertLockFile(expiredLockData, Option.of(this.getLock()));
     switch (result.getLeft()) {
       case UNKNOWN_ERROR:
         // Here we do not know the state of the lock.
@@ -419,7 +414,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         return true;
       case ACQUIRED_BY_OTHERS:
         // As we are confident no lock is held by itself, clean up the cached lock object.
-        // However this is an edge case, so warn.
+        // However, this is an edge case, so warn.
         logWarnLockState(RELEASED, "lock should not have been acquired by others.");
         setLock(null);
         return true;
@@ -456,10 +451,9 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       // Action taken for corner case 2 is just a best effort mitigation. At least it
       // prevents further data corruption by
       // letting someone else acquire the lock.
-      Pair<LockUpdateResult, StorageLockFile> currentLock = this.storageLockClient.tryUpdateLockFile(
-          () -> new StorageLockData(false, System.currentTimeMillis() + validitySeconds, ownerId),
-          getLock(),
-          LOCK_UPSERT_RETRY_COUNT);
+      Pair<LockUpsertResult, Option<StorageLockFile>> currentLock = this.storageLockClient.tryUpsertLockFile(
+          new StorageLockData(false, System.currentTimeMillis() + validitySeconds, ownerId),
+          Option.of(getLock()));
       switch (currentLock.getLeft()) {
         case ACQUIRED_BY_OTHERS:
           logger.error("Owner {}: Unable to renew lock as it is acquired by others.", ownerId);
@@ -474,7 +468,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           return true;
         case SUCCESS:
           // Only positive outcome
-          this.setLock(currentLock.getRight());
+          this.setLock(currentLock.getRight().get());
           logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
               ownerId, oldExpirationMs - System.currentTimeMillis(), lockFilePath);
           // Let heartbeat continue to renew lock lease again later.
@@ -502,8 +496,12 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
   private String generateLockStateMessage(LockState state) {
     String threadName = Thread.currentThread().getName();
-    return String.format("Owner %s: Lock file path %s, Thread %s, Storage based lock state %s", ownerId,
-        lockFilePath, threadName, state.toString());
+    return String.format(
+            "Owner %s: Lock file path %s, Thread %s, Storage based lock state %s",
+            ownerId,
+            lockFilePath,
+            threadName,
+            state.toString());
   }
 
   private static final String LOCK_STATE_LOGGER_MSG = "Owner {}: Lock file path {}, Thread {}, Storage based lock state {}";

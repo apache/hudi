@@ -21,9 +21,10 @@
 package org.apache.hudi.aws.transaction.lock;
 
 import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.LockUpdateResult;
+import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
 import org.apache.hudi.client.transaction.lock.models.StorageLockData;
 import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -46,20 +47,16 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
+import java.util.Properties;
 
-import static org.apache.hudi.client.transaction.lock.models.LockUpdateResult.UNKNOWN_ERROR;
+import static org.apache.hudi.client.transaction.lock.models.LockUpsertResult.UNKNOWN_ERROR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -86,7 +83,8 @@ class TestS3StorageLockClient {
     lockService = new S3StorageLockClient(
             OWNER_ID,
             LOCK_FILE_URI,
-            mockS3Client,
+            new Properties(),
+            (a,b) -> mockS3Client,
             mockLogger
     );
   }
@@ -115,11 +113,11 @@ class TestS3StorageLockClient {
     PutObjectResponse putResp = PutObjectResponse.builder().eTag("new-etag-123").build();
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenReturn(putResp);
 
-    Pair<LockUpdateResult, StorageLockFile> result = lockService.tryCreateLockFile(lockData, null);
+    Pair<LockUpsertResult, Option<StorageLockFile>> result = lockService.tryUpsertLockFile(lockData, Option.empty());
 
-    assertEquals(LockUpdateResult.SUCCESS, result.getLeft());
-    assertNotNull(result.getRight());
-    assertEquals("new-etag-123", result.getRight().getVersionId());
+    assertEquals(LockUpsertResult.SUCCESS, result.getLeft());
+    assertTrue(result.getRight().isPresent());
+    assertEquals("new-etag-123", result.getRight().get().getVersionId());
     verify(mockS3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
     verifyNoMoreInteractions(mockLogger);
   }
@@ -129,7 +127,8 @@ class TestS3StorageLockClient {
     assertThrows(HoodieLockException.class, () -> new S3StorageLockClient(
             OWNER_ID,
             "\\",
-            mockS3Client,
+            new Properties(),
+            (a,b) -> mockS3Client,
             mockLogger
     ));
   }
@@ -139,7 +138,8 @@ class TestS3StorageLockClient {
     IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> new S3StorageLockClient(
             OWNER_ID,
             "s3://bucket/",
-            mockS3Client,
+            new Properties(),
+            (a,b) -> mockS3Client,
             mockLogger
     ));
     assertTrue(ex.getMessage().contains("lock file path"));
@@ -150,7 +150,8 @@ class TestS3StorageLockClient {
     IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> new S3StorageLockClient(
             OWNER_ID,
             "s3:///path",
-            mockS3Client,
+            new Properties(),
+            (a,b) -> mockS3Client,
             mockLogger
     ));
     assertTrue(ex.getMessage().contains("bucket name"));
@@ -169,12 +170,12 @@ class TestS3StorageLockClient {
             any(RequestBody.class)
     )).thenReturn(putResp);
 
-    Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateLockFile(lockData, prevLockFile);
+    Pair<LockUpsertResult, Option<StorageLockFile>> result =
+            lockService.tryUpsertLockFile(lockData, Option.of(prevLockFile));
 
-    assertEquals(LockUpdateResult.SUCCESS, result.getLeft());
-    assertNotNull(result.getRight());
-    assertEquals("new-etag-456", result.getRight().getVersionId());
+    assertEquals(LockUpsertResult.SUCCESS, result.getLeft());
+    assertTrue(result.getRight().isPresent());
+    assertEquals("new-etag-456", result.getRight().get().getVersionId());
     verify(mockS3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
   }
 
@@ -186,11 +187,11 @@ class TestS3StorageLockClient {
     AwsServiceException ex412 = S3Exception.builder().statusCode(412).build();
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex412);
 
-    Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateLockFile(lockData, prevLockFile);
+    Pair<LockUpsertResult, Option<StorageLockFile>> result =
+            lockService.tryUpsertLockFile(lockData, Option.of(prevLockFile));
 
-    assertEquals(LockUpdateResult.ACQUIRED_BY_OTHERS, result.getLeft());
-    assertNull(result.getRight());
+    assertEquals(LockUpsertResult.ACQUIRED_BY_OTHERS, result.getLeft());
+    assertTrue(result.getRight().isEmpty());
     verify(mockLogger).warn(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
@@ -202,12 +203,14 @@ class TestS3StorageLockClient {
     AwsServiceException ex409 = S3Exception.builder().statusCode(409).build();
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex409);
 
-    Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateLockFile(lockData, prevLockFile);
+    Pair<LockUpsertResult, Option<StorageLockFile>> result =
+            lockService.tryUpsertLockFile(lockData, Option.of(prevLockFile));
 
-    assertEquals(LockUpdateResult.ACQUIRED_BY_OTHERS, result.getLeft());
-    assertNull(result.getRight());
-    verify(mockLogger).warn(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
+    // This error is not necessarily unknown, but we don't know the state of the lockfile,
+    // which is why the return result is UNKNOWN_ERROR
+    assertEquals(UNKNOWN_ERROR, result.getLeft());
+    assertTrue(result.getRight().isEmpty());
+    verify(mockLogger).warn(contains("Retriable conditional request conflict error"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
   @Test
@@ -216,11 +219,11 @@ class TestS3StorageLockClient {
     AwsServiceException ex429 = S3Exception.builder().statusCode(429).build();
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex429);
 
-    Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateLockFile(lockData, null);
+    Pair<LockUpsertResult, Option<StorageLockFile>> result =
+            lockService.tryUpsertLockFile(lockData, Option.empty());
 
     assertEquals(UNKNOWN_ERROR, result.getLeft());
-    assertNull(result.getRight());
+    assertTrue(result.getRight().isEmpty());
     verify(mockLogger).warn(contains("Rate limit exceeded"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
@@ -230,98 +233,21 @@ class TestS3StorageLockClient {
     AwsServiceException ex503 = S3Exception.builder().statusCode(503).build();
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex503);
 
-    Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryCreateLockFile(lockData, null);
+    Pair<LockUpsertResult, Option<StorageLockFile>> result =
+            lockService.tryUpsertLockFile(lockData, Option.empty());
 
     assertEquals(UNKNOWN_ERROR, result.getLeft());
-    assertNull(result.getRight());
-    verify(mockLogger).warn(contains("S3 internal server error"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(ex503));
+    assertTrue(result.getRight().isEmpty());
+    verify(mockLogger).warn(contains("internal server error"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(ex503));
   }
 
   @Test
-  void testTryCreateOrUpdateLockFile_unexpectedError() {
-    AwsServiceException ex400 = S3Exception.builder().statusCode(400).message("Bad Request").build();
-    when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex400);
-
-    StorageLockData lockData = new StorageLockData(false, 6000L, "myTxOwner");
-    assertThrows(S3Exception.class, () -> lockService.tryCreateLockFile(lockData, null));
-  }
-
-  @Test
-  void testTryCreateOrUpdateLockFileWithRetry_successWithinAttempts() {
-    StorageLockData lockData = new StorageLockData(false, 7000L, "myTxOwner");
-    AwsServiceException ex500 = S3Exception.builder().statusCode(500).build();
-    AwsServiceException ex429 = S3Exception.builder().statusCode(429).build();
-    PutObjectResponse successResp = PutObjectResponse.builder().eTag("retry-etag").build();
-
-    when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-            .thenThrow(ex500)
-            .thenThrow(ex429)
-            .thenReturn(successResp);
-
-    Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryUpdateLockFile(() -> lockData, null, 5);
-
-    assertEquals(LockUpdateResult.SUCCESS, result.getLeft());
-    assertNotNull(result.getRight());
-    assertEquals("retry-etag", result.getRight().getVersionId());
-    verify(mockS3Client, times(3)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
-  }
-
-  @Test
-  void testTryCreateOrUpdateLockFileWithRetry_preconditionFailed() {
-    StorageLockData lockData = new StorageLockData(false, 8000L, "myTxOwner");
-    AwsServiceException ex412 = S3Exception.builder().statusCode(412).build();
-    when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex412);
-
-    Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryUpdateLockFile(() -> lockData, null, 5);
-
-    assertEquals(LockUpdateResult.ACQUIRED_BY_OTHERS, result.getLeft());
-    assertNull(result.getRight());
-    verify(mockS3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
-  }
-
-  @Test
-  void testTryCreateOrUpdateLockFileWithRetry_unexpectedError() {
+  void testTryCreateLockFile_unexpectedError() {
     StorageLockData lockData = new StorageLockData(false, 8000L, "myTxOwner");
     AwsServiceException ex400 = AwsServiceException.builder().statusCode(400).build();
     when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex400);
 
-    Pair<LockUpdateResult, StorageLockFile> result =
-            lockService.tryUpdateLockFile(() -> lockData, null, 3);
-
-    assertEquals(LockUpdateResult.UNKNOWN_ERROR, result.getLeft());
-    assertNull(result.getRight());
-    verify(mockS3Client, times(3)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
-  }
-
-  @Test
-  void testTryCreateOrUpdateLockFileWithRetry_unexpectedThenInterrupt() throws InterruptedException {
-    AwsServiceException ex400 = S3Exception.builder().statusCode(400).message("Bad Request").build();
-    CountDownLatch attemptLatch = new CountDownLatch(1);
-    CountDownLatch interruptLatch = new CountDownLatch(1);
-
-    doAnswer(invocation -> {
-      attemptLatch.countDown();
-      throw ex400;
-    }).when(mockS3Client).putObject(any(PutObjectRequest.class), any(RequestBody.class));
-
-    Thread t = new Thread(() -> {
-      Pair<LockUpdateResult, StorageLockFile> result = lockService.tryUpdateLockFile(
-              () -> new StorageLockData(false, 9999L, "myTxOwner"),
-              null,
-              3
-      );
-      assertEquals(UNKNOWN_ERROR, result.getLeft());
-      assertNull(result.getRight());
-      interruptLatch.countDown();
-    });
-    t.start();
-    assertTrue(attemptLatch.await(2, TimeUnit.SECONDS));
-    t.interrupt();
-    t.join();
-    assertTrue(interruptLatch.await(2, TimeUnit.SECONDS));
+    assertThrows(AwsServiceException.class, () -> lockService.tryUpsertLockFile(lockData, Option.empty()));
   }
 
   @Test
@@ -329,9 +255,9 @@ class TestS3StorageLockClient {
     AwsServiceException ex404 = S3Exception.builder().statusCode(404).build();
     when(mockS3Client.getObject(any(GetObjectRequest.class))).thenThrow(ex404);
 
-    Pair<LockGetResult, StorageLockFile> result = lockService.readCurrentLockFile();
+    Pair<LockGetResult, Option<StorageLockFile>> result = lockService.readCurrentLockFile();
     assertEquals(LockGetResult.NOT_EXISTS, result.getLeft());
-    assertNull(result.getRight());
+    assertTrue(result.getRight().isEmpty());
     verify(mockLogger).info(contains("Object not found"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
@@ -340,9 +266,9 @@ class TestS3StorageLockClient {
     AwsServiceException ex409 = S3Exception.builder().statusCode(409).build();
     when(mockS3Client.getObject(any(GetObjectRequest.class))).thenThrow(ex409);
 
-    Pair<LockGetResult, StorageLockFile> result = lockService.readCurrentLockFile();
+    Pair<LockGetResult, Option<StorageLockFile>> result = lockService.readCurrentLockFile();
     assertEquals(LockGetResult.UNKNOWN_ERROR, result.getLeft());
-    assertNull(result.getRight());
+    assertTrue(result.getRight().isEmpty());
     verify(mockLogger).info(contains("Conflicting operation has occurred"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
@@ -351,11 +277,11 @@ class TestS3StorageLockClient {
     StorageLockData lockData = new StorageLockData(false, 9999L, "myTxOwner");
     mockS3ObjectWithLockData(lockData, "abc-etag");
 
-    Pair<LockGetResult, StorageLockFile> result = lockService.readCurrentLockFile();
+    Pair<LockGetResult, Option<StorageLockFile>> result = lockService.readCurrentLockFile();
     assertEquals(LockGetResult.SUCCESS, result.getLeft());
-    assertNotNull(result.getRight());
-    assertEquals("abc-etag", result.getRight().getVersionId());
-    assertEquals("myTxOwner", result.getRight().getOwner());
+    assertTrue(result.getRight().isPresent());
+    assertEquals("abc-etag", result.getRight().get().getVersionId());
+    assertEquals("myTxOwner", result.getRight().get().getOwner());
   }
 
   @Test
@@ -363,9 +289,9 @@ class TestS3StorageLockClient {
     AwsServiceException ex429 = S3Exception.builder().statusCode(429).build();
     when(mockS3Client.getObject(any(GetObjectRequest.class))).thenThrow(ex429);
 
-    Pair<LockGetResult, StorageLockFile> result = lockService.readCurrentLockFile();
+    Pair<LockGetResult, Option<StorageLockFile>> result = lockService.readCurrentLockFile();
     assertEquals(LockGetResult.UNKNOWN_ERROR, result.getLeft());
-    assertNull(result.getRight());
+    assertTrue(result.getRight().isEmpty());
     verify(mockLogger).warn(contains("Rate limit exceeded"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
@@ -374,9 +300,9 @@ class TestS3StorageLockClient {
     AwsServiceException ex500 = S3Exception.builder().statusCode(500).build();
     when(mockS3Client.getObject(any(GetObjectRequest.class))).thenThrow(ex500);
 
-    Pair<LockGetResult, StorageLockFile> result = lockService.readCurrentLockFile();
+    Pair<LockGetResult, Option<StorageLockFile>> result = lockService.readCurrentLockFile();
     assertEquals(LockGetResult.UNKNOWN_ERROR, result.getLeft());
-    assertNull(result.getRight());
+    assertTrue(result.getRight().isEmpty());
     verify(mockLogger).warn(contains("S3 internal server error"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(ex500));
   }
 

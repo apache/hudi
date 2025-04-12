@@ -18,13 +18,12 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
 import org.apache.hudi.client.transaction.lock.models.StorageLockData;
 import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
 import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.LockUpdateResult;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-
-import java.util.function.Supplier;
 
 /**
  * Defines a contract for a service which should be able to perform conditional writes to object storage.
@@ -33,49 +32,19 @@ import java.util.function.Supplier;
  */
 public interface StorageLockClient extends AutoCloseable {
   /**
-   * Tries once to create or update a lock file.
-   * @param newLockData The new data to update the lock file with.
-   * @param previousLockFile The previous lock file, use this to conditionally update the lock file.
+   * Tries to create or update a lock file.
+   * All non pre-condition failure related errors should be returned as UNKNOWN_ERROR.
+   * @param newLockData The new data to write to the lock file
+   * @param previousLockFile The previous lock file
    * @return A pair containing the result state and the new lock file (if successful)
    */
-  default Pair<LockUpdateResult, StorageLockFile> tryCreateLockFile(
+  Pair<LockUpsertResult, Option<StorageLockFile>> tryUpsertLockFile(
       StorageLockData newLockData,
-      StorageLockFile previousLockFile) {
-    return tryCreateOrUpdateLockFile(() -> newLockData, previousLockFile, true, 1);
-  }
-
-  /**
-   * Tries to update a lock file while retrying N times.
-   * All non pre-condition failure related errors should be retried.
-   * @param newLockDataSupplier The new data supplier
-   * @param previousLockFile The previous lock file
-   * @param retryCount Number of retries to attempt
-   * @return A pair containing the result state and the new lock file (if successful)
-   */
-  default Pair<LockUpdateResult, StorageLockFile> tryUpdateLockFile(
-      Supplier<StorageLockData> newLockDataSupplier,
-      org.apache.hudi.client.transaction.lock.models.StorageLockFile previousLockFile,
-      long retryCount) {
-    return tryCreateOrUpdateLockFile(newLockDataSupplier, previousLockFile, false, retryCount);
-  }
-
-  /**
-   * Tries to create or update a lock file while retrying N times.
-   * All non pre-condition failure related errors should be retried.
-   * @param newLockDataSupplier The new data supplier
-   * @param previousLockFile The previous lock file
-   * @param retryCount Number of retries to attempt
-   * @return A pair containing the result state and the new lock file (if successful)
-   */
-  Pair<LockUpdateResult, StorageLockFile> tryCreateOrUpdateLockFile(
-      Supplier<StorageLockData> newLockDataSupplier,
-      StorageLockFile previousLockFile,
-      boolean isCreate,
-      long retryCount);
+      Option<StorageLockFile> previousLockFile);
 
   /**
    * Reads the current lock file.
    * @return The lock retrieve result and the current lock file if successfully retrieved.
    * */
-  Pair<LockGetResult, StorageLockFile> readCurrentLockFile();
+  Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile();
 }
