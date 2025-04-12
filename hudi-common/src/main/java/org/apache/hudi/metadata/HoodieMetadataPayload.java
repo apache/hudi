@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
@@ -104,9 +105,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * HoodieMetadata schema field ids
    */
   public static final String KEY_FIELD_NAME = HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME;
-  public  static final int KEY_FIELD_INDEX = HoodieMetadataRecord.getClassSchema().getField(KEY_FIELD_NAME).pos();
+  public  static final int KEY_FIELD_INDEX = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema()).getField(KEY_FIELD_NAME).pos();
   public static final String SCHEMA_FIELD_NAME_TYPE = "type";
-  public static final int TYPE_FIELD_INDEX = HoodieMetadataRecord.getClassSchema().getField(SCHEMA_FIELD_NAME_TYPE).pos();
+  public static final int TYPE_FIELD_INDEX = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema()).getField(SCHEMA_FIELD_NAME_TYPE).pos();
   public static final String SCHEMA_FIELD_NAME_METADATA = "filesystemMetadata";
   public static final String SCHEMA_FIELD_ID_COLUMN_STATS = "ColumnStatsMetadata";
   public static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
