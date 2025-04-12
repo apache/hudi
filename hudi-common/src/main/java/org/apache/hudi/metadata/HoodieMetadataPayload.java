@@ -104,7 +104,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * HoodieMetadata schema field ids
    */
   public static final String KEY_FIELD_NAME = HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME;
+  public  static final int KEY_FIELD_INDEX = HoodieMetadataRecord.getClassSchema().getField(KEY_FIELD_NAME).pos();
   public static final String SCHEMA_FIELD_NAME_TYPE = "type";
+  public static final int TYPE_FIELD_INDEX = HoodieMetadataRecord.getClassSchema().getField(SCHEMA_FIELD_NAME_TYPE).pos();
   public static final String SCHEMA_FIELD_NAME_METADATA = "filesystemMetadata";
   public static final String SCHEMA_FIELD_ID_COLUMN_STATS = "ColumnStatsMetadata";
   public static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
@@ -199,8 +201,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       // NOTE: {@code HoodieMetadataRecord} has to always carry both "key" and "type" fields
       //       for it to be handled appropriately, therefore these fields have to be reflected
       //       in any (read-)projected schema
-      key = record.get(KEY_FIELD_NAME).toString();
-      type = (int) record.get(SCHEMA_FIELD_NAME_TYPE);
+      key = record.get(KEY_FIELD_INDEX).toString();
+      type = (int) record.get(TYPE_FIELD_INDEX);
       MetadataPartitionType.get(type).constructMetadataPayload(this, record);
     } else {
       this.isDeletedRecord = true;

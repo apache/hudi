@@ -532,8 +532,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     }
     HoodieKey hoodieKey = new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH));
     return new HoodieAvroRecord<>(hoodieKey,
-        HoodieRecordUtils.loadPayload(payloadClass.get(), new Object[] {record, readerContext.getOrderingValue(recordOption, metadataMap,
-            recordSchema, orderingFieldName)}, GenericRecord.class, Comparable.class), null);
+        HoodieRecordUtils.loadPayload(payloadClass.get(), record, readerContext.getOrderingValue(recordOption, metadataMap,
+            recordSchema, orderingFieldName)), null);
   }
 
   private Schema getSchemaForAvroPayloadMerge(HoodieRecord record, Map<String, Object> infoMap) throws IOException {
