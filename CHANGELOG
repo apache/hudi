@@ -712,3 +712,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-04-09 16:04:13] [release-v1.110.0] ---
 [ENG-25226][INTERNAL] Exclude parquet-avro from hudi-utilities and hudi-gcp bundles (#1320)
 [AUDIT-1276]: Changelog for release-v1.108.0 (#1318)
+
+--- [2025-04-13 02:09:09] [release-v1.110.1] ---
+[ENG-24904][HUDI-9288] Fix file group bug with uncommitted slices (#1324)
+[AUDIT-1071]: Changelog for release-v1.110.0 (#1323)
