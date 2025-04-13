@@ -148,8 +148,8 @@ public class S3StorageLockClient implements StorageLockClient {
 
   @Override
   public Pair<LockUpsertResult, Option<StorageLockFile>> tryUpsertLockFile(StorageLockData newLockData, Option<StorageLockFile> previousLockFile) {
-    boolean isCreate = previousLockFile.isEmpty();
-    String currentEtag = isCreate ? null : previousLockFile.get().getVersionId();
+    boolean isLockRenewal = previousLockFile.isPresent();
+    String currentEtag = isLockRenewal ? previousLockFile.get().getVersionId() : null;
     LockUpsertResult result = LockUpsertResult.UNKNOWN_ERROR;
     try {
       StorageLockFile updated = createOrUpdateLockFileInternal(newLockData, currentEtag);
@@ -158,7 +158,7 @@ public class S3StorageLockClient implements StorageLockClient {
       result = handleUpsertS3Exception(e);
     } catch (AwsServiceException | SdkClientException e) {
       logger.warn("OwnerId: {}, Unexpected SDK error while writing lock file: {}", ownerId, lockFilePath, e);
-      if (isCreate) {
+      if (!isLockRenewal) {
         // We should always throw errors early when we are creating the lock file.
         // This is likely indicative of a larger issue that should bubble up sooner.
         throw e;

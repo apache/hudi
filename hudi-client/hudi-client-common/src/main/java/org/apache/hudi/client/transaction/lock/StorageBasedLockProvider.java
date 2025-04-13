@@ -90,7 +90,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   // The lock service implementation which interacts with storage
   private final StorageLockClient storageLockClient;
 
-  private final long validitySeconds;
+  private final long lockValiditySecs;
   private final String ownerId;
   private final String lockFilePath;
   private final HeartbeatManager heartbeatManager;
@@ -122,11 +122,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
             UUID.randomUUID().toString(),
             lockConfiguration.getConfig(),
             LockProviderHeartbeatManager::new,
-            getStorageLockClient(),
+            getStorageLockClientClassName(),
             LOGGER);
   }
 
-  private static Functions.Function3<String, String, TypedProperties, StorageLockClient> getStorageLockClient() {
+  private static Functions.Function3<String, String, TypedProperties, StorageLockClient> getStorageLockClientClassName() {
     return (ownerId, lockFilePath, lockConfig) -> {
       try {
         return (StorageLockClient) ReflectionUtils.loadClass(
@@ -157,7 +157,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       Logger logger) {
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder().fromProperties(properties).build();
     long heartbeatPollSeconds = config.getHeartbeatPollSeconds();
-    this.validitySeconds = config.getValiditySeconds();
+    this.lockValiditySecs = config.getValiditySeconds();
     this.lockFilePath = String.format(
             "%s%s%s%s%s",
             config.getHudiTableBasePath(),
@@ -282,7 +282,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     }
 
     // Try to acquire the lock
-    StorageLockData newLockData = new StorageLockData(false, System.currentTimeMillis() + validitySeconds, ownerId);
+    StorageLockData newLockData = new StorageLockData(false, System.currentTimeMillis() + lockValiditySecs, ownerId);
     Pair<LockUpsertResult, Option<StorageLockFile>> lockUpdateStatus = this.storageLockClient.tryUpsertLockFile(
         newLockData,
         latestLock.getRight());
@@ -452,7 +452,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       // prevents further data corruption by
       // letting someone else acquire the lock.
       Pair<LockUpsertResult, Option<StorageLockFile>> currentLock = this.storageLockClient.tryUpsertLockFile(
-          new StorageLockData(false, System.currentTimeMillis() + validitySeconds, ownerId),
+          new StorageLockData(false, System.currentTimeMillis() + lockValiditySecs, ownerId),
           Option.of(getLock()));
       switch (currentLock.getLeft()) {
         case ACQUIRED_BY_OTHERS:
