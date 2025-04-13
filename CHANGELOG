@@ -716,3 +716,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-04-13 02:09:09] [release-v1.110.1] ---
 [ENG-24904][HUDI-9288] Fix file group bug with uncommitted slices (#1324)
 [AUDIT-1071]: Changelog for release-v1.110.0 (#1323)
+
+--- [2025-04-13 16:04:03] [release-v1.111.0] ---
+[AUDIT-1292] Changelog for release-v1.110.1 (#1325)
+[ENG-24904][HUDI-9288] Fix file group bug with uncommitted slices (#1324)
+[AUDIT-1071]: Changelog for release-v1.110.0 (#1323)
