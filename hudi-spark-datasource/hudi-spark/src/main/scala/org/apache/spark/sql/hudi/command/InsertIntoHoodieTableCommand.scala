@@ -104,9 +104,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     }
     val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions, staticOverwritePartitionPathOpt)
 
-    val sparkRowSerDe = sparkAdapter.createSparkRowSerDe(query.schema)
-    val rows = query.execute().map(sparkRowSerDe.deserializeRow)
-    val df = sparkSession.createDataFrame(rows, query.schema)
+    val df = sparkSession.internalCreateDataFrame(query.execute(), query.schema)
     val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, df)
 
     if (!success) {
