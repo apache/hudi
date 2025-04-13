@@ -232,12 +232,9 @@ public class S3StorageLockClient implements StorageLockClient {
       // Set all request timeouts to be 1/5 of the default validity.
       // Each call to acquire a lock requires 2 requests.
       // Each renewal requires 1 request.
-      long defaultValiditySeconds = VALIDITY_TIMEOUT_SECONDS.defaultValue();
-      if (props.contains(VALIDITY_TIMEOUT_SECONDS.key())) {
-        defaultValiditySeconds = (long) props.get(VALIDITY_TIMEOUT_SECONDS.key());
-      }
-      long configuredS3TimeoutSeconds = defaultValiditySeconds / 5;
-      S3Client s3Client = createS3Client(region, configuredS3TimeoutSeconds, props);
+      long validityTimeoutSecs = (long) props.getOrDefault(VALIDITY_TIMEOUT_SECONDS.key(), VALIDITY_TIMEOUT_SECONDS.defaultValue());
+      long s3CallTimeoutSecs = validityTimeoutSecs / 5;
+      S3Client s3Client = createS3Client(region, s3CallTimeoutSecs, props);
       if (requiredFallbackRegion) {
         GetBucketLocationResponse bucketLocationResponse = s3Client.getBucketLocation(
                 GetBucketLocationRequest.builder().bucket(bucketName).build());
@@ -248,7 +245,7 @@ public class S3StorageLockClient implements StorageLockClient {
           s3Client.close();
           return createS3Client(
                   Region.of(regionString),
-                  configuredS3TimeoutSeconds,
+                  s3CallTimeoutSecs,
                   props);
         }
       }
@@ -257,11 +254,11 @@ public class S3StorageLockClient implements StorageLockClient {
     };
   }
 
-  private static S3Client createS3Client(Region region, long timeout, Properties props) {
+  private static S3Client createS3Client(Region region, long timeoutSecs, Properties props) {
     // Set the timeout, credentials, and region
     return S3Client.builder()
             .overrideConfiguration(
-                    b -> b.apiCallTimeout(Duration.ofSeconds(timeout)))
+                    b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs)))
             .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
             .region(region).build();
   }
