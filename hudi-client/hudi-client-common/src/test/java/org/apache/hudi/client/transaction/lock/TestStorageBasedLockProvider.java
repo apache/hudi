@@ -18,18 +18,18 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
 import org.apache.hudi.client.transaction.lock.models.StorageLockData;
 import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
 import org.apache.hudi.client.transaction.lock.models.HeartbeatManager;
 import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.LockUpdateResult;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.StorageBasedLockConfig;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterEach;
@@ -40,17 +40,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 
 import java.lang.reflect.Method;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -73,7 +71,7 @@ import static org.mockito.Mockito.when;
  */
 class TestStorageBasedLockProvider {
   private StorageBasedLockProvider lockProvider;
-  private StorageLock mockLockService;
+  private StorageLockClient mockLockService;
   private HeartbeatManager mockHeartbeatManager;
   private Logger mockLogger;
   private final String ownerId = UUID.randomUUID().toString();
@@ -81,12 +79,12 @@ class TestStorageBasedLockProvider {
 
   @BeforeEach
   void setupLockProvider() {
-    mockLockService = mock(StorageLock.class);
+    mockLockService = mock(StorageLockClient.class);
     mockHeartbeatManager = mock(HeartbeatManager.class);
     mockLogger = mock(Logger.class);
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
     TypedProperties props = new TypedProperties();
-    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "5");
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
     props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
 
@@ -101,17 +99,6 @@ class TestStorageBasedLockProvider {
   @AfterEach
   void cleanupLockProvider() {
     lockProvider.close();
-  }
-
-  @Test
-  void testUnsupportedLockStorageLocation() {
-    TypedProperties props = new TypedProperties();
-    props.put(BASE_PATH.key(), "hdfs://bucket/lake/db/tbl-default");
-    LockConfiguration lockConf = new LockConfiguration(props);
-    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
-    HoodieLockException ex = assertThrows(HoodieLockException.class,
-        () -> new StorageBasedLockProvider(lockConf, storageConf));
-    assertTrue(ex.getCause().getMessage().contains("No implementation of StorageLock supports this scheme"));
   }
 
   @Test
@@ -140,23 +127,6 @@ class TestStorageBasedLockProvider {
     HoodieLockException ex = assertThrows(HoodieLockException.class,
         () -> new StorageBasedLockProvider(lockConf, storageConf));
     assertTrue(ex.getMessage().contains("Failed to load and initialize StorageLock"));
-  }
-
-  @Test
-  void testInvalidLocksLocationForWriteService() {
-    TypedProperties props = new TypedProperties();
-    props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
-    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "5");
-    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
-
-    LockConfiguration lockConf = new LockConfiguration(props);
-    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
-
-    HoodieLockException ex = assertThrows(HoodieLockException.class,
-        () -> new StorageBasedLockProvider(lockConf, storageConf));
-    Throwable cause = ex.getCause();
-    assertNotNull(cause);
-    assertInstanceOf(HoodieNotSupportedException.class, cause);
   }
 
   @Test
@@ -207,14 +177,14 @@ class TestStorageBasedLockProvider {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile realLockFile = new StorageLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockLockService.tryUpsertLockFile(any(), isNull()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
 
     boolean acquired = lockProvider.tryLock();
     assertTrue(acquired);
     assertEquals(realLockFile, lockProvider.getLock());
-    verify(mockLockService, atLeastOnce()).tryCreateOrUpdateLockFile(any(), any());
+    verify(mockLockService, atLeastOnce()).tryUpsertLockFile(any(), any());
   }
 
   @Test
@@ -222,11 +192,11 @@ class TestStorageBasedLockProvider {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile realLockFile = new StorageLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockLockService.tryUpsertLockFile(any(), isNull()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(false);
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(realLockFile), anyLong()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
 
     boolean acquired = lockProvider.tryLock();
     assertFalse(acquired);
@@ -237,8 +207,8 @@ class TestStorageBasedLockProvider {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     StorageLockFile returnedLockFile = new StorageLockFile(
         new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, "different-owner"), "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, returnedLockFile));
+    when(mockLockService.tryUpsertLockFile(any(), isNull()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(returnedLockFile)));
 
     HoodieLockException ex = assertThrows(HoodieLockException.class, () -> lockProvider.tryLock());
     assertTrue(ex.getMessage().contains("Owners do not match"));
@@ -249,7 +219,7 @@ class TestStorageBasedLockProvider {
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS,
         "other-owner");
     StorageLockFile existingLock = new StorageLockFile(data, "v2");
-    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.SUCCESS, existingLock));
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(existingLock)));
 
     boolean acquired = lockProvider.tryLock();
     assertFalse(acquired);
@@ -258,8 +228,8 @@ class TestStorageBasedLockProvider {
   @Test
   void testTryLockFailsToUpdateFile() {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
-        .thenReturn(Pair.of(LockUpdateResult.ACQUIRED_BY_OTHERS, null));
+    when(mockLockService.tryUpsertLockFile(any(), isNull()))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, null));
     assertFalse(lockProvider.tryLock());
   }
 
@@ -277,9 +247,9 @@ class TestStorageBasedLockProvider {
     StorageLockData newData = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS,
         ownerId);
     StorageLockFile realLockFile = new StorageLockFile(newData, "v1");
-    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.SUCCESS, existingLock));
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), eq(existingLock)))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(existingLock)));
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(existingLock))))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
     boolean acquired = lockProvider.tryLock();
     assertTrue(acquired);
@@ -290,8 +260,8 @@ class TestStorageBasedLockProvider {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile realLockFile = new StorageLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockLockService.tryUpsertLockFile(any(), isNull()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
 
     boolean acquired = lockProvider.tryLock();
@@ -318,8 +288,8 @@ class TestStorageBasedLockProvider {
     StorageLockData validData = new StorageLockData(false, System.currentTimeMillis() - DEFAULT_LOCK_VALIDITY_MS,
         ownerId);
     StorageLockFile validLock = new StorageLockFile(validData, "v2");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, validLock));
+    when(mockLockService.tryUpsertLockFile(any(), isNull()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(validLock)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
 
     assertTrue(lockProvider.tryLock());
@@ -343,8 +313,8 @@ class TestStorageBasedLockProvider {
     StorageLockData validData = new StorageLockData(false, System.currentTimeMillis() - DEFAULT_LOCK_VALIDITY_MS,
         ownerId);
     StorageLockFile validLock = new StorageLockFile(validData, "v2");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, validLock));
+    when(mockLockService.tryUpsertLockFile(any(), isNull()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(validLock)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
 
     assertTrue(lockProvider.tryLock());
@@ -374,14 +344,14 @@ class TestStorageBasedLockProvider {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile realLockFile = new StorageLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockLockService.tryUpsertLockFile(any(), isNull()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(realLockFile), anyLong()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS,
-            new StorageLockFile(new StorageLockData(true, data.getValidUntil(), ownerId), "v2")));
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS,
+            Option.of(new StorageLockFile(new StorageLockData(true, data.getValidUntil(), ownerId), "v2"))));
     assertTrue(lockProvider.tryLock());
     when(mockHeartbeatManager.hasActiveHeartbeat())
         .thenReturn(true) // when we try to stop the heartbeat we will check if heartbeat is active return true.
@@ -396,8 +366,8 @@ class TestStorageBasedLockProvider {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile realLockFile = new StorageLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockLockService.tryUpsertLockFile(any(), isNull()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
     assertTrue(lockProvider.tryLock());
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(false);
@@ -411,8 +381,8 @@ class TestStorageBasedLockProvider {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile realLockFile = new StorageLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockLockService.tryUpsertLockFile(any(), isNull()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
     assertTrue(lockProvider.tryLock());
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(false);
@@ -443,8 +413,8 @@ class TestStorageBasedLockProvider {
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() - DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile nearExpiredLockFile = new StorageLockFile(data, "v1");
     doReturn(nearExpiredLockFile).when(lockProvider).getLock();
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(nearExpiredLockFile), anyLong()))
-        .thenReturn(Pair.of(LockUpdateResult.ACQUIRED_BY_OTHERS, null));
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(nearExpiredLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, null));
     assertFalse(lockProvider.renewLock());
     verify(mockLogger).error("Owner {}: Unable to renew lock as it is acquired by others.", this.ownerId);
   }
@@ -456,8 +426,8 @@ class TestStorageBasedLockProvider {
     doReturn(lockFile).when(lockProvider).getLock();
     // Signal the upsert attempt failed, but may be transient. See interface for
     // more details.
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong()))
-        .thenReturn(Pair.of(LockUpdateResult.UNKNOWN_ERROR, null));
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.UNKNOWN_ERROR, null));
     assertTrue(lockProvider.renewLock());
   }
 
@@ -468,8 +438,8 @@ class TestStorageBasedLockProvider {
     doReturn(lockFile).when(lockProvider).getLock();
     // Signal the upsert attempt failed, but may be transient. See interface for
     // more details.
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong()))
-        .thenReturn(Pair.of(LockUpdateResult.UNKNOWN_ERROR, null));
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.UNKNOWN_ERROR, null));
     // renewLock return true so it will be retried.
     assertTrue(lockProvider.renewLock());
 
@@ -484,8 +454,8 @@ class TestStorageBasedLockProvider {
 
     StorageLockData nearExpirationData = new StorageLockData(false, System.currentTimeMillis(), ownerId);
     StorageLockFile lockFileNearExpiration = new StorageLockFile(nearExpirationData, "v2");
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, lockFileNearExpiration));
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFileNearExpiration)));
 
     // We used to fail in this case before, but since we are only modifying a single
     // lock file, this is ok now.
@@ -502,13 +472,13 @@ class TestStorageBasedLockProvider {
     StorageLockData successData = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS,
         ownerId);
     StorageLockFile successLockFile = new StorageLockFile(successData, "v2");
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong()))
-        .thenReturn(Pair.of(LockUpdateResult.SUCCESS, successLockFile));
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(successLockFile)));
     assertTrue(lockProvider.renewLock());
 
     verify(mockLogger).info(
         eq("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}."),
-        eq(this.ownerId), anyLong(), eq("gs://bucket/lake/db/tbl-default/.hoodie/.locks"));
+        eq(this.ownerId), anyLong(), eq("gs://bucket/lake/db/tbl-default/.hoodie/.locks/table_lock.json"));
   }
 
   @Test
@@ -517,7 +487,7 @@ class TestStorageBasedLockProvider {
     StorageLockFile lockFile = new StorageLockFile(data, "v1");
     doReturn(lockFile).when(lockProvider).getLock();
 
-    when(mockLockService.tryCreateOrUpdateLockFileWithRetry(any(), eq(lockFile), anyLong()))
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(lockFile))))
         .thenThrow(new RuntimeException("Failure"));
     assertFalse(lockProvider.renewLock());
 
@@ -555,17 +525,17 @@ class TestStorageBasedLockProvider {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, null));
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile realLockFile = new StorageLockFile(data, "v1");
-    when(mockLockService.tryCreateOrUpdateLockFile(any(), isNull()))
-            .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockLockService.tryUpsertLockFile(any(), isNull()))
+            .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
 
     boolean acquired = lockProvider.tryLock();
     assertTrue(acquired);
     assertEquals(realLockFile, lockProvider.getLock());
-    verify(mockLockService, atLeastOnce()).tryCreateOrUpdateLockFile(any(), any());
+    verify(mockLockService, atLeastOnce()).tryUpsertLockFile(any(), any());
 
-    when(mockLockService.tryCreateOrUpdateLockFile(any(StorageLockData.class), eq(realLockFile)))
-            .thenReturn(Pair.of(LockUpdateResult.SUCCESS, realLockFile));
+    when(mockLockService.tryUpsertLockFile(any(StorageLockData.class), eq(Option.of(realLockFile))))
+            .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
 
     // Mock shutdown
     Method shutdownMethod = lockProvider.getClass().getDeclaredMethod("shutdown", boolean.class);
@@ -591,27 +561,20 @@ class TestStorageBasedLockProvider {
     verify(mockHeartbeatManager, never()).close();
   }
 
-  public static class StubStorageLock implements StorageLock {
-    public StubStorageLock(String arg1, String arg2, String arg3) {
-      // No-op constructor for reflection
+  public static class StubStorageLockClient implements StorageLockClient {
+    public StubStorageLockClient(String ownerId, String lockFileUri, Properties props) {
+      assertTrue(lockFileUri.endsWith("table_lock.json"));
     }
 
     @Override
-    public Pair<LockUpdateResult, StorageLockFile> tryCreateOrUpdateLockFile(StorageLockData newLockData,
-        StorageLockFile previousLockFile) {
+    public Pair<LockUpsertResult, Option<StorageLockFile>> tryUpsertLockFile(
+        StorageLockData newLockData,
+        Option<StorageLockFile> previousLockFile) {
       return null;
     }
 
     @Override
-    public Pair<LockUpdateResult, StorageLockFile> tryCreateOrUpdateLockFileWithRetry(
-        Supplier<StorageLockData> newLockDataSupplier,
-        StorageLockFile previousLockFile,
-        long retryExpiration) {
-      return null;
-    }
-
-    @Override
-    public Pair<LockGetResult, StorageLockFile> readCurrentLockFile() {
+    public Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile() {
       return null;
     }
 

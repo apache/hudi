@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.transaction.lock.models;
 
-public enum LockUpdateResult {
+public enum LockUpsertResult {
   // Lock was successfully created/updated with code 0
   SUCCESS(0),
   // Another process has modified the lock file (precondition failure) with code 1
@@ -28,7 +28,7 @@ public enum LockUpdateResult {
 
   private final int code;
 
-  LockUpdateResult(int code) {
+  LockUpsertResult(int code) {
     this.code = code;
   }
 
