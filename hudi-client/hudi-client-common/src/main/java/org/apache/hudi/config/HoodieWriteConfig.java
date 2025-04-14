@@ -2151,7 +2151,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @return {@code true} if the metadata column stats index is enabled, {@code false} otherwise.
    */
   public boolean isMetadataColumnStatsIndexEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.COLUMN_STATS.getPartitionPath());
+    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
   }
 
   /**
@@ -2168,7 +2168,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public boolean isPartitionStatsIndexEnabled() {
     if (isMetadataColumnStatsIndexEnabled()) {
-      return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+      return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled();
     }
     return false;
   }
