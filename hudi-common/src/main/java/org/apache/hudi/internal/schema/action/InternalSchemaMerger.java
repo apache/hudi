@@ -165,7 +165,8 @@ public class InternalSchemaMerger {
     String finalFieldName = useColNameFromFileSchema ? nameFromFileSchema : nameFromQuerySchema;
     Type typeFromFileSchema = fieldFromFileSchema.type();
     if (!useColNameFromFileSchema) {
-      renamedFields.put(nameFromQuerySchema, nameFromFileSchema);
+      // use full name here to prevent conflicts for composite types
+      renamedFields.put(querySchema.findFullName(fieldId), nameFromFileSchema);
     }
     // Current design mechanism guarantees nestedType change is not allowed, so no need to consider.
     if (newType.isNestedType()) {

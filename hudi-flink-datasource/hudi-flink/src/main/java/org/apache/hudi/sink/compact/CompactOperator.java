@@ -21,13 +21,11 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.table.format.FlinkRowDataReaderContext;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
@@ -148,8 +146,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
                             Collector<CompactionCommitEvent> collector,
                             HoodieWriteConfig writeConfig) throws IOException {
     compactionMetrics.startCompaction();
-    HoodieFlinkMergeOnReadTableCompactor<?> compactor =
-        new HoodieFlinkMergeOnReadTableCompactor<>(new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)));
+    HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
     HoodieTableMetaClient metaClient = writeClient.getHoodieTable().getMetaClient();
 
     boolean useFileGroupReaderBasedCompaction = !metaClient.isMetadataTable()

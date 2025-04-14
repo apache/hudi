@@ -127,7 +127,7 @@ public class HoodieFlinkMergeOnReadTable<T>
   public HoodieWriteMetadata<List<WriteStatus>> compact(
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
-        context, config, this, compactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor(context),
+        context, config, this, compactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor(),
         new HoodieFlinkCopyOnWriteTable(config, context, getMetaClient()), WriteOperationType.COMPACT);
     return convertMetadata(compactionExecutor.execute());
   }
@@ -143,7 +143,7 @@ public class HoodieFlinkMergeOnReadTable<T>
   public HoodieWriteMetadata<List<WriteStatus>> logCompact(
       HoodieEngineContext context, String logCompactionInstantTime) {
     RunCompactionActionExecutor logCompactionExecutor = new RunCompactionActionExecutor(context, config, this,
-        logCompactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor<>(context), this, WriteOperationType.LOG_COMPACT);
+        logCompactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor<>(), this, WriteOperationType.LOG_COMPACT);
     return logCompactionExecutor.execute();
   }
 

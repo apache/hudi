@@ -19,15 +19,14 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.util.RowDataToAvroConverters.RowDataToAvroConverter;
 
 import org.apache.avro.Schema;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,11 +36,25 @@ import java.util.stream.Collectors;
 /**
  * Utils for get/set operations on {@link RowData}.
  */
-public class HoodieRowDataUtil {
-  // key: <record_schema, field_name>
+public class RowDataUtil {
+  // <record_schema, field_name> -> field_getter
   private static final Map<Pair<Schema, String>, RowData.FieldGetter> FIELD_GETTER_CACHE = new ConcurrentHashMap<>();
+  // <record_schema, field_name> -> field_converter
   private static final Map<Pair<Schema, String>, UnaryOperator<Object>> FIELD_CONVERTER_CACHE = new ConcurrentHashMap<>();
+  // record_schema -> field_converter[]
   private static final Map<Schema, RowData.FieldGetter[]> ALL_FIELD_GETTERS_CACHE = new ConcurrentHashMap<>();
+
+  /**
+   * An implementation of {@code FieldGetter} which always return NULL.
+   */
+  public static final RowData.FieldGetter NULL_GETTER = new RowData.FieldGetter() {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public @Nullable Object getFieldOrNull(RowData rowData) {
+      return null;
+    }
+  };
 
   /**
    * Utils to get FieldGetter from cache.
@@ -50,25 +63,17 @@ public class HoodieRowDataUtil {
    * @param fieldName name of the field
    * @return FieldGetter from cache or newly created one if not existed in cache.
    */
-  public static Option<RowData.FieldGetter> getFieldGetter(Schema schema, String fieldName) {
+  public static RowData.FieldGetter internFieldGetter(Schema schema, String fieldName) {
+    Schema.Field field = schema.getField(fieldName);
+    if (field == null) {
+      return NULL_GETTER;
+    }
     Pair<Schema, String> cacheKey = Pair.of(schema, fieldName);
-    RowData.FieldGetter fieldGetter = FIELD_GETTER_CACHE.get(cacheKey);
-    if (fieldGetter == null) {
-      Schema.Field field = schema.getField(fieldName);
-      if (field == null) {
-        return Option.empty();
-      }
+    return FIELD_GETTER_CACHE.computeIfAbsent(cacheKey, key -> {
       int fieldPos = schema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList()).indexOf(fieldName);
       LogicalType fieldType = AvroSchemaConverter.convertToDataType(field.schema()).getLogicalType();
-      fieldGetter = RowData.createFieldGetter(fieldType, fieldPos);
-      FIELD_GETTER_CACHE.put(cacheKey, fieldGetter);
-    }
-    return Option.of(fieldGetter);
-  }
-
-  public static UnaryOperator<Object> getFieldConverter(Schema schema, String fieldName, Configuration conf) {
-    boolean useUTCTimezone = conf.getBoolean("read.utc-timezone", true);
-    return getFieldConverter(schema, fieldName, useUTCTimezone);
+      return RowData.createFieldGetter(fieldType, fieldPos);
+    });
   }
 
   /**
@@ -79,26 +84,23 @@ public class HoodieRowDataUtil {
    * @param useUTCTimezone whether to use UTC timezone to create converter
    * @return RowData converter from cache or newly created one if not existed in cache.
    */
-  public static UnaryOperator<Object> getFieldConverter(Schema schema, String fieldName, boolean useUTCTimezone) {
+  public static UnaryOperator<Object> internFieldConverter(Schema schema, String fieldName, boolean useUTCTimezone) {
     Pair<Schema, String> cacheKey = Pair.of(schema, fieldName);
-    UnaryOperator<Object> fieldConverter = FIELD_CONVERTER_CACHE.get(cacheKey);
-    if (fieldConverter == null) {
+    return FIELD_CONVERTER_CACHE.computeIfAbsent(cacheKey, key -> {
       Schema.Field field = schema.getField(fieldName);
       if (field == null) {
-        throw new HoodieException(String.format("Field %s is not in schema: %s.", fieldName, schema));
+        throw new HoodieException(String.format("Field: %s does not exist in Schema: %s", fieldName, schema));
       }
       LogicalType fieldType = AvroSchemaConverter.convertToDataType(field.schema()).getLogicalType();
       RowDataToAvroConverter avroConverter = RowDataToAvroConverters.createConverter(fieldType, useUTCTimezone);
-      fieldConverter = new UnaryOperator<Object>() {
+      return new UnaryOperator<Object>() {
         @Override
         public Object apply(Object val) {
           return HoodieAvroUtils.convertValueForSpecificDataTypes(
               field.schema(), avroConverter.convert(field.schema(), val), false);
         }
       };
-      FIELD_CONVERTER_CACHE.put(cacheKey, fieldConverter);
-    }
-    return fieldConverter;
+    });
   }
 
   /**
@@ -107,16 +109,14 @@ public class HoodieRowDataUtil {
    * @param schema schema of record
    * @return All field getters from cache or newly created one if not existed in cache.
    */
-  public static RowData.FieldGetter[] getAllFieldGetters(Schema schema) {
-    RowData.FieldGetter[] fieldGetters = ALL_FIELD_GETTERS_CACHE.get(schema);
-    if (fieldGetters == null) {
-      fieldGetters = new RowData.FieldGetter[schema.getFields().size()];
+  public static RowData.FieldGetter[] internAllFieldGetters(Schema schema) {
+    return ALL_FIELD_GETTERS_CACHE.computeIfAbsent(schema, key -> {
+      RowData.FieldGetter[] fieldGetters = new RowData.FieldGetter[schema.getFields().size()];
       int idx = 0;
       for (Schema.Field field: schema.getFields()) {
-        fieldGetters[idx++] = getFieldGetter(schema, field.name()).get();
+        fieldGetters[idx++] = internFieldGetter(schema, field.name());
       }
-      ALL_FIELD_GETTERS_CACHE.put(schema, fieldGetters);
-    }
-    return fieldGetters;
+      return fieldGetters;
+    });
   }
 }

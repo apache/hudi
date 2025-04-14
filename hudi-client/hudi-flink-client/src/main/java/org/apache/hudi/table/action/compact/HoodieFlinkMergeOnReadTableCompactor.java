@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -34,7 +33,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
@@ -52,12 +50,6 @@ import java.util.List;
 @SuppressWarnings("checkstyle:LineLength")
 public class HoodieFlinkMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
-  private final HoodieFlinkEngineContext flinkEngineContext;
-
-  public HoodieFlinkMergeOnReadTableCompactor(HoodieEngineContext engineContext) {
-    ValidationUtils.checkArgument(engineContext instanceof HoodieFlinkEngineContext);
-    this.flinkEngineContext = (HoodieFlinkEngineContext) engineContext;
-  }
 
   @Override
   public void preCompact(
