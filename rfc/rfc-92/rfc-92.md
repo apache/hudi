@@ -57,7 +57,7 @@ In the future, as Hudi adds row-level or row-group-level skipping, bitmap indexe
 
 ## Design
 
-### Storage Structure
+### Bitmap Metadata Structure
 Bitmap indexes for all columns will be stored in the `bitmap_index` partition of the table's Hudi metadata table. (`<table_path>/.hoodie/metadata/bitmap_index`)
 
 To support bitmap indexing, we plan to introduce a new type of metadata record along with a new metadata field, `BitmapIndexMetadata`.
@@ -77,8 +77,93 @@ Below is another example of how the index record looks like in the storage.
 
 
 ### Writing Index
+Just like other existing Hudi indexes, the logic for writing the bitmap index will be integrated with Hudi's metadata writer during commit operations.
+Bitmap index maintenance during writes typically falls into the following categories: **Initialize**, **Insert**, **Update**, and **Delete**.
+Before diving into each category, let’s define two key bitmap metadata operations that will be referenced frequently:
+> **addBitmapPosition**: 
+> 1. For a given record, extract its indexed column name-value pairs and file group ID to construct the bitmap key.
+> 2. Retrieve the existing bitmap using the key, or initialize an empty one if it doesn't exist.
+> 3. Add the record’s position to the bitmap.
+> 4. Write the bitmap record `<bitmap key, updated bitmap>` to the `bitmap_index` partition in the metadata table
 
-### Reading Index
+> **removeBitmapPosition**:
+> 1. For a given record, extract its indexed column name-value pairs and file group ID to construct the bitmap key.
+> 2. Retrieve the existing bitmap using the key; if it doesn’t exist, the operation becomes a no-op.
+> 3. Remove the record’s position from the bitmap.
+> 4. Write the bitmap record `<bitmap key, updated bitmap>` to the `bitmap_index` partition in the metadata table
+
+Note: We don’t need to explicitly delete outdated bitmap records during updates. 
+Since the bitmap key remains unchanged, the updated record will overwrite the previous one.
+#### Initialize
+When initializing the bitmap index, the metadata writer scans all file groups to collect `existing_records`.
+The bitmap records will be written into the `bitmap_index` partition of the table's Hudi metadata table.
+Pseudocode:
+```
+for record in existing_records:
+  addBitmapPosition(record)
+```
+#### Insert
+The commit metadata for inserts includes files affected by new records.
+The metadata writer extracts `inserted_records` from those files and updates the bitmap index accordingly.
+Pseudocode:
+```
+for record in inserted_records:
+  addBitmapPosition(record)
+```
+#### Update
+Update commit metadata includes files impacted by updated records.
+The metadata writer scans those files and compares the new records to those from the previous file slice.
+If indexed columns have changed, we capture:
+- `new_records`: records with updated indexed column values.
+- `old_records`: corresponding records from the previous file slice.
+The bitmap index is updated in two steps:
+```
+// Note the actual implementation doesn't have to be two for-loops
+for record in new_records:
+  addBitmapPosition(record)
+for record in old_records:
+  removeBitmapPosition(record)
+```
+#### Delete
+Delete commit metadata includes files impacted by deletions.
+The metadata writer compares the current state to the previous file slice to identify `deleted_records`.
+Then we will have steps to maintain bitmap index after deletes in pseudocode:
+```
+for record in deleted_records:
+  removeBitmapPosition(record)
+```
+
+### Reading the Index
+To enable file pruning using the bitmap index, we can extend `SparkBaseIndexSupport` with a new `BitmapIndexSupport`. 
+The initial implementation will target Spark, but the design can be adapted for other engines.
+
+Imagine a table tracking how people commute to work. 
+We index the `gender` and `commute_type` columns using bitmap indexing.
+We want to find the age of the youngest woman who does not commute by car:
+```
+SELECT MIN(age) FROM hudi_table
+WHERE gender = 'female' AND commute_type != 'car';
+```
+This query can generate two filters: 
+- `EqualTo(gender, female)`
+- `Not(EqualTo(commute_type, car))`
+
+We can use the following logic to prune file groups:
+```
+for file_group in file_groups
+  # 1. get bitmap for the gender filter
+  let bitmap_key_female = gender$female$file_group_id
+  let bitmap_female = metadata_table.getBitmap(bitmap_key_female)
+  # 2. get bitmap for the commute_type filter
+  let bitmap_key_car = commute_type$car$file_group_id
+  let bitmap_car = metadata_table.getBitmap(bitmap_key_car)
+  # 3. perform ANDNOT
+  let res_bitmap = bitmap_female.andNot(bitmap_car)
+  # 4. If the result is non-empty, include the file group
+  if res_bitmap.cardinality != 0
+    then include file_group
+```
+![prune_example](./prune_example.png)
 
 ### New Hudi Configs
 
