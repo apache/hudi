@@ -587,7 +587,7 @@ class TestStorageBasedLockProvider {
 
   @Test
   void testShutdownHookFiresDuringTryLockWithTimeout() throws Exception {
-    // This test simulates the scenario where the shutdown hook fires while tryLock(long time, TimeUnit unit) 
+    // This test simulates the scenario where the shutdown hook fires while tryLock(long time, TimeUnit unit)
     // is in progress, and expects that HoodieLockException is thrown when tryLock is called after shutdown.
 
     // Setup mocks to simulate lock being held by another owner (to keep tryLock looping)
