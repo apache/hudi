@@ -19,17 +19,17 @@
 
 package org.apache.hudi.io.compress;
 
+import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipDecompressor;
+import org.apache.hudi.io.compress.builtin.HoodieNoneDecompressor;
 import org.apache.hudi.io.util.IOUtils;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Random;
-import java.util.zip.GZIPOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -72,13 +72,11 @@ public class TestHoodieDecompressor {
   private static InputStream prepareInputStream(CompressionCodec codec) throws IOException {
     switch (codec) {
       case NONE:
-        return new ByteArrayInputStream(INPUT_BYTES);
+        return new ByteArrayInputStream(
+            new HoodieNoneDecompressor().compress(INPUT_BYTES));
       case GZIP:
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(stream)) {
-          gzipOutputStream.write(INPUT_BYTES);
-        }
-        return new ByteArrayInputStream(stream.toByteArray());
+        return new ByteArrayInputStream(
+            new HoodieAirliftGzipDecompressor().compress(INPUT_BYTES));
       default:
         throw new IllegalArgumentException("Not supported in tests.");
     }
