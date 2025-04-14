@@ -60,10 +60,14 @@ To support bitmap indexing, we plan to introduce a new type of metadata record a
 This field will store the serialized and encoded bitmap string directly.
 Each record's key will follow the format: `<column_name>$<column_value>$<file_group_id>`,
 where file_group_id is defined as `<partition_path>$<file_id>`.
-> `store_type$grocery$20250401$2aa10971-11b2-41b3-9baf-ab33c0000144-0`
+```
+store_type$grocery$20250401$2aa10971-11b2-41b3-9baf-ab33c0000144-0
+```
 
 For non-partitioned tables, we use `.` as a placeholder for the partition path. In this case, the key would be:
->`store_type$grocery$.$2aa10971-11b2-41b3-9baf-ab33c0000144-0`
+```
+store_type$grocery$.$2aa10971-11b2-41b3-9baf-ab33c0000144-0
+```
 
 The index key can be constructed on-the-fly by concatenating strings during both read and write operations.
 Since the reader must know at least the column name and column value, searching bitmaps by key prefix is also supported.
@@ -132,8 +136,8 @@ This is because:
 - Although the current file group may not contain the value, it could be added back in the future. 
   Removing the bitmap too aggressively would introduce unnecessary complexity and could even hurt performance.
 - The total number of bitmap records stored in the metadata table is expected to remain manageable.
-  Let m represent the number of columns indexed using bitmap indexes, and n be the average cardinality of these columns.
-  Then, Hudi maintains O(mn) bitmap records for the table.
+  Let `m` represent the number of columns indexed using bitmap indexes, and `n` be the average cardinality of these columns.
+  Then, Hudi maintains `O(mn)` bitmap records for the table.
 
 ### Reading the Index
 To enable file pruning using the bitmap index, we can extend `SparkBaseIndexSupport` with a new `BitmapIndexSupport`. 
