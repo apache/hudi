@@ -201,8 +201,8 @@ public class HFileUtils extends FileFormatUtils {
       final byte[] recordBytes = serializeRecord(record, writerSchema, keyFieldName);
       if (sortedRecordsMap.containsKey(recordKey)) {
         LOG.error("Found duplicate record with recordKey: {} ", recordKey);
-        printRecord("Previous record", sortedRecordsMap.get(recordKey), writerSchema);
-        printRecord("Current record", recordBytes, writerSchema);
+        logRecordMetadata("Previous record", sortedRecordsMap.get(recordKey), writerSchema);
+        logRecordMetadata("Current record", recordBytes, writerSchema);
         throw new HoodieException(String.format("Writing multiple records with same key %s not supported for Hfile format with Metadata table",
             recordKey));
       }
@@ -235,13 +235,13 @@ public class HFileUtils extends FileFormatUtils {
   /**
    * Print the meta fields of the record of interest
    */
-  private void printRecord(String msg, byte[] bs, Schema schema) throws IOException {
+  private void logRecordMetadata(String msg, byte[] bs, Schema schema) throws IOException {
     GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema);
     if (schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) != null) {
-      LOG.error(String.format("%s: Hudi meta field values -> Record key: %s, Partition Path: %s, FileName: %s, CommitTime: %s, CommitSeqNo: %s", msg,
-          record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString()), record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(),
-          record.get(HoodieRecord.FILENAME_METADATA_FIELD).toString(), record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString(),
-          record.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).toString());
+      LOG.error("{}: Hudi meta field values -> Record key: {}, Partition Path: {}, FileName: {}, CommitTime: {}, CommitSeqNo: {}", msg,
+          record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD), record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+          record.get(HoodieRecord.FILENAME_METADATA_FIELD), record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
+          record.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD));
     }
   }
 
