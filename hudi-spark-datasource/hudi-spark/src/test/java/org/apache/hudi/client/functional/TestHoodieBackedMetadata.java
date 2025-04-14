@@ -1980,9 +1980,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // there are 3 partitions in total and 2 commits. total entries should be 6.
       assertEquals(result.size(), 6);
-      result.forEach(entry -> {
-        //LOG.warn("Prefix search entries just for record key col : " + entry.getRecordKey().toString() + " :: " + entry.getData().getColumnStatMetadata().get().toString());
-      });
 
       // prefix search for col(_hoodie_record_key) and first partition. only 2 files should be matched
       PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
@@ -1991,7 +1988,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);
       result.forEach(entry -> {
-        // LOG.warn("Prefix search entries for record key col and first partition : " + entry.getRecordKey().toString() + " :: " + entry.getData().getColumnStatMetadata().get().toString());
         HoodieMetadataColumnStats metadataColumnStats = entry.getData().getColumnStatMetadata().get();
         String fileName = metadataColumnStats.getFileName();
         if (fileName.contains(firstCommit)) {
@@ -2011,7 +2007,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);
       result.forEach(entry -> {
-        // LOG.warn("Prefix search entries for record key col and first partition : " + entry.getRecordKey().toString() + " :: " + entry.getData().getColumnStatMetadata().get().toString());
         HoodieMetadataColumnStats metadataColumnStats = entry.getData().getColumnStatMetadata().get();
         // for commit time column, min max should be the same since we disable small files, every commit will create a new file
         assertEquals(metadataColumnStats.getMinValue(), metadataColumnStats.getMaxValue());

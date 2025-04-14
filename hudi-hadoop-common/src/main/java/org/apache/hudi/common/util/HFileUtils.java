@@ -200,11 +200,11 @@ public class HFileUtils extends FileFormatUtils {
 
       final byte[] recordBytes = serializeRecord(record, writerSchema, keyFieldName);
       if (sortedRecordsMap.containsKey(recordKey)) {
-        LOG.error("Found duplicate record with recordKey: " + recordKey);
+        LOG.error("Found duplicate record with recordKey: {} ", recordKey);
         printRecord("Previous record", sortedRecordsMap.get(recordKey), writerSchema);
         printRecord("Current record", recordBytes, writerSchema);
-        throw new HoodieException(String.format("Writing multiple records with same key %s not supported for %s",
-            recordKey, this.getClass().getName()));
+        throw new HoodieException(String.format("Writing multiple records with same key %s not supported for Hfile format with Metadata table",
+            recordKey));
       }
       sortedRecordsMap.put(recordKey, recordBytes);
     }
@@ -233,12 +233,16 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   /**
-   * Print the record in json format
+   * Print the meta fields of the record of interest
    */
   private void printRecord(String msg, byte[] bs, Schema schema) throws IOException {
     GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema);
-    byte[] json = HoodieAvroUtils.avroToJson(record, true);
-    LOG.error(String.format("%s: %s", msg, new String(json)));
+    if (schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) != null) {
+      LOG.error(String.format("%s: Hudi meta field values -> Record key: %s, Partition Path: %s, FileName: %s, CommitTime: %s, CommitSeqNo: %s", msg,
+          record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString()), record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(),
+          record.get(HoodieRecord.FILENAME_METADATA_FIELD).toString(), record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString(),
+          record.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).toString());
+    }
   }
 
   @Override

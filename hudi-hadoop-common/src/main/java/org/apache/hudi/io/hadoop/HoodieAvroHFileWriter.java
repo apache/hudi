@@ -72,7 +72,6 @@ public class HoodieAvroHFileWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
-  private final Schema schema;
   private final Option<Schema.Field> keyFieldSchema;
   private HFile.Writer writer;
   private String minRecordKey;
@@ -80,7 +79,7 @@ public class HoodieAvroHFileWriter
   private String prevRecordKey;
 
   // This is private in CacheConfig so have been copied here.
-  private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
+  private static final String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
   public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, Schema schema,
                                TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
@@ -91,7 +90,6 @@ public class HoodieAvroHFileWriter
     this.isWrapperFileSystem = fs instanceof HoodieWrapperFileSystem;
     this.wrapperFs = this.isWrapperFileSystem ? Option.of((HoodieWrapperFileSystem) fs) : Option.empty();
     this.hfileConfig = hfileConfig;
-    this.schema = schema;
     this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
 
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the

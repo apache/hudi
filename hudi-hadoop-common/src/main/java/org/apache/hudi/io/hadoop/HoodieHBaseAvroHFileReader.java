@@ -371,7 +371,8 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   private static Option<IndexedRecord> fetchRecordByKeyInternal(HFileScanner scanner, String key, Schema writerSchema, Schema readerSchema) throws IOException {
-    KeyValue kv = new KeyValue(getUTF8Bytes(key), null, null, null);
+    byte[] keyBytes = getUTF8Bytes(key);
+    KeyValue kv = new KeyValue(keyBytes, null, null, null);
     // NOTE: HFile persists both keys/values as bytes, therefore lexicographical sorted is
     //       essentially employed
     //
@@ -394,7 +395,7 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     // key is found and the cursor is left where the key is found
     Cell c = scanner.getCell();
     byte[] valueBytes = copyValueFromCell(c);
-    GenericRecord record = deserialize(getUTF8Bytes(key), valueBytes, writerSchema, readerSchema);
+    GenericRecord record = deserialize(keyBytes, valueBytes, writerSchema, readerSchema);
 
     return Option.of(record);
   }
