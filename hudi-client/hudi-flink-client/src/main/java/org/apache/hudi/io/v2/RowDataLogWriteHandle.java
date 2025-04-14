@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.AppendResult;
+import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
@@ -95,8 +96,8 @@ public class RowDataLogWriteHandle<T, I, K, O>
 
   private void initWriteConf(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig) {
     storageConf.set(
-        HoodieStorageConfig.PARQUET_WRITE_UTC_TIMEZONE.key(),
-        writeConfig.getString(HoodieStorageConfig.PARQUET_WRITE_UTC_TIMEZONE.key()));
+        HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
+        writeConfig.getString(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key()));
     storageConf.set(
         HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(),
         HoodieFlinkIOFactory.class.getName());
@@ -117,6 +118,10 @@ public class RowDataLogWriteHandle<T, I, K, O>
 
   @Override
   protected void processAppendResult(AppendResult result, Option<HoodieLogBlock> dataBlock) {
+    if (pickLogDataBlockFormat() == HoodieLogBlockType.AVRO_DATA_BLOCK) {
+      super.processAppendResult(result, dataBlock);
+      return;
+    }
     HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
     updateWriteStatus(result, stat);
 
@@ -182,6 +187,8 @@ public class RowDataLogWriteHandle<T, I, K, O>
             writeConfig.getParquetCompressionCodec(),
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled());
+      case AVRO_DATA_BLOCK:
+        return new HoodieAvroDataBlock(records, header, keyField);
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " is not implemented for Flink RowData append handle.");
     }
@@ -208,7 +215,14 @@ public class RowDataLogWriteHandle<T, I, K, O>
     if (logBlockTypeOpt.isPresent()) {
       return logBlockTypeOpt.get();
     }
-    return HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
+    // Fallback to deduce data-block type based on the base file format
+    switch (hoodieTable.getBaseFileFormat()) {
+      case PARQUET:
+        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+      default:
+        throw new HoodieException("Base file format " + hoodieTable.getBaseFileFormat()
+            + " does not have associated log block type");
+    }
   }
 
   @Override

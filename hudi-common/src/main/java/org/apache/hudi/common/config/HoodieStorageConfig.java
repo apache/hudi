@@ -160,8 +160,8 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Control whether to write bloom filter or not. Default true. "
           + "We can set to false in non bloom index cases for CPU resource saving.");
 
-  public static final ConfigProperty<Boolean> PARQUET_WRITE_UTC_TIMEZONE = ConfigProperty
-      .key("hoodie.parquet.write.utc-timezone.enabled")
+  public static final ConfigProperty<Boolean> WRITE_UTC_TIMEZONE = ConfigProperty
+      .key("hoodie.write.utc-timezone.enabled")
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.1.0")
@@ -515,7 +515,7 @@ public class HoodieStorageConfig extends HoodieConfig {
     }
 
     public Builder withWriteUtcTimezone(boolean writeUtcTimezone) {
-      storageConfig.setValue(PARQUET_WRITE_UTC_TIMEZONE, String.valueOf(writeUtcTimezone));
+      storageConfig.setValue(WRITE_UTC_TIMEZONE, String.valueOf(writeUtcTimezone));
       return this;
     }
 

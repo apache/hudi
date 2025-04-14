@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -2508,6 +2509,29 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
   }
 
+  @ParameterizedTest
+  @MethodSource("indexAndLogBlockType")
+  void testRowDataWriteMode(String index, String logBlockType) throws Exception {
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    streamTableEnv.executeSql(createSource);
+
+    // insert first batch of data with rowdata mode writing disabled
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
+        .option(FlinkOptions.INDEX_TYPE, index)
+        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logBlockType)
+        .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    // reading from the earliest
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -2586,6 +2610,19 @@ public class ITTestHoodieDataSource {
             {"FLINK_STATE", true},
             {"BUCKET", false},
             {"BUCKET", true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (index type, log block type).
+   */
+  private static Stream<Arguments> indexAndLogBlockType() {
+    Object[][] data =
+        new Object[][] {
+            {"FLINK_STATE", "parquet"},
+            {"FLINK_STATE", "avro"},
+            {"BUCKET", "parquet"},
+            {"BUCKET", "avro"}};
     return Stream.of(data).map(Arguments::of);
   }
 
