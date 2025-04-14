@@ -46,12 +46,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.EXPRESSION_INDEX_ENABLE_PROP;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -97,8 +91,8 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsR
 public enum MetadataPartitionType {
   FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 2) {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      return getBooleanWithAltKeys(writeConfig, ENABLE);
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+      return metadataConfig.isEnabled();
     }
 
     @Override
@@ -113,8 +107,8 @@ public enum MetadataPartitionType {
   },
   COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-", 3) {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_COLUMN_STATS);
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+      return metadataConfig.isColumnStatsIndexEnabled();
     }
 
     @Override
@@ -135,8 +129,8 @@ public enum MetadataPartitionType {
   },
   BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-", 4) {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_BLOOM_FILTER);
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+      return metadataConfig.isBloomFilterIndexEnabled();
     }
 
     @Override
@@ -166,8 +160,8 @@ public enum MetadataPartitionType {
   },
   RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-", 5) {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      return getBooleanWithAltKeys(writeConfig, RECORD_INDEX_ENABLE_PROP);
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+      return metadataConfig.isRecordIndexEnabled();
     }
 
     @Override
@@ -189,8 +183,8 @@ public enum MetadataPartitionType {
   },
   EXPRESSION_INDEX(PARTITION_NAME_EXPRESSION_INDEX_PREFIX, "expr-index-", -1) {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      return getBooleanWithAltKeys(writeConfig, EXPRESSION_INDEX_ENABLE_PROP);
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+      return metadataConfig.isExpressionIndexEnabled();
     }
 
     @Override
@@ -210,8 +204,8 @@ public enum MetadataPartitionType {
   },
   SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      return getBooleanWithAltKeys(writeConfig, SECONDARY_INDEX_ENABLE_PROP);
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+      return metadataConfig.isSecondaryIndexEnabled();
     }
 
     @Override
@@ -238,8 +232,8 @@ public enum MetadataPartitionType {
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_PARTITION_STATS);
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+      return metadataConfig.isPartitionStatsIndexEnabled();
     }
 
     @Override
@@ -261,8 +255,8 @@ public enum MetadataPartitionType {
   // ALL_PARTITIONS is just another record type in FILES partition
   ALL_PARTITIONS(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 1) {
     @Override
-    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      return getBooleanWithAltKeys(writeConfig, ENABLE);
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+      return metadataConfig.isEnabled();
     }
 
     @Override
@@ -356,7 +350,7 @@ public enum MetadataPartitionType {
   /**
    * Check if the metadata partition is enabled based on the metadata config.
    */
-  public abstract boolean isMetadataPartitionEnabled(TypedProperties writeConfig);
+  public abstract boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig);
 
   /**
    * Check if the metadata partition is available based on the table config.
@@ -461,8 +455,9 @@ public enum MetadataPartitionType {
     if (!getBooleanWithAltKeys(writeConfig, ENABLE)) {
       return Collections.emptyList();
     }
+    HoodieMetadataConfig dataMetadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(writeConfig).build();
     return Arrays.stream(getValidValues())
-        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(writeConfig) || partitionType.isMetadataPartitionAvailable(metaClient))
+        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(dataMetadataConfig) || partitionType.isMetadataPartitionAvailable(metaClient))
         .collect(Collectors.toList());
   }
 

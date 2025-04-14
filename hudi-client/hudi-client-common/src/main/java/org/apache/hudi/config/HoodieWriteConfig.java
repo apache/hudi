@@ -2130,6 +2130,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    *
    * <p>The bloom filter index is enabled if the metadata table is enabled and bloom filter index is enabled in the metadata configuration.
    *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
+   *
    * @return {@code true} if the metadata bloom filter index is enabled, {@code false} otherwise.
    */
   public boolean isMetadataBloomFilterIndexEnabled() {
@@ -2140,6 +2143,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Determines if the metadata column stats index is enabled.
    *
    * <p>The column stats index is enabled if metadata table is enabled and column stats index is enabled in the metadata configuration.
+   *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the metadata column stats index is enabled, {@code false} otherwise.
    */
@@ -2156,6 +2162,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    *   <li>The metadata table is enabled and partition stats index is enabled in the metadata configuration.</li>
    * </ul>
    *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
+   *
    * @return {@code true} if the partition stats index is enabled, {@code false} otherwise.
    */
   public boolean isPartitionStatsIndexEnabled() {
@@ -2168,7 +2177,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * Determines if the record index is enabled.
    *
-   * <p>The record index is enabled if the record index is enabled in the metadata configuration
+   * <p>The record index is enabled if the record index is enabled in the metadata configuration.
+   *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the record index is enabled, {@code false} otherwise.
    */
