@@ -57,9 +57,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
       buildHoodieConfig(catalogTable)
     }
 
-    val sparkRowSerDe = sparkAdapter.createSparkRowSerDe(plan.schema)
-    val rows = plan.execute().map(sparkRowSerDe.deserializeRow)
-    val df = sparkSession.createDataFrame(rows, plan.schema)
+    val df = sparkSession.internalCreateDataFrame(plan.execute(), plan.schema)
     HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
 
     sparkSession.catalog.refreshTable(tableId)
