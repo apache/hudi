@@ -36,9 +36,6 @@ This project proposes the integration of bitmap indexing into Hudi’s indexing 
 Bitmap indexes offer compact storage and fast bitwise operations, making them particularly well-suited for analytical workloads where predicates involve columns with a limited number of distinct values. 
 By introducing bitmap index support, we aim to enhance Hudi’s performance for a broader set of query patterns, especially in use cases with filtering on categorical or boolean fields.
 
-
-
-
 ## Background
 
 A bitmap index is a specialized indexing technique that enhances query performance, particularly for columns with low cardinality (few distinct values). 
@@ -53,7 +50,6 @@ One limitation is that Hudi currently lacks row-level skipping, so once a file g
 Even so, bitmap indexes are valuable, especially when multiple low-cardinality columns are indexed and commonly used in joins or filters. 
 Bitwise operations on these indexes can efficiently narrow down relevant file groups. 
 In the future, as Hudi adds row-level or row-group-level skipping, bitmap indexes will offer even greater performance gains by enabling precise row filtering within files.
-
 
 ## Design
 
@@ -75,8 +71,7 @@ Since the reader must know at least the column name and column value, searching 
 Below is another example of how the index record looks like in the storage.
 ![bitmap_payload](./bitmap_payload.png)
 
-
-### Writing Index
+### Maintaining the Index
 Just like other existing Hudi indexes, the logic for writing the bitmap index will be integrated with Hudi's metadata writer during commit operations.
 Bitmap index maintenance during writes typically falls into the following categories: **Initialize**, **Insert**, **Update**, and **Delete**.
 Before diving into each category, let’s define two key bitmap metadata operations that will be referenced frequently:
@@ -132,6 +127,13 @@ Then we will have steps to maintain bitmap index after deletes in pseudocode:
 for record in deleted_records:
   removeBitmapPosition(record)
 ```
+Unlike other indexes, updating or deleting records doesn't cause Hudi to remove bitmap index entries—even if the corresponding bitmap no longer has any positions stored.
+This is because:
+- Although the current file group may not contain the value, it could be added back in the future. 
+  Removing the bitmap too aggressively would introduce unnecessary complexity and could even hurt performance.
+- The total number of bitmap records stored in the metadata table is expected to remain manageable.
+  Let m represent the number of columns indexed using bitmap indexes, and n be the average cardinality of these columns.
+  Then, Hudi maintains O(mn) bitmap records for the table.
 
 ### Reading the Index
 To enable file pruning using the bitmap index, we can extend `SparkBaseIndexSupport` with a new `BitmapIndexSupport`. 
@@ -167,8 +169,6 @@ for file_group in file_groups
 
 ### New Hudi Configs
 
-
-### Spark SQL Support
 ## Rollout/Adoption Plan
 
 - What impact (if any) will there be on existing users?
@@ -182,4 +182,7 @@ for file_group in file_groups
 
 ## Test Plan
 ### Unit Tests
-### Performance Tests
+### Performance Benchmark
+## Future Improvement
+- Support `CREATE INDEX` SQL semantics for bitmap index and allow creating bitmap index asynchronously
+- Adapt the bitmap index support for other engines
