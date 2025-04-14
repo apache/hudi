@@ -83,13 +83,13 @@ public class StorageBasedLockConfig extends HoodieConfig {
         throw new IllegalArgumentException(BASE_PATH.key() + notExistsMsg);
       }
       if (lockConfig.getLongOrDefault(VALIDITY_TIMEOUT_SECONDS) < lockConfig.getLongOrDefault(HEARTBEAT_POLL_SECONDS)
-          * 3) {
+          * 10) {
         throw new IllegalArgumentException(
-            VALIDITY_TIMEOUT_SECONDS.key() + " should be more than triple " + HEARTBEAT_POLL_SECONDS.key());
+            VALIDITY_TIMEOUT_SECONDS.key() + " should be greater than or equal to 10x " + HEARTBEAT_POLL_SECONDS.key());
       }
-      if (lockConfig.getLongOrDefault(VALIDITY_TIMEOUT_SECONDS) < 5) {
+      if (lockConfig.getLongOrDefault(VALIDITY_TIMEOUT_SECONDS) < 10) {
         throw new IllegalArgumentException(
-            VALIDITY_TIMEOUT_SECONDS.key() + " should be greater than or equal to 5 seconds.");
+            VALIDITY_TIMEOUT_SECONDS.key() + " should be greater than or equal to 10 seconds.");
       }
       if (lockConfig.getLongOrDefault(HEARTBEAT_POLL_SECONDS) < 1) {
         throw new IllegalArgumentException(

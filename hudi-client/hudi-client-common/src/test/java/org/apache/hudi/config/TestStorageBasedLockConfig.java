@@ -79,7 +79,7 @@ class TestStorageBasedLockConfig {
     // Ensure that validations which restrict the time-based inputs are working.
     TypedProperties props = new TypedProperties();
     props.setProperty(BASE_PATH.key(), "/hudi/table/basepath");
-    // Invalid config case: validity timeout is less than triple of heartbeat poll period
+    // Invalid config case: validity timeout is less than 10x of heartbeat poll period
     props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "5");
     props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "3");
     StorageBasedLockConfig.Builder propsBuilder = new StorageBasedLockConfig.Builder();
@@ -87,13 +87,13 @@ class TestStorageBasedLockConfig {
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
         () -> propsBuilder.fromProperties(props));
     assertTrue(exception.getMessage().contains(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key()));
-    // Invalid config case: validity timeout is less than 5 seconds
-    props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "4");
+    // Invalid config case: validity timeout is less than 10 seconds
+    props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "9");
     props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
     exception = assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
     assertTrue(exception.getMessage().contains(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key()));
     // Invalid config case: heartbeat poll period is less than 1 second
-    props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "5");
+    props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
     props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "0");
     exception = assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
     assertTrue(exception.getMessage().contains(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key()));
