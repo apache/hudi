@@ -130,7 +130,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   /**
    * Default constructor for StorageBasedLockProvider, required by LockManager
    * to instantiate it using reflection, supports 0.14.1 LP format.
-   * 
+   *
    * @param lockConfiguration The lock configuration, should be transformable into
    *                          StorageBasedLockConfig
    * @param conf              Storage config, ignored.
