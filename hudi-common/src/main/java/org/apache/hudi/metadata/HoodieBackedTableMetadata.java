@@ -29,6 +29,7 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -389,17 +390,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       result = toStream(records)
           .map(record -> {
             GenericRecord data = (GenericRecord) record.getData();
-            return Pair.of(
-                (String) (data).get(HoodieMetadataPayload.KEY_FIELD_NAME),
-                composeRecord(data, partitionName));
+            String recordKey = (String) data.get(HoodieMetadataPayload.KEY_FIELD_NAME);
+            return Pair.of(recordKey, composeRecord(data, recordKey, partitionName));
           })
           .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     }
     return result;
   }
 
-  private HoodieRecord<HoodieMetadataPayload> composeRecord(GenericRecord avroRecord, String partitionName) {
-    return new HoodieAvroRecord<>(new HoodieKey(avroRecord.get(HoodieMetadataPayload.KEY_FIELD_NAME).toString(), partitionName),
+  private HoodieRecord<HoodieMetadataPayload> composeRecord(GenericRecord avroRecord, String recordKey, String partitionName) {
+    return new HoodieAvroRecord<>(new HoodieKey(recordKey, partitionName),
         new HoodieMetadataPayload(avroRecord, 0L), null);
   }
 
