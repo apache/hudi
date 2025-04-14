@@ -38,7 +38,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
-public class StorageLockFileTest {
+public class StorageLockClientFileTest {
 
   private static final String JSON_DATA = "{\"expired\":false,\"validUntil\":1700000000000,\"owner\":\"testOwner\"}";
   private static final String JSON_DATA_EXTRA_FIELD = "{\"expired\":true,\"validUntil\":1600000000000,\"owner\":\"otherOwner\",\"state\":\"active\"}";
@@ -59,7 +59,7 @@ public class StorageLockFileTest {
   @Test
   void testCreateValidInputStream() {
     StorageLockFile file = StorageLockFile.createFromStream(validJsonStream, VERSION_ID);
-    assertEquals(1700000000000L, file.getValidUntil());
+    assertEquals(1700000000000L, file.getValidUntilMs());
     assertEquals("testOwner", file.getOwner());
     assertEquals(VERSION_ID, file.getVersionId());
     assertFalse(file.isExpired());
@@ -68,7 +68,7 @@ public class StorageLockFileTest {
   @Test
   void testCreateValidInputStreamExtraField() {
     StorageLockFile file = StorageLockFile.createFromStream(extraFieldValidJsonStream, VERSION_ID);
-    assertEquals(1600000000000L, file.getValidUntil());
+    assertEquals(1600000000000L, file.getValidUntilMs());
     assertEquals("otherOwner", file.getOwner());
     assertEquals(VERSION_ID, file.getVersionId());
     assertTrue(file.isExpired());

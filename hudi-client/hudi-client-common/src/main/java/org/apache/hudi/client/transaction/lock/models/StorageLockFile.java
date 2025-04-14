@@ -35,7 +35,7 @@ public class StorageLockFile {
   private final StorageLockData data;
   private final String versionId;
 
-  // Get a custom object mapper. See ConditionalWriteLockData for required properties.
+  // Get a custom object mapper. See StorageLockData for required properties.
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
       // This allows us to add new properties down the line.
       .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
@@ -43,7 +43,7 @@ public class StorageLockFile {
       .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES);
 
   /**
-   * Initializes a ConditionalWriteLockFile using the data and unique versionId.
+   * Initializes a StorageLockFile using the data and unique versionId.
    *
    * @param data      The data in the lock file.
    * @param versionId The version of this lock file. Used to ensure consistency through conditional writes.
@@ -56,11 +56,11 @@ public class StorageLockFile {
   }
 
   /**
-   * Factory method to load an input stream into a ConditionalWriteLockFile.
+   * Factory method to load an input stream into a StorageLockFile.
    *
    * @param inputStream The input stream of the JSON content.
    * @param versionId   The unique version identifier for the lock file.
-   * @return A new instance of ConditionalWriteLockFile.
+   * @return A new instance of StorageLockFile.
    * @throws HoodieIOException If deserialization fails.
    */
   public static StorageLockFile createFromStream(InputStream inputStream, String versionId) {
@@ -68,7 +68,7 @@ public class StorageLockFile {
       StorageLockData data = OBJECT_MAPPER.readValue(inputStream, StorageLockData.class);
       return new StorageLockFile(data, versionId);
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to deserialize JSON content into ConditionalWriteLockData", e);
+      throw new HoodieIOException("Failed to deserialize JSON content into StorageLockData", e);
     }
   }
 
@@ -111,7 +111,7 @@ public class StorageLockFile {
    * Gets the expiration time in ms.
    * @return A long representing the expiration.
    */
-  public long getValidUntil() {
+  public long getValidUntilMs() {
     return this.data.getValidUntil();
   }
 

@@ -29,7 +29,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -141,9 +140,7 @@ public class HoodieAvroHFileWriter
 
   @Override
   public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
-    // do not allow duplicates for record index (primary index)
-    // secondary index can have duplicates
-    if (prevRecordKey.equals(recordKey) && file.getName().startsWith(MetadataPartitionType.RECORD_INDEX.getFileIdPrefix())) {
+    if (prevRecordKey.equals(recordKey)) {
       throw new HoodieDuplicateKeyException("Duplicate recordKey " + recordKey + " found while writing to HFile."
           + "Record payload: " + record);
     }

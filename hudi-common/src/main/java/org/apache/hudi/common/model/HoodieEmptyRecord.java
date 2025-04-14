@@ -39,7 +39,10 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   public HoodieEmptyRecord(HoodieKey key, HoodieRecordType type) {
     super(key, null);
     this.type = type;
-    this.orderingVal = null;
+    // IMPORTANT:
+    // This should be kept in line with EmptyHoodieRecordPayload
+    // default natural order
+    this.orderingVal = 0;
   }
 
   public HoodieEmptyRecord(HoodieKey key, HoodieOperation operation, Comparable<?> orderingVal, HoodieRecordType type) {
