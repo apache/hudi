@@ -181,8 +181,6 @@ for file_group in file_groups
 <img src="./prune_example.png" width="610" height="732" />
 </p>
 
-### New Hudi Configs
-
 ## Rollout/Adoption Plan
 
 - What impact (if any) will there be on existing users?
