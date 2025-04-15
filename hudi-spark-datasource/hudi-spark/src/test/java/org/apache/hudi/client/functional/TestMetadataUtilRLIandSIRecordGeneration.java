@@ -55,7 +55,6 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -72,6 +71,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRecordKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRevivedAndDeletedKeysFromMergedLogs;
@@ -85,7 +85,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@Disabled("HUDI-9281")
 public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBase {
 
   /**
@@ -112,8 +111,10 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       String commitTime = client.createNewInstantTime();
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, 100);
       client.startCommitWithTime(commitTime);
-      List<WriteStatus> writeStatuses1 = client.insert(jsc.parallelize(records1, 1), commitTime).collect();
-      assertNoWriteErrors(writeStatuses1);
+      JavaRDD<WriteStatus> rawWriteStatusesRDD1 = client.insert(jsc.parallelize(records1, 1), commitTime);
+      JavaRDD<WriteStatus> writeStatusesRDD1 = jsc.parallelize(rawWriteStatusesRDD1.collect(), 1);
+      List<WriteStatus> writeStatuses1 = writeStatusesRDD1.collect();
+      client.commit(commitTime, writeStatusesRDD1);
 
       // assert RLI records for a base file from 1st commit
       String finalCommitTime = commitTime;
@@ -155,7 +156,10 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       records2.addAll(updates2);
       records2.addAll(deletes2);
 
-      List<WriteStatus> writeStatuses2 = client.upsert(jsc.parallelize(records2, 1), commitTime).collect();
+      JavaRDD<WriteStatus> rawWriteStatuses2 = client.upsert(jsc.parallelize(records2, 1), commitTime);
+      JavaRDD<WriteStatus> writeStatusesRDD2 = jsc.parallelize(rawWriteStatuses2.collect(), 1);
+      List<WriteStatus> writeStatuses2 = writeStatusesRDD2.collect();
+
       assertNoWriteErrors(writeStatuses2);
 
       List<String> expectedInserts = inserts2.stream().map(record -> record.getKey().getRecordKey()).collect(Collectors.toList());
@@ -207,8 +211,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieWriteConfig writeConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2)
-            .withInlineCompaction(true)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(3)
+            .withInlineCompaction(false)
             .compactionSmallFileSize(0).build()).build();
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
@@ -216,7 +220,10 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       String commitTime = client.createNewInstantTime();
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, 100);
       client.startCommitWithTime(commitTime);
-      List<WriteStatus> writeStatuses1 = client.insert(jsc.parallelize(records1, 1), commitTime).collect();
+      JavaRDD<WriteStatus> rawWriteStatusesRDD1 = client.insert(jsc.parallelize(records1, 1), commitTime);
+      List<WriteStatus> writeStatuses1 = rawWriteStatusesRDD1.collect();
+      JavaRDD<WriteStatus> writeStatusesRDD1 = jsc.parallelize(writeStatuses1, 1);
+      client.commit(commitTime, writeStatusesRDD1, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       assertNoWriteErrors(writeStatuses1);
 
       // assert RLI records for a base file from 1st commit
@@ -258,8 +265,11 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       records2.addAll(updates2);
       records2.addAll(deletes2);
 
-      List<WriteStatus> writeStatuses2 = client.upsert(jsc.parallelize(records2, 1), commitTime).collect();
-      assertNoWriteErrors(writeStatuses2);
+      JavaRDD<WriteStatus> rawWriteStatusesRDD2 = client.upsert(jsc.parallelize(records2, 1), commitTime);
+      List<WriteStatus> writeStatuses2 = rawWriteStatusesRDD2.collect();
+      JavaRDD<WriteStatus> writeStatusesRDD2 = jsc.parallelize(writeStatuses2, 1);
+      client.commit(commitTime, writeStatusesRDD2, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+
       assertRLIandSIRecordGenerationAPIs(inserts2, updates2, deletes2, writeStatuses2, commitTime, writeConfig);
 
       // trigger 2nd commit.
@@ -274,8 +284,10 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       records3.addAll(updates3);
       records3.addAll(deletes3);
 
-      List<WriteStatus> writeStatuses3 = client.upsert(jsc.parallelize(records3, 1), commitTime).collect();
-      assertNoWriteErrors(writeStatuses3);
+      JavaRDD<WriteStatus> rawWriteStatusesRDD3 = client.upsert(jsc.parallelize(records3, 1), commitTime);
+      List<WriteStatus> writeStatuses3 = rawWriteStatusesRDD3.collect();
+      JavaRDD<WriteStatus> writeStatusesRDD3 = jsc.parallelize(writeStatuses3, 1);
+      client.commit(commitTime, writeStatusesRDD3, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       assertRLIandSIRecordGenerationAPIs(inserts3, updates3, deletes3, writeStatuses3, finalCommitTime3, writeConfig);
 
       // trigger compaction
