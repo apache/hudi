@@ -78,7 +78,7 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
   def testConvertValueToEngineType(): Unit = {
     val reader = Mockito.mock(classOf[SparkParquetReader])
     val stringValue = "string_value"
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf())
     assertEquals(1, sparkReaderContext.convertValueToEngineType(1))
     assertEquals(1L, sparkReaderContext.convertValueToEngineType(1L))
     assertEquals(1.1f, sparkReaderContext.convertValueToEngineType(1.1f))

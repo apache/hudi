@@ -99,7 +99,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def getHoodieReaderContext(tablePath: String, avroSchema: Schema, storageConf: StorageConfiguration[_]): HoodieReaderContext[InternalRow] = {
     val reader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
-    new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty)
+    new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, getStorageConf)
   }
 
   override def commitToTable(recordList: util.List[HoodieRecord[_]], operation: String, options: util.Map[String, String]): Unit = {
@@ -149,7 +149,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   @Test
   def testGetOrderingValue(): Unit = {
     val reader = Mockito.mock(classOf[SparkParquetReader])
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, getStorageConf)
     val orderingFieldName = "col2"
     val avroSchema = new Schema.Parser().parse(
       "{\"type\": \"record\",\"name\": \"test\",\"namespace\": \"org.apache.hudi\",\"fields\": ["
