@@ -73,7 +73,6 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -478,7 +477,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             0, Long.MAX_VALUE, usePosition, false);
         fileGroupReader.initRecordIterators();
         // read records from the FG reader
-        return fileGroupReader.getClosableIterator(); // TODO: does this actually close??
+        return fileGroupReader.getClosableIterator();
       }
     }).rdd();
 
