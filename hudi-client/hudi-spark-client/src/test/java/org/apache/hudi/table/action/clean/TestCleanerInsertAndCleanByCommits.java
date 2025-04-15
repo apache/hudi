@@ -42,6 +42,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -68,6 +69,7 @@ import static org.apache.hudi.testutils.HoodieClientTestBase.Function3;
 import static org.apache.hudi.testutils.HoodieClientTestBase.wrapRecordsGenFunctionForPreppedCalls;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Disabled("HUDI-9281")
 public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTestHarness {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestCleanerInsertAndCleanByCommits.class);

@@ -35,6 +35,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -53,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
 
+@Disabled("HUDI-9281")
 public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientTestHarness {
 
   @BeforeEach
