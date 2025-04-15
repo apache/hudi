@@ -78,13 +78,14 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -443,10 +444,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
           getGcsMetadataRecord(commitTime, "data-file-4.json", "bucket-1", "1")
       );
       JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime);
-
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
-
+      writeClient.commit(commitTime, result, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       return Pair.of(commitTime, gcsMetadataRecords);
     }
   }
