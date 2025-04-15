@@ -41,7 +41,10 @@ By introducing bitmap index support, we aim to enhance Hudi’s performance for 
 A bitmap index is a specialized indexing technique that enhances query performance, particularly for columns with low cardinality (few distinct values). 
 Instead of storing row pointers like traditional indexes, it represents data as bitmaps, where each distinct value in a column has a corresponding bit vector indicating the presence of that value in different rows.
 The main advantage of a bitmap index is its ability to perform fast bitwise operations, which allow for quick filtering and combination of multiple conditions.
-![bitmap_example](./bitmap_example.png)
+<p align="center">
+<img src="./bitmap_example.png" width="610" height="550" />
+</p>
+
 In Hudi, bitmap indexes can provide significant performance benefits by helping to skip unnecessary files during query execution. 
 Since Hudi organizes data into files and partitions, a bitmap index can track which files contain relevant values, allowing the query engine to efficiently prune irrelevant files before scanning. 
 Additionally, bitmap indexes enable bitmap joins, where bitwise operations quickly determine matching records across datasets without performing costly row-by-row comparisons.
@@ -143,33 +146,40 @@ This is because:
 To enable file pruning using the bitmap index, we can extend `SparkBaseIndexSupport` with a new `BitmapIndexSupport`. 
 The initial implementation will target Spark, but the design can be adapted for other engines.
 
+As of now, the bitmap index only supports the `EqualTo` (`=`) query filter.
+The `Not(EqualTo)` (`!=`) filter is not supported because the underlying implementation uses RoaringBitmap.
+RoaringBitmap is a space-efficient, sparse bitmap format. It doesn't support global `not` or `flipAll` operations, as these require a well-defined range of record positions.
+In other words, we would need to know the full range of possible record positions in advance—which is not practical in most cases.
+
 Imagine a table tracking how people commute to work. 
 We index the `gender` and `commute_type` columns using bitmap indexing.
-We want to find the age of the youngest woman who does not commute by car:
+We want to find the age of the youngest woman who commute by car:
 ```
 SELECT MIN(age) FROM hudi_table
-WHERE gender = 'female' AND commute_type != 'car';
+WHERE gender = 'female' AND commute_type = 'car';
 ```
 This query can generate two filters: 
 - `EqualTo(gender, female)`
-- `Not(EqualTo(commute_type, car))`
+- `EqualTo(commute_type, car)`
 
 We can use the following logic to prune file groups:
 ```
 for file_group in file_groups
   # 1. get bitmap for the gender filter
-  let bitmap_key_female = gender$female$file_group_id
-  let bitmap_female = metadata_table.getBitmap(bitmap_key_female)
+  bitmap_key_female = gender$female$file_group_id
+  bitmap_female = metadata_table.getBitmap(bitmap_key_female)
   # 2. get bitmap for the commute_type filter
-  let bitmap_key_car = commute_type$car$file_group_id
-  let bitmap_car = metadata_table.getBitmap(bitmap_key_car)
-  # 3. perform ANDNOT
-  let res_bitmap = bitmap_female.andNot(bitmap_car)
+  bitmap_key_car = commute_type$car$file_group_id
+  bitmap_car = metadata_table.getBitmap(bitmap_key_car)
+  # 3. perform bit-wise and
+  res_bitmap = bitmap_female.and(bitmap_car)
   # 4. If the result is non-empty, include the file group
   if res_bitmap.cardinality != 0
     then include file_group
 ```
-![prune_example](./prune_example.png)
+<p align="center">
+<img src="./prune_example.png" width="610" height="732" />
+</p>
 
 ### New Hudi Configs
 
