@@ -2188,33 +2188,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.isRecordIndexEnabled();
   }
 
-  /**
-   * Checks if a specific metadata index is marked for dropping based on the metadata configuration.
-   *
-   * <p>An index is considered marked for dropping if:
-   * <ul>
-   *   <li>The metadata configuration specifies a non-empty index to drop, and</li>
-   *   <li>The specified index matches the given index name.</li>
-   * </ul>
-   *
-   * @param indexName the name of the metadata index to check
-   * @return {@code true} if the specified metadata index is marked for dropping, {@code false} otherwise.
-   */
-  public boolean isDropMetadataIndex(String indexName) {
-    String subIndexNameToDrop = getMetadataConfig().getMetadataIndexToDrop();
-    if (StringUtils.isNullOrEmpty(subIndexNameToDrop)) {
-      return false;
-    }
-    if (StringUtils.isNullOrEmpty(indexName)) {
-      return false;
-    }
-    // not sure whether the specific index items start with these prefix?
-    ValidationUtils.checkArgument(indexName.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX)
-        || indexName.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX), "Unexpected index name to drop: " + indexName);
-    // not sure #equals or #contains
-    return subIndexNameToDrop.contains(indexName);
-  }
-
   public int getPartitionStatsIndexParallelism() {
     return metadataConfig.getPartitionStatsIndexParallelism();
   }

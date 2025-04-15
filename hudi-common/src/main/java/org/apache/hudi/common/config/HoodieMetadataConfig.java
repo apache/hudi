@@ -37,6 +37,10 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+
 /**
  * Configurations used by the HUDI Metadata Table.
  */
@@ -398,7 +402,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> SECONDARY_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable secondary index within the metadata table. "
           + " When this configuration property is enabled (`true`), the Hudi writer automatically "
@@ -562,7 +566,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean isExpressionIndexEnabled() {
-    return getBooleanOrDefault(EXPRESSION_INDEX_ENABLE_PROP);
+    return getBooleanOrDefault(EXPRESSION_INDEX_ENABLE_PROP) && !isDropMetadataIndex(MetadataPartitionType.EXPRESSION_INDEX.getPartitionPath());
   }
 
   public int getExpressionIndexFileGroupCount() {
@@ -623,7 +627,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isSecondaryIndexEnabled() {
     // Secondary index is enabled only iff record index (primary key index) is also enabled
-    return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP);
+    return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP) && !isDropMetadataIndex(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
   }
 
   public int getSecondaryIndexParallelism() {
@@ -640,6 +644,33 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public String getMetadataIndexToDrop() {
     return getString(DROP_METADATA_INDEX);
+  }
+
+  /**
+   * Checks if a specific metadata index is marked for dropping based on the metadata configuration.
+   * NOTE: Only applicable for secondary indexes (SI) or expression indexes (EI).
+   *
+   * <p>An index is considered marked for dropping if:
+   * <ul>
+   *   <li>The metadata configuration specifies a non-empty index to drop, and</li>
+   *   <li>The specified index matches the given index name.</li>
+   * </ul>
+   *
+   * @param indexName the name of the metadata index to check
+   * @return {@code true} if the specified metadata index is marked for dropping, {@code false} otherwise.
+   */
+  public boolean isDropMetadataIndex(String indexName) {
+    String subIndexNameToDrop = getMetadataIndexToDrop();
+    if (StringUtils.isNullOrEmpty(subIndexNameToDrop)) {
+      return false;
+    }
+    if (StringUtils.isNullOrEmpty(indexName)) {
+      return false;
+    }
+    // Only applicable for SI or EI
+    checkArgument(indexName.startsWith(PARTITION_NAME_EXPRESSION_INDEX_PREFIX)
+        || indexName.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX), "Unexpected index name to drop: " + indexName);
+    return subIndexNameToDrop.contains(indexName);
   }
 
   public static class Builder {
