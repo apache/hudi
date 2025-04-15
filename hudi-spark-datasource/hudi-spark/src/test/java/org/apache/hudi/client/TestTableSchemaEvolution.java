@@ -40,7 +40,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -63,7 +62,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Disabled("HUDI-9281")
 public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
   private final String initCommitTime = "000";

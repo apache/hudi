@@ -47,7 +47,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -61,17 +60,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
-import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests diff file system views.
  */
-@Disabled("HUDI-9281")
 public class TestHoodieFileSystemViews extends HoodieClientTestBase {
 
   private HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
@@ -97,7 +96,9 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("tableTypeMetadataFSVTypeArgs")
   public void testFileSystemViewConsistency(HoodieTableType tableType, boolean enableMdt, FileSystemViewStorageType storageType, int writeVersion) throws IOException {
+    metaClient.getStorage().deleteDirectory(new StoragePath(basePath));
     this.tableType = tableType;
+    initMetaClient(tableType);
     HoodieWriteConfig.Builder configBuilder = getConfigBuilder();
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       configBuilder.withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true)
@@ -113,8 +114,8 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
         .withWriteTableVersion(writeVersion);
     HoodieWriteConfig config = configBuilder.build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-      insertRecords(client, "001", 100, WriteOperationType.BULK_INSERT);
-      insertRecords(client, "002", 100, WriteOperationType.INSERT);
+      insertRecords(client, String.format("%010d", 1), 100, WriteOperationType.BULK_INSERT);
+      insertRecords(client, String.format("%010d", 2), 100, WriteOperationType.INSERT);
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // base line file system view is in-memory for any combination.
@@ -134,14 +135,14 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
 
       assertFileSystemViews(config, enableMdt, storageType);
       for (int i = 3; i < 10; i++) {
-        String commitTime = String.format("%10d", i);
+        String commitTime = String.format("%010d", i);
         upsertRecords(client, commitTime, 50);
       }
       expectedFileSystemView.sync();
       actualFileSystemView.sync();
       assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt);
       for (int i = 10; i < 20; i++) {
-        String commitTime = String.format("%10d", i);
+        String commitTime = String.format("%010d", i);
         upsertRecords(client, commitTime, 50);
       }
 
@@ -286,16 +287,17 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     client.startCommitWithTime(commitTime);
     List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime, numRecords);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 2);
-    List<WriteStatus> statuses = operationType == WriteOperationType.BULK_INSERT ? client.bulkInsert(insertRecordsRDD1, commitTime, Option.empty()).collect() :
-        client.insert(insertRecordsRDD1, commitTime).collect();
-    assertNoWriteErrors(statuses);
+    JavaRDD<WriteStatus> statuses = operationType == WriteOperationType.BULK_INSERT ? client.bulkInsert(insertRecordsRDD1, commitTime, Option.empty()) :
+        client.insert(insertRecordsRDD1, commitTime);
+    client.commit(commitTime, statuses, Option.empty(),
+        tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
   }
 
   private void upsertRecords(SparkRDDWriteClient client, String commitTime, int numRecords) {
     client.startCommitWithTime(commitTime);
     List<HoodieRecord> updates = dataGen.generateUniqueUpdates(commitTime, numRecords);
     JavaRDD<HoodieRecord> updatesRdd = jsc.parallelize(updates, 2);
-    List<WriteStatus> statuses = client.upsert(updatesRdd, commitTime).collect();
-    assertNoWriteErrors(statuses);
+    client.commit(commitTime, client.upsert(updatesRdd, commitTime), Option.empty(),
+        tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
   }
 }
