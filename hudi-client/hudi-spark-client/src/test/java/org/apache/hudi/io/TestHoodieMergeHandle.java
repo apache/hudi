@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -43,29 +44,28 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
-import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @SuppressWarnings("unchecked")
-@Disabled("HUDI-9281")
 public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
 
   @BeforeEach
@@ -119,8 +119,8 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
         records.add(dup);
       }
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-      List<WriteStatus> statuses = client.bulkInsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
+      JavaRDD<WriteStatus> statuses = client.bulkInsert(writeRecords, newCommitTime);
+      client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       // verify that there is a commit
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -145,8 +145,8 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       HoodieRecord sameAsRecord1 = dataGen.generateUpdateRecord(record1.getKey(), newCommitTime);
       newRecords.add(sameAsRecord1);
       writeRecords = jsc.parallelize(newRecords, 1);
-      statuses = client.bulkInsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
+      statuses = client.bulkInsert(writeRecords, newCommitTime);
+      client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       // verify that there are 2 commits
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -165,8 +165,8 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       client.startCommitWithTime(newCommitTime);
       newRecords = dataGen.generateInserts(newCommitTime, 2);
       writeRecords = jsc.parallelize(newRecords, 1);
-      statuses = client.bulkInsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
+      statuses = client.bulkInsert(writeRecords, newCommitTime);
+      client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       // verify that there are now 3 commits
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -194,10 +194,8 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       HoodieRecord sameAsRecord2 = dataGen.generateUpdateRecord(record2.getKey(), newCommitTime);
       updateRecords.add(sameAsRecord2);
       JavaRDD<HoodieRecord> updateRecordsRDD = jsc.parallelize(updateRecords, 1);
-      statuses = client.upsert(updateRecordsRDD, newCommitTime).collect();
-
-      // Verify there are no errors
-      assertNoWriteErrors(statuses);
+      statuses = client.upsert(updateRecordsRDD, newCommitTime);
+      client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       // verify there are now 4 commits
       timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
@@ -272,7 +270,9 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-      List<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime).collect();
+      JavaRDD<WriteStatus> statusesRdd = writeClient.insert(recordsRDD, newCommitTime);
+      List<WriteStatus> statuses = statusesRdd.collect();
+      writeClient.commit(newCommitTime, jsc.parallelize(statuses, 1), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       // All records should be inserts into new parquet
       assertTrue(statuses.stream()
@@ -296,7 +296,9 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
 
       List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
-      statuses = writeClient.upsert(updatedRecordsRDD, newCommitTime).collect();
+      JavaRDD<WriteStatus> rawWriteStatusRDD = writeClient.upsert(updatedRecordsRDD, newCommitTime);
+      statuses = rawWriteStatusRDD.collect();
+      writeClient.commit(newCommitTime, jsc.parallelize(statuses, 1), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       // All records should be upserts into existing parquet
       assertEquals(0,
@@ -318,7 +320,9 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       List<HoodieRecord> allRecords = dataGen.generateInserts(newCommitTime, 100);
       allRecords.addAll(updatedRecords);
       JavaRDD<HoodieRecord> allRecordsRDD = jsc.parallelize(allRecords, 1);
-      statuses = writeClient.upsert(allRecordsRDD, newCommitTime).collect();
+      rawWriteStatusRDD = writeClient.upsert(allRecordsRDD, newCommitTime);
+      statuses = rawWriteStatusRDD.collect();
+      writeClient.commit(newCommitTime, jsc.parallelize(statuses, 1), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       // All records should be upserts into existing parquet (with inserts as updates small file handled)
       assertEquals(0, (long) statuses.stream()
