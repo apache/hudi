@@ -222,7 +222,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
                              Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     // Skip the empty commit if not allowed
-    if (!config.allowEmptyCommit() && stats.isEmpty()) {
+    if (!config.allowEmptyCommit() && (stats.isEmpty() && partitionToReplaceFileIds.isEmpty())) {
       return true;
     }
     LOG.info("Committing {} action {}", instantTime, commitActionType);

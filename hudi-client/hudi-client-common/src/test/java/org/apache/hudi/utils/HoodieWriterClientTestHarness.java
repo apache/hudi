@@ -113,6 +113,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
+import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.LAZY;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
@@ -250,7 +251,8 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
-            .withRemoteServerPort(timelineServicePort).build());
+            .withRemoteServerPort(timelineServicePort).build())
+        .withEmbeddedTimelineServerPort(timelineServicePort);
     if (StringUtils.nonEmpty(schemaStr)) {
       builder.withSchema(schemaStr);
     }
@@ -631,7 +633,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   }
 
   protected List<WriteStatus> writeAndVerifyBatch(BaseHoodieWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields) throws IOException {
-    return writeAndVerifyBatch(client, inserts, commitTime, populateMetaFields, false);
+    return writeAndVerifyBatch(client, inserts, commitTime, populateMetaFields, true);
   }
 
   /**
@@ -1060,8 +1062,6 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       String newCommitTime = "001";
       int numRecords = 200;
       Object result = castInsertFirstBatch(cfgBuilder.build(), client, newCommitTime, prevCommitTime, numRecords, writeFn, isPrepped, false, numRecords, instantGenerator);
-      assertFalse(testTable.commitExists(newCommitTime), "If Autocommit is false, then commit should not be made automatically");
-      assertTrue(client.commit(newCommitTime, result), "Commit should succeed");
       assertTrue(testTable.commitExists(newCommitTime), "After explicit commit, commit file should be created");
     }
   }
@@ -1094,7 +1094,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         };
 
     castWriteBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime, -1, recordGenFunction,
-        BaseHoodieWriteClient::upsert, true, 150, 150, 1, false, true, instantGenerator);
+        BaseHoodieWriteClient::upsert, true, 150, 150, 1, true, true, instantGenerator);
   }
 
   /**
@@ -1173,7 +1173,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   protected void testUpsertsInternal(Function3<Object, BaseHoodieWriteClient, Object, String> writeFn, boolean populateMetaFields, boolean isPrepped,
                                      SupportsUpgradeDowngrade upgradeDowngrade) throws Exception {
     metaClient = createMetaClient();
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withRollbackUsingMarkers(true)
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(LAZY).withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     // Force using older timeline layout
