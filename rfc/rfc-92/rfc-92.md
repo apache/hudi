@@ -49,11 +49,6 @@ In Hudi, bitmap indexes can provide significant performance benefits by helping 
 Since Hudi organizes data into files and partitions, a bitmap index can track which files contain relevant values, allowing the query engine to efficiently prune irrelevant files before scanning. 
 Additionally, bitmap indexes enable bitmap joins, where bitwise operations quickly determine matching records across datasets without performing costly row-by-row comparisons.
 
-One limitation is that Hudi currently lacks row-level skipping, so once a file group is selected, the entire file must be scanned. 
-Even so, bitmap indexes are valuable, especially when multiple low-cardinality columns are indexed and commonly used in joins or filters. 
-Bitwise operations on these indexes can efficiently narrow down relevant file groups. 
-In the future, as Hudi adds row-level or row-group-level skipping, bitmap indexes will offer even greater performance gains by enabling precise row filtering within files.
-
 ## Design
 
 ### Bitmap Metadata Structure
@@ -81,7 +76,7 @@ Below is another example of how the index record looks like in the storage.
 ### Maintaining the Index
 Just like other existing Hudi indexes, the logic for writing the bitmap index will be integrated with Hudi's metadata writer during commit operations.
 Bitmap index maintenance during writes typically falls into the following categories: **Initialize**, **Insert**, **Update**, and **Delete**.
-Before diving into each category, let’s define two key bitmap metadata operations that will be referenced frequently:
+Before diving into each category, let’s define two bitmap meta operations that will be referenced frequently:
 
 **addBitmapPosition**: 
 1. For a given record, extract its indexed column name-value pairs and file group ID to construct the bitmap key.
@@ -178,6 +173,17 @@ for file_group in file_groups
 </p>
 
 ## Considerations
+### No Row-level Skipping
+One limitation is that Hudi currently lacks row-level skipping, so once a file group is selected, the entire file must be scanned.
+Even so, bitmap indexes are valuable, especially when multiple low-cardinality columns are indexed and commonly used in joins or filters.
+Bitwise operations on these indexes can efficiently narrow down relevant file groups.
+In the future, as Hudi adds row-level or row-group-level skipping, bitmap indexes will offer even greater performance gains by enabling precise row filtering within files.
+
+Another interesting observation: with cloud object stores like S3, fine-grained data skipping can sometimes hurt performance. 
+While formats like Iceberg support row group–level skipping, cloud storage is optimized for large, sequential reads. 
+Reading two small row groups can be slower and costlier than reading one big block, due to the overhead of multiple small I/O calls. 
+In short, 0.3 + 0.3 > 1 can happen— so it's important to balance skipping precision with I/O efficiency.
+
 ### Write Amplification
 Like other indexes, bitmap indexes can amplify write operations and negatively impact writer performance.
 This is especially true for updates, where Hudi needs to compare the previous file slice with the current one to identify which indexed field values have changed, in order to update the corresponding bitmaps.
