@@ -898,6 +898,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withSecondaryIndexEnabled(boolean enabled) {
+      metadataConfig.setValue(SECONDARY_INDEX_ENABLE_PROP, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withExpressionIndexEnabled(boolean enabled) {
+      metadataConfig.setValue(EXPRESSION_INDEX_ENABLE_PROP, String.valueOf(enabled));
+      return this;
+    }
+
     public Builder withSecondaryIndexForColumn(String column) {
       metadataConfig.setValue(SECONDARY_INDEX_COLUMN, column);
       return this;

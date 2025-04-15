@@ -60,45 +60,31 @@ public class TestMetadataPartitionType {
     Mockito.when(tableConfig.isMetadataPartitionAvailable(partitionType)).thenReturn(false);
     Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
     HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder();
-    int expectedEnabledPartitions;
+    int expectedEnabledPartitions = 3; // by default, FILES, COLUMN_STATS, PARTITION_STATS are enabled
     switch (partitionType) {
-      case FILES:
-      case ALL_PARTITIONS:
       case EXPRESSION_INDEX:
-      case SECONDARY_INDEX:
-        metadataConfigBuilder.enable(true);
-        expectedEnabledPartitions = 2;
+        metadataConfigBuilder.enable(true).withExpressionIndexEnabled(true);
+        expectedEnabledPartitions = 4;
         break;
-      case COLUMN_STATS:
-        metadataConfigBuilder.enable(true).withMetadataIndexColumnStats(true);
-        expectedEnabledPartitions = 2;
+      case SECONDARY_INDEX:
+        metadataConfigBuilder.enable(true).withEnableRecordIndex(true).withSecondaryIndexEnabled(true);
+        expectedEnabledPartitions = 5;
         break;
       case BLOOM_FILTERS:
         metadataConfigBuilder.enable(true).withMetadataIndexBloomFilter(true);
-        expectedEnabledPartitions = 3;
+        expectedEnabledPartitions = 4;
         break;
       case RECORD_INDEX:
         metadataConfigBuilder.enable(true).withEnableRecordIndex(true);
-        expectedEnabledPartitions = 3;
+        expectedEnabledPartitions = 5;
         break;
-      case PARTITION_STATS:
-        metadataConfigBuilder.enable(true).withMetadataIndexPartitionStats(true).withColumnStatsIndexForColumns("partitionCol");
-        expectedEnabledPartitions = 2;
-        break;
-      default:
-        throw new IllegalArgumentException("Unknown partition type: " + partitionType);
     }
 
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfigBuilder.build().getProps(), metaClient);
 
     // Verify partition type is enabled due to config
-    if (partitionType == MetadataPartitionType.EXPRESSION_INDEX || partitionType == MetadataPartitionType.SECONDARY_INDEX) {
-      assertEquals(2 + 2, enabledPartitions.size(), "EXPRESSION_INDEX should be enabled by SQL, only FILES and SECONDARY_INDEX is enabled in this case.");
-      assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES));
-    } else {
-      assertEquals(expectedEnabledPartitions + 2, enabledPartitions.size());
-      assertTrue(enabledPartitions.contains(partitionType) || MetadataPartitionType.ALL_PARTITIONS.equals(partitionType));
-    }
+    assertEquals(expectedEnabledPartitions, enabledPartitions.size());
+    assertTrue(enabledPartitions.contains(partitionType) || MetadataPartitionType.ALL_PARTITIONS.equals(partitionType));
   }
 
   @Test
@@ -115,11 +101,12 @@ public class TestMetadataPartitionType {
 
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig.getProps(), metaClient);
 
-    // Verify RECORD_INDEX and FILES is enabled due to availability, and SECONDARY_INDEX by default
-    assertEquals(5, enabledPartitions.size(), "RECORD_INDEX, SECONDARY_INDEX, FILES, COL_STATS, PARTITION_STATS should be available");
+    // Verify RECORD_INDEX and FILES is enabled due to availability, and COLUMN_STATS and PARTITION_STATS by default
+    assertEquals(4, enabledPartitions.size(), "RECORD_INDEX, FILES, COL_STATS, PARTITION_STATS should be available");
     assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES), "FILES should be enabled by availability");
     assertTrue(enabledPartitions.contains(MetadataPartitionType.RECORD_INDEX), "RECORD_INDEX should be enabled by availability");
-    assertTrue(enabledPartitions.contains(MetadataPartitionType.SECONDARY_INDEX), "SECONDARY_INDEX should be enabled by default");
+    assertTrue(enabledPartitions.contains(MetadataPartitionType.COLUMN_STATS), "COLUMN_STATS should be enabled by default");
+    assertTrue(enabledPartitions.contains(MetadataPartitionType.PARTITION_STATS), "PARTITION_STATS should be enabled by default");
   }
 
   @Test
@@ -155,11 +142,12 @@ public class TestMetadataPartitionType {
 
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig.getProps(), metaClient);
 
-    // Verify EXPRESSION_INDEX and FILES is enabled due to availability, and SECONDARY_INDEX, COL_STATS and PARTITION_STATS by default
-    assertEquals(5, enabledPartitions.size(), "EXPRESSION_INDEX, FILES, COL_STATS and SECONDARY_INDEX should be available");
+    // Verify EXPRESSION_INDEX and FILES is enabled due to availability, and COLUMN_STATS and PARTITION_STATS by default
+    assertEquals(4, enabledPartitions.size(), "EXPRESSION_INDEX, FILES, COL_STATS and SECONDARY_INDEX should be available");
     assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES), "FILES should be enabled by availability");
     assertTrue(enabledPartitions.contains(MetadataPartitionType.EXPRESSION_INDEX), "EXPRESSION_INDEX should be enabled by availability");
-    assertTrue(enabledPartitions.contains(MetadataPartitionType.SECONDARY_INDEX), "SECONDARY_INDEX should be enabled by default");
+    assertTrue(enabledPartitions.contains(MetadataPartitionType.COLUMN_STATS), "COLUMN_STATS should be enabled by default");
+    assertTrue(enabledPartitions.contains(MetadataPartitionType.PARTITION_STATS), "PARTITION_STATS should be enabled by default");
   }
 
   @Test

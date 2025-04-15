@@ -72,7 +72,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     // remove column stats enable key from commonOpts
     val hudiOpts = commonOpts + (HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
     // should throw an exception as column stats is required for partition stats
-    assertThrows[HoodieException] {
+    assertThrows[IllegalStateException] {
       doWriteAndValidateDataAndPartitionStats(
         hudiOpts,
         operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
