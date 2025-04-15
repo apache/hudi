@@ -32,6 +32,7 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringOperation;
@@ -72,6 +73,7 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -468,8 +470,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         }
 
         // instantiate FG reader
-        HoodieFileGroupReader<InternalRow> fileGroupReader = new HoodieFileGroupReader<>(readerContextFactory.getContext(),
-            getHoodieTable().getMetaClient().getStorage(),
+        HoodieReaderContext<InternalRow> readerContext = readerContextFactory.getContext();
+        HoodieFileGroupReader<InternalRow> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
+            getHoodieTable().getMetaClient().getStorage().newInstance(new StoragePath(basePath), readerContext.getStorageConfiguration()),
             basePath, instantTime, fileSlice, readerSchema, readerSchema, internalSchemaOption,
             getHoodieTable().getMetaClient(), getHoodieTable().getMetaClient().getTableConfig().getProps(),
             0, Long.MAX_VALUE, usePosition, false);
