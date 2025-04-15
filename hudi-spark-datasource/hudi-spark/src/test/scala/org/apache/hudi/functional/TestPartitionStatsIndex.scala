@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.{HoodieException, HoodieWriteConflictException}
+import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.util.{JavaConversions, JFunction}
@@ -72,7 +72,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     // remove column stats enable key from commonOpts
     val hudiOpts = commonOpts + (HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
     // should throw an exception as column stats is required for partition stats
-    assertThrows[HoodieException] {
+    assertThrows[IllegalStateException] {
       doWriteAndValidateDataAndPartitionStats(
         hudiOpts,
         operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,

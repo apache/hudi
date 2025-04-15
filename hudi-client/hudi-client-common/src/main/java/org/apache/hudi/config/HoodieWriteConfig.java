@@ -76,7 +76,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.storage.StoragePath;
@@ -2127,31 +2126,29 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * Determines if the metadata bloom filter index is enabled.
    *
-   * <p>The bloom filter index is enabled if:
-   * <ul>
-   *   <li>The metadata table is enabled and bloom filter index is enabled in the metadata configuration, or</li>
-   *   <li>The bloom filter index is not explicitly marked for dropping in the metadata configuration.</li>
-   * </ul>
+   * <p>The bloom filter index is enabled if the metadata table is enabled and bloom filter index is enabled in the metadata configuration.
+   *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the metadata bloom filter index is enabled, {@code false} otherwise.
    */
   public boolean isMetadataBloomFilterIndexEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
+    return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled();
   }
 
   /**
    * Determines if the metadata column stats index is enabled.
    *
-   * <p>The column stats index is enabled if:
-   * <ul>
-   *   <li>The metadata table is enabled and column stats index is enabled in the metadata configuration, or</li>
-   *   <li>The column stats index is not explicitly marked for dropping in the metadata configuration.</li>
-   * </ul>
+   * <p>The column stats index is enabled if metadata table is enabled and column stats index is enabled in the metadata configuration.
+   *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the metadata column stats index is enabled, {@code false} otherwise.
    */
   public boolean isMetadataColumnStatsIndexEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.COLUMN_STATS.getPartitionPath());
+    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
   }
 
   /**
@@ -2159,16 +2156,18 @@ public class HoodieWriteConfig extends HoodieConfig {
    *
    * <p>The partition stats index is enabled if:
    * <ul>
-   *   <li>The column stats is enabled. Partition stats cannot be created without column stats.</li>
-   *   <li>The metadata table is enabled and partition stats index is enabled in the metadata configuration, or</li>
-   *   <li>The partition stats index is not explicitly marked for dropping in the metadata configuration.</li>
+   *   <li>The column stats is enabled. Partition stats cannot be created without column stats;</li>
+   *   <li>The metadata table is enabled and partition stats index is enabled in the metadata configuration.</li>
    * </ul>
+   *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the partition stats index is enabled, {@code false} otherwise.
    */
   public boolean isPartitionStatsIndexEnabled() {
     if (isMetadataColumnStatsIndexEnabled()) {
-      return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+      return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled();
     }
     return false;
   }
@@ -2176,32 +2175,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * Determines if the record index is enabled.
    *
-   * <p>The record index is enabled if:
-   * <ul>
-   *   <li>The record index is enabled in the metadata configuration, or</li>
-   *   <li>The record index is not explicitly marked for dropping in the metadata configuration.</li>
-   * </ul>
+   * <p>The record index is enabled if the record index is enabled in the metadata configuration.
+   *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the record index is enabled, {@code false} otherwise.
    */
   public boolean isRecordIndexEnabled() {
-    return metadataConfig.isRecordIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.RECORD_INDEX.getPartitionPath());
-  }
-
-  /**
-   * Checks if a specific metadata index is marked for dropping based on the metadata configuration.
-   *
-   * <p>An index is considered marked for dropping if:
-   * <ul>
-   *   <li>The metadata configuration specifies a non-empty index to drop, and</li>
-   *   <li>The specified index matches the given index name.</li>
-   * </ul>
-   *
-   * @param indexName the name of the metadata index to check
-   * @return {@code true} if the specified metadata index is marked for dropping, {@code false} otherwise.
-   */
-  public boolean isDropMetadataIndex(String indexName) {
-    return StringUtils.nonEmpty(getMetadataConfig().getMetadataIndexToDrop()) && getMetadataConfig().getMetadataIndexToDrop().equals(indexName);
+    return metadataConfig.isRecordIndexEnabled();
   }
 
   public int getPartitionStatsIndexParallelism() {
