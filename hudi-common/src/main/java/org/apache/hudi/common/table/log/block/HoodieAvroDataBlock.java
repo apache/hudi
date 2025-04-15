@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -78,7 +77,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroDataBlock extends HoodieDataBlock {
 
-  private final ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
+  protected final ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
 
   public HoodieAvroDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                              Option<byte[]> content,
@@ -123,7 +122,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         try {
           // Encode the record into bytes
           // Spark Record not support write avro log
-          IndexedRecord data = s.toIndexedRecord(schema, getProperties(storage)).get().getData();
+          IndexedRecord data = s.toIndexedRecord(schema, new Properties()).get().getData();
           writer.write(data, encoder);
           encoder.flush();
 
@@ -396,21 +395,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       buffer.limit(buffer.limit() + bytesRead);
       return true;
     }
-  }
-
-  /**
-   * Get necessary storage configurations for serializing records into bytes content.
-   * @param storage hoodie storage
-   * @return a {@link Properties} contains necessary configurations.
-   */
-  private Properties getProperties(HoodieStorage storage) {
-    Properties properties = new Properties();
-    properties.setProperty(
-        HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
-        storage.getConf().getString(
-            HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
-            HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
-    return properties;
   }
 
   //----------------------------------------------------------------------------------------

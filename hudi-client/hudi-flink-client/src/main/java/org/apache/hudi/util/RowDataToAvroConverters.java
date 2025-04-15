@@ -359,7 +359,7 @@ public class RowDataToAvroConverters {
   /**
    * Returns the precision of the given TIMESTAMP type.
    */
-  private static int precision(LogicalType logicalType) {
+  public static int precision(LogicalType logicalType) {
     if (logicalType instanceof TimestampType) {
       return ((TimestampType) logicalType).getPrecision();
     } else if (logicalType instanceof LocalZonedTimestampType) {

@@ -51,7 +51,6 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -137,7 +136,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -276,16 +274,7 @@ public class HoodieTableMetadataUtil {
             fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
           }
         } else if (record.getRecordType() == HoodieRecordType.FLINK) {
-          try {
-            // will get the cached IndexedRecord from HoodieFlinkRecord
-            Option<HoodieAvroIndexedRecord> avroIndexedRecordOption = record.toIndexedRecord(recordSchema, new Properties());
-            fieldValue = HoodieAvroUtils.getRecordColumnValues(avroIndexedRecordOption.get(), new String[]{fieldName}, recordSchema, false)[0];
-            if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
-              fieldValue = java.sql.Date.valueOf(fieldValue.toString());
-            }
-          } catch (IOException e) {
-            throw new HoodieException("Failed to get field value for column: " + fieldName, e);
-          }
+          fieldValue = record.getColumnValueAsJavaType(recordSchema, fieldName);
         } else {
           throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
         }

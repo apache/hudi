@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.model;
 
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -27,18 +26,18 @@ import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.HoodieRowDataUtil;
-import org.apache.hudi.util.RowDataToAvroConverters;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.utils.JoinedRowData;
+import org.apache.flink.table.types.logical.LogicalType;
 
 import java.io.IOException;
 import java.util.Map;
@@ -49,7 +48,6 @@ import java.util.Properties;
  */
 public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   private Comparable<?> orderingValue = 0;
-  private HoodieAvroIndexedRecord cachedAvroIndexRecord;
 
   public HoodieFlinkRecord(RowData rowData) {
     super(null, rowData);
@@ -180,14 +178,15 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
+  public Comparable<?> getColumnValueAsJavaType(Schema recordSchema, String column) {
+    RowData.FieldGetter fieldGetter = HoodieRowDataUtil.getFieldGetter(recordSchema, column);
+    Object fieldVal = fieldGetter.getFieldOrNull(getData());
+    LogicalType fieldType = AvroSchemaConverter.convertToDataType(recordSchema.getField(column).schema()).getLogicalType();
+    return HoodieRowDataUtil.convertToNativeJavaType(fieldVal, fieldType);
+  }
+
+  @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
-    if (cachedAvroIndexRecord != null) {
-      return Option.of(cachedAvroIndexRecord);
-    }
-    boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
-        HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
-    RowDataToAvroConverters.RowDataToAvroConverter converter = HoodieRowDataUtil.getRowDataToAvroConverter(recordSchema, utcTimezone);
-    cachedAvroIndexRecord = new HoodieAvroIndexedRecord(getKey(), (IndexedRecord) converter.convert(recordSchema, getData()), getOperation(), getMetadata());
-    return Option.of(cachedAvroIndexRecord);
+    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 }
