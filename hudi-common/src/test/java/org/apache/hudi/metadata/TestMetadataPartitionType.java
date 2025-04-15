@@ -60,7 +60,7 @@ public class TestMetadataPartitionType {
     Mockito.when(tableConfig.isMetadataPartitionAvailable(partitionType)).thenReturn(false);
     Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
     HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder();
-    int expectedEnabledPartitions = 3; // by default, FILES, COLUMN_STATS, PARTITION_STATS are enabled
+    int expectedEnabledPartitions;
     switch (partitionType) {
       case EXPRESSION_INDEX:
         metadataConfigBuilder.enable(true).withExpressionIndexEnabled(true);
@@ -77,6 +77,10 @@ public class TestMetadataPartitionType {
       case RECORD_INDEX:
         metadataConfigBuilder.enable(true).withEnableRecordIndex(true);
         expectedEnabledPartitions = 5;
+        break;
+      default:
+        metadataConfigBuilder.enable(true);
+        expectedEnabledPartitions = 3; // by default, FILES, COLUMN_STATS, PARTITION_STATS are enabled
         break;
     }
 
