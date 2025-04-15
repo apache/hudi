@@ -68,6 +68,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   private static final String SCHEME = "http";
   private static final String BASE_URL = "/v1/hoodie/view";
+  private static final String BASE_URL_V2 = "/v2/hoodie/view";
   public static final String LATEST_PARTITION_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/");
   public static final String LATEST_PARTITION_SLICES_INFLIGHT_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/inflight/");
   public static final String LATEST_PARTITION_SLICES_STATELESS_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/stateless/");
@@ -103,7 +104,10 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String LAST_INSTANT_URL = String.format("%s/%s", BASE_URL, "timeline/instant/last");
   public static final String LAST_INSTANTS_URL = String.format("%s/%s", BASE_URL, "timeline/instants/last");
 
+  public static final String INSTANT_DETAILS_URL = String.format("%s/%s", BASE_URL_V2, "timeline/instant");
+
   public static final String TIMELINE_URL = String.format("%s/%s", BASE_URL, "timeline/instants/all");
+  public static final String TIMELINE_V2_URL = String.format("%s/%s", BASE_URL_V2, "timeline/instants/all");
 
   // POST Requests
   public static final String REFRESH_TABLE_URL = String.format("%s/%s", BASE_URL, "refresh/");
@@ -114,6 +118,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String PARTITIONS_PARAM = "partitions";
   public static final String BASEPATH_PARAM = "basepath";
   public static final String INSTANT_PARAM = "instant";
+  public static final String INSTANT_ACTION_PARAM = "instantaction";
+  public static final String INSTANT_STATE_PARAM = "instantstate";
   public static final String MAX_INSTANT_PARAM = "maxinstant";
   public static final String MIN_INSTANT_PARAM = "mininstant";
   public static final String INSTANTS_PARAM = "instants";

@@ -1,0 +1,193 @@
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*      http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="${title}">Vis Timeline Example</title>
+  <link href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css" rel="stylesheet" type="text/css" />
+  <style>
+    #timeline {
+      width: 100%;
+      height: 400px;
+      border: 1px solid lightgray;
+    }
+  </style>
+</head>
+<body>
+<h2>Hudi Timeline</h2>
+
+<form id="timelineForm">
+  <label for="tablePath">Enter Hudi Table Path:</label>
+  <input type="text" id="tablePath" name="tablePath" required />
+  <button type="submit">View Timeline</button>
+</form>
+
+<!-- Timeline container -->
+<div id="timeline"></div>
+
+<!-- Instant details container -->
+<pre id="instantDetails" style="margin-top: 20px; background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto;"></pre>
+
+
+<!-- JavaScript to load vis-timeline and data -->
+<script type="text/javascript" src="https://unpkg.com/vis-timeline@latest/standalone/umd/vis-timeline-graph2d.min.js"></script>
+<script>
+  let timeline = null;
+  const detailsContainer = document.getElementById('instantDetails');
+  const actionToGroupId = {
+    "commit": 0,
+    "deltacommit": 1,
+    "replacecommit": 2,
+    "compaction": 3,
+    "clean": 4,
+    "rollback": 5,
+    "indexing": 6
+  };
+  const groups = Object.entries(actionToGroupId).map(([action, id]) => ({
+    id,
+    content: action
+  }));
+  const displayInstantDetails = (item, element, data) => {
+    let html = `<p>Start: ${item.start}</p>`
+    if (item.end !== undefined) {
+      html += `<p>End: ${item.end}</p>`
+      let duration = localize(timeDiff(item.end, item.start))
+      html += `<p>Duration: ${duration}</p>`
+    }
+    html += `<p>Instant: ${item.content}</p>`
+    return html;
+  }
+  const options = {
+    width: '100%',
+    height: '100%',
+    margin: { item: 10, axis: 5 },
+    preferZoom: true,
+    horizontalScroll: true,
+    zoomKey: 'shiftKey',
+    editable: false,
+    tooltip: {
+      delay: 0,
+      template: displayInstantDetails,
+    }
+  };
+
+  document.getElementById('timelineForm').addEventListener('submit', function(e) {
+    e.preventDefault(); // prevent form submission redirect
+
+    detailsContainer.textContent = ''; // Clear previous instant details
+    const tablePath = document.getElementById('tablePath').value;
+    const timelineContainer = document.getElementById('timeline');
+
+    fetch(`/v2/hoodie/view/timeline/instants/all?basepath=${encodeURIComponent(tablePath)}`)
+    .then(res => res.json())
+    .then(data => {
+      const items = data.instants.map((instant, index) => {
+        const requestTs = instant.requestTs;
+        const completionTs = instant.completionTs;
+        const action = instant.action;
+        const state = instant.state;
+        const groupId = actionToGroupId[action] ?? -1; // -1 if action is unknown
+        const effectiveRequestTs = (requestTs === '00000000000000000') ? completionTs : requestTs;
+        const requestTsFormatted = parseHudiTimestamp(effectiveRequestTs);
+        const completionTsFormatted = parseHudiTimestamp(completionTs);
+        return {
+          id: index + 1,
+          content: `${requestTs}__${action}__${state}`,
+          start: requestTsFormatted,
+          end: completionTsFormatted,
+          group: groupId,
+          requestTs: requestTs,
+          action: action,
+          state: state
+        };
+      });
+
+      if (timeline === null) {
+        timeline = new vis.Timeline(timelineContainer, items, groups, options);
+      } else {
+        timeline.setItems(items); // re-render with new items
+      }
+
+      // Add event listener for selects
+      timeline.on('select', function (props) {
+        onSelect(props, tablePath);
+      });
+    })
+    .catch(err => {
+      timelineContainer.innerHTML = "Failed to load timeline.";
+      console.error(err);
+    });
+  });
+
+
+  // Utility functions
+  function parseHudiTimestamp(ts) {
+    const pattern = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{3})$/;
+    const match = ts.match(pattern);
+    if (!match) return ts;
+    const [_, year, month, day, hour, min, sec] = match;
+    return `${year}-${month}-${day} ${hour}:${min}:${sec}`;
+  }
+
+  function timeDiff(endStr, startStr) {
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    const diffMs = end - start;
+
+    const seconds = Math.floor(diffMs / 1000) % 60;
+    const minutes = Math.floor(diffMs / (1000 * 60)) % 60;
+    const hours = Math.floor(diffMs / (1000 * 60 * 60)) % 24;
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    return { days, hours, minutes, seconds };
+  }
+
+  function localize({ days, hours, minutes, seconds }) {
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+    return parts.join(' ');
+  }
+
+
+  function onSelect(props, tablePath) {
+    if (props.items.length > 0) {
+      detailsContainer.textContent = ''; // Clear previous instant details
+      const item = timeline.itemsData.get(props.items[0]);
+      const url = `/v2/hoodie/view/timeline/instant?basepath=${encodeURIComponent(tablePath)}&instant=${item.requestTs}&instantaction=${item.action}&instantstate=${item.state}`;
+      detailsContainer.textContent = "Loading...";
+
+      fetch(url)
+      .then(res => res.json())
+      .then(json => {
+        detailsContainer.textContent = JSON.stringify(json, null, 2);
+      })
+      .catch(err => {
+        console.error(err);
+        detailsContainer.textContent = "Failed to fetch instant details.";
+      });
+    }
+  }
+</script>
+</body>
+</html>
