@@ -390,6 +390,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       result = toStream(records)
           .map(record -> {
             GenericRecord data = (GenericRecord) record.getData();
+            // populateMetaFields is hardcoded to false for the metadata table so key must be extracted from the `key` field
             String recordKey = (String) data.get(HoodieMetadataPayload.KEY_FIELD_NAME);
             return Pair.of(recordKey, composeRecord(data, recordKey, partitionName));
           })
