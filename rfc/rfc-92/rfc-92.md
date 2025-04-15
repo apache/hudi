@@ -82,20 +82,21 @@ Below is another example of how the index record looks like in the storage.
 Just like other existing Hudi indexes, the logic for writing the bitmap index will be integrated with Hudi's metadata writer during commit operations.
 Bitmap index maintenance during writes typically falls into the following categories: **Initialize**, **Insert**, **Update**, and **Delete**.
 Before diving into each category, let’s define two key bitmap metadata operations that will be referenced frequently:
-> **addBitmapPosition**: 
-> 1. For a given record, extract its indexed column name-value pairs and file group ID to construct the bitmap key.
-> 2. Retrieve the existing bitmap using the key, or initialize an empty one if it doesn't exist.
-> 3. Add the record’s position to the bitmap.
-> 4. Write the bitmap record `<bitmap key, updated bitmap>` to the `bitmap_index` partition in the metadata table
 
-> **removeBitmapPosition**:
-> 1. For a given record, extract its indexed column name-value pairs and file group ID to construct the bitmap key.
-> 2. Retrieve the existing bitmap using the key; if it doesn’t exist, the operation becomes a no-op.
-> 3. Remove the record’s position from the bitmap.
-> 4. Write the bitmap record `<bitmap key, updated bitmap>` to the `bitmap_index` partition in the metadata table
+**addBitmapPosition**: 
+1. For a given record, extract its indexed column name-value pairs and file group ID to construct the bitmap key.
+2. Retrieve the existing bitmap using the key, or initialize an empty one if it doesn't exist.
+3. Add the record’s position to the bitmap.
+4. Write the bitmap record `<bitmap key, updated bitmap>` to the `bitmap_index` partition in the metadata table
 
-Note: We don’t need to explicitly delete outdated bitmap records during updates. 
-Since the bitmap key remains unchanged, the updated record will overwrite the previous one.
+**removeBitmapPosition**:
+1. For a given record, extract its indexed column name-value pairs and file group ID to construct the bitmap key.
+2. Retrieve the existing bitmap using the key; if it doesn’t exist, the operation becomes a no-op.
+3. Remove the record’s position from the bitmap.
+4. Write the bitmap record `<bitmap key, updated bitmap>` to the `bitmap_index` partition in the metadata table
+
+> Note: We don’t need an operation to explicitly delete outdated bitmap records.
+Since the bitmap key remains unchanged, the new record will overwrite the previous one.
 #### Initialize
 When initializing the bitmap index, the metadata writer scans all file groups to collect `existing_records`.
 The bitmap records will be written into the `bitmap_index` partition of the table's Hudi metadata table.
@@ -120,12 +121,12 @@ If indexed columns have changed, we capture:
 - `old_records`: corresponding records from the previous file slice.
 The bitmap index is updated in two steps:
 ```
-// Note the actual implementation doesn't have to be two for-loops
 for record in new_records:
   addBitmapPosition(record)
 for record in old_records:
   removeBitmapPosition(record)
 ```
+> Note: the actual implementation doesn't have to be two for-loops because we can process (old column, new column) pairs directly
 #### Delete
 Delete commit metadata includes files impacted by deletions.
 The metadata writer compares the current state to the previous file slice to identify `deleted_records`.
@@ -145,11 +146,6 @@ This is because:
 ### Reading the Index
 To enable file pruning using the bitmap index, we can extend `SparkBaseIndexSupport` with a new `BitmapIndexSupport`. 
 The initial implementation will target Spark, but the design can be adapted for other engines.
-
-As of now, the bitmap index only supports the `EqualTo` (`=`) query filter.
-The `Not(EqualTo)` (`!=`) filter is not supported because the underlying implementation uses RoaringBitmap.
-RoaringBitmap is a space-efficient, sparse bitmap format. It doesn't support global `not` or `flipAll` operations, as these require a well-defined range of record positions.
-In other words, we would need to know the full range of possible record positions in advance—which is not practical in most cases.
 
 Imagine a table tracking how people commute to work. 
 We index the `gender` and `commute_type` columns using bitmap indexing.
@@ -181,6 +177,48 @@ for file_group in file_groups
 <img src="./prune_example.png" width="610" height="732" />
 </p>
 
+## Considerations
+### Write Amplification
+Like other indexes, bitmap indexes can amplify write operations and negatively impact writer performance.
+This is especially true for updates, where Hudi needs to compare the previous file slice with the current one to identify which indexed field values have changed, in order to update the corresponding bitmaps.
+This process is costly, and use cases with heavy write pressure should carefully evaluate the potential performance impact.
+
+Write amplification could be reduced in the future if Hudi supports row lineage, allowing the system to know exactly which rows were updated in the last write.
+With that, there's no need to scan both the previous and current file slices entirely.
+
+### Memory Pressure
+Using indexes introduces memory overhead.
+When querying indexed columns, their bitmaps must be loaded into memory to enable efficient bitwise operations.
+However, if the number of bitmaps becomes too large, it can lead to OOM errors.
+
+Users should carefully evaluate their query patterns to decide which columns to index and consider the cardinality of those columns.
+
+### Extra Storage
+Bitmap indexes require additional storage.
+Although RoaringBitmap is space-efficient (e.g., 100,000 positions take ~300KB), having too many indexed columns can still lead to storage concerns.
+It’s important to strike a balance between query performance and storage footprint.
+
+### Limited Predicate Support
+As of now, the bitmap index only supports the `EqualTo` (`=`) query filter.
+The `Not(EqualTo)` (`!=`) filter is not supported because the underlying implementation uses RoaringBitmap.
+RoaringBitmap is a space-efficient, sparse bitmap format. It doesn't support global `not` or `flipAll` operations, as these require a well-defined range of record positions (this holds true for most compressed bitmap implementations).
+In other words, we would need to know the full range of possible record positions in advance—which is not practical in most cases.
+
+Support for the `IN` predicate is possible, but not memory-efficient. Take the following query as an example:
+```
+SELECT age FROM commute_table WHERE commute_type IN ('car', 'walk', 'bike')
+```
+This query retrieves the ages of people who commute using any of the three specified types.
+If we have a bitmap index on `commute_type` and support the `IN` predicate, we would need to load three bitmaps into memory for every file group and perform a bitwise `OR` across them to determine if that file group contains any matching values.
+This introduces additional memory overhead on the Hudi side.
+Instead, the query can be rewritten as:
+```
+SELECT age FROM commute_table WHERE commute_type='car' OR commute_type='walk' OR commute_type='bike'
+```
+In this version, we still read the same three bitmaps, but not all at once. 
+Only one bitmap is loaded into memory at a time, and the query engine handles the `OR` logic by merging file name results from each predicate.
+The overall performance should be nearly the same, but the memory usage is significantly reduced.
+
 ## Rollout/Adoption Plan
 
 - What impact (if any) will there be on existing users?
@@ -192,9 +230,8 @@ for file_group in file_groups
 - When will we remove the existing behavior
     - N/A
 
-## Test Plan
-### Unit Tests
-### Performance Benchmark
+## Performance Benchmark
+TBD
 ## Future Improvement
 - Support `CREATE INDEX` SQL semantics for bitmap index and allow creating bitmap index asynchronously
 - Adapt the bitmap index support for other engines
