@@ -49,12 +49,10 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
@@ -82,19 +80,17 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_
 public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkFileGroupReaderBasedMergeHandle.class);
 
-  protected HoodieReaderContext readerContext;
-  protected FileSlice fileSlice;
-  protected Configuration conf;
-  protected HoodieReadStats readStats;
+  private final HoodieReaderContext<T> readerContext;
+  private final FileSlice fileSlice;
+  private HoodieReadStats readStats;
 
   public HoodieSparkFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                     CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                                     Option<BaseKeyGenerator> keyGeneratorOpt,
-                                                    HoodieReaderContext readerContext, Configuration conf) {
+                                                    HoodieReaderContext<T> readerContext) {
     super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
-    this.conf = conf;
     Option<HoodieBaseFile> baseFileOpt =
         operation.getBaseFile(config.getBasePath(), operation.getPartitionPath());
     List<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(p ->
@@ -189,7 +185,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
     // Initializes file group reader
     try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
-        storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
+        storage.newInstance(hoodieTable.getMetaClient().getBasePath(), readerContext.getStorageConfiguration()),
         hoodieTable.getMetaClient().getBasePath().toString(), instantTime, fileSlice,
         writeSchemaWithMetaFields, writeSchemaWithMetaFields, internalSchemaOption,
         hoodieTable.getMetaClient(), props, 0, Long.MAX_VALUE, usePosition, false)) {

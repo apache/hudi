@@ -59,6 +59,7 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   public HoodieTestReaderContext(
       Option<HoodieRecordMerger> customMerger,
       Option<String> payloadClass) {
+    super(null);
     this.customMerger = customMerger;
     this.payloadClass = payloadClass;
   }

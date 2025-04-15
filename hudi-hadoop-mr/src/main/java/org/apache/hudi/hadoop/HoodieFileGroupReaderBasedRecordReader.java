@@ -38,6 +38,7 @@ import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -124,7 +125,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     Schema requestedSchema = createRequestedSchema(tableSchema, jobConfCopy);
     this.readerContext = new HiveHoodieReaderContext(readerCreator, getRecordKeyField(metaClient),
         getStoredPartitionFieldNames(jobConfCopy, tableSchema),
-        new ObjectInspectorCache(tableSchema, jobConfCopy));
+        new ObjectInspectorCache(tableSchema, jobConfCopy), new HadoopStorageConfiguration(jobConfCopy));
     this.arrayWritable = new ArrayWritable(Writable.class, new Writable[requestedSchema.getFields().size()]);
     TypedProperties props = metaClient.getTableConfig().getProps();
     jobConf.forEach(e -> {

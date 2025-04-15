@@ -7,46 +7,44 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-package org.apache.hudi.table;
+package org.apache.hudi.client.common;
 
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.execution.datasources.FileFormat;
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
+import org.apache.spark.sql.hudi.SparkAdapter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.util.SerializableConfiguration;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,31 +53,16 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 import scala.collection.JavaConverters;
 
-/**
- * Broadcast variable management for Spark.
- */
-public class SparkBroadcastManager extends EngineBroadcastManager {
+class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
+  private final Broadcast<SparkParquetReader> parquetReaderBroadcast;
+  private final Broadcast<SerializableConfiguration> configurationBroadcast;
 
-  private final transient HoodieEngineContext context;
-  private final transient HoodieTableMetaClient metaClient;
-
-  protected Option<SparkParquetReader> parquetReaderOpt = Option.empty();
-  protected Broadcast<SQLConf> sqlConfBroadcast;
-  protected Broadcast<SparkParquetReader> parquetReaderBroadcast;
-  protected Broadcast<SerializableConfiguration> configurationBroadcast;
-
-  public SparkBroadcastManager(HoodieEngineContext context, HoodieTableMetaClient metaClient) {
-    this.context = context;
-    this.metaClient = metaClient;
+  SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient) {
+    this(hoodieSparkEngineContext, metaClient, new TableSchemaResolver(metaClient), SparkAdapterSupport$.MODULE$.sparkAdapter());
   }
 
-  @Override
-  public void prepareAndBroadcast() {
-    if (!(context instanceof HoodieSparkEngineContext)) {
-      throw new HoodieIOException("Expected to be called using Engine's context and not local context");
-    }
-
-    HoodieSparkEngineContext hoodieSparkEngineContext = (HoodieSparkEngineContext) context;
+  SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient,
+                            TableSchemaResolver resolver, SparkAdapter sparkAdapter) {
     SQLConf sqlConf = hoodieSparkEngineContext.getSqlContext().sessionState().conf();
     JavaSparkContext jsc = hoodieSparkEngineContext.jsc();
 
@@ -88,50 +71,47 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     scala.collection.immutable.Map<String, String> options =
         scala.collection.immutable.Map$.MODULE$.<String, String>empty()
             .$plus(new Tuple2<>(FileFormat.OPTION_RETURNING_BATCH(), Boolean.toString(returningBatch)));
-    TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
     InstantFileNameGenerator fileNameGenerator = metaClient.getTimelineLayout().getInstantFileNameGenerator();
     HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
     Map<String, String> schemaEvolutionConfigs =
         getSchemaEvolutionConfigs(resolver, timeline, fileNameGenerator, metaClient.getBasePath().toString());
 
     // Broadcast: SQLConf.
-    sqlConfBroadcast = jsc.broadcast(sqlConf);
     // Broadcast: Configuration.
     Configuration configs = getHadoopConfiguration(jsc.hadoopConfiguration());
-    addSchemaEvolutionConfigs(configs, schemaEvolutionConfigs);
+    schemaEvolutionConfigs.forEach(configs::set);
     configurationBroadcast = jsc.broadcast(new SerializableConfiguration(configs));
     // Broadcast: ParquetReader.
     // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
-    parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
-        false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
-    parquetReaderBroadcast = jsc.broadcast(parquetReaderOpt.get());
+    SparkParquetReader parquetFileReader = sparkAdapter.createParquetFileReader(false, sqlConf, options, configs);
+    // TODO why is vectorized always set to false?
+    parquetReaderBroadcast = jsc.broadcast(parquetFileReader);
   }
 
   @Override
-  public Option<HoodieReaderContext> retrieveFileGroupReaderContext(StoragePath basePath) {
+  public HoodieReaderContext<InternalRow> getContext() {
     if (parquetReaderBroadcast == null) {
       throw new HoodieException("Spark Parquet reader broadcast is not initialized.");
     }
 
+    if (configurationBroadcast == null) {
+      throw new HoodieException("Configuration broadcast is not initialized.");
+    }
+
     SparkParquetReader sparkParquetReader = parquetReaderBroadcast.getValue();
     if (sparkParquetReader != null) {
-      List<Filter> filters = new ArrayList<>();
-      return Option.of(new SparkFileFormatInternalRowReaderContext(
+      List<Filter> filters = Collections.emptyList();
+      return new SparkFileFormatInternalRowReaderContext(
           sparkParquetReader,
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
-          new HadoopStorageConfiguration(configurationBroadcast.getValue().value())));
+          new HadoopStorageConfiguration(configurationBroadcast.getValue().value()));
     } else {
       throw new HoodieException("Cannot get the broadcast Spark Parquet reader.");
     }
   }
 
-  @Override
-  public Option<Configuration> retrieveStorageConfig() {
-    return Option.of(configurationBroadcast.getValue().value());
-  }
-
-  static Configuration getHadoopConfiguration(Configuration configuration) {
+  private static Configuration getHadoopConfiguration(Configuration configuration) {
     // new Configuration() is critical so that we don't run into ConcurrentModificatonException
     Configuration hadoopConf = new Configuration(configuration);
     hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED().key(), false);
@@ -148,10 +128,10 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     return (new HadoopStorageConfiguration(hadoopConf).getInline()).unwrap();
   }
 
-  static Map<String, String> getSchemaEvolutionConfigs(TableSchemaResolver schemaResolver,
-                                                       HoodieTimeline timeline,
-                                                       InstantFileNameGenerator fileNameGenerator,
-                                                       String basePath) {
+  private static Map<String, String> getSchemaEvolutionConfigs(TableSchemaResolver schemaResolver,
+                                                               HoodieTimeline timeline,
+                                                               InstantFileNameGenerator fileNameGenerator,
+                                                               String basePath) {
     Option<InternalSchema> internalSchemaOpt = schemaResolver.getTableInternalSchemaFromCommitMetadata();
     Map<String, String> configs = new HashMap<>();
     if (internalSchemaOpt.isPresent()) {
@@ -160,11 +140,5 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
       configs.put(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, basePath);
     }
     return configs;
-  }
-
-  static void addSchemaEvolutionConfigs(Configuration configs, Map<String, String> schemaEvolutionConfigs) {
-    for (Map.Entry<String, String> entry : schemaEvolutionConfigs.entrySet()) {
-      configs.set(entry.getKey(), entry.getValue());
-    }
   }
 }

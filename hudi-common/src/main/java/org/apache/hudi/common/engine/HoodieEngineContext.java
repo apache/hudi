@@ -27,6 +27,7 @@ import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -130,4 +131,8 @@ public abstract class HoodieEngineContext {
    * @return the result of the aggregation
    */
   public abstract <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp);
+
+  public <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient) {
+    throw new UnsupportedOperationException("Reader context factory is not yet supported");
+  }
 }
