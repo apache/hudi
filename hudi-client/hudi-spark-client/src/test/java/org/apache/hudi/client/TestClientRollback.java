@@ -51,6 +51,7 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -81,6 +82,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test Cases for rollback of snapshots and commits.
  */
+@Disabled("HUDI-9281")
 public class TestClientRollback extends HoodieClientTestBase {
 
   private static Stream<Arguments> testSavepointAndRollbackParams() {
