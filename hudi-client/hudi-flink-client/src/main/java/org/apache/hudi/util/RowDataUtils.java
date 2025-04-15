@@ -21,7 +21,6 @@ package org.apache.hudi.util;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.avro.Conversions;
 import org.apache.avro.Schema;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.RowData;
@@ -33,57 +32,55 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.util.RowDataToAvroConverters.precision;
 
 /**
  * Utils for get/set operations on {@link RowData}.
  */
-public class HoodieRowDataUtil {
-
-  private static final Map<Pair<Schema, String>, RowData.FieldGetter> FIELD_GETTER_CACHE = new ConcurrentHashMap<>();
-
-  private static final Map<Schema, RowDataToAvroConverters.RowDataToAvroConverter> ROWDATA_CONVERTER_CACHE = new ConcurrentHashMap<>();
-
-  private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
+public class RowDataUtils {
+  // logical type -> (logical type, field getter)
+  private static final Map<LogicalType, Pair<LogicalType, RowData.FieldGetter>> FIELD_GETTER_CACHE = new ConcurrentHashMap<>();
+  // avro schema -> converter
+  private static final Map<Schema, RowDataToAvroConverters.RowDataToAvroConverter> ROW_DATA_CONVERTER_CACHE = new ConcurrentHashMap<>();
 
   /**
-   * Utils to get {@code RowDataToAvroConverter} from cache.
+   * Returns the existing {@code RowDataToAvroConverter} from cache, create a new one first if it does not exist.
    *
-   * @param schema schema of record
-   * @param utcTimezone whether writing timestamp data with UTC timezone
-   * @return a {@code RowDataToAvroConverter} from cache or newly created one if not existed in cache.
+   * @param schema      schema of record
+   * @param utcTimezone whether to write timestamp data with UTC timezone
+   *
+   * @return A {@code RowDataToAvroConverter} from cache or newly created one if not existed in the cache.
    */
-  public static RowDataToAvroConverters.RowDataToAvroConverter getRowDataToAvroConverter(Schema schema, boolean utcTimezone) {
-    return ROWDATA_CONVERTER_CACHE.computeIfAbsent(schema, s -> {
+  public static RowDataToAvroConverters.RowDataToAvroConverter internRowDataToAvroConverter(Schema schema, boolean utcTimezone) {
+    return ROW_DATA_CONVERTER_CACHE.computeIfAbsent(schema, s -> {
       LogicalType rowType = AvroSchemaConverter.convertToDataType(s).getLogicalType();
       return RowDataToAvroConverters.createConverter(rowType, utcTimezone);
     });
   }
 
   /**
-   * Utils to get FieldGetter from cache.
+   * Returns existing FieldGetter from cache, create a new one first if it does not exist.
    *
-   * @param schema schema of record
+   * @param schema    schema of the record
    * @param fieldName name of the field
-   * @return FieldGetter from cache or newly created one if not existed in cache.
+   *
+   * @return Pair of logical type and FieldGetter or newly created one if not existed in the cache.
    */
-  public static RowData.FieldGetter getFieldGetter(Schema schema, String fieldName) {
-    Pair<Schema, String> cacheKey = Pair.of(schema, fieldName);
-
-    return FIELD_GETTER_CACHE.computeIfAbsent(cacheKey, schemaStringPair -> {
-      Schema.Field field = schema.getField(fieldName);
-      if (field == null) {
-        throw new HoodieException(String.format("Column: %s does not exist in schema: %s", fieldName, schema));
-      }
-      int fieldPos = schema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList()).indexOf(fieldName);
-      LogicalType fieldType = AvroSchemaConverter.convertToDataType(field.schema()).getLogicalType();
-      return RowData.createFieldGetter(fieldType, fieldPos);
-    });
+  public static Pair<LogicalType, RowData.FieldGetter> internFieldGetter(Schema schema, String fieldName) {
+    Schema.Field field = schema.getField(fieldName);
+    if (field == null) {
+      throw new HoodieException(String.format("Column: %s does not exist in schema: %s", fieldName, schema));
+    }
+    int fieldPos = schema.getField(fieldName).pos();
+    LogicalType fieldType = AvroSchemaConverter.convertToDataType(field.schema()).getLogicalType();
+    return FIELD_GETTER_CACHE.computeIfAbsent(fieldType, t -> Pair.of(fieldType, RowData.createFieldGetter(fieldType, fieldPos)));
   }
 
-  public static Comparable<?> convertToNativeJavaType(Object fieldVal, LogicalType fieldType) {
+  /**
+   * Converts a row data field value into Java native data type.
+   */
+  public static Comparable<?> rowDataFieldToJava(Object fieldVal, LogicalType fieldType) {
     switch (fieldType.getTypeRoot()) {
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
       case TIMESTAMP_WITHOUT_TIME_ZONE:

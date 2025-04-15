@@ -26,8 +26,7 @@ import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.util.AvroSchemaConverter;
-import org.apache.hudi.util.HoodieRowDataUtil;
+import org.apache.hudi.util.RowDataUtils;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -132,7 +131,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+  public boolean isDelete(Schema recordSchema, Properties props) {
     if (data == null) {
       return true;
     }
@@ -163,7 +162,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(Schema recordSchema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Boolean withOperation,
-                                                            Option<String> partitionNameOp, Boolean populateMetaFieldsOp, Option<Schema> schemaWithoutMetaFields) throws IOException {
+                                                            Option<String> partitionNameOp, Boolean populateMetaFieldsOp, Option<Schema> schemaWithoutMetaFields) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
@@ -173,20 +172,22 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException {
+  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override
   public Comparable<?> getColumnValueAsJavaType(Schema recordSchema, String column) {
-    RowData.FieldGetter fieldGetter = HoodieRowDataUtil.getFieldGetter(recordSchema, column);
-    Object fieldVal = fieldGetter.getFieldOrNull(getData());
-    LogicalType fieldType = AvroSchemaConverter.convertToDataType(recordSchema.getField(column).schema()).getLogicalType();
-    return HoodieRowDataUtil.convertToNativeJavaType(fieldVal, fieldType);
+    Pair<LogicalType, RowData.FieldGetter> fieldTypeAndGetter = RowDataUtils.internFieldGetter(recordSchema, column);
+    Object fieldVal = fieldTypeAndGetter.getRight().getFieldOrNull(getData());
+    if (fieldVal == null) {
+      return null;
+    }
+    return RowDataUtils.rowDataFieldToJava(fieldVal, fieldTypeAndGetter.getLeft());
   }
 
   @Override
-  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
+  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 }

@@ -2511,7 +2511,7 @@ public class ITTestHoodieDataSource {
 
   @ParameterizedTest
   @MethodSource("indexAndLogBlockType")
-  void testRowDataWriteMode(String index, String logBlockType) throws Exception {
+  void testRowDataWriteModeWithDifferentLogFormat(String index, String logBlockType) throws Exception {
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
 
