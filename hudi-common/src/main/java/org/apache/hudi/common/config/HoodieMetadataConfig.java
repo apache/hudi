@@ -932,6 +932,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, metadataConfig.isColumnStatsIndexEnabled());
+      metadataConfig.setDefaultValue(SECONDARY_INDEX_ENABLE_PROP, getDefaultSecondaryIndexEnable(engineType));
       // fix me: disable when schema on read is enabled.
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
@@ -956,6 +957,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
         case FLINK:
         case JAVA:
           return false; // HUDI-8814
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+
+    private boolean getDefaultSecondaryIndexEnable(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+        case JAVA:
+          return true;
+        case FLINK:
+          return false;
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
