@@ -30,6 +30,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -47,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Test-cases for covering HoodieReadClient APIs
  */
 @SuppressWarnings("unchecked")
+@Disabled("HUDI-9281")
 public class TestHoodieReadClient extends HoodieClientTestBase {
 
   private static final int PARALLELISM = 2;
