@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -38,29 +39,29 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.view.FileSystemViewStorageType.EMBEDDED_KV_STORE;
 import static org.apache.hudi.common.table.view.FileSystemViewStorageType.MEMORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
-import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for savepoint operation.
  */
-@Disabled("HUDI-9281")
 public class TestSavepoint extends HoodieClientTestBase {
 
   private static Stream<Arguments> testSavepointParams() {
@@ -88,15 +89,17 @@ public class TestSavepoint extends HoodieClientTestBase {
       client.startCommitWithTime(commitTime1);
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
       JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(records1, 1);
-      List<WriteStatus> statuses1 = client.upsert(writeRecords1, commitTime1).collect();
-      assertNoWriteErrors(statuses1);
+      JavaRDD<WriteStatus> statuses1 = client.upsert(writeRecords1, commitTime1);
+      client.commit(commitTime1, statuses1, Option.empty(), tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION,
+          Collections.emptyMap(), Option.empty());
 
       String commitTime2 = "002";
       client.startCommitWithTime(commitTime2);
       List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
       JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
-      List<WriteStatus> statuses2 = client.upsert(writeRecords2, commitTime2).collect();
-      assertNoWriteErrors(statuses2);
+      JavaRDD<WriteStatus> statuses2 = client.upsert(writeRecords2, commitTime2);
+      client.commit(commitTime2, statuses2, Option.empty(), tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION,
+          Collections.emptyMap(), Option.empty());
 
       client.savepoint("user", "hoodie-savepoint-unit-test");
 
