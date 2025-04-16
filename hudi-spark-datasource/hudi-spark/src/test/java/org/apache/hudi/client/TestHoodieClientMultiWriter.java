@@ -428,7 +428,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   //@ParameterizedTest
   //@MethodSource("configParamsTimelineServerBased")
-  // to fix. 
+  // to fix.
   public void testHoodieClientBasicMultiWriterWithEarlyConflictDetectionTimelineServerBased(String tableType, String earlyConflictDetectionStrategy) throws Exception {
     testHoodieClientBasicMultiWriterWithEarlyConflictDetection(tableType, MarkerType.TIMELINE_SERVER_BASED.name(), earlyConflictDetectionStrategy);
   }
