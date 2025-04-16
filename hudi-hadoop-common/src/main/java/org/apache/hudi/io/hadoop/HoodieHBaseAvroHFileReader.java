@@ -329,7 +329,6 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     class KeyPrefixIterator implements Iterator<IndexedRecord> {
       private IndexedRecord next = null;
       private boolean eof = false;
-      private boolean initialized = false;
 
       @Override
       public boolean hasNext() {
@@ -340,15 +339,6 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         }
 
         try {
-          // Initialize scanner if needed
-          if (!initialized) {
-            initialized = true;
-            if (!scanner.seekTo()) {
-              eof = true;
-              return false;
-            }
-          }
-
           Cell c = scanner.getCell();
           if (c == null) {
             eof = true;
