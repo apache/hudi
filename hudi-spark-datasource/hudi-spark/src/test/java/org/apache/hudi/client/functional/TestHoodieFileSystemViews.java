@@ -50,7 +50,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -76,7 +75,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests diff file system views.
  */
-//@Disabled("HUDI-9281")
 public class TestHoodieFileSystemViews extends HoodieClientTestBase {
 
   private HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
@@ -107,8 +105,8 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     Properties properties = new Properties();
     properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), Integer.toString(writeVersion));
     properties.setProperty(HoodieTableConfig.VERSION.key(), Integer.toString(writeVersion));
-    properties.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(), writeVersion == 6 ?
-        Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_1.getVersion()) : Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_2.getVersion()));
+    properties.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(), writeVersion == 6
+        ? Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_1.getVersion()) : Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_2.getVersion()));
     initMetaClient(tableType, properties);
     HoodieWriteConfig.Builder configBuilder = getConfigBuilder();
     if (tableType == HoodieTableType.MERGE_ON_READ) {
