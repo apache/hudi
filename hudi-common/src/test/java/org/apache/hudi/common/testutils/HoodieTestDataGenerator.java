@@ -955,7 +955,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
     List<Integer> keys = new ArrayList<>(existingKeys.keySet());
     Collections.shuffle(keys);
-    for (int index : keys.subList(0, n)) {
+    if (n > keys.size()) {
+      logger.warn("Requested more updates than there are records currently written");
+    }
+    for (int index : keys.subList(0, Math.min(n, keys.size()))) {
       KeyPartition kp = existingKeys.get(index);
       HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
       updates.add(record);
