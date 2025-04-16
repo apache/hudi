@@ -29,17 +29,16 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -94,7 +93,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private final String metadataBasePath;
 
   private HoodieTableMetaClient metadataMetaClient;
-  private HoodieTableConfig metadataTableConfig;
 
   private HoodieTableFileSystemView metadataFileSystemView;
   // should we reuse the open file handles, across calls
@@ -136,19 +134,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             .setStorage(storage)
             .setBasePath(metadataBasePath)
             .build();
-        this.metadataTableConfig = metadataMetaClient.getTableConfig();
       } catch (TableNotFoundException e) {
         LOG.warn("Metadata table was not found at path {}", metadataBasePath);
         this.isMetadataTableInitialized = false;
         this.metadataMetaClient = null;
         this.metadataFileSystemView = null;
-        this.metadataTableConfig = null;
       } catch (Exception e) {
         LOG.error("Failed to initialize metadata table at path {}", metadataBasePath, e);
         this.isMetadataTableInitialized = false;
         this.metadataMetaClient = null;
         this.metadataFileSystemView = null;
-        this.metadataTableConfig = null;
       }
     }
   }
@@ -395,24 +390,18 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       result = toStream(records)
           .map(record -> {
             GenericRecord data = (GenericRecord) record.getData();
-            return Pair.of(
-                (String) (data).get(HoodieMetadataPayload.KEY_FIELD_NAME),
-                composeRecord(data, partitionName));
+            // populateMetaFields is hardcoded to false for the metadata table so key must be extracted from the `key` field
+            String recordKey = (String) data.get(HoodieMetadataPayload.KEY_FIELD_NAME);
+            return Pair.of(recordKey, composeRecord(data, recordKey, partitionName));
           })
           .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     }
     return result;
   }
 
-  private HoodieRecord<HoodieMetadataPayload> composeRecord(GenericRecord avroRecord, String partitionName) {
-    if (metadataTableConfig.populateMetaFields()) {
-      return SpillableMapUtils.convertToHoodieRecordPayload(avroRecord,
-          metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(), false);
-    }
-    return SpillableMapUtils.convertToHoodieRecordPayload(avroRecord,
-        metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(),
-        Pair.of(metadataTableConfig.getRecordKeyFieldProp(), metadataTableConfig.getPartitionFieldProp()),
-        false, Option.of(partitionName), Option.empty());
+  private HoodieRecord<HoodieMetadataPayload> composeRecord(GenericRecord avroRecord, String recordKey, String partitionName) {
+    return new HoodieAvroRecord<>(new HoodieKey(recordKey, partitionName),
+        new HoodieMetadataPayload(avroRecord, 0L), null);
   }
 
   /**
