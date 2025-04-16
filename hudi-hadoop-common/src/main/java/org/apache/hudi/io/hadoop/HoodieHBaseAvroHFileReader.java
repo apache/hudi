@@ -329,6 +329,7 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     class KeyPrefixIterator implements Iterator<IndexedRecord> {
       private IndexedRecord next = null;
       private boolean eof = false;
+      private boolean initialized = false;
 
       @Override
       public boolean hasNext() {
@@ -338,32 +339,52 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           return false;
         }
 
-        Cell c = Objects.requireNonNull(scanner.getCell());
-        byte[] keyBytes = copyKeyFromCell(c);
-        String key = new String(keyBytes);
-        // Check whether we're still reading records corresponding to the key-prefix
-        if (!key.startsWith(keyPrefix)) {
-          return false;
-        }
-
-        // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterwards
-        byte[] valueBytes = copyValueFromCell(c);
         try {
+          // Initialize scanner if needed
+          if (!initialized) {
+            initialized = true;
+            if (!scanner.seekTo()) {
+              eof = true;
+              return false;
+            }
+          }
+
+          Cell c = scanner.getCell();
+          if (c == null) {
+            eof = true;
+            return false;
+          }
+
+          byte[] keyBytes = copyKeyFromCell(c);
+          String key = new String(keyBytes);
+
+          // Check key prefix match
+          if (!key.startsWith(keyPrefix)) {
+            eof = true;
+            return false;
+          }
+
+          // Extract value and deserialize
+          byte[] valueBytes = copyValueFromCell(c);
           next = deserialize(keyBytes, valueBytes, writerSchema, readerSchema);
-          // In case scanner is not able to advance, it means we reached EOF
+
+          // Advance for next call
           eof = !scanner.next();
+          return true;
+
         } catch (IOException e) {
           throw new HoodieIOException("Failed to deserialize payload", e);
         }
-
-        return true;
       }
 
       @Override
       public IndexedRecord next() {
-        IndexedRecord next = this.next;
+        if (!hasNext()) {
+          throw new HoodieIOException("No more elements");
+        }
+        IndexedRecord result = this.next;
         this.next = null;
-        return next;
+        return result;
       }
     }
 
