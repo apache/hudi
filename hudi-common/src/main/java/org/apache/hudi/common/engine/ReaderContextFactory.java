@@ -20,6 +20,11 @@ package org.apache.hudi.common.engine;
 
 import java.io.Serializable;
 
+/**
+ * A factory that will return a {@link HoodieReaderContext<T>} for an engine specific data type.
+ * The factory must be serializable by default so the factory can be serialized to worker nodes in a distributed compute framework like Spark.
+ * @param <T> The engine specific data type for the reader
+ */
 public interface ReaderContextFactory<T> extends Serializable {
   HoodieReaderContext<T> getContext();
 }
