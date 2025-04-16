@@ -18,14 +18,12 @@
 
 package org.apache.hudi.io.v2;
 
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.AppendResult;
-import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
@@ -34,14 +32,13 @@ import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.HoodieAppendHandle;
+import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.io.MiniBatchHandle;
 import org.apache.hudi.io.log.block.HoodieFlinkParquetDataBlock;
 import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
 import org.apache.hudi.io.storage.row.HoodieFlinkIOFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.util.Lazy;
@@ -72,13 +69,9 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_DICTIONA
  * given file group and instant.
  */
 public class RowDataLogWriteHandle<T, I, K, O>
-    extends HoodieAppendHandle<T, I, K, O> implements MiniBatchHandle {
+    extends FlinkAppendHandle<T, I, K, O> implements MiniBatchHandle {
 
   private static final Logger LOG = LoggerFactory.getLogger(RowDataLogWriteHandle.class);
-
-  private boolean isClosed = false;
-
-  private final BucketType bucketType;
 
   public RowDataLogWriteHandle(
       HoodieWriteConfig config,
@@ -89,9 +82,8 @@ public class RowDataLogWriteHandle<T, I, K, O>
       String partitionPath,
       BucketType bucketType,
       TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
+    super(config, instantTime, hoodieTable, partitionPath, fileId, bucketType, recordItr, taskContextSupplier);
     initWriteConf(storage.getConf(), config);
-    this.bucketType = bucketType;
   }
 
   private void initWriteConf(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig) {
@@ -108,6 +100,25 @@ public class RowDataLogWriteHandle<T, I, K, O>
     return new FlinkRecordSizeEstimator();
   }
 
+  @Override
+  protected HoodieLogBlockType pickLogDataBlockFormat() {
+    Option<HoodieLogBlock.HoodieLogBlockType> logBlockTypeOpt = config.getLogDataBlockFormat();
+    if (logBlockTypeOpt.isPresent()) {
+      return logBlockTypeOpt.get();
+    }
+    // Fallback to deduce data-block type based on the base file format
+    switch (hoodieTable.getBaseFileFormat()) {
+      case PARQUET:
+      case ORC:
+        return HoodieLogBlockType.PARQUET_DATA_BLOCK;
+      case HFILE:
+        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
+      default:
+        throw new HoodieException("Base file format " + hoodieTable.getBaseFileFormat()
+            + " does not have associated log block type");
+    }
+  }
+
   /**
    * Flink writer does not support record-position for update/delete currently, will be supported later, see HUDI-9192.
    */
@@ -118,10 +129,6 @@ public class RowDataLogWriteHandle<T, I, K, O>
 
   @Override
   protected void processAppendResult(AppendResult result, Option<HoodieLogBlock> dataBlock) {
-    if (pickLogDataBlockFormat() == HoodieLogBlockType.AVRO_DATA_BLOCK) {
-      super.processAppendResult(result, dataBlock);
-      return;
-    }
     HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
     updateWriteStatus(result, stat);
 
@@ -187,51 +194,8 @@ public class RowDataLogWriteHandle<T, I, K, O>
             writeConfig.getParquetCompressionCodec(),
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled());
-      case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(records, header, keyField);
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " is not implemented for Flink RowData append handle.");
     }
-  }
-
-  @Override
-  protected boolean isUpdateRecord(HoodieRecord<T> hoodieRecord) {
-    return bucketType == BucketType.UPDATE;
-  }
-
-  @Override
-  protected boolean needsUpdateLocation() {
-    return false;
-  }
-
-  @Override
-  public boolean canWrite(HoodieRecord record) {
-    return true;
-  }
-
-  @Override
-  public List<WriteStatus> close() {
-    try {
-      return super.close();
-    } finally {
-      this.isClosed = true;
-    }
-  }
-
-  @Override
-  public void closeGracefully() {
-    if (isClosed) {
-      return;
-    }
-    try {
-      close();
-    } catch (Throwable throwable) {
-      LOG.warn("Error while trying to dispose the APPEND handle", throwable);
-    }
-  }
-
-  @Override
-  public StoragePath getWritePath() {
-    return writer.getLogFile().getPath();
   }
 }

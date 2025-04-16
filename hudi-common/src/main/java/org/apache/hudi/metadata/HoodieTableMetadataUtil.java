@@ -262,7 +262,7 @@ public class HoodieTableMetadataUtil {
         Schema fieldSchema = resolveNullableSchema(fieldNameFieldPair.getValue().schema());
         ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats());
         Object fieldValue;
-        if (record.getRecordType() == HoodieRecordType.AVRO || record.getRecordType() == HoodieRecordType.FLINK) {
+        if (record.getRecordType() == HoodieRecordType.AVRO) {
           fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema, false)[0];
           if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
             fieldValue = java.sql.Date.valueOf(fieldValue.toString());

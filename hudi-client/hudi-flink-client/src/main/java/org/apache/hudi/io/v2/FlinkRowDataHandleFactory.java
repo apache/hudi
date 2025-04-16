@@ -21,11 +21,14 @@ package org.apache.hudi.io.v2;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketInfo;
+import org.apache.hudi.util.LogBlockUtil;
 
 import org.apache.hadoop.fs.Path;
 
@@ -66,15 +69,27 @@ public class FlinkRowDataHandleFactory {
         String instantTime,
         HoodieTable<T, I, K, O> table,
         Iterator<HoodieRecord<T>> recordIterator) {
-      return new RowDataLogWriteHandle<>(
-          config,
-          instantTime,
-          table,
-          recordIterator,
-          bucketInfo.getFileIdPrefix(),
-          bucketInfo.getPartitionPath(),
-          bucketInfo.getBucketType(),
-          table.getTaskContextSupplier());
+      if (LogBlockUtil.pickLogDataBlockFormat(config, table) == HoodieLogBlockType.PARQUET_DATA_BLOCK) {
+        return new RowDataLogWriteHandle<>(
+            config,
+            instantTime,
+            table,
+            recordIterator,
+            bucketInfo.getFileIdPrefix(),
+            bucketInfo.getPartitionPath(),
+            bucketInfo.getBucketType(),
+            table.getTaskContextSupplier());
+      } else {
+        return new FlinkAppendHandle<>(
+            config,
+            instantTime,
+            table,
+            bucketInfo.getPartitionPath(),
+            bucketInfo.getFileIdPrefix(),
+            bucketInfo.getBucketType(),
+            recordIterator,
+            table.getTaskContextSupplier());
+      }
     }
   }
 

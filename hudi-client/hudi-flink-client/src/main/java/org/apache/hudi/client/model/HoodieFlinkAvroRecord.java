@@ -72,7 +72,7 @@ public class HoodieFlinkAvroRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public HoodieRecordType getRecordType() {
-    return HoodieRecordType.FLINK;
+    return HoodieRecordType.AVRO;
   }
 
   @Override

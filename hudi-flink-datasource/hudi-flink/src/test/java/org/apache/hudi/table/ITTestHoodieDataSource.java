@@ -1888,13 +1888,18 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class)
-  void testWriteAndReadWithDataSkipping(HoodieTableType tableType) {
+  @MethodSource("tableTypeAndLogBlockType")
+  void testWriteAndReadWithDataSkipping(HoodieTableType tableType, String logBlockType) {
+    // logBlockType only works for MOR
+    if (tableType == COPY_ON_WRITE && logBlockType.equals("avro")) {
+      return;
+    }
     TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.METADATA_ENABLED, true)
         .option("hoodie.metadata.index.column.stats.enable", true)
+        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logBlockType)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .end();
@@ -2575,6 +2580,19 @@ public class ITTestHoodieDataSource {
             {HoodieTableType.COPY_ON_WRITE, true},
             {HoodieTableType.MERGE_ON_READ, false},
             {HoodieTableType.MERGE_ON_READ, true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (HoodieTableType, LogBlockType).
+   */
+  private static Stream<Arguments> tableTypeAndLogBlockType() {
+    Object[][] data =
+        new Object[][] {
+            {HoodieTableType.COPY_ON_WRITE, "avro"},
+            {HoodieTableType.COPY_ON_WRITE, "parquet"},
+            {HoodieTableType.MERGE_ON_READ, "avro"},
+            {HoodieTableType.MERGE_ON_READ, "parquet"}};
     return Stream.of(data).map(Arguments::of);
   }
 

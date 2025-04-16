@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.BucketType;
 
 import org.apache.hadoop.fs.Path;
 
@@ -280,7 +281,8 @@ public class FlinkWriteHandleFactory {
       final String fileID = record.getCurrentLocation().getFileId();
       final String partitionPath = record.getPartitionPath();
       final TaskContextSupplier contextSupplier = table.getTaskContextSupplier();
-      return new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, recordItr, contextSupplier);
+      BucketType bucketType = record.getCurrentLocation().getInstantTime().equals("I") ? BucketType.INSERT : BucketType.UPDATE;
+      return new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, bucketType, recordItr, contextSupplier);
     }
   }
 }
