@@ -76,6 +76,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -141,9 +142,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     assertEquals(Source.SourceType.ROW, incrSource.getSourceType());
   }
 
-  //@ParameterizedTest
-  //@MethodSource("getArgumentsForHoodieIncrSource")
-  // to fix.
+  @ParameterizedTest
+  @MethodSource("getArgumentsForHoodieIncrSource")
   public void testHoodieIncrSource(HoodieTableType tableType, boolean useSourceProfile, HoodieTableVersion sourceTableVersion) throws IOException {
     this.tableType = tableType;
     Properties properties = getPropertiesForKeyGen(true);
@@ -154,7 +154,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .withAutoUpgradeVersion(false)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(tableType == MERGE_ON_READ).withMaxNumDeltaCommitsBeforeCompaction(3).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(tableType == MERGE_ON_READ)
+            .withMaxNumDeltaCommitsBeforeCompaction(3).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(false).build())
         .build();
@@ -270,12 +271,12 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> getArgumentsForHoodieIncrSource() {
     return Stream.of(
+        Arguments.of(COPY_ON_WRITE, true, HoodieTableVersion.SIX),
+        Arguments.of(MERGE_ON_READ, true, HoodieTableVersion.SIX),
         Arguments.of(COPY_ON_WRITE, true, HoodieTableVersion.EIGHT),
         Arguments.of(MERGE_ON_READ, true, HoodieTableVersion.EIGHT),
         Arguments.of(COPY_ON_WRITE, false, HoodieTableVersion.EIGHT),
-        Arguments.of(MERGE_ON_READ, false, HoodieTableVersion.EIGHT),
-        Arguments.of(COPY_ON_WRITE, true, HoodieTableVersion.SIX),
-        Arguments.of(MERGE_ON_READ, true, HoodieTableVersion.SIX)
+        Arguments.of(MERGE_ON_READ, false, HoodieTableVersion.EIGHT)
     );
   }
 

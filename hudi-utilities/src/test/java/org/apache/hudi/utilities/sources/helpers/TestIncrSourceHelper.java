@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -61,7 +60,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
-import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -342,19 +340,14 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
       List<HoodieRecord> s3MetadataRecords = Arrays.asList(
           generateS3EventMetadata(commitTime, "bucket-1", "data-file-1.json", 1L)
       );
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime);
-
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
-
+      writeClient.commit(commitTime, writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime));
       return Pair.of(commitTime, s3MetadataRecords);
     }
   }
 
   // Tests to validate previous, begin and end instances during query generation for
   // different missing checkpoint strategies
-  // @Test
-  // to fix
+  @Test
   void testQueryInfoGeneration() throws IOException {
     String commitTimeForReads = "1";
     String commitTimeForWrites = "2";
