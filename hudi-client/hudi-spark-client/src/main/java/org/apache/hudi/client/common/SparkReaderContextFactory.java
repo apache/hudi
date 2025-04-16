@@ -53,6 +53,9 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 import scala.collection.JavaConverters;
 
+/**
+ * Factory that provides the {@link InternalRow} based {@link HoodieReaderContext} for reading data into the spark native format.
+ */
 class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
   private final Broadcast<SparkParquetReader> parquetReaderBroadcast;
   private final Broadcast<SerializableConfiguration> configurationBroadcast;
