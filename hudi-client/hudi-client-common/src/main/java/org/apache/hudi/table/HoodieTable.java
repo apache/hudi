@@ -90,6 +90,7 @@ import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
+import org.apache.hudi.util.CommonClientUtils;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -964,11 +965,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public HoodieFileFormat getBaseFileFormat() {
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (tableConfig.isMultipleBaseFileFormatsEnabled() && config.contains(HoodieWriteConfig.BASE_FILE_FORMAT)) {
-      return config.getBaseFileFormat();
-    }
-    return metaClient.getTableConfig().getBaseFileFormat();
+    return CommonClientUtils.getBaseFileFormat(config, metaClient.getTableConfig());
   }
 
   public Option<HoodieFileFormat> getPartitionMetafileFormat() {

@@ -28,7 +28,7 @@ import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketInfo;
-import org.apache.hudi.util.LogBlockUtil;
+import org.apache.hudi.util.CommonClientUtils;
 
 import org.apache.hadoop.fs.Path;
 
@@ -69,7 +69,7 @@ public class FlinkRowDataHandleFactory {
         String instantTime,
         HoodieTable<T, I, K, O> table,
         Iterator<HoodieRecord<T>> recordIterator) {
-      if (LogBlockUtil.pickLogDataBlockFormat(config, table) == HoodieLogBlockType.PARQUET_DATA_BLOCK) {
+      if (CommonClientUtils.getLogBlockType(config, table.getMetaClient().getTableConfig()) == HoodieLogBlockType.PARQUET_DATA_BLOCK) {
         return new RowDataLogWriteHandle<>(
             config,
             instantTime,

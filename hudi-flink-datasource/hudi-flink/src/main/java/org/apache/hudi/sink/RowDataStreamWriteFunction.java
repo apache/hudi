@@ -49,7 +49,7 @@ import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.util.AvroSchemaConverter;
-import org.apache.hudi.util.LogBlockUtil;
+import org.apache.hudi.util.CommonClientUtils;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 import org.apache.hudi.util.OrderingValueExtractor;
 import org.apache.hudi.util.RowDataToAvroConverters;
@@ -71,6 +71,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -236,21 +237,21 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
   private void initRecordConverter() {
     // construct flink record according to the log block format type
-    HoodieLogBlockType logBlockType = LogBlockUtil.pickLogDataBlockFormat(writeClient.getConfig(), writeClient.getHoodieTable());
+    HoodieLogBlockType logBlockType = CommonClientUtils.getLogBlockType(writeClient.getConfig(), metaClient.getTableConfig());
     LOG.info("init record converter, log block type: {}", logBlockType);
     if (logBlockType == HoodieLogBlockType.PARQUET_DATA_BLOCK) {
-      this.recordConverter = new RecordConverter() {
-        @Override
-        public HoodieRecord convert(RowData dataRow, BucketInfo bucketInfo) {
-          String key = keyGen.getRecordKey(dataRow);
-          Comparable<?> orderingValue = orderingValueExtractor.getOrderingValue(dataRow);
-          HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
-          HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
-          return new HoodieFlinkRecord(hoodieKey, operation, orderingValue, dataRow);
-        }
+      this.recordConverter = (dataRow, bucketInfo) -> {
+        String key = keyGen.getRecordKey(dataRow);
+        Comparable<?> orderingValue = orderingValueExtractor.getOrderingValue(dataRow);
+        HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
+        HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
+        return new HoodieFlinkRecord(hoodieKey, operation, orderingValue, dataRow);
       };
     } else if (logBlockType == HoodieLogBlockType.AVRO_DATA_BLOCK) {
       this.recordConverter = new RecordConverter() {
+        private final Schema avroSchema = StreamerUtil.getSourceSchema(config);
+        private final RowDataToAvroConverters.RowDataToAvroConverter converter = RowDataToAvroConverters.createConverter(rowType, config.get(FlinkOptions.WRITE_UTC_TIMEZONE));
+
         @Override
         public HoodieRecord convert(RowData dataRow, BucketInfo bucketInfo) {
           String key = keyGen.getRecordKey(dataRow);
@@ -258,8 +259,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
           HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
           HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
 
-          Schema avroSchema = StreamerUtil.getSourceSchema(config);
-          RowDataToAvroConverters.RowDataToAvroConverter converter = RowDataToAvroConverters.createConverter(rowType, config.get(FlinkOptions.WRITE_UTC_TIMEZONE));
           GenericRecord record = (GenericRecord) converter.convert(avroSchema, dataRow);
           return new HoodieFlinkAvroRecord(hoodieKey, operation, orderingValue, record);
         }
@@ -321,19 +320,21 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
         RowKind.fromByteValue(HoodieOperation.fromName(record.getOperationType()).getValue()));
     final String bucketID = getBucketID(record.getPartitionPath(), record.getFileId());
 
+    // 1. try buffer the record into the memory pool
     boolean success = doBufferRecord(bucketID, record);
-    // 1. flushing bucket for memory pool is full.
     if (!success) {
+      // 2. flushes the bucket if the memory pool is full.
       RowDataBucket bucketToFlush = this.buckets.values().stream()
           .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
           .orElseThrow(NoSuchElementException::new);
       if (flushBucket(bucketToFlush)) {
+        // 2.1 flushes the data bucket with maximum size.
         this.tracer.countDown(bucketToFlush.getBufferSize());
         disposeBucket(bucketToFlush);
       } else {
         LOG.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
       }
-      // try write row again
+      // 2.2 try to write row again
       success = doBufferRecord(bucketID, record);
       if (!success) {
         throw new RuntimeException("Buffer is too small to hold a single record.");
@@ -341,7 +342,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     }
     RowDataBucket bucket = this.buckets.get(bucketID);
     this.tracer.trace(bucket.getLastRecordSize());
-    // 2. flushing bucket for bucket is full.
+    // 3. flushes the bucket if it is full.
     if (bucket.isFull()) {
       if (flushBucket(bucket)) {
         this.tracer.countDown(bucket.getBufferSize());
@@ -447,12 +448,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     writeMetrics.resetAfterCommit();
   }
 
-  private void registerMetrics() {
-    MetricGroup metrics = getRuntimeContext().getMetricGroup();
-    writeMetrics = new FlinkStreamWriteMetrics(metrics);
-    writeMetrics.registerMetrics();
-  }
-
   protected List<WriteStatus> writeRecords(
       String instant,
       RowDataBucket rowDataBucket) {
@@ -479,16 +474,17 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     }
   }
 
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    writeMetrics = new FlinkStreamWriteMetrics(metrics);
+    writeMetrics.registerMetrics();
+  }
+
   private OrderingValueExtractor getOrderingValueExtractor(Configuration conf, RowType rowType) {
     String preCombineField = OptionsResolver.getPreCombineField(conf);
     if (StringUtils.isNullOrEmpty(preCombineField)) {
-      // return a dummy extractor.
-      return new OrderingValueExtractor() {
-        @Override
-        public Comparable<?> getOrderingValue(RowData rowData) {
-          return HoodieRecord.DEFAULT_ORDERING_VALUE;
-        }
-      };
+      // returns a natual order value extractor.
+      return rowData -> HoodieRecord.DEFAULT_ORDERING_VALUE;
     }
     int preCombineFieldIdx = rowType.getFieldNames().indexOf(preCombineField);
     LogicalType fieldType = rowType.getChildren().get(preCombineFieldIdx);
@@ -500,13 +496,9 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     RowDataToAvroConverters.RowDataToAvroConverter fieldConverter =
         RowDataToAvroConverters.createConverter(fieldType, conf.get(FlinkOptions.WRITE_UTC_TIMEZONE));
     Schema fieldSchema = AvroSchemaConverter.convertToSchema(fieldType, preCombineField);
-    return new OrderingValueExtractor() {
-      @Override
-      public Comparable<?> getOrderingValue(RowData rowData) {
-        return (Comparable<?>) HoodieAvroUtils.convertValueForSpecificDataTypes(
-            fieldSchema, fieldConverter.convert(fieldSchema, preCombineFieldGetter.getFieldOrNull(rowData)), false);
-      }
-    };
+    // should convert the row data field directly into the Java native object just like HoodieAvroUtils#convertValueForAvroLogicalTypes
+    return rowData -> (Comparable<?>) HoodieAvroUtils.convertValueForSpecificDataTypes(
+        fieldSchema, fieldConverter.convert(fieldSchema, preCombineFieldGetter.getFieldOrNull(rowData)), false);
   }
 
   // -------------------------------------------------------------------------
@@ -530,11 +522,21 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     return ret;
   }
 
-  protected interface WriteFunction {
+  // -------------------------------------------------------------------------
+  //  Inner Classes
+  // -------------------------------------------------------------------------
+
+  /**
+   * Write function to trigger the actual write action.
+   */
+  protected interface WriteFunction extends Serializable {
     List<WriteStatus> write(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant);
   }
 
-  protected interface RecordConverter {
+  /**
+   * Function that converts the given {@link RowData} into a hoodie record.
+   */
+  protected interface RecordConverter extends Serializable {
     HoodieRecord convert(RowData dataRow, BucketInfo bucketInfo);
   }
 }

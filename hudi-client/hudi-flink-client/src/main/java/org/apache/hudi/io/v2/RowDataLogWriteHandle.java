@@ -101,7 +101,7 @@ public class RowDataLogWriteHandle<T, I, K, O>
   }
 
   @Override
-  protected HoodieLogBlockType pickLogDataBlockFormat() {
+  protected HoodieLogBlockType getLogBlockType() {
     Option<HoodieLogBlock.HoodieLogBlockType> logBlockTypeOpt = config.getLogDataBlockFormat();
     if (logBlockTypeOpt.isPresent()) {
       return logBlockTypeOpt.get();
