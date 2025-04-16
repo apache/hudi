@@ -2187,7 +2187,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       HoodieExpressionIndex.DYNAMIC_BLOOM_MAX_ENTRIES -> "1000"
     )
     val bloomFilterRecords = SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(df, "c5",
-      HoodieWriteConfig.newBuilder().withPath("a/b").withAutoCommit(true).build(), "",
+      HoodieWriteConfig.newBuilder().withPath("a/b").withAutoCommit(false).build(), "",
         HoodieIndexDefinition.newBuilder().withIndexName("random").withIndexOptions(JavaConverters.mapAsJavaMapConverter(indexOptions).asJava).build())
       .getExpressionIndexRecords
     // Since there is only one partition file pair there is only one bloom filter record
@@ -2301,7 +2301,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   private def getWriteConfigBuilder(hudiOpts: Map[String, String], basePath: String): HoodieWriteConfig.Builder = {
     val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
     HoodieWriteConfig.newBuilder()
-      .withAutoCommit(true)
+      .withAutoCommit(false)
       .withProps(props)
       .withPath(basePath)
   }

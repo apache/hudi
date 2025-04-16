@@ -85,6 +85,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
+import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -350,7 +351,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
    *
    *  the txn2 should be fail to commit caused by conflict
    */
-  //@Test
+  @Test
   public void testBulkInsertAndInsertConcurrentCase2() throws Exception {
     HoodieWriteConfig config = createHoodieWriteConfig();
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
@@ -396,7 +397,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
    *
    *  the txn2 should be fail to commit caused by conflict
    */
-  //@Test
+  @Test
   public void testBulkInsertAndInsertConcurrentCase3() throws Exception {
     HoodieWriteConfig config = createHoodieWriteConfig();
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
@@ -583,6 +584,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     }
     Properties props = getPropertiesForKeyGen(true);
     props.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    props.put(ENABLE_SCHEMA_CONFLICT_RESOLUTION.key(), "false");
     String basePath = basePath();
     return HoodieWriteConfig.newBuilder()
         .withProps(Collections.singletonMap(HoodieTableConfig.PRECOMBINE_FIELD.key(), "ts"))

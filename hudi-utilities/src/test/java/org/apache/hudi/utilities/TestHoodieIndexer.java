@@ -82,7 +82,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Disabled("to fix")
+@Disabled("HUDI-9281")
 public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implements SparkProvider {
 
   private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator(0L);
