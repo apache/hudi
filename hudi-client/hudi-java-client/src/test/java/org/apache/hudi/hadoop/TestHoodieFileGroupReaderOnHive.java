@@ -27,7 +27,9 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase;
@@ -186,13 +188,17 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
       throw new RuntimeException(e);
     }
 
-    HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(context, writeConfig);
-    String instantTime = writeClient.createNewInstantTime();
-    writeClient.startCommitWithTime(instantTime);
-    if (operation.toLowerCase().equals("insert")) {
-      writeClient.insert(recordList, instantTime);
-    } else {
-      writeClient.upsert(recordList, instantTime);
+    try (HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(context, writeConfig)) {
+      String instantTime = writeClient.createNewInstantTime();
+      writeClient.startCommitWithTime(instantTime);
+      // Make a copy of the records for writing. The writer will clear out the data field.
+      List<HoodieRecord> recordsCopy = new ArrayList<>(recordList.size());
+      recordList.forEach(hoodieRecord -> recordsCopy.add(new HoodieAvroRecord<>(hoodieRecord.getKey(), (HoodieRecordPayload) hoodieRecord.getData())));
+      if (operation.toLowerCase().equals("insert")) {
+        writeClient.insert(recordsCopy, instantTime);
+      } else {
+        writeClient.upsert(recordsCopy, instantTime);
+      }
     }
   }
 

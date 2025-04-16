@@ -958,7 +958,8 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     if (n > keys.size()) {
       logger.warn("Requested more updates than there are records currently written");
     }
-    for (int index : keys.subList(0, Math.min(n, keys.size()))) {
+    for (int i = 0; i < n; i++) {
+      int index = keys.get(i % keys.size());
       KeyPartition kp = existingKeys.get(index);
       HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
       updates.add(record);
