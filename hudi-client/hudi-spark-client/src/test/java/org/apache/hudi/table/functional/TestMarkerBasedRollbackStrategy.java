@@ -186,13 +186,20 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     assertEquals(1, stats.stream().mapToInt(r -> r.getFailedDeleteFiles().size()).sum());
   }
 
-  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @MethodSource("configParams")
-  public void testCopyOnWriteRollback(boolean useFileListingMetadata) throws Exception {
+  @Test
+  public void testCopyOnWriteRollbackNoMdt() throws Exception {
+    testCopyOnWriteRollback(false);
+  }
+
+  @Test
+  public void testCopyOnWriteRollback() throws Exception {
+    testCopyOnWriteRollback(true);
+  }
+
+  private void testCopyOnWriteRollback(boolean useFileListingMetadata) throws Exception {
     HoodieWriteConfig writeConfig = getConfigBuilder().withRollbackUsingMarkers(true).withAutoCommit(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(useFileListingMetadata).build())
         .withPath(basePath).build();
-
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig)) {
       // rollback 2nd commit and ensure stats reflect the info.
@@ -271,8 +278,8 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     writeStatuses = writeClient.upsert(jsc.parallelize(records, 1), newCommitTime);
     writeStatuses.collect();
 
-    HoodieTable hoodieTable = HoodieSparkTable.create(getConfigBuilder().build(), context, metaClient);
-    List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfigBuilder().build(),
+    HoodieTable hoodieTable = HoodieSparkTable.create(writeClient.getConfig(), context, metaClient);
+    List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, writeClient.getConfig(),
         "003").getRollbackRequests(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"));
 
     // rollback 2nd commit and ensure stats reflect the info.
