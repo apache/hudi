@@ -286,10 +286,10 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    * Execute a single compaction operation and report back status.
    */
   public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
-                                       HoodieWriteConfig writeConfig,
-                                       CompactionOperation operation,
-                                       String instantTime,
-                                       HoodieReaderContext<T> hoodieReaderContext) throws IOException {
+                                   HoodieWriteConfig writeConfig,
+                                   CompactionOperation operation,
+                                   String instantTime,
+                                   HoodieReaderContext<T> hoodieReaderContext) throws IOException {
     return compactionHandler.compactUsingFileGroupReader(instantTime, operation,
         writeConfig, hoodieReaderContext);
   }
