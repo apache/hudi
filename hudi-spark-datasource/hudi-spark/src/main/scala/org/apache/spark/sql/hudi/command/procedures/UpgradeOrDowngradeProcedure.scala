@@ -86,7 +86,7 @@ class UpgradeOrDowngradeProcedure extends BaseProcedure with ProcedureBuilder wi
     val basePath = getBasePath(tableOpt)
     val (tableName, database) = HoodieCLIUtils.getTableIdentifier(tableOpt.get.asInstanceOf[String])
     HoodieWriteConfig.newBuilder
-      .withAutoCommit(true)
+      .withAutoCommit(false)
       .forTable(tableName)
       .withPath(basePath)
       .withRollbackUsingMarkers(true)

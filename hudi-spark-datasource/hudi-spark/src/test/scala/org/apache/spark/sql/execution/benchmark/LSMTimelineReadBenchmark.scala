@@ -54,7 +54,7 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
       val tablePath = new Path(f.getCanonicalPath, tableName).toUri.toString
       val metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf, tablePath, HoodieTableType.COPY_ON_WRITE, tableName)
 
-      val writeConfig = HoodieWriteConfig.newBuilder().withPath(tablePath).withAutoCommit(true)
+      val writeConfig = HoodieWriteConfig.newBuilder().withPath(tablePath).withAutoCommit(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.INMEMORY).build())
         .withMarkersType("DIRECT")
         .build()
