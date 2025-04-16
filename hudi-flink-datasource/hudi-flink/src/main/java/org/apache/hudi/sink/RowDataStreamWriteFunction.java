@@ -135,8 +135,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
   protected final RowDataKeyGen keyGen;
 
-  protected final OrderingValueExtractor orderingValueExtractor;
-
   /**
    * Total size tracer.
    */
@@ -160,7 +158,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     super(config);
     this.rowType = rowType;
     this.keyGen = RowDataKeyGen.instance(config, rowType);
-    this.orderingValueExtractor = getOrderingValueExtractor(config, rowType);
   }
 
   @Override
@@ -239,6 +236,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     // construct flink record according to the log block format type
     HoodieLogBlockType logBlockType = CommonClientUtils.getLogBlockType(writeClient.getConfig(), metaClient.getTableConfig());
     LOG.info("init record converter, log block type: {}", logBlockType);
+    OrderingValueExtractor orderingValueExtractor = getOrderingValueExtractor(config, rowType);
     if (logBlockType == HoodieLogBlockType.PARQUET_DATA_BLOCK) {
       this.recordConverter = (dataRow, bucketInfo) -> {
         String key = keyGen.getRecordKey(dataRow);
