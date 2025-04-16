@@ -87,7 +87,6 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
     // Broadcast: ParquetReader.
     // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
     SparkParquetReader parquetFileReader = sparkAdapter.createParquetFileReader(false, sqlConf, options, configs);
-    // TODO why is vectorized always set to false?
     parquetReaderBroadcast = jsc.broadcast(parquetFileReader);
   }
 
