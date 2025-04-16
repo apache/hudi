@@ -1779,7 +1779,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   private def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
     val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
     HoodieWriteConfig.newBuilder()
-      .withAutoCommit(true)
+      .withAutoCommit(false)
       .withProps(props)
       .withPath(basePath)
       .build()

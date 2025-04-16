@@ -267,7 +267,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
   }
 
-  @Disabled("to-fix-based-on-drop-index")
+  @Test
   public void testTurnOffMetadataIndexAfterEnable() throws Exception {
     initPath();
     HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
@@ -300,8 +300,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     assertFalse(tableConfig.getMetadataPartitions().isEmpty());
     assertTrue(tableConfig.getMetadataPartitions().contains(FILES.getPartitionPath()));
-    // column_stats is enabled by default
-    assertTrue(tableConfig.getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
+    // column_stats is explicitly disabled
+    assertFalse(tableConfig.getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
     assertFalse(tableConfig.getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
 
     // enable column stats and run 1 upserts
@@ -763,9 +763,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     testTableOperationsImpl(engineContext, writeConfig);
   }
 
-  //@ParameterizedTest
-  //@EnumSource(HoodieTableType.class)
-  @Disabled("to-fix-based-on-drop-index")
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
   public void testMetadataTableDeletePartition(HoodieTableType tableType) throws Exception {
     initPath();
     int maxCommits = 1;
@@ -3407,7 +3406,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     Properties properties = getDisabledRowWriterProperties();
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
-        .withAutoCommit(true)
+        .withAutoCommit(false)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
