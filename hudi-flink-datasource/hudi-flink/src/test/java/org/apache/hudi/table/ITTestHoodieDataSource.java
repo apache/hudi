@@ -2510,8 +2510,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("indexAndLogBlockType")
-  void testRowDataWriteModeWithDifferentLogFormat(String index, String logBlockType) throws Exception {
+  @ValueSource(strings = {"FLINK_STATE", "BUCKET"})
+  void testRowDataWriteModeWithParquetLogFormat(String index) throws Exception {
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
 
@@ -2520,7 +2520,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
         .option(FlinkOptions.INDEX_TYPE, index)
-        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logBlockType)
+        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet")
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
@@ -2610,19 +2610,6 @@ public class ITTestHoodieDataSource {
             {"FLINK_STATE", true},
             {"BUCKET", false},
             {"BUCKET", true}};
-    return Stream.of(data).map(Arguments::of);
-  }
-
-  /**
-   * Return test params => (index type, log block type).
-   */
-  private static Stream<Arguments> indexAndLogBlockType() {
-    Object[][] data =
-        new Object[][] {
-            {"FLINK_STATE", "parquet"},
-            {"FLINK_STATE", "avro"},
-            {"BUCKET", "parquet"},
-            {"BUCKET", "avro"}};
     return Stream.of(data).map(Arguments::of);
   }
 

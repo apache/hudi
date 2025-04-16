@@ -394,15 +394,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public abstract Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled);
 
   /**
-   * Get Column value as native Java type, which will be used to generate column stats metadata.
-   *
-   * @return column value as native Java type.
-   */
-  public Comparable<?> getColumnValueAsJavaType(Schema recordSchema, String column) {
-    throw new UnsupportedOperationException("getColumnValueAsJavaType() is not supported yet for " + this.getClass().getSimpleName());
-  }
-
-  /**
    * Support bootstrap.
    */
   public abstract HoodieRecord joinWith(HoodieRecord other, Schema targetSchema);

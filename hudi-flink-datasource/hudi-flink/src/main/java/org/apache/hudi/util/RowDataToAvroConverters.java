@@ -30,10 +30,8 @@ import org.apache.flink.table.data.MapData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.ArrayType;
-import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.table.types.logical.TimestampType;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -162,7 +160,7 @@ public class RowDataToAvroConverters {
             };
         break;
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-        int precision = precision(type);
+        int precision = DataTypeUtils.precision(type);
         if (precision <= 3) {
           converter = new RowDataToAvroConverter() {
             private static final long serialVersionUID = 1L;
@@ -187,7 +185,7 @@ public class RowDataToAvroConverters {
         }
         break;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        precision = precision(type);
+        precision = DataTypeUtils.precision(type);
         if (precision <= 3) {
           converter =
               new RowDataToAvroConverter() {
@@ -354,19 +352,6 @@ public class RowDataToAvroConverters {
         return map;
       }
     };
-  }
-
-  /**
-   * Returns the precision of the given TIMESTAMP type.
-   */
-  public static int precision(LogicalType logicalType) {
-    if (logicalType instanceof TimestampType) {
-      return ((TimestampType) logicalType).getPrecision();
-    } else if (logicalType instanceof LocalZonedTimestampType) {
-      return ((LocalZonedTimestampType) logicalType).getPrecision();
-    } else {
-      throw new AssertionError("Unexpected type: " + logicalType);
-    }
   }
 }
 

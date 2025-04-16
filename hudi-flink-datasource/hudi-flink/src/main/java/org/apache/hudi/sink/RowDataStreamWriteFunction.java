@@ -20,6 +20,7 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.model.HoodieFlinkAvroRecord;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -27,7 +28,9 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -53,6 +56,7 @@ import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -144,6 +148,9 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
   protected transient MemorySegmentPool memorySegmentPool;
 
+  private transient Schema avroSchema;
+  private transient RowDataToAvroConverters.RowDataToAvroConverter converter;
+
   /**
    * Constructs a StreamingSinkFunction.
    *
@@ -162,6 +169,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     initBuffer();
     initWriteFunction();
     initMergeClass();
+    initConverter();
     registerMetrics();
   }
 
@@ -411,6 +419,14 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     writeMetrics.registerMetrics();
   }
 
+  private void initConverter() {
+    HoodieLogBlockType logBlockType = pickLogDataBlockFormat();
+    if (logBlockType == HoodieLogBlockType.AVRO_DATA_BLOCK) {
+      this.avroSchema = StreamerUtil.getSourceSchema(this.config);
+      this.converter = RowDataToAvroConverters.createConverter(this.rowType, this.config.get(FlinkOptions.WRITE_UTC_TIMEZONE));
+    }
+  }
+
   protected List<WriteStatus> writeRecords(
       String instant,
       RowDataBucket rowDataBucket) {
@@ -428,12 +444,34 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     return statuses;
   }
 
-  protected HoodieFlinkRecord convertToRecord(RowData dataRow, BucketInfo bucketInfo) {
+  protected HoodieRecord convertToRecord(RowData dataRow, BucketInfo bucketInfo) {
     String key = keyGen.getRecordKey(dataRow);
-    Comparable<?> preCombineValue = orderingValueExtractor.getOrderingValue(dataRow);
+    Comparable<?> orderingValue = orderingValueExtractor.getOrderingValue(dataRow);
     HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
     HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
-    return new HoodieFlinkRecord(hoodieKey, operation, preCombineValue, dataRow);
+    // construct flink record according to the log block format type
+    HoodieLogBlockType logBlockType = pickLogDataBlockFormat();
+    if (logBlockType == HoodieLogBlockType.AVRO_DATA_BLOCK) {
+      GenericRecord record = (GenericRecord) this.converter.convert(this.avroSchema, dataRow);
+      return new HoodieFlinkAvroRecord(hoodieKey, operation, orderingValue, record);
+    } else {
+      return new HoodieFlinkRecord(hoodieKey, operation, orderingValue, dataRow);
+    }
+  }
+
+  private HoodieLogBlockType pickLogDataBlockFormat() {
+    Option<HoodieLogBlockType> logBlockTypeOpt = writeClient.getConfig().getLogDataBlockFormat();
+    if (logBlockTypeOpt.isPresent()) {
+      return logBlockTypeOpt.get();
+    }
+    // Fallback to deduce data-block type based on the base file format
+    switch (writeClient.getHoodieTable().getBaseFileFormat()) {
+      case PARQUET:
+        return HoodieLogBlockType.AVRO_DATA_BLOCK;
+      default:
+        throw new HoodieException("Base file format " + writeClient.getHoodieTable().getBaseFileFormat()
+            + " does not have associated log block type");
+    }
   }
 
   protected Iterator<HoodieRecord> deduplicateRecordsIfNeeded(Iterator<HoodieRecord> records) {

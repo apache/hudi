@@ -262,7 +262,7 @@ public class HoodieTableMetadataUtil {
         Schema fieldSchema = resolveNullableSchema(fieldNameFieldPair.getValue().schema());
         ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats());
         Object fieldValue;
-        if (record.getRecordType() == HoodieRecordType.AVRO) {
+        if (record.getRecordType() == HoodieRecordType.AVRO || record.getRecordType() == HoodieRecordType.FLINK) {
           fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema, false)[0];
           if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
             fieldValue = java.sql.Date.valueOf(fieldValue.toString());
@@ -273,8 +273,6 @@ public class HoodieTableMetadataUtil {
           if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
             fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
           }
-        } else if (record.getRecordType() == HoodieRecordType.FLINK) {
-          fieldValue = record.getColumnValueAsJavaType(recordSchema, fieldName);
         } else {
           throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
         }

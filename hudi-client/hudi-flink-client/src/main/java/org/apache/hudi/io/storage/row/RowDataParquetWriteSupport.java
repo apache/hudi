@@ -58,8 +58,8 @@ public class RowDataParquetWriteSupport extends WriteSupport<RowData> {
     // should make the utc timestamp configurable
     boolean utcTimestamp =
         hadoopConf.getBoolean(
-            HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
-            HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue());
+            HoodieStorageConfig.PARQUET_WRITE_UTC_TIMEZONE.key(),
+            HoodieStorageConfig.PARQUET_WRITE_UTC_TIMEZONE.defaultValue());
     this.writer = new ParquetRowDataWriter(recordConsumer, rowType, schema, utcTimestamp);
   }
 
