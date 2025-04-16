@@ -952,10 +952,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    */
   public List<HoodieRecord> generateUpdates(String instantTime, Integer n, String schemaStr) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
-    for (int i = 0; i < n; i++) {
-      Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
-      Integer numExistingKeys = numKeysBySchema.get(schemaStr);
-      KeyPartition kp = existingKeys.get(rand.nextInt(numExistingKeys - 1));
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
+    List<Integer> keys = new ArrayList<>(existingKeys.keySet());
+    Collections.shuffle(keys);
+    for (int index : keys.subList(0, n)) {
+      KeyPartition kp = existingKeys.get(index);
       HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
       updates.add(record);
     }
