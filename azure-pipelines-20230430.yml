@@ -513,6 +513,9 @@ stages:
               ImageName: $(Build.BuildId)
           - task: Docker@2
             displayName: "UT FT common & other modules"
+            # trying with ubuntu 24
+            pool:
+              vmImage: 'ubuntu-24.04'
             inputs:
               containerRegistry: 'apachehudi-docker-hub'
               repository: 'apachehudi/hudi-ci-bundle-validation-base'
