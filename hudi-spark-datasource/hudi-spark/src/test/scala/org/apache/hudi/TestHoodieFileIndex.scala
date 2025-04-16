@@ -207,7 +207,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL
     )
     val writeConfig = HoodieWriteConfig.newBuilder()
-      .withAutoCommit(true)
+      .withAutoCommit(false)
       .withEngineType(EngineType.JAVA)
       .withPath(basePath)
       .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
@@ -221,7 +221,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       dataGen.generateInsertsContainsAllPartitions(instantTime, 100)
         .asInstanceOf[java.util.List[HoodieRecord[Nothing]]]
     writeClient.startCommitWithTime(instantTime)
-    writeClient.insert(records, instantTime)
+    writeClient.commit(instantTime, writeClient.insert(records, instantTime))
     metaClient.reloadActiveTimeline()
 
     val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
