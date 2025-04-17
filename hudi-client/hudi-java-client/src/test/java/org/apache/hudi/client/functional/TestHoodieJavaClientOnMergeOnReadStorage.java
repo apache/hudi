@@ -65,8 +65,8 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
         false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
     // check that only log files exist
     try (SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline())) {
-      Arrays.stream(dataGen.getPartitionPaths()).forEach(partition ->
-        fileSystemView.getLatestFileSlices(partition).forEach(fileSlice -> assertTrue(fileSlice.getBaseFile().isEmpty())));
+      Arrays.stream(dataGen.getPartitionPaths())
+          .forEach(partition -> fileSystemView.getLatestFileSlices(partition).forEach(fileSlice -> assertTrue(fileSlice.getBaseFile().isEmpty())));
     }
 
     // Update
