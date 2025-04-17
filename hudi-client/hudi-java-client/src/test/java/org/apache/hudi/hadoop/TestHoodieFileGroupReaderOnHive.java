@@ -39,11 +39,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
-import org.apache.hudi.testutils.ArrayWritableTestUtil;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.testutils.ArrayWritableTestUtil;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.Schema;
@@ -67,7 +67,6 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -87,11 +86,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBase<ArrayWritable> {
-
-  @Override
-  @Disabled("[HUDI-8072]")
-  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
-  }
 
   private static final String PARTITION_COLUMN = "datestr";
   private static JobConf baseJobConf;
