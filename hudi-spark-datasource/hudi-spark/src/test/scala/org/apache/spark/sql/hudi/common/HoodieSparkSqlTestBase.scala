@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.HoodieSparkRecordMerger
+import org.apache.hudi.{HoodieSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecord}
@@ -235,8 +235,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       }
       f
     } finally {
-      configNameValues.foreach { case ((configName, configValue), condition) =>
-        spark.sql(s"reset $configName")
+      if (HoodieSparkUtils.gteqSpark3_1) {
+        configNameValues.foreach { case ((configName, configValue), condition) =>
+          spark.sql(s"reset $configName")
+        }
       }
     }
   }
