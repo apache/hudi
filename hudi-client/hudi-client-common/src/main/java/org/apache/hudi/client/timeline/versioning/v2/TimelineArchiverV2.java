@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -117,6 +118,11 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         deleteArchivedActions(instantsToArchive, context);
         // triggers compaction and cleaning only after archiving action
         this.timelineWriter.compactAndClean(context);
+        List<HoodieInstant> archivedInstants = instantsToArchive.stream()
+            .map(action -> Stream.concat(action.getCompletedInstants().stream(), action.getPendingInstants().stream()).collect(Collectors.toList()))
+            .flatMap(Collection::stream).collect(Collectors.toList());
+        // Call Table Format archive to allow archiving in supplementary table format.
+        table.getMetaClient().getTableFormat().archive(archivedInstants, table.getContext(), table.getMetaClient(), table.getViewManager());
       } else {
         LOG.info("No Instants to archive");
       }

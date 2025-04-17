@@ -181,7 +181,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   protected abstract HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
 
-  private synchronized FileSystemViewManager getViewManager() {
+  public synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
       viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getMetadataTable());
     }

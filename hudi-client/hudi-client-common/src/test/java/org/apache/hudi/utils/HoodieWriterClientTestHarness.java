@@ -1207,7 +1207,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     numRecords = 50;
 
     castDeleteBatch(config, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
-        0, 150, config.populateMetaFields(), metaClient.getTimelineLayout().getTimelineFactory(),
+        0, 150, config.populateMetaFields(), metaClient.getTableFormat().getTimelineFactory(),
         metaClient.getInstantGenerator());
 
     // Now perform an upgrade and perform a restore operation
@@ -1233,7 +1233,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     numRecords = 50;
 
     castDeleteBatch(newConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, isPrepped, true, 0, 150,
-        metaClient.getTimelineLayout().getTimelineFactory(), metaClient.getInstantGenerator());
+        metaClient.getTableFormat().getTimelineFactory(), metaClient.getInstantGenerator());
 
     checkTimelineForUpsertsInternal(metaClient);
 

@@ -84,12 +84,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
                              boolean applyLayoutFilters) {
     // Filter all the filter in the metapath and include only the extensions passed and
     // convert them into HoodieInstant
-    try {
-      this.setInstants(metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(),
-          includedExtensions, applyLayoutFilters));
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to scan metadata", e);
-    }
+    this.setInstants(getInstantsFromFileSystem(metaClient, includedExtensions, applyLayoutFilters));
     this.metaClient = metaClient;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
@@ -150,17 +145,19 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   @Override
-  public <T> void saveAsComplete(HoodieInstant instant, Option<T> metadata) {
+  public <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata) {
     LOG.info("Marking instant complete " + instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
-    transitionState(instant, instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime()), metadata);
+    HoodieInstant completedInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime());
+    transitionState(instant, completedInstant, metadata);
     LOG.info("Completed " + instant);
+    return completedInstant;
   }
 
   @Override
-  public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
-    saveAsComplete(instant, metadata);
+  public <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
+    return saveAsComplete(instant, metadata);
   }
 
   @Override
