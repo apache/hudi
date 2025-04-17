@@ -138,11 +138,13 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       writeTableMetadata(table, clusteringCommitTime, metadata);
 
       LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
-      ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
+      HoodieInstant completedClusteringInstant = ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
           false,
           clusteringInstant,
           metadata,
           table.getActiveTimeline());
+      // Call Table Format Commit to allow writing supplementary table format.
+      table.getMetaClient().getTableFormat().commit(metadata, completedClusteringInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
     } catch (HoodieIOException e) {
       throw new HoodieClusteringException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);

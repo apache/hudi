@@ -133,30 +133,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
                                     HoodieMetadataConfig metadataConfig,
                                     String datasetBasePath,
                                     boolean reuse) {
-    if (metadataConfig.isEnabled()) {
-      HoodieBackedTableMetadata metadata = createHoodieBackedTableMetadata(engineContext, storage, metadataConfig, datasetBasePath, reuse);
-      // If the MDT is not initialized then we fallback to FSBackedTableMetadata
-      if (metadata.isMetadataTableInitialized()) {
-        return metadata;
-      }
-      LOG.warn("Falling back to FileSystemBackedTableMetadata as metadata table is not initialized");
-    }
-    return createFSBackedTableMetadata(engineContext, storage, datasetBasePath);
-  }
-
-  static FileSystemBackedTableMetadata createFSBackedTableMetadata(HoodieEngineContext engineContext,
-                                                                   HoodieStorage storage,
-                                                                   String datasetBasePath) {
-    return new FileSystemBackedTableMetadata(
-        engineContext, storage, datasetBasePath);
-  }
-
-  static HoodieBackedTableMetadata createHoodieBackedTableMetadata(HoodieEngineContext engineContext,
-                                                                   HoodieStorage storage,
-                                                                   HoodieMetadataConfig metadataConfig,
-                                                                   String datasetBasePath,
-                                                                   boolean reuse) {
-    return new HoodieBackedTableMetadata(engineContext, storage, metadataConfig, datasetBasePath, reuse);
+    //TODO: vb - Need to wire TableFormat here. Also, change metadaConfig to the one in the Table Format as that will be
+    // the contract.
+    return new HoodieTableMetadataFactory().create(engineContext, storage, metadataConfig, datasetBasePath, reuse);
   }
 
   /**

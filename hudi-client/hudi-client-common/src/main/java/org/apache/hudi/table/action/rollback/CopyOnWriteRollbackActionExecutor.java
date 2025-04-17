@@ -70,6 +70,18 @@ public class CopyOnWriteRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
       resolvedInstant = activeTimeline.revertToInflight(instantToRollback);
       // reload meta-client to reflect latest timeline status
       table.getMetaClient().reloadActiveTimeline();
+      // rollback instant in supplementary table format as well.
+      table.getMetaClient().getTableFormat().rollback(instantToRollback, table.getContext(), table.getMetaClient(), table.getViewManager());
+    }
+
+    // If instant is inflight but marked as completed in native format, delete the completed instant from storage.
+    if (instantToRollback.isInflight()) {
+      HoodieActiveTimeline activeTimelineForNativeFormat = table.getMetaClient().getActiveTimelineForNativeFormat();
+      HoodieInstant instantToRollbackInNativeFormat = activeTimelineForNativeFormat.filter(instant -> instant.requestedTime().equals(instantToRollback.requestedTime())).lastInstant().get();
+      if (instantToRollbackInNativeFormat.isCompleted()) {
+        resolvedInstant = activeTimelineForNativeFormat.revertToInflight(instantToRollbackInNativeFormat);
+        table.getMetaClient().reloadActiveTimeline();
+      }
     }
 
     // For Requested State (like failure during index lookup), there is nothing to do rollback other than
