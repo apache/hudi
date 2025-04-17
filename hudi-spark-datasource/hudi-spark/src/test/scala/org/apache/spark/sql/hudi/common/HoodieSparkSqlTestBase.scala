@@ -33,6 +33,7 @@ import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
+import org.apache.hudi.util.JFunction
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
@@ -295,10 +296,11 @@ object HoodieSparkSqlTestBase {
     val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
       engineContext, FileSystemViewStorageConfig.newBuilder.build,
       HoodieCommonConfig.newBuilder.build,
+      JFunction.toJavaSerializableFunctionUnchecked(
       (_: HoodieTableMetaClient) => {
         HoodieTableMetadata.create(
           engineContext, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
-      }
+      })
     )
     val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
     (metaClient, fsView)

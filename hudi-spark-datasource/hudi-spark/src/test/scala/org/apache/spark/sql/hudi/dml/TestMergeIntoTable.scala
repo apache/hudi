@@ -26,6 +26,8 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StringType, StructField}
 import org.junit.jupiter.api.Assertions.assertTrue
 
+import scala.collection.JavaConverters._
+
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
   test("Test MergeInto Basic") {
@@ -134,14 +136,14 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           val (metaClient, fsv) = HoodieSparkSqlTestBase.getMetaClientAndFileSystemView(tmp.getCanonicalPath)
           Seq("p2", "p3", "p4").map(e => "partition=" + e).foreach(partition => {
             assertTrue(fsv.getLatestFileSlices(partition).count() > 0)
-            fsv.getLatestFileSlices(partition).forEach(fileSlice => {
+            fsv.getLatestFileSlices(partition).iterator().asScala.foreach(fileSlice => {
               if (fileSlice.getBaseFile.isPresent) {
                 HoodieSparkSqlTestBase.replaceWithEmptyFile(
                   metaClient.getStorage, fileSlice.getBaseFile.get.getStoragePath)
               }
-              fileSlice.getLogFiles.forEach(logFile =>
+              fileSlice.getLogFiles.iterator().asScala.foreach(logFile => {
                 HoodieSparkSqlTestBase.replaceWithEmptyFile(metaClient.getStorage, logFile.getPath)
-              )
+              })
             })
           })
           // the fourth merge (delete the record)
