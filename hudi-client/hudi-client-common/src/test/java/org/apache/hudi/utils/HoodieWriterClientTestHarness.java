@@ -276,7 +276,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   /* Auxiliary methods for testing CopyOnWriteStorage with Spark and Java clients
   to avoid code duplication in TestHoodieClientOnCopyOnWriteStorage and TestHoodieJavaClientOnCopyOnWriteStorage */
 
-  protected abstract  List<WriteStatus> writeAndVerifyBatch(BaseHoodieWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields, boolean autoCommitOff)
+  protected abstract List<WriteStatus> writeAndVerifyBatch(BaseHoodieWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields, boolean autoCommitOff)
       throws IOException;
 
   protected Object castInsertFirstBatch(HoodieWriteConfig writeConfig, BaseHoodieWriteClient client, String newCommitTime,
@@ -311,6 +311,16 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                                   Function3<Object, BaseHoodieWriteClient, Object, String> writeFn,
                                   boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, boolean doCommit,
                                   boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator) throws Exception {
+    return castWriteBatch(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit, recordGenFunction,
+        writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, doCommit, filterForCommitTimeWithAssert, instantGenerator, false);
+  }
+
+  protected Object castWriteBatch(BaseHoodieWriteClient client, String newCommitTime, String prevCommitTime,
+                                  Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime, int numRecordsInThisCommit,
+                                  Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
+                                  Function3<Object, BaseHoodieWriteClient, Object, String> writeFn,
+                                  boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, boolean doCommit,
+                                  boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator, boolean leaveInflightCommit) throws Exception {
     return null; // override in subclasses if needed
   }
 
@@ -1296,12 +1306,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     // Perform 2 failed writes to table
     castWriteBatch(client, "200", "100", Option.of(Arrays.asList("200")), "100",
         100, dataGen::generateInserts, BaseHoodieWriteClient::bulkInsert, false, 100, 300,
-        0, false, INSTANT_GENERATOR);
+        0, false, true, INSTANT_GENERATOR, true);
     client.close();
     client = getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     castWriteBatch(client, "300", "200", Option.of(Arrays.asList("300")), "300",
         100, dataGen::generateInserts, BaseHoodieWriteClient::bulkInsert, false, 100, 300,
-        0, false, INSTANT_GENERATOR);
+        0, false, true, INSTANT_GENERATOR, true);
     client.close();
     // refresh data generator to delete records generated from failed commits
     dataGen = new HoodieTestDataGenerator();
@@ -1357,7 +1367,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     // Perform 1 failed writes to table
     castWriteBatch(client, "200", "100", Option.of(Arrays.asList("200")), "200",
         100, dataGen::generateInserts, BaseHoodieWriteClient::bulkInsert, false, 100, 300,
-        0, false, INSTANT_GENERATOR);
+        0, false, true, INSTANT_GENERATOR, true);
     client.close();
     // Toggle cleaning policy to LAZY
     cleaningPolicy = HoodieFailedWritesCleaningPolicy.LAZY;
@@ -1365,12 +1375,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     client = getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     castWriteBatch(client, "300", "200", Option.of(Arrays.asList("300")), "300",
         100, dataGen::generateInserts, BaseHoodieWriteClient::bulkInsert, false, 100, 300,
-        0, false, INSTANT_GENERATOR);
+        0, false, true, INSTANT_GENERATOR, true);
     client.close();
     client = getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     castWriteBatch(client, "400", "300", Option.of(Arrays.asList("400")), "400",
         100, dataGen::generateInserts, BaseHoodieWriteClient::bulkInsert, false, 100, 300,
-        0, false, INSTANT_GENERATOR);
+        0, false, true, INSTANT_GENERATOR, true);
     client.close();
     // Wait till enough time passes such that the 2 failed commits heartbeats are expired
     boolean conditionMet = false;
@@ -1385,12 +1395,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     client = getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     castWriteBatch(client, "500", "400", Option.of(Arrays.asList("300")), "300",
         100, dataGen::generateInserts, BaseHoodieWriteClient::bulkInsert, false, 100, 300,
-        0, false, INSTANT_GENERATOR);
+        0, false, true, INSTANT_GENERATOR, true);
     client.close();
     client = getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     castWriteBatch(client, "600", "500", Option.of(Arrays.asList("400")), "400",
         100, dataGen::generateInserts, BaseHoodieWriteClient::bulkInsert, false, 100, 300,
-        0, false, INSTANT_GENERATOR);
+        0, false, true, INSTANT_GENERATOR, true);
     client.close();
     // Toggle cleaning policy to EAGER
     cleaningPolicy = EAGER;
@@ -1416,12 +1426,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     // Perform 2 failed writes to table
     castWriteBatch(client, "200", "100", Option.of(Arrays.asList("200")), "200",
         100, dataGen::generateInserts, BaseHoodieWriteClient::bulkInsert, false, 100, 100,
-        0, false, INSTANT_GENERATOR);
+        0, false, true, INSTANT_GENERATOR, true);
     client.close();
     client = getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     castWriteBatch(client, "300", "200", Option.of(Arrays.asList("300")), "300",
         100, dataGen::generateInserts, BaseHoodieWriteClient::bulkInsert, false, 100, 100,
-        0, false, INSTANT_GENERATOR);
+        0, false, true, INSTANT_GENERATOR, true);
     client.close();
     // refresh data generator to delete records generated from failed commits
     dataGen = new HoodieTestDataGenerator();
