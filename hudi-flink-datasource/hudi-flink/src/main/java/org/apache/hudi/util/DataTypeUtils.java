@@ -19,6 +19,7 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.exception.HoodieValidationException;
 
 import org.apache.avro.util.Utf8;
 import org.apache.flink.table.api.DataTypes;
@@ -221,7 +222,10 @@ public class DataTypeUtils {
    * @param fieldVal    The field value
    * @param utcTimezone whether to use UTC timezone for timestamp data type
    */
-  public static Object resolveOrderingValue(LogicalType logicalType, Object fieldVal, boolean utcTimezone) {
+  public static Object resolveOrderingValue(
+      LogicalType logicalType,
+      Object fieldVal,
+      boolean utcTimezone) {
     switch (logicalType.getTypeRoot()) {
       case NULL:
         return null;
@@ -260,6 +264,9 @@ public class DataTypeUtils {
       case DECIMAL:
         return ((DecimalData) fieldVal).toBigDecimal();
       default:
+        if (fieldVal == null) {
+          throw new HoodieValidationException("Ordering value(legacy as preCombine field value) can not be null");
+        }
         return fieldVal;
     }
   }

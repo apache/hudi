@@ -19,22 +19,16 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.model.HoodieFlinkAvroRecord;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
-import org.apache.hudi.client.model.HoodieFlinkRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.util.HoodieRecordUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
@@ -44,25 +38,18 @@ import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
+import org.apache.hudi.sink.transform.RecordConverter;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
-import org.apache.hudi.util.CommonClientUtils;
-import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
-import org.apache.hudi.util.OrderingValueExtractor;
-import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
-import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
-import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
@@ -232,37 +219,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
   }
 
   private void initRecordConverter() {
-    // construct flink record according to the log block format type
-    HoodieLogBlockType logBlockType = CommonClientUtils.getLogBlockType(writeClient.getConfig(), metaClient.getTableConfig());
-    LOG.info("init record converter, log block type: {}", logBlockType);
-    OrderingValueExtractor orderingValueExtractor = getOrderingValueExtractor(config, rowType);
-    if (logBlockType == HoodieLogBlockType.PARQUET_DATA_BLOCK) {
-      this.recordConverter = (dataRow, bucketInfo) -> {
-        String key = keyGen.getRecordKey(dataRow);
-        Comparable<?> orderingValue = orderingValueExtractor.getOrderingValue(dataRow);
-        HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
-        HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
-        return new HoodieFlinkRecord(hoodieKey, operation, orderingValue, dataRow);
-      };
-    } else if (logBlockType == HoodieLogBlockType.AVRO_DATA_BLOCK) {
-      this.recordConverter = new RecordConverter() {
-        private final Schema avroSchema = StreamerUtil.getSourceSchema(config);
-        private final RowDataToAvroConverters.RowDataToAvroConverter converter = RowDataToAvroConverters.createConverter(rowType, config.get(FlinkOptions.WRITE_UTC_TIMEZONE));
-
-        @Override
-        public HoodieRecord convert(RowData dataRow, BucketInfo bucketInfo) {
-          String key = keyGen.getRecordKey(dataRow);
-          Comparable<?> orderingValue = orderingValueExtractor.getOrderingValue(dataRow);
-          HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
-          HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
-
-          GenericRecord record = (GenericRecord) converter.convert(avroSchema, dataRow);
-          return new HoodieFlinkAvroRecord(hoodieKey, operation, orderingValue, record);
-        }
-      };
-    } else {
-      throw new HoodieException("Unsupported log block type: " + logBlockType);
-    }
+    this.recordConverter = RecordConverter.getInstance(config, rowType, keyGen, writeClient.getConfig(), metaClient.getTableConfig());
   }
 
   private void initMergeClass() {
@@ -477,21 +434,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     writeMetrics.registerMetrics();
   }
 
-  private OrderingValueExtractor getOrderingValueExtractor(Configuration conf, RowType rowType) {
-    String fieldName = OptionsResolver.getPreCombineField(conf);
-    if (StringUtils.isNullOrEmpty(fieldName)) {
-      // returns a natual order value extractor.
-      return rowData -> HoodieRecord.DEFAULT_ORDERING_VALUE;
-    }
-    final int fieldPos = rowType.getFieldNames().indexOf(fieldName);
-    final LogicalType fieldType = rowType.getTypeAt(fieldPos);
-    final RowData.FieldGetter orderingValueFieldGetter = RowData.createFieldGetter(fieldType, fieldPos);
-    boolean utcTimezone = conf.get(FlinkOptions.WRITE_UTC_TIMEZONE);
-
-    return rowData -> (Comparable<?>) DataTypeUtils.resolveOrderingValue(
-        fieldType, orderingValueFieldGetter.getFieldOrNull(rowData), utcTimezone);
-  }
-
   // -------------------------------------------------------------------------
   //  Getter/Setter
   // -------------------------------------------------------------------------
@@ -522,12 +464,5 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
    */
   protected interface WriteFunction extends Serializable {
     List<WriteStatus> write(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant);
-  }
-
-  /**
-   * Function that converts the given {@link RowData} into a hoodie record.
-   */
-  protected interface RecordConverter extends Serializable {
-    HoodieRecord convert(RowData dataRow, BucketInfo bucketInfo);
   }
 }
