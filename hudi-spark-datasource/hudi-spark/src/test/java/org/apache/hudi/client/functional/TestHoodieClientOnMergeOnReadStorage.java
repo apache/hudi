@@ -273,14 +273,14 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
   /**
    * Test scheduling compaction right after scheduling log-compaction. This should fail.
    */
-  // to fix.
+  @Test
   public void testSchedulingCompactionAfterSchedulingLogCompaction() throws Exception {
     HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(1)
         .withLogCompactionBlocksThreshold(1)
         .build();
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        HoodieIndex.IndexType.INMEMORY).withAutoCommit(false)
         .withCompactionConfig(compactionConfig)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
