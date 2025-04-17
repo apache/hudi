@@ -1156,10 +1156,12 @@ public class TestInputFormat {
 
   @Test
   void testOrderingValueWithDecimalType() throws Exception {
-    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.removeKey(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key());
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_DECIMAL_ORDERING).toString());
+    conf = new Configuration();
+    conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
     conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_DECIMAL_ORDERING).toString());
     conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // by default close the async compaction
     StreamerUtil.initTableIfNotExists(conf);
 
