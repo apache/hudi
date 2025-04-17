@@ -23,8 +23,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.storage.StoragePath;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;

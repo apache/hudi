@@ -62,7 +62,6 @@ public class FlinkTables {
    * <p>This expects to be used by client.
    */
   public static HoodieFlinkTable<?> createTable(
-      Configuration conf,
       HoodieWriteConfig writeConfig,
       org.apache.hadoop.conf.Configuration hadoopConf,
       RuntimeContext runtimeContext) {

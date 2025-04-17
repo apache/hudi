@@ -19,25 +19,17 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 
-import java.io.IOException;
 import java.util.List;
 
 /**
@@ -67,40 +59,5 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
   @Override
   public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     // No OP
-  }
-
-  // todo add reader context parameters.
-  public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
-                                   HoodieTableMetaClient metaClient,
-                                   HoodieWriteConfig writeConfig,
-                                   CompactionOperation operation,
-                                   String instantTime,
-                                   String maxInstantTime,
-                                   TaskContextSupplier taskContextSupplier,
-                                   HoodieReaderContext readerContext) throws IOException {
-    boolean useFileGroupReaderBasedCompaction = !metaClient.isMetadataTable()
-        && writeConfig.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
-        && operation.getBootstrapFilePath().isEmpty()
-        && writeConfig.populateMetaFields()                                                         // Virtual key support by fg reader is not ready
-        && !(metaClient.getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor());  // do not support produce cdc log during fg reader
-
-    if (useFileGroupReaderBasedCompaction) {
-      return compact(
-          compactionHandler,
-          metaClient,
-          writeConfig,
-          operation,
-          instantTime,
-          Option.empty());
-    } else {
-      return compact(
-          compactionHandler,
-          metaClient,
-          writeConfig,
-          operation,
-          instantTime,
-          maxInstantTime,
-          taskContextSupplier);
-    }
   }
 }

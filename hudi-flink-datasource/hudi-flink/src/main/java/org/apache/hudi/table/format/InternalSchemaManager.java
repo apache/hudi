@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.format;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,6 +29,7 @@ import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
@@ -73,7 +73,7 @@ public class InternalSchemaManager implements Serializable {
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
   public static InternalSchemaManager get(Configuration conf, HoodieTableMetaClient metaClient) {
-    if (!conf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())) {
+    if (!OptionsResolver.isSchemaEvolutionEnabled(conf)) {
       return DISABLED;
     }
     Option<InternalSchema> internalSchema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata();
@@ -116,7 +116,7 @@ public class InternalSchemaManager implements Serializable {
    * @param fileName Name of file to fetch commitTime/versionId for
    * @return mergeSchema, i.e. the schema on which the file should be read with
    */
-  public InternalSchema getMergeSchema(String fileName) {
+  InternalSchema getMergeSchema(String fileName) {
     if (querySchema.isEmptySchema()) {
       return querySchema;
     }
@@ -147,7 +147,7 @@ public class InternalSchemaManager implements Serializable {
    *
    * @see CastMap
    */
-  public CastMap getCastMap(InternalSchema mergeSchema, String[] queryFieldNames, DataType[] queryFieldTypes, int[] selectedFields) {
+  CastMap getCastMap(InternalSchema mergeSchema, String[] queryFieldNames, DataType[] queryFieldTypes, int[] selectedFields) {
     Preconditions.checkArgument(!querySchema.isEmptySchema(), "querySchema cannot be empty");
     Preconditions.checkArgument(!mergeSchema.isEmptySchema(), "mergeSchema cannot be empty");
 
@@ -204,7 +204,7 @@ public class InternalSchemaManager implements Serializable {
    *
    * @see InternalSchemaUtils#collectRenameCols(InternalSchema, InternalSchema)
    */
-  public String[] getMergeFieldNames(InternalSchema mergeSchema, String[] queryFieldNames) {
+  String[] getMergeFieldNames(InternalSchema mergeSchema, String[] queryFieldNames) {
     Preconditions.checkArgument(!querySchema.isEmptySchema(), "querySchema cannot be empty");
     Preconditions.checkArgument(!mergeSchema.isEmptySchema(), "mergeSchema cannot be empty");
 
