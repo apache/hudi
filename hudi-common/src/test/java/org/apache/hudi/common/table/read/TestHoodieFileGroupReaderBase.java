@@ -52,16 +52,13 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.IOException;
 import java.io.Serializable;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -69,7 +66,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -140,7 +136,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           initialRecords, initialRecords);
 
       // Two commits; reading one file group containing a base file and a log file
-      List<HoodieRecord> updates = dataGen.generateUpdates("002", 50);
+      List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       List<HoodieRecord> allRecords = mergeRecordLists(updates, initialRecords);
       List<HoodieRecord> unmergedRecords = CollectionUtils.combine(initialRecords, updates);
       commitToTable(updates, UPSERT.value(), writeConfigs);
@@ -149,7 +145,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           allRecords, unmergedRecords);
 
       // Three commits; reading one file group containing a base file and two log files
-      List<HoodieRecord> updates2 = dataGen.generateUpdates("003", 100);
+      List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates("003", 100);
       List<HoodieRecord> finalRecords = mergeRecordLists(updates2, allRecords);
       commitToTable(updates2, UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
@@ -175,7 +171,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           initialRecords, initialRecords);
 
       // Two commits; reading one file group containing a base file and a log file
-      List<HoodieRecord> updates = dataGen.generateUpdates("002", 50);
+      List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       List<HoodieRecord> allRecords = mergeRecordLists(updates, initialRecords);
       commitToTable(updates, UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
@@ -277,10 +273,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
     // use reader context for conversion to engine specific objects
     HoodieReaderContext<T> readerContext = getHoodieReaderContext(tablePath, avroSchema, getStorageConf());
-    List<RecordIdentifier> expectedRecords = convertHoodieRecords(expectedHoodieRecords, avroSchema);
-    List<RecordIdentifier> expectedUnmergedRecords = convertHoodieRecords(expectedHoodieUnmergedRecords, avroSchema);
+    List<HoodieTestDataGenerator.RecordIdentifier> expectedRecords = convertHoodieRecords(expectedHoodieRecords, avroSchema);
+    List<HoodieTestDataGenerator.RecordIdentifier> expectedUnmergedRecords = convertHoodieRecords(expectedHoodieUnmergedRecords, avroSchema);
     List<FileSlice> fileSlices = getFileSlicesToRead(storageConf, tablePath, metaClient, partitionPaths, containsBaseFile, expectedLogFileNum);
-    List<RecordIdentifier> actualRecordList = convertEngineRecords(
+    List<HoodieTestDataGenerator.RecordIdentifier> actualRecordList = convertEngineRecords(
         readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, false),
         avroSchema, readerContext);
     // validate size is equivalent to ensure no duplicates are returned
@@ -407,63 +403,20 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             .collect(Collectors.toList());
   }
 
-  private List<RecordIdentifier> convertHoodieRecords(List<HoodieRecord> records, Schema schema) {
-    int keyFieldIndex = schema.getField(KEY_FIELD_NAME).pos();
-    int orderingFieldIndex = schema.getField(PRECOMBINE_FIELD_NAME).pos();
-    int partitionFieldIndex = schema.getField(PARTITION_FIELD_NAME).pos();
-    int riderFieldIndex = schema.getField(RIDER_FIELD_NAME).pos();
+  private List<HoodieTestDataGenerator.RecordIdentifier> convertHoodieRecords(List<HoodieRecord> records, Schema schema) {
     return records.stream().map(record -> {
-      try {
-        RawTripTestPayload payload = (RawTripTestPayload) record.getData();
-        IndexedRecord indexedRecord = payload.getRecordToInsert(schema);
-        return new RecordIdentifier(indexedRecord.get(keyFieldIndex).toString(), indexedRecord.get(orderingFieldIndex).toString(),
-            indexedRecord.get(partitionFieldIndex).toString(), indexedRecord.get(riderFieldIndex).toString());
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
+      RawTripTestPayload payload = (RawTripTestPayload) record.getData();
+      return HoodieTestDataGenerator.RecordIdentifier.fromTripTestPayload(payload);
     }).collect(Collectors.toList());
   }
 
-  private List<RecordIdentifier> convertEngineRecords(List<T> records, Schema schema, HoodieReaderContext<T> readerContext) {
+  private List<HoodieTestDataGenerator.RecordIdentifier> convertEngineRecords(List<T> records, Schema schema, HoodieReaderContext<T> readerContext) {
     return records.stream()
-        .map(record -> new RecordIdentifier(readerContext.getValue(record, schema, KEY_FIELD_NAME).toString(),
-            readerContext.getValue(record, schema, PRECOMBINE_FIELD_NAME).toString(),
+        .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
+            readerContext.getValue(record, schema, KEY_FIELD_NAME).toString(),
             readerContext.getValue(record, schema, PARTITION_FIELD_NAME).toString(),
+            readerContext.getValue(record, schema, PRECOMBINE_FIELD_NAME).toString(),
             readerContext.getValue(record, schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
-  }
-
-  /**
-   * Used for equality checks between the expected and actual records for the FileGroupReader.
-   */
-  private static class RecordIdentifier {
-    private final String recordKey;
-    private final String orderingVal;
-    private final String partitionPath;
-    private final String riderValue;
-
-    public RecordIdentifier(String recordKey, String orderingVal, String partitionPath, String riderValue) {
-      this.recordKey = recordKey;
-      this.orderingVal = orderingVal;
-      this.partitionPath = partitionPath;
-      this.riderValue = riderValue;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      RecordIdentifier that = (RecordIdentifier) o;
-      return Objects.equals(recordKey, that.recordKey)
-          && Objects.equals(orderingVal, that.orderingVal)
-          && Objects.equals(partitionPath, that.partitionPath)
-          && Objects.equals(riderValue, that.riderValue);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(recordKey, orderingVal, partitionPath, riderValue);
-    }
   }
 }
