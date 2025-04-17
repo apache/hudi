@@ -1888,20 +1888,55 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("tableTypeAndLogBlockType")
-  void testWriteAndReadWithDataSkipping(HoodieTableType tableType, String logBlockType) {
-    // logBlockType only works for MOR
-    if (tableType == COPY_ON_WRITE && logBlockType.equals("avro")) {
-      return;
-    }
+  @EnumSource(value = HoodieTableType.class)
+  void testWriteAndReadWithDataSkipping(HoodieTableType tableType) {
     TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.METADATA_ENABLED, true)
         .option("hoodie.metadata.index.column.stats.enable", true)
-        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logBlockType)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, tableType)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
+    // apply filters
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where uuid > 'id5' and age > 20").execute().collect());
+    assertRowsEquals(result2, "["
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+    // filter by timestamp
+    List<Row> result3 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where ts > TIMESTAMP '1970-01-01 00:00:05'").execute().collect());
+    assertRowsEquals(result3, "["
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+    // filter by in expression
+    List<Row> result4 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where uuid in ('id6', 'id7', 'id8')").execute().collect());
+    assertRowsEquals(result4, "["
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+  }
+
+  @Test
+  void testParquetLogBlockDataSkipping() {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .option("hoodie.metadata.index.column.stats.enable", true)
+        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet")
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -2586,7 +2621,7 @@ public class ITTestHoodieDataSource {
   /**
    * Return test params => (HoodieTableType, LogBlockType).
    */
-  private static Stream<Arguments> tableTypeAndLogBlockType() {
+  private static Stream<Arguments> tableTypeAndLogBlockTypeParams() {
     Object[][] data =
         new Object[][] {
             {HoodieTableType.COPY_ON_WRITE, "avro"},

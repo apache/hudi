@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieFlinkAvroRecord;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
@@ -48,8 +47,8 @@ import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.CommonClientUtils;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 import org.apache.hudi.util.OrderingValueExtractor;
 import org.apache.hudi.util.RowDataToAvroConverters;
@@ -321,12 +320,12 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     // 1. try buffer the record into the memory pool
     boolean success = doBufferRecord(bucketID, record);
     if (!success) {
-      // 2. flushes the bucket if the memory pool is full.
+      // 2. flushes the bucket if the memory pool is full
       RowDataBucket bucketToFlush = this.buckets.values().stream()
           .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
           .orElseThrow(NoSuchElementException::new);
       if (flushBucket(bucketToFlush)) {
-        // 2.1 flushes the data bucket with maximum size.
+        // 2.1 flushes the data bucket with maximum size
         this.tracer.countDown(bucketToFlush.getBufferSize());
         disposeBucket(bucketToFlush);
       } else {
@@ -340,7 +339,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     }
     RowDataBucket bucket = this.buckets.get(bucketID);
     this.tracer.trace(bucket.getLastRecordSize());
-    // 3. flushes the bucket if it is full.
+    // 3. flushes the bucket if it is full
     if (bucket.isFull()) {
       if (flushBucket(bucket)) {
         this.tracer.countDown(bucket.getBufferSize());
@@ -479,24 +478,18 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
   }
 
   private OrderingValueExtractor getOrderingValueExtractor(Configuration conf, RowType rowType) {
-    String preCombineField = OptionsResolver.getPreCombineField(conf);
-    if (StringUtils.isNullOrEmpty(preCombineField)) {
+    String fieldName = OptionsResolver.getPreCombineField(conf);
+    if (StringUtils.isNullOrEmpty(fieldName)) {
       // returns a natual order value extractor.
       return rowData -> HoodieRecord.DEFAULT_ORDERING_VALUE;
     }
-    int preCombineFieldIdx = rowType.getFieldNames().indexOf(preCombineField);
-    LogicalType fieldType = rowType.getChildren().get(preCombineFieldIdx);
-    RowData.FieldGetter preCombineFieldGetter = RowData.createFieldGetter(fieldType, preCombineFieldIdx);
+    final int fieldPos = rowType.getFieldNames().indexOf(fieldName);
+    final LogicalType fieldType = rowType.getTypeAt(fieldPos);
+    final RowData.FieldGetter orderingValueFieldGetter = RowData.createFieldGetter(fieldType, fieldPos);
+    boolean utcTimezone = conf.get(FlinkOptions.WRITE_UTC_TIMEZONE);
 
-    // currently the log reader for flink is avro reader, and it merges records based on ordering value
-    // in form of AVRO format, so here we align the data format with reader.
-    // TODO refactor this after RowData reader is supported, HUDI-9146.
-    RowDataToAvroConverters.RowDataToAvroConverter fieldConverter =
-        RowDataToAvroConverters.createConverter(fieldType, conf.get(FlinkOptions.WRITE_UTC_TIMEZONE));
-    Schema fieldSchema = AvroSchemaConverter.convertToSchema(fieldType, preCombineField);
-    // should convert the row data field directly into the Java native object just like HoodieAvroUtils#convertValueForAvroLogicalTypes
-    return rowData -> (Comparable<?>) HoodieAvroUtils.convertValueForSpecificDataTypes(
-        fieldSchema, fieldConverter.convert(fieldSchema, preCombineFieldGetter.getFieldOrNull(rowData)), false);
+    return rowData -> (Comparable<?>) DataTypeUtils.resolveOrderingValue(
+        fieldType, orderingValueFieldGetter.getFieldOrNull(rowData), utcTimezone);
   }
 
   // -------------------------------------------------------------------------

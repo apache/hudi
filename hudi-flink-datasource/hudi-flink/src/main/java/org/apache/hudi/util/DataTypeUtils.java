@@ -20,7 +20,10 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.common.model.HoodieRecord;
 
+import org.apache.avro.util.Utf8;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.DecimalData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -32,6 +35,8 @@ import org.apache.flink.table.types.logical.TimestampType;
 import javax.annotation.Nullable;
 
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -204,5 +209,58 @@ public class DataTypeUtils {
     mergedFields.addAll(rowType.getFields());
 
     return new RowType(false, mergedFields);
+  }
+
+  /**
+   * Resolve the native Java object from given row data field value.
+   *
+   * <p>IMPORTANT: the logic references the row-data to avro conversion in {@code RowDataToAvroConverters.createConverter}
+   * and {@code HoodieAvroUtils.convertValueForAvroLogicalTypes}.
+   *
+   * @param logicalType The logical type
+   * @param fieldVal    The field value
+   * @param utcTimezone whether to use UTC timezone for timestamp data type
+   */
+  public static Object resolveOrderingValue(LogicalType logicalType, Object fieldVal, boolean utcTimezone) {
+    switch (logicalType.getTypeRoot()) {
+      case NULL:
+        return null;
+      case TINYINT:
+        return ((Byte) fieldVal).intValue();
+      case SMALLINT:
+        return ((Short) fieldVal).intValue();
+      case DATE:
+        return LocalDate.ofEpochDay((Long) fieldVal);
+      case CHAR:
+      case VARCHAR:
+        return new Utf8(fieldVal.toString());
+      case BINARY:
+      case VARBINARY:
+        return ByteBuffer.wrap((byte[]) fieldVal);
+      case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+        int precision1 = DataTypeUtils.precision(logicalType);
+        if (precision1 <= 3) {
+          return ((TimestampData) fieldVal).toInstant().toEpochMilli();
+        } else if (precision1 <= 6) {
+          Instant instant = ((TimestampData) fieldVal).toInstant();
+          return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1000_000), instant.getNano() / 1000);
+        } else {
+          throw new UnsupportedOperationException("Unsupported timestamp precision: " + precision1);
+        }
+      case TIMESTAMP_WITHOUT_TIME_ZONE:
+        int precision2 = DataTypeUtils.precision(logicalType);
+        if (precision2 <= 3) {
+          return utcTimezone ? ((TimestampData) fieldVal).toInstant().toEpochMilli() : ((TimestampData) fieldVal).toTimestamp().getTime();
+        } else if (precision2 <= 6) {
+          Instant instant = utcTimezone ? ((TimestampData) fieldVal).toInstant() : ((TimestampData) fieldVal).toTimestamp().toInstant();
+          return  Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1000_000), instant.getNano() / 1000);
+        } else {
+          throw new UnsupportedOperationException("Unsupported timestamp precision: " + precision2);
+        }
+      case DECIMAL:
+        return ((DecimalData) fieldVal).toBigDecimal();
+      default:
+        return fieldVal;
+    }
   }
 }
