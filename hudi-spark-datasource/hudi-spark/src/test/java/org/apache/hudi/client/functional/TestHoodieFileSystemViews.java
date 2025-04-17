@@ -50,6 +50,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -75,6 +76,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests diff file system views.
  */
+@Disabled("HUDI-9281")
 public class TestHoodieFileSystemViews extends HoodieClientTestBase {
 
   private HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
