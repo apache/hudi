@@ -1155,8 +1155,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // verify inflight clustering was rolled back
     metaClient.reloadActiveTimeline();
-    pendingClusteringPlans = ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
-    assertEquals(config.isRollbackPendingClustering() ? 0 : 1, pendingClusteringPlans.size());
+    if (rollbackPendingClustering) {
+      // if rollbackPendingClustering is true, first one will be rolled back and 2nd one will succeed
+      assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().filter(instant -> instant.getAction().equals(REPLACE_COMMIT_ACTION)).countInstants());
+    } else {
+      // if rollbackPendingClustering is false, two completed RC should be found
+      assertEquals(2, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().filter(instant -> instant.getAction().equals(REPLACE_COMMIT_ACTION)).countInstants());
+    }
   }
 
   @Test
