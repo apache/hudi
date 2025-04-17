@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RowDataUtils;
 
 import org.apache.avro.Schema;
@@ -138,7 +139,7 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
 
   private RowData mergeRowData(RowData lowOrderRow, RowData highOrderRow, Schema schema) {
     GenericRowData result = new GenericRowData(schema.getFields().size());
-    RowData.FieldGetter[] fieldGetters = RowDataUtils.internAllFieldGetters(schema);
+    RowData.FieldGetter[] fieldGetters = RowDataAvroQueryContexts.fromAvroSchema(schema).fieldGetters();
     for (int i = 0; i < fieldGetters.length; i++) {
       result.setField(i, fieldGetters[i].getFieldOrNull(lowOrderRow));
       Object fieldValWithHighOrder = fieldGetters[i].getFieldOrNull(highOrderRow);

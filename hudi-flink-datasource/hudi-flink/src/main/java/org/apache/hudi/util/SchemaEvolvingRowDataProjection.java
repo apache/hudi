@@ -44,9 +44,8 @@ import java.util.Map;
 /**
  * An implementation of {@link FlinkRowProjection} which supports schema evolvable projection on {@link RowData}.
  */
-public class SchemaEvolvableRowDataProjection implements FlinkRowProjection {
+public class SchemaEvolvingRowDataProjection implements FlinkRowProjection {
   private static final long serialVersionUID = 1L;
-
 
   /**
    * An implementation of {@code ObjectConverter} which return the object itself.
@@ -55,7 +54,7 @@ public class SchemaEvolvableRowDataProjection implements FlinkRowProjection {
 
   private final ObjectConverter innerProjection;
 
-  SchemaEvolvableRowDataProjection(RowType from, RowType to, Map<String, String> renamedColumns) {
+  public SchemaEvolvingRowDataProjection(RowType from, RowType to, Map<String, String> renamedColumns) {
     this.innerProjection = createProjection(from, to, renamedColumns, new ArrayDeque<>());
   }
 
@@ -63,8 +62,8 @@ public class SchemaEvolvableRowDataProjection implements FlinkRowProjection {
     return (RowData) this.innerProjection.convert(rowData);
   }
 
-  public static SchemaEvolvableRowDataProjection instance(RowType from, RowType to, Map<String, String> renamedColumns) {
-    return new SchemaEvolvableRowDataProjection(from, to, renamedColumns);
+  public static SchemaEvolvingRowDataProjection instance(RowType from, RowType to, Map<String, String> renamedColumns) {
+    return new SchemaEvolvingRowDataProjection(from, to, renamedColumns);
   }
 
   private ObjectConverter createProjection(LogicalType fromType, LogicalType toType, Map<String, String> renamedColumns, Deque<String> fieldNameStack) {

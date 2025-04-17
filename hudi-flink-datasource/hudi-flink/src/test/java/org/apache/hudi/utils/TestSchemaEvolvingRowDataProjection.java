@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.hudi.util.SchemaEvolvableRowDataProjection;
+import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.ArrayData;
@@ -39,9 +39,9 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests from {@link SchemaEvolvableRowDataProjection}.
+ * Tests from {@link SchemaEvolvingRowDataProjection}.
  */
-public class TestSchemaEvolvableRowDataProjection {
+public class TestSchemaEvolvingRowDataProjection {
   @Test
   public void testSchemaEvolvedProjection() {
     // nested composite type: Array<Row>
@@ -167,7 +167,7 @@ public class TestSchemaEvolvableRowDataProjection {
     expected.setField(8, null);
     expected.setField(9, 1000.0);
 
-    SchemaEvolvableRowDataProjection projection = SchemaEvolvableRowDataProjection.instance(from, to, renamedCols);
+    SchemaEvolvingRowDataProjection projection = SchemaEvolvingRowDataProjection.instance(from, to, renamedCols);
     GenericRowData projRow = (GenericRowData) projection.project(rowData);
     assertEquals(expected, projRow);
   }

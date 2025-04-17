@@ -45,9 +45,10 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.FlinkRowProjection;
+import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RowDataUtils;
 import org.apache.hudi.util.AvroConverterUtils;
-import org.apache.hudi.util.SchemaEvolvableRowDataProjection;
+import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -134,7 +135,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   @Override
   public Object getValue(RowData record, Schema schema, String fieldName) {
-    RowData.FieldGetter fieldGetter = RowDataUtils.internFieldGetter(schema, fieldName);
+    RowData.FieldGetter fieldGetter = RowDataAvroQueryContexts.fromAvroSchema(schema).getFieldQueryContext(fieldName).getFieldGetter();
     return fieldGetter.getFieldOrNull(record);
   }
 
@@ -237,7 +238,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   public UnaryOperator<RowData> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
     RowType fromType = (RowType) AvroSchemaConverter.convertToDataType(from).getLogicalType();
     RowType toType = (RowType) AvroSchemaConverter.convertToDataType(to).getLogicalType();
-    FlinkRowProjection rowProjection = SchemaEvolvableRowDataProjection.instance(fromType, toType, renamedColumns);
+    FlinkRowProjection rowProjection = SchemaEvolvingRowDataProjection.instance(fromType, toType, renamedColumns);
     return rowProjection::project;
   }
 

@@ -37,6 +37,18 @@ import java.util.function.Function;
  */
 public class RowDataUtils {
   /**
+   * An implementation of {@code FieldGetter} which always return NULL.
+   */
+  public static final RowData.FieldGetter NULL_GETTER = new RowData.FieldGetter() {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public Object getFieldOrNull(RowData rowData) {
+      return null;
+    }
+  };
+
+  /**
    * Resolve the native Java object from given row data field value.
    *
    * <p>IMPORTANT: the logic references the row-data to avro conversion in {@code RowDataToAvroConverters.createConverter}
