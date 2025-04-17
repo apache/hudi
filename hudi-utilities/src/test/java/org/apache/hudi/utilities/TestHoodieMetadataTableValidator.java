@@ -1231,12 +1231,12 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     }
 
     @Override
-    List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, StoragePath basePath, HoodieStorage storage, HoodieTimeline completedTimeline) {
+    List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, HoodieTimeline completedTimeline) {
       return fsPartitionsToReturn;
     }
 
     @Override
-    List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, StoragePath basePath, HoodieStorage storage) {
+    List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient) {
       return metadataPartitionsToReturn;
     }
 

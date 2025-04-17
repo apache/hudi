@@ -202,8 +202,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     snapshot1.cache()
     assertEquals(300, snapshot1.count())
 
+    metaClient = createMetaClient(spark, basePath)
     var partitionPaths = FSUtils.getAllPartitionPaths(
-      new HoodieSparkEngineContext(jsc), storage, HoodieMetadataConfig.newBuilder().build(), basePath)
+      new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().build())
     assertTrue(partitionPaths.contains("100/rider-123"))
     assertTrue(partitionPaths.contains("200/rider-456"))
 
@@ -226,8 +227,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    partitionPaths = FSUtils.getAllPartitionPaths(
-      new HoodieSparkEngineContext(jsc), storage, HoodieMetadataConfig.newBuilder().build(), basePath)
+    partitionPaths = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().build())
     assertEquals(partitionPaths.size(), 1)
     assertEquals(partitionPaths.get(0), "")
   }

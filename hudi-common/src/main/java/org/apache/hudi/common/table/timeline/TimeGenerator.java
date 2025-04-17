@@ -47,6 +47,8 @@ public interface TimeGenerator {
    *
    * @param skipLocking If this is triggered by another parent transaction, locking can be skipped.
    * @param func   A consumer that takes a monotonically increasing timestamp.
+   *
+   * @return Return TrueTime as milliseconds in consumer function.
    */
-  void consumeTime(boolean skipLocking, Consumer<Long> func);
+  long consumeTime(boolean skipLocking, Consumer<Long> func);
 }

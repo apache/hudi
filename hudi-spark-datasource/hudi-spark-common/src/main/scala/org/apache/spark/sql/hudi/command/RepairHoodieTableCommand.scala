@@ -17,9 +17,6 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.HoodieStorageUtils
-
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -87,9 +84,7 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
       val total = partitionSpecsAndLocs.length
       val partitionList = partitionSpecsAndLocs.map(_._2.toString)
       val partitionStats = if (spark.sqlContext.conf.gatherFastStats && total > 0) {
-        HoodieSqlCommonUtils.getFilesInPartitions(spark, table,
-            HoodieStorageUtils.getStorage(partitionList.head, HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())),
-            partitionList)
+        HoodieSqlCommonUtils.getFilesInPartitions(spark, table, hoodieCatalogTable.metaClient, partitionList)
           .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getLength).sum))
       } else {
         Map.empty[String, PartitionStatistics]
