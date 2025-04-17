@@ -156,13 +156,14 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     // Use InMemoryIndex to generate log only mor table
     writeConfigs.put("hoodie.index.type", "INMEMORY");
 
+
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
-      // One commit; reading one file group containing a base file only
-      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
+      // One commit: reading one file group containing 1 log file only.
+      commitToTable(dataGen.generateInserts("001", 100), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 1, recordMergeMode);
 
-      // Two commits; reading one file group containing a base file and a log file
+      // Two commits: reading one file group with 2 log files only.
       commitToTable(dataGen.generateUpdates("002", 100), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 2, recordMergeMode);
