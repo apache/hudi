@@ -290,7 +290,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private void scanLogFiles() {
     String path = readerContext.getTablePath();
-    try (HoodieMergedLogRecordReader logRecordReader = HoodieMergedLogRecordReader.newBuilder()
+    try (HoodieMergedLogRecordReader<T> logRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
         .withHoodieReaderContext(readerContext)
         .withStorage(storage)
         .withLogFiles(logFiles)
@@ -318,9 +318,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
     if (recordBuffer != null) {
       recordBuffer.close();
-    }
-    if (readerContext != null) {
-      readerContext.close();
     }
   }
 

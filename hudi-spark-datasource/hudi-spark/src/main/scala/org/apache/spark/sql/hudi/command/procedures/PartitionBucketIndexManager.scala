@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, EN
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, SerializableSchema}
-import org.apache.hudi.common.engine.HoodieEngineContext
+import org.apache.hudi.common.engine.{HoodieEngineContext, ReaderContextFactory}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{PartitionBucketIndexHashingConfig, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -35,7 +35,6 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.bucket.partition.{PartitionBucketIndexCalculator, PartitionBucketIndexUtils}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.table.SparkBroadcastManager
 
 import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
@@ -213,9 +212,7 @@ class PartitionBucketIndexManager extends BaseProcedure
           throw new HoodieException("Failed to get table schema during clustering", e)
       }
 
-      // broadcast reader context.
-      val broadcastManager = new SparkBroadcastManager(context, metaClient)
-      broadcastManager.prepareAndBroadcast()
+      val readerContextFactory: ReaderContextFactory[InternalRow] = context.getReaderContextFactory(metaClient)
       val sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields)
 
       val res: RDD[InternalRow] = if (allFileSlice.isEmpty) {
@@ -227,10 +224,9 @@ class PartitionBucketIndexManager extends BaseProcedure
         spark.sparkContext.parallelize(allFileSlice, allFileSlice.size).flatMap(fileSlice => {
           // instantiate other supporting cast
           val readerSchema = serializableTableSchemaWithMetaFields.get
-          val readerContextOpt = broadcastManager.retrieveFileGroupReaderContext(basePath)
           val internalSchemaOption: Option[InternalSchema] = Option.empty()
           // instantiate FG reader
-          val fileGroupReader = new HoodieFileGroupReader(readerContextOpt.get(),
+          val fileGroupReader = new HoodieFileGroupReader(readerContextFactory.getContext,
             metaClient.getStorage,
             basePath.toString,
             latestInstantTime.requestedTime(),

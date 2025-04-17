@@ -142,7 +142,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
     setupJobconf(jobConf);
     return new HiveHoodieReaderContext(readerCreator, getRecordKeyField(metaClient),
         getStoredPartitionFieldNames(new JobConf(storageConf.unwrapAs(Configuration.class)), avroSchema),
-        new ObjectInspectorCache(avroSchema, jobConf));
+        new ObjectInspectorCache(avroSchema, jobConf), storageConf);
   }
 
   @Override
