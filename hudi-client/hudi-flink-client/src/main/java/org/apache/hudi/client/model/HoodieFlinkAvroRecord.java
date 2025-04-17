@@ -31,42 +31,37 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
-import org.apache.flink.table.data.GenericRowData;
-import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.data.utils.JoinedRowData;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
 /**
- * Flink Engine-specific Implementations of `HoodieRecord`, which is expected to hold {@code RowData} as payload.
+ * Flink implementation of `HoodieRecord`, which is expected to hold Avro {@code IndexedRecord} as payload.
+ * It's only used by writer when the log block format type is AVRO.
  */
-public class HoodieFlinkRecord extends HoodieRecord<RowData> {
+public class HoodieFlinkAvroRecord extends HoodieRecord<IndexedRecord> {
   private Comparable<?> orderingValue = 0;
 
-  public HoodieFlinkRecord(RowData rowData) {
-    super(null, rowData);
-  }
-
-  public HoodieFlinkRecord(HoodieKey key, HoodieOperation op, Comparable<?> orderingValue, RowData rowData) {
-    super(key, rowData, op, Option.empty());
+  public HoodieFlinkAvroRecord(HoodieKey key, HoodieOperation op, Comparable<?> orderingValue, IndexedRecord record) {
+    super(key, record, op, Option.empty());
     this.orderingValue = orderingValue;
   }
 
   @Override
-  public HoodieRecord<RowData> newInstance() {
-    return new HoodieFlinkRecord(key, operation, orderingValue, data);
+  public HoodieRecord<IndexedRecord> newInstance() {
+    return new HoodieFlinkAvroRecord(key, operation, orderingValue, data);
   }
 
   @Override
-  public HoodieRecord<RowData> newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieFlinkRecord(key, op, orderingValue, this.data);
+  public HoodieRecord<IndexedRecord> newInstance(HoodieKey key, HoodieOperation op) {
+    return new HoodieFlinkAvroRecord(key, op, orderingValue, data);
   }
 
   @Override
-  public HoodieRecord<RowData> newInstance(HoodieKey key) {
+  public HoodieRecord<IndexedRecord> newInstance(HoodieKey key) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
@@ -77,7 +72,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecordType getRecordType() {
-    return HoodieRecordType.FLINK;
+    return HoodieRecordType.AVRO;
   }
 
   @Override
@@ -91,12 +86,12 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  protected void writeRecordPayload(RowData payload, Kryo kryo, Output output) {
+  protected void writeRecordPayload(IndexedRecord payload, Kryo kryo, Output output) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override
-  protected RowData readRecordPayload(Kryo kryo, Input input) {
+  protected IndexedRecord readRecordPayload(Kryo kryo, Input input) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
@@ -112,15 +107,22 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
-    int metaFieldSize = targetSchema.getFields().size() - recordSchema.getFields().size();
-    GenericRowData metaRow = new GenericRowData(metaFieldSize);
-    String[] metaVals = metadataValues.getValues();
-    for (int i = 0; i < metaVals.length; i++) {
-      if (metaVals[i] != null) {
-        metaRow.setField(i, StringData.fromString(metaVals[i]));
+    GenericRecord recordWithMetaFields = new GenericData.Record(targetSchema);
+    // update meta fields
+    if (!metadataValues.isEmpty()) {
+      String[] values = metadataValues.getValues();
+      for (int i = 0; i < values.length; i++) {
+        if (values[i] != null) {
+          recordWithMetaFields.put(i, values[i]);
+        }
       }
     }
-    return new HoodieFlinkRecord(key, operation, orderingValue, new JoinedRowData(data.getRowKind(), metaRow, data));
+    // update data fields
+    int metaFieldsSize = targetSchema.getFields().size() - recordSchema.getFields().size();
+    for (int i = 0; i < recordSchema.getFields().size(); i++) {
+      recordWithMetaFields.put(metaFieldsSize + i, data.get(i));
+    }
+    return new HoodieFlinkAvroRecord(key, operation, orderingValue, recordWithMetaFields);
   }
 
   @Override
@@ -140,16 +142,20 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
     // Use data field to decide.
     Schema.Field deleteField = recordSchema.getField(HOODIE_IS_DELETED_FIELD);
-    return deleteField != null && data.getBoolean(deleteField.pos());
+    if (deleteField == null) {
+      return false;
+    }
+    Object deleteMarker = data.get(deleteField.pos());
+    return deleteMarker instanceof Boolean && (Boolean) deleteMarker;
   }
 
   @Override
-  public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
+  public boolean shouldIgnore(Schema recordSchema, Properties props) {
     return false;
   }
 
   @Override
-  public HoodieRecord<RowData> copy() {
+  public HoodieRecord<IndexedRecord> copy() {
     return this;
   }
 
@@ -176,6 +182,6 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+    return Option.of(new HoodieAvroIndexedRecord(getKey(), getData(), getOperation(), getMetadata()));
   }
 }

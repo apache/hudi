@@ -181,8 +181,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   /**
    * Returns the builder for {@code HoodieMergedLogRecordReader}.
    */
-  public static Builder newBuilder() {
-    return new Builder();
+  public static <T> Builder<T> newBuilder() {
+    return new Builder<>();
   }
 
   public long getTotalTimeTakenToReadAndMergeBlocks() {

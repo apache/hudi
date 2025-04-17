@@ -61,6 +61,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.CommonClientUtils;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
@@ -499,7 +500,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        dataBlock = getDataBlock(config, pickLogDataBlockFormat(), recordList,
+        dataBlock = getDataBlock(config, getLogBlockType(), recordList,
             getUpdatedHeader(header, config, baseFileInstantTimeOfPositions), keyField);
         blocks.add(dataBlock);
       }
@@ -664,23 +665,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
   }
 
-  protected HoodieLogBlock.HoodieLogBlockType pickLogDataBlockFormat() {
-    Option<HoodieLogBlock.HoodieLogBlockType> logBlockTypeOpt = config.getLogDataBlockFormat();
-    if (logBlockTypeOpt.isPresent()) {
-      return logBlockTypeOpt.get();
-    }
-
-    // Fallback to deduce data-block type based on the base file format
-    switch (hoodieTable.getBaseFileFormat()) {
-      case PARQUET:
-      case ORC:
-        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
-      case HFILE:
-        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
-      default:
-        throw new HoodieException("Base file format " + hoodieTable.getBaseFileFormat()
-            + " does not have associated log block type");
-    }
+  protected HoodieLogBlock.HoodieLogBlockType getLogBlockType() {
+    return CommonClientUtils.getLogBlockType(config, hoodieTable.getMetaClient().getTableConfig());
   }
 
   private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header,

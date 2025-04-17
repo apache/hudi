@@ -34,7 +34,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
-import org.apache.hudi.io.v2.RowDataLogWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.delta.FlinkUpsertDeltaCommitActionExecutor;
@@ -83,10 +82,9 @@ public class HoodieFlinkMergeOnReadTable<T>
       BucketInfo bucketInfo,
       String instantTime,
       Iterator<HoodieRecord<T>> records) {
-    ValidationUtils.checkArgument(writeHandle instanceof RowDataLogWriteHandle,
-        "MOR RowData handle should always be a RowDataLogHandle");
-    RowDataLogWriteHandle<?, ?, ?, ?> rowDataLogHandle = (RowDataLogWriteHandle<?, ?, ?, ?>) writeHandle;
-    return new RowDataUpsertDeltaCommitActionExecutor<>(context, rowDataLogHandle, bucketInfo, config, this, instantTime, records).execute();
+    ValidationUtils.checkArgument(writeHandle instanceof FlinkAppendHandle,
+        "MOR RowData handle should always be a FlinkAppendHandle");
+    return new RowDataUpsertDeltaCommitActionExecutor<>(context, writeHandle, bucketInfo, config, this, instantTime, records).execute();
   }
 
   @Override
