@@ -48,9 +48,8 @@ public class DatasetBulkInsertOverwriteTableCommitActionExecutor extends Dataset
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieData<WriteStatus> writeStatuses) {
     HoodieEngineContext context = writeClient.getEngineContext();
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(context,
-        table.getStorage(),
-        writeConfig.getMetadataConfig(),
-        table.getMetaClient().getBasePath());
+        table.getMetaClient(),
+        writeConfig.getMetadataConfig());
 
     if (partitionPaths == null || partitionPaths.isEmpty()) {
       return Collections.emptyMap();

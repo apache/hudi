@@ -66,26 +66,25 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     avroSchema.map(AvroConversionUtils.convertAvroSchemaToStructType)
   }
 
-  def getAllPartitionPaths(spark: SparkSession, table: CatalogTable, storage: HoodieStorage): Seq[String] = {
+  def getAllPartitionPaths(spark: SparkSession, table: CatalogTable, metaClient: HoodieTableMetaClient): Seq[String] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
       val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
-    FSUtils.getAllPartitionPaths(sparkEngine, storage, metadataConfig, getTableLocation(table, spark)).asScala.toSeq
+    FSUtils.getAllPartitionPaths(sparkEngine, metaClient, metadataConfig).asScala.toSeq
   }
 
   def getFilesInPartitions(spark: SparkSession,
                            table: CatalogTable,
-                           storage: HoodieStorage,
+                           metaClient: HoodieTableMetaClient,
                            partitionPaths: Seq[String]): Map[String, Seq[StoragePathInfo]] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
       val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
-    FSUtils.getFilesInPartitions(sparkEngine, storage, metadataConfig, getTableLocation(table, spark),
-      partitionPaths.toArray).asScala
+    FSUtils.getFilesInPartitions(sparkEngine, metaClient, metadataConfig, partitionPaths.toArray).asScala
       .map(e => (e._1, e._2.asScala.toSeq))
       .toMap
   }

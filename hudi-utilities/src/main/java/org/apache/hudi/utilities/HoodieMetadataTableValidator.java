@@ -734,10 +734,9 @@ public class HoodieMetadataTableValidator implements Serializable {
   List<String> validatePartitions(HoodieSparkEngineContext engineContext, StoragePath basePath, HoodieTableMetaClient metaClient) {
     // compare partitions
     HoodieTimeline completedTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
-    List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, basePath, metaClient.getStorage(),
-        completedTimeline);
+    List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, metaClient, completedTimeline);
 
-    List<String> allPartitionPathsMeta = getPartitionsFromMDT(engineContext, basePath, metaClient.getStorage());
+    List<String> allPartitionPathsMeta = getPartitionsFromMDT(engineContext, metaClient);
 
     Collections.sort(allPartitionPathsFromFS);
     Collections.sort(allPartitionPathsMeta);
@@ -801,20 +800,18 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   @VisibleForTesting
-  List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, StoragePath basePath,
-                                    HoodieStorage storage) {
-    return FSUtils.getAllPartitionPaths(engineContext, storage, basePath, true);
+  List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient) {
+    return FSUtils.getAllPartitionPaths(engineContext, metaClient, true);
   }
 
   @VisibleForTesting
-  List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, StoragePath basePath,
-                                           HoodieStorage storage, HoodieTimeline completedTimeline) {
-    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, storage, basePath, false);
+  List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, HoodieTimeline completedTimeline) {
+    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, metaClient, false);
 
     // ignore partitions created by uncommitted ingestion.
     return allPartitionPathsFromFS.stream().parallel().filter(part -> {
       HoodiePartitionMetadata hoodiePartitionMetadata =
-          new HoodiePartitionMetadata(storage, FSUtils.constructAbsolutePath(basePath, part));
+          new HoodiePartitionMetadata(metaClient.getStorage(), FSUtils.constructAbsolutePath(metaClient.getBasePath().toString(), part));
       Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
       if (instantOption.isPresent()) {
         String instantTime = instantOption.get();
@@ -1758,7 +1755,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         FileSystemViewStorageConfig viewConf = FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();
         ValidationUtils.checkArgument(viewConf.getStorageType().name().equals(viewStorageType), "View storage type not reflected");
         HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
-        this.tableMetadata = HoodieTableMetadata.create(
+        this.tableMetadata = metaClient.getTableFormat().getMetadataFactory().create(
             engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
         this.fileSystemView = getFileSystemView(engineContext,
             metaClient, metadataConfig, viewConf, commonConfig);
