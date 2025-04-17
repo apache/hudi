@@ -58,7 +58,9 @@ public class ConsistentBucketStreamWriteFunctionWrapper<I> extends BucketStreamW
     HoodieFlinkInternalRow hoodieRecord = toHoodieFunction.map((RowData) record);
     ScalaCollector<HoodieFlinkInternalRow> collector = ScalaCollector.getInstance();
     assignFunction.processElement(hoodieRecord, null, collector);
-    writeFunction.processElement(collector.getVal(), null, null);
+    for (HoodieFlinkInternalRow row: collector.getVal()) {
+      writeFunction.processElement(row, null, null);
+    }
   }
 
   @Override

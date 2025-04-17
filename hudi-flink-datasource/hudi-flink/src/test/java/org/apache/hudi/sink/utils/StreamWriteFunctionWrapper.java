@@ -179,7 +179,9 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     ScalaCollector<HoodieFlinkInternalRow> collector = ScalaCollector.getInstance();
     bucketAssignerFunction.processElement(hoodieRecord, null, collector);
     bucketAssignFunctionContext.setCurrentKey(hoodieRecord.getRecordKey());
-    writeFunction.processElement(collector.getVal(), null, null);
+    for (HoodieFlinkInternalRow row: collector.getVal()) {
+      writeFunction.processElement(row, null, null);
+    }
   }
 
   public WriteMetadataEvent[] getEventBuffer() {

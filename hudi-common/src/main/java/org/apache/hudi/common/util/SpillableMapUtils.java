@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -168,8 +169,9 @@ public class SpillableMapUtils {
     if (isNullOrEmpty(preCombineField)) {
       return DEFAULT_ORDERING_VALUE;
     }
-    Schema.Field field = rec.getSchema().getField(preCombineField);
-    return field == null ? DEFAULT_ORDERING_VALUE : (Comparable) rec.get(field.pos());
+    // keep consistent with writer side, using Java type for ordering value, see `DefaultHoodieRecordPayload`.
+    Object orderingValue = HoodieAvroUtils.getNestedFieldVal(rec, preCombineField, true, false);
+    return orderingValue == null ? DEFAULT_ORDERING_VALUE : (Comparable) orderingValue;
   }
 
   /**

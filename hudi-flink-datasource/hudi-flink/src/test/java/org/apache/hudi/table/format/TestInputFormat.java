@@ -52,11 +52,13 @@ import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
+import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -1152,6 +1154,28 @@ public class TestInputFormat {
     TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
   }
 
+  @Test
+  void testOrderingValueWithDecimalType() throws Exception {
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.removeKey(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key());
+    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_DECIMAL_ORDERING).toString());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // by default close the async compaction
+    StreamerUtil.initTableIfNotExists(conf);
+
+    tableSource = getTableSource(conf, TestConfigurations.TABLE_SCHEMA_DECIMAL_ORDERING);
+
+    TestData.writeData(TestData.DATA_SET_INSERT_DECIMAL_ORDERING, conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    List<RowData> result = readData(inputFormat, TestConfigurations.SERIALIZER_DECIMAL_ORDERING);
+
+    // global index is enabled by default
+    // row1: <id1, Danny, 23, 10, par1>
+    // row2: <id1, Bob, 44, 1, par2>
+    // the ordering value of row2: 1 is smaller than that of row1: 10, so row1 in `par1` will not be deleted.
+    TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT_DECIMAL_ORDERING, TestConfigurations.ROW_DATA_TYPE_DECIMAL_ORDERING);
+  }
+
   /**
    * Test reading file groups with compaction plan scheduled and delta logs.
    * File-slice after pending compaction-requested instant-time should also be considered valid.
@@ -1241,28 +1265,40 @@ public class TestInputFormat {
   }
 
   private HoodieTableSource getTableSource(Configuration conf) {
+    return getTableSource(conf, TestConfigurations.TABLE_SCHEMA);
+  }
+
+  private HoodieTableSource getTableSource(Configuration conf, ResolvedSchema tableSchema) {
     return new HoodieTableSource(
-        SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
+        SerializableSchema.create(tableSchema),
         new StoragePath(tempFile.getAbsolutePath()),
         Collections.singletonList("partition"),
         "default",
         conf);
   }
 
-  @SuppressWarnings("rawtypes")
   private static List<RowData> readData(InputFormat inputFormat) throws IOException {
+    return readData(inputFormat, TestConfigurations.SERIALIZER);
+  }
+
+  @SuppressWarnings("rawtypes")
+  private static List<RowData> readData(InputFormat inputFormat, RowDataSerializer serializer) throws IOException {
     InputSplit[] inputSplits = inputFormat.createInputSplits(1);
-    return readData(inputFormat, inputSplits);
+    return readData(inputFormat, inputSplits, serializer);
+  }
+
+  private static List<RowData> readData(InputFormat inputFormat, InputSplit[] inputSplits) throws IOException {
+    return readData(inputFormat, inputSplits, TestConfigurations.SERIALIZER);
   }
 
   @SuppressWarnings("unchecked, rawtypes")
-  private static List<RowData> readData(InputFormat inputFormat, InputSplit[] inputSplits) throws IOException {
+  private static List<RowData> readData(InputFormat inputFormat, InputSplit[] inputSplits, RowDataSerializer serializer) throws IOException {
     List<RowData> result = new ArrayList<>();
 
     for (InputSplit inputSplit : inputSplits) {
       inputFormat.open(inputSplit);
       while (!inputFormat.reachedEnd()) {
-        result.add(TestConfigurations.SERIALIZER.copy((RowData) inputFormat.nextRecord(null))); // no reuse
+        result.add(serializer.copy((RowData) inputFormat.nextRecord(null))); // no reuse
       }
       inputFormat.close();
     }
