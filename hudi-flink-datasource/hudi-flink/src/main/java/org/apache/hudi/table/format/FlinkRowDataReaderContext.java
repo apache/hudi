@@ -43,6 +43,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.expression.Predicate;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.FlinkRowProjection;
 import org.apache.hudi.util.RowDataUtil;
 import org.apache.hudi.util.RowDataUtils;
@@ -246,6 +247,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   @Override
   public RowData convertAvroRecord(IndexedRecord avroRecord) {
-    throw new UnsupportedOperationException("FlinkRowDataReaderContext do not support convertAvroRecord yet.");
+    Schema recordSchema = avroRecord.getSchema();
+    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataUtils.internAvroConverter(recordSchema, conf.get(FlinkOptions.READ_UTC_TIMEZONE));
+    return (RowData) converter.convert(avroRecord);
   }
 }
