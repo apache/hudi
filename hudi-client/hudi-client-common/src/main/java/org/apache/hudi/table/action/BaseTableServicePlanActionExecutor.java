@@ -102,8 +102,7 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
 
     // get all partitions
     LOG.info("Start to fetch all partitions for " + type + ". Instant " + instantTime);
-    return FSUtils.getAllPartitionPaths(context, table.getMetaClient().getStorage(),
-        config.getMetadataConfig(), table.getMetaClient().getBasePath());
+    return FSUtils.getAllPartitionPaths(context, table.getMetaClient(), config.getMetadataConfig());
   }
 
   public Pair<Option<HoodieInstant>, Set<String>> getIncrementalPartitions(TableServiceType type) {

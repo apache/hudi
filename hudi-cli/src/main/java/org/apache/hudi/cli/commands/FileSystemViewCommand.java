@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
+
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -270,7 +271,7 @@ public class FileSystemViewCommand {
       }
       instantsStream = instantsStream.filter(is -> predicate.test(maxInstant, is.requestedTime()));
     }
-    TimelineFactory timelineFactory = metaClient.getTimelineLayout().getTimelineFactory();
+    TimelineFactory timelineFactory = metaClient.getTableFormat().getTimelineFactory();
     HoodieTimeline filteredTimeline = timelineFactory.createDefaultTimeline(instantsStream, metaClient.getActiveTimeline());
     return new HoodieTableFileSystemView(metaClient, filteredTimeline, pathInfoList);
   }

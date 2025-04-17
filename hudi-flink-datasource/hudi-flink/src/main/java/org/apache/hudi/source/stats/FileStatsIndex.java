@@ -23,6 +23,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -102,9 +103,11 @@ public class FileStatsIndex implements ColumnStatsIndex {
   public HoodieTableMetadata getMetadataTable() {
     // initialize the metadata table lazily
     if (this.metadataTable == null) {
-      this.metadataTable = HoodieTableMetadata.create(
+      HoodieHadoopStorage storage = new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf());
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storage.getConf()).build();
+      this.metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
           HoodieFlinkEngineContext.DEFAULT,
-          new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf()),
+          storage,
           metadataConfig,
           basePath);
     }

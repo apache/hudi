@@ -342,12 +342,14 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     // Get base path for metadata table.
     StoragePath metadataTableBasePath =
         HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
+    HoodieTableMetaClient metadataMetaClient =
+        HoodieTableMetaClient.builder()
+            .setBasePath(metadataTableBasePath.toUri().toString())
+            .setConf(hoodieStorage.getConf())
+            .build();
 
     // Fetch metadata partition paths.
-    List<String> metadataPartitions = FSUtils.getAllPartitionPaths(context,
-        hoodieStorage,
-        metadataTableBasePath,
-        false);
+    List<String> metadataPartitions = FSUtils.getAllPartitionPaths(context, metadataMetaClient, false);
 
     // Delete partitions.
     List<String> validPartitionPaths = deleteMetadataPartition(context, metaClient, metadataPartitions);

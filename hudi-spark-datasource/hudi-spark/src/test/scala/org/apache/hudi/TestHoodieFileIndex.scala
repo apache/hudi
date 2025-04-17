@@ -634,7 +634,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
     // Test getting partition paths in a subset of directories
-    val metadata = HoodieTableMetadata.create(context,
+    val metadata = metaClient.getTableFormat.getMetadataFactory.create(context,
       metaClient.getStorage,
       HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build(),
       metaClient.getBasePath.toString)
