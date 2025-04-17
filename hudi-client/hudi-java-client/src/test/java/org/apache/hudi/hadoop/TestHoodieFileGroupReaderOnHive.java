@@ -183,13 +183,14 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
       throw new RuntimeException(e);
     }
 
-    HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(context, writeConfig);
-    String instantTime = writeClient.createNewInstantTime();
-    writeClient.startCommitWithTime(instantTime);
-    if (operation.toLowerCase().equals("insert")) {
-      writeClient.insert(recordList, instantTime);
-    } else {
-      writeClient.upsert(recordList, instantTime);
+    try (HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(context, writeConfig)) {
+      String instantTime = writeClient.createNewInstantTime();
+      writeClient.startCommitWithTime(instantTime);
+      if (operation.toLowerCase().equals("insert")) {
+        writeClient.insert(recordList, instantTime);
+      } else {
+        writeClient.upsert(recordList, instantTime);
+      }
     }
   }
 
