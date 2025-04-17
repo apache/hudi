@@ -56,13 +56,13 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
   protected static List<DataGenerationPlan.OperationType> operationTypes;
   // Set the instantTime for each record set.
   protected static List<String> instantTimes;
-  protected static List<Boolean> shouldWritePositions;
+  protected List<Boolean> shouldWritePositions;
 
   // Environmental variables.
   protected static StorageConfiguration<?> storageConf;
   protected static HoodieTestTable testTable;
-  protected static HoodieReaderContext<IndexedRecord> readerContext;
   protected static TypedProperties properties;
+  protected HoodieReaderContext<IndexedRecord> readerContext;
 
   static {
     // Note: Make `timestamp` as ordering field.
@@ -70,8 +70,6 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
     properties.setProperty(
         "hoodie.datasource.write.precombine.field", "timestamp");
     storageConf = getDefaultStorageConf();
-    readerContext = new HoodieTestReaderContext(
-        Option.empty(), Option.empty());
   }
 
   @AfterAll

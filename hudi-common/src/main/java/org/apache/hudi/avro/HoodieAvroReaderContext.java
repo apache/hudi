@@ -17,22 +17,28 @@
  * under the License.
  */
 
-package org.apache.hudi.common.testutils.reader;
+package org.apache.hudi.avro;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.OverwriteWithLatestMerger;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.storage.HoodieAvroBootstrapFileReader;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieBootstrapFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -50,18 +56,18 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
-public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> {
-  private Option<HoodieRecordMerger> customMerger;
-  private Option<String> payloadClass;
+public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
+  private final Option<String> payloadClass;
+  private final Option<String> recordKeyField;
 
-  public HoodieTestReaderContext(
-      Option<HoodieRecordMerger> customMerger,
-      Option<String> payloadClass) {
-    super(null);
-    this.customMerger = customMerger;
+  public HoodieAvroReaderContext(
+      Option<String> payloadClass,
+      Option<String> recordKeyField) {
     this.payloadClass = payloadClass;
+    this.recordKeyField = recordKeyField;
   }
 
   @Override
@@ -91,10 +97,23 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
-    if (mergeMode == RecordMergeMode.CUSTOM) {
-      return customMerger;
+    switch (mergeMode) {
+      case EVENT_TIME_ORDERING:
+        return Option.of(new HoodiePreCombineAvroRecordMerger());
+      case COMMIT_TIME_ORDERING:
+        return Option.of(new OverwriteWithLatestMerger());
+      case CUSTOM:
+      default:
+        if (mergeStrategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+          return Option.of(HoodieAvroRecordMerger.INSTANCE);
+        }
+        Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
+        if (mergerClass.isEmpty()) {
+          throw new IllegalArgumentException("No valid merger implementation set for `"
+              + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
+        }
+        return mergerClass;
     }
-    return Option.of(HoodieAvroRecordMerger.INSTANCE);
   }
 
   @Override
@@ -104,18 +123,14 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public String getRecordKey(IndexedRecord record, Schema schema) {
-    return getFieldValueFromIndexedRecord(record, schema, ROW_KEY).toString();
+    return getFieldValueFromIndexedRecord(record, schema, recordKeyField.orElse(RECORD_KEY_METADATA_FIELD)).toString();
   }
 
   @Override
   public HoodieRecord constructHoodieRecord(
       Option<IndexedRecord> recordOpt,
-      Map<String, Object> metadataMap
-  ) {
-    String appliedPayloadClass =
-        payloadClass.isPresent()
-            ? payloadClass.get()
-            : DefaultHoodieRecordPayload.class.getName();
+      Map<String, Object> metadataMap) {
+    String appliedPayloadClass = payloadClass.orElse(DefaultHoodieRecordPayload.class.getName());
     if (!recordOpt.isPresent()) {
       return SpillableMapUtils.generateEmptyPayload(
           (String) metadataMap.get(INTERNAL_META_RECORD_KEY),
@@ -141,13 +156,13 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
                                                                Schema skeletonRequiredSchema,
                                                                ClosableIterator<IndexedRecord> dataFileIterator,
                                                                Schema dataRequiredSchema) {
-    return null;
+    new HoodieAvroBootstrapFileReader<>(skeletonFileIterator, dataFileIterator, )
   }
 
   @Override
   public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
     if (!renamedColumns.isEmpty()) {
-      throw new UnsupportedOperationException("Schema evolution is not supported for the test reader context");
+      throw new UnsupportedOperationException("Schema evolution is not supported for the HoodieAvroReaderContext");
     }
     Map<String, Integer> fromFields = IntStream.range(0, from.getFields().size())
         .boxed()

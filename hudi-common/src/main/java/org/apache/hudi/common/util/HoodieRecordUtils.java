@@ -118,7 +118,7 @@ public class HoodieRecordUtils {
   }
 
   public static boolean recordTypeCompatibleEngine(HoodieRecordType recordType, EngineType engineType) {
-    return engineType == EngineType.SPARK && recordType == HoodieRecordType.SPARK;
+    return (engineType == EngineType.SPARK && recordType == HoodieRecordType.SPARK) || (engineType == EngineType.JAVA && recordType == HoodieRecordType.AVRO);
   }
 
   public static HoodieRecordMerger mergerToPreCombineMode(HoodieRecordMerger merger) {
