@@ -21,9 +21,9 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -31,16 +31,20 @@ import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.storage.HoodieAvroBootstrapFileReader;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
-import org.apache.hudi.io.storage.HoodieBootstrapFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -58,16 +62,41 @@ import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
-  private final Option<String> payloadClass;
-  private final Option<String> recordKeyField;
+  private final String payloadClass;
+  private final BaseKeyGenerator keyGenerator;
+  private final boolean metaFieldsPopulated;
 
   public HoodieAvroReaderContext(
-      Option<String> payloadClass,
-      Option<String> recordKeyField) {
-    this.payloadClass = payloadClass;
-    this.recordKeyField = recordKeyField;
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig) {
+    super(storageConfiguration);
+    this.payloadClass = tableConfig.getPayloadClass();
+    this.metaFieldsPopulated = tableConfig.populateMetaFields();
+    this.keyGenerator = metaFieldsPopulated ? null : buildKeyGenerator(tableConfig);
+  }
+
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      BaseKeyGenerator keyGenerator) {
+    super(storageConfiguration);
+    this.payloadClass = tableConfig.getPayloadClass();
+    this.metaFieldsPopulated = tableConfig.populateMetaFields();
+    this.keyGenerator = keyGenerator;
+  }
+
+  private static BaseKeyGenerator buildKeyGenerator(HoodieTableConfig tableConfig) {
+    TypedProperties tableConfigProps = tableConfig.getProps();
+    // Write out the properties from the table config into the required properties for generating the KeyGenerator
+    TypedProperties properties = new TypedProperties();
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), tableConfigProps.getOrDefault(RECORDKEY_FIELDS.key(), ""));
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), tableConfigProps.getOrDefault(PARTITION_FIELDS.key(), ""));
+    return (BaseKeyGenerator) ReflectionUtils.loadClass(tableConfig.getKeyGeneratorClassName(), properties);
   }
 
   @Override
@@ -123,20 +152,22 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public String getRecordKey(IndexedRecord record, Schema schema) {
-    return getFieldValueFromIndexedRecord(record, schema, recordKeyField.orElse(RECORD_KEY_METADATA_FIELD)).toString();
+    if (metaFieldsPopulated) {
+      return getFieldValueFromIndexedRecord(record, schema, RECORD_KEY_METADATA_FIELD).toString();
+    }
+    return keyGenerator.getRecordKey((GenericRecord) record);
   }
 
   @Override
   public HoodieRecord constructHoodieRecord(
       Option<IndexedRecord> recordOpt,
       Map<String, Object> metadataMap) {
-    String appliedPayloadClass = payloadClass.orElse(DefaultHoodieRecordPayload.class.getName());
     if (!recordOpt.isPresent()) {
       return SpillableMapUtils.generateEmptyPayload(
           (String) metadataMap.get(INTERNAL_META_RECORD_KEY),
           (String) metadataMap.get(INTERNAL_META_PARTITION_PATH),
           (Comparable<?>) metadataMap.get(INTERNAL_META_ORDERING_FIELD),
-          appliedPayloadClass);
+          payloadClass);
     }
     return new HoodieAvroIndexedRecord(recordOpt.get());
   }
@@ -156,7 +187,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
                                                                Schema skeletonRequiredSchema,
                                                                ClosableIterator<IndexedRecord> dataFileIterator,
                                                                Schema dataRequiredSchema) {
-    new HoodieAvroBootstrapFileReader<>(skeletonFileIterator, dataFileIterator, )
+    return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema, dataFileIterator, dataRequiredSchema);
   }
 
   @Override
@@ -208,9 +239,62 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   ) {
     Schema.Field field = recordSchema.getField(fieldName);
     if (field == null) {
-      return null;
+      throw new HoodieSchemaException(String.format("Field %s is not present in the schema:%s", fieldName, recordSchema));
     }
     int pos = field.pos();
     return record.get(pos);
+  }
+
+  /**
+   * Iterator that traverses the skeleton file and the base file in tandem.
+   * The iterator will only extract the fields requested in the provided schemas.
+   */
+  private static class BootstrapIterator implements ClosableIterator<IndexedRecord> {
+    private final ClosableIterator<IndexedRecord> skeletonFileIterator;
+    private final Schema skeletonRequiredSchema;
+    private final ClosableIterator<IndexedRecord> dataFileIterator;
+    private final Schema dataRequiredSchema;
+    private final Schema mergedSchema;
+    private final int skeletonFields;
+
+    public BootstrapIterator(ClosableIterator<IndexedRecord> skeletonFileIterator, Schema skeletonRequiredSchema,
+                             ClosableIterator<IndexedRecord> dataFileIterator, Schema dataRequiredSchema) {
+      this.skeletonFileIterator = skeletonFileIterator;
+      this.skeletonRequiredSchema = skeletonRequiredSchema;
+      this.dataFileIterator = dataFileIterator;
+      this.dataRequiredSchema = dataRequiredSchema;
+      this.mergedSchema = AvroSchemaUtils.mergeSchemas(skeletonRequiredSchema, dataRequiredSchema);
+      this.skeletonFields = skeletonRequiredSchema.getFields().size();
+    }
+
+    @Override
+    public void close() {
+      skeletonFileIterator.close();
+      dataFileIterator.close();
+    }
+
+    @Override
+    public boolean hasNext() {
+      checkState(dataFileIterator.hasNext() == skeletonFileIterator.hasNext(),
+          "Bootstrap data-file iterator and skeleton-file iterator have to be in-sync!");
+      return skeletonFileIterator.hasNext();
+    }
+
+    @Override
+    public IndexedRecord next() {
+      IndexedRecord skeletonRecord = skeletonFileIterator.next();
+      IndexedRecord dataRecord = dataFileIterator.next();
+      GenericRecord mergedRecord = new GenericData.Record(mergedSchema);
+
+      for (Schema.Field skeletonField : skeletonRequiredSchema.getFields()) {
+        Schema.Field sourceField = skeletonRecord.getSchema().getField(skeletonField.name());
+        mergedRecord.put(skeletonField.pos(), skeletonRecord.get(sourceField.pos()));
+      }
+      for (Schema.Field dataField : dataRequiredSchema.getFields()) {
+        Schema.Field sourceField = dataRecord.getSchema().getField(dataField.name());
+        mergedRecord.put(dataField.pos() + skeletonFields, dataRecord.get(sourceField.pos()));
+      }
+      return mergedRecord;
+    }
   }
 }

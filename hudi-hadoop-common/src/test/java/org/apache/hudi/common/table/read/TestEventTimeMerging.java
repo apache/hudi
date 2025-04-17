@@ -19,14 +19,12 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
-import org.apache.hudi.common.testutils.reader.HoodieRecordTestPayload;
-import org.apache.hudi.avro.HoodieAvroReaderContext;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import org.apache.avro.generic.IndexedRecord;
@@ -116,7 +114,7 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     testTable = HoodieTestTable.of(metaClient);
     // Create dedicated merger to avoid current delete logic holes.
     // TODO: Unify delete logic (HUDI-7240).
-    readerContext = new HoodieAvroReaderContext(Option.of(HoodieRecordTestPayload.class.getName()), Option.of(ROW_KEY));
+    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig(), new TestKeyGenerator());
     setUpMockCommits();
   }
 

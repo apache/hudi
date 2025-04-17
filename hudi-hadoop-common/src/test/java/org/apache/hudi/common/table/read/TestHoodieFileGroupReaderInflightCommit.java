@@ -19,13 +19,12 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieAvroRecordTestMerger;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
-import org.apache.hudi.common.testutils.reader.HoodieRecordTestPayload;
-import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
@@ -80,8 +79,7 @@ public class TestHoodieFileGroupReaderInflightCommit extends HoodieFileGroupRead
     initMetaClient();
     initTestDataGenerator(new String[]{PARTITION_PATH});
     testTable = HoodieTestTable.of(metaClient);
-    readerContext = new HoodieAvroReaderContext(
-        Option.of(HoodieRecordTestPayload.class.getName()), Option.of(ROW_KEY));
+    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig(), new TestKeyGenerator());
     readerContext.setRecordMerger(Option.of(new HoodieAvroRecordTestMerger()));
     setUpMockCommits();
   }
