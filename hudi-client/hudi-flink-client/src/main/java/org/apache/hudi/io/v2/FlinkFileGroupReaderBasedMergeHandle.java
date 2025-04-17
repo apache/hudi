@@ -34,11 +34,9 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.BaseFileGroupReaderBasedMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.flink.table.data.RowData;
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,10 +60,9 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
       CompactionOperation operation,
       TaskContextSupplier taskContextSupplier,
       Option<BaseKeyGenerator> keyGeneratorOpt,
-      HoodieReaderContext readerContext,
-      Configuration conf) {
+      HoodieReaderContext<T> readerContext) {
     super(config, instantTime, hoodieTable, operation,
-        taskContextSupplier, keyGeneratorOpt, readerContext, conf);
+        taskContextSupplier, keyGeneratorOpt, readerContext);
   }
 
   @Override
@@ -85,7 +82,7 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
     // Initializes file group reader
     try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         readerContext,
-        storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
+        storage.newInstance(hoodieTable.getMetaClient().getBasePath(), readerContext.getStorageConfiguration()),
         hoodieTable.getMetaClient().getBasePath().toString(),
         instantTime,
         fileSlice,

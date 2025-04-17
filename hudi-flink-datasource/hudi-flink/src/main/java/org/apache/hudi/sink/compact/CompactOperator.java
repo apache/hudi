@@ -158,13 +158,12 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     List<WriteStatus> writeStatuses;
     if (useFileGroupReaderBasedCompaction) {
       FlinkRowDataReaderContext readerContext =
-          new FlinkRowDataReaderContext(conf, internalSchemaManager, Collections.emptyList());
+          new FlinkRowDataReaderContext(writeClient.getEngineContext().getStorageConf(), internalSchemaManager, Collections.emptyList());
       writeStatuses = compactor.compact(
           new HoodieFlinkCopyOnWriteTable<>(
               writeConfig,
               writeClient.getEngineContext(),
               metaClient),
-          metaClient,
           writeConfig,
           compactionOperation,
           instantTime,

@@ -42,7 +42,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * An implementation of {@link FlinkRowProjection} which supports schema evolvable projection on old {@link RowData}.
+ * An implementation of {@link FlinkRowProjection} which supports schema evolvable projection on {@link RowData}.
  */
 public class SchemaEvolvableRowDataProjection implements FlinkRowProjection {
   private static final long serialVersionUID = 1L;
@@ -147,7 +147,7 @@ public class SchemaEvolvableRowDataProjection implements FlinkRowProjection {
       int fieldIdxInFrom = fromFieldNames.indexOf(fieldName);
       // this is a new added column
       if (fieldIdxInFrom == -1) {
-        fieldGetters[i] = RowDataUtil.NULL_GETTER;
+        fieldGetters[i] = RowDataUtils.NULL_GETTER;
         objectConverters[i] = TypeConverters.NOOP_CONVERTER::convert;
       } else {
         fieldGetters[i] = RowData.createFieldGetter(fromRowType.getTypeAt(fieldIdxInFrom), fieldIdxInFrom);

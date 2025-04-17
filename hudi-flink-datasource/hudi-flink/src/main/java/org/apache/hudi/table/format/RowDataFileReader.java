@@ -16,10 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage.row;
+package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.table.expression.Predicate;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.flink.table.data.RowData;

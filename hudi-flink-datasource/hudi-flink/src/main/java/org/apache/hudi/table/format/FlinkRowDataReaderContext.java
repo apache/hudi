@@ -38,24 +38,25 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.io.storage.row.RowDataFileReader;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.table.expression.Predicate;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.FlinkRowProjection;
-import org.apache.hudi.util.RowDataUtil;
 import org.apache.hudi.util.RowDataUtils;
+import org.apache.hudi.util.AvroConverterUtils;
+import org.apache.hudi.util.SchemaEvolvableRowDataProjection;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
@@ -77,13 +78,12 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   private final List<Predicate> predicates;
   private final InternalSchemaManager internalSchemaManager;
   private RowDataSerializer rowDataSerializer;
-  private final Configuration conf;
 
   public FlinkRowDataReaderContext(
-      Configuration conf,
+      StorageConfiguration<?> storageConfiguration,
       InternalSchemaManager internalSchemaManager,
       List<Predicate> predicates) {
-    this.conf = conf;
+    super(storageConfiguration);
     this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;
   }
@@ -100,7 +100,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     // disable schema evolution in fileReader if it's log file, since schema evolution for log file is handled in `FileGroupRecordBuffer`
     InternalSchemaManager schemaManager = isLogFile ? InternalSchemaManager.DISABLED : internalSchemaManager;
     RowDataFileReaderFactories.Factory readerFactory = RowDataFileReaderFactories.getFactory(HoodieFileFormat.PARQUET);
-    RowDataFileReader fileReader = readerFactory.createFileReader(schemaManager, conf);
+    RowDataFileReader fileReader = readerFactory.createFileReader(schemaManager, getStorageConfiguration());
 
     List<String> fieldNames = dataSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
     List<DataType> fieldTypes = dataSchema.getFields().stream().map(
@@ -134,7 +134,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   @Override
   public Object getValue(RowData record, Schema schema, String fieldName) {
-    RowData.FieldGetter fieldGetter = RowDataUtil.internFieldGetter(schema, fieldName);
+    RowData.FieldGetter fieldGetter = RowDataUtils.internFieldGetter(schema, fieldName);
     return fieldGetter.getFieldOrNull(record);
   }
 
@@ -171,10 +171,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       return DEFAULT_ORDERING_VALUE;
     }
     Object value = getValue(recordOption.get(), schema, orderingFieldName.get());
-    // currently the ordering value stored in DeleteRecord is converted to Avro value because Flink reader currently uses AVRO payload to merge.
-    // So here we align the data format with reader until RowData reader is supported, HUDI-9146.
-    UnaryOperator<Object> fieldConverter = RowDataUtil.internFieldConverter(schema, orderingFieldName.get(), conf.get(FlinkOptions.READ_UTC_TIMEZONE));
-    Comparable finalOrderingVal = value != null ? (Comparable) fieldConverter.apply(value) : DEFAULT_ORDERING_VALUE;
+    LogicalType fieldType = AvroSchemaConverter.convertToDataType(schema.getField(orderingFieldName.get()).schema()).getLogicalType();
+    boolean utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
+    Comparable finalOrderingVal = (Comparable) RowDataUtils.resolveOrderingValue(fieldType, value, utcTimezone);
     metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
     return finalOrderingVal;
   }
@@ -236,7 +235,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
    */
   @Override
   public UnaryOperator<RowData> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    FlinkRowProjection rowProjection = RowDataUtils.internRowDataProjection(from, to, renamedColumns);
+    RowType fromType = (RowType) AvroSchemaConverter.convertToDataType(from).getLogicalType();
+    RowType toType = (RowType) AvroSchemaConverter.convertToDataType(to).getLogicalType();
+    FlinkRowProjection rowProjection = SchemaEvolvableRowDataProjection.instance(fromType, toType, renamedColumns);
     return rowProjection::project;
   }
 
@@ -248,7 +249,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   @Override
   public RowData convertAvroRecord(IndexedRecord avroRecord) {
     Schema recordSchema = avroRecord.getSchema();
-    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataUtils.internAvroConverter(recordSchema, conf.get(FlinkOptions.READ_UTC_TIMEZONE));
+    boolean utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
+    AvroToRowDataConverters.AvroToRowDataConverter converter = AvroConverterUtils.internAvroConverter(recordSchema, utcTimezone);
     return (RowData) converter.convert(avroRecord);
   }
 }

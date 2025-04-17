@@ -19,9 +19,7 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.io.storage.row.RowDataFileReader;
-
-import org.apache.flink.configuration.Configuration;
+import org.apache.hudi.storage.StorageConfiguration;
 
 /**
  * A factory to create {@link RowDataFileReader} to
@@ -39,7 +37,7 @@ public class RowDataFileReaderFactories {
 
   private static class ParquetFileReaderFactory implements Factory {
     @Override
-    public RowDataFileReader createFileReader(InternalSchemaManager internalSchemaManager, Configuration conf) {
+    public RowDataFileReader createFileReader(InternalSchemaManager internalSchemaManager, StorageConfiguration<?> conf) {
       return new FlinkParquetReader(internalSchemaManager, conf);
     }
   }
@@ -50,6 +48,6 @@ public class RowDataFileReaderFactories {
      * @param conf flink configuration
      * @return A RowData file reader
      */
-    RowDataFileReader createFileReader(InternalSchemaManager internalSchemaManager, Configuration conf);
+    RowDataFileReader createFileReader(InternalSchemaManager internalSchemaManager, StorageConfiguration<?> conf);
   }
 }

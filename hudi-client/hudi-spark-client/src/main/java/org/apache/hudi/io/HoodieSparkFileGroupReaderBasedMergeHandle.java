@@ -39,7 +39,6 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
@@ -65,8 +64,8 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Base
   public HoodieSparkFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                     CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                                     Option<BaseKeyGenerator> keyGeneratorOpt,
-                                                    HoodieReaderContext readerContext, Configuration conf) {
-    super(config, instantTime, hoodieTable, operation, taskContextSupplier, keyGeneratorOpt, readerContext, conf);
+                                                    HoodieReaderContext<T> readerContext) {
+    super(config, instantTime, hoodieTable, operation, taskContextSupplier, keyGeneratorOpt, readerContext);
   }
 
   @Override

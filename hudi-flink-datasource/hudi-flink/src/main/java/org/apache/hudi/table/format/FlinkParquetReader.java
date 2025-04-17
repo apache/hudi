@@ -20,15 +20,14 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.HadoopConfigurations;
-import org.apache.hudi.io.storage.row.RowDataFileReader;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.inline.InLineFSUtils;
-import org.apache.hudi.table.expression.Predicate;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -39,13 +38,13 @@ import java.util.List;
  */
 public class FlinkParquetReader implements RowDataFileReader {
   private final InternalSchemaManager internalSchemaManager;
-  private final Configuration conf;
+  private final StorageConfiguration<?> conf;
 
   private static final int DEFAULT_BATCH_SIZE = 2048;
 
   public FlinkParquetReader(
       InternalSchemaManager internalSchemaManager,
-      Configuration conf) {
+      StorageConfiguration<?> conf) {
     this.internalSchemaManager = internalSchemaManager;
     this.conf = conf;
   }
@@ -59,13 +58,14 @@ public class FlinkParquetReader implements RowDataFileReader {
       StoragePath path,
       long start,
       long length) throws IOException {
-    final boolean useUTCTimeStamp = conf.get(FlinkOptions.READ_UTC_TIMEZONE);
+    final boolean useUTCTimeStamp = conf.getBoolean(
+        FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
     LinkedHashMap<String, Object> partitionSpec = getPartitionSpec(path, fieldNames, fieldTypes);
     return RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
         useUTCTimeStamp,
         true,
-        HadoopConfigurations.getHadoopConf(conf),
+        conf.unwrapAs(Configuration.class),
         fieldNames.toArray(new String[0]),
         fieldTypes.toArray(new DataType[0]),
         partitionSpec,
@@ -88,8 +88,8 @@ public class FlinkParquetReader implements RowDataFileReader {
         path.toString(),
         fieldNames,
         fieldTypes,
-        conf.get(FlinkOptions.PARTITION_DEFAULT_NAME),
-        conf.get(FlinkOptions.PARTITION_PATH_FIELD),
-        conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING));
+        conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME.key(), FlinkOptions.PARTITION_DEFAULT_NAME.defaultValue()),
+        conf.getString(FlinkOptions.PARTITION_PATH_FIELD.key(), FlinkOptions.PARTITION_PATH_FIELD.defaultValue()),
+        conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), FlinkOptions.HIVE_STYLE_PARTITIONING.defaultValue()));
   }
 }

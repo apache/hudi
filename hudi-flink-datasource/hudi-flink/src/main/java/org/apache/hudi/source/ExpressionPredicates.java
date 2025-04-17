@@ -18,7 +18,6 @@
 
 package org.apache.hudi.source;
 
-import org.apache.hudi.table.expression.Predicate;
 import org.apache.hudi.util.ImplicitTypeConverter;
 
 import org.apache.flink.table.expressions.CallExpression;
@@ -62,7 +61,7 @@ import static org.apache.parquet.io.api.Binary.fromConstantByteArray;
 import static org.apache.parquet.io.api.Binary.fromString;
 
 /**
- * Tool to predicate the {@link ResolvedExpression}s.
+ * Tool to predicate the {@link org.apache.flink.table.expressions.ResolvedExpression}s.
  */
 public class ExpressionPredicates {
 
@@ -166,6 +165,19 @@ public class ExpressionPredicates {
   // --------------------------------------------------------------------------------------------
   //  Classes to define predicates
   // --------------------------------------------------------------------------------------------
+
+  /**
+   * A filter predicate that can be evaluated by the FileInputFormat.
+   */
+  public interface Predicate extends Serializable {
+
+    /**
+     * Predicates the criteria for which records to keep when loading data from a parquet file.
+     *
+     * @return A filter predicate of parquet file.
+     */
+    FilterPredicate filter();
+  }
 
   /**
    * Column predicate which depends on the given field.
@@ -397,7 +409,6 @@ public class ExpressionPredicates {
     private static final long serialVersionUID = 1L;
 
     private static final Logger LOG = LoggerFactory.getLogger(In.class);
-
 
     private static final int IN_PREDICATE_LIMIT = 200;
 

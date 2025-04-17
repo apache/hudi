@@ -45,7 +45,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,19 +65,17 @@ import java.util.stream.Collectors;
 public abstract class BaseFileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
   private static final Logger LOG = LoggerFactory.getLogger(BaseFileGroupReaderBasedMergeHandle.class);
 
-  protected HoodieReaderContext readerContext;
+  protected HoodieReaderContext<T> readerContext;
   protected FileSlice fileSlice;
-  protected Configuration conf;
   protected HoodieReadStats readStats;
 
   public BaseFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                              CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                              Option<BaseKeyGenerator> keyGeneratorOpt,
-                                             HoodieReaderContext readerContext, Configuration conf) {
+                                             HoodieReaderContext<T> readerContext) {
     super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
-    this.conf = conf;
     Option<HoodieBaseFile> baseFileOpt =
         operation.getBaseFile(config.getBasePath(), operation.getPartitionPath());
     List<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(p ->

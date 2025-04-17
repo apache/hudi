@@ -70,7 +70,6 @@ import org.apache.hudi.table.action.commit.FlinkUpsertPreppedCommitActionExecuto
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -440,11 +439,10 @@ public class HoodieFlinkCopyOnWriteTable<T>
       String instantTime,
       CompactionOperation operation,
       HoodieWriteConfig writeConfig,
-      HoodieReaderContext readerContext,
-      Configuration conf) {
+      HoodieReaderContext readerContext) {
     config.setDefault(writeConfig);
     FlinkFileGroupReaderBasedMergeHandle mergeHandle = new FlinkFileGroupReaderBasedMergeHandle<>(
-        config, instantTime, this, operation, taskContextSupplier, Option.empty(), readerContext, conf);
+        config, instantTime, this, operation, taskContextSupplier, Option.empty(), readerContext);
     mergeHandle.write();
     return mergeHandle.close();
   }

@@ -28,7 +28,7 @@ import org.apache.hudi.source.ExpressionPredicates.LessThanOrEqual;
 import org.apache.hudi.source.ExpressionPredicates.Not;
 import org.apache.hudi.source.ExpressionPredicates.NotEquals;
 import org.apache.hudi.source.ExpressionPredicates.Or;
-import org.apache.hudi.table.expression.Predicate;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.expressions.CallExpression;

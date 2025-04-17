@@ -21,6 +21,7 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -117,8 +118,8 @@ public class ITTestHoodieFlinkCompactor {
   File tempFile;
 
   @ParameterizedTest
-  @MethodSource("trueFalseParams")
-  public void testHoodieFlinkCompactor(boolean enableChangelog, boolean rowDataModeEnabled) throws Exception {
+  @MethodSource("changedlogAndLogBlockParams")
+  public void testHoodieFlinkCompactor(boolean enableChangelog, String logBlockFormat) throws Exception {
     // Create hoodie table and insert into data.
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
@@ -129,7 +130,7 @@ public class ITTestHoodieFlinkCompactor {
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
-    options.put(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED.key(), rowDataModeEnabled + "");
+    options.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logBlockFormat);
     options.put(FlinkOptions.CHANGELOG_ENABLED.key(), enableChangelog + "");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
@@ -530,15 +531,15 @@ public class ITTestHoodieFlinkCompactor {
   }
 
   /**
-   * Return test params => (true/false, true/false).
+   * Return test params => (enableChangelog, log block format).
    */
-  private static Stream<Arguments> trueFalseParams() {
+  private static Stream<Arguments> changedlogAndLogBlockParams() {
     Object[][] data =
         new Object[][] {
-            {true, false},
-            {true, true},
-            {false, false},
-            {false, true}};
+            {true, "parquet"},
+            {true, "avro"},
+            {false, "parquet"},
+            {false, "avro"}};
     return Stream.of(data).map(Arguments::of);
   }
 }
