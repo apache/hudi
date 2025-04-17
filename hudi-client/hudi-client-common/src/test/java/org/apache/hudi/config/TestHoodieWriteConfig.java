@@ -125,7 +125,7 @@ public class TestHoodieWriteConfig {
         constructConfigMap(
             EngineType.SPARK, HoodieIndex.IndexType.SIMPLE,
             EngineType.FLINK, HoodieIndex.IndexType.INMEMORY,
-            EngineType.JAVA, HoodieIndex.IndexType.INMEMORY));
+            EngineType.JAVA, HoodieIndex.IndexType.SIMPLE));
   }
 
   @Test
