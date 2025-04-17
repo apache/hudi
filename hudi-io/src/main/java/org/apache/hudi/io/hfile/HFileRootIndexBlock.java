@@ -74,4 +74,24 @@ public class HFileRootIndexBlock extends HFileBlock {
     }
     return blockIndexEntryMap;
   }
+
+  /**
+   * Returns the block index entries contained in the root index block.
+   */
+  public List<BlockIndexEntry> readBlockIndexForMultiLevelIndex(int numEntries,
+                                                                boolean contentKeyOnly) {
+    List<BlockIndexEntry> indexEntries = new ArrayList<>();
+    int buffOffset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
+    for (int i = 0; i < numEntries; i++) {
+      long offset = readLong(byteBuff, buffOffset);
+      int size = readInt(byteBuff, buffOffset + 8);
+      int varLongSizeOnDist = decodeVarLongSizeOnDisk(byteBuff, buffOffset + 12);
+      int keyLength = (int) readVarLong(byteBuff, buffOffset + 12, varLongSizeOnDist);
+      byte[] keyBytes = copy(byteBuff, buffOffset + 12 + varLongSizeOnDist, keyLength);
+      Key key = contentKeyOnly ? new UTF8StringKey(keyBytes) : new Key(keyBytes);
+      indexEntries.add(new BlockIndexEntry(key, Option.empty(), offset, size));
+      buffOffset += (12 + varLongSizeOnDist + keyLength);
+    }
+    return indexEntries;
+  }
 }

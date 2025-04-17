@@ -28,7 +28,10 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.TreeMap;
 
 import static org.apache.hudi.io.hfile.HFileBlock.HFILEBLOCK_HEADER_SIZE;
@@ -75,7 +78,12 @@ public class HFileReaderImpl implements HFileReader {
         fileSize - HFileTrailer.getTrailerSize());
     HFileRootIndexBlock dataIndexBlock =
         (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
-    this.dataBlockIndexEntryMap = dataIndexBlock.readBlockIndex(trailer.getDataIndexCount(), false);
+    if (trailer.getNumDataIndexLevels() == 1) {
+      this.dataBlockIndexEntryMap = dataIndexBlock.readBlockIndex(trailer.getDataIndexCount(), false);
+    } else {
+      this.dataBlockIndexEntryMap = readBlockIndexForMultiLevelIndex(
+          trailer.getDataIndexCount(), false, trailer.getNumDataIndexLevels());
+    }
     HFileRootIndexBlock metaIndexBlock =
         (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
     this.metaBlockIndexEntryMap = metaIndexBlock.readBlockIndex(trailer.getMetaIndexCount(), true);
@@ -312,5 +320,70 @@ public class HFileReaderImpl implements HFileReader {
       return cursor.getOffset() == indexEntry.getOffset() + HFILEBLOCK_HEADER_SIZE;
     }
     return false;
+  }
+
+  /**
+   * Read multiple-level indexes, and load all data block information into memory in BFS fashion.
+   *
+   * @param numEntries      The number of entries in the root index block.
+   * @param contentKeyOnly  Only need the key content.
+   * @param levels          The level of the indexes.
+   * @return
+   */
+  public TreeMap<Key, BlockIndexEntry> readBlockIndexForMultiLevelIndex(int numEntries,
+                                                                        boolean contentKeyOnly,
+                                                                        int levels) throws IOException {
+    // Stores next patch of leaf index entries in order.
+    List<BlockIndexEntry> indexEntries;
+
+    // Parse root index block.
+    HFileBlockReader blockReader = new HFileBlockReader(
+        context, stream, trailer.getLoadOnOpenDataOffset(), fileSize - HFileTrailer.getTrailerSize());
+    HFileBlock block = blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
+    indexEntries = ((HFileRootIndexBlock) block).readBlockIndexForMultiLevelIndex(numEntries, contentKeyOnly);
+    levels--;
+
+    // Supports BFS search for leaf index entries.
+    Queue<BlockIndexEntry> queue = new LinkedList<>();
+    while (levels >= 1) {
+      // (2) Put intermediate / leaf index entries to the queue.
+      for (int i = 0; i < indexEntries.size(); i++) {
+        queue.add(indexEntries.get(i));
+      }
+      indexEntries.clear();
+
+      // (3) BFS.
+      while (!queue.isEmpty()) {
+        BlockIndexEntry indexEntry = queue.poll();
+        blockReader = new HFileBlockReader(
+            context, stream, indexEntry.getOffset(), indexEntry.getOffset() + indexEntry.getSize());
+        HFileBlockType blockType = levels > 1
+            ? HFileBlockType.INTERMEDIATE_INDEX : HFileBlockType.LEAF_INDEX;
+        HFileBlock tempBlock = blockReader.nextBlock(blockType);
+        indexEntries.addAll(
+            ((HFileLeafIndexBlock) tempBlock).readBlockIndex(contentKeyOnly));
+      }
+
+      // (4) Lower index level.
+      levels--;
+    }
+
+    // (5) Now all entries are data blocks. Put them into the map.
+    TreeMap<Key, BlockIndexEntry> blockIndexEntryMap = new TreeMap<>();
+    for (int i = 0; i < indexEntries.size(); i++) {
+      Key key = indexEntries.get(i).getFirstKey();
+      blockIndexEntryMap.put(
+          key,
+          new BlockIndexEntry(
+              key,
+              i < indexEntries.size() - 1
+                  ? Option.of(indexEntries.get(i + 1).getFirstKey())
+                  : Option.empty(),
+              indexEntries.get(i).getOffset(),
+              indexEntries.get(i).getSize()));
+    }
+
+    // (6) Returns the combined index entry map.
+    return blockIndexEntryMap;
   }
 }
