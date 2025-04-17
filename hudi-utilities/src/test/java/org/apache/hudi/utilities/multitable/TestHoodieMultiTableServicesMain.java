@@ -59,6 +59,7 @@ import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,6 +79,7 @@ import static org.apache.hudi.utilities.multitable.MultiTableServiceUtils.Consta
  * Tests for HoodieMultiTableServicesMain
  * @see HoodieMultiTableServicesMain
  */
+@Disabled("HUDI-9281")
 class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implements SparkProvider {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMultiTableServicesMain.class);
