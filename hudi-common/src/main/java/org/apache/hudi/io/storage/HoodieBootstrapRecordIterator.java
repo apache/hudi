@@ -62,7 +62,6 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
 
   @Override
   public HoodieRecord<T> next() {
-    // TODO TIM
     HoodieRecord<T> dataRecord = dataFileIterator.next();
     HoodieRecord<T> skeletonRecord = skeletonIterator.next();
     HoodieRecord<T> ret = dataRecord.prependMetaFields(schema, schema,

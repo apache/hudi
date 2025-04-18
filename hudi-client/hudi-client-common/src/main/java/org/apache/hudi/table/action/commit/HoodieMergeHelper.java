@@ -114,7 +114,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         HoodieStorage storage = table.getStorage().newInstance(
             bootstrapFilePath, table.getStorageConf().newInstance());
         bootstrapFileReader = HoodieIOFactory.getIOFactory(storage).getReaderFactory(recordType).newBootstrapFileReader(
-            baseFileReader, // TODO TIM
+            baseFileReader,
             HoodieIOFactory.getIOFactory(storage).getReaderFactory(recordType)
                 .getFileReader(writeConfig, bootstrapFilePath),
             mergeHandle.getPartitionFields(),
