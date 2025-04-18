@@ -165,9 +165,9 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
 
   static String getPayloadClassName(Properties props) {
     String payloadClassName;
-    if (props.contains(PAYLOAD_CLASS_NAME.key())) {
+    if (props.containsKey(PAYLOAD_CLASS_NAME.key())) {
       payloadClassName = props.getProperty(PAYLOAD_CLASS_NAME.key());
-    } else if (props.contains("hoodie.datasource.write.payload.class")) {
+    } else if (props.containsKey("hoodie.datasource.write.payload.class")) {
       payloadClassName = props.getProperty("hoodie.datasource.write.payload.class");
     } else {
       return HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME;
