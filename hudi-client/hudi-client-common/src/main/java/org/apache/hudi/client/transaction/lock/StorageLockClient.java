@@ -18,44 +18,33 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockData;
-import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockFile;
+import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
+import org.apache.hudi.client.transaction.lock.models.StorageLockData;
+import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
+import org.apache.hudi.client.transaction.lock.models.LockGetResult;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-
-import java.util.function.Supplier;
 
 /**
  * Defines a contract for a service which should be able to perform conditional writes to object storage.
  * It expects to be interacting with a single lock file per context (table), and will be competing with other instances
  * to perform writes, so it should handle these cases accordingly (using conditional writes).
  */
-public interface ConditionalWriteLockService extends AutoCloseable {
+public interface StorageLockClient extends AutoCloseable {
   /**
-   * Tries once to create or update a lock file.
-   * @param newLockData The new data to update the lock file with.
-   * @param previousLockFile The previous lock file, use this to conditionally update the lock file.
-   * @return A pair containing the result state and the new lock file (if successful)
-   */
-  Pair<LockUpdateResult, ConditionalWriteLockFile> tryCreateOrUpdateLockFile(
-      ConditionalWriteLockData newLockData,
-      ConditionalWriteLockFile previousLockFile);
-
-  /**
-   * Tries to create or update a lock file while retrying N times.
-   * All non pre-condition failure related errors should be retried.
-   * @param newLockDataSupplier The new data supplier
+   * Tries to create or update a lock file.
+   * All non pre-condition failure related errors should be returned as UNKNOWN_ERROR.
+   * @param newLockData The new data to write to the lock file
    * @param previousLockFile The previous lock file
-   * @param retryCount Number of retries to attempt
    * @return A pair containing the result state and the new lock file (if successful)
    */
-  Pair<LockUpdateResult, ConditionalWriteLockFile> tryCreateOrUpdateLockFileWithRetry(
-      Supplier<ConditionalWriteLockData> newLockDataSupplier,
-      ConditionalWriteLockFile previousLockFile,
-      long retryCount);
+  Pair<LockUpsertResult, Option<StorageLockFile>> tryUpsertLockFile(
+      StorageLockData newLockData,
+      Option<StorageLockFile> previousLockFile);
 
   /**
-   * Gets the current lock file.
+   * Reads the current lock file.
    * @return The lock retrieve result and the current lock file if successfully retrieved.
    * */
-  Pair<LockGetResult, ConditionalWriteLockFile> getCurrentLockFile();
+  Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile();
 }

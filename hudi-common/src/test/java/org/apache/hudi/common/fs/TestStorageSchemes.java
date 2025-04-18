@@ -55,9 +55,14 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAppendSupported("tos"));
     assertTrue(StorageSchemes.isAppendSupported("cfs"));
 
-    assertTrue(StorageSchemes.isConditionalWritesSupported("s3"));
-    assertTrue(StorageSchemes.isConditionalWritesSupported("s3a"));
-    assertTrue(StorageSchemes.isConditionalWritesSupported("gs"));
+    for (StorageSchemes scheme : StorageSchemes.values()) {
+      String schemeName = scheme.getScheme();
+      if (scheme.getScheme().startsWith("s3") || scheme.getScheme().startsWith("gs")) {
+        assertTrue(StorageSchemes.getStorageLockImplementationIfExists(schemeName).isPresent());
+      } else {
+        assertFalse(StorageSchemes.getStorageLockImplementationIfExists(schemeName).isPresent());
+      }
+    }
 
     assertTrue(StorageSchemes.isAtomicCreationSupported("file"));
     assertTrue(StorageSchemes.isAtomicCreationSupported("hdfs"));

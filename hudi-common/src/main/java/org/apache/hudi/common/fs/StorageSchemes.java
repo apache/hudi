@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+
 import java.util.Arrays;
 
 /**
@@ -25,59 +28,59 @@ import java.util.Arrays;
  */
 public enum StorageSchemes {
   // Local filesystem
-  FILE("file", false, false, true, true, false),
+  FILE("file", false, false, true, true, null),
   // Hadoop File System
-  HDFS("hdfs", true, false, true, false, false),
+  HDFS("hdfs", true, false, true, false, null),
   // Baidu Advanced File System
-  AFS("afs", true, null, null, null, false),
+  AFS("afs", true, null, null, null, null),
   // Mapr File System
-  MAPRFS("maprfs", true, null, null, null, false),
+  MAPRFS("maprfs", true, null, null, null, null),
   // Apache Ignite FS
-  IGNITE("igfs", true, null, null, null, false),
+  IGNITE("igfs", true, null, null, null, null),
   // AWS S3
-  S3A("s3a", false, true, null, true, true),
-  S3("s3", false, true, null, true, true),
+  S3A("s3a", false, true, null, true, "org.apache.hudi.aws.transaction.lock.S3StorageLockClient"),
+  S3("s3", false, true, null, true, "org.apache.hudi.aws.transaction.lock.S3StorageLockClient"),
   // Google Cloud Storage
-  GCS("gs", false, true, null, true, true),
+  GCS("gs", false, true, null, true, "org.apache.hudi.gcp.transaction.lock.GCSStorageLockClient"),
   // Azure WASB
-  WASB("wasb", false, null, null, null, false), WASBS("wasbs", false, null, null, null, false),
+  WASB("wasb", false, null, null, null, null), WASBS("wasbs", false, null, null, null, null),
   // Azure ADLS
-  ADL("adl", false, null, null, null, true),
+  ADL("adl", false, null, null, null, null),
   // Azure ADLS Gen2
-  ABFS("abfs", false, null, null, null, false), ABFSS("abfss", false, null, null, null, false),
+  ABFS("abfs", false, null, null, null, null), ABFSS("abfss", false, null, null, null, null),
   // Aliyun OSS
-  OSS("oss", false, null, null, null, false),
+  OSS("oss", false, null, null, null, null),
   // View FS for federated setups. If federating across cloud stores, then append support is false
   // View FS support atomic creation
-  VIEWFS("viewfs", true, null, true, null, false),
+  VIEWFS("viewfs", true, null, true, null, null),
   //ALLUXIO
-  ALLUXIO("alluxio", false, null, null, null, false),
+  ALLUXIO("alluxio", false, null, null, null, null),
   // Tencent Cloud Object Storage
-  COSN("cosn", false, null, null, null, false),
+  COSN("cosn", false, null, null, null, null),
   // Tencent Cloud HDFS
-  CHDFS("ofs", true, null, null, null, false),
+  CHDFS("ofs", true, null, null, null, null),
   // Tencent Cloud CacheFileSystem
-  GOOSEFS("gfs", false, null, null, null, false),
+  GOOSEFS("gfs", false, null, null, null, null),
   // Databricks file system
-  DBFS("dbfs", false, null, null, null, false),
+  DBFS("dbfs", false, null, null, null, null),
   // IBM Cloud Object Storage
-  COS("cos", false, null, null, null, false),
+  COS("cos", false, null, null, null, null),
   // Huawei Cloud Object Storage
-  OBS("obs", false, null, null, null, false),
+  OBS("obs", false, null, null, null, null),
   // Kingsoft Standard Storage ks3
-  KS3("ks3", false, null, null, null, false),
+  KS3("ks3", false, null, null, null, null),
   // JuiceFileSystem
-  JFS("jfs", true, null, null, null, false),
+  JFS("jfs", true, null, null, null, null),
   // Baidu Object Storage
-  BOS("bos", false, null, null, null, false),
+  BOS("bos", false, null, null, null, null),
   // Oracle Cloud Infrastructure Object Storage
-  OCI("oci", false, null, null, null, false),
+  OCI("oci", false, null, null, null, null),
   // Volcengine Object Storage
-  TOS("tos", false, null, null, null, false),
+  TOS("tos", false, null, null, null, null),
   // Volcengine Cloud HDFS
-  CFS("cfs", true, null, null, null, false),
+  CFS("cfs", true, null, null, null, null),
   // Aliyun Apsara File Storage for HDFS
-  DFS("dfs", true, false, true, null, false);
+  DFS("dfs", true, false, true, null, null);
 
   private String scheme;
   private boolean supportsAppend;
@@ -89,15 +92,15 @@ public enum StorageSchemes {
   // when we want to get only part of files under a directory rather than all files, use getStatus may be more friendly than listStatus.
   // here is a trade-off between rpc times and throughput of storage meta service
   private Boolean listStatusFriendly;
-  private Boolean supportsConditionalWrites;
+  private String storageLockClass;
 
-  StorageSchemes(String scheme, boolean supportsAppend, Boolean isWriteTransactional, Boolean supportAtomicCreation, Boolean listStatusFriendly, Boolean supportsConditionalWrites) {
+  StorageSchemes(String scheme, boolean supportsAppend, Boolean isWriteTransactional, Boolean supportAtomicCreation, Boolean listStatusFriendly, String storageLockClass) {
     this.scheme = scheme;
     this.supportsAppend = supportsAppend;
     this.isWriteTransactional = isWriteTransactional;
     this.supportAtomicCreation = supportAtomicCreation;
     this.listStatusFriendly = listStatusFriendly;
-    this.supportsConditionalWrites = supportsConditionalWrites;
+    this.storageLockClass = storageLockClass;
   }
 
   public String getScheme() {
@@ -120,8 +123,12 @@ public enum StorageSchemes {
     return listStatusFriendly != null && listStatusFriendly;
   }
 
-  public boolean supportsConditionalWrites() {
-    return supportsConditionalWrites;
+  public boolean implementsStorageLock() {
+    return !StringUtils.isNullOrEmpty(storageLockClass);
+  }
+
+  public String getStorageLockClass() {
+    return storageLockClass;
   }
 
   public static boolean isSchemeSupported(String scheme) {
@@ -150,17 +157,18 @@ public enum StorageSchemes {
     return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.isAtomicCreationSupported() && s.scheme.equals(scheme));
   }
 
+  public static Option<StorageSchemes> getStorageLockImplementationIfExists(String scheme) {
+    if (!isSchemeSupported(scheme)) {
+      throw new IllegalArgumentException("Unsupported scheme :" + scheme);
+    }
+    return Option.fromJavaOptional(Arrays.stream(StorageSchemes.values())
+        .filter(s -> s.implementsStorageLock() && s.scheme.equals(scheme)).findFirst());
+  }
+
   public static boolean isListStatusFriendly(String scheme) {
     if (!isSchemeSupported(scheme)) {
       throw new IllegalArgumentException("Unsupported scheme :" + scheme);
     }
     return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.getListStatusFriendly() && s.scheme.equals(scheme));
-  }
-
-  public static boolean isConditionalWritesSupported(String scheme) {
-    if (!isSchemeSupported(scheme)) {
-      throw new IllegalArgumentException("Unsupported scheme :" + scheme);
-    }
-    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.supportsConditionalWrites() && s.scheme.equals(scheme));
   }
 }

@@ -16,13 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.lock;
+package org.apache.hudi.client.transaction.lock.models;
 
 public enum LockGetResult {
-  // Lock file does not exist
-  NOT_EXISTS,
-  // Successfully retrieved the lock file
-  SUCCESS,
-  // Unable to determine lock state due to transient errors
-  UNKNOWN_ERROR
+  // Lock file does not exist with code 0
+  NOT_EXISTS(0),
+  // Successfully retrieved the lock file with code 1
+  SUCCESS(1),
+  // Unable to determine lock state due to transient errors with code 2
+  UNKNOWN_ERROR(2);
+
+  private final int code;
+
+  LockGetResult(int code) {
+    this.code = code;
+  }
+
+  public int getCode() {
+    return code;
+  }
 }

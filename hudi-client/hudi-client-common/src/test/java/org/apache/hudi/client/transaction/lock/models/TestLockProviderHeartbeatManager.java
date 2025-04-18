@@ -80,7 +80,7 @@ public class TestLockProviderHeartbeatManager {
   @Test
   void testStartHeartbeatSuccess() {
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), eq(100L), eq(100L), eq(TimeUnit.MILLISECONDS)))
-        .thenAnswer(invocation -> mockFuture);
+            .thenAnswer(invocation -> mockFuture);
     manager = createDefaultManagerWithMocks(() -> true);
     assertTrue(manager.startHeartbeatForThread(Thread.currentThread()));
   }
@@ -88,7 +88,7 @@ public class TestLockProviderHeartbeatManager {
   @Test
   void testStartHeartbeatAlreadyRunning() {
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(invocation -> mockFuture);
+            .thenAnswer(invocation -> mockFuture);
 
     manager = createDefaultManagerWithMocks(() -> true);
 
@@ -100,8 +100,8 @@ public class TestLockProviderHeartbeatManager {
   @Test
   void testStartHeartbeatSchedulerException() {
     doThrow(new RejectedExecutionException("Scheduler failure"))
-        .when(mockScheduler)
-        .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
+            .when(mockScheduler)
+            .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
 
     manager = createDefaultManagerWithMocks(() -> true);
 
@@ -120,7 +120,7 @@ public class TestLockProviderHeartbeatManager {
   @Test
   void testStopHeartbeatAlreadyRequested() {
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(invocation -> mockFuture);
+            .thenAnswer(invocation -> mockFuture);
 
     manager = createDefaultManagerWithMocks(() -> true);
     assertTrue(manager.startHeartbeatForThread(Thread.currentThread()));
@@ -140,14 +140,14 @@ public class TestLockProviderHeartbeatManager {
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<Thread> t = new AtomicReference<>();
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(invocation -> {
-          Runnable task = invocation.getArgument(0);
-          t.set(new Thread(() -> {
-            task.run();
-            latch.countDown();
-          }));
-          return mockFuture;
-        });
+            .thenAnswer(invocation -> {
+              Runnable task = invocation.getArgument(0);
+              t.set(new Thread(() -> {
+                task.run();
+                latch.countDown();
+              }));
+              return mockFuture;
+            });
 
     when(mockFuture.cancel(true)).thenReturn(true);
     Semaphore semaphore = mock(Semaphore.class);
@@ -156,13 +156,13 @@ public class TestLockProviderHeartbeatManager {
     when(semaphore.tryAcquire()).thenReturn(false);
     when(semaphore.tryAcquire(eq(DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS), eq(TimeUnit.MILLISECONDS))).thenReturn(true);
     manager = new LockProviderHeartbeatManager(
-        LOGGER_ID,
-        mockScheduler,
-        100L,
-        DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
-        () -> true,
-        semaphore,
-        mockLogger);
+            LOGGER_ID,
+            mockScheduler,
+            100L,
+            DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
+            () -> true,
+            semaphore,
+            mockLogger);
     assertTrue(manager.startHeartbeatForThread(Thread.currentThread()));
     t.get().start();
     assertTrue(latch.await(1000, TimeUnit.MILLISECONDS));
@@ -175,7 +175,7 @@ public class TestLockProviderHeartbeatManager {
   @Test
   void testStopHeartbeatMockSuccessfulCancel() {
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(invocation -> mockFuture);
+            .thenAnswer(invocation -> mockFuture);
     when(mockFuture.cancel(true)).thenReturn(true);
 
     manager = createDefaultManagerWithMocks(() -> true);
@@ -190,14 +190,14 @@ public class TestLockProviderHeartbeatManager {
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<Thread> t = new AtomicReference<>();
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(invocation -> {
-          Runnable task = invocation.getArgument(0);
-          t.set(new Thread(() -> {
-            task.run();
-            latch.countDown();
-          }));
-          return mockFuture;
-        });
+            .thenAnswer(invocation -> {
+              Runnable task = invocation.getArgument(0);
+              t.set(new Thread(() -> {
+                task.run();
+                latch.countDown();
+              }));
+              return mockFuture;
+            });
 
     when(mockFuture.cancel(true)).thenReturn(true);
 
@@ -214,9 +214,9 @@ public class TestLockProviderHeartbeatManager {
 
     verify(mockLogger).warn("Owner {}: No active heartbeat task to stop.", LOGGER_ID);
     verify(mockLogger).debug(
-        "Owner {}: Heartbeat started with interval: {} ms",
-        "test-owner",
-        100L
+            "Owner {}: Heartbeat started with interval: {} ms",
+            "test-owner",
+            100L
     );
     verify(mockLogger).info("Owner {}: Requested termination of heartbeat task. Cancellation returned {}.", LOGGER_ID, true);
     assertFalse(manager.hasActiveHeartbeat());
@@ -234,14 +234,14 @@ public class TestLockProviderHeartbeatManager {
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<Thread> t = new AtomicReference<>();
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(invocation -> {
-          Runnable task = invocation.getArgument(0);
-          t.set(new Thread(() -> {
-            task.run();
-            latch.countDown();
-          }));
-          return mockFuture;
-        });
+            .thenAnswer(invocation -> {
+              Runnable task = invocation.getArgument(0);
+              t.set(new Thread(() -> {
+                task.run();
+                latch.countDown();
+              }));
+              return mockFuture;
+            });
 
     when(mockFuture.cancel(false)).thenReturn(false);
     Thread deadThread = new Thread(() -> {
@@ -264,14 +264,14 @@ public class TestLockProviderHeartbeatManager {
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<Thread> t = new AtomicReference<>();
     when(mockScheduler.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(invocation -> {
-          Runnable task = invocation.getArgument(0);
-          t.set(new Thread(() -> {
-            task.run();
-            latch.countDown();
-          }));
-          return mockFuture;
-        });
+            .thenAnswer(invocation -> {
+              Runnable task = invocation.getArgument(0);
+              t.set(new Thread(() -> {
+                task.run();
+                latch.countDown();
+              }));
+              return mockFuture;
+            });
     manager = createDefaultManagerWithMocks(() -> {
       throw new RuntimeException("Renewal error");
     });
@@ -280,9 +280,9 @@ public class TestLockProviderHeartbeatManager {
     t.get().start();
     assertTrue(latch.await(500, TimeUnit.MILLISECONDS), "Heartbeat task did not run in time");
     verify(mockLogger).error(
-        eq("Owner {}: Heartbeat function threw exception {}"),
-        eq(LOGGER_ID),
-        any(RuntimeException.class));
+            eq("Owner {}: Heartbeat function threw exception {}"),
+            eq(LOGGER_ID),
+            any(RuntimeException.class));
     assertFalse(manager.hasActiveHeartbeat());
   }
 
@@ -459,23 +459,23 @@ public class TestLockProviderHeartbeatManager {
 
   private LockProviderHeartbeatManager createDefaultManagerWithMocks(Supplier<Boolean> heartbeatFunc) {
     return new LockProviderHeartbeatManager(
-        LOGGER_ID,
-        mockScheduler,
-        100L,
-        DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
-        heartbeatFunc,
-        new Semaphore(1),
-        mockLogger);
+            LOGGER_ID,
+            mockScheduler,
+            100L,
+            DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
+            heartbeatFunc,
+            new Semaphore(1),
+            mockLogger);
   }
 
   private LockProviderHeartbeatManager createDefaultManagerWithRealExecutor(Supplier<Boolean> heartbeatFunc) {
     return new LockProviderHeartbeatManager(
-        LOGGER_ID,
-        actualExecutorService,
-        100L,
-        DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
-        heartbeatFunc,
-        new Semaphore(1),
-        mockLogger);
+            LOGGER_ID,
+            actualExecutorService,
+            100L,
+            DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
+            heartbeatFunc,
+            new Semaphore(1),
+            mockLogger);
   }
 }

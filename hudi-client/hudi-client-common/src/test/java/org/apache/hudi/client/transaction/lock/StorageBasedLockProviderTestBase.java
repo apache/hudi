@@ -20,6 +20,7 @@
 package org.apache.hudi.client.transaction.lock;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.config.StorageBasedLockConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.junit.jupiter.api.AfterEach;
@@ -41,12 +42,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public abstract class AbstractLockProviderTestBase {
+public abstract class StorageBasedLockProviderTestBase {
 
-  protected ConditionalWriteLockProvider lockProvider;
+  protected StorageBasedLockProvider lockProvider;
   protected static TypedProperties providerProperties;
   // A method that subclasses must implement to instantiate the correct provider.
-  protected abstract ConditionalWriteLockProvider createLockProvider();
+  protected abstract StorageBasedLockProvider createLockProvider();
 
   @BeforeEach
   void setUp() {
@@ -89,8 +90,8 @@ public abstract class AbstractLockProviderTestBase {
 
   @Test
   void testLockThreadKilledShouldNotCauseOrphanedHeartbeat() throws InterruptedException {
-    providerProperties.put(ConditionalWriteLockConfig.LOCK_VALIDITY_TIMEOUT_MS.key(), 5000);
-    providerProperties.put(ConditionalWriteLockConfig.HEARTBEAT_POLL_MS.key(), 1000);
+    providerProperties.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), 10);
+    providerProperties.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), 1);
 
     // Create a thread with a new lock provider to acquire the lock
     Thread lockingThread = new Thread(() -> {
@@ -104,7 +105,7 @@ public abstract class AbstractLockProviderTestBase {
     assertFalse(lockingThread.isAlive());
 
     // After the validity expires, should be able to reacquire
-    ConditionalWriteLockProvider newLockProvider = createLockProvider();
+    StorageBasedLockProvider newLockProvider = createLockProvider();
     boolean lockAcquired = newLockProvider.tryLock(15, TimeUnit.SECONDS);
     assertTrue(lockAcquired, "Lock should be reacquired after expiration");
     assertNotNull(newLockProvider.getLock(), "Lock should be reacquired and getLock() should return non-null");
@@ -117,10 +118,10 @@ public abstract class AbstractLockProviderTestBase {
     // We had an issue with tryLock(30, TimeUnit.SECONDS) where it was not synchronized
     // and this created a race condition where closing it would result in improper
     // execution with the heartbeat manager.
-    ConditionalWriteLockProvider provider1 = createLockProvider();
+    StorageBasedLockProvider provider1 = createLockProvider();
     assertTrue(provider1.tryLock(), "Provider1 should acquire the lock immediately");
 
-    ConditionalWriteLockProvider provider2 = createLockProvider();
+    StorageBasedLockProvider provider2 = createLockProvider();
 
     CountDownLatch finishLatch = new CountDownLatch(1);
 
@@ -140,7 +141,7 @@ public abstract class AbstractLockProviderTestBase {
 
   @Test
   void testLockAfterClosing() {
-    ConditionalWriteLockProvider provider1 = createLockProvider();
+    StorageBasedLockProvider provider1 = createLockProvider();
     assertTrue(provider1.tryLock(), "Provider1 should acquire the lock immediately");
     provider1.unlock();
     provider1.close();
@@ -149,7 +150,7 @@ public abstract class AbstractLockProviderTestBase {
 
   @Test
   void testCloseBeforeUnlocking() {
-    ConditionalWriteLockProvider provider1 = createLockProvider();
+    StorageBasedLockProvider provider1 = createLockProvider();
     assertTrue(provider1.tryLock(), "Provider1 should acquire the lock immediately");
     provider1.close();
     provider1.unlock();
@@ -206,12 +207,12 @@ public abstract class AbstractLockProviderTestBase {
   @Test
   void testMultipleLockProvidersContention() throws InterruptedException {
     final int NUM_THREADS = 10;
-    List<ConditionalWriteLockProvider> providers = new ArrayList<>();
+    List<StorageBasedLockProvider> providers = new ArrayList<>();
     List<Thread> threads = new ArrayList<>();
     AtomicBoolean stopFlag = new AtomicBoolean(false);
     CountDownLatch startLatch = new CountDownLatch(1);
     CountDownLatch threadsCompleteLatch = new CountDownLatch(NUM_THREADS);
-    
+
     // Shared ArrayList that will detect concurrent modifications
     ArrayList<Integer> sharedList = new ArrayList<>();
     // Pre-populate the list to allow modifications
@@ -224,7 +225,7 @@ public abstract class AbstractLockProviderTestBase {
     }
 
     for (int i = 0; i < NUM_THREADS; i++) {
-      final ConditionalWriteLockProvider provider = providers.get(i);
+      final StorageBasedLockProvider provider = providers.get(i);
       final int threadId = i;
       Thread t = new Thread(() -> {
         try {
@@ -237,17 +238,17 @@ public abstract class AbstractLockProviderTestBase {
               try {
                 // Multiple operations on ArrayList that must be atomic
                 sharedList.removeIf(val -> val % (threadId + 1) == 0);
-                
+
                 // Add numbers back based on threadId
                 for (int j = 0; j < 1000; j++) {
                   if (j % (threadId + 1) == 0) {
                     sharedList.add(j);
                   }
                 }
-                
+
                 // Sort the list - this will fail if another thread modifies the list
                 sharedList.sort(Integer::compareTo);
-                
+
               } finally {
                 provider.unlock();
               }
@@ -274,9 +275,9 @@ public abstract class AbstractLockProviderTestBase {
       t.join();
     }
 
-    providers.forEach(ConditionalWriteLockProvider::close);
+    providers.forEach(StorageBasedLockProvider::close);
     assertTrue(threadsCompleteLatch.await(6, TimeUnit.SECONDS));
-    
+
     // Validate the invariant of the list.
     assertEquals(1000, sharedList.size(), "List should contain 1000 elements");
     for (int i = 0; i < 1000; i++) {

@@ -22,9 +22,9 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
- * Pojo for conditional write lock provider.
+ * Pojo for conditional writes-based lock provider.
  */
-public class ConditionalWriteLockData {
+public class StorageLockData {
   private final boolean expired;
   private final long validUntil;
   private final String owner;
@@ -36,7 +36,7 @@ public class ConditionalWriteLockData {
    * @param owner The uuid owner of the owner of this lock.
    */
   @JsonCreator
-  public ConditionalWriteLockData(
+  public StorageLockData(
       @JsonProperty(value = "expired", required = true) boolean expired,
       @JsonProperty(value = "validUntil", required = true) long validUntil,
       @JsonProperty(value = "owner", required = true) String owner) {

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.transaction.lock.models;
 
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -28,12 +29,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-public class ConditionalWriteLockFile {
+public class StorageLockFile {
 
-  private final ConditionalWriteLockData data;
+  private final StorageLockData data;
   private final String versionId;
 
-  // Get a custom object mapper. See ConditionalWriteLockData for required properties.
+  // Get a custom object mapper. See StorageLockData for required properties.
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
       // This allows us to add new properties down the line.
       .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
@@ -41,38 +42,32 @@ public class ConditionalWriteLockFile {
       .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES);
 
   /**
-   * Initializes a ConditionalWriteLockFile using the data and unique versionId.
+   * Initializes a StorageLockFile using the data and unique versionId.
    *
    * @param data      The data in the lock file.
    * @param versionId The version of this lock file. Used to ensure consistency through conditional writes.
    */
-  public ConditionalWriteLockFile(ConditionalWriteLockData data, String versionId) {
-    if (data == null) {
-      throw new IllegalArgumentException("Data must not be null.");
-    }
-
-    if (versionId == null || versionId.isEmpty()) {
-      throw new IllegalArgumentException("VersionId must not be null or empty.");
-    }
-
+  public StorageLockFile(StorageLockData data, String versionId) {
+    ValidationUtils.checkArgument(data != null, "Data must not be null.");
+    ValidationUtils.checkArgument(versionId != null && !versionId.isEmpty(), "VersionId must not be null or empty.");
     this.data = data;
     this.versionId = versionId;
   }
 
   /**
-   * Factory method to load an input stream into a ConditionalWriteLockFile.
+   * Factory method to load an input stream into a StorageLockFile.
    *
    * @param inputStream The input stream of the JSON content.
    * @param versionId   The unique version identifier for the lock file.
-   * @return A new instance of ConditionalWriteLockFile.
+   * @return A new instance of StorageLockFile.
    * @throws HoodieIOException If deserialization fails.
    */
-  public static ConditionalWriteLockFile createFromStream(InputStream inputStream, String versionId) {
+  public static StorageLockFile createFromStream(InputStream inputStream, String versionId) {
     try {
-      ConditionalWriteLockData data = OBJECT_MAPPER.readValue(inputStream, ConditionalWriteLockData.class);
-      return new ConditionalWriteLockFile(data, versionId);
+      StorageLockData data = OBJECT_MAPPER.readValue(inputStream, StorageLockData.class);
+      return new StorageLockFile(data, versionId);
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to deserialize JSON content into ConditionalWriteLockData", e);
+      throw new HoodieIOException("Failed to deserialize JSON content into StorageLockData", e);
     }
   }
 
@@ -95,7 +90,7 @@ public class ConditionalWriteLockFile {
    * @return A byte array.
    * @throws HoodieIOException If serialization fails.
    */
-  public static byte[] toByteArray(ConditionalWriteLockData data) {
+  public static byte[] toByteArray(StorageLockData data) {
     try {
       return OBJECT_MAPPER.writeValueAsBytes(data);
     } catch (JsonProcessingException e) {
@@ -115,7 +110,7 @@ public class ConditionalWriteLockFile {
    * Gets the expiration time in ms.
    * @return A long representing the expiration.
    */
-  public long getValidUntil() {
+  public long getValidUntilMs() {
     return this.data.getValidUntil();
   }
 

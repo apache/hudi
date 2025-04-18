@@ -35,7 +35,7 @@ import java.util.function.Supplier;
 
 /**
  * LockProviderHeartbeatManager is a helper class which handles the scheduling and stopping of heartbeat
- * tasks. This is intended for use with the conditional write lock provider, which requires
+ * tasks. This is intended for use with the storage based lock provider, which requires
  * a separate thread to spawn and renew the lock repeatedly.
  * It should be responsible for the entire lifecycle of the heartbeat task.
  * Importantly, a new instance should be created for each lock provider.
@@ -53,7 +53,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
 
   /**
    * Contract for the heartbeat function execution.
-   * 
+   *
    * <p>Behavior of the heartbeat manager (consumer):
    * <ul>
    *   <li>Executes heartBeatFuncToExec every heartbeatTimeMs when:
@@ -65,7 +65,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    *     <ul>
    *       <li>heartBeatFuncToExec returns false</li>
    *       <li>heartBeatFuncToExec throws an exception</li>
-   *       <li>heart beat manager calls stopHeartbeat, which will interrupt any inflight execution 
+   *       <li>heart beat manager calls stopHeartbeat, which will interrupt any inflight execution
    *           and prevent further recurring executions</li>
    *     </ul>
    *   </li>
@@ -90,7 +90,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    *     </ul>
    *   </li>
    * </ul>
-   * 
+   *
    * <p>Warning: Returning false stops all future lock renewal attempts. If the writer thread
    * is still running, it will execute with a lock that can expire at any time, potentially
    * leading to corrupted data.
@@ -136,13 +136,13 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
                                       long heartbeatTimeMs,
                                       Supplier<Boolean> heartbeatFuncToExec) {
     this(
-        ownerId,
-        createThreadScheduler((ownerId != null && ownerId.length() >= 6) ? ownerId.substring(0, 6) : ""),
-        heartbeatTimeMs,
-        DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
-        heartbeatFuncToExec,
-        new Semaphore(1),
-        DEFAULT_LOGGER);
+            ownerId,
+            createThreadScheduler((ownerId != null && ownerId.length() >= 6) ? ownerId.substring(0, 6) : ""),
+            heartbeatTimeMs,
+            DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
+            heartbeatFuncToExec,
+            new Semaphore(1),
+            DEFAULT_LOGGER);
   }
 
   @VisibleForTesting
@@ -167,7 +167,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    */
   private static ScheduledExecutorService createThreadScheduler(String shortUuid) {
     return Executors.newSingleThreadScheduledExecutor(
-        r -> new Thread(r, "LockProvider-HeartbeatManager-Thread-" + shortUuid));
+            r -> new Thread(r, "LockProvider-HeartbeatManager-Thread-" + shortUuid));
   }
 
   /**
@@ -200,7 +200,6 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    */
   private void heartbeatTaskRunner(Thread threadToMonitor) {
     if (!heartbeatSemaphore.tryAcquire()) {
-      // This will trigger an alert
       logger.error("Owner {}: Heartbeat semaphore should be acquirable at the start of every heartbeat!", ownerId);
       return;
     }
@@ -267,8 +266,12 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     // exiting synchronously.
     boolean heartbeatStillInflight = syncWaitInflightHeartbeatTaskToFinish();
     if (heartbeatStillInflight) {
-      // This will trigger an alert
-      logger.error("Owner {}: Heartbeat is still in flight!", ownerId);
+      // If waiting for cancellation was interrupted, do not log an error.
+      if (Thread.currentThread().isInterrupted()) {
+        logger.warn("Owner {}: Heartbeat is still in flight due to interruption!", ownerId);
+      } else {
+        logger.error("Owner {}: Heartbeat is still in flight!", ownerId);
+      }
       return false;
     }
 
@@ -298,7 +301,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
   }
 
   private boolean syncWaitInflightHeartbeatTaskToFinish() {
-    // Wait for up to 15 seconds for the currently executing heartbeat task to complete.
+    // Wait for up to stopHeartbeatTimeoutMs for the currently executing heartbeat task to complete.
     // It is assumed that the heartbeat task, when finishing its execution,
     // sets heartbeatIsExecuting to false and calls notifyAll() on this object.
     boolean heartbeatStillInflight = true;
@@ -318,11 +321,17 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     return heartbeatStillInflight;
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public synchronized boolean hasActiveHeartbeat() {
     return scheduledFuture != null;
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public synchronized void close() throws Exception {
     if (hasActiveHeartbeat()) {

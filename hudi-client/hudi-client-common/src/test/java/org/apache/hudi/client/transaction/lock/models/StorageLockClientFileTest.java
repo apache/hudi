@@ -38,7 +38,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
-public class ConditionalWriteLockFileTest {
+public class StorageLockClientFileTest {
 
   private static final String JSON_DATA = "{\"expired\":false,\"validUntil\":1700000000000,\"owner\":\"testOwner\"}";
   private static final String JSON_DATA_EXTRA_FIELD = "{\"expired\":true,\"validUntil\":1600000000000,\"owner\":\"otherOwner\",\"state\":\"active\"}";
@@ -58,8 +58,8 @@ public class ConditionalWriteLockFileTest {
 
   @Test
   void testCreateValidInputStream() {
-    ConditionalWriteLockFile file = ConditionalWriteLockFile.createFromStream(validJsonStream, VERSION_ID);
-    assertEquals(1700000000000L, file.getValidUntil());
+    StorageLockFile file = StorageLockFile.createFromStream(validJsonStream, VERSION_ID);
+    assertEquals(1700000000000L, file.getValidUntilMs());
     assertEquals("testOwner", file.getOwner());
     assertEquals(VERSION_ID, file.getVersionId());
     assertFalse(file.isExpired());
@@ -67,8 +67,8 @@ public class ConditionalWriteLockFileTest {
 
   @Test
   void testCreateValidInputStreamExtraField() {
-    ConditionalWriteLockFile file = ConditionalWriteLockFile.createFromStream(extraFieldValidJsonStream, VERSION_ID);
-    assertEquals(1600000000000L, file.getValidUntil());
+    StorageLockFile file = StorageLockFile.createFromStream(extraFieldValidJsonStream, VERSION_ID);
+    assertEquals(1600000000000L, file.getValidUntilMs());
     assertEquals("otherOwner", file.getOwner());
     assertEquals(VERSION_ID, file.getVersionId());
     assertTrue(file.isExpired());
@@ -81,14 +81,14 @@ public class ConditionalWriteLockFileTest {
     doThrow(new IOException("Simulated IOException"))
         .when(mockInputStream)
         .read();
-    HoodieIOException exception = assertThrows(HoodieIOException.class, () -> ConditionalWriteLockFile.createFromStream(mockInputStream, "versionId"));
+    HoodieIOException exception = assertThrows(HoodieIOException.class, () -> StorageLockFile.createFromStream(mockInputStream, "versionId"));
     assertTrue(exception.getMessage().contains("Failed to deserialize"));
   }
 
   @Test
   void testCreateInvalidInputStreamFromBadData() {
     HoodieIOException exception = assertThrows(HoodieIOException.class, () ->
-        ConditionalWriteLockFile.createFromStream(invalidJsonStream, VERSION_ID)
+        StorageLockFile.createFromStream(invalidJsonStream, VERSION_ID)
     );
     assertTrue(exception.getMessage().contains("Failed to deserialize"));
   }
@@ -96,27 +96,27 @@ public class ConditionalWriteLockFileTest {
   @Test
   void testCreateNullData() {
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-        new ConditionalWriteLockFile(null, VERSION_ID)
+        new StorageLockFile(null, VERSION_ID)
     );
     assertTrue(exception.getMessage().contains("Data must not be null"));
   }
 
   @Test
   void testCreateNullVersionId() {
-    ConditionalWriteLockData data = new ConditionalWriteLockData(true, 1700000000000L, "testOwner");
+    StorageLockData data = new StorageLockData(true, 1700000000000L, "testOwner");
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-        new ConditionalWriteLockFile(data, null)
+        new StorageLockFile(data, null)
     );
     assertTrue(exception.getMessage().contains("VersionId must not be null or empty."));
     exception = assertThrows(IllegalArgumentException.class, () ->
-        new ConditionalWriteLockFile(data, "")
+        new StorageLockFile(data, "")
     );
     assertTrue(exception.getMessage().contains("VersionId must not be null or empty."));
   }
 
   @Test
   void testToJsonStreamValidData() {
-    ConditionalWriteLockFile file = ConditionalWriteLockFile.createFromStream(validJsonStream, VERSION_ID);
+    StorageLockFile file = StorageLockFile.createFromStream(validJsonStream, VERSION_ID);
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     file.writeToStream(outputStream);
     String outputJson = new String(outputStream.toByteArray());
@@ -132,8 +132,8 @@ public class ConditionalWriteLockFileTest {
     doThrow(new IOException("Simulated IOException"))
         .when(mockOutputStream)
         .write(any(byte[].class), anyInt(), anyInt());
-    ConditionalWriteLockFile file = new ConditionalWriteLockFile(
-        new ConditionalWriteLockData(true, System.currentTimeMillis() + 1000, "testOwner"),
+    StorageLockFile file = new StorageLockFile(
+        new StorageLockData(true, System.currentTimeMillis() + 1000, "testOwner"),
         VERSION_ID);
 
     HoodieIOException exception = assertThrows(HoodieIOException.class, () -> file.writeToStream(mockOutputStream));
@@ -142,8 +142,8 @@ public class ConditionalWriteLockFileTest {
 
   @Test
   void testToByteArrayValidData() {
-    ConditionalWriteLockData data = new ConditionalWriteLockData(false, 1700000000000L, "testOwner");
-    String outputJson = new String(ConditionalWriteLockFile.toByteArray(data));
+    StorageLockData data = new StorageLockData(false, 1700000000000L, "testOwner");
+    String outputJson = new String(StorageLockFile.toByteArray(data));
     assertTrue(outputJson.contains("\"expired\":false"));
     assertTrue(outputJson.contains("\"validUntil\":1700000000000"));
     assertTrue(outputJson.contains("\"owner\":\"testOwner\""));
@@ -151,15 +151,15 @@ public class ConditionalWriteLockFileTest {
 
   @Test
   void testIsExpired() {
-    ConditionalWriteLockData data = new ConditionalWriteLockData(true, System.currentTimeMillis() - 1000, "testOwner");
-    ConditionalWriteLockFile file = new ConditionalWriteLockFile(data, VERSION_ID);
+    StorageLockData data = new StorageLockData(true, System.currentTimeMillis() - 1000, "testOwner");
+    StorageLockFile file = new StorageLockFile(data, VERSION_ID);
     assertTrue(file.isExpired());
   }
 
   @Test
   void testGetVersionId() {
-    ConditionalWriteLockData data = new ConditionalWriteLockData(false, 1700000000000L, "testOwner");
-    ConditionalWriteLockFile file = new ConditionalWriteLockFile(data, VERSION_ID);
+    StorageLockData data = new StorageLockData(false, 1700000000000L, "testOwner");
+    StorageLockFile file = new StorageLockFile(data, VERSION_ID);
     assertEquals(VERSION_ID, file.getVersionId());
   }
 }

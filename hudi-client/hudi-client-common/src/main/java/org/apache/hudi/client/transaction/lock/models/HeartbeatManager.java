@@ -34,9 +34,9 @@ public interface HeartbeatManager extends AutoCloseable {
 
   /**
    * Stops the heartbeat, if one is active.
-   * This is a blocking call, which drains any inflight heart beat task execution before return.
-   * @param mayInterruptIfRunning Whether we may interrupt the underlying heartbeat task if it is inflight.
-   * @return true: no heartbeat task is inflight or to be executed.
+   * This is a blocking call, which drains any in-flight heart beat task execution before return.
+   * @param mayInterruptIfRunning Whether we may interrupt the underlying heartbeat task if it is in-flight.
+   * @return true: no heartbeat task is in-flight or to be executed.
    *         false: failed to stop the heartbeat, there can still be recurring execution of heartbeat tasks.
    */
   boolean stopHeartbeat(boolean mayInterruptIfRunning);

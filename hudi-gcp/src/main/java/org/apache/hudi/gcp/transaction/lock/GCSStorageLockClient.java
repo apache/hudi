@@ -18,11 +18,18 @@
 
 package org.apache.hudi.gcp.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.ConditionalWriteLockService;
-import org.apache.hudi.client.transaction.lock.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockData;
-import org.apache.hudi.client.transaction.lock.models.ConditionalWriteLockFile;
+import org.apache.hudi.client.transaction.lock.StorageLockClient;
+import org.apache.hudi.client.transaction.lock.models.LockGetResult;
+import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
+import org.apache.hudi.client.transaction.lock.models.StorageLockData;
+import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
+import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieLockException;
 
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
@@ -34,27 +41,23 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.concurrent.ThreadSafe;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.channels.Channels;
 import java.util.Properties;
-import java.util.function.Supplier;
-
-import org.apache.hudi.client.transaction.lock.LockUpdateResult;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieIOException;
-
-import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * A GCS-based implementation of a distributed lock provider using conditional writes
  * with generationMatch, plus local concurrency safety, heartbeat/renew, and pruning old locks.
  */
 @ThreadSafe
-public class GCSConditionalWriteLockService implements ConditionalWriteLockService {
-  private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(GCSConditionalWriteLockService.class);
-  private static final long WAIT_TIME_FOR_RETRY_MS = 1000L;
+public class GCSStorageLockClient implements StorageLockClient {
+  private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(GCSStorageLockClient.class);
   private static final long PRECONDITION_FAILURE_ERROR_CODE = 412;
   private static final long NOT_FOUND_ERROR_CODE = 404;
   private static final long RATE_LIMIT_ERROR_CODE = 429;
@@ -67,32 +70,50 @@ public class GCSConditionalWriteLockService implements ConditionalWriteLockServi
 
   /** Constructor that is used by reflection to instantiate a GCS-based locking service.
    * @param ownerId The owner id.
-   * @param bucketName The name of the bucket.
-   * @param lockFilePath The path within the bucket where to write lock files.
+   * @param lockFileUri The path within the bucket where to write lock files.
    * @param props The properties for the lock config, can be used to customize client.
    */
-  public GCSConditionalWriteLockService(
+  public GCSStorageLockClient(
       String ownerId,
-      String bucketName,
-      String lockFilePath,
+      String lockFileUri,
       Properties props) {
-    this(ownerId, bucketName, lockFilePath, StorageOptions.newBuilder()
-        .build()
-        .getService(), DEFAULT_LOGGER);
+    this(ownerId, lockFileUri, props, createDefaultGcsClient(), DEFAULT_LOGGER);
   }
 
   @VisibleForTesting
-  GCSConditionalWriteLockService(
+  GCSStorageLockClient(
       String ownerId,
-      String bucketName,
-      String lockFilePath,
-      Storage gcsClient,
+      String lockFileUri,
+      Properties properties,
+      Functions.Function1<Properties, Storage> gcsClientSupplier,
       Logger logger) {
-    this.gcsClient = gcsClient;
-    this.lockFilePath = lockFilePath;
-    this.bucketName = bucketName;
-    this.ownerId = ownerId;
-    this.logger = logger;
+    try {
+      // This logic can likely be extended to other lock client implementations.
+      // Consider creating base class with utilities, incl error handling.
+      URI uri = new URI(lockFileUri);
+      this.bucketName = uri.getHost();
+      this.lockFilePath = uri.getPath().replaceFirst("/", "");
+      this.gcsClient = gcsClientSupplier.apply(properties);
+
+      if (StringUtils.isNullOrEmpty(this.bucketName)) {
+        throw new IllegalArgumentException("LockFileUri does not contain a valid bucket name.");
+      }
+      if (StringUtils.isNullOrEmpty(this.lockFilePath)) {
+        throw new IllegalArgumentException("LockFileUri does not contain a valid lock file path.");
+      }
+      this.ownerId = ownerId;
+      this.logger = logger;
+    } catch (URISyntaxException e) {
+      throw new HoodieLockException(e);
+    }
+  }
+
+  private static Functions.Function1<Properties, Storage> createDefaultGcsClient() {
+    return (props) -> {
+      // Provide the option to customize the timeouts later on.
+      // For now, defaults suffice
+      return StorageOptions.newBuilder().build().getService();
+    };
   }
 
   /**
@@ -100,17 +121,17 @@ public class GCSConditionalWriteLockService implements ConditionalWriteLockServi
    *
    * @param lockData the new lock data to use.
    * @param generationNumber the expected generation number (0 for creation).
-   * @return the updated ConditionalWriteLockFile instance.
+   * @return the updated StorageLockFile instance.
    * @throws StorageException if the update fails.
    */
-  private ConditionalWriteLockFile createOrUpdateLockFileInternal(ConditionalWriteLockData lockData, long generationNumber)
+  private StorageLockFile createOrUpdateLockFileInternal(StorageLockData lockData, long generationNumber)
       throws StorageException {
     BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(bucketName, lockFilePath)).build();
     Blob updatedBlob = gcsClient.create(
         blobInfo,
-        ConditionalWriteLockFile.toByteArray(lockData),
+        StorageLockFile.toByteArray(lockData),
         Storage.BlobTargetOption.generationMatch(generationNumber));
-    return new ConditionalWriteLockFile(
+    return new StorageLockFile(
         lockData,
         String.valueOf(updatedBlob.getGeneration()));
   }
@@ -119,18 +140,18 @@ public class GCSConditionalWriteLockService implements ConditionalWriteLockServi
    * {@inheritDoc}
    */
   @Override
-  public Pair<LockUpdateResult, ConditionalWriteLockFile> tryCreateOrUpdateLockFile(
-      ConditionalWriteLockData newLockData, 
-      ConditionalWriteLockFile previousLockFile) {
+  public Pair<LockUpsertResult, Option<StorageLockFile>> tryUpsertLockFile(
+      StorageLockData newLockData,
+      Option<StorageLockFile> previousLockFile) {
     long generationNumber = getGenerationNumber(previousLockFile);
     try {
-      ConditionalWriteLockFile updatedFile = createOrUpdateLockFileInternal(newLockData, generationNumber);
-      return Pair.of(LockUpdateResult.SUCCESS, updatedFile);
+      StorageLockFile updatedFile = createOrUpdateLockFileInternal(newLockData, generationNumber);
+      return Pair.of(LockUpsertResult.SUCCESS, Option.of(updatedFile));
     } catch (StorageException e) {
       if (e.getCode() == PRECONDITION_FAILURE_ERROR_CODE) {
         logger.info("OwnerId: {}, Unable to write new lock file. Another process has modified this lockfile {} already.", 
             ownerId, lockFilePath);
-        return Pair.of(LockUpdateResult.ACQUIRED_BY_OTHERS, null);
+        return Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty());
       } else if (e.getCode() == RATE_LIMIT_ERROR_CODE) {
         logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFilePath);
       } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
@@ -139,55 +160,8 @@ public class GCSConditionalWriteLockService implements ConditionalWriteLockServi
       } else {
         throw e;
       }
-      return Pair.of(LockUpdateResult.UNKNOWN_ERROR, null);
+      return Pair.of(LockUpsertResult.UNKNOWN_ERROR, Option.empty());
     }
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public Pair<LockUpdateResult, ConditionalWriteLockFile> tryCreateOrUpdateLockFileWithRetry(
-      Supplier<ConditionalWriteLockData> newLockDataSupplier,
-      ConditionalWriteLockFile previousLockFile,
-      long maxAttempts) {
-    long generationNumber = getGenerationNumber(previousLockFile);
-    long attempts = 0;
-
-    while (attempts < maxAttempts) {
-      try {
-        attempts++;
-        logger.debug("OwnerId: {}, Attempt {} to create lock file {}.", ownerId, attempts, lockFilePath);
-
-        ConditionalWriteLockFile updatedLockFile = createOrUpdateLockFileInternal(
-            newLockDataSupplier.get(), generationNumber);
-        return Pair.of(LockUpdateResult.SUCCESS, updatedLockFile);
-
-      } catch (StorageException e) {
-        if (e.getCode() == PRECONDITION_FAILURE_ERROR_CODE) {
-          logger.warn("OwnerId: {}, Unable to write new lock file. Another process has modified this lock file {} already. This error is not retriable.", 
-              ownerId, lockFilePath);
-          return Pair.of(LockUpdateResult.ACQUIRED_BY_OTHERS, null);
-        } else if (e.getCode() == RATE_LIMIT_ERROR_CODE) {
-          logger.warn("OwnerId: {}, Rate limit exceeded for writing lock file: {} with retry", ownerId, lockFilePath);
-        } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-          logger.warn("OwnerId: {}, GCS returned internal server error code for writing lock file: {} with retry", ownerId, lockFilePath, e);
-        } else {
-          logger.warn("OwnerId: {}, Unknown error encountered while writing lock file: {} with retry", ownerId, lockFilePath, e);
-        }
-      }
-
-      try {
-        Thread.sleep(WAIT_TIME_FOR_RETRY_MS);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        break;
-      }
-    }
-
-    logger.warn("OwnerId: {}, Upsert for lockfile {} did not succeed after {} attempts.", 
-        ownerId, lockFilePath, attempts);
-    return Pair.of(LockUpdateResult.UNKNOWN_ERROR, null);
   }
 
   /**
@@ -196,16 +170,16 @@ public class GCSConditionalWriteLockService implements ConditionalWriteLockServi
    * @param ignore404 Whether to ignore 404 as a valid exception.
    *                  When we read from stream we might see this, and
    *                  it should not be counted as NOT_EXISTS.
-   * @return A pair of the result type and the file, if we were able to create it.
+   * @return The type of getResult error
    */
-  private Pair<LockGetResult, ConditionalWriteLockFile> handleGetStorageException(StorageException e, boolean ignore404) {
+  private LockGetResult handleGetStorageException(StorageException e, boolean ignore404) {
     if (e.getCode() == NOT_FOUND_ERROR_CODE) {
       if (ignore404) {
         logger.info("OwnerId: {}, GCS stream read failure detected: {}", ownerId, lockFilePath);
-        return Pair.of(LockGetResult.UNKNOWN_ERROR, null);
+      } else {
+        logger.info("OwnerId: {}, Object not found in the path: {}", ownerId, lockFilePath);
+        return LockGetResult.NOT_EXISTS;
       }
-      logger.info("OwnerId: {}, Object not found in the path: {}", ownerId, lockFilePath);
-      return Pair.of(LockGetResult.NOT_EXISTS, null);
     } else if (e.getCode() == RATE_LIMIT_ERROR_CODE) {
       logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFilePath);
     } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
@@ -213,39 +187,38 @@ public class GCSConditionalWriteLockService implements ConditionalWriteLockServi
     } else {
       throw e;
     }
-    return Pair.of(LockGetResult.UNKNOWN_ERROR, null);
+    return LockGetResult.UNKNOWN_ERROR;
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
-  public Pair<LockGetResult, ConditionalWriteLockFile> getCurrentLockFile() {
+  public Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile() {
     try {
       Blob blob = gcsClient.get(BlobId.of(bucketName, lockFilePath));
       if (blob == null) {
-        return Pair.of(LockGetResult.NOT_EXISTS, null);
+        return Pair.of(LockGetResult.NOT_EXISTS, Option.empty());
       }
       return getLockFileFromBlob(blob);
     } catch (StorageException e) {
-      return handleGetStorageException(e, false);
+      return Pair.of(handleGetStorageException(e, false), Option.empty());
     } catch (HoodieIOException e) {
       // GCS will throw IOException wrapping 404 when reading from stream for file that has been modified in between calling gcsClient.get
-      // and ConditionalWriteLockFile.createFromStream. People have complained that this is not being strongly consistent, however
+      // and StorageLockFile.createFromStream. People have complained that this is not being strongly consistent, however
       // we have to handle this case. https://stackoverflow.com/q/66759993
       Throwable cause = e.getCause();
       if (cause instanceof IOException && cause.getCause() instanceof StorageException) {
-        return handleGetStorageException((StorageException) cause.getCause(), true);
+        return Pair.of(handleGetStorageException((StorageException) cause.getCause(), true), Option.empty());
       }
       throw e;
     }
   }
 
-  private @NotNull Pair<LockGetResult, ConditionalWriteLockFile> getLockFileFromBlob(Blob blob) {
+  private @NotNull Pair<LockGetResult, Option<StorageLockFile>> getLockFileFromBlob(Blob blob) {
     try (InputStream inputStream = Channels.newInputStream(blob.reader())) {
       return Pair.of(LockGetResult.SUCCESS,
-          ConditionalWriteLockFile.createFromStream(inputStream, String.valueOf(blob.getGeneration()))
-      );
+          Option.of(StorageLockFile.createFromStream(inputStream, String.valueOf(blob.getGeneration()))));
     } catch (IOException e) {
       // Our createFromStream method does not throw IOExceptions, it wraps in HoodieIOException, however Sonar requires handling this.
       throw new UncheckedIOException("Failed reading blob: " + lockFilePath, e);
@@ -257,9 +230,9 @@ public class GCSConditionalWriteLockService implements ConditionalWriteLockServi
     this.gcsClient.close();
   }
 
-  private long getGenerationNumber(ConditionalWriteLockFile file) {
-    return (file != null)
-        ? Long.parseLong(file.getVersionId())
+  private long getGenerationNumber(Option<StorageLockFile> file) {
+    return (file.isPresent())
+        ? Long.parseLong(file.get().getVersionId())
         : 0;
   }
 }

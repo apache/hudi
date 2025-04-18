@@ -20,8 +20,8 @@
 
 package org.apache.hudi.aws.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.AbstractLockProviderTestBase;
-import org.apache.hudi.client.transaction.lock.ConditionalWriteLockProvider;
+import org.apache.hudi.client.transaction.lock.StorageBasedLockProvider;
+import org.apache.hudi.client.transaction.lock.StorageBasedLockProviderTestBase;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.config.HoodieAWSConfig;
 
@@ -52,14 +52,13 @@ import static org.mockito.Mockito.mockStatic;
 import static org.testcontainers.containers.localstack.LocalStackContainer.Service.S3;
 
 /**
- * Tests S3-based ConditionalWriteLockProvider using a LocalStack container
+ * Tests S3-based StorageBasedLockProvider using a LocalStack container
  * to emulate S3.
  */
-public class TestS3ConditionalWriteLockProvider extends AbstractLockProviderTestBase {
+public class TestS3StorageBasedLockProvider extends StorageBasedLockProviderTestBase {
 
-  // Adjust LocalStack image version as needed
   private static final DockerImageName LOCALSTACK_IMAGE =
-      DockerImageName.parse("localstack/localstack:latest");
+          DockerImageName.parse("localstack/localstack:4.1.0");
 
   private static LocalStackContainer S3_CONTAINER;
 
@@ -70,24 +69,24 @@ public class TestS3ConditionalWriteLockProvider extends AbstractLockProviderTest
   static void initContainer() {
     // Spin up LocalStack with S3 service
     S3_CONTAINER = new LocalStackContainer(LOCALSTACK_IMAGE)
-        .withServices(S3);
+            .withServices(S3);
     S3_CONTAINER.start();
 
     s3Client = S3Client.builder()
-        .endpointOverride(S3_CONTAINER.getEndpointOverride(S3))
-        .credentialsProvider(
-            StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(
-                    S3_CONTAINER.getAccessKey(),
-                    S3_CONTAINER.getSecretKey()
-                )
+            .endpointOverride(S3_CONTAINER.getEndpointOverride(S3))
+            .credentialsProvider(
+                    StaticCredentialsProvider.create(
+                            AwsBasicCredentials.create(
+                                    S3_CONTAINER.getAccessKey(),
+                                    S3_CONTAINER.getSecretKey()
+                            )
+                    )
             )
-        )
-        .region(Region.of(S3_CONTAINER.getRegion()))
-        .build();
+            .region(Region.of(S3_CONTAINER.getRegion()))
+            .build();
     s3Client.createBucket(CreateBucketRequest.builder()
-        .bucket(TEST_BUCKET)
-        .build());
+            .bucket(TEST_BUCKET)
+            .build());
   }
 
   @AfterAll
@@ -98,22 +97,22 @@ public class TestS3ConditionalWriteLockProvider extends AbstractLockProviderTest
   }
 
   /**
-   * Creates a real S3-based ConditionalWriteLockProvider for testing.
+   * Creates a real S3-based StorageBasedLockProvider for testing.
    */
   @Override
-  protected ConditionalWriteLockProvider createLockProvider() {
+  protected StorageBasedLockProvider createLockProvider() {
     LockConfiguration lockConf = new LockConfiguration(providerProperties);
     Configuration hadoopConf = new Configuration();
 
     try (MockedStatic<S3Client> s3ClientStaticMock =
-             mockStatic(S3Client.class, Mockito.CALLS_REAL_METHODS)) {
+                 mockStatic(S3Client.class, Mockito.CALLS_REAL_METHODS)) {
       s3ClientStaticMock.when(S3Client::builder).thenAnswer(invocation -> {
         S3ClientBuilder builder = (S3ClientBuilder) invocation.callRealMethod();
         // Always add the endpoint override from S3_CONTAINER
         builder.endpointOverride(S3_CONTAINER.getEndpointOverride(S3));
         return builder;
       });
-      return new ConditionalWriteLockProvider(
+      return new StorageBasedLockProvider(
           lockConf,
           hadoopConf);
     }
@@ -134,23 +133,23 @@ public class TestS3ConditionalWriteLockProvider extends AbstractLockProviderTest
     String key = "my-test-object";
     // Put an object
     PutObjectResponse put1 = s3Client.putObject(
-        PutObjectRequest.builder()
-            .bucket(TEST_BUCKET)
-            .key(key)
-            .serverSideEncryption(ServerSideEncryption.AES256)
-            .ifNoneMatch("*")
-            .build(),
-        RequestBody.fromString("Hello1"));
+            PutObjectRequest.builder()
+                    .bucket(TEST_BUCKET)
+                    .key(key)
+                    .serverSideEncryption(ServerSideEncryption.AES256)
+                    .ifNoneMatch("*")
+                    .build(),
+            RequestBody.fromString("Hello1"));
 
     // Put a second object with different contents
     PutObjectResponse put2 = s3Client.putObject(
-        PutObjectRequest.builder()
-            .bucket(TEST_BUCKET)
-            .key(key)
-            .serverSideEncryption(ServerSideEncryption.AES256)
-            .ifMatch(put1.eTag())
-            .build(),
-        RequestBody.fromString("Hello2"));
+            PutObjectRequest.builder()
+                    .bucket(TEST_BUCKET)
+                    .key(key)
+                    .serverSideEncryption(ServerSideEncryption.AES256)
+                    .ifMatch(put1.eTag())
+                    .build(),
+            RequestBody.fromString("Hello2"));
     s3Client.close();
     // ETags should differ
     assertNotNull(put1.eTag());
