@@ -92,8 +92,8 @@ public class ConfigUtils {
   /**
    * Get payload class.
    */
-  public static String getPayloadClass(Properties properties) {
-    return HoodieRecordPayload.getPayloadClassName(new HoodieConfig(properties));
+  public static String getPayloadClass(Properties props) {
+    return HoodieRecordPayload.getPayloadClassName(props);
   }
 
   public static List<String> split2List(String param) {
