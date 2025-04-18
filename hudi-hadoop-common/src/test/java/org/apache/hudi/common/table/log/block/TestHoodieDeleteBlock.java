@@ -122,7 +122,7 @@ public class TestHoodieDeleteBlock {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
     HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, new HashMap<>());
-    byte[] contentBytes = deleteBlock.getContentBytes(HoodieTestUtils.getDefaultStorage());
+    byte[] contentBytes = deleteBlock.getContentBytes(HoodieTestUtils.getDefaultStorage()).toByteArray();
     HoodieDeleteBlock deserializeDeleteBlock = new HoodieDeleteBlock(
         Option.of(contentBytes), null, true, Option.empty(), new HashMap<>(), new HashMap<>());
     DeleteRecord[] deserializedDeleteRecords = deserializeDeleteBlock.getRecordsToDelete();

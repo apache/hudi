@@ -88,12 +88,11 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   }
 
   @Override
-  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
-    Option<byte[]> content = getContent();
-
+  public ByteArrayOutputStream getContentBytes(HoodieStorage storage) throws IOException {
     // In case this method is called before realizing keys from content
-    if (content.isPresent()) {
-      return content.get();
+    Option<ByteArrayOutputStream> baosOpt = getContentAsByteStream();
+    if (baosOpt.isPresent()) {
+      return baosOpt.get();
     } else if (readBlockLazily && recordsToDelete == null) {
       // read block lazily
       getRecordsToDelete();
@@ -105,7 +104,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     byte[] bytesToWrite = (version <= 2) ? serializeV2() : serializeV3();
     output.writeInt(bytesToWrite.length);
     output.write(bytesToWrite);
-    return baos.toByteArray();
+    return baos;
   }
 
   public DeleteRecord[] getRecordsToDelete() {

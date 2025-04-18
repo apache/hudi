@@ -34,6 +34,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.io.MiniBatchHandle;
+import org.apache.hudi.io.log.block.HoodieFlinkAvroDataBlock;
 import org.apache.hudi.io.log.block.HoodieFlinkParquetDataBlock;
 import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
 import org.apache.hudi.io.storage.row.HoodieFlinkIOFactory;
@@ -88,8 +89,8 @@ public class RowDataLogWriteHandle<T, I, K, O>
 
   private void initWriteConf(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig) {
     storageConf.set(
-        HoodieStorageConfig.PARQUET_WRITE_UTC_TIMEZONE.key(),
-        writeConfig.getString(HoodieStorageConfig.PARQUET_WRITE_UTC_TIMEZONE.key()));
+        HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
+        writeConfig.getString(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key()));
     storageConf.set(
         HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(),
         HoodieFlinkIOFactory.class.getName());
@@ -98,25 +99,6 @@ public class RowDataLogWriteHandle<T, I, K, O>
   @Override
   protected SizeEstimator<HoodieRecord> getSizeEstimator() {
     return new FlinkRecordSizeEstimator();
-  }
-
-  @Override
-  protected HoodieLogBlockType getLogBlockType() {
-    Option<HoodieLogBlock.HoodieLogBlockType> logBlockTypeOpt = config.getLogDataBlockFormat();
-    if (logBlockTypeOpt.isPresent()) {
-      return logBlockTypeOpt.get();
-    }
-    // Fallback to deduce data-block type based on the base file format
-    switch (hoodieTable.getBaseFileFormat()) {
-      case PARQUET:
-      case ORC:
-        return HoodieLogBlockType.PARQUET_DATA_BLOCK;
-      case HFILE:
-        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
-      default:
-        throw new HoodieException("Base file format " + hoodieTable.getBaseFileFormat()
-            + " does not have associated log block type");
-    }
   }
 
   /**
@@ -129,6 +111,10 @@ public class RowDataLogWriteHandle<T, I, K, O>
 
   @Override
   protected void processAppendResult(AppendResult result, Option<HoodieLogBlock> dataBlock) {
+    if (getLogBlockType() == HoodieLogBlockType.AVRO_DATA_BLOCK) {
+      super.processAppendResult(result, dataBlock);
+      return;
+    }
     HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
     updateWriteStatus(result, stat);
 
@@ -194,6 +180,8 @@ public class RowDataLogWriteHandle<T, I, K, O>
             writeConfig.getParquetCompressionCodec(),
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled());
+      case AVRO_DATA_BLOCK:
+        return new HoodieFlinkAvroDataBlock(records, header, keyField);
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " is not implemented for Flink RowData append handle.");
     }

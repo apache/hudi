@@ -34,6 +34,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.avro.Schema;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -71,7 +72,7 @@ public class HoodieFlinkParquetDataBlock extends HoodieParquetDataBlock implemen
   }
 
   @Override
-  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
+  public ByteArrayOutputStream getContentBytes(HoodieStorage storage) throws IOException {
     Map<String, String> paramsMap = new HashMap<>();
     paramsMap.put(PARQUET_COMPRESSION_CODEC_NAME.key(), compressionCodecName.get());
     paramsMap.put(PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(expectedCompressionRatio.get()));
@@ -79,7 +80,7 @@ public class HoodieFlinkParquetDataBlock extends HoodieParquetDataBlock implemen
     Schema writerSchema = AvroSchemaCache.intern(new Schema.Parser().parse(
         super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA)));
 
-    Pair<byte[], Object> result =
+    Pair<ByteArrayOutputStream, Object> result =
         HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(PARQUET)
             .serializeRecordsToLogBlock(
                 storage,

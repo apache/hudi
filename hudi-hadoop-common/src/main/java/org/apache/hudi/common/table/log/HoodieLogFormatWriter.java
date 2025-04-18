@@ -34,6 +34,7 @@ import org.apache.hadoop.ipc.RemoteException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -151,12 +152,12 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       // bytes for header
       byte[] headerBytes = HoodieLogBlock.getHeaderMetadataBytes(block.getLogBlockHeader());
       // content bytes
-      byte[] content = block.getContentBytes(storage);
+      ByteArrayOutputStream content = block.getContentBytes(storage);
       // bytes for footer
       byte[] footerBytes = HoodieLogBlock.getFooterMetadataBytes(block.getLogBlockFooter());
 
       // 2. Write the total size of the block (excluding Magic)
-      outputStream.writeLong(getLogBlockLength(content.length, headerBytes.length, footerBytes.length));
+      outputStream.writeLong(getLogBlockLength(content.size(), headerBytes.length, footerBytes.length));
 
       // 3. Write the version of this log block
       outputStream.writeInt(currentLogFormatVersion.getVersion());
@@ -166,9 +167,9 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       // 5. Write the headers for the log block
       outputStream.write(headerBytes);
       // 6. Write the size of the content block
-      outputStream.writeLong(content.length);
+      outputStream.writeLong(content.size());
       // 7. Write the contents of the data block
-      outputStream.write(content);
+      content.writeTo(outputStream);
       // 8. Write the footers for the log block
       outputStream.write(footerBytes);
       // 9. Write the total size of the log block (including magic) which is everything written
