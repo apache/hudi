@@ -112,7 +112,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
     Option<String> partitionNameOpt = StringUtils.isNullOrEmpty(partitionPaths[0])
         ? Option.empty() : Option.of(partitionPaths[0]);
 
-    HoodieReaderContext ctx = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf(), );
+    HoodieReaderContext ctx = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf(), metaClient);
     ctx.setTablePath(getBasePath());
     ctx.setLatestCommitTime(metaClient.createNewInstantTime());
     ctx.setShouldMergeUseRecordPosition(true);
