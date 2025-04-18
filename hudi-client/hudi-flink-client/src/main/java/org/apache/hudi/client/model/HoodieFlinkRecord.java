@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
-import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RowDataAvroQueryContexts.RowDataQueryContext;
 
 import com.esotericsoftware.kryo.Kryo;

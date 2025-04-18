@@ -171,10 +171,10 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     if (!recordOption.isPresent() || orderingFieldName.isEmpty()) {
       return DEFAULT_ORDERING_VALUE;
     }
-    Object value = getValue(recordOption.get(), schema, orderingFieldName.get());
-    LogicalType fieldType = AvroSchemaConverter.convertToDataType(schema.getField(orderingFieldName.get()).schema()).getLogicalType();
     boolean utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
-    Comparable finalOrderingVal = (Comparable) RowDataUtils.resolveOrderingValue(fieldType, value, utcTimezone);
+    RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(orderingFieldName.get());
+
+    Comparable finalOrderingVal = (Comparable) context.getValAsJava(recordOption.get());
     metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
     return finalOrderingVal;
   }

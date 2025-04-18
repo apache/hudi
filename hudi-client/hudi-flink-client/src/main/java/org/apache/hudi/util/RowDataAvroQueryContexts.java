@@ -36,6 +36,10 @@ import java.util.function.Function;
 public class RowDataAvroQueryContexts {
   private static final Map<Schema, RowDataQueryContext> QUERY_CONTEXT_MAP = new ConcurrentHashMap<>();
 
+  public static RowDataQueryContext fromAvroSchema(Schema avroSchema) {
+    return fromAvroSchema(avroSchema, true);
+  }
+
   public static RowDataQueryContext fromAvroSchema(Schema avroSchema, boolean utcTimezone) {
     return QUERY_CONTEXT_MAP.computeIfAbsent(avroSchema, k -> {
       DataType dataType = AvroSchemaConverter.convertToDataType(avroSchema);
