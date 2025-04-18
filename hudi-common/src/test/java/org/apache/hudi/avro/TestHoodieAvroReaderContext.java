@@ -22,7 +22,6 @@ package org.apache.hudi.avro;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -39,6 +38,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -153,7 +153,7 @@ class TestHoodieAvroReaderContext {
   void getFieldNotInSchema() {
     HoodieAvroReaderContext avroReaderContext = getReaderContextWithMetaFields();
     IndexedRecord indexedRecord = createSkeletonRecord("field1", "field2", 3);
-    assertThrows(HoodieSchemaException.class, () -> avroReaderContext.getValue(indexedRecord, SKELETON_SCHEMA, "missing_field"));
+    assertNull(avroReaderContext.getValue(indexedRecord, SKELETON_SCHEMA, "missing_field"));
   }
 
   @Test

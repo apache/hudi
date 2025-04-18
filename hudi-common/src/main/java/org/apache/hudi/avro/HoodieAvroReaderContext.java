@@ -38,7 +38,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -239,7 +238,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   ) {
     Schema.Field field = recordSchema.getField(fieldName);
     if (field == null) {
-      throw new HoodieSchemaException(String.format("Field %s is not present in the schema:%s", fieldName, recordSchema));
+      return null;
     }
     int pos = field.pos();
     return record.get(pos);
