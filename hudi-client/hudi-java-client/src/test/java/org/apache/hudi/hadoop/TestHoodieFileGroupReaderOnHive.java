@@ -68,7 +68,6 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -86,11 +85,6 @@ import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getS
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBase<ArrayWritable> {
-
-  @Override
-  @Disabled("[HUDI-8072]")
-  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat, boolean populateMetaFields) throws Exception {
-  }
 
   private static final String PARTITION_COLUMN = "datestr";
   private static JobConf baseJobConf;
