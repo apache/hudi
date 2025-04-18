@@ -20,6 +20,7 @@ package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
@@ -44,8 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTestHarness {
 
-  private HoodieTestTable testTable;
-
   @BeforeEach
   public void setUpTestTable() {
     testTable = HoodieTestTable.of(metaClient);
@@ -64,6 +63,11 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     String commitTime = client.createNewInstantTime();
     insertBatch(config, client, commitTime, "000", 100, HoodieJavaWriteClient::insert,
         false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    // check that only log files exist
+    try (SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline())) {
+      Arrays.stream(dataGen.getPartitionPaths())
+          .forEach(partition -> fileSystemView.getLatestFileSlices(partition).forEach(fileSlice -> assertTrue(fileSlice.getBaseFile().isEmpty())));
+    }
 
     // Update
     String commitTimeBetweenPrevAndNew = commitTime;

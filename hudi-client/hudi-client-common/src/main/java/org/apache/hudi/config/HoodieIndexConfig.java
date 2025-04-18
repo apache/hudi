@@ -752,9 +752,9 @@ public class HoodieIndexConfig extends HoodieConfig {
     private String getDefaultIndexType(EngineType engineType) {
       switch (engineType) {
         case SPARK:
+        case JAVA:
           return HoodieIndex.IndexType.SIMPLE.name();
         case FLINK:
-        case JAVA:
           return HoodieIndex.IndexType.INMEMORY.name();
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);

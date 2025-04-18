@@ -68,7 +68,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseJavaCommitActionExecutor.class);
 
-  public BaseJavaCommitActionExecutor(HoodieEngineContext context,
+  protected BaseJavaCommitActionExecutor(HoodieEngineContext context,
                                       HoodieWriteConfig config,
                                       HoodieTable table,
                                       String instantTime,
@@ -76,12 +76,12 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     super(context, config, table, instantTime, operationType, Option.empty());
   }
 
-  public BaseJavaCommitActionExecutor(HoodieEngineContext context,
+  protected BaseJavaCommitActionExecutor(HoodieEngineContext context,
                                       HoodieWriteConfig config,
                                       HoodieTable table,
                                       String instantTime,
                                       WriteOperationType operationType,
-                                      Option extraMetadata) {
+                                      Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
   }
 
