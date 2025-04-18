@@ -26,15 +26,15 @@ import java.util.List;
 /**
  * A mock {@link Collector} that used in  {@link TestFunctionWrapper}.
  */
-class ScalaCollector<T> implements Collector<T> {
+class RecordsCollector<T> implements Collector<T> {
   private List<T> val;
 
-  public ScalaCollector() {
+  public RecordsCollector() {
     this.val = new ArrayList<>();
   }
 
-  public static <T> ScalaCollector<T> getInstance() {
-    return new ScalaCollector<>();
+  public static <T> RecordsCollector<T> getInstance() {
+    return new RecordsCollector<>();
   }
 
   @Override
