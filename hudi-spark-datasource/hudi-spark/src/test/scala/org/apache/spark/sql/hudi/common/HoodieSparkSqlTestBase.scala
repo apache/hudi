@@ -236,6 +236,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       f
     } finally {
       if (HoodieSparkUtils.gteqSpark3_1) {
+        // Spark 3.0.x does not support "RESET configuration_key"
         configNameValues.foreach { case ((configName, configValue), condition) =>
           spark.sql(s"reset $configName")
         }
