@@ -27,8 +27,9 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase;
@@ -39,11 +40,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
-import org.apache.hudi.testutils.ArrayWritableTestUtil;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.testutils.ArrayWritableTestUtil;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.Schema;
@@ -83,14 +84,12 @@ import static org.apache.hadoop.hive.ql.exec.Utilities.MAPRED_MAPPER_CLASS;
 import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getRecordKeyField;
 import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getStoredPartitionFieldNames;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBase<ArrayWritable> {
 
   @Override
   @Disabled("[HUDI-8072]")
-  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
+  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat, boolean populateMetaFields) throws Exception {
   }
 
   private static final String PARTITION_COLUMN = "datestr";
@@ -189,63 +188,17 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
       throw new RuntimeException(e);
     }
 
-    HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(context, writeConfig);
-    String instantTime = writeClient.createNewInstantTime();
-    writeClient.startCommitWithTime(instantTime);
-    if (operation.toLowerCase().equals("insert")) {
-      writeClient.insert(recordList, instantTime);
-    } else {
-      writeClient.upsert(recordList, instantTime);
-    }
-  }
-
-  @Override
-  public void validateRecordsInFileGroup(String tablePath, List<ArrayWritable> actualRecordList, Schema schema, FileSlice fileSlice, boolean isSkipMerge) {
-    assertEquals(HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA), schema);
-    String fileGroupId = fileSlice.getFileId();
-    try {
-      //prepare fg reader records to be compared to the baseline reader
-      HoodieReaderContext<ArrayWritable> readerContext = getHoodieReaderContext(tablePath, schema, storageConf);
-      Map<String, ArrayWritable> recordMap = new HashMap<>();
-      for (ArrayWritable record : actualRecordList) {
-        recordMap.put(createUniqueKey(readerContext, schema, record, isSkipMerge), record);
+    try (HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(context, writeConfig)) {
+      String instantTime = writeClient.createNewInstantTime();
+      writeClient.startCommitWithTime(instantTime);
+      // Make a copy of the records for writing. The writer will clear out the data field.
+      List<HoodieRecord> recordsCopy = new ArrayList<>(recordList.size());
+      recordList.forEach(hoodieRecord -> recordsCopy.add(new HoodieAvroRecord<>(hoodieRecord.getKey(), (HoodieRecordPayload) hoodieRecord.getData())));
+      if (operation.toLowerCase().equals("insert")) {
+        writeClient.insert(recordsCopy, instantTime);
+      } else {
+        writeClient.upsert(recordsCopy, instantTime);
       }
-
-      RecordReader<NullWritable, ArrayWritable> reader = createRecordReader(tablePath, isSkipMerge);
-      // use reader to read log file.
-      NullWritable key = reader.createKey();
-      ArrayWritable value = reader.createValue();
-      //TODO: [HUDI-8209] get rid of logFileCounts and don't guard recordMap.remove(uniqueKey);
-      Map<String, Integer> logFileCounts = new HashMap<>();
-      while (reader.next(key, value)) {
-        if (readerContext.getValue(value, schema, HoodieRecord.FILENAME_METADATA_FIELD).toString().contains(fileGroupId)) {
-          //only evaluate records from the specified filegroup. Maybe there is a way to get
-          //hive to do this?
-          String uniqueKey = createUniqueKey(readerContext, schema, value, isSkipMerge);
-          Integer seenCount = logFileCounts.get(uniqueKey);
-          boolean isLogFile = isLogFileRec(readerContext, schema, value);
-          if (!isSkipMerge || seenCount == null) {
-            ArrayWritable compVal = recordMap.remove(uniqueKey);
-            assertNotNull(compVal);
-            ArrayWritableTestUtil.assertArrayWritableEqual(schema, value, compVal, USE_FAKE_PARTITION);
-            if (isSkipMerge && isLogFile) {
-              logFileCounts.put(uniqueKey, 1);
-            }
-          } else {
-            assertTrue(isLogFile);
-            logFileCounts.put(uniqueKey, seenCount + 1);
-          }
-        }
-        key = reader.createKey();
-        value = reader.createValue();
-      }
-      reader.close();
-      assertEquals(0, recordMap.size());
-      for (Integer v : logFileCounts.values()) {
-        assertEquals(2, v);
-      }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
     }
   }
 
