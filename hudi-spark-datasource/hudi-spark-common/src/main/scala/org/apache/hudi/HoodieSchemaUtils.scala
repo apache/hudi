@@ -39,6 +39,7 @@ import org.apache.spark.sql.types.{StructField, StructType}
 import org.slf4j.LoggerFactory
 
 import java.util.Properties
+
 import scala.collection.JavaConverters._
 
 /**
