@@ -26,7 +26,7 @@ import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.internal.schema.InternalSchema
@@ -37,6 +37,8 @@ import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileS
 import org.apache.avro.Schema
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.slf4j.LoggerFactory
+
+import java.util.Properties
 
 import scala.collection.JavaConverters._
 
@@ -73,7 +75,19 @@ object HoodieSchemaUtils {
    */
   def getLatestTableInternalSchema(config: HoodieConfig,
                                    tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {
-    if (!config.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
+    getLatestTableInternalSchema(config.getProps, tableMetaClient)
+  }
+
+  /**
+   * get latest internalSchema from table
+   *
+   * @param props           instance of {@link Properties}
+   * @param tableMetaClient instance of HoodieTableMetaClient
+   * @return Option of InternalSchema. Will always be empty if schema on read is disabled
+   */
+  def getLatestTableInternalSchema(props: Properties,
+                                   tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {
+    if (!ConfigUtils.getBooleanWithAltKeys(props, DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
       None
     } else {
       try {
