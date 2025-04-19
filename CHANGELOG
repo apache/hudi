@@ -721,3 +721,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [AUDIT-1292] Changelog for release-v1.110.1 (#1325)
 [ENG-24904][HUDI-9288] Fix file group bug with uncommitted slices (#1324)
 [AUDIT-1071]: Changelog for release-v1.110.0 (#1323)
+
+--- [2025-04-19 16:03:49] [release-v1.112.0] ---
+[ENG-25434][INTERNAL] Refactor storage based lock provider from OSS upstream (#1333)
+[AUDIT-1071]: Changelog for release-v1.111.0 (#1326)
