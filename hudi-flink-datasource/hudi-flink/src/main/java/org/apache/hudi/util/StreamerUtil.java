@@ -219,7 +219,7 @@ public class StreamerUtil {
    */
   public static TypedProperties flinkConf2TypedProperties(Configuration conf) {
     Configuration flatConf = FlinkOptions.flatOptions(conf);
-    Properties properties = new Properties();
+    TypedProperties properties = new TypedProperties();
     // put all the set options
     flatConf.addAllToProperties(properties);
     // put all the default options
@@ -229,7 +229,7 @@ public class StreamerUtil {
       }
     }
     properties.put(HoodieTableConfig.TYPE.key(), conf.getString(FlinkOptions.TABLE_TYPE));
-    return new TypedProperties(properties);
+    return properties;
   }
 
   /**

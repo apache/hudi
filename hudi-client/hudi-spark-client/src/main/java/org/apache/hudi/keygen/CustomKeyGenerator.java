@@ -159,7 +159,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
   }
 
   private static TypedProperties stripPartitionPathConfig(TypedProperties props) {
-    TypedProperties filtered = new TypedProperties(props);
+    TypedProperties filtered = TypedProperties.copy(props);
     // NOTE: We have to stub it out w/ empty string, since we properties are:
     //         - Expected to bear this config
     //         - Can't be stubbed out w/ null

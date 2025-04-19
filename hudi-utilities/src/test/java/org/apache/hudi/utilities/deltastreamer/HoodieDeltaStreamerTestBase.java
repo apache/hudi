@@ -411,7 +411,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
                                        String partitionPath, String emptyBatchParam, TypedProperties extraProps,
                                          boolean skipRecordKeyField) throws IOException {
     // Properties used for testing delta-streamer with Parquet source
-    TypedProperties parquetProps = new TypedProperties(extraProps);
+    TypedProperties parquetProps = TypedProperties.copy(extraProps);
 
     if (addCommonProps) {
       populateCommonProps(parquetProps, basePath);
@@ -439,7 +439,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   }
 
   protected void prepareAvroKafkaDFSSource(String propsFileName,  Long maxEventsToReadFromKafkaSource, String topicName, String partitionPath, TypedProperties extraProps) throws IOException {
-    TypedProperties props = new TypedProperties(extraProps);
+    TypedProperties props = TypedProperties.copy(extraProps);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
     props.put(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "false");
     props.setProperty("auto.offset.reset", "earliest");

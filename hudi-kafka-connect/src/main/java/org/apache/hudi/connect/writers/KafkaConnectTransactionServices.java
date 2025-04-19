@@ -21,7 +21,6 @@ package org.apache.hudi.connect.writers;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -86,10 +85,10 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
 
     try {
       KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createAvroKeyGeneratorByType(
-          new TypedProperties(connectConfigs.getProps()));
+          connectConfigs.getProps());
       String recordKeyFields = KafkaConnectUtils.getRecordKeyColumns(keyGenerator);
       String partitionColumns = KafkaConnectUtils.getPartitionColumnsForKeyGenerator(keyGenerator,
-          new TypedProperties(connectConfigs.getProps()));
+          connectConfigs.getProps());
 
       LOG.info(String.format("Setting record key %s and partition fields %s for table %s",
           recordKeyFields, partitionColumns, tableBasePath + tableName));
