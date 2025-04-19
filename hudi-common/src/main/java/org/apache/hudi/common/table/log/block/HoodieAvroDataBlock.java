@@ -220,7 +220,11 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
     @Override
     public boolean hasNext() {
-      return readRecords < totalRecords;
+      boolean hasNext = readRecords < totalRecords;
+      if (!hasNext) {
+        close();
+      }
+      return hasNext;
     }
 
     @Override

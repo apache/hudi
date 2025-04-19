@@ -328,6 +328,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       try {
         // NOTE: This is required for idempotency
         if (eof) {
+          // eagerly close
+          close();
           return false;
         }
 
@@ -344,6 +346,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
         if (!hasRecords) {
           eof = true;
+          // eagerly close
+          close();
           return false;
         }
 
