@@ -114,7 +114,7 @@ object HoodieCreateRecordUtils {
 
         avroRecords.mapPartitions(it => {
           val sparkPartitionId = TaskContext.getPartitionId()
-          val keyGenProps = new TypedProperties(config.getProps)
+          val keyGenProps = TypedProperties.copy(config.getProps)
           if (autoGenerateRecordKeys) {
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(sparkPartitionId))
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
@@ -164,7 +164,7 @@ object HoodieCreateRecordUtils {
 
         df.queryExecution.toRdd.mapPartitions { it =>
           val sparkPartitionId = TaskContext.getPartitionId()
-          val keyGenProps = new TypedProperties(config.getProps)
+          val keyGenProps = TypedProperties.copy(config.getProps)
           if (autoGenerateRecordKeys) {
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(sparkPartitionId))
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)

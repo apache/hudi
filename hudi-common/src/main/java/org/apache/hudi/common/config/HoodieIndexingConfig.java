@@ -91,22 +91,6 @@ public class HoodieIndexingConfig extends HoodieConfig {
     super();
   }
 
-  public static void create(HoodieStorage storage, StoragePath metadataFolder, Properties properties)
-      throws IOException {
-    if (!storage.exists(metadataFolder)) {
-      storage.createDirectory(metadataFolder);
-    }
-    HoodieConfig hoodieConfig = new HoodieConfig(properties);
-    StoragePath propertyPath = new StoragePath(metadataFolder, INDEX_DEFINITION_FILE);
-    try (OutputStream outputStream = storage.create(propertyPath)) {
-      if (!hoodieConfig.contains(INDEX_NAME)) {
-        throw new IllegalArgumentException(INDEX_NAME.key() + " property needs to be specified");
-      }
-      hoodieConfig.setDefaultValue(INDEX_TYPE);
-      storeProperties(hoodieConfig.getProps(), outputStream);
-    }
-  }
-
   public static void update(HoodieStorage storage, StoragePath metadataFolder,
                             Properties updatedProps) {
     modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties);

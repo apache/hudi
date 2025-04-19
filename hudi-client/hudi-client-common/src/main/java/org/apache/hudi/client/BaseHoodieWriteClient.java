@@ -33,7 +33,6 @@ import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -105,7 +104,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -1376,7 +1374,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
-    Properties properties = writeConfig.getProps();
     // Once meta fields are disabled, it cant be re-enabled for a given table.
     if (!tableConfig.populateMetaFields() && writeConfig.populateMetaFields()) {
       throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
@@ -1385,7 +1382,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // Meta fields can be disabled only when either {@code SimpleKeyGenerator}, {@code ComplexKeyGenerator},
     // {@code NonpartitionedKeyGenerator} is used
     if (!tableConfig.populateMetaFields()) {
-      String keyGenClass = KeyGeneratorType.getKeyGeneratorClassName(new HoodieConfig(properties));
+      String keyGenClass = KeyGeneratorType.getKeyGeneratorClassName(writeConfig);
       if (StringUtils.isNullOrEmpty(keyGenClass)) {
         keyGenClass = "org.apache.hudi.keygen.SimpleKeyGenerator";
       }
@@ -1400,7 +1397,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (tableConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {
       HoodieIndex.IndexType indexType = writeConfig.getIndexType();
       if (indexType != null && indexType.equals(HoodieIndex.IndexType.BUCKET)) {
-        String bucketEngine = properties.getProperty("hoodie.index.bucket.engine");
+        String bucketEngine = writeConfig.getString("hoodie.index.bucket.engine");
         if (bucketEngine != null && bucketEngine.equals("CONSISTENT_HASHING")) {
           throw new HoodieException("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table.");
         }

@@ -161,7 +161,7 @@ class TestEightToSevenDowngradeHandler {
     existingTableProps.put(BOOTSTRAP_INDEX_TYPE.key(), BootstrapIndexType.HFILE.name());
     existingTableProps.put(KEY_GENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
-    when(tableConfig.getProps()).thenReturn(new TypedProperties(existingTableProps));
+    when(tableConfig.getProps()).thenReturn(TypedProperties.copy(existingTableProps));
     when(config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())).thenReturn("partition_field");
     when(tableConfig.getPartitionFieldProp()).thenReturn("partition_field");
     when(tableConfig.getKeyGeneratorClassName()).thenReturn("org.apache.hudi.keygen.CustomKeyGenerator");
