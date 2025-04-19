@@ -304,7 +304,12 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties prop) throws IOException {
+  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties prop) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public byte[] getAvroBytes(Schema recordSchema, Properties props) throws IOException {
     throw new UnsupportedOperationException();
   }
 

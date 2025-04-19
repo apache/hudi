@@ -217,6 +217,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     return Option.of(this);
   }
 
+  @Override
+  public byte[] getAvroBytes(Schema recordSchema, Properties props) {
+    return HoodieAvroUtils.avroToBytes(data);
+  }
+
   /**
    * NOTE: This method is declared final to make sure there's no polymorphism and therefore
    *       JIT compiler could perform more aggressive optimizations

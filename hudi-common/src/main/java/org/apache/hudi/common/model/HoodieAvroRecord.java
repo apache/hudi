@@ -227,6 +227,16 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
+  public byte[] getAvroBytes(Schema recordSchema, Properties props) throws IOException {
+    if (data instanceof BaseAvroPayload) {
+      return ((BaseAvroPayload) getData()).getRecordBytes();
+    } else {
+      Option<IndexedRecord> avroData = getData().getInsertValue(recordSchema, props);
+      return avroData.map(HoodieAvroUtils::avroToBytes).orElse(new byte[0]);
+    }
+  }
+
+  @Override
   protected final void writeRecordPayload(T payload, Kryo kryo, Output output) {
     // NOTE: Since [[orderingVal]] is polymorphic we have to write out its class
     //       to be able to properly deserialize it
