@@ -32,7 +32,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -45,6 +47,7 @@ import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_IN_RANGE;
 import static org.apache.hudi.io.hfile.HFileUtils.getValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -266,6 +269,33 @@ public class TestHFileReader {
                                                 int numEntries,
                                                 List<KeyLookUpInfo> keyLookUpInfoList) throws IOException {
     verifyHFileRead(filename, numEntries, KEY_CREATOR, VALUE_CREATOR, keyLookUpInfoList);
+  }
+
+  @Test
+  public void testReadHFileCorrupted() throws Exception {
+    List<String> keys = new ArrayList<>();
+    try (HFileReader reader = getHFileReader("/hfile/col-stats-0001-0_1-170431-5847084_20250418193125815.hfile")) {
+      reader.initializeMetadata();
+      boolean available = reader.seekTo();
+      while (available) {
+        keys.add(reader.getKeyValue().get().getKey().getContentInString());
+        available = reader.next();
+      }
+    }
+    List<String> sortedKeys = new ArrayList<>(keys);
+    Collections.sort(sortedKeys);
+    assertEquals(sortedKeys, keys);
+  }
+
+  @Test
+  public void testSeekKeyDoesNotExist() throws Exception {
+    try (HFileReader reader = getHFileReader("/hfile/col-stats-0001-0_1-170431-5847084_20250418193125815.hfile")) {
+      reader.initializeMetadata();
+      reader.seekTo();
+      reader.seekTo(new UTF8StringKey("aZud4Oj9wxA=AZcHyzibzy8=bJfAFKIt2udY/eEKkDkFba=="));
+      reader.seekTo(new UTF8StringKey("aZud4Oj9wxA=AZcHyzibzy8=bJfAFKIt2udY/eEKkDkFbg=="));
+      assertNotNull(reader.getKeyValue());
+    }
   }
 
   @Test

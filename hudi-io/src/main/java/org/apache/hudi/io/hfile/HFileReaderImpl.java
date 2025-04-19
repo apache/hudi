@@ -168,7 +168,7 @@ public class HFileReaderImpl implements HFileReader {
     if (compareCurrent == 0) {
       return SEEK_TO_FOUND;
     }
-    if (!isAtFirstKey()) {
+    if (!isAtBlockStart()) {
       // For backward seekTo after the first key, throw exception
       throw new IllegalStateException(
           "The current lookup key is less than the current position of the cursor, "
@@ -293,10 +293,14 @@ public class HFileReaderImpl implements HFileReader {
     return (HFileDataBlock) blockReader.nextBlock(HFileBlockType.DATA);
   }
 
-  private boolean isAtFirstKey() {
-    if (cursor.isValid() && !dataBlockIndexEntryMap.isEmpty()) {
-      return cursor.getOffset() == dataBlockIndexEntryMap.firstKey().getOffset() + HFILEBLOCK_HEADER_SIZE;
+  /**
+   * Returns true if the cursor is currently positioned exactly at the
+   * first KV of the *current* data block.
+   */
+  private boolean isAtBlockStart() {
+    if (!cursor.isValid() || dataBlockIndexEntryMap.isEmpty()) {
+      return false;
     }
-    return false;
+    return cursor.getOffset() == currentDataBlockEntry.orElse(dataBlockIndexEntryMap.firstEntry().getValue()).getOffset() + HFILEBLOCK_HEADER_SIZE;
   }
 }
