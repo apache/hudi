@@ -55,12 +55,12 @@ public class HoodieConfig implements Serializable {
     this.props = new TypedProperties();
   }
 
-  public HoodieConfig(Properties props) {
-    this.props = new TypedProperties(props);
-  }
-
   public HoodieConfig(TypedProperties props) {
     this.props = props;
+  }
+
+  protected HoodieConfig(Properties props) {
+    this.props = TypedProperties.copy(props);
   }
 
   public <T> void setValue(ConfigProperty<T> cfg, String val) {
@@ -273,5 +273,9 @@ public class HoodieConfig implements Serializable {
     } else {
       throw new HoodieException(errorMessage);
     }
+  }
+
+  public static HoodieConfig copy(Properties props) {
+    return new HoodieConfig(props);
   }
 }

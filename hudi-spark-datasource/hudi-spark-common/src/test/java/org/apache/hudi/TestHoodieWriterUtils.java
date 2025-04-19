@@ -39,7 +39,7 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     HoodieTableMetaClient tableMetaClient = getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(), "")
         .initTable(storageConf, tempDir.resolve("table1").toString());
     HoodieTableConfig tableConfig = tableMetaClient.getTableConfig();
-    TypedProperties properties = new TypedProperties(tableConfig.getProps());
+    TypedProperties properties = TypedProperties.copy(tableConfig.getProps());
     properties.put(HoodieTableConfig.DATABASE_NAME.key(), "databaseFromCatalog");
     Assertions.assertDoesNotThrow(() -> HoodieWriterUtils.validateTableConfig(sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(properties), tableConfig));
   }

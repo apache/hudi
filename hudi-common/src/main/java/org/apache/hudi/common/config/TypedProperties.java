@@ -39,7 +39,7 @@ public class TypedProperties extends Properties implements Serializable {
     super(null);
   }
 
-  public TypedProperties(Properties defaults) {
+  protected TypedProperties(Properties defaults) {
     if (Objects.nonNull(defaults)) {
       for (Enumeration<?> e = defaults.propertyNames(); e.hasMoreElements(); ) {
         Object k = e.nextElement();
@@ -163,5 +163,9 @@ public class TypedProperties extends Properties implements Serializable {
    */
   public static void putAll(TypedProperties props, Map<?, ?> items) {
     props.putAll(items);
+  }
+
+  public static TypedProperties copy(Properties defaults) {
+    return new TypedProperties(defaults);
   }
 }

@@ -72,7 +72,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -187,12 +186,12 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
   }
 
   protected TypedProperties setProps(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy) {
-    Properties properties = new Properties();
+    TypedProperties properties = new TypedProperties();
     properties.setProperty("hoodie.streamer.source.hoodieincr.path", basePath());
     properties.setProperty("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy",
         missingCheckpointStrategy.name());
     properties.setProperty("hoodie.streamer.source.hoodieincr.file.format", "json");
-    return new TypedProperties(properties);
+    return properties;
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(String basePath, HoodieTableMetaClient metaClient) {
