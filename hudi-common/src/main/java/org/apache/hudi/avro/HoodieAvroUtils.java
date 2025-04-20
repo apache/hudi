@@ -181,6 +181,13 @@ public class HoodieAvroUtils {
     return indexedRecordToBytes(record);
   }
 
+  /**
+   * Convert a given avro record to bytes.
+   */
+  public static byte[] avroToBytes(IndexedRecord record) {
+    return indexedRecordToBytes(record);
+  }
+
   public static <T extends IndexedRecord> byte[] indexedRecordToBytes(T record) {
     GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema(), ConvertingGenericData.INSTANCE);
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {

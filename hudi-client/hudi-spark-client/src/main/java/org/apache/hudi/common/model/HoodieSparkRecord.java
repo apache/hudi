@@ -304,6 +304,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
+  public byte[] getAvroBytes(Schema recordSchema, Properties props) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public HoodieSparkRecord copy() {
     if (!copy) {
       this.data = this.data.copy();

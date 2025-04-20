@@ -161,12 +161,12 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public byte[] serializeRecordsToLogBlock(HoodieStorage storage,
-                                           List<HoodieRecord> records,
-                                           Schema writerSchema,
-                                           Schema readerSchema,
-                                           String keyFieldName,
-                                           Map<String, String> paramsMap) throws IOException {
+  public ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
+                                                          List<HoodieRecord> records,
+                                                          Schema writerSchema,
+                                                          Schema readerSchema,
+                                                          String keyFieldName,
+                                                          Map<String, String> paramsMap) throws IOException {
     Compression.Algorithm compressionAlgorithm = getHFileCompressionAlgorithm(paramsMap);
     HFileContext context = new HFileContextBuilder()
         .withBlockSize(DEFAULT_BLOCK_SIZE_FOR_LOG_FILE)
@@ -229,7 +229,7 @@ public class HFileUtils extends FileFormatUtils {
     ostream.flush();
     ostream.close();
 
-    return baos.toByteArray();
+    return baos;
   }
 
   /**

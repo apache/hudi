@@ -32,6 +32,7 @@ import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -116,14 +117,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   @Override
-  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
+  public ByteArrayOutputStream getContentBytes(HoodieStorage storage) throws IOException {
     // In case this method is called before realizing records from content
     Option<byte[]> content = getContent();
 
     checkState(content.isPresent() || records.isPresent(), "Block is in invalid state");
 
-    if (content.isPresent()) {
-      return content.get();
+    Option<ByteArrayOutputStream> baosOpt = getContentAsByteStream();
+    if (baosOpt.isPresent()) {
+      return baosOpt.get();
     }
 
     return serializeRecords(records.get(), storage);
@@ -267,7 +269,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     );
   }
 
-  protected abstract byte[] serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException;
+  protected abstract ByteArrayOutputStream serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException;
 
   protected abstract <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException;
 

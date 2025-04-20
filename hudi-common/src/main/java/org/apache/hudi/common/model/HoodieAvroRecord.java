@@ -157,6 +157,9 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+    if (HoodieOperation.isDelete(getOperation())) {
+      return true;
+    }
     if (this.data instanceof BaseAvroPayload) {
       return ((BaseAvroPayload) this.data).isDeleted(recordSchema, props);
     } else {
@@ -215,6 +218,16 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       return Option.of(record);
     } else {
       return Option.empty();
+    }
+  }
+
+  @Override
+  public byte[] getAvroBytes(Schema recordSchema, Properties props) throws IOException {
+    if (data instanceof BaseAvroPayload) {
+      return ((BaseAvroPayload) getData()).getRecordBytes();
+    } else {
+      Option<IndexedRecord> avroData = getData().getInsertValue(recordSchema, props);
+      return avroData.map(HoodieAvroUtils::avroToBytes).orElse(new byte[0]);
     }
   }
 

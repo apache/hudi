@@ -212,6 +212,11 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 
+  @Override
+  public byte[] getAvroBytes(Schema recordSchema, Properties props) throws IOException {
+    throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
+  }
+
   private Object getValue(String name) {
     return HoodieArrayWritableAvroUtils.getWritableValue(data, objectInspector, name);
   }

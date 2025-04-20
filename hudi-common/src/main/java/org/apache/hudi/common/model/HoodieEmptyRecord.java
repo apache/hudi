@@ -150,6 +150,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
+  public byte[] getAvroBytes(Schema recordSchema, Properties props) throws IOException {
+    return new byte[0];
+  }
+
+  @Override
   public Option<Map<String, String>> getMetadata() {
     return Option.empty();
   }

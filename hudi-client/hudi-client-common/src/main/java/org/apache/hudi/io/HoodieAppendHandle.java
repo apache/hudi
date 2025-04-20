@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -280,48 +279,20 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     return hoodieRecord.getCurrentLocation() != null;
   }
 
-  private Option<HoodieRecord> prepareRecord(HoodieRecord<T> hoodieRecord) {
+  private void bufferRecord(HoodieRecord<T> hoodieRecord) {
     Option<Map<String, String>> recordMetadata = hoodieRecord.getMetadata();
     Schema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
     try {
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
       // Whether it is an update or insert record.
       boolean isUpdateRecord = isUpdateRecord(hoodieRecord);
-      // If the format can not record the operation field, nullify the DELETE payload manually.
-      boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.allowOperationMetadataField();
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
 
-      Option<HoodieRecord> finalRecordOpt = nullifyPayload ? Option.empty() : Option.of(hoodieRecord);
       // Check for delete
-      if (finalRecordOpt.isPresent() && !finalRecordOpt.get().isDelete(schema, recordProperties)) {
-        HoodieRecord finalRecord = finalRecordOpt.get();
-        // Check if the record should be ignored (special case for [[ExpressionPayload]])
-        if (finalRecord.shouldIgnore(schema, recordProperties)) {
-          return finalRecordOpt;
-        }
-
-        // Prepend meta-fields into the record
-        MetadataValues metadataValues = populateMetadataFields(finalRecord);
-        HoodieRecord populatedRecord =
-            finalRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
-
-        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-        //       it since these records will be put into the recordList(List).
-        finalRecordOpt = Option.of(populatedRecord.copy());
-        if (isUpdateRecord || isLogCompaction) {
-          updatedRecordsWritten++;
-        } else {
-          insertRecordsWritten++;
-        }
-        recordsWritten++;
+      if (!hoodieRecord.isDelete(schema, recordProperties) || config.allowOperationMetadataField()) {
+        bufferInsertAndUpdate(schema, hoodieRecord, isUpdateRecord);
       } else {
-        finalRecordOpt = Option.empty();
-        // Clear the new location as the record was deleted
-        hoodieRecord.unseal();
-        hoodieRecord.clearNewLocation();
-        hoodieRecord.seal();
-        recordsDeleted++;
+        bufferDelete(hoodieRecord);
       }
 
       writeStatus.markSuccess(hoodieRecord, recordMetadata);
@@ -329,12 +300,45 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // part of marking
       // record successful.
       hoodieRecord.deflate();
-      return finalRecordOpt;
     } catch (Exception e) {
-      LOG.error("Error writing record  " + hoodieRecord, e);
+      LOG.error("Error writing record {}", hoodieRecord, e);
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
     }
-    return Option.empty();
+  }
+
+  private void bufferInsertAndUpdate(Schema schema, HoodieRecord<T> hoodieRecord, boolean isUpdateRecord) throws IOException {
+    // Check if the record should be ignored (special case for [[ExpressionPayload]])
+    if (hoodieRecord.shouldIgnore(schema, recordProperties)) {
+      return;
+    }
+
+    // Prepend meta-fields into the record
+    MetadataValues metadataValues = populateMetadataFields(hoodieRecord);
+    HoodieRecord populatedRecord =
+        hoodieRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+
+    // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+    //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+    //       it since these records will be put into the recordList(List).
+    recordList.add(populatedRecord.copy());
+    if (isUpdateRecord || isLogCompaction) {
+      updatedRecordsWritten++;
+    } else {
+      insertRecordsWritten++;
+    }
+    recordsWritten++;
+  }
+
+  private void bufferDelete(HoodieRecord<T> hoodieRecord) {
+    // Clear the new location as the record was deleted
+    hoodieRecord.unseal();
+    hoodieRecord.clearNewLocation();
+    hoodieRecord.seal();
+    recordsDeleted++;
+
+    final Comparable<?> orderingVal = hoodieRecord.getOrderingValue(writeSchema, recordProperties);
+    long position = baseFileInstantTimeOfPositions.isPresent() ? hoodieRecord.getCurrentPosition() : -1L;
+    recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(hoodieRecord.getKey(), orderingVal), position));
   }
 
   private MetadataValues populateMetadataFields(HoodieRecord<T> hoodieRecord) {
@@ -620,22 +624,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       record.seal();
     }
     // fetch the ordering val first in case the record was deflated.
-    final Comparable<?> orderingVal = record.getOrderingValue(writeSchema, recordProperties);
-    Option<HoodieRecord> indexedRecord = prepareRecord(record);
-    if (indexedRecord.isPresent()) {
-      // Skip the ignored record.
-      try {
-        if (!indexedRecord.get().shouldIgnore(writeSchema, recordProperties)) {
-          recordList.add(indexedRecord.get());
-        }
-      } catch (IOException e) {
-        writeStatus.markFailure(record, e, record.getMetadata());
-        LOG.error("Error writing record  " + indexedRecord.get(), e);
-      }
-    } else {
-      long position = baseFileInstantTimeOfPositions.isPresent() ? record.getCurrentPosition() : -1L;
-      recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(record.getKey(), orderingVal), position));
-    }
+    bufferRecord(record);
     numberOfRecords++;
   }
 
