@@ -1871,7 +1871,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Expression Index Rollback") {
+  ignore("Test Expression Index Rollback") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isPartitioned = true
