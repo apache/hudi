@@ -94,4 +94,38 @@ class TestHoodieListData {
     emptyListData = HoodieListData.lazy(Collections.emptyList());
     assertTrue(emptyListData.isEmpty());
   }
+
+  @Test
+  void testMapPartitionsWithCloseable() {
+    String partition1 = "partition1";
+    String partition2 = "partition2";
+    HoodieData<String> input = HoodieListData.eager(Arrays.asList(partition1, partition2));
+    WrappedIterator<String> iterator = new WrappedIterator<>(Collections.singletonList("value").iterator());
+    assertEquals(1, input.mapPartitions(partition -> iterator, true).collectAsList().size());
+    assertTrue(iterator.isClosed());
+  }
+
+  @Test
+  void testFlatMapWithCloseable() {
+    String partition1 = "partition1";
+    String partition2 = "partition2";
+    WrappedIterator<String> iterator1 = new WrappedIterator<>(Collections.singletonList("value").iterator());
+    WrappedIterator<String> iterator2 = new WrappedIterator<>(Collections.singletonList("value").iterator());
+    HoodieData<String> input = HoodieListData.eager(Arrays.asList(partition1, partition2));
+    assertEquals(2, input.flatMap(partition -> partition.equals(partition1) ? iterator1 : iterator2).collectAsList().size());
+    assertTrue(iterator1.isClosed());
+    assertTrue(iterator2.isClosed());
+  }
+
+  @Test
+  void testFlatMapToPairWithCloseable() {
+    String partition1 = "partition1";
+    String partition2 = "partition2";
+    HoodieData<String> input = HoodieListData.eager(Arrays.asList(partition1, partition2));
+    WrappedIterator<Pair<String, String>> iterator1 = new WrappedIterator<>(Collections.singletonList(Pair.of("1", "value")).iterator());
+    WrappedIterator<Pair<String, String>> iterator2 = new WrappedIterator<>(Collections.singletonList(Pair.of("2", "value")).iterator());
+    assertEquals(2, input.flatMapToPair(partition -> partition.equals(partition1) ? iterator1 : iterator2).collectAsList().size());
+    assertTrue(iterator1.isClosed());
+    assertTrue(iterator2.isClosed());
+  }
 }

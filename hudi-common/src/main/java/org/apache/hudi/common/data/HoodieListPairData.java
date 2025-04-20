@@ -165,7 +165,7 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
 
       return StreamSupport.stream(
           Spliterators.spliteratorUnknownSize(mappedPairsIterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(mappedValuesIterator));
-    }), lazy);
+    }), true);
   }
 
   @Override

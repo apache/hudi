@@ -125,17 +125,19 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
         StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(
                 newIterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(newIterator)),
-        lazy
+        true
     );
   }
 
   @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
     Function<T, Iterator<O>> mapper = throwingMapWrapper(func);
-    Stream<O> mappedStream = asStream().flatMap(e ->
-        StreamSupport.stream(
-            Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true));
-    return new HoodieListData<>(mappedStream, lazy);
+    Stream<O> mappedStream = asStream().flatMap(e -> {
+      Iterator<O> iterator = mapper.apply(e);
+      return StreamSupport.stream(
+          Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(iterator));
+    });
+    return new HoodieListData<>(mappedStream, true);
   }
 
   @Override
@@ -147,7 +149,7 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
           Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(iterator));
     });
 
-    return new HoodieListPairData<>(mappedStream, lazy);
+    return new HoodieListPairData<>(mappedStream, true);
   }
 
   @Override
