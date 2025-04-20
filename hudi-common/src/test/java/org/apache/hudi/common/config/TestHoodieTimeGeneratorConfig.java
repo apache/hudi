@@ -19,7 +19,8 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.commons.lang3.StringUtils;
+import org.apache.hudi.common.util.StringUtils;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -38,7 +39,7 @@ class TestHoodieTimeGeneratorConfig {
   void testMaxSkewDefaults(String lockProvider, long expected) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(BASE_PATH.key(), "/tmp/path");
-    if (StringUtils.isNotEmpty(lockProvider)) {
+    if (!StringUtils.isNullOrEmpty(lockProvider)) {
       properties.setProperty(HoodieTimeGeneratorConfig.LOCK_PROVIDER_KEY, lockProvider);
     }
     HoodieTimeGeneratorConfig config = HoodieTimeGeneratorConfig.newBuilder().fromProperties(properties).build();
