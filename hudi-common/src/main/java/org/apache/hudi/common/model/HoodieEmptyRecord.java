@@ -98,6 +98,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
+  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
+  }
+
+  @Override
   public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
     throw new UnsupportedOperationException();
   }
@@ -147,6 +152,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
     return Option.empty();
+  }
+
+  @Override
+  public byte[] getAvroBytes(Schema recordSchema, Properties props) {
+    return new byte[0];
   }
 
   @Override

@@ -115,6 +115,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
+  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
+  }
+
+  @Override
   public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
     GenericRecord record = HoodieAvroUtils.stitchRecords((GenericRecord) data, (GenericRecord) other.getData(), targetSchema);
     return new HoodieAvroIndexedRecord(key, record, operation, metaData);
@@ -210,6 +215,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) {
     return Option.of(this);
+  }
+
+  @Override
+  public byte[] getAvroBytes(Schema recordSchema, Properties props) {
+    return HoodieAvroUtils.avroToBytes(data);
   }
 
   /**

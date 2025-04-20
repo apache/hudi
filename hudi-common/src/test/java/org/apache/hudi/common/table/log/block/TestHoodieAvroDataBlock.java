@@ -32,6 +32,9 @@ import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -50,6 +53,8 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestHoodieAvroDataBlock {
   // Record key field of the test data
@@ -304,7 +309,9 @@ public class TestHoodieAvroDataBlock {
     Map<HeaderMetadataType, String> header = new HashMap<>();
     header.put(HeaderMetadataType.SCHEMA, schema.toString());
 
-    return new HoodieAvroDataBlock(records, header, RECORD_KEY_FIELD).getContentBytes(null);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    when(storage.getConf()).thenReturn(mock(StorageConfiguration.class));
+    return new HoodieAvroDataBlock(records, header, RECORD_KEY_FIELD).getContentBytes(storage).toByteArray();
   }
 
   /**

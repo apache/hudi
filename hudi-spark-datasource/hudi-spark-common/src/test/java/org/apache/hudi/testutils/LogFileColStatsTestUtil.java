@@ -68,7 +68,7 @@ public class LogFileColStatsTestUtil {
         return Option.empty();
       }
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-          collectColumnRangeMetadata(records, fieldsToIndex, filePath, writerSchemaOpt.get());
+          collectColumnRangeMetadata(records, fieldsToIndex, filePath, writerSchemaOpt.get(), datasetMetaClient.getStorageConf());
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>(columnRangeMetadataMap.values());
       return Option.of(getColStatsEntry(filePath, columnRangeMetadataList));
     } else {

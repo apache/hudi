@@ -39,6 +39,7 @@ import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -136,6 +137,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -241,7 +243,11 @@ public class HoodieTableMetadataUtil {
    *         the collection of provided records
    */
   public static Map<String, HoodieColumnRangeMetadata<Comparable>> collectColumnRangeMetadata(
-      List<HoodieRecord> records, List<Pair<String, Schema.Field>> targetFields, String filePath, Schema recordSchema) {
+      List<HoodieRecord> records,
+      List<Pair<String, Schema.Field>> targetFields,
+      String filePath,
+      Schema recordSchema,
+      StorageConfiguration<?> storageConfig) {
     // Helper class to calculate column stats
     class ColumnStats {
       Object minValue;
@@ -252,6 +258,9 @@ public class HoodieTableMetadataUtil {
 
     HashMap<String, ColumnStats> allColumnStats = new HashMap<>();
 
+    final Properties properties = new Properties();
+    properties.setProperty(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
+        storageConfig.getString(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
     // Collect stats for all columns by iterating through records while accounting
     // corresponding stats
     records.forEach((record) -> {
@@ -273,6 +282,8 @@ public class HoodieTableMetadataUtil {
           if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
             fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
           }
+        } else if (record.getRecordType() == HoodieRecordType.FLINK) {
+          fieldValue = record.getColumnValueAsJava(recordSchema, fieldName, properties);
         } else {
           throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
         }
@@ -1713,7 +1724,7 @@ public class HoodieTableMetadataUtil {
         return Collections.emptyList();
       }
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-          collectColumnRangeMetadata(records, fieldsToIndex, getFileNameFromPath(filePath), writerSchemaOpt.get());
+          collectColumnRangeMetadata(records, fieldsToIndex, getFileNameFromPath(filePath), writerSchemaOpt.get(), datasetMetaClient.getStorage().getConf());
       return new ArrayList<>(columnRangeMetadataMap.values());
     }
     return Collections.emptyList();
