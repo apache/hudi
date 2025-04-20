@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -95,33 +96,36 @@ class TestHoodieListData {
     assertTrue(emptyListData.isEmpty());
   }
 
-  @Test
-  void testMapPartitionsWithCloseable() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testMapPartitionsWithCloseable(boolean isLazy) {
     String partition1 = "partition1";
     String partition2 = "partition2";
-    HoodieData<String> input = HoodieListData.eager(Arrays.asList(partition1, partition2));
+    HoodieData<String> input = new HoodieListData<>(Stream.of(partition1, partition2), isLazy);
     WrappedIterator<String> iterator = new WrappedIterator<>(Collections.singletonList("value").iterator());
     assertEquals(1, input.mapPartitions(partition -> iterator, true).collectAsList().size());
     assertTrue(iterator.isClosed());
   }
 
-  @Test
-  void testFlatMapWithCloseable() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testFlatMapWithCloseable(boolean isLazy) {
     String partition1 = "partition1";
     String partition2 = "partition2";
     WrappedIterator<String> iterator1 = new WrappedIterator<>(Collections.singletonList("value").iterator());
     WrappedIterator<String> iterator2 = new WrappedIterator<>(Collections.singletonList("value").iterator());
-    HoodieData<String> input = HoodieListData.eager(Arrays.asList(partition1, partition2));
+    HoodieData<String> input = new HoodieListData<>(Stream.of(partition1, partition2), isLazy);
     assertEquals(2, input.flatMap(partition -> partition.equals(partition1) ? iterator1 : iterator2).collectAsList().size());
     assertTrue(iterator1.isClosed());
     assertTrue(iterator2.isClosed());
   }
 
-  @Test
-  void testFlatMapToPairWithCloseable() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testFlatMapToPairWithCloseable(boolean isLazy) {
     String partition1 = "partition1";
     String partition2 = "partition2";
-    HoodieData<String> input = HoodieListData.lazy(Arrays.asList(partition1, partition2));
+    HoodieData<String> input = new HoodieListData<>(Stream.of(partition1, partition2), isLazy);
     WrappedIterator<Pair<String, String>> iterator1 = new WrappedIterator<>(Collections.singletonList(Pair.of("1", "value")).iterator());
     WrappedIterator<Pair<String, String>> iterator2 = new WrappedIterator<>(Collections.singletonList(Pair.of("2", "value")).iterator());
     assertEquals(2, input.flatMapToPair(partition -> partition.equals(partition1) ? iterator1 : iterator2).collectAsList().size());
