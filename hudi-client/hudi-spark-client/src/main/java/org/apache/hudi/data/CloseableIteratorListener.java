@@ -32,13 +32,18 @@ import java.util.Iterator;
  */
 public class CloseableIteratorListener implements TaskCompletionListener {
   private static final Logger LOG = LoggerFactory.getLogger(CloseableIteratorListener.class);
-  private final Iterator<?> iterator;
+  private final Object iterator;
 
-  private CloseableIteratorListener(Iterator<?> iterator) {
+  private CloseableIteratorListener(Object iterator) {
     this.iterator = iterator;
   }
 
   public static <T> Iterator<T> addListener(Iterator<T> iterator) {
+    TaskContext.get().addTaskCompletionListener(new CloseableIteratorListener(iterator));
+    return iterator;
+  }
+
+  public static <T> scala.collection.Iterator<T> addListener(scala.collection.Iterator<T> iterator) {
     TaskContext.get().addTaskCompletionListener(new CloseableIteratorListener(iterator));
     return iterator;
   }
