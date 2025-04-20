@@ -26,12 +26,17 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 
-class CloseableIteratorListener implements TaskCompletionListener {
+public class CloseableIteratorListener implements TaskCompletionListener {
   private static final Logger LOG = LoggerFactory.getLogger(CloseableIteratorListener.class);
   private final Iterator<?> iterator;
 
-  CloseableIteratorListener(Iterator<?> iterator) {
+  private CloseableIteratorListener(Iterator<?> iterator) {
     this.iterator = iterator;
+  }
+
+  public static <T> Iterator<T> addListener(Iterator<T> iterator) {
+    TaskContext.get().addTaskCompletionListener(new CloseableIteratorListener(iterator));
+    return iterator;
   }
 
   /**

@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.Partitioner;
-import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.Optional;
@@ -151,32 +150,21 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
 
   @Override
   public <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func, boolean preservesPartitioning) {
-    return HoodieJavaRDD.of(rddData.mapPartitions(iter -> {
-      Iterator<O> output = func.apply(iter);
-      TaskContext.get().addTaskCompletionListener(new CloseableIteratorListener(output));
-      return output;
-    }, preservesPartitioning));
+    return HoodieJavaRDD.of(rddData.mapPartitions(iter -> CloseableIteratorListener.addListener(func.apply(iter)), preservesPartitioning));
   }
 
   @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
     // NOTE: Unrolling this lambda into a method reference results in [[ClassCastException]]
     //       due to weird interop b/w Scala and Java
-    return HoodieJavaRDD.of(rddData.flatMap(e -> {
-      Iterator<O> output = func.apply(e);
-      TaskContext.get().addTaskCompletionListener(new CloseableIteratorListener(output));
-      return output;
-    }));
+    return HoodieJavaRDD.of(rddData.flatMap(e -> CloseableIteratorListener.addListener(func.apply(e))));
   }
 
   @Override
   public <K, V> HoodiePairData<K, V> flatMapToPair(SerializableFunction<T, Iterator<? extends Pair<K, V>>> func) {
     return HoodieJavaPairRDD.of(
-        rddData.flatMapToPair(e -> {
-          Iterator<? extends Pair<K, V>> iterator = func.apply(e);
-          TaskContext.get().addTaskCompletionListener(new CloseableIteratorListener(iterator));
-          return new MappingIterator<>(iterator, p -> new Tuple2<>(p.getKey(), p.getValue()));
-        }));
+        rddData.flatMapToPair(e ->
+            new MappingIterator<>(CloseableIteratorListener.addListener(func.apply(e)), p -> new Tuple2<>(p.getKey(), p.getValue()))));
   }
 
   @Override

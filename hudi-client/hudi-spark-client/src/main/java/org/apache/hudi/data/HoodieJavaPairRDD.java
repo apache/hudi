@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.Partitioner;
-import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.Optional;
 import org.apache.spark.sql.internal.SQLConf;
@@ -132,12 +131,7 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   public <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func) {
-    // TODO
-    return HoodieJavaPairRDD.of(pairRDDData.flatMapValues(iter -> {
-      Iterator<W> output = func.apply(iter);
-      TaskContext.get().addTaskCompletionListener(new CloseableIteratorListener(output));
-      return output;
-    }));
+    return HoodieJavaPairRDD.of(pairRDDData.flatMapValues(iter -> CloseableIteratorListener.addListener(func.apply(iter))));
   }
 
   @Override
