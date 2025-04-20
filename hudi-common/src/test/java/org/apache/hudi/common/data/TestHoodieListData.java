@@ -121,7 +121,7 @@ class TestHoodieListData {
   void testFlatMapToPairWithCloseable() {
     String partition1 = "partition1";
     String partition2 = "partition2";
-    HoodieData<String> input = HoodieListData.eager(Arrays.asList(partition1, partition2));
+    HoodieData<String> input = HoodieListData.lazy(Arrays.asList(partition1, partition2));
     WrappedIterator<Pair<String, String>> iterator1 = new WrappedIterator<>(Collections.singletonList(Pair.of("1", "value")).iterator());
     WrappedIterator<Pair<String, String>> iterator2 = new WrappedIterator<>(Collections.singletonList(Pair.of("2", "value")).iterator());
     assertEquals(2, input.flatMapToPair(partition -> partition.equals(partition1) ? iterator1 : iterator2).collectAsList().size());

@@ -125,7 +125,7 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
         StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(
                 newIterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(newIterator)),
-        true
+        lazy
     );
   }
 
@@ -137,7 +137,7 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
       return StreamSupport.stream(
           Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(iterator));
     });
-    return new HoodieListData<>(mappedStream, true);
+    return new HoodieListData<>(mappedStream, lazy);
   }
 
   @Override
@@ -149,7 +149,7 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
           Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(iterator));
     });
 
-    return new HoodieListPairData<>(mappedStream, true);
+    return new HoodieListPairData<>(mappedStream, lazy);
   }
 
   @Override
