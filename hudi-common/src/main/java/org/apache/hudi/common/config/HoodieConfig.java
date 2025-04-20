@@ -113,7 +113,7 @@ public class HoodieConfig implements Serializable {
     }
   }
 
-  public Boolean contains(String key) {
+  public boolean contains(String key) {
     return props.containsKey(key);
   }
 
