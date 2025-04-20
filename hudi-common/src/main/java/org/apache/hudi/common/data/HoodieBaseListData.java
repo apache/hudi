@@ -47,7 +47,12 @@ public abstract class HoodieBaseListData<T> {
   protected HoodieBaseListData(Stream<T> dataStream, boolean lazy) {
     // NOTE: In case this container is being instantiated by an eager parent, we have to
     //       pre-materialize the stream
-    this.data = lazy ? Either.left(dataStream) : Either.right(dataStream.collect(Collectors.toList()));
+    if (lazy) {
+      this.data = Either.left(dataStream);
+    } else {
+      this.data = Either.right(dataStream.collect(Collectors.toList()));
+      dataStream.close();
+    }
     this.lazy = lazy;
   }
 
