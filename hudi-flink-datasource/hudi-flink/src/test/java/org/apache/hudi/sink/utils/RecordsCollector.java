@@ -20,27 +20,35 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.flink.util.Collector;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * A mock {@link Collector} that used in  {@link TestFunctionWrapper}.
  */
-class ScalaCollector<T> implements Collector<T> {
-  private T val;
+class RecordsCollector<T> implements Collector<T> {
+  private List<T> val;
 
-  public static <T> ScalaCollector<T> getInstance() {
-    return new ScalaCollector<>();
+  public RecordsCollector() {
+    this.val = new ArrayList<>();
+  }
+
+  public static <T> RecordsCollector<T> getInstance() {
+    return new RecordsCollector<>();
   }
 
   @Override
   public void collect(T t) {
-    this.val = t;
+    this.val.add(t);
   }
 
   @Override
   public void close() {
+    this.val.clear();
     this.val = null;
   }
 
-  public T getVal() {
+  public List<T> getVal() {
     return val;
   }
 }
