@@ -26,6 +26,10 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
+/**
+ * Closeable iterator to use in Spark related testing to ensure that the close method is properly called after transformations.
+ * @param <T> type of record within the iterator
+ */
 class TrackingCloseableIterator<T> implements ClosableIterator<T>, Serializable {
   private static final Map<String, Boolean> IS_CLOSED_BY_ID = new HashMap<>();
   private final String id;

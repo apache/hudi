@@ -19,11 +19,15 @@
 
 package org.apache.hudi.common.data;
 
-import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import java.util.Iterator;
 
-class WrappedIterator<T> implements CloseableIterator<T> {
+/**
+ * Implementation of a {@link ClosableIterator} to help validate that the close method is properly called.
+ * @param <T> type of record within the iterator
+ */
+class WrappedIterator<T> implements ClosableIterator<T> {
   private final Iterator<T> inner;
   private boolean isClosed = false;
 
