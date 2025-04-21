@@ -41,12 +41,11 @@ AWS S3 recently introduced conditional writes, and GCS and Azure storage already
 
 ## Implementation
 
-This design implements a leader election algorithm for Apache Hudi using a single lock file per table stored in .hoodie folder by default. Each table’s lock is represented by a JSON file with the following fields:
+This design implements a leader election algorithm for Apache Hudi using a single lock file per table stored in .hoodie folder. Each table’s lock is represented by a JSON file with the following fields:
 - owner: A unique UUID identifying the lock provider instance.
 - expiration: A UTC timestamp indicating when the lock expires.
 - expired: A boolean flag marking the lock as released.
-
-Example lock file path: `s3://bucket/table/.hoodie/.locks/table_lock.json`.  An advanced user might configure the lock file path in a separate location outside the bath path, but this is not recommended for proper concurrency control among multiple writers. 
+Example lock file path: `s3://bucket/table/.hoodie/.locks/table_lock.json`.
 
 ### Diagram
 
@@ -61,9 +60,10 @@ Each `LockProvider` must implement `tryLock()` and `unlock()` however we also ne
 
 `renewLock()`:  periodically extends the lock’s expiration (the heartbeat) to continue holding the lock if allowed.
 - Update the lock file’s expiration using a conditional write that verifies the unique tag from the current lock state. If the tag does not match, the renewal fails, indicating that the lock has been lost.
+- This process will continue to retry until the lock expiration and someone else will be able to acquire the lock.
 
 `unlock()`: safely releases the lock.
-- Update the existing lock file to mark it as expired. This update is performed with a conditional write that ensures the operation is only executed if the file’s unique tag still matches the one held by the lock owner. We do not delete the current lock file, this is an unnecessary operation.
+- Update the existing lock file to mark it as expired. This update is performed with a conditional write that ensures the operation is only executed if the file’s unique tag still matches the one held by the lock owner. We do not delete the lock file, as S3 does not support conditional deletes.
 
 ### Heartbeat Manager
 
@@ -78,10 +78,11 @@ Once a lock is acquired, a dedicated heartbeat task periodically calls renewLock
 
 ### New Hudi configs
 
-- `hoodie.write.lock.conditional_write.locks_location`: default empty String (indicating that "<table_base_path>/.hoodie/.locks/table_lock.json" is used as the lock file), tells us where to write the lock file to.
-- `hoodie.write.lock.conditional_write.heartbeat_poll_ms`: default 30 sec, how often to renew each lock.
-- `hoodie.write.lock.conditional_write.lock_validity_timeout_ms`: default 5 min, how long each lock is valid for.
+- `hoodie.write.lock.storage.heartbeat.poll.secs`: default 30 sec, how often to renew each lock.
+- `hoodie.write.lock.storage.validity.timeout.secs`: default 300 sec (5 min), how long each lock is valid for.
 Also requires `hoodie.base.path`, if this does not exist it should fail.
+
+The heartbeat should always be at minimum a factor 10 less than the timeout to ensure enough retries exist to acquire the heartbeat.
 
 ### Cloud Provider Specific Details
 
