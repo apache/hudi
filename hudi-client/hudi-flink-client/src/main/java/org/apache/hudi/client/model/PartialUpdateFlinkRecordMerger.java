@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
-import org.apache.hudi.util.RowDataUtils;
 
 import org.apache.avro.Schema;
 import org.apache.flink.table.data.GenericRowData;

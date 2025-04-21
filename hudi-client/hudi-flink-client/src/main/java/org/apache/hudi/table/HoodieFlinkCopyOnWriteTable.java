@@ -440,9 +440,8 @@ public class HoodieFlinkCopyOnWriteTable<T>
       CompactionOperation operation,
       HoodieWriteConfig writeConfig,
       HoodieReaderContext readerContext) {
-    config.setDefault(writeConfig);
     FlinkFileGroupReaderBasedMergeHandle mergeHandle = new FlinkFileGroupReaderBasedMergeHandle<>(
-        config, instantTime, this, operation, taskContextSupplier, Option.empty(), readerContext);
+        writeConfig, instantTime, this, operation, taskContextSupplier, Option.empty(), readerContext);
     mergeHandle.write();
     return mergeHandle.close();
   }

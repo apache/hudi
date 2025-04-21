@@ -46,7 +46,6 @@ import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.FlinkRowProjection;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
-import org.apache.hudi.util.RowDataUtils;
 import org.apache.hudi.util.AvroConverterUtils;
 import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 
@@ -57,7 +56,6 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
@@ -135,8 +133,12 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   @Override
   public Object getValue(RowData record, Schema schema, String fieldName) {
-    RowData.FieldGetter fieldGetter = RowDataAvroQueryContexts.fromAvroSchema(schema).getFieldQueryContext(fieldName).getFieldGetter();
-    return fieldGetter.getFieldOrNull(record);
+    RowDataAvroQueryContexts.FieldQueryContext fieldQueryContext = RowDataAvroQueryContexts.fromAvroSchema(schema).getFieldQueryContext(fieldName);
+    if (fieldQueryContext == null) {
+      return null;
+    } else {
+      return fieldQueryContext.getFieldGetter().getFieldOrNull(record);
+    }
   }
 
   @Override

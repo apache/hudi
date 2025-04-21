@@ -411,6 +411,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   public abstract HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props);
 
+  // public abstract HoodieRecord updateMetaField(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props);
+
   /**
    * Support schema evolution.
    */

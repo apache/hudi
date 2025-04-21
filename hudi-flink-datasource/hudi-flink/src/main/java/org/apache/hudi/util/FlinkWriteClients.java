@@ -230,6 +230,9 @@ public class FlinkWriteClients {
             .withSchema(getSourceSchema(conf).toString())
             .withRecordMergeImplClasses(conf.get(FlinkOptions.RECORD_MERGER_IMPLS));
 
+    // infer merge impl class from payload class config.
+    // filegroup reader update merge priority
+
     Option<HoodieLockConfig> lockConfig = getLockConfig(conf);
     if (lockConfig.isPresent()) {
       builder.withLockConfig(lockConfig.get());
