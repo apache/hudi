@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -58,7 +57,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.CommonClientUtils;
@@ -72,12 +70,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -424,12 +420,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     updateWriteStatus(result, stat);
 
     if (config.isMetadataColumnStatsIndexEnabled()) {
-      Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
-          .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
-              config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
-              Option.of(this.recordMerger.getRecordType())).keySet());
-      final List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndexSet.stream()
-          .map(fieldName -> HoodieAvroUtils.getSchemaForField(writeSchemaWithMetaFields, fieldName)).collect(Collectors.toList());
       try {
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
             collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, storage.getConf());

@@ -50,7 +50,7 @@ public class LogFileColStatsTestUtil {
                                                   List<String> columnsToIndex, Option<Schema> writerSchemaOpt,
                                                   int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
-      List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndex.stream()
+      List<Pair<String, Schema>> fieldsToIndex = columnsToIndex.stream()
           .map(fieldName -> HoodieAvroUtils.getSchemaForField(writerSchemaOpt.get(), fieldName, ""))
           .collect(Collectors.toList());
       List<HoodieRecord> records = new ArrayList<>();
