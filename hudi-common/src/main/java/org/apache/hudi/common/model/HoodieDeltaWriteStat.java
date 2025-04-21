@@ -18,14 +18,10 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.Option;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Statistics about a single Hoodie delta log operation.

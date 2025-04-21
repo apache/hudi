@@ -402,7 +402,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> SECONDARY_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.enable")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable secondary index within the metadata table. "
           + " When this configuration property is enabled (`true`), the Hudi writer automatically "
@@ -953,7 +953,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     private boolean getDefaultColStatsEnable(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return true;
+          return false;
         case FLINK:
         case JAVA:
           return false; // HUDI-8814

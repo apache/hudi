@@ -88,6 +88,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.HoodieWriteHelper;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.generic.GenericRecord;
@@ -112,7 +113,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
-import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.LAZY;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
@@ -1217,19 +1217,18 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, writeFn, isPrepped, true,
         numRecords, 200, 2, populateMetaFields, metaClient.getInstantGenerator());
 
-    /*// Delete 1
+    // Delete 1
     prevCommitTime = newCommitTime2;
     String newCommitTime3 = client.createNewInstantTime();
     numRecords = 50;
 
-<<<<<<< HEAD
-    castDeleteBatch(config, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
+    castDeleteBatch(config, client, newCommitTime3, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
         0, 150, config.populateMetaFields(), metaClient.getTimelineLayout().getTimelineFactory(),
         metaClient.getInstantGenerator());
-=======
+    /*=======
     castDeleteBatch(config, client, newCommitTime3, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
         0, 150, config.populateMetaFields());
->>>>>>> 81addb3a684 (Adding optimized writes to MDT)
+    >>>>>>> 81addb3a684 (Adding optimized writes to MDT)*/
 
     // Now perform an upgrade and perform a restore operation
     HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withWriteTableVersion(HoodieTableVersion.EIGHT.versionCode()).build();
@@ -1249,16 +1248,16 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     assertTheEntireDatasetHasAllRecordsStill(200);
 
     // Perform Delete again on upgraded dataset.
-    prevCommitTime = newCommitTime;
-    newCommitTime = "006";
+    prevCommitTime = newCommitTime3;
+    newCommitTime3 = "006";
     numRecords = 50;
 
-    castDeleteBatch(newConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, isPrepped, true, 0, 150,
+    castDeleteBatch(newConfig, client, newCommitTime3, prevCommitTime, initCommitTime, numRecords, isPrepped, true, 0, 150,
         metaClient.getTimelineLayout().getTimelineFactory(), metaClient.getInstantGenerator());
 
     checkTimelineForUpsertsInternal(metaClient);
 
-    testMergeHandle(config);*/
+    testMergeHandle(config);
   }
 
   /**
