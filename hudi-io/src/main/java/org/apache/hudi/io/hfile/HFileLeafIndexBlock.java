@@ -28,6 +28,10 @@ import static org.apache.hudi.io.util.IOUtils.copy;
 import static org.apache.hudi.io.util.IOUtils.readInt;
 import static org.apache.hudi.io.util.IOUtils.readLong;
 
+/**
+ * Represents a {@link HFileBlockType#LEAF_INDEX} block, as
+ * part of a multi-level block index.
+ */
 public class HFileLeafIndexBlock extends HFileBlock {
   protected HFileLeafIndexBlock(HFileContext context,
                                 byte[] byteBuff,

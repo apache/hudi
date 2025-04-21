@@ -29,9 +29,9 @@ import java.io.IOException;
  */
 public class HFileBlockReader {
   private final HFileContext context;
+  private final long streamStartOffset;
   private final SeekableDataInputStream stream;
   private final byte[] byteBuff;
-  private long streamStartOffset;
   private int offset;
   private boolean isReadFully = false;
 

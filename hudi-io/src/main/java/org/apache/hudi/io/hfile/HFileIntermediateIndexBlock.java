@@ -19,6 +19,10 @@
 
 package org.apache.hudi.io.hfile;
 
+/**
+ * Represents a {@link HFileBlockType#INTERMEDIATE_INDEX} block, as
+ * part of a multi-level block index.
+ */
 public class HFileIntermediateIndexBlock extends HFileLeafIndexBlock {
   protected HFileIntermediateIndexBlock(HFileContext context,
                                         byte[] byteBuff,

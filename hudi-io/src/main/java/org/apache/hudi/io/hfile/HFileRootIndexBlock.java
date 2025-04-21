@@ -45,42 +45,34 @@ public class HFileRootIndexBlock extends HFileBlock {
    * Reads the index block and returns the block index entry to an in-memory {@link TreeMap}
    * for searches.
    *
-   * @param numEntries the number of entries in the block.
-   * @return a {@link TreeMap} of block index entries.
+   * @param numEntries     the number of entries in the block
+   * @param contentKeyOnly whether the key part contains content only
+   * @return a {@link TreeMap} of block index entries
    */
   public TreeMap<Key, BlockIndexEntry> readBlockIndex(int numEntries, boolean contentKeyOnly) {
     TreeMap<Key, BlockIndexEntry> blockIndexEntryMap = new TreeMap<>();
-    int buffOffset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
-    List<Key> keyList = new ArrayList<>();
-    List<Long> offsetList = new ArrayList<>();
-    List<Integer> sizeList = new ArrayList();
+    List<BlockIndexEntry> indexEntryList = readBlockIndexEntry(numEntries, contentKeyOnly);
     for (int i = 0; i < numEntries; i++) {
-      long offset = readLong(byteBuff, buffOffset);
-      int size = readInt(byteBuff, buffOffset + 8);
-      int varLongSizeOnDist = decodeVarLongSizeOnDisk(byteBuff, buffOffset + 12);
-      int keyLength = (int) readVarLong(byteBuff, buffOffset + 12, varLongSizeOnDist);
-      byte[] keyBytes = copy(byteBuff, buffOffset + 12 + varLongSizeOnDist, keyLength);
-      Key key = contentKeyOnly ? new UTF8StringKey(keyBytes) : new Key(keyBytes);
-      keyList.add(key);
-      offsetList.add(offset);
-      sizeList.add(size);
-      buffOffset += (12 + varLongSizeOnDist + keyLength);
-    }
-    for (int i = 0; i < numEntries; i++) {
-      Key key = keyList.get(i);
+      Key key = indexEntryList.get(i).getFirstKey();
       blockIndexEntryMap.put(key, new BlockIndexEntry(
-          key, i < numEntries - 1 ? Option.of(keyList.get(i + 1)) : Option.empty(),
-          offsetList.get(i), sizeList.get(i)));
+          key,
+          i < numEntries - 1 ? Option.of(indexEntryList.get(i + 1).getFirstKey()) : Option.empty(),
+          indexEntryList.get(i).getOffset(),
+          indexEntryList.get(i).getSize()));
     }
     return blockIndexEntryMap;
   }
 
   /**
    * Returns the block index entries contained in the root index block.
+   *
+   * @param numEntries     the number of entries in the block
+   * @param contentKeyOnly whether the key part contains content only
+   * @return a {@link List} of block index entries
    */
-  public List<BlockIndexEntry> readBlockIndexForMultiLevelIndex(int numEntries,
-                                                                boolean contentKeyOnly) {
-    List<BlockIndexEntry> indexEntries = new ArrayList<>();
+  public List<BlockIndexEntry> readBlockIndexEntry(int numEntries,
+                                                   boolean contentKeyOnly) {
+    List<BlockIndexEntry> indexEntryList = new ArrayList<>();
     int buffOffset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
     for (int i = 0; i < numEntries; i++) {
       long offset = readLong(byteBuff, buffOffset);
@@ -89,9 +81,9 @@ public class HFileRootIndexBlock extends HFileBlock {
       int keyLength = (int) readVarLong(byteBuff, buffOffset + 12, varLongSizeOnDist);
       byte[] keyBytes = copy(byteBuff, buffOffset + 12 + varLongSizeOnDist, keyLength);
       Key key = contentKeyOnly ? new UTF8StringKey(keyBytes) : new Key(keyBytes);
-      indexEntries.add(new BlockIndexEntry(key, Option.empty(), offset, size));
+      indexEntryList.add(new BlockIndexEntry(key, Option.empty(), offset, size));
       buffOffset += (12 + varLongSizeOnDist + keyLength);
     }
-    return indexEntries;
+    return indexEntryList;
   }
 }
