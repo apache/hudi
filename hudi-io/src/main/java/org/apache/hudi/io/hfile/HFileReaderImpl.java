@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.io.SeekableDataInputStream;
 
 import org.apache.logging.log4j.util.Strings;
@@ -330,6 +331,8 @@ public class HFileReaderImpl implements HFileReader {
   private TreeMap<Key, BlockIndexEntry> readDataBlockIndex(HFileBlockReader rootBlockReader,
                                                            int numEntries,
                                                            int levels) throws IOException {
+    ValidationUtils.checkArgument(levels > 0,
+        "levels of data block index must be greater than 0");
     // Parse root data index block
     HFileRootIndexBlock rootDataIndexBlock =
         (HFileRootIndexBlock) rootBlockReader.nextBlock(HFileBlockType.ROOT_INDEX);

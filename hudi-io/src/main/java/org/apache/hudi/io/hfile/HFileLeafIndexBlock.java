@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,7 +67,7 @@ public class HFileLeafIndexBlock extends HFileBlock {
     List<BlockIndexEntry> indexEntries = new ArrayList<>();
     int secondIndexAfterOffset = buffOffset;
     for (int i = 0; i < numEntries; i++) {
-      assert (buffOffset - secondIndexAfterOffset == relativeOffsets.get(i));
+      ValidationUtils.checkState(buffOffset - secondIndexAfterOffset == relativeOffsets.get(i));
       long offset = readLong(byteBuff, buffOffset);
       int size = readInt(byteBuff, buffOffset + 8);
       // Key parsing requires different logic than that of root index.
