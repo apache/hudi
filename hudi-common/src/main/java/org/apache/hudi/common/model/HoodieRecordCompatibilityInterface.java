@@ -52,4 +52,6 @@ public interface HoodieRecordCompatibilityInterface {
   HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException;
 
   Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException;
+
+  byte[] getAvroBytes(Schema recordSchema, Properties props) throws IOException;
 }

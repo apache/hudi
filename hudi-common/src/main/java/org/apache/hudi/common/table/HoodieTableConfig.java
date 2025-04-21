@@ -569,7 +569,7 @@ public class HoodieTableConfig extends HoodieConfig {
     if (!storage.exists(metadataFolder)) {
       storage.createDirectory(metadataFolder);
     }
-    HoodieConfig hoodieConfig = new HoodieConfig(properties);
+    HoodieConfig hoodieConfig = HoodieConfig.copy(properties);
     StoragePath propertyPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     HoodieTableVersion tableVersion = getTableVersion(hoodieConfig);
     try (OutputStream outputStream = storage.create(propertyPath)) {

@@ -44,7 +44,7 @@ public class MockConfigurationHotUpdateStrategy extends ConfigurationHotUpdateSt
   public Option<TypedProperties> updateProperties(TypedProperties currentProps) {
     if (currentProps.containsKey(UPSERT_PARALLELISM_VALUE.key())) {
       long upsertShuffleParallelism = currentProps.getLong(UPSERT_PARALLELISM_VALUE.key());
-      TypedProperties newProps = new TypedProperties(currentProps);
+      TypedProperties newProps = TypedProperties.copy(currentProps);
       newProps.setProperty(UPSERT_PARALLELISM_VALUE.key(), String.valueOf(upsertShuffleParallelism + 5));
       LOG.info("update {} from [{}] to [{}]", UPSERT_PARALLELISM_VALUE.key(), upsertShuffleParallelism, upsertShuffleParallelism + 5);
       return Option.of(newProps);

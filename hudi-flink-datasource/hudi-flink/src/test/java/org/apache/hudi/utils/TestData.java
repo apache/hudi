@@ -58,6 +58,7 @@ import org.apache.flink.table.data.conversion.DataStructureConverters;
 import org.apache.flink.table.data.writer.BinaryRowWriter;
 import org.apache.flink.table.data.writer.BinaryWriter;
 import org.apache.flink.table.runtime.typeutils.InternalSerializers;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.Row;
@@ -117,6 +118,13 @@ public class TestData {
           TimestampData.fromEpochMillis(7), StringData.fromString("par4")),
       insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
+  );
+
+  public static List<RowData> DATA_SET_INSERT_DECIMAL_ORDERING = Arrays.asList(
+      insertRow(TestConfigurations.ROW_TYPE_DECIMAL_ORDERING, StringData.fromString("id1"), StringData.fromString("Danny"),
+          23, DecimalData.fromBigDecimal(BigDecimal.TEN, 10, 0), StringData.fromString("par1")),
+      insertRow(TestConfigurations.ROW_TYPE_DECIMAL_ORDERING, StringData.fromString("id1"), StringData.fromString("Bob"),
+          44, DecimalData.fromBigDecimal(BigDecimal.ONE, 10, 0), StringData.fromString("par2"))
   );
 
   public static List<RowData> DATA_SET_INSERT_PARTITION_IS_NULL = Arrays.asList(
@@ -499,8 +507,15 @@ public class TestData {
    * Returns string format of a list of RowData.
    */
   public static String rowDataToString(List<RowData> rows) {
+    return rowDataToString(rows, TestConfigurations.ROW_DATA_TYPE);
+  }
+
+  /**
+   * Returns string format of a list of RowData.
+   */
+  public static String rowDataToString(List<RowData> rows, DataType rowType) {
     DataStructureConverter<Object, Object> converter =
-        DataStructureConverters.getConverter(TestConfigurations.ROW_DATA_TYPE);
+        DataStructureConverters.getConverter(rowType);
     return rows.stream()
         .sorted(Comparator.comparing(o -> toIdSafely(o.getString(0))))
         .map(row -> converter.toExternal(row).toString())
@@ -671,8 +686,20 @@ public class TestData {
    * @param expected Expected row data list
    */
   public static void assertRowDataEquals(List<RowData> rows, List<RowData> expected) {
-    String rowsString = rowDataToString(rows);
-    assertThat(rowsString, is(rowDataToString(expected)));
+    assertRowDataEquals(rows, expected, TestConfigurations.ROW_DATA_TYPE);
+  }
+
+  /**
+   * Sort the {@code rows} using field at index 0 and asserts
+   * it equals with the expected row data list {@code expected}.
+   *
+   * @param rows     Actual result rows
+   * @param expected Expected row data list
+   * @param rowType DataType for record
+   */
+  public static void assertRowDataEquals(List<RowData> rows, List<RowData> expected, DataType rowType) {
+    String rowsString = rowDataToString(rows, rowType);
+    assertThat(rowsString, is(rowDataToString(expected, rowType)));
   }
 
   /**

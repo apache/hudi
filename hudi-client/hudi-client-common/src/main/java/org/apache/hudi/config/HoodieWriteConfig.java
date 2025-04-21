@@ -2111,6 +2111,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieIndexConfig.BLOOM_INDEX_USE_METADATA);
   }
 
+  public String getBloomIndexInputStorageLevel() {
+    return getStringOrDefault(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE);
+  }
+
   public boolean useBloomIndexTreebasedFilter() {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_TREE_BASED_FILTER);
   }
@@ -2218,6 +2222,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieIndexConfig.SIMPLE_INDEX_PARALLELISM);
   }
 
+  public String getSimpleIndexInputStorageLevel() {
+    return getStringOrDefault(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE);
+  }
+
   public boolean getSimpleIndexUseCaching() {
     return getBoolean(HoodieIndexConfig.SIMPLE_INDEX_USE_CACHING);
   }
@@ -2268,6 +2276,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean getRecordIndexUpdatePartitionPath() {
     return getBoolean(HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE);
+  }
+
+  public String getRecordIndexInputStorageLevel() {
+    return getStringOrDefault(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE);
   }
 
   /**

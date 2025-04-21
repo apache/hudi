@@ -172,7 +172,7 @@ public class ChainedTransformer implements Transformer {
         // Ex. For id tr1, key `hoodie.streamer.transformer.sql.tr1` would be converted to
         // `hoodie.streamer.transformer.sql` and then passed to the transformer.
         String id = idOpt.get();
-        transformerProps = new TypedProperties(properties);
+        transformerProps = TypedProperties.copy(properties);
         Map<String, Object> overrideKeysMap = new HashMap<>();
         for (Map.Entry<Object, Object> entry : properties.entrySet()) {
           String key = (String) entry.getKey();

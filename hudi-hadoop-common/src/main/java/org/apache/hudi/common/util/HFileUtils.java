@@ -161,7 +161,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public byte[] serializeRecordsToLogBlock(HoodieStorage storage,
+  public ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
                                            List<HoodieRecord> records,
                                            Schema writerSchema,
                                            Schema readerSchema,
@@ -229,7 +229,7 @@ public class HFileUtils extends FileFormatUtils {
     ostream.flush();
     ostream.close();
 
-    return baos.toByteArray();
+    return baos;
   }
 
   /**
@@ -246,7 +246,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public Pair<byte[], Object> serializeRecordsToLogBlock(
+  public Pair<ByteArrayOutputStream, Object> serializeRecordsToLogBlock(
       HoodieStorage storage,
       Iterator<HoodieRecord> records,
       HoodieRecord.HoodieRecordType recordType,

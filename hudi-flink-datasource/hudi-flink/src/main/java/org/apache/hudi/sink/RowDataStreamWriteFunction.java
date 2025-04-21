@@ -219,7 +219,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
   }
 
   private void initRecordConverter() {
-    this.recordConverter = RecordConverter.getInstance(config, rowType, keyGen, writeClient.getConfig(), metaClient.getTableConfig());
+    this.recordConverter = RecordConverter.getInstance(keyGen);
   }
 
   private void initMergeClass() {

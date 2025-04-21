@@ -693,7 +693,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
                              Checkpoint expectedCheckpoint, Option<String> snapshotCheckPointImplClassOpt,
                              TypedProperties extraProps, Option<Integer> expectedRDDPartitions) {
 
-    Properties properties = new Properties();
+    TypedProperties properties = new TypedProperties();
     if (!ConfigUtils.containsConfigProperty(extraProps, HoodieWriteConfig.WRITE_TABLE_VERSION)) {
       properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(),
           String.valueOf(HoodieTableVersion.current().versionCode()));
@@ -703,8 +703,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     properties.putAll(extraProps);
     snapshotCheckPointImplClassOpt.map(className ->
         properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));
-    TypedProperties typedProperties = new TypedProperties(properties);
-    HoodieIncrSource incrSource = new HoodieIncrSource(typedProperties, jsc(), spark(), metrics, new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA), sourceProfile));
+    HoodieIncrSource incrSource = new HoodieIncrSource(properties, jsc(), spark(), metrics, new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA), sourceProfile));
 
     // read everything until latest
     Pair<Option<Dataset<Row>>, Checkpoint> batchCheckPoint = incrSource.fetchNextBatch(checkpointToPull, 500);

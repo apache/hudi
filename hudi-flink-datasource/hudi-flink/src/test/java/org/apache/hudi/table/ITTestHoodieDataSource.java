@@ -2646,19 +2646,6 @@ public class ITTestHoodieDataSource {
     return Stream.of(data).map(Arguments::of);
   }
 
-  /**
-   * Return test params => (HoodieTableType, LogBlockType).
-   */
-  private static Stream<Arguments> tableTypeAndLogBlockTypeParams() {
-    Object[][] data =
-        new Object[][] {
-            {HoodieTableType.COPY_ON_WRITE, "avro"},
-            {HoodieTableType.COPY_ON_WRITE, "parquet"},
-            {HoodieTableType.MERGE_ON_READ, "avro"},
-            {HoodieTableType.MERGE_ON_READ, "parquet"}};
-    return Stream.of(data).map(Arguments::of);
-  }
-
   public static List<Arguments> testBulkInsertWithPartitionBucketIndexParams() {
     return asList(
         Arguments.of("bulk_insert", COPY_ON_WRITE.name()),

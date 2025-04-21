@@ -382,14 +382,14 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   @Override
-  public byte[] serializeRecordsToLogBlock(HoodieStorage storage,
+  public ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
                                            List<HoodieRecord> records,
                                            Schema writerSchema,
                                            Schema readerSchema,
                                            String keyFieldName,
                                            Map<String, String> paramsMap) throws IOException {
     if (records.size() == 0) {
-      return new byte[0];
+      return new ByteArrayOutputStream(0);
     }
 
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -407,17 +407,17 @@ public class ParquetUtils extends FileFormatUtils {
       }
       outputStream.flush();
     }
-    return outputStream.toByteArray();
+    return outputStream;
   }
 
   @Override
-  public Pair<byte[], Object> serializeRecordsToLogBlock(HoodieStorage storage,
-                                                         Iterator<HoodieRecord> recordItr,
-                                                         HoodieRecord.HoodieRecordType recordType,
-                                                         Schema writerSchema,
-                                                         Schema readerSchema,
-                                                         String keyFieldName,
-                                                         Map<String, String> paramsMap) throws IOException {
+  public Pair<ByteArrayOutputStream, Object> serializeRecordsToLogBlock(HoodieStorage storage,
+                                                                        Iterator<HoodieRecord> recordItr,
+                                                                        HoodieRecord.HoodieRecordType recordType,
+                                                                        Schema writerSchema,
+                                                                        Schema readerSchema,
+                                                                        String keyFieldName,
+                                                                        Map<String, String> paramsMap) throws IOException {
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     HoodieConfig config = new HoodieConfig();
     paramsMap.entrySet().stream().forEach(entry -> config.setValue(entry.getKey(), entry.getValue()));
@@ -434,7 +434,7 @@ public class ParquetUtils extends FileFormatUtils {
     }
     outputStream.flush();
     parquetWriter.close();
-    return Pair.of(outputStream.toByteArray(), parquetWriter.getFileFormatMetadata());
+    return Pair.of(outputStream, parquetWriter.getFileFormatMetadata());
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {

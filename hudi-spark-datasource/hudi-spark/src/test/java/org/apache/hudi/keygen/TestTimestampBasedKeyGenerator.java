@@ -91,7 +91,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   private TypedProperties getBaseKeyConfig(String partitionPathField, String timestampType, String dateFormat, String timezone, String scalarType) {
-    TypedProperties properties = new TypedProperties(this.properties);
+    TypedProperties properties = TypedProperties.copy(this.properties);
 
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
     properties.setProperty(TIMESTAMP_TYPE_FIELD.key(), timestampType);
@@ -112,7 +112,7 @@ public class TestTimestampBasedKeyGenerator {
                                            String inputTimezone,
                                            String outputFormat,
                                            String outputTimezone) {
-    TypedProperties properties = new TypedProperties(this.properties);
+    TypedProperties properties = TypedProperties.copy(this.properties);
 
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
 

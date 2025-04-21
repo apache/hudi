@@ -94,4 +94,8 @@ public abstract class BaseAvroPayload implements Serializable {
     Object deleteMarker = genericRecord.get(isDeleteKey);
     return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
   }
+
+  public byte[] getRecordBytes() {
+    return recordBytes;
+  }
 }
