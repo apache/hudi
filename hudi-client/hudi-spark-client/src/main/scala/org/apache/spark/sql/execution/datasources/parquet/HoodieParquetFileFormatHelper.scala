@@ -24,7 +24,7 @@ import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, UnsafeProjection}
-import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, DoubleType, FloatType, MapType, StringType, StructField, StructType}
 
 object HoodieParquetFileFormatHelper {
 
@@ -120,7 +120,15 @@ object HoodieParquetFileFormatHelper {
           val srcType = typeChangeInfos.get(i).getRight
           val dstType = typeChangeInfos.get(i).getLeft
           val needTimeZone = Cast.needsTimeZone(srcType, dstType)
-          Cast(attr, dstType, if (needTimeZone) timeZoneId else None)
+
+          // work around for the case when cast float to double
+          if (srcType == FloatType && dstType == DoubleType) {
+            // first cast to string and then to double
+            val toStringAttr = Cast(attr, StringType, if (needTimeZone) timeZoneId else None)
+            Cast(toStringAttr, dstType, if (needTimeZone) timeZoneId else None)
+          } else {
+            Cast(attr, dstType, if (needTimeZone) timeZoneId else None)
+          }
         } else attr
       }
       GenerateUnsafeProjection.generate(castSchema, newFullSchema)
