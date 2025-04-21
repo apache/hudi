@@ -132,7 +132,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       Option<IndexedRecord> avroRecordOpt = getData().getInsertValue(recordSchema, props);
       GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecordOpt.get(), targetSchema);
       updateMetadataValuesInternal(newAvroRecord, metadataValues);
-      return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(newAvroRecord), getOperation(), this.currentLocation, this.newLocation);
+      return new HoodieAvroIndexedRecord(getKey(), newAvroRecord, getOperation(), this.currentLocation, this.newLocation);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to deserialize record!", e);
     }
@@ -143,7 +143,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     try {
       GenericRecord oldRecord = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
       GenericRecord rewriteRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(oldRecord, newSchema, renameCols);
-      return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(rewriteRecord), getOperation(), this.currentLocation, this.newLocation);
+      return new HoodieAvroIndexedRecord(getKey(), rewriteRecord, getOperation(), this.currentLocation, this.newLocation);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to deserialize record!", e);
     }
@@ -153,7 +153,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException {
     GenericRecord avroRecordPayload = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
     avroRecordPayload.put(keyFieldName, StringUtils.EMPTY_STRING);
-    return new HoodieAvroRecord<>(getKey(), new RewriteAvroPayload(avroRecordPayload), getOperation(), this.currentLocation, this.newLocation);
+    return new HoodieAvroIndexedRecord(getKey(), avroRecordPayload, getOperation(), this.currentLocation, this.newLocation);
   }
 
   @Override
