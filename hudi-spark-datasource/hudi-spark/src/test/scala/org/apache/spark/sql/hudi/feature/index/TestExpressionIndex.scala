@@ -1871,7 +1871,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     }
   }
 
-  ignore("Test Expression Index Rollback") {
+  test("Test Expression Index Rollback") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isPartitioned = true
@@ -1973,10 +1973,10 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     if (shouldRollback) {
       // rollback the operation
       val lastCompletedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants().lastInstant()
-      val writeConfig = getWriteConfig(Map.empty, metaClient.getBasePath.toString)
-      writeConfig.setValue("hoodie.metadata.index.column.stats.enable", "false")
-      writeConfig.setValue("hoodie.metadata.index.partition.stats.enable", "false")
-      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), writeConfig)
+      val configBuilder = getWriteConfigBuilder(Map.empty, metaClient.getBasePath.toString)
+      configBuilder.withMetadataConfig(HoodieMetadataConfig.newBuilder()
+        .withMetadataIndexColumnStats(false).withMetadataIndexPartitionStats(false).build())
+      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), configBuilder.build())
       writeClient.rollback(lastCompletedInstant.get().requestedTime)
       // validate the expression index
       checkAnswer(metadataSql)(
@@ -2298,11 +2298,10 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       metaClient.getActiveTimeline)
   }
 
-  private def getWriteConfig(hudiOpts: Map[String, String], basePath: String): HoodieWriteConfig = {
+  private def getWriteConfigBuilder(hudiOpts: Map[String, String], basePath: String): HoodieWriteConfig.Builder = {
     val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
     HoodieWriteConfig.newBuilder()
       .withProps(props)
       .withPath(basePath)
-      .build()
   }
 }
