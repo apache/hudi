@@ -244,7 +244,7 @@ public class HoodieTableMetadataUtil {
    */
   public static Map<String, HoodieColumnRangeMetadata<Comparable>> collectColumnRangeMetadata(
       List<HoodieRecord> records,
-      List<Pair<String, Schema.Field>> targetFields,
+      List<Pair<String, Schema>> targetFields,
       String filePath,
       Schema recordSchema,
       StorageConfiguration<?> storageConfig) {
@@ -266,9 +266,9 @@ public class HoodieTableMetadataUtil {
     records.forEach((record) -> {
       // For each column (field) we have to index update corresponding column stats
       // with the values from this record
-      targetFields.forEach(fieldNameFieldPair -> {
-        String fieldName = fieldNameFieldPair.getKey();
-        Schema fieldSchema = resolveNullableSchema(fieldNameFieldPair.getValue().schema());
+      targetFields.forEach(fieldNameSchemaPair -> {
+        String fieldName = fieldNameSchemaPair.getKey();
+        Schema fieldSchema = resolveNullableSchema(fieldNameSchemaPair.getValue());
         ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats());
         Object fieldValue;
         if (record.getRecordType() == HoodieRecordType.AVRO) {
@@ -306,9 +306,9 @@ public class HoodieTableMetadataUtil {
     });
 
     Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
-        targetFields.stream().map(fieldNameFieldPair -> {
-          String fieldName = fieldNameFieldPair.getKey();
-          Schema fieldSchema = fieldNameFieldPair.getValue().schema();
+        targetFields.stream().map(fieldNameSchemaPair -> {
+          String fieldName = fieldNameSchemaPair.getKey();
+          Schema fieldSchema = fieldNameSchemaPair.getValue();
           ColumnStats colStats = allColumnStats.get(fieldName);
           HoodieColumnRangeMetadata<Comparable> hcrm = HoodieColumnRangeMetadata.<Comparable>create(
               filePath,
@@ -1602,7 +1602,7 @@ public class HoodieTableMetadataUtil {
       Option<Schema> tableSchema = tableSchemaLazyOpt.get();
       Map<String, Schema> colsToIndexSchemaMap = new LinkedHashMap<>();
       columnsToIndex.stream().filter(fieldName -> !META_COL_SET_TO_INDEX.contains(fieldName))
-          .map(colName -> Pair.of(colName, HoodieAvroUtils.getSchemaForField(tableSchema.get(), colName).getRight().schema()))
+          .map(colName -> Pair.of(colName, HoodieAvroUtils.getSchemaForField(tableSchema.get(), colName).getRight()))
           .filter(fieldNameSchemaPair -> isColumnTypeSupported(fieldNameSchemaPair.getValue(), recordType))
           .forEach(entry -> colsToIndexSchemaMap.put(entry.getKey(), entry.getValue()));
       return colsToIndexSchemaMap;
@@ -1705,7 +1705,7 @@ public class HoodieTableMetadataUtil {
                                                                                           List<String> columnsToIndex, Option<Schema> writerSchemaOpt,
                                                                                           int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
-      List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndex.stream().map(fieldName -> HoodieAvroUtils.getSchemaForField(writerSchemaOpt.get(), fieldName))
+      List<Pair<String, Schema>> fieldsToIndex = columnsToIndex.stream().map(fieldName -> HoodieAvroUtils.getSchemaForField(writerSchemaOpt.get(), fieldName))
           .collect(Collectors.toList());
       // read log file records without merging
       List<HoodieRecord> records = new ArrayList<>();
