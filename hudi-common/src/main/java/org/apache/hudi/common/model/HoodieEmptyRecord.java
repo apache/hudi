@@ -27,6 +27,7 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
@@ -155,8 +156,8 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public byte[] getAvroBytes(Schema recordSchema, Properties props) {
-    return new byte[0];
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) {
+    return new ByteArrayOutputStream(0);
   }
 
   @Override

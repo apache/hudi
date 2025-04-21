@@ -42,6 +42,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 
+import java.io.ByteArrayOutputStream;
 import java.util.Map;
 import java.util.Properties;
 
@@ -88,9 +89,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
       if (isNullOrEmpty(orderingField)) {
         this.orderingValue = DEFAULT_ORDERING_VALUE;
       } else {
-        boolean utcTimezone = Boolean.parseBoolean(props.getProperty("read.utc-timezone", "true"));
-        RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone).getFieldQueryContext(orderingField);
-        this.orderingValue = (Comparable<?>) context.getValAsJava(this.data);
+        this.orderingValue = (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props);
       }
     }
     return this.orderingValue;
@@ -127,11 +126,11 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public Object getColumnValueAsJava(Schema recordSchema, String columns, Properties props) {
+  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
         HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
     RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
-    return rowDataQueryContext.getFieldQueryContext(columns).getValAsJava(data);
+    return rowDataQueryContext.getFieldQueryContext(column).getValAsJava(data);
   }
 
   @Override
@@ -213,11 +212,11 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public byte[] getAvroBytes(Schema recordSchema, Properties props) {
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) {
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
         HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
     RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
     IndexedRecord indexedRecord = (IndexedRecord) rowDataQueryContext.getRowDataToAvroConverter().convert(recordSchema, getData());
-    return HoodieAvroUtils.avroToBytes(indexedRecord);
+    return HoodieAvroUtils.avroToBytesStream(indexedRecord);
   }
 }

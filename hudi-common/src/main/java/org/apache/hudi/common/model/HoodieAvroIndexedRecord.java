@@ -34,6 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
@@ -218,8 +219,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public byte[] getAvroBytes(Schema recordSchema, Properties props) {
-    return HoodieAvroUtils.avroToBytes(data);
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) {
+    return HoodieAvroUtils.avroToBytesStream(data);
   }
 
   /**
