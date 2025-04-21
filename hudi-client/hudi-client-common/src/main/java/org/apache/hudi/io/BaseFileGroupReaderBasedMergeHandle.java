@@ -26,12 +26,10 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
@@ -44,7 +42,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +49,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Properties;
 import java.util.stream.Collectors;
 
 /**
@@ -164,31 +160,6 @@ public abstract class BaseFileGroupReaderBasedMergeHandle<T, I, K, O> extends Ho
   @Override
   protected void writeIncomingRecords() {
     // no operation.
-  }
-
-  /**
-   * Writes a single record to the new file.
-   *
-   * @param key                          record key
-   * @param record                       the record of {@link HoodieRecord}
-   * @param schema                       record schema
-   * @param prop                         table properties
-   * @param shouldPreserveRecordMetadata should preserve meta fields or not
-   *
-   * @throws IOException
-   */
-  protected void writeToFile(HoodieKey key, HoodieRecord record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata)
-      throws IOException {
-    // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
-    //       file holding this record even in cases when overall metadata is preserved
-    MetadataValues metadataValues = new MetadataValues().setFileName(newFilePath.getName());
-    HoodieRecord populatedRecord = record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
-
-    if (shouldPreserveRecordMetadata) {
-      fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
-    } else {
-      fileWriter.writeWithMetadata(key, populatedRecord, writeSchemaWithMetaFields);
-    }
   }
 
   @Override

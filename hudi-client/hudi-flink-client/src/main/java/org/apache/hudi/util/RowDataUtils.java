@@ -56,8 +56,9 @@ public class RowDataUtils {
    *
    * @param logicalType The logical type
    * @param utcTimezone whether to use UTC timezone for timestamp data type
+   * @param returnNullIfNotFound whether return null value if field is null
    */
-  public static Function<Object, Object> orderingValFunc(LogicalType logicalType, boolean utcTimezone) {
+  public static Function<Object, Object> orderingValFunc(LogicalType logicalType, boolean utcTimezone, boolean returnNullIfNotFound) {
     switch (logicalType.getTypeRoot()) {
       case NULL:
         return fieldVal -> null;

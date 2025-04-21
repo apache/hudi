@@ -40,17 +40,4 @@ public abstract class HoodieRowDataCreation {
         ? new HoodieRowDataWithMetaFields(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, row, withOperation)
         : new HoodieRowData(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, row, withOperation);
   }
-
-  /**
-   * Creates a {@link AbstractHoodieRowData} instance based on the given configuration.
-   */
-  public static AbstractHoodieRowData create(
-      String[] metaFields,
-      RowData row,
-      boolean withOperation,
-      boolean withMetaFields) {
-    return withMetaFields
-        ? new HoodieRowDataWithMetaFields(metaFields[0], metaFields[1], metaFields[2], metaFields[3], metaFields[4], row, withOperation)
-        : new HoodieRowData(metaFields[0], metaFields[1], metaFields[2], metaFields[3], metaFields[4], row, withOperation);
-  }
 }

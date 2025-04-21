@@ -18,79 +18,20 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.common.util.ValidationUtils;
-
-import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.RowType;
 
-import javax.annotation.Nullable;
-
-import java.util.Arrays;
-import java.util.List;
+import java.io.Serializable;
 
 /**
- * Utilities to project the row data with given positions.
+ * Interface for Flink {@link RowData} projection.
  */
-public class RowDataProjection implements FlinkRowProjection {
-  private static final long serialVersionUID = 1L;
-
-  private final RowData.FieldGetter[] fieldGetters;
-
-  protected RowDataProjection(LogicalType[] types, int[] positions) {
-    ValidationUtils.checkArgument(types.length == positions.length,
-        "types and positions should have the equal number");
-    this.fieldGetters = new RowData.FieldGetter[types.length];
-    for (int i = 0; i < types.length; i++) {
-      final LogicalType type = types[i];
-      final int pos = positions[i];
-      this.fieldGetters[i] = RowData.createFieldGetter(type, pos);
-    }
-  }
-
-  public static RowDataProjection instance(RowType rowType, int[] positions) {
-    final LogicalType[] types = rowType.getChildren().toArray(new LogicalType[0]);
-    return new RowDataProjection(types, positions);
-  }
-
-  public static RowDataProjection instanceV2(RowType rowType, int[] positions) {
-    List<LogicalType> fieldTypes = rowType.getChildren();
-    final LogicalType[] types = Arrays.stream(positions).mapToObj(fieldTypes::get).toArray(LogicalType[]::new);
-    return new RowDataProjection(types, positions);
-  }
-
-  public static RowDataProjection instance(LogicalType[] types, int[] positions) {
-    return new RowDataProjection(types, positions);
-  }
+public interface RowDataProjection extends Serializable {
 
   /**
-   * Returns the projected row data.
+   * Project on a given rowData to generate another rowData.
+   *
+   * @param rowData the row to project on
+   * @return projected rowData
    */
-  @Override
-  public RowData project(RowData rowData) {
-    GenericRowData genericRowData = new GenericRowData(this.fieldGetters.length);
-    genericRowData.setRowKind(rowData.getRowKind());
-    for (int i = 0; i < this.fieldGetters.length; i++) {
-      final Object val = this.fieldGetters[i].getFieldOrNull(rowData);
-      genericRowData.setField(i, getVal(i, val));
-    }
-    return genericRowData;
-  }
-
-  /**
-   * Returns the projected values array.
-   */
-  public Object[] projectAsValues(RowData rowData) {
-    Object[] values = new Object[this.fieldGetters.length];
-    for (int i = 0; i < this.fieldGetters.length; i++) {
-      final Object val = this.fieldGetters[i].getFieldOrNull(rowData);
-      values[i] = val;
-    }
-    return values;
-  }
-
-  protected @Nullable Object getVal(int pos, @Nullable Object val) {
-    return val;
-  }
+  RowData project(RowData rowData);
 }

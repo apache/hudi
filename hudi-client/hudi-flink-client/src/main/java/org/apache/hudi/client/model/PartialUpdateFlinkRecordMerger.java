@@ -128,7 +128,7 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
       TypedProperties props) {
     // merge older and newer, currently assume there is no schema evolution, solve it in HUDI-9253
     ValidationUtils.checkArgument(lowOrderSchema.getFields().size() == highOrderSchema.getFields().size());
-    RowData mergedRow = mergeRowData((RowData) lowOrderRecord.getData(), (RowData) highOrderRecord.getData(), highOrderSchema);
+    RowData mergedRow = mergeRowData((RowData) lowOrderRecord.getData(), (RowData) highOrderRecord.getData(), highOrderSchema, props);
     return new HoodieFlinkRecord(
         highOrderRecord.getKey(),
         highOrderRecord.getOperation(),
@@ -136,9 +136,10 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
         mergedRow);
   }
 
-  private RowData mergeRowData(RowData lowOrderRow, RowData highOrderRow, Schema schema) {
+  private RowData mergeRowData(RowData lowOrderRow, RowData highOrderRow, Schema schema, TypedProperties props) {
+    boolean utcTimezone = Boolean.parseBoolean(props.getProperty("read.utc-timezone", "true"));
     GenericRowData result = new GenericRowData(schema.getFields().size());
-    RowData.FieldGetter[] fieldGetters = RowDataAvroQueryContexts.fromAvroSchema(schema).fieldGetters();
+    RowData.FieldGetter[] fieldGetters = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone, true).fieldGetters();
     for (int i = 0; i < fieldGetters.length; i++) {
       result.setField(i, fieldGetters[i].getFieldOrNull(lowOrderRow));
       Object fieldValWithHighOrder = fieldGetters[i].getFieldOrNull(highOrderRow);

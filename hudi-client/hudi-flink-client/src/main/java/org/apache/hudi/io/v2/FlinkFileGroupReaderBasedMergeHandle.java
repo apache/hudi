@@ -36,12 +36,14 @@ import org.apache.hudi.io.BaseFileGroupReaderBasedMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.apache.flink.table.data.RowData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * An implementation of merge handle for Flink based on the {@link HoodieFileGroupReader}.
@@ -116,7 +118,7 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
           }
           // Writes the record
           try {
-            writeToFile(recordKey, record, writeSchemaWithMetaFields, config.getPayloadConfig().getProps(), preserveMetadata);
+            writeToFile(recordKey, (HoodieRecord<T>) record, writeSchemaWithMetaFields, config.getPayloadConfig().getProps(), preserveMetadata);
             writeStatus.markSuccess(record, recordMetadata);
           } catch (Exception e) {
             LOG.error("Error writing record  " + record, e);
@@ -134,6 +136,19 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
       }
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to compact file slice: " + fileSlice, e);
+    }
+  }
+
+  @Override
+  protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {
+    // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
+    //       file holding this record even in cases when overall metadata is preserved
+    HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
+
+    if (shouldPreserveRecordMetadata) {
+      fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
+    } else {
+      fileWriter.writeWithMetadata(key, populatedRecord, writeSchemaWithMetaFields);
     }
   }
 }

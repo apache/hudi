@@ -42,12 +42,10 @@ import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.FlinkRowProjection;
+import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
-import org.apache.hudi.util.AvroConverterUtils;
-import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
+import org.apache.hudi.util.SchemaEvolvingRowDataDataProjection;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -102,8 +100,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     RowDataFileReader fileReader = readerFactory.createFileReader(schemaManager, getStorageConfiguration());
 
     List<String> fieldNames = dataSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
-    List<DataType> fieldTypes = dataSchema.getFields().stream().map(
-        f -> AvroSchemaConverter.convertToDataType(f.schema())).collect(Collectors.toList());
+    List<DataType> fieldTypes = RowDataAvroQueryContexts.fromAvroSchema(dataSchema).getRowType().getChildren();
     int[] selectedFields = requiredSchema.getFields().stream().map(Schema.Field::name)
         .map(fieldNames::indexOf)
         .mapToInt(i -> i)
@@ -133,7 +130,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   @Override
   public Object getValue(RowData record, Schema schema, String fieldName) {
-    RowDataAvroQueryContexts.FieldQueryContext fieldQueryContext = RowDataAvroQueryContexts.fromAvroSchema(schema).getFieldQueryContext(fieldName);
+    boolean utcTimezone = getStorageConfiguration().getBoolean("read.utc-timezone", true);
+    RowDataAvroQueryContexts.FieldQueryContext fieldQueryContext =
+        RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(fieldName);
     if (fieldQueryContext == null) {
       return null;
     } else {
@@ -184,7 +183,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   @Override
   public RowData seal(RowData rowData) {
     if (rowDataSerializer == null) {
-      RowType requiredRowType = (RowType) AvroSchemaConverter.convertToDataType(getSchemaHandler().getRequiredSchema()).getLogicalType();
+      RowType requiredRowType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(getSchemaHandler().getRequiredSchema()).getRowType().getLogicalType();
       rowDataSerializer = new RowDataSerializer(requiredRowType);
     }
     // copy is unnecessary if there is no caching in subsequent processing.
@@ -238,9 +237,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
    */
   @Override
   public UnaryOperator<RowData> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    RowType fromType = (RowType) AvroSchemaConverter.convertToDataType(from).getLogicalType();
-    RowType toType = (RowType) AvroSchemaConverter.convertToDataType(to).getLogicalType();
-    FlinkRowProjection rowProjection = SchemaEvolvingRowDataProjection.instance(fromType, toType, renamedColumns);
+    RowType fromType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(from).getRowType().getLogicalType();
+    RowType toType =  (RowType) RowDataAvroQueryContexts.fromAvroSchema(to).getRowType().getLogicalType();
+    RowDataProjection rowProjection = SchemaEvolvingRowDataDataProjection.instance(fromType, toType, renamedColumns);
     return rowProjection::project;
   }
 
@@ -253,7 +252,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   public RowData convertAvroRecord(IndexedRecord avroRecord) {
     Schema recordSchema = avroRecord.getSchema();
     boolean utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
-    AvroToRowDataConverters.AvroToRowDataConverter converter = AvroConverterUtils.internAvroConverter(recordSchema, utcTimezone);
+    AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone).getAvroToRowDataConverter();
     return (RowData) converter.convert(avroRecord);
   }
 }

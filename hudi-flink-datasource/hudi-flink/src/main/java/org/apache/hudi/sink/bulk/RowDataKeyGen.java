@@ -25,7 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
-import org.apache.hudi.util.RowDataProjection;
+import org.apache.hudi.util.DefaultRowDataDataProjection;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -62,8 +62,8 @@ public class RowDataKeyGen implements Serializable {
   private final String[] recordKeyFields;
   private final String[] partitionPathFields;
 
-  private final RowDataProjection recordKeyProjection;
-  private final RowDataProjection partitionPathProjection;
+  private final DefaultRowDataDataProjection recordKeyProjection;
+  private final DefaultRowDataDataProjection partitionPathProjection;
 
   private final boolean hiveStylePartitioning;
   private final boolean encodePartitionPath;
@@ -287,10 +287,10 @@ public class RowDataKeyGen implements Serializable {
    * @param schemaTypes  The table schema types
    * @return the row data projection for the fields
    */
-  private static RowDataProjection getProjection(String[] fields, List<String> schemaFields, List<LogicalType> schemaTypes) {
+  private static DefaultRowDataDataProjection getProjection(String[] fields, List<String> schemaFields, List<LogicalType> schemaTypes) {
     int[] positions = getFieldPositions(fields, schemaFields);
     LogicalType[] types = Arrays.stream(positions).mapToObj(schemaTypes::get).toArray(LogicalType[]::new);
-    return RowDataProjection.instance(types, positions);
+    return DefaultRowDataDataProjection.instance(types, positions);
   }
 
   /**

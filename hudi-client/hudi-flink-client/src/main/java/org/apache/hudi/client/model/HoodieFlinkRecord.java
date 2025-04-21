@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
@@ -37,7 +38,10 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.utils.JoinedRowData;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Map;
@@ -98,7 +102,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
       if (isNullOrEmpty(orderingField)) {
         this.orderingValue = DEFAULT_ORDERING_VALUE;
       } else {
-        this.orderingValue = (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props);
+        this.orderingValue = (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props, false);
       }
     }
     return this.orderingValue;
@@ -136,9 +140,13 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    return getColumnValueAsJava(recordSchema, column, props, true);
+  }
+
+  private Object getColumnValueAsJava(Schema recordSchema, String column, Properties props, boolean returnNullIfNotFound) {
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
         HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
-    RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
+    RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone, returnNullIfNotFound);
     return rowDataQueryContext.getFieldQueryContext(column).getValAsJava(data);
   }
 
@@ -149,24 +157,24 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
-    boolean withMetaFields = recordSchema.getField(RECORD_KEY_METADATA_FIELD) != null;
-    boolean withOperationField = targetSchema.getField(OPERATION_METADATA_FIELD) != null;
-    int metaFieldSize = HOODIE_META_COLUMNS.size();
-    String[] metaFields = new String[metaFieldSize];
-    if (withMetaFields) {
-      for (int i = 0; i < metaFieldSize; i++) {
-        metaFields[i] = data.getString(i).toString();
-      }
-    }
-
-    AbstractHoodieRowData rowWithMetaFields = HoodieRowDataCreation.create(metaFields, data, withOperationField, withMetaFields);
+    int metaFieldSize = targetSchema.getFields().size() - recordSchema.getFields().size();
+    GenericRowData metaRow = new GenericRowData(metaFieldSize);
     String[] metaVals = metadataValues.getValues();
     for (int i = 0; i < metaVals.length; i++) {
       if (metaVals[i] != null) {
-        rowWithMetaFields.updateMetaField(i, metaVals[i]);
+        metaRow.setField(i, StringData.fromString(metaVals[i]));
       }
     }
-    return new HoodieFlinkRecord(key, operation, orderingValue, rowWithMetaFields);
+    return new HoodieFlinkRecord(key, operation, orderingValue, new JoinedRowData(data.getRowKind(), metaRow, data));
+  }
+
+  @Override
+  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    ValidationUtils.checkArgument(recordSchema.getField(RECORD_KEY_METADATA_FIELD) != null,
+        "The record is expected to contain metadata fields.");
+    GenericRowData rowData = (GenericRowData) getData();
+    rowData.setField(ordinal, StringData.fromString(value));
+    return this;
   }
 
   @Override

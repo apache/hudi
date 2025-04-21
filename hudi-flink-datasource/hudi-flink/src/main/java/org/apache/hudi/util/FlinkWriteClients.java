@@ -228,7 +228,7 @@ public class FlinkWriteClients {
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(conf))
             .withSchema(getSourceSchema(conf).toString())
-            .withRecordMergeImplClasses(conf.get(FlinkOptions.RECORD_MERGER_IMPLS));
+            .withRecordMergeImplClasses(StreamerUtil.getMergeClasses(conf));
 
     // infer merge impl class from payload class config.
     // filegroup reader update merge priority

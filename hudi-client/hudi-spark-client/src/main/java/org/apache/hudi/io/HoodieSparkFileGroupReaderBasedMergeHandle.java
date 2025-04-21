@@ -117,7 +117,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Base
           }
           // Writes the record
           try {
-            writeToFile(recordKey, record, writeSchemaWithMetaFields,
+            writeToFile(recordKey, (HoodieRecord<T>) record, writeSchemaWithMetaFields,
                 config.getPayloadConfig().getProps(), preserveMetadata);
             writeStatus.markSuccess(record, recordMetadata);
           } catch (Exception e) {

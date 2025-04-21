@@ -24,6 +24,7 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hudi.util.RowDataToAvroConverters.RowDataToAvroConverter;
+import org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -37,10 +38,14 @@ public class RowDataAvroQueryContexts {
   private static final Map<Schema, RowDataQueryContext> QUERY_CONTEXT_MAP = new ConcurrentHashMap<>();
 
   public static RowDataQueryContext fromAvroSchema(Schema avroSchema) {
-    return fromAvroSchema(avroSchema, true);
+    return fromAvroSchema(avroSchema, true, true);
   }
 
   public static RowDataQueryContext fromAvroSchema(Schema avroSchema, boolean utcTimezone) {
+    return fromAvroSchema(avroSchema, utcTimezone, true);
+  }
+
+  public static RowDataQueryContext fromAvroSchema(Schema avroSchema, boolean utcTimezone, boolean returnNullIfNotFound) {
     return QUERY_CONTEXT_MAP.computeIfAbsent(avroSchema, k -> {
       DataType dataType = AvroSchemaConverter.convertToDataType(avroSchema);
       RowType rowType = (RowType) dataType.getLogicalType();
@@ -51,28 +56,41 @@ public class RowDataAvroQueryContexts {
         LogicalType fieldType = rowFields[i].getType();
         RowData.FieldGetter fieldGetter = RowData.createFieldGetter(rowFields[i].getType(), i);
         fieldGetters[i] = fieldGetter;
-        contextMap.put(rowFields[i].getName(), FieldQueryContext.create(fieldType, fieldGetter, utcTimezone));
+        contextMap.put(rowFields[i].getName(), FieldQueryContext.create(fieldType, fieldGetter, utcTimezone, returnNullIfNotFound));
       }
       RowDataToAvroConverter rowDataToAvroConverter = RowDataToAvroConverters.createConverter(rowType, utcTimezone);
-      return RowDataQueryContext.create(contextMap, fieldGetters, rowDataToAvroConverter);
+      AvroToRowDataConverter avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType, utcTimezone);
+      return RowDataQueryContext.create(dataType, contextMap, fieldGetters, rowDataToAvroConverter, avroToRowDataConverter);
     });
   }
 
   public static class RowDataQueryContext {
+    private final DataType rowType;
     private final Map<String, FieldQueryContext> contextMap;
     private final RowData.FieldGetter[] fieldGetters;
     private final RowDataToAvroConverter rowDataToAvroConverter;
-    private RowDataQueryContext(Map<String, FieldQueryContext> contextMap, RowData.FieldGetter[] fieldGetters, RowDataToAvroConverter rowDataAvroConverter) {
+    private final AvroToRowDataConverter avroToRowDataConverter;
+
+    private RowDataQueryContext(
+        DataType rowType,
+        Map<String, FieldQueryContext> contextMap,
+        RowData.FieldGetter[] fieldGetters,
+        RowDataToAvroConverter rowDataAvroConverter,
+        AvroToRowDataConverter avroToRowDataConverter) {
+      this.rowType = rowType;
       this.contextMap = contextMap;
       this.fieldGetters = fieldGetters;
       this.rowDataToAvroConverter = rowDataAvroConverter;
+      this.avroToRowDataConverter = avroToRowDataConverter;
     }
 
     public static RowDataQueryContext create(
+        DataType rowType,
         Map<String, FieldQueryContext> contextMap,
         RowData.FieldGetter[] fieldGetters,
-        RowDataToAvroConverter rowDataToAvroConverter) {
-      return new RowDataQueryContext(contextMap, fieldGetters, rowDataToAvroConverter);
+        RowDataToAvroConverter rowDataToAvroConverter,
+        AvroToRowDataConverter avroToRowDataConverter) {
+      return new RowDataQueryContext(rowType, contextMap, fieldGetters, rowDataToAvroConverter, avroToRowDataConverter);
     }
 
     public FieldQueryContext getFieldQueryContext(String fieldName) {
@@ -86,20 +104,28 @@ public class RowDataAvroQueryContexts {
     public RowDataToAvroConverter getRowDataToAvroConverter() {
       return rowDataToAvroConverter;
     }
+
+    public AvroToRowDataConverter getAvroToRowDataConverter() {
+      return avroToRowDataConverter;
+    }
+
+    public DataType getRowType() {
+      return this.rowType;
+    }
   }
 
   public static class FieldQueryContext {
     private final LogicalType logicalType;
     private final RowData.FieldGetter fieldGetter;
     private final Function<Object, Object> javaTypeConverter;
-    private FieldQueryContext(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone) {
+    private FieldQueryContext(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone, boolean returnNullIfNotFound) {
       this.logicalType = logicalType;
       this.fieldGetter = fieldGetter;
-      this.javaTypeConverter = RowDataUtils.orderingValFunc(logicalType, utcTimezone);
+      this.javaTypeConverter = RowDataUtils.orderingValFunc(logicalType, utcTimezone, returnNullIfNotFound);
     }
 
-    public static FieldQueryContext create(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone) {
-      return new FieldQueryContext(logicalType, fieldGetter, utcTimezone);
+    public static FieldQueryContext create(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone, boolean returnNullIfNotFound) {
+      return new FieldQueryContext(logicalType, fieldGetter, utcTimezone, returnNullIfNotFound);
     }
 
     public LogicalType getLogicalType() {

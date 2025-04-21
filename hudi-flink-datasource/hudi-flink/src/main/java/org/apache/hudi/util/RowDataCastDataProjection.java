@@ -27,15 +27,15 @@ import javax.annotation.Nullable;
 import java.util.stream.IntStream;
 
 /**
- * This class is responsible to project row as well as {@link RowDataProjection}.
+ * This class is responsible to project row as well as {@link DefaultRowDataDataProjection}.
  * In addition, fields are converted according to the CastMap.
  */
-public final class RowDataCastProjection extends RowDataProjection {
+public final class RowDataCastDataProjection extends DefaultRowDataDataProjection {
   private static final long serialVersionUID = 1L;
 
   private final CastMap castMap;
 
-  public RowDataCastProjection(LogicalType[] types, CastMap castMap) {
+  public RowDataCastDataProjection(LogicalType[] types, CastMap castMap) {
     super(types, IntStream.range(0, types.length).toArray());
     this.castMap = castMap;
   }
