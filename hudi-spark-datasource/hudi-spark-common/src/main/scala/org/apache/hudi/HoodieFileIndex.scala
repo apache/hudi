@@ -175,29 +175,10 @@ case class HoodieFileIndex(spark: SparkSession,
     val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
       case (partitionOpt, fileSlices) =>
         if (shouldEmbedFileSlices) {
-          val logFileEstimationFraction = options.getOrElse(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key(),
-            HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()).toDouble
-          // 1. Generate a disguised representative file for each file slice, which spark uses to optimize rdd partition parallelism based on data such as file size
-          // For file slice only has base file, we directly use the base file size as representative file size
-          // For file slice has log file, we estimate the representative file size based on the log file size and option(base file) size
-          val delegateFiles = fileSlices.map(slice => {
-            val estimationFileSize = slice.getTotalFileSizeAsParquetFormat(logFileEstimationFraction)
-            val fileInfo = if (slice.getBaseFile.isPresent) {
-              slice.getBaseFile.get().getPathInfo
-            } else {
-              slice.getLogFiles.findAny().get().getPathInfo
-            }
-            new FileStatus(estimationFileSize, fileInfo.isDirectory, 0, fileInfo.getBlockSize, fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri))
-          })
-          // 2. Generate a mapping from fileId to file slice
-          val c = fileSlices.filter(f => f.hasLogFiles || f.hasBootstrapBase).foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
-          if (c.nonEmpty) {
-            sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-              new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), delegateFiles)
-          } else {
-            sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-              InternalRow.fromSeq(partitionOpt.get.values), delegateFiles)
-          }
+          SparkPartitionFileUtils.convertFileSlicesToPartitionDirectory(
+            partitionOpt,
+            fileSlices,
+            options)
         } else {
           val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
             val baseFileStatusOpt = getBaseFileInfo(Option.apply(fs.getBaseFile.orElse(null)))
