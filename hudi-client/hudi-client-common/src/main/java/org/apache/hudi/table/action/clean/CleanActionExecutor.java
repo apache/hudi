@@ -257,8 +257,13 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       }
 
       for (HoodieInstant hoodieInstant : pendingCleanInstants) {
-        if (table.getCleanTimeline().isEmpty(hoodieInstant)) {
+        if (table.getCleanTimeline().isEmpty(CleanerUtils.getCleanRequestInstant(table.getMetaClient(), hoodieInstant))) {
+          // remove the empty instant
           table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);
+          if (hoodieInstant.isInflight()) {
+            // if the instant is the inflight one, we need to delete the requested also
+            table.getActiveTimeline().deleteEmptyInstantIfExists(CleanerUtils.getCleanRequestInstant(table.getMetaClient(), hoodieInstant));
+          }
         } else {
           LOG.info("Finishing previously unfinished cleaner instant=" + hoodieInstant);
           try {
