@@ -21,6 +21,7 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 
+import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_BLOCK_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_IN_RANGE;
 import static org.apache.hudi.io.hfile.KeyValue.KEY_OFFSET;
@@ -55,9 +56,19 @@ public class HFileDataBlock extends HFileBlock {
    * @param key                    key to look up.
    * @param blockStartOffsetInFile the start offset of the block relative to the beginning of the
    *                               HFile.
-   * @return 0 if the block contains the exact same key as the lookup key, and the cursor points
-   * to the key; or 1 if the lookup key does not exist, and the cursor points to the
-   * lexicographically largest key that is smaller than the lookup key.
+   * @return 0 ({@link HFileReader#SEEK_TO_FOUND}) if the block contains the exact same key as
+   * the lookup key; the cursor points to the key;
+   * 1 ({@link HFileReader#SEEK_TO_IN_RANGE}) if the lookup key does not exist, and the lookup
+   * key is lexicographically greater than the actual first key of the data block and
+   * lexicographically smaller than the start key of the next data block based on the block index,
+   * or lexicographically smaller than or equal to the last key of the file if the data block is
+   * the last one; the cursor points to the lexicographically largest key that is smaller
+   * than the lookup key;
+   * -2 (@link HFileReader#SEEK_TO_BEFORE_BLOCK_FIRST_KEY) if the lookup key does not exist,
+   * and the lookup key is lexicographically greater than or equal to the fake first key of the
+   * data block based on the block index and lexicographically smaller than the actual first key
+   * of the data block; the cursor points to the actual first key of the data block which is
+   * lexicographically greater than the lookup key.
    */
   public int seekTo(HFileCursor cursor, Key key, int blockStartOffsetInFile) {
     int relativeOffset = cursor.getOffset() - blockStartOffsetInFile;
@@ -84,7 +95,10 @@ public class HFileDataBlock extends HFileBlock {
           // Otherwise, defer the read till it's needed
           cursor.setOffset(lastRelativeOffset + blockStartOffsetInFile);
         }
-        return SEEK_TO_IN_RANGE;
+        // If the lookup key is lexicographically smaller than the first key pointed to by
+        // the cursor, SEEK_TO_BEFORE_BLOCK_FIRST_KEY should be returned, so the caller
+        // know that the cursor is ahead of the lookup key in this case.
+        return isAtFirstKey(relativeOffset) ? SEEK_TO_BEFORE_BLOCK_FIRST_KEY : SEEK_TO_IN_RANGE;
       }
       long increment =
           (long) KEY_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength()
@@ -130,5 +144,9 @@ public class HFileDataBlock extends HFileBlock {
     cursor.increment((long) KEY_OFFSET + (long) keyValue.get().getKeyLength()
         + (long) keyValue.get().getValueLength() + ZERO_TS_VERSION_BYTE_LENGTH);
     return cursor.getOffset() - blockStartOffsetInFile < uncompressedContentEndRelativeOffset;
+  }
+
+  private boolean isAtFirstKey(int relativeOffset) {
+    return relativeOffset == HFILEBLOCK_HEADER_SIZE;
   }
 }

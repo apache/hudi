@@ -168,14 +168,28 @@ public class HFileReaderImpl implements HFileReader {
     if (compareCurrent == 0) {
       return SEEK_TO_FOUND;
     }
-    if (!isAtFirstKey()) {
-      // For backward seekTo after the first key, throw exception
-      throw new IllegalStateException(
-          "The current lookup key is less than the current position of the cursor, "
-              + "i.e., backward seekTo, which is not supported and should be avoided. "
-              + "key=" + key + " cursor=" + cursor);
+    // compareCurrent < 0, i.e., the lookup key is lexicographically smaller than
+    // the key at the current cursor
+    // We need to check two cases that are allowed:
+    // 1. The lookup key is lexicographically greater than or equal to the fake first key
+    // of the data block based on the block index and lexicographically smaller than
+    // the actual first key of the data block
+    // See HFileReader#SEEK_TO_BEFORE_BLOCK_FIRST_KEY for more information
+    if (isAtFirstKeyOfBlock(currentDataBlockEntry.get())
+        && key.compareTo(currentDataBlockEntry.get().getFirstKey()) >= 0) {
+      return SEEK_TO_BEFORE_BLOCK_FIRST_KEY;
     }
-    return SEEK_TO_BEFORE_FIRST_KEY;
+    // 2. The lookup key is lexicographically smaller than the first key of the file
+    if (!dataBlockIndexEntryMap.isEmpty()
+        && isAtFirstKeyOfBlock(dataBlockIndexEntryMap.firstEntry().getValue())) {
+      // the lookup key is lexicographically smaller than the first key of the file
+      return SEEK_TO_BEFORE_FILE_FIRST_KEY;
+    }
+    // For invalid backward seekTo, throw exception
+    throw new IllegalStateException(
+        "The current lookup key is less than the current position of the cursor, "
+            + "i.e., backward seekTo, which is not supported and should be avoided. "
+            + "key=" + key + " cursor=" + cursor);
   }
 
   @Override
@@ -293,9 +307,9 @@ public class HFileReaderImpl implements HFileReader {
     return (HFileDataBlock) blockReader.nextBlock(HFileBlockType.DATA);
   }
 
-  private boolean isAtFirstKey() {
-    if (cursor.isValid() && !dataBlockIndexEntryMap.isEmpty()) {
-      return cursor.getOffset() == dataBlockIndexEntryMap.firstKey().getOffset() + HFILEBLOCK_HEADER_SIZE;
+  private boolean isAtFirstKeyOfBlock(BlockIndexEntry indexEntry) {
+    if (cursor.isValid()) {
+      return cursor.getOffset() == indexEntry.getOffset() + HFILEBLOCK_HEADER_SIZE;
     }
     return false;
   }
