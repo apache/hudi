@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
@@ -168,6 +169,10 @@ public class CleanerUtils {
   public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
     CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
+    InstantGenerator instantGenerator = metaClient.getInstantGenerator();
+    if (cleanInstant.isInflight() || cleanInstant.isCompleted()) {
+      cleanInstant = instantGenerator.getRequestedInstant(cleanInstant);
+    }
     HoodieCleanerPlan cleanerPlan = metaClient.getActiveTimeline().readCleanerPlan(cleanInstant);
     return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
   }

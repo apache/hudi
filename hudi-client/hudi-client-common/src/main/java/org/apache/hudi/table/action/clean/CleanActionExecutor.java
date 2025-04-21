@@ -209,7 +209,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     try {
       final HoodieTimer timer = HoodieTimer.start();
       if (cleanInstant.isRequested()) {
-        inflightInstant = table.getActiveTimeline().transitionCleanRequestedToInflight(cleanInstant, Option.of(cleanerPlan));
+        inflightInstant = table.getActiveTimeline().transitionCleanRequestedToInflight(cleanInstant);
       } else {
         inflightInstant = cleanInstant;
       }
