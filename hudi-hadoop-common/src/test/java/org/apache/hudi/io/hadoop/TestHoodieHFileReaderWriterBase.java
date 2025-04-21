@@ -311,17 +311,16 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
           .map(r -> (GenericRecord) r.getData()).collect(Collectors.toList());
       Iterator<IndexedRecord> iterator = hfileReader.getIndexedRecordsByKeysIterator(
           Arrays.asList("key000000", "key000066-abcdefghij", "key001424-aa", "key001424-aaa",
-              "key004958-abcdefghij", "key010769", "key01988", "key030000"),
+              "key004958-abcdefghij", "key010769", "key019889-abcdefghij", "key030000"),
           avroSchema);
       List<GenericRecord> actual =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
               .collect(Collectors.toList());
       List<GenericRecord> expected = allRecords.stream().filter(entry -> (
-          (entry.get("_row_key").toString()).contains("key000066-abcdefghij")
-              || (entry.get("_row_key").toString()).contains("key004958-abcdefghij")
-              || (entry.get("_row_key").toString()).contains("key010769")
-              || (entry.get("_row_key").toString()).contains("key01988"))).collect(Collectors.toList());
+          (entry.get("_row_key").toString()).equals("key000066-abcdefghij")
+              || (entry.get("_row_key").toString()).equals("key004958-abcdefghij")
+              || (entry.get("_row_key").toString()).equals("key019889-abcdefghij"))).collect(Collectors.toList());
       assertEquals(expected, actual);
     }
   }
