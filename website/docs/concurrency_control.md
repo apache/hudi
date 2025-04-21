@@ -46,6 +46,7 @@ There are 4 different lock providers that require different configurations to be
 hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.StorageBasedLockProvider
 ```
 No configs are required for this lock provider, however as of 1.0.2 this lock provider is only supported for S3.
+All writers compete to acquire a lock using the file `.hoodie/.locks/table_lock.json`.
 
 #### Zookeeper based
 ```
