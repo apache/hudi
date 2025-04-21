@@ -340,7 +340,7 @@ public class HFileReaderImpl implements HFileReader {
 
     // Multi-level data block index
     // This list stores next patch of leaf index entries in order
-    List<BlockIndexEntry> indexEntries =
+    List<BlockIndexEntry> indexEntryList =
         rootDataIndexBlock.readBlockIndexEntry(numEntries, false);
     levels--;
 
@@ -348,8 +348,8 @@ public class HFileReaderImpl implements HFileReader {
     Queue<BlockIndexEntry> queue = new LinkedList<>();
     while (levels >= 1) {
       // (2) Put intermediate / leaf index entries to the queue
-      queue.addAll(indexEntries);
-      indexEntries.clear();
+      queue.addAll(indexEntryList);
+      indexEntryList.clear();
 
       // (3) BFS
       while (!queue.isEmpty()) {
@@ -359,7 +359,7 @@ public class HFileReaderImpl implements HFileReader {
         HFileBlockType blockType = levels > 1
             ? HFileBlockType.INTERMEDIATE_INDEX : HFileBlockType.LEAF_INDEX;
         HFileBlock tempBlock = blockReader.nextBlock(blockType);
-        indexEntries.addAll(
+        indexEntryList.addAll(
             ((HFileLeafIndexBlock) tempBlock).readBlockIndex(false));
       }
 
@@ -369,17 +369,17 @@ public class HFileReaderImpl implements HFileReader {
 
     // (5) Now all entries are data block index entries. Put them into the map
     TreeMap<Key, BlockIndexEntry> blockIndexEntryMap = new TreeMap<>();
-    for (int i = 0; i < indexEntries.size(); i++) {
-      Key key = indexEntries.get(i).getFirstKey();
+    for (int i = 0; i < indexEntryList.size(); i++) {
+      Key key = indexEntryList.get(i).getFirstKey();
       blockIndexEntryMap.put(
           key,
           new BlockIndexEntry(
               key,
-              i < indexEntries.size() - 1
-                  ? Option.of(indexEntries.get(i + 1).getFirstKey())
+              i < indexEntryList.size() - 1
+                  ? Option.of(indexEntryList.get(i + 1).getFirstKey())
                   : Option.empty(),
-              indexEntries.get(i).getOffset(),
-              indexEntries.get(i).getSize()));
+              indexEntryList.get(i).getOffset(),
+              indexEntryList.get(i).getSize()));
     }
 
     // (6) Returns the combined index entry map
