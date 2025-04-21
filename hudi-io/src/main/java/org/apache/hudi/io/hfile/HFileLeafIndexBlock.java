@@ -50,7 +50,7 @@ public class HFileLeafIndexBlock extends HFileBlock {
   /**
    * Reads the index block and returns the block index entries.
    */
-  public List<BlockIndexEntry> readBlockIndex(boolean contentKeyOnly) {
+  public List<BlockIndexEntry> readBlockIndex() {
     // 0. Print block magic
     int buffOffset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
 
@@ -75,7 +75,7 @@ public class HFileLeafIndexBlock extends HFileBlock {
       int nextEntryStartOffset = secondIndexAfterOffset + relativeOffsets.get(i + 1);
       int keyLength = nextEntryStartOffset - keyStartOffset;
       byte[] keyBytes = copy(byteBuff, buffOffset + 12, keyLength);
-      Key key = contentKeyOnly ? new UTF8StringKey(keyBytes) : new Key(keyBytes);
+      Key key = new Key(keyBytes);
       indexEntries.add(new BlockIndexEntry(key, Option.empty(), offset, size));
       buffOffset += (12 + keyLength);
     }

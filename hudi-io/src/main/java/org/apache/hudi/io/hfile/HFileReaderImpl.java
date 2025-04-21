@@ -362,8 +362,7 @@ public class HFileReaderImpl implements HFileReader {
         HFileBlockType blockType = levels > 1
             ? HFileBlockType.INTERMEDIATE_INDEX : HFileBlockType.LEAF_INDEX;
         HFileBlock tempBlock = blockReader.nextBlock(blockType);
-        indexEntryList.addAll(
-            ((HFileLeafIndexBlock) tempBlock).readBlockIndex(false));
+        indexEntryList.addAll(((HFileLeafIndexBlock) tempBlock).readBlockIndex());
       }
 
       // (4) Lower index level
