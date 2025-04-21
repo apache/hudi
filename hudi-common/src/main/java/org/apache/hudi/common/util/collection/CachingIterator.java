@@ -39,24 +39,6 @@ public abstract class CachingIterator<T> implements ClosableIterator<T> {
     return record;
   }
 
-  public static <U> CachingIterator<U> wrap(ClosableIterator<U> iterator) {
-    return new CachingIterator<U>() {
-      @Override
-      protected boolean doHasNext() {
-        if (iterator.hasNext()) {
-          nextRecord = iterator.next();
-          return true;
-        }
-        return false;
-      }
-
-      @Override
-      public void close() {
-        iterator.close();
-      }
-    };
-  }
-
   public static <U> CachingIterator<U> wrap(ClosableIterator<U> iterator, HoodieReaderContext<U> readerContext) {
     return new CachingIterator<U>() {
       @Override
@@ -74,5 +56,4 @@ public abstract class CachingIterator<T> implements ClosableIterator<T> {
       }
     };
   }
-
 }

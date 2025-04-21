@@ -345,6 +345,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       return StreamSupport.stream(indexedRecords.spliterator(), false).map(this::transform).iterator();
     }).collect(Collectors.toList());
 
+    // FIXME-vc: this is not closed.
     return new ConcatenatingIterator<>(iteratorsForPartition);
   }
 

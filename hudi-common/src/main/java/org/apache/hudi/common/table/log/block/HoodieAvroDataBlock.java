@@ -136,7 +136,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
     checkArgument(type != HoodieRecordType.SPARK, "Not support read avro to spark record");
     // TODO AvroSparkReader need
-    RecordIterator iterator = RecordIterator.getInstance(this, content);
+    CloseableRecordIterator iterator = CloseableRecordIterator.getInstance(this, content);
     return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
   }
 
@@ -163,11 +163,11 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   @Override
   protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
-    RecordIterator iterator = RecordIterator.getInstance(this, content);
+    CloseableRecordIterator iterator = CloseableRecordIterator.getInstance(this, content);
     return new CloseableMappingIterator<>(iterator, data -> readerContext.convertAvroRecord(data));
   }
 
-  private static class RecordIterator implements ClosableIterator<IndexedRecord> {
+  private static class CloseableRecordIterator implements ClosableIterator<IndexedRecord> {
     private byte[] content;
     private final SizeAwareDataInputStream dis;
     private final GenericDatumReader<IndexedRecord> reader;
@@ -176,7 +176,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     private int totalRecords = 0;
     private int readRecords = 0;
 
-    private RecordIterator(Schema readerSchema, Schema writerSchema, byte[] content) throws IOException {
+    private CloseableRecordIterator(Schema readerSchema, Schema writerSchema, byte[] content) throws IOException {
       this.content = content;
 
       this.dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(this.content)));
@@ -195,8 +195,8 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       }
     }
 
-    public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content) throws IOException {
-      return new RecordIterator(dataBlock.readerSchema, dataBlock.getSchemaFromHeader(), content);
+    public static CloseableRecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content) throws IOException {
+      return new CloseableRecordIterator(dataBlock.readerSchema, dataBlock.getSchemaFromHeader(), content);
     }
 
     @Override

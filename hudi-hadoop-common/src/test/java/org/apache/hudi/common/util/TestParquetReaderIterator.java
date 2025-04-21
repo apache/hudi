@@ -44,12 +44,13 @@ public class TestParquetReaderIterator {
     ParquetReader reader = mock(ParquetReader.class);
     // only 1 record in reader
     when(reader.read()).thenReturn(1).thenReturn(null);
-    ParquetReaderIterator<Integer> iterator = new ParquetReaderIterator<>(reader);
-    int idempotencyCheckCounter = 0;
-    // call hasNext() 3 times
-    while (idempotencyCheckCounter < 3) {
-      assertTrue(iterator.hasNext());
-      idempotencyCheckCounter++;
+    try (ParquetReaderIterator<Integer> iterator = new ParquetReaderIterator<>(reader)) {
+      int idempotencyCheckCounter = 0;
+      // call hasNext() 3 times
+      while (idempotencyCheckCounter < 3) {
+        assertTrue(iterator.hasNext());
+        idempotencyCheckCounter++;
+      }
     }
   }
 
@@ -59,12 +60,13 @@ public class TestParquetReaderIterator {
     ParquetReader reader = mock(ParquetReader.class);
     // only one record to read
     when(reader.read()).thenReturn(1).thenReturn(null);
-    ParquetReaderIterator<Integer> iterator = new ParquetReaderIterator<>(reader);
-    // should return value even though hasNext() hasn't been called
-    assertEquals(1, iterator.next());
-    // no more entries to iterate on
-    assertFalse(iterator.hasNext());
-    assertThrows(HoodieException.class, iterator::next, "should throw an exception since there is only 1 record");
-    verify(reader, times(1)).close();
+    try (ParquetReaderIterator<Integer> iterator = new ParquetReaderIterator<>(reader)) {
+      // should return value even though hasNext() hasn't been called
+      assertEquals(1, iterator.next());
+      // no more entries to iterate on
+      assertFalse(iterator.hasNext());
+      assertThrows(HoodieException.class, iterator::next, "should throw an exception since there is only 1 record");
+      verify(reader, times(1)).close();
+    }
   }
 }

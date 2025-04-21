@@ -322,21 +322,23 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                                   String instantTime) {
     int readParallelism = Math.min(writeConfig.getClusteringGroupReadParallelism(), clusteringOps.size());
 
-    return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
-      List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
-      long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
-      LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
-      Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
-      clusteringOpsPartition.forEachRemaining(clusteringOp -> {
-        Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> {
-          Option<HoodieFileReader> baseOrBootstrapFileReader = getBaseOrBootstrapFileReader(clusteringOp);
+    return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism)
+        .mapPartitions(clusteringOpsPartition -> {
+          List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
+          long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
+          LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
+          Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
+          clusteringOpsPartition.forEachRemaining(clusteringOp -> {
+            Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> {
+              Option<HoodieFileReader> baseOrBootstrapFileReader = getBaseOrBootstrapFileReader(clusteringOp);
 
-          return getRecordIteratorWithLogFiles(clusteringOp, instantTime, maxMemoryPerCompaction, keyGeneratorOpt, baseOrBootstrapFileReader);
-        };
-        suppliers.add(iteratorSupplier);
-      });
-      return new LazyConcatenatingIterator<>(suppliers);
-    }));
+              return getRecordIteratorWithLogFiles(clusteringOp, instantTime, maxMemoryPerCompaction, keyGeneratorOpt, baseOrBootstrapFileReader);
+            };
+            suppliers.add(iteratorSupplier);
+          });
+          // FIXME-vc: this is not closed.
+          return new LazyConcatenatingIterator<>(suppliers);
+        }));
   }
 
   /**
@@ -356,7 +358,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             Supplier<ClosableIterator<HoodieRecord<T>>> recordIteratorGetter = () -> getRecordIteratorWithBaseFileOnly(keyGeneratorOpt, baseOrBootstrapFileReader.get());
             iteratorGettersForPartition.add(recordIteratorGetter);
           });
-
+          // FIXME-vc: this is not closed.
           return new LazyConcatenatingIterator<>(iteratorGettersForPartition);
         }));
   }

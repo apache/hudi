@@ -41,13 +41,14 @@ public class TestRecordReaderValueIterator {
     List<Pair<Integer, String>> entries =
         IntStream.range(0, values.length).boxed().map(idx -> Pair.of(idx, values[idx])).collect(Collectors.toList());
     TestRecordReader reader = new TestRecordReader(entries);
-    RecordReaderValueIterator<IntWritable, Text> itr = new RecordReaderValueIterator<IntWritable, Text>(reader);
-    for (int i = 0; i < values.length; i++) {
-      assertTrue(itr.hasNext());
-      Text val = itr.next();
-      assertEquals(values[i], val.toString());
+    try (RecordReaderValueIterator<IntWritable, Text> itr = new RecordReaderValueIterator<IntWritable, Text>(reader)) {
+      for (int i = 0; i < values.length; i++) {
+        assertTrue(itr.hasNext());
+        Text val = itr.next();
+        assertEquals(values[i], val.toString());
+      }
+      assertFalse(itr.hasNext());
     }
-    assertFalse(itr.hasNext());
   }
 
   /**

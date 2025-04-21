@@ -36,6 +36,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 
+// FIXME-vc: this is an iterator by itself, that needs to be closed?
 public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
   private Option<Iterator<HoodieRecord>> baseFileIterator;
   private HoodieMergedLogRecordScanner scanner;
@@ -98,5 +99,4 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
   protected boolean doHasNext() {
     return hasNextInternal();
   }
-
 }

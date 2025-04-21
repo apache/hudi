@@ -71,44 +71,44 @@ public class TestLazyConcatenatingIterator {
     Supplier<ClosableIterator<Integer>> i2 = () -> new MockClosableIterator(Collections.emptyIterator()); // empty iterator
     Supplier<ClosableIterator<Integer>> i3 = () -> new MockClosableIterator(Collections.singletonList(3).iterator());
 
-    LazyConcatenatingIterator<Integer> ci = new LazyConcatenatingIterator<>(Arrays.asList(i1, i2, i3));
+    try (LazyConcatenatingIterator<Integer> ci = new LazyConcatenatingIterator<>(Arrays.asList(i1, i2, i3))) {
+      assertEquals(0, initTimes);
 
-    assertEquals(0, initTimes);
+      List<Integer> allElements = new ArrayList<>();
+      int count = 0;
+      while (ci.hasNext()) {
+        count++;
+        if (count == 1) {
+          assertEquals(1, initTimes);
+          assertEquals(0, closeTimes);
+        }
+        if (count == 5) {
+          assertEquals(3, initTimes);
+          assertEquals(2, closeTimes);
+        }
+        allElements.add(ci.next());
+      }
 
-    List<Integer> allElements = new ArrayList<>();
-    int count = 0;
-    while (ci.hasNext()) {
-      count++;
-      if (count == 1) {
-        assertEquals(1, initTimes);
-        assertEquals(0, closeTimes);
-      }
-      if (count == 5) {
-        assertEquals(3, initTimes);
-        assertEquals(2, closeTimes);
-      }
-      allElements.add(ci.next());
+      assertEquals(3, initTimes);
+      assertEquals(3, closeTimes);
+
+      assertEquals(5, allElements.size());
+      assertEquals(Arrays.asList(5, 3, 2, 1, 3), allElements);
     }
-
-    assertEquals(3, initTimes);
-    assertEquals(3, closeTimes);
-
-    assertEquals(5, allElements.size());
-    assertEquals(Arrays.asList(5, 3, 2, 1, 3), allElements);
   }
 
   @Test
   public void testConcatError() {
     Supplier<ClosableIterator<Integer>> i1 = () -> new MockClosableIterator(Collections.emptyIterator()); // empty iterator
 
-    LazyConcatenatingIterator<Integer> ci = new LazyConcatenatingIterator<>(Collections.singletonList(i1));
-    assertFalse(ci.hasNext());
-    try {
-      ci.next();
-      fail("expected error for empty iterator");
-    } catch (IllegalStateException e) {
-      //
+    try (LazyConcatenatingIterator<Integer> ci = new LazyConcatenatingIterator<>(Collections.singletonList(i1))) {
+      assertFalse(ci.hasNext());
+      try {
+        ci.next();
+        fail("expected error for empty iterator");
+      } catch (IllegalStateException e) {
+        //
+      }
     }
   }
-
 }

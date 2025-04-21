@@ -64,7 +64,7 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
           .collect(Collectors.toList());
       Schema recordKeySchema = HoodieAvroUtils.generateProjectionSchema(avroSchema, recordKeyColumns);
 
-      LOG.info("Schema to be used for reading record keys: " + recordKeySchema);
+      LOG.info("Schema to be used for reading record keys: {}", recordKeySchema);
 
       executeBootstrap(bootstrapHandle, sourceFilePath, keyGenerator, partitionPath, recordKeySchema);
     } catch (Exception e) {

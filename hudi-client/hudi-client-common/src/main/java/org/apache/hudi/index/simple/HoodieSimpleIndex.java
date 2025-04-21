@@ -145,6 +145,7 @@ public class HoodieSimpleIndex
     int parallelism = getParallelism(config.getSimpleIndexParallelism(), baseFiles.size());
 
     return context.parallelize(baseFiles, parallelism)
+        // FIXME-vc: not closed.
         .flatMap(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile, keyGeneratorOpt)
             .locations())
         .mapToPair(e -> (Pair<HoodieKey, HoodieRecordLocation>) e);

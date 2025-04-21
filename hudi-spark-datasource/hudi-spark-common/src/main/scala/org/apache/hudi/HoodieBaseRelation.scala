@@ -854,6 +854,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       val requiredAvroSchema = new Schema.Parser().parse(requiredDataSchema.avroSchemaStr)
       val avroToRowConverter = AvroConversionUtils.createAvroToInternalRowConverter(requiredAvroSchema, requiredRowSchema)
 
+      // FIXME-vc: does the reader ever get closed?
       reader.getRecordIterator(requiredAvroSchema).asScala
         .map(record => {
           avroToRowConverter.apply(record.getData.asInstanceOf[GenericRecord]).get
