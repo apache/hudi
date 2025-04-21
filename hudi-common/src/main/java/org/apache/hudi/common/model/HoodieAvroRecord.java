@@ -34,6 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
@@ -222,12 +223,15 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public byte[] getAvroBytes(Schema recordSchema, Properties props) throws IOException {
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) throws IOException {
     if (data instanceof BaseAvroPayload) {
-      return ((BaseAvroPayload) getData()).getRecordBytes();
+      byte[] data = ((BaseAvroPayload) getData()).getRecordBytes();
+      ByteArrayOutputStream baos = new ByteArrayOutputStream(data.length);
+      baos.write(data);
+      return baos;
     } else {
       Option<IndexedRecord> avroData = getData().getInsertValue(recordSchema, props);
-      return avroData.map(HoodieAvroUtils::avroToBytes).orElse(new byte[0]);
+      return avroData.map(HoodieAvroUtils::avroToBytesStream).orElse(new ByteArrayOutputStream(0));
     }
   }
 

@@ -47,6 +47,7 @@ import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
@@ -304,7 +305,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public byte[] getAvroBytes(Schema recordSchema, Properties props) throws IOException {
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) throws IOException {
     throw new UnsupportedOperationException();
   }
 

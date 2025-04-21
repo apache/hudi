@@ -113,11 +113,11 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         try {
           // Encode the record into bytes
           // Spark Record not support write avro log
-          byte[] data = s.getAvroBytes(schema, CollectionUtils.emptyProps());
+          ByteArrayOutputStream data = s.getAvroBytes(schema, CollectionUtils.emptyProps());
           // Write the record size
-          output.writeInt(data.length);
+          output.writeInt(data.size());
           // Write the content
-          output.write(data);
+          data.writeTo(output);
         } catch (IOException e) {
           throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);
         }
