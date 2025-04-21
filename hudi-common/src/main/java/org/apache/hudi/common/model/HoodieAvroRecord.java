@@ -34,6 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
@@ -157,6 +158,9 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+    if (HoodieOperation.isDelete(getOperation())) {
+      return true;
+    }
     if (this.data instanceof BaseAvroPayload) {
       return ((BaseAvroPayload) this.data).isDeleted(recordSchema, props);
     } else {
@@ -215,6 +219,19 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       return Option.of(record);
     } else {
       return Option.empty();
+    }
+  }
+
+  @Override
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) throws IOException {
+    if (data instanceof BaseAvroPayload) {
+      byte[] data = ((BaseAvroPayload) getData()).getRecordBytes();
+      ByteArrayOutputStream baos = new ByteArrayOutputStream(data.length);
+      baos.write(data);
+      return baos;
+    } else {
+      Option<IndexedRecord> avroData = getData().getInsertValue(recordSchema, props);
+      return avroData.map(HoodieAvroUtils::avroToBytesStream).orElse(new ByteArrayOutputStream(0));
     }
   }
 

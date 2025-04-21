@@ -39,6 +39,7 @@ import org.apache.avro.generic.GenericRecord;
 
 import javax.annotation.Nonnull;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -319,11 +320,11 @@ public abstract class FileFormatUtils {
    * @return byte array after serialization.
    * @throws IOException upon serialization error.
    */
-  public abstract byte[] serializeRecordsToLogBlock(HoodieStorage storage,
-                                                    List<HoodieRecord> records,
-                                                    Schema writerSchema,
-                                                    Schema readerSchema, String keyFieldName,
-                                                    Map<String, String> paramsMap) throws IOException;
+  public abstract ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
+                                                                   List<HoodieRecord> records,
+                                                                   Schema writerSchema,
+                                                                   Schema readerSchema, String keyFieldName,
+                                                                   Map<String, String> paramsMap) throws IOException;
 
   // -------------------------------------------------------------------------
   //  Inner Class

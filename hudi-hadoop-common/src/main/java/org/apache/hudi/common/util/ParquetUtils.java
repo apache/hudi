@@ -374,14 +374,14 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   @Override
-  public byte[] serializeRecordsToLogBlock(HoodieStorage storage,
-                                           List<HoodieRecord> records,
-                                           Schema writerSchema,
-                                           Schema readerSchema,
-                                           String keyFieldName,
-                                           Map<String, String> paramsMap) throws IOException {
+  public ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
+                                                          List<HoodieRecord> records,
+                                                          Schema writerSchema,
+                                                          Schema readerSchema,
+                                                          String keyFieldName,
+                                                          Map<String, String> paramsMap) throws IOException {
     if (records.size() == 0) {
-      return new byte[0];
+      return new ByteArrayOutputStream(0);
     }
 
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -399,7 +399,7 @@ public class ParquetUtils extends FileFormatUtils {
       }
       outputStream.flush();
     }
-    return outputStream.toByteArray();
+    return outputStream;
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {

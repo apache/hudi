@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
+import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -62,7 +63,7 @@ public class HoodieCommandBlock extends HoodieLogBlock {
   }
 
   @Override
-  public byte[] getContentBytes(HoodieStorage storage) {
-    return new byte[0];
+  public ByteArrayOutputStream getContentBytes(HoodieStorage storage) {
+    return new ByteArrayOutputStream(0);
   }
 }
