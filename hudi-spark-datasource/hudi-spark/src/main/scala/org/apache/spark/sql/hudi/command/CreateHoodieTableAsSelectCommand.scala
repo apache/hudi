@@ -46,7 +46,7 @@ case class CreateHoodieTableAsSelectCommand(
    query: LogicalPlan) extends DataWritingCommand {
   override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
 
-  override lazy val metrics: Map[String, SQLMetric] = InsertIntoHoodieTableCommand.metrics
+  override lazy val metrics: Map[String, SQLMetric] = HoodieCommandMetrics.metrics
 
   override def run(sparkSession: SparkSession, plan: SparkPlan): Seq[Row] = {
     checkState(table.tableType != CatalogTableType.VIEW)

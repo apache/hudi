@@ -126,7 +126,7 @@ object HoodieSparkSqlWriter {
             sourceDf: DataFrame,
             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
-  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig, HOption[HoodieCommitMetadata]) = {
+  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
     new HoodieSparkSqlWriterInternal().write(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient)
   }
 
@@ -180,13 +180,13 @@ class HoodieSparkSqlWriterInternal {
             sourceDf: DataFrame,
             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
-  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig, HOption[HoodieCommitMetadata]) = {
+  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
 
-    val retryWrite: () => (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig, HOption[HoodieCommitMetadata]) = () => {
+    val retryWrite: () => (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = () => {
       var succeeded = false
       var counter = 0
       val maxRetry: Integer = Integer.parseInt(optParams.getOrElse(HoodieWriteConfig.NUM_RETRIES_ON_CONFLICT_FAILURES.key(), HoodieWriteConfig.NUM_RETRIES_ON_CONFLICT_FAILURES.defaultValue().toString))
-      var toReturn: (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig, HOption[HoodieCommitMetadata]) = null
+      var toReturn: (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = null
 
       while (counter <= maxRetry && !succeeded) {
         try {
@@ -217,7 +217,7 @@ class HoodieSparkSqlWriterInternal {
                             sourceDf: DataFrame,
                             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
                             hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
-  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig, HOption[HoodieCommitMetadata]) = {
+  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
 
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
     val path = optParams("path")
@@ -273,7 +273,7 @@ class HoodieSparkSqlWriterInternal {
     val tableVersion = Integer.valueOf(getStringWithAltKeys(parameters, HoodieWriteConfig.WRITE_TABLE_VERSION))
     if (mode == SaveMode.Ignore && tableExists) {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
-      (false, common.util.Option.empty(), common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig, HOption.empty[HoodieCommitMetadata]())
+      (false, common.util.Option.empty(), common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
     } else {
       // Handle various save modes
       handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tblName, operation, fs)
@@ -535,13 +535,13 @@ class HoodieSparkSqlWriterInternal {
 
       // Check for errors and commit the write.
       try {
-        val (writeSuccessful, compactionInstant, clusteringInstant, commitMetadata) =
+        val (writeSuccessful, compactionInstant, clusteringInstant) =
           commitAndPerformPostOperations(sqlContext.sparkSession, df.schema,
             writeResult, parameters, writeClient, tableConfig, jsc,
             TableInstantInfo(basePath, instantTime, commitActionType, operation), streamingWritesParamsOpt.map(_.extraPreCommitFn)
               .orElse(Option.apply(Option.empty)).get)
 
-        (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig, commitMetadata)
+        (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
       } finally {
         handleWriteClientClosure(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
       }
@@ -814,7 +814,7 @@ class HoodieSparkSqlWriterInternal {
                       basePath: Path,
                       writerSchema: Schema,
                       tableConfig: HoodieTableConfig):
-  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig, HOption[HoodieCommitMetadata]) = {
+  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
     if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
       throw new HoodieException("Dropping duplicates with bulk_insert in row writer path is not supported yet")
     }
@@ -844,10 +844,10 @@ class HoodieSparkSqlWriterInternal {
     val writeResult = executor.execute(df, tableConfig.isTablePartitioned)
 
     try {
-      val (writeSuccessful, compactionInstant, clusteringInstant, commitMetadata) = mode match {
+      val (writeSuccessful, compactionInstant, clusteringInstant) = mode match {
         case _ if overwriteOperationType == null =>
           val syncHiveSuccess = metaSync(sqlContext.sparkSession, writeConfig, basePath, df.schema)
-          (syncHiveSuccess, HOption.empty().asInstanceOf[HOption[String]], HOption.empty().asInstanceOf[HOption[String]], HOption.empty[HoodieCommitMetadata]())
+          (syncHiveSuccess, HOption.empty().asInstanceOf[HOption[String]], HOption.empty().asInstanceOf[HOption[String]])
         case _ =>
           try {
             commitAndPerformPostOperations(sqlContext.sparkSession, df.schema, writeResult, parameters, writeClient, tableConfig, jsc,
@@ -855,7 +855,7 @@ class HoodieSparkSqlWriterInternal {
 
           }
       }
-      (writeSuccessful, HOption.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig, commitMetadata)
+      (writeSuccessful, HOption.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
     } finally {
       // close the write client in all cases
       val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
@@ -993,19 +993,19 @@ class HoodieSparkSqlWriterInternal {
                                              jsc: JavaSparkContext,
                                              tableInstantInfo: TableInstantInfo,
                                              extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]]
-                                            ): (Boolean, HOption[java.lang.String], HOption[java.lang.String], HOption[HoodieCommitMetadata]) = {
+                                            ): (Boolean, HOption[java.lang.String], HOption[java.lang.String]) = {
     if (writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors).count() == 0) {
       log.info("Proceeding to commit the write.")
       val metaMap = parameters.filter(kv =>
         kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX.key)))
-      val commitStatus =
+      val commitSuccess =
         client.commit(tableInstantInfo.instantTime, writeResult.getWriteStatuses,
           common.util.Option.of(new java.util.HashMap[String, String](metaMap.asJava)),
           tableInstantInfo.commitActionType,
           writeResult.getPartitionToReplaceFileIds,
           common.util.Option.ofNullable(extraPreCommitFn.orNull))
 
-      if (commitStatus.isSuccess) {
+      if (commitSuccess) {
         log.info("Commit " + tableInstantInfo.instantTime + " successful!")
       }
       else {
@@ -1036,7 +1036,7 @@ class HoodieSparkSqlWriterInternal {
         tableInstantInfo.basePath, schema)
 
       log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
-      (commitStatus.isSuccess && metaSyncSuccess, compactionInstant, clusteringInstant, HOption.ofNullable(commitStatus.getMetadata))
+      (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
     } else {
       log.error(s"${tableInstantInfo.operation} failed with errors")
       if (log.isTraceEnabled) {
@@ -1051,7 +1051,7 @@ class HoodieSparkSqlWriterInternal {
             }
           })
       }
-      (false, common.util.Option.empty(), common.util.Option.empty(), HOption.empty())
+      (false, common.util.Option.empty(), common.util.Option.empty())
     }
   }
 

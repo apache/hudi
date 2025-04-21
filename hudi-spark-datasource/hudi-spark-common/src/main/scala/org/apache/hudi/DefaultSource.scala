@@ -168,7 +168,7 @@ class DefaultSource extends RelationProvider
       if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
         HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
       } else {
-        val (success, _, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
+        val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
         if (!success) {
           throw new HoodieException("Failed to write to Hudi")
         }

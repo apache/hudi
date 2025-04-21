@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.model.CommitStatus;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -87,9 +86,9 @@ public class SparkRDDWriteClient<T> extends
    * Complete changes performed at the given instantTime marker with specified action.
    */
   @Override
-  public CommitStatus commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
-                             String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
-                             Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+  public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
+                        String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);

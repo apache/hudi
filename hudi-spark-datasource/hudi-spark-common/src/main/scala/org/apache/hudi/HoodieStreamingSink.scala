@@ -139,7 +139,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
             }))), writeClient)
       )
       match {
-        case Success((true, commitOps, compactionInstantOps, clusteringInstant, client, tableConfig, _)) =>
+        case Success((true, commitOps, compactionInstantOps, clusteringInstant, client, tableConfig)) =>
           log.info(s"Micro batch id=$batchId succeeded"
             + (commitOps.isPresent match {
             case true => s" for commit=${commitOps.get()}"
@@ -182,7 +182,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
             if (retryCnt > 1) log.info(s"Retrying the failed micro batch id=$batchId ...")
             Failure(e)
           }
-        case Success((false, commitOps, _, _, _, _, _)) =>
+        case Success((false, commitOps, _, _, _, _)) =>
           log.error(s"Micro batch id=$batchId ended up with errors"
             + (commitOps.isPresent match {
             case true => s" for commit=${commitOps.get()}"

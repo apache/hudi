@@ -22,28 +22,28 @@ import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.mockito.Mockito.{mock, when}
 
-class TestInsertIntoHoodieTableCommand extends HoodieSparkSqlTestBase {
+class TestHoodieCommandMetrics extends HoodieSparkSqlTestBase {
 
   override def beforeAll(): Unit = {
     spark.sparkContext
   }
 
-  test("test InsertIntoHoodieTableCommand metrics") {
-    val metrics = InsertIntoHoodieTableCommand.metrics
+  test("test HoodieCommandMetrics metrics") {
+    val metrics = HoodieCommandMetrics.metrics
     assert(metrics != null)
     assert(metrics.size == 10)
 
-    InsertIntoHoodieTableCommand.updateInsertMetrics(metrics, mockedCommitMetadata())
-    assertResult(1L)(metrics(InsertIntoHoodieTableCommand.NUM_PARTITION_KEY).value)
-    assertResult(2L)(metrics(InsertIntoHoodieTableCommand.NUM_INSERT_FILE_KEY).value)
-    assertResult(3L)(metrics(InsertIntoHoodieTableCommand.NUM_UPDATE_FILE_KEY).value)
-    assertResult(4L)(metrics(InsertIntoHoodieTableCommand.NUM_WRITE_ROWS_KEY).value)
-    assertResult(5L)(metrics(InsertIntoHoodieTableCommand.NUM_UPDATE_ROWS_KEY).value)
-    assertResult(6L)(metrics(InsertIntoHoodieTableCommand.NUM_INSERT_ROWS_KEY).value)
-    assertResult(7L)(metrics(InsertIntoHoodieTableCommand.NUM_DELETE_ROWS_KEY).value)
-    assertResult(8L)(metrics(InsertIntoHoodieTableCommand.NUM_OUTPUT_BYTES_KEY).value)
-    assertResult(9L)(metrics(InsertIntoHoodieTableCommand.INSERT_TIME).value)
-    assertResult(10L)(metrics(InsertIntoHoodieTableCommand.UPSERT_TIME).value)
+    HoodieCommandMetrics.updateInsertMetrics(metrics, mockedCommitMetadata())
+    assertResult(1L)(metrics(HoodieCommandMetrics.NUM_PARTITION_KEY).value)
+    assertResult(2L)(metrics(HoodieCommandMetrics.NUM_INSERT_FILE_KEY).value)
+    assertResult(3L)(metrics(HoodieCommandMetrics.NUM_UPDATE_FILE_KEY).value)
+    assertResult(4L)(metrics(HoodieCommandMetrics.NUM_WRITE_ROWS_KEY).value)
+    assertResult(5L)(metrics(HoodieCommandMetrics.NUM_UPDATE_ROWS_KEY).value)
+    assertResult(6L)(metrics(HoodieCommandMetrics.NUM_INSERT_ROWS_KEY).value)
+    assertResult(7L)(metrics(HoodieCommandMetrics.NUM_DELETE_ROWS_KEY).value)
+    assertResult(8L)(metrics(HoodieCommandMetrics.NUM_OUTPUT_BYTES_KEY).value)
+    assertResult(9L)(metrics(HoodieCommandMetrics.INSERT_TIME).value)
+    assertResult(10L)(metrics(HoodieCommandMetrics.UPSERT_TIME).value)
   }
 
 

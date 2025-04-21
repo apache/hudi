@@ -103,7 +103,7 @@ class TruncateTableProcedure extends BaseProcedure
 
     } else {
       val parameters = buildHoodieDropPartitionsConfig(sparkSession, catalogTable, partitionsStr)
-      val (success, _, _, _, _, _, _) = HoodieSparkSqlWriter.write(
+      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
         sparkSession.sqlContext,
         SaveMode.Append,
         parameters,

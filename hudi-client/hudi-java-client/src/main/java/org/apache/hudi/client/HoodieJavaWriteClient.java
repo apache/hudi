@@ -21,7 +21,6 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.CommitStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -86,12 +85,12 @@ public class HoodieJavaWriteClient<T> extends
   }
 
   @Override
-  public CommitStatus commit(String instantTime,
-                             List<WriteStatus> writeStatuses,
-                             Option<Map<String, String>> extraMetadata,
-                             String commitActionType,
-                             Map<String, List<String>> partitionToReplacedFileIds,
-                             Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+  public boolean commit(String instantTime,
+                        List<WriteStatus> writeStatuses,
+                        Option<Map<String, String>> extraMetadata,
+                        String commitActionType,
+                        Map<String, List<String>> partitionToReplacedFileIds,
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
     return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
         extraPreCommitFunc);

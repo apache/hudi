@@ -276,7 +276,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     if (doCommit) {
       boolean success = writeClient.commitStats(commitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
-          Option.empty(), metaClient.getCommitActionType()).isSuccess();
+          Option.empty(), metaClient.getCommitActionType());
       Assertions.assertTrue(success);
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);
