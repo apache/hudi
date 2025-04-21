@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.avro.Schema
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
@@ -30,20 +30,21 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieSparkUtils, SparkAdapterSupport}
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
+
+import org.apache.avro.Schema
 import org.apache.spark.sql._
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, MatchCast}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
-import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{CoercedAttributeReference, encodeAsBase64String, resolveFieldAssociationsBetweenSourceAndTarget, resolvesToSourceAttribute, stripCasting, toStructType, validateDataTypes}
+import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{encodeAsBase64String, resolveFieldAssociationsBetweenSourceAndTarget, resolvesToSourceAttribute, stripCasting, toStructType, validateDataTypes, CoercedAttributeReference}
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
@@ -257,11 +258,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       sparkSession.conf.set("spark.sql.crossJoin.enabled","true")
     }
 
-    val projectedJoinedDF: DataFrame = projectedJoinedDataset
+    val processedInputDf: DataFrame = getProcessedInputDf
     // Create the write parameters
     val props = buildMergeIntoConfig(hoodieCatalogTable)
     // Do the upsert
-    executeUpsert(projectedJoinedDF, props)
+    executeUpsert(processedInputDf, props)
     // Refresh the table in the catalog
     sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
 
@@ -272,9 +273,25 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private val insertingActions: Seq[InsertAction] = mergeInto.notMatchedActions.collect { case u: InsertAction => u}
   private val deletingActions: Seq[DeleteAction] = mergeInto.matchedActions.collect { case u: DeleteAction => u}
 
+  private def hasPrimaryKey(): Boolean = {
+    hoodieCatalogTable.tableConfig.getRecordKeyFields.isPresent
+  }
+
   /**
-   * Here we're adjusting incoming (source) dataset in case its schema is divergent from
-   * the target table, to make sure it (at a bare minimum)
+   * Here we're processing the logical plan of the source table and optionally the target
+   * table to get it prepared for writing the data into the Hudi table:
+   * <ul>
+   * <li> For a target table with record key(s) configure, the source table
+   * [[mergeInto.sourceTable]] is used.
+   * <li> For a primary keyless target table, the source table [[mergeInto.sourceTable]]
+   * and target table [[mergeInto.targetTable]] are left-outer joined based the on the
+   * merge condition so that the record key stored in the record key meta column
+   * (`_hoodie_record_key`) are attached to the input records if they are updates.
+   * </ul>
+   *
+   * After getting the initial logical plan to precess as above, we're adjusting incoming
+   * (source) dataset in case its schema is divergent from the target table, to make sure
+   * it contains all the required columns for MERGE INTO (at a bare minimum)
    *
    * <ol>
    *   <li>Contains "primary-key" column (as defined by target table's config)</li>
@@ -310,29 +327,31 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * <li>{@code ts = source.sts}</li>
    * </ul>
    */
-  def projectedJoinedDataset: DataFrame = {
+  private def getProcessedInputDf: DataFrame = {
     val resolver = sparkSession.sessionState.analyzer.resolver
 
-    // We want to join the source and target tables.
-    // Then we want to project the output so that we have the meta columns from the target table
-    // followed by the data columns of the source table
-    val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
-    val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
-    val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
-    // for pkless table, we need to project the meta columns
-    val hasPrimaryKey = hoodieCatalogTable.tableConfig.getRecordKeyFields.isPresent
-    val projectedJoinPlan = if (!hasPrimaryKey || sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false") == "true") {
+    // For pkless table, we need to project the meta columns by joining with the target table;
+    // for a Hudi table with record key, we use the source table and rely on Hudi's tagging
+    // to identify inserts, updates, and deletes to avoid the join
+    val inputPlan = if (!hasPrimaryKey()) {
+      // For a primary keyless target table, join the source and target tables.
+      // Then we want to project the output so that we have the meta columns from the target table
+      // followed by the data columns of the source table
+      val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
+      val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
+      val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
       Project(tableMetaCols ++ incomingDataCols, joinData)
     } else {
-      Project(incomingDataCols, joinData)
+      // For a target table with record key(s) configure, the source table is used
+      mergeInto.sourceTable
     }
 
-    val projectedJoinOutput = projectedJoinPlan.output
+    val inputPlanAttributes = inputPlan.output
 
     val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
 
     val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
-      case (keyAttr, _) => projectedJoinOutput.exists(attr => resolver(keyAttr.name, attr.name))
+      case (keyAttr, _) => inputPlanAttributes.exists(attr => resolver(keyAttr.name, attr.name))
     }
 
     // This is to handle the situation where condition is something like "s0.s_id = t0.id" so In the source table
@@ -344,7 +363,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       them according to aforementioned heuristic) to meet Hudi's requirements
     val additionalColumns: Seq[NamedExpression] =
       missingAttributesMap.flatMap {
-        case (keyAttr, sourceExpression) if !projectedJoinOutput.exists(attr => resolver(attr.name, keyAttr.name)) =>
+        case (keyAttr, sourceExpression) if !inputPlanAttributes.exists(attr => resolver(attr.name, keyAttr.name)) =>
           Seq(Alias(sourceExpression, keyAttr.name)())
 
         case _ => Seq()
@@ -354,7 +373,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // matches to that one of the target table. This is necessary b/c unlike Spark, Avro is case-sensitive
     // and therefore would fail downstream if case of corresponding columns don't match
     val existingAttributes = existingAttributesMap.map(_._1)
-    val adjustedSourceTableOutput = projectedJoinOutput.map { attr =>
+    val adjustedSourceTableOutput = inputPlanAttributes.map { attr =>
       existingAttributes.find(keyAttr => resolver(keyAttr.name, attr.name)) match {
         // To align the casing we just rename the attribute to match that one of the
         // target table
@@ -363,7 +382,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       }
     }
 
-    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, projectedJoinPlan)
+    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, inputPlan)
 
     Dataset.ofRows(sparkSession, amendedPlan)
   }
@@ -557,7 +576,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // NOTE: We're relying on [[sourceDataset]] here instead of [[mergeInto.sourceTable]],
     //       as it could be amended to add missing primary-key and/or pre-combine columns.
     //       Please check [[sourceDataset]] scala-doc for more details
-    (projectedJoinedDataset.queryExecution.analyzed.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
+    (getProcessedInputDf.queryExecution.analyzed.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
   }
 
   private def validateInsertingAssignmentExpression(expr: Expression): Unit = {
@@ -590,9 +609,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
     // for pkless tables, we need to enable optimized merge
-    val hasPrimaryKey = tableConfig.getRecordKeyFields.isPresent
-    val enableOptimizedMerge = if (!hasPrimaryKey) "true" else sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false")
-    val keyGeneratorClassName = if (enableOptimizedMerge == "true") {
+    val isPrimaryKeylessTable = !hasPrimaryKey()
+    val keyGeneratorClassName = if (isPrimaryKeylessTable) {
       classOf[MergeIntoKeyGenerator].getCanonicalName
     } else {
       classOf[SqlKeyGenerator].getCanonicalName
@@ -631,7 +649,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       CANONICALIZE_SCHEMA.key -> "false",
       SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true",
       HoodieSparkSqlWriter.SQL_MERGE_INTO_WRITES.key -> "true",
-      HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY -> enableOptimizedMerge,
+      // Only primary keyless table requires prepped keys and upsert
+      HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY -> isPrimaryKeylessTable.toString,
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(preCombineField)).toString
     )
 
