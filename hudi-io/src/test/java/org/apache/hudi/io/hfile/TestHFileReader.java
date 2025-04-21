@@ -65,6 +65,9 @@ public class TestHFileReader {
   public static final Function<Integer, String> KEY_CREATOR = i -> String.format("hudi-key-%09d", i);
   public static final Function<Integer, String> KEY_CREATOR_WITH_SUFFIX = i -> String.format("hudi-key-%09d-abcdefghij", i);
   public static final Function<Integer, String> VALUE_CREATOR = i -> String.format("hudi-value-%09d", i);
+  private static final String LARGE_KEY_PREFIX = "hudi-key-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-";
+  private static final Function<Integer, String> LARGE_KEY_CREATOR = i -> LARGE_KEY_PREFIX + String.format("%09d", i);
   private static final int SEEK_TO_THROW_EXCEPTION = -3;
 
   static Stream<Arguments> testArgsReadHFilePointAndPrefixLookup() {
@@ -387,18 +390,277 @@ public class TestHFileReader {
                 new KeyLookUpInfo("hudi-key-000020001", SEEK_TO_EOF, "", "")
             )
         ),
+        // This HFile has large keys (key length > 100B), generated with LARGE_KEY_CREATOR
+        // using {@link TestHoodieHBaseHFileReaderWriter#generateHFileForTesting}
+        // The number of data block index levels is 2
         Arguments.of(
-            "/hfile/hudi_1_0_hbase_2_4_13_16KB_GZ_200000.hfile",
-            200000,
+            "/hfile/hudi_1_0_hbase_2_4_13_1KB_GZ_20000_large_keys.hfile",
+            20000,
+            LARGE_KEY_CREATOR,
             Arrays.asList(
                 // before first key
-                new KeyLookUpInfo("", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
-                new KeyLookUpInfo("a", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
-                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                new KeyLookUpInfo("", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                new KeyLookUpInfo("as", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                // backward seekTo before first key is allowed and safe
+                new KeyLookUpInfo("aa", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "0000000", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
                 // first key
-                new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
-                // last key of block 0
-                new KeyLookUpInfo("hudi-key-000001110", SEEK_TO_FOUND, "hudi-key-000001110", "hudi-value-000001110")
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000000", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                // key in the block 0
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000005", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000000005", "hudi-value-000000005"),
+                // backward seek not supported in a block
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000004", SEEK_TO_THROW_EXCEPTION, "", ""),
+                // prefix lookup, the pointer should not move
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "00000010", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000099", "hudi-value-000000099"),
+                // non-exact lookup, the pointer should move
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000100a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000100", "hudi-value-000000100"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000100b", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000100", "hudi-value-000000100"),
+                // prefix lookup with a jump, the pointer should not go beyond the lookup key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "00000040", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000399", "hudi-value-000000399"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000400a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000400", "hudi-value-000000400"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000400b", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000400", "hudi-value-000000400"),
+                // last key of the block
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002785", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000002785", "hudi-value-000002785"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002785a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000002785", "hudi-value-000002785"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002785b", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000002785", "hudi-value-000002785"),
+                // first key of the next block
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002786", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000002786", "hudi-value-000002786"),
+                // more lookups
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000005340", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000005340", "hudi-value-000005340"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000007340", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000007340", "hudi-value-000007340"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000009340", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000009340", "hudi-value-000009340"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000013899", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000013899", "hudi-value-000013899"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000013899", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000013899", "hudi-value-000013899"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000013900", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000013900", "hudi-value-000013900"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000013901", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000013901", "hudi-value-000013901"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000013902", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000013902", "hudi-value-000013902"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000015902", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000015902", "hudi-value-000015902"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000017902", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000017902", "hudi-value-000017902"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000019500", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000019500", "hudi-value-000019500"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "0000196", SEEK_TO_BEFORE_BLOCK_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000019600", "hudi-value-000019600"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "00001960", SEEK_TO_BEFORE_BLOCK_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000019600", "hudi-value-000019600"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000019600a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000019600", "hudi-value-000019600"),
+                // second to last key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000019998", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000019998", "hudi-value-000019998"),
+                // last key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000019999", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000019999", "hudi-value-000019999"),
+                // after last key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000019999a", SEEK_TO_EOF, "", ""),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000019999b", SEEK_TO_EOF, "", "")
+            )
+        ),
+        // This HFile has large keys (key length > 100B), generated with LARGE_KEY_CREATOR
+        // using {@link TestHoodieHBaseHFileReaderWriter#generateHFileForTesting}
+        // and the HFile configs: hfile.index.block.max.size = 2048, hfile.index.block.min.entries = 4
+        // The number of data block index levels is 3
+        Arguments.of(
+            "/hfile/hudi_1_0_hbase_2_4_13_1KB_GZ_10000_large_keys_deep_index.hfile",
+            10000,
+            LARGE_KEY_CREATOR,
+            Arrays.asList(
+                // before first key
+                new KeyLookUpInfo("", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                new KeyLookUpInfo("as", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                // backward seekTo before first key is allowed and safe
+                new KeyLookUpInfo("aa", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "0000000", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                // first key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000000", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                // key in the block 0
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000005", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000000005", "hudi-value-000000005"),
+                // backward seek not supported in a block
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000004", SEEK_TO_THROW_EXCEPTION, "", ""),
+                // prefix lookup, the pointer should not move
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "00000010", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000099", "hudi-value-000000099"),
+                // non-exact lookup, the pointer should move
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000100a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000100", "hudi-value-000000100"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000100b", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000100", "hudi-value-000000100"),
+                // prefix lookup with a jump, the pointer should not go beyond the lookup key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "00000040", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000399", "hudi-value-000000399"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000400a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000400", "hudi-value-000000400"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000400b", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000400", "hudi-value-000000400"),
+                // last key of the block
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002785", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000002785", "hudi-value-000002785"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002785a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000002785", "hudi-value-000002785"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002785b", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000002785", "hudi-value-000002785"),
+                // first key of the next block
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002786", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000002786", "hudi-value-000002786"),
+                // more lookups
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000003340", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000003340", "hudi-value-000003340"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000004340", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000004340", "hudi-value-000004340"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000005340", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000005340", "hudi-value-000005340"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000006899", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000006899", "hudi-value-000006899"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000006899", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000006899", "hudi-value-000006899"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000006900", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000006900", "hudi-value-000006900"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000006901", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000006901", "hudi-value-000006901"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000006902", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000006902", "hudi-value-000006902"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000007902", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000007902", "hudi-value-000007902"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000008902", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000008902", "hudi-value-000008902"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "0000091", SEEK_TO_BEFORE_BLOCK_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000009100", "hudi-value-000009100"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "00000910", SEEK_TO_BEFORE_BLOCK_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000009100", "hudi-value-000009100"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000009100a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000009100", "hudi-value-000009100"),
+                // second to last key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000009998", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000009998", "hudi-value-000009998"),
+                // last key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000009999", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000009999", "hudi-value-000009999"),
+                // after last key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000009999a", SEEK_TO_EOF, "", ""),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000009999b", SEEK_TO_EOF, "", "")
+            )
+        ),
+        // This HFile has large keys (key length > 100B), generated with LARGE_KEY_CREATOR
+        // using {@link TestHoodieHBaseHFileReaderWriter#generateHFileForTesting}
+        // and the HFile configs: hfile.index.block.max.size = 2048, hfile.index.block.min.entries = 4
+        // The number of data block index levels is 4
+        Arguments.of(
+            "/hfile/hudi_1_0_hbase_2_4_13_1KB_GZ_50000_large_keys_deep_index.hfile",
+            50000,
+            LARGE_KEY_CREATOR,
+            Arrays.asList(
+                // before first key
+                new KeyLookUpInfo("", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                new KeyLookUpInfo("as", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                // backward seekTo before first key is allowed and safe
+                new KeyLookUpInfo("aa", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "0000000", SEEK_TO_BEFORE_FILE_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                // first key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000000", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000000000", "hudi-value-000000000"),
+                // key in the block 0
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000005", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000000005", "hudi-value-000000005"),
+                // backward seek not supported in a block
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000004", SEEK_TO_THROW_EXCEPTION, "", ""),
+                // prefix lookup, the pointer should not move
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "00000010", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000099", "hudi-value-000000099"),
+                // non-exact lookup, the pointer should move
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000100a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000100", "hudi-value-000000100"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000100b", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000100", "hudi-value-000000100"),
+                // prefix lookup with a jump, the pointer should not go beyond the lookup key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "00000040", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000399", "hudi-value-000000399"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000400a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000400", "hudi-value-000000400"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000000400b", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000000400", "hudi-value-000000400"),
+                // last key of the block
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002785", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000002785", "hudi-value-000002785"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002785a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000002785", "hudi-value-000002785"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002785b", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000002785", "hudi-value-000002785"),
+                // first key of the next block
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000002786", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000002786", "hudi-value-000002786"),
+                // more lookups
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000005340", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000005340", "hudi-value-000005340"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000010340", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000010340", "hudi-value-000010340"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000019340", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000019340", "hudi-value-000019340"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000023899", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000023899", "hudi-value-000023899"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000023899", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000023899", "hudi-value-000023899"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000023900", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000023900", "hudi-value-000023900"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000023901", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000023901", "hudi-value-000023901"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000023902", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000023902", "hudi-value-000023902"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000030902", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000030902", "hudi-value-000030902"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000037902", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000037902", "hudi-value-000037902"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000039500", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000039500", "hudi-value-000039500"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "0000448", SEEK_TO_BEFORE_BLOCK_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000044800", "hudi-value-000044800"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "00004480", SEEK_TO_BEFORE_BLOCK_FIRST_KEY,
+                    LARGE_KEY_PREFIX + "000044800", "hudi-value-000044800"),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000044800a", SEEK_TO_IN_RANGE,
+                    LARGE_KEY_PREFIX + "000044800", "hudi-value-000044800"),
+                // second to last key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000049998", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000049998", "hudi-value-000049998"),
+                // last key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000049999", SEEK_TO_FOUND,
+                    LARGE_KEY_PREFIX + "000049999", "hudi-value-000049999"),
+                // after last key
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000049999a", SEEK_TO_EOF, "", ""),
+                new KeyLookUpInfo(LARGE_KEY_PREFIX + "000049999b", SEEK_TO_EOF, "", "")
             )
         )
     );
