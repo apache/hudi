@@ -1593,14 +1593,14 @@ public class HoodieAvroUtils {
    * @return
    */
   @VisibleForTesting
-  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName) {
+  public static Pair<String, Schema> getSchemaForField(Schema schema, String fieldName) {
     return getSchemaForField(schema, fieldName, StringUtils.EMPTY_STRING);
   }
 
   @VisibleForTesting
-  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName, String prefix) {
+  public static Pair<String, Schema> getSchemaForField(Schema schema, String fieldName, String prefix) {
     if (!fieldName.contains(".")) {
-      return Pair.of(prefix + fieldName, schema.getField(fieldName));
+      return Pair.of(prefix + fieldName, schema.getField(fieldName).schema());
     } else {
       int rootFieldIndex = fieldName.indexOf(".");
       Schema.Field rootField = schema.getField(fieldName.substring(0, rootFieldIndex));
