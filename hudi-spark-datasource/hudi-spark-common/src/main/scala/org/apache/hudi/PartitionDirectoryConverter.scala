@@ -25,7 +25,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionDirectory
 
-object SparkPartitionFileUtils extends SparkAdapterSupport {
+object PartitionDirectoryConverter extends SparkAdapterSupport {
 
   def convertFileSlicesToPartitionDirectory(partitionOpt: Option[PartitionPath],
                                             fileSlices: Seq[FileSlice],

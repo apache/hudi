@@ -175,7 +175,7 @@ case class HoodieFileIndex(spark: SparkSession,
     val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
       case (partitionOpt, fileSlices) =>
         if (shouldEmbedFileSlices) {
-          SparkPartitionFileUtils.convertFileSlicesToPartitionDirectory(
+          PartitionDirectoryConverter.convertFileSlicesToPartitionDirectory(
             partitionOpt,
             fileSlices,
             options)

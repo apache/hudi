@@ -31,7 +31,7 @@ import org.apache.spark.sql.execution.datasources.FilePartition
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-class TestSparkPartitionFileUtils extends SparkAdapterSupport {
+class TestPartitionDirectoryConverter extends SparkAdapterSupport {
 
   val spark = SparkSession.builder
     .config(getSparkConfForTest("Hoodie Datasource test"))
@@ -81,7 +81,7 @@ class TestSparkPartitionFileUtils extends SparkAdapterSupport {
     val maxSplitSize = totalSize / expectedTaskCount
     val partitionValues = Seq("2025-01-01")
     val partitionOpt = Some(new PartitionPath(partitionPath, partitionValues.toArray))
-    val partitionDirectory = SparkPartitionFileUtils.convertFileSlicesToPartitionDirectory(partitionOpt, slices, options)
+    val partitionDirectory = PartitionDirectoryConverter.convertFileSlicesToPartitionDirectory(partitionOpt, slices, options)
 
     val partitionedFiles = partitionDirectory.files.flatMap(file => {
       // getPath() is very expensive so we only want to call it once in this block:
