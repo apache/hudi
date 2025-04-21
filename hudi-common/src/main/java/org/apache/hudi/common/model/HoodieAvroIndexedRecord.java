@@ -58,6 +58,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     super(key, data, null, currentLocation, null);
   }
 
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation, HoodieRecordLocation currentLocation, HoodieRecordLocation newLocation) {
+    super(key, data, operation, currentLocation, newLocation);
+  }
+
   public HoodieAvroIndexedRecord(IndexedRecord data, HoodieRecordLocation currentLocation) {
     super(null, data, null, currentLocation, null);
   }
@@ -189,9 +193,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     }
     HoodieKey hoodieKey = new HoodieKey(key, partition);
 
-    HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
-    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, avroPayload);
-    return hoodieRecord;
+    return new HoodieAvroIndexedRecord(hoodieKey, record);
   }
 
   @Override
