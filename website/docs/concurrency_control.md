@@ -41,9 +41,9 @@ In case of multi-writing in Hudi, the locks are acquired on the Hudi table for a
 
 There are 4 different lock providers that require different configurations to be set. 1 lock provider requires no configurations. Please refer to comprehensive locking configs [here](https://hudi.apache.org/docs/next/configurations#LOCK).
 
-#### Conditional writes based
+#### Storage with conditional writes based
 ```
-hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ConditionalWriteLockProvider
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.StorageBasedLockProvider
 ```
 No configs are required for this lock provider, however as of 1.0.2 this lock provider is only supported for S3.
 
