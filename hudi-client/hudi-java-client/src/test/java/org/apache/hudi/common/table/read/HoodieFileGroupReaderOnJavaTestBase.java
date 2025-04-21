@@ -29,11 +29,10 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -66,27 +65,25 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
     HoodieJavaClientTestHarness.TestJavaTaskContextSupplier taskContextSupplier = new HoodieJavaClientTestHarness.TestJavaTaskContextSupplier();
     HoodieJavaEngineContext context = new HoodieJavaEngineContext(getStorageConf(), taskContextSupplier);
     //init table if not exists
-    Path basePath = new Path(getBasePath());
-    try {
-      try (FileSystem lfs = basePath.getFileSystem(getStorageConf().unwrapAs(Configuration.class))) {
-        boolean basepathExists = lfs.exists(basePath);
-        boolean operationIsInsert = operation.equalsIgnoreCase("insert");
-        if (!basepathExists || operationIsInsert) {
-          if (basepathExists) {
-            lfs.delete(new Path(getBasePath()), true);
-          }
-          Map<String, Object> initConfigs = new HashMap<>(writeConfigs);
-          HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
-              .setTableType(writeConfigs.getOrDefault("hoodie.datasource.write.table.type", "MERGE_ON_READ"))
-              .setTableName(writeConfigs.get("hoodie.table.name"))
-              .setPartitionFields(writeConfigs.getOrDefault("hoodie.datasource.write.partitionpath.field", ""))
-              .setRecordMergeMode(RecordMergeMode.getValue(writeConfigs.get("hoodie.record.merge.mode")))
-              .set(initConfigs);
-          if (writeConfigs.containsKey("hoodie.datasource.write.payload.class")) {
-            builder = builder.setPayloadClassName(writeConfigs.get("hoodie.datasource.write.payload.class"));
-          }
-          builder.initTable(getStorageConf(), getBasePath());
+    StoragePath basePath = new StoragePath(getBasePath());
+    try (HoodieStorage storage = new HoodieHadoopStorage(basePath, getStorageConf())) {
+      boolean basepathExists = storage.exists(basePath);
+      boolean operationIsInsert = operation.equalsIgnoreCase("insert");
+      if (!basepathExists || operationIsInsert) {
+        if (basepathExists) {
+          storage.deleteDirectory(basePath);
         }
+        Map<String, Object> initConfigs = new HashMap<>(writeConfigs);
+        HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
+            .setTableType(writeConfigs.getOrDefault("hoodie.datasource.write.table.type", "MERGE_ON_READ"))
+            .setTableName(writeConfigs.get("hoodie.table.name"))
+            .setPartitionFields(writeConfigs.getOrDefault("hoodie.datasource.write.partitionpath.field", ""))
+            .setRecordMergeMode(RecordMergeMode.getValue(writeConfigs.get("hoodie.record.merge.mode")))
+            .set(initConfigs);
+        if (writeConfigs.containsKey("hoodie.datasource.write.payload.class")) {
+          builder = builder.setPayloadClassName(writeConfigs.get("hoodie.datasource.write.payload.class"));
+        }
+        builder.initTable(getStorageConf(), getBasePath());
       }
     } catch (IOException e) {
       throw new RuntimeException(e);

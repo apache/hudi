@@ -65,6 +65,10 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
+/**
+ * An implementation of {@link HoodieReaderContext} that reads data from the base files as {@link IndexedRecord}.
+ * This implementation does not rely on a specific engine and can be used in any JVM environment as a result.
+ */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final String payloadClass;
   private final BaseKeyGenerator keyGenerator;
