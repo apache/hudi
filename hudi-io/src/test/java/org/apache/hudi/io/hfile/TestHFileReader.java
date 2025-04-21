@@ -213,6 +213,8 @@ public class TestHFileReader {
                 new KeyLookUpInfo("hudi-key-000006814", SEEK_TO_THROW_EXCEPTION, "", ""),
                 new KeyLookUpInfo("hudi-key-000006815-ab", SEEK_TO_BEFORE_BLOCK_FIRST_KEY,
                     "hudi-key-000006815-abcdefghij", "hudi-value-000006815"),
+                new KeyLookUpInfo("hudi-key-000006815-abcdefghij", SEEK_TO_FOUND,
+                    "hudi-key-000006815-abcdefghij", "hudi-value-000006815"),
                 new KeyLookUpInfo("hudi-key-000006815-ac", SEEK_TO_IN_RANGE,
                     "hudi-key-000006815-abcdefghij", "hudi-value-000006815"),
                 new KeyLookUpInfo("hudi-key-000006816", SEEK_TO_IN_RANGE,

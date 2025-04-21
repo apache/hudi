@@ -170,14 +170,16 @@ public class HFileReaderImpl implements HFileReader {
     }
     // compareCurrent < 0, i.e., the lookup key is lexicographically smaller than
     // the key at the current cursor
+    // We need to check two cases that are allowed:
+    // 1. The lookup key is lexicographically greater than or equal to the fake first key
+    // of the data block based on the block index and lexicographically smaller than
+    // the actual first key of the data block
+    // See HFileReader#SEEK_TO_BEFORE_BLOCK_FIRST_KEY for more information
     if (isAtFirstKeyOfBlock(currentDataBlockEntry.get())
         && key.compareTo(currentDataBlockEntry.get().getFirstKey()) >= 0) {
-      // The lookup key is lexicographically greater than or equal to the fake first key
-      // of the data block based on the block index and lexicographically smaller than
-      // the actual first key of the data block
-      // See HFileReader#SEEK_TO_BEFORE_BLOCK_FIRST_KEY for more information
       return SEEK_TO_BEFORE_BLOCK_FIRST_KEY;
     }
+    // 2. The lookup key is lexicographically smaller than the first key of the file
     if (!dataBlockIndexEntryMap.isEmpty()
         && isAtFirstKeyOfBlock(dataBlockIndexEntryMap.firstEntry().getValue())) {
       // the lookup key is lexicographically smaller than the first key of the file
