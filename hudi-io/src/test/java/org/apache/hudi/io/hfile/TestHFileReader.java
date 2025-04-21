@@ -386,6 +386,20 @@ public class TestHFileReader {
                 new KeyLookUpInfo("hudi-key-000020000", SEEK_TO_EOF, "", ""),
                 new KeyLookUpInfo("hudi-key-000020001", SEEK_TO_EOF, "", "")
             )
+        ),
+        Arguments.of(
+            "/hfile/hudi_1_0_hbase_2_4_13_16KB_GZ_200000.hfile",
+            200000,
+            Arrays.asList(
+                // before first key
+                new KeyLookUpInfo("", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                new KeyLookUpInfo("a", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                // first key
+                new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
+                // last key of block 0
+                new KeyLookUpInfo("hudi-key-000001110", SEEK_TO_FOUND, "hudi-key-000001110", "hudi-value-000001110")
+            )
         )
     );
   }

@@ -124,14 +124,14 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
   @CsvSource({
       "512,GZ,20000,true", "16,GZ,20000,true",
       "64,NONE,5000,true", "16,NONE,5000,true",
-      "16,GZ,200,false"
+      "16,GZ,200,false", "16,GZ,200000,true"
   })
   void generateHFileForTesting(int blockSizeKB,
                                String compressionCodec,
                                int numEntries,
                                boolean uniqueKeys) throws IOException {
     writeHFileForTesting(
-        String.format("/tmp/hudi_1_0_hbase_2_4_9_%sKB_%s_%s.hfile",
+        String.format("/tmp/hudi_1_0_hbase_2_4_13_%sKB_%s_%s.hfile",
             blockSizeKB, compressionCodec, numEntries),
         blockSizeKB * 1024,
         Compression.Algorithm.valueOf(compressionCodec),
