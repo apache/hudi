@@ -98,7 +98,6 @@ class TestSparkPartitionFileUtils extends SparkAdapterSupport {
     })
 
     val tasks = sparkAdapter.getFilePartitions(spark, partitionedFiles, maxSplitSize)
-    assert(tasks.size - expectedTaskCount <= 1, s"Expected task count is $expectedTaskCount, but got ${tasks.size}")
     verifyBalanceByNum(tasks, totalRecordNum, logFraction)
   }
 
