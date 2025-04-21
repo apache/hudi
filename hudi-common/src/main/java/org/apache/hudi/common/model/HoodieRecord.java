@@ -394,6 +394,12 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public abstract Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled);
 
   /**
+   * Get column in record to support RDDCustomColumnsSortPartitioner
+   * @return column value
+   */
+  public abstract Object getColumnValueAsJava(Schema recordSchema, String column, Properties props);
+
+  /**
    * Support bootstrap.
    */
   public abstract HoodieRecord joinWith(HoodieRecord other, Schema targetSchema);

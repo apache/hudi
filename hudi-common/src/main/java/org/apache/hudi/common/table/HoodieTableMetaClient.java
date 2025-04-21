@@ -48,6 +48,7 @@ import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -643,7 +644,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     // if anything other than default timeline path is specified, create that too
-    String timelinePropVal = new HoodieConfig(props).getStringOrDefault(TIMELINE_PATH);
+    String timelinePropVal = ConfigUtils.getStringWithAltKeys(props, TIMELINE_PATH, true);
     StoragePath timelineDir = metaPathDir;
     timelineLayout = timelineLayout == null ? TimelineLayoutVersion.CURR_VERSION : timelineLayout;
     if (!StringUtils.isNullOrEmpty(timelinePropVal) && TimelineLayoutVersion.VERSION_2.equals(timelineLayout)) {
@@ -654,7 +655,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     // if anything other than default timeline history path is specified, create that too
-    String archiveLogPropVal = new HoodieConfig(props).getStringOrDefault(HoodieTableConfig.TIMELINE_HISTORY_PATH);
+    String archiveLogPropVal = ConfigUtils.getStringWithAltKeys(props, HoodieTableConfig.TIMELINE_HISTORY_PATH, true);
     if (!StringUtils.isNullOrEmpty(archiveLogPropVal) && TimelineLayoutVersion.VERSION_2.equals(timelineLayout)) {
       StoragePath archiveLogDir = new StoragePath(timelineDir, archiveLogPropVal);
       if (!storage.exists(archiveLogDir)) {
@@ -1256,7 +1257,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     public TableBuilder fromProperties(Properties properties) {
-      HoodieConfig hoodieConfig = new HoodieConfig(properties);
+      HoodieConfig hoodieConfig = HoodieConfig.copy(properties);
 
       for (ConfigProperty<String> configProperty : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
         if (hoodieConfig.contains(configProperty)) {

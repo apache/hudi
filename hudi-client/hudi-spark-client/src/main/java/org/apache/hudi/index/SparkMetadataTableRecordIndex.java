@@ -19,7 +19,6 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -90,7 +89,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     final int numFileGroups = fileGroupSize;
 
     if (config.getRecordIndexUseCaching()) {
-      records.persist(new HoodieConfig(config.getProps()).getString(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+      records.persist(config.getRecordIndexInputStorageLevel());
     }
 
     // Partition the record keys to lookup such that each partition looks up one record index shard

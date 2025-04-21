@@ -132,11 +132,10 @@ public class HoodieTimeGeneratorConfig extends HoodieConfig {
     }
 
     public HoodieTimeGeneratorConfig build() {
-      timeGeneratorConfig.setDefaults(HoodieTimeGeneratorConfig.class.getName());
-
       if (!timeGeneratorConfig.contains(LOCK_PROVIDER_KEY)) {
         timeGeneratorConfig.setValue(LOCK_PROVIDER_KEY, DEFAULT_LOCK_PROVIDER);
       }
+      timeGeneratorConfig.setDefaults(HoodieTimeGeneratorConfig.class.getName());
       return timeGeneratorConfig;
     }
   }

@@ -80,8 +80,8 @@ public class ITTestDynamoDBBasedLockProvider {
     dynamoDblpProps.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_CAPACITY.key(), "0");
     dynamoDblpProps.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY.key(), "0");
 
-    implicitPartKeyLpProps = new TypedProperties(dynamoDblpProps);
-    dynamoDblpProps = new TypedProperties(dynamoDblpProps);
+    implicitPartKeyLpProps = TypedProperties.copy(dynamoDblpProps);
+    dynamoDblpProps = TypedProperties.copy(dynamoDblpProps);
 
     // For the day-1 DynamoDbBasedLockProvider, it requires an optional partition key
     dynamoDblpProps.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key(), "testKey");
@@ -95,16 +95,16 @@ public class ITTestDynamoDBBasedLockProvider {
         HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "ma_po_tofu_is_awesome");
     IMPLICIT_PART_KEY_LOCK_CONFIG = new LockConfiguration(implicitPartKeyLpProps);
     // With partition key nothing should break, the field should be simply ignored.
-    TypedProperties withPartKey = new TypedProperties(implicitPartKeyLpProps);
+    TypedProperties withPartKey = TypedProperties.copy(implicitPartKeyLpProps);
     withPartKey.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key(), "testKey");
     IMPLICIT_PART_KEY_LOCK_CONFIG_WITH_PART_KEY = new LockConfiguration(withPartKey);
 
     // Missing either base path or hoodie table name is a bad config for implicit partition key lock provider.
-    TypedProperties missingBasePath = new TypedProperties(implicitPartKeyLpProps);
+    TypedProperties missingBasePath = TypedProperties.copy(implicitPartKeyLpProps);
     missingBasePath.remove(HoodieCommonConfig.BASE_PATH.key());
     IMPLICIT_PART_KEY_LOCK_CONFIG_NO_BASE_PATH = new LockConfiguration(missingBasePath);
 
-    TypedProperties missingTableName = new TypedProperties(implicitPartKeyLpProps);
+    TypedProperties missingTableName = TypedProperties.copy(implicitPartKeyLpProps);
     missingTableName.remove(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
     IMPLICIT_PART_KEY_LOCK_CONFIG_NO_TBL_NAME = new LockConfiguration(missingTableName);
   }

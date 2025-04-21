@@ -177,6 +177,13 @@ public class HoodieAvroUtils {
   /**
    * Convert a given avro record to bytes.
    */
+  public static byte[] avroToBytes(IndexedRecord record) {
+    return indexedRecordToBytes(record);
+  }
+
+  /**
+   * Convert a given avro record to bytes.
+   */
   public static byte[] avroToBytes(GenericRecord record) {
     return indexedRecordToBytes(record);
   }
