@@ -267,8 +267,6 @@ public class HoodieMetadataWriteUtils {
     // Inline compaction and auto clean is required as we do not expose this table outside
     ValidationUtils.checkArgument(!metadataWriteConfig.isAutoClean(), "Cleaning is controlled internally for Metadata table.");
     ValidationUtils.checkArgument(!metadataWriteConfig.inlineCompactionEnabled(), "Compaction is controlled internally for metadata table.");
-    // Auto commit is required
-    // ValidationUtils.checkArgument(metadataWriteConfig.shouldAutoCommit(), "Auto commit is required for Metadata Table");
     ValidationUtils.checkArgument(metadataWriteConfig.getWriteStatusClassName().equals(FailOnFirstErrorWriteStatus.class.getName()),
         "MDT should use " + FailOnFirstErrorWriteStatus.class.getName());
     // Metadata Table cannot have metadata listing turned on. (infinite loop, much?)

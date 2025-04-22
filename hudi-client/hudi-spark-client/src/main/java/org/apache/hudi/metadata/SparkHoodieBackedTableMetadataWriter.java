@@ -239,13 +239,13 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void writeAndCommitBulkInsert(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs,
                                           Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
-    writeClient.commit(instantTime, writeStatusJavaRDD);
+    writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
   }
 
   @Override
   protected void writeAndCommitUpsert(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs) {
     JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
-    writeClient.commit(instantTime, writeStatusJavaRDD);
+    writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
   }
 
   @Override
