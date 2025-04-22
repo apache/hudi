@@ -73,7 +73,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     super(storageConfiguration, tableConfig.populateMetaFields());
     this.payloadClass = tableConfig.getPayloadClass();
     String keyGenClassName = KeyGeneratorType.fromClassName(tableConfig.getKeyGeneratorClassName()).getAvroImplementation().getClassName();
-    this.keyGenerator = metaFieldsPopulated ? null : buildKeyGenerator(keyGenClassName, tableConfig.getProps());
+    this.keyGenerator = metaFieldsPopulated ? null : buildKeyGenerator(tableConfig);
   }
 
   public HoodieAvroReaderContext(
@@ -83,6 +83,15 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     super(storageConfiguration, tableConfig.populateMetaFields());
     this.payloadClass = tableConfig.getPayloadClass();
     this.keyGenerator = keyGenerator;
+  }
+
+  @Override
+  protected String getKeyGenClass(HoodieTableConfig tableConfig) {
+    String keyGeneratorClassName = tableConfig.getKeyGeneratorClassName();
+    if (keyGeneratorClassName == null) {
+      return tableConfig.isTablePartitioned() ? KeyGeneratorType.SIMPLE_AVRO.getClassName() : KeyGeneratorType.NON_PARTITION_AVRO.getClassName();
+    }
+    return KeyGeneratorType.fromClassName(keyGeneratorClassName).getAvroImplementation().getClassName();
   }
 
   @Override

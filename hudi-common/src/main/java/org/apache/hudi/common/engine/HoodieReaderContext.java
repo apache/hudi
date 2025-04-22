@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
@@ -83,13 +84,16 @@ public abstract class HoodieReaderContext<T> {
     this.metaFieldsPopulated = metaFieldsPopulated;
   }
 
-  protected BaseKeyGenerator buildKeyGenerator(String className, TypedProperties tableConfigProps) {
+  protected BaseKeyGenerator buildKeyGenerator(HoodieTableConfig tableConfig) {
     // Write out the properties from the table config into the required properties for generating the KeyGenerator
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), tableConfigProps.getOrDefault(RECORDKEY_FIELDS.key(), ""));
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), tableConfigProps.getOrDefault(PARTITION_FIELDS.key(), ""));
-    return (BaseKeyGenerator) ReflectionUtils.loadClass(className, properties);
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), tableConfig.getProps().getOrDefault(RECORDKEY_FIELDS.key(), ""));
+    String partitionFields = tableConfig.getProps().getOrDefault(PARTITION_FIELDS.key(), "").toString();
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionFields);
+    return (BaseKeyGenerator) ReflectionUtils.loadClass(getKeyGenClass(tableConfig), properties);
   }
+
+  protected abstract String getKeyGenClass(HoodieTableConfig tableConfig);
 
   // Getter and Setter for schemaHandler
   public FileGroupReaderSchemaHandler<T> getSchemaHandler() {

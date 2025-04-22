@@ -107,8 +107,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.partitionColSet = new HashSet<>(this.partitionCols);
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
-    String keyGenClassName = KeyGeneratorType.fromClassName(tableConfig.getKeyGeneratorClassName()).getAvroImplementation().getClassName();
-    this.keyGenerator = metaFieldsPopulated ? null : buildKeyGenerator(keyGenClassName, tableConfig.getProps());
+    this.keyGenerator = metaFieldsPopulated ? null : buildKeyGenerator(tableConfig);
   }
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
@@ -127,6 +126,15 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNames);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, requiredSchema.getFields()
         .stream().map(f -> String.valueOf(dataSchema.getField(f.name()).pos())).collect(Collectors.joining(",")));
+  }
+
+  @Override
+  protected String getKeyGenClass(HoodieTableConfig tableConfig) {
+    String keyGeneratorClassName = tableConfig.getKeyGeneratorClassName();
+    if (keyGeneratorClassName == null) {
+      return tableConfig.isTablePartitioned() ? KeyGeneratorType.SIMPLE_AVRO.getClassName() : KeyGeneratorType.NON_PARTITION_AVRO.getClassName();
+    }
+    return KeyGeneratorType.fromClassName(keyGeneratorClassName).getAvroImplementation().getClassName();
   }
 
   @Override

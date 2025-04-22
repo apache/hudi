@@ -180,6 +180,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
+
   @ParameterizedTest
   @EnumSource(value = ExternalSpillableMap.DiskMapType.class)
   public void testSpillableMapUsage(ExternalSpillableMap.DiskMapType diskMapType) throws Exception {

@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -62,8 +62,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
                                               HoodieTableConfig tableConfig) {
     super(storageConfig, tableConfig.populateMetaFields());
-    String keyGenClassName = HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(tableConfig.getKeyGeneratorClassName());
-    this.keyGenerator = metaFieldsPopulated ? null : (BuiltinKeyGenerator) buildKeyGenerator(keyGenClassName, tableConfig.getProps());
+    this.keyGenerator = metaFieldsPopulated ? null : (BuiltinKeyGenerator) buildKeyGenerator(tableConfig);
   }
 
   @Override
@@ -87,6 +86,15 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         }
         return mergerClass;
     }
+  }
+
+  @Override
+  protected String getKeyGenClass(HoodieTableConfig tableConfig) {
+    String keyGeneratorClassName = tableConfig.getKeyGeneratorClassName();
+    if (keyGeneratorClassName == null) {
+      return tableConfig.isTablePartitioned() ? KeyGeneratorType.SIMPLE.getClassName() : KeyGeneratorType.NON_PARTITION.getClassName();
+    }
+    return keyGeneratorClassName;
   }
 
   @Override
