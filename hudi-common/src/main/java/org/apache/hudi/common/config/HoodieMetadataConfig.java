@@ -966,7 +966,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       switch (engineType) {
         case SPARK:
         case JAVA:
-          return true;
+          return false;
         case FLINK:
           return false;
         default:
