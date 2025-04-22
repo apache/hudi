@@ -159,7 +159,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
     HoodieTableMetaClient metaClient = flinkTable.getMetaClient();
     // reload the timeline
-    metaClient.reloadActiveTimeline();
+    metaClient.reload();
     // schema evolution
     CompactionUtil.setAvroSchema(writeConfig, metaClient);
     List<WriteStatus> writeStatuses = compactor.compact(
