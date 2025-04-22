@@ -43,6 +43,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -469,11 +470,12 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         }
 
         // instantiate FG reader
-        HoodieReaderContext<InternalRow> readerContext = readerContextFactory.getContext();
+        HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
+        HoodieReaderContext<InternalRow> readerContext = readerContextFactory.getContext(metaClient.getTableConfig());
         HoodieFileGroupReader<InternalRow> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
-            getHoodieTable().getMetaClient().getStorage().newInstance(new StoragePath(basePath), readerContext.getStorageConfiguration()),
+            metaClient.getStorage().newInstance(new StoragePath(basePath), readerContext.getStorageConfiguration()),
             basePath, instantTime, fileSlice, readerSchema, readerSchema, internalSchemaOption,
-            getHoodieTable().getMetaClient(), getHoodieTable().getMetaClient().getTableConfig().getProps(),
+            metaClient, metaClient.getTableConfig().getProps(),
             0, Long.MAX_VALUE, usePosition, false);
         fileGroupReader.initRecordIterators();
         // read records from the FG reader

@@ -20,12 +20,16 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -44,7 +48,8 @@ import java.util.Map;
 import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
-import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -59,6 +64,7 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  */
 public abstract class HoodieReaderContext<T> {
   private final StorageConfiguration<?> storageConfiguration;
+  protected final boolean metaFieldsPopulated;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
@@ -71,8 +77,18 @@ public abstract class HoodieReaderContext<T> {
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
-  protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration) {
+  protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
+                                boolean metaFieldsPopulated) {
     this.storageConfiguration = storageConfiguration;
+    this.metaFieldsPopulated = metaFieldsPopulated;
+  }
+
+  protected BaseKeyGenerator buildKeyGenerator(String className, TypedProperties tableConfigProps) {
+    // Write out the properties from the table config into the required properties for generating the KeyGenerator
+    TypedProperties properties = new TypedProperties();
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), tableConfigProps.getOrDefault(RECORDKEY_FIELDS.key(), ""));
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), tableConfigProps.getOrDefault(PARTITION_FIELDS.key(), ""));
+    return (BaseKeyGenerator) ReflectionUtils.loadClass(className, properties);
   }
 
   // Getter and Setter for schemaHandler
@@ -243,10 +259,7 @@ public abstract class HoodieReaderContext<T> {
    * @param schema The Avro schema of the record.
    * @return The record key in String.
    */
-  public String getRecordKey(T record, Schema schema) {
-    Object val = getValue(record, schema, RECORD_KEY_METADATA_FIELD);
-    return val.toString();
-  }
+  public abstract String getRecordKey(T record, Schema schema);
 
   /**
    * Gets the ordering value in particular type.

@@ -29,6 +29,8 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -39,6 +41,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 
 public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieFileGroupReaderBase<T> {
 
@@ -79,6 +83,11 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
             .setTableName(writeConfigs.get("hoodie.table.name"))
             .setPartitionFields(writeConfigs.getOrDefault("hoodie.datasource.write.partitionpath.field", ""))
             .setRecordMergeMode(RecordMergeMode.getValue(writeConfigs.get("hoodie.record.merge.mode")))
+            .setPopulateMetaFields(Boolean.parseBoolean(writeConfigs.getOrDefault(POPULATE_META_FIELDS.key(), "true")))
+            .setKeyGeneratorType(KeyGeneratorType.SIMPLE.name())
+            .setRecordKeyFields(writeConfigs.get(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()))
+            .setPartitionFields(writeConfigs.get(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()))
+            .setPreCombineField(writeConfigs.get("hoodie.datasource.write.precombine.field"))
             .set(initConfigs);
         if (writeConfigs.containsKey("hoodie.datasource.write.payload.class")) {
           builder = builder.setPayloadClassName(writeConfigs.get("hoodie.datasource.write.payload.class"));

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
+
 import java.io.Serializable;
 
 /**
@@ -26,5 +28,5 @@ import java.io.Serializable;
  * @param <T> The engine specific data type for the reader
  */
 public interface ReaderContextFactory<T> extends Serializable {
-  HoodieReaderContext<T> getContext();
+  HoodieReaderContext<T> getContext(HoodieTableConfig tableConfig);
 }

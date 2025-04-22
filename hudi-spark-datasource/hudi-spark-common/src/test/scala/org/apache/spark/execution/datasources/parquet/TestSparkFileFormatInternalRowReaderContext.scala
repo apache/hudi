@@ -21,10 +21,15 @@ package org.apache.spark.execution.datasources.parquet
 
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.filterIsSafeForBootstrap
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.keygen.CustomKeyGenerator
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
+import org.apache.avro.SchemaBuilder
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
 import org.apache.spark.sql.sources.{And, IsNotNull, Or}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
@@ -32,6 +37,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
+import org.mockito.Mockito.when
 
 class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalTestHarness {
 
@@ -78,7 +84,9 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
   def testConvertValueToEngineType(): Unit = {
     val reader = Mockito.mock(classOf[SparkParquetReader])
     val stringValue = "string_value"
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf())
+    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
+    when(tableConfig.populateMetaFields()).thenReturn(true)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
     assertEquals(1, sparkReaderContext.convertValueToEngineType(1))
     assertEquals(1L, sparkReaderContext.convertValueToEngineType(1L))
     assertEquals(1.1f, sparkReaderContext.convertValueToEngineType(1.1f))
@@ -87,5 +95,43 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
       sparkReaderContext.convertValueToEngineType(stringValue))
     assertEquals(UTF8String.fromString(stringValue),
       sparkReaderContext.convertValueToEngineType(UTF8String.fromString(stringValue)))
+  }
+
+  @Test
+  def getRecordKeyFromMetadataFields(): Unit = {
+    val reader = Mockito.mock(classOf[SparkParquetReader])
+    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
+    when(tableConfig.populateMetaFields()).thenReturn(true)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
+    val schema = SchemaBuilder.builder()
+      .record("test")
+      .fields()
+      .requiredString(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+      .optionalString("field2")
+      .endRecord()
+    val key = "my_key"
+    val row = InternalRow.fromSeq(Seq(key, "value2"))
+    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
+  }
+
+  @Test
+  def getRecordKeyWithKeyGen (): Unit = {
+    val reader = Mockito.mock(classOf[SparkParquetReader])
+    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
+    when(tableConfig.populateMetaFields()).thenReturn(false)
+    when(tableConfig.getKeyGeneratorClassName).thenReturn(classOf[CustomKeyGenerator].getName)
+    val props = new TypedProperties
+    props.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "field1,field2")
+    when(tableConfig.getProps).thenReturn(props)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
+    val schema = SchemaBuilder.builder()
+      .record("test")
+      .fields()
+      .requiredString("field1")
+      .optionalString("field2")
+      .endRecord()
+    val key = "compound,key"
+    val row = InternalRow.fromSeq(Seq("compound", "key"))
+    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
   }
 }

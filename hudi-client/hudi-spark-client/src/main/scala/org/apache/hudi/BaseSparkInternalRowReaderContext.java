@@ -28,8 +28,11 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.BuiltinKeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -54,9 +57,13 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
  * Subclasses need to implement {@link #getFileRecordIterator} with the reader logic.
  */
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
+  private final BuiltinKeyGenerator keyGenerator;
 
-  protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig) {
-    super(storageConfig);
+  protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
+                                              HoodieTableConfig tableConfig) {
+    super(storageConfig, tableConfig.populateMetaFields());
+    String keyGenClassName = HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(tableConfig.getKeyGeneratorClassName());
+    this.keyGenerator = metaFieldsPopulated ? null : (BuiltinKeyGenerator) buildKeyGenerator(keyGenClassName, tableConfig.getProps());
   }
 
   @Override
@@ -89,7 +96,11 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public String getRecordKey(InternalRow row, Schema schema) {
-    return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
+    if (metaFieldsPopulated) {
+      return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
+    }
+    StructType structType = getCachedSchema(schema);
+    return keyGenerator.getRecordKey(row, structType).toString();
   }
 
   @Override

@@ -21,7 +21,6 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -33,14 +32,13 @@ import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -59,8 +57,6 @@ import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -70,34 +66,23 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final String payloadClass;
   private final BaseKeyGenerator keyGenerator;
-  private final boolean metaFieldsPopulated;
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig) {
-    super(storageConfiguration);
+    super(storageConfiguration, tableConfig.populateMetaFields());
     this.payloadClass = tableConfig.getPayloadClass();
-    this.metaFieldsPopulated = tableConfig.populateMetaFields();
-    this.keyGenerator = metaFieldsPopulated ? null : buildKeyGenerator(tableConfig);
+    String keyGenClassName = KeyGeneratorType.fromClassName(tableConfig.getKeyGeneratorClassName()).getAvroImplementation().getClassName();
+    this.keyGenerator = metaFieldsPopulated ? null : buildKeyGenerator(keyGenClassName, tableConfig.getProps());
   }
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
       BaseKeyGenerator keyGenerator) {
-    super(storageConfiguration);
+    super(storageConfiguration, tableConfig.populateMetaFields());
     this.payloadClass = tableConfig.getPayloadClass();
-    this.metaFieldsPopulated = tableConfig.populateMetaFields();
     this.keyGenerator = keyGenerator;
-  }
-
-  private static BaseKeyGenerator buildKeyGenerator(HoodieTableConfig tableConfig) {
-    TypedProperties tableConfigProps = tableConfig.getProps();
-    // Write out the properties from the table config into the required properties for generating the KeyGenerator
-    TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), tableConfigProps.getOrDefault(RECORDKEY_FIELDS.key(), ""));
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), tableConfigProps.getOrDefault(PARTITION_FIELDS.key(), ""));
-    return (BaseKeyGenerator) ReflectionUtils.loadClass(tableConfig.getKeyGeneratorClassName(), properties);
   }
 
   @Override

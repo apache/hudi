@@ -145,7 +145,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     if (useFileGroupReaderBasedCompaction) {
       ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
       return context.parallelize(operations).map(
-              operation -> compact(compactionHandler, config, operation, compactionInstantTime, readerContextFactory.getContext()))
+              operation -> compact(compactionHandler, config, operation, compactionInstantTime, readerContextFactory.getContext(metaClient.getTableConfig())))
           .flatMap(List::iterator);
     } else {
       return context.parallelize(operations).map(

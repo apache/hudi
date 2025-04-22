@@ -150,4 +150,12 @@ public enum KeyGeneratorType {
     }
     return null;
   }
+
+  public KeyGeneratorType getAvroImplementation() {
+    if (name().endsWith("AVRO")) {
+      return this;
+    }
+    String avroName = name() + "_AVRO";
+    return KeyGeneratorType.valueOf(avroName);
+  }
 }

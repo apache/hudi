@@ -25,14 +25,12 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
@@ -123,9 +121,10 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     String latestCommitTime = getLatestCommitTime(split, metaClient);
     Schema tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
     Schema requestedSchema = createRequestedSchema(tableSchema, jobConfCopy);
-    this.readerContext = new HiveHoodieReaderContext(readerCreator, getRecordKeyField(metaClient),
+    this.readerContext = new HiveHoodieReaderContext(readerCreator,
         getStoredPartitionFieldNames(jobConfCopy, tableSchema),
-        new ObjectInspectorCache(tableSchema, jobConfCopy), new HadoopStorageConfiguration(jobConfCopy));
+        new ObjectInspectorCache(tableSchema, jobConfCopy), new HadoopStorageConfiguration(jobConfCopy),
+        metaClient.getTableConfig());
     this.arrayWritable = new ArrayWritable(Writable.class, new Writable[requestedSchema.getFields().size()]);
     TypedProperties props = metaClient.getTableConfig().getProps();
     jobConf.forEach(e -> {
@@ -187,22 +186,6 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   @Override
   public float getProgress() throws IOException {
     return readerContext.getProgress();
-  }
-
-  /**
-   * If populate meta fields is false, then getRecordKeyFields()
-   * should return exactly 1 recordkey field.
-   */
-  @VisibleForTesting
-  static String getRecordKeyField(HoodieTableMetaClient metaClient) {
-    if (metaClient.getTableConfig().populateMetaFields()) {
-      return HoodieRecord.RECORD_KEY_METADATA_FIELD;
-    }
-
-    Option<String[]> recordKeyFieldsOpt = metaClient.getTableConfig().getRecordKeyFields();
-    ValidationUtils.checkArgument(recordKeyFieldsOpt.isPresent(), "No record key field set in table config, but populateMetaFields is disabled");
-    ValidationUtils.checkArgument(recordKeyFieldsOpt.get().length == 1, "More than 1 record key set in table config, but populateMetaFields is disabled");
-    return recordKeyFieldsOpt.get()[0];
   }
 
   /**

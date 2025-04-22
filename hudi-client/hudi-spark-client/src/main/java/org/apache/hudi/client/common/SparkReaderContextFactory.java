@@ -24,6 +24,7 @@ import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -91,7 +92,7 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
   }
 
   @Override
-  public HoodieReaderContext<InternalRow> getContext() {
+  public HoodieReaderContext<InternalRow> getContext(HoodieTableConfig tableConfig) {
     if (parquetReaderBroadcast == null) {
       throw new HoodieException("Spark Parquet reader broadcast is not initialized.");
     }
@@ -107,7 +108,8 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
           sparkParquetReader,
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
-          new HadoopStorageConfiguration(configurationBroadcast.getValue().value()));
+          new HadoopStorageConfiguration(configurationBroadcast.getValue().value()),
+          tableConfig);
     } else {
       throw new HoodieException("Cannot get the broadcast Spark Parquet reader.");
     }
