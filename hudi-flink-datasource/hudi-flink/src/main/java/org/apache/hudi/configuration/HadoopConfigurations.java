@@ -18,7 +18,6 @@
 
 package org.apache.hudi.configuration;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -53,17 +52,6 @@ public class HadoopConfigurations {
     org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
     Map<String, String> options = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
     options.forEach(hadoopConf::set);
-
-    hadoopConf.set(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(),
-        options.getOrDefault(
-            HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(),
-            HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue().toString()));
-    hadoopConf.set(FlinkOptions.READ_UTC_TIMEZONE.key(), conf.get(FlinkOptions.READ_UTC_TIMEZONE).toString());
-    hadoopConf.set(FlinkOptions.WRITE_UTC_TIMEZONE.key(), conf.get(FlinkOptions.WRITE_UTC_TIMEZONE).toString());
-    hadoopConf.set(FlinkOptions.PARTITION_DEFAULT_NAME.key(), conf.get(FlinkOptions.PARTITION_DEFAULT_NAME));
-    hadoopConf.set(FlinkOptions.PARTITION_PATH_FIELD.key(), conf.get(FlinkOptions.PARTITION_PATH_FIELD));
-    hadoopConf.set(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING).toString());
-
     return hadoopConf;
   }
 

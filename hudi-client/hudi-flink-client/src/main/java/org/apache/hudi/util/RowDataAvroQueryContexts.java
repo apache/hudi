@@ -23,6 +23,8 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.util.RowDataToAvroConverters.RowDataToAvroConverter;
 import org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter;
 
@@ -38,14 +40,10 @@ public class RowDataAvroQueryContexts {
   private static final Map<Schema, RowDataQueryContext> QUERY_CONTEXT_MAP = new ConcurrentHashMap<>();
 
   public static RowDataQueryContext fromAvroSchema(Schema avroSchema) {
-    return fromAvroSchema(avroSchema, true, true);
+    return fromAvroSchema(avroSchema, true);
   }
 
   public static RowDataQueryContext fromAvroSchema(Schema avroSchema, boolean utcTimezone) {
-    return fromAvroSchema(avroSchema, utcTimezone, true);
-  }
-
-  public static RowDataQueryContext fromAvroSchema(Schema avroSchema, boolean utcTimezone, boolean returnNullIfNotFound) {
     return QUERY_CONTEXT_MAP.computeIfAbsent(avroSchema, k -> {
       DataType dataType = AvroSchemaConverter.convertToDataType(avroSchema);
       RowType rowType = (RowType) dataType.getLogicalType();
@@ -56,7 +54,7 @@ public class RowDataAvroQueryContexts {
         LogicalType fieldType = rowFields[i].getType();
         RowData.FieldGetter fieldGetter = RowData.createFieldGetter(rowFields[i].getType(), i);
         fieldGetters[i] = fieldGetter;
-        contextMap.put(rowFields[i].getName(), FieldQueryContext.create(fieldType, fieldGetter, utcTimezone, returnNullIfNotFound));
+        contextMap.put(rowFields[i].getName(), FieldQueryContext.create(fieldType, fieldGetter, utcTimezone));
       }
       RowDataToAvroConverter rowDataToAvroConverter = RowDataToAvroConverters.createConverter(rowType, utcTimezone);
       AvroToRowDataConverter avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType, utcTimezone);
@@ -118,14 +116,14 @@ public class RowDataAvroQueryContexts {
     private final LogicalType logicalType;
     private final RowData.FieldGetter fieldGetter;
     private final Function<Object, Object> javaTypeConverter;
-    private FieldQueryContext(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone, boolean returnNullIfNotFound) {
+    private FieldQueryContext(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone) {
       this.logicalType = logicalType;
       this.fieldGetter = fieldGetter;
-      this.javaTypeConverter = RowDataUtils.orderingValFunc(logicalType, utcTimezone, returnNullIfNotFound);
+      this.javaTypeConverter = RowDataUtils.javaValFunc(logicalType, utcTimezone);
     }
 
-    public static FieldQueryContext create(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone, boolean returnNullIfNotFound) {
-      return new FieldQueryContext(logicalType, fieldGetter, utcTimezone, returnNullIfNotFound);
+    public static FieldQueryContext create(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone) {
+      return new FieldQueryContext(logicalType, fieldGetter, utcTimezone);
     }
 
     public LogicalType getLogicalType() {
@@ -137,7 +135,15 @@ public class RowDataAvroQueryContexts {
     }
 
     public Object getValAsJava(RowData rowData) {
-      return this.javaTypeConverter.apply(fieldGetter.getFieldOrNull(rowData));
+      return getValAsJava(rowData, true);
+    }
+
+    public Object getValAsJava(RowData rowData, boolean allowsNull) {
+      Object val = this.javaTypeConverter.apply(fieldGetter.getFieldOrNull(rowData));
+      if (val == null && !allowsNull) {
+        throw new HoodieException("The field value can not be null");
+      }
+      return val;
     }
   }
 }

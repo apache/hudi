@@ -18,8 +18,6 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.exception.HoodieValidationException;
-
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.TimestampData;
@@ -56,9 +54,8 @@ public class RowDataUtils {
    *
    * @param logicalType The logical type
    * @param utcTimezone whether to use UTC timezone for timestamp data type
-   * @param returnNullIfNotFound whether return null value if field is null
    */
-  public static Function<Object, Object> orderingValFunc(LogicalType logicalType, boolean utcTimezone, boolean returnNullIfNotFound) {
+  public static Function<Object, Object> javaValFunc(LogicalType logicalType, boolean utcTimezone) {
     switch (logicalType.getTypeRoot()) {
       case NULL:
         return fieldVal -> null;
@@ -101,12 +98,7 @@ public class RowDataUtils {
       case DECIMAL:
         return fieldVal -> ((DecimalData) fieldVal).toBigDecimal();
       default:
-        return fieldVal -> {
-          if (fieldVal == null) {
-            throw new HoodieValidationException("Ordering value(legacy as preCombine field value) can not be null");
-          }
-          return fieldVal;
-        };
+        return fieldVal -> fieldVal;
     }
   }
 

@@ -75,6 +75,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   private final List<Predicate> predicates;
   private final InternalSchemaManager internalSchemaManager;
   private RowDataSerializer rowDataSerializer;
+  private final boolean utcTimezone;
 
   public FlinkRowDataReaderContext(
       StorageConfiguration<?> storageConfiguration,
@@ -83,6 +84,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     super(storageConfiguration);
     this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;
+    this.utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
   }
 
   @Override
@@ -130,7 +132,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   @Override
   public Object getValue(RowData record, Schema schema, String fieldName) {
-    boolean utcTimezone = getStorageConfiguration().getBoolean("read.utc-timezone", true);
     RowDataAvroQueryContexts.FieldQueryContext fieldQueryContext =
         RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(fieldName);
     if (fieldQueryContext == null) {
@@ -172,10 +173,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     if (!recordOption.isPresent() || orderingFieldName.isEmpty()) {
       return DEFAULT_ORDERING_VALUE;
     }
-    boolean utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
     RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(orderingFieldName.get());
-
-    Comparable finalOrderingVal = (Comparable) context.getValAsJava(recordOption.get());
+    Comparable finalOrderingVal = (Comparable) context.getValAsJava(recordOption.get(), false);
     metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
     return finalOrderingVal;
   }
@@ -251,7 +250,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   @Override
   public RowData convertAvroRecord(IndexedRecord avroRecord) {
     Schema recordSchema = avroRecord.getSchema();
-    boolean utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
     AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone).getAvroToRowDataConverter();
     return (RowData) converter.convert(avroRecord);
   }

@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -31,10 +32,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,8 +74,13 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
                                    CompactionOperation operation,
                                    String instantTime,
                                    TaskContextSupplier taskContextSupplier,
-                                   Option<HoodieReaderContext> readerContextOpt) throws IOException {
-    if (readerContextOpt.isEmpty()) {
+                                   Lazy<HoodieReaderContext<?>> readerContextLazy) throws IOException {
+    boolean useFileGroupReaderBasedCompaction = !metaClient.isMetadataTable()
+        && writeConfig.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+        && operation.getBootstrapFilePath().isEmpty()
+        && writeConfig.populateMetaFields()                                                         // Virtual key support by fg reader is not ready
+        && !(metaClient.getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor());  // do not support produce cdc log during fg reader
+    if (!useFileGroupReaderBasedCompaction) {
       LOG.info("Compact using legacy compaction, operation: {}.", operation);
       String maxInstantTime = getMaxInstantTime(metaClient);
       return compact(
@@ -92,7 +98,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
           writeConfig,
           operation,
           instantTime,
-          readerContextOpt.get());
+          readerContextLazy.get());
     }
   }
 

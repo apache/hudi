@@ -139,7 +139,7 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
   private RowData mergeRowData(RowData lowOrderRow, RowData highOrderRow, Schema schema, TypedProperties props) {
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty("read.utc-timezone", "true"));
     GenericRowData result = new GenericRowData(schema.getFields().size());
-    RowData.FieldGetter[] fieldGetters = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone, true).fieldGetters();
+    RowData.FieldGetter[] fieldGetters = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).fieldGetters();
     for (int i = 0; i < fieldGetters.length; i++) {
       result.setField(i, fieldGetters[i].getFieldOrNull(lowOrderRow));
       Object fieldValWithHighOrder = fieldGetters[i].getFieldOrNull(highOrderRow);
