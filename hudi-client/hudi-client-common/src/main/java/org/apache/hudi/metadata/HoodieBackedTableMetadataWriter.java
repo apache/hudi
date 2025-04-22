@@ -130,7 +130,7 @@ import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readS
  *
  * @param <I> Type of input for the write client
  */
-public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableMetadataWriter {
+public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTableMetadataWriter {
 
   static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadataWriter.class);
 
@@ -142,7 +142,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   // Record index has a fixed size schema. This has been calculated based on experiments with default settings
   // for block size (1MB), compression (GZ) and disabling the hudi metadata fields.
   private static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
-  protected transient BaseHoodieWriteClient<?, I, ?, ?> writeClient;
+  protected transient BaseHoodieWriteClient<?, I, ?, O> writeClient;
 
   protected HoodieWriteConfig metadataWriteConfig;
   protected HoodieWriteConfig dataWriteConfig;
@@ -1374,7 +1374,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
     I preppedRecordInputs = convertHoodieDataToEngineSpecificData(preppedRecords);
 
-    BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient();
+    BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();
     // rollback partially failed writes if any.
     metadataMetaClient = rollbackFailedWrites(dataWriteConfig, writeClient, metadataMetaClient);
 
@@ -1404,13 +1404,15 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     writeClient.startCommitWithTime(instantTime);
     preWrite(instantTime);
+    O resultStatus;
     if (isInitializing) {
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-      writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
+      resultStatus = writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
     } else {
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-      writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+      resultStatus = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
     }
+    writeClient.commit(instantTime, resultStatus);
 
     metadataMetaClient.reloadActiveTimeline();
 
@@ -1757,12 +1759,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return initialized;
   }
 
-  protected BaseHoodieWriteClient<?, I, ?, ?> getWriteClient() {
+  protected BaseHoodieWriteClient<?, I, ?, O> getWriteClient() {
     if (writeClient == null) {
       writeClient = initializeWriteClient();
     }
     return writeClient;
   }
 
-  protected abstract BaseHoodieWriteClient<?, I, ?, ?> initializeWriteClient();
+  protected abstract BaseHoodieWriteClient<?, I, ?, O> initializeWriteClient();
 }

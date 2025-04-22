@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
@@ -56,7 +57,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
-public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieBackedTableMetadataWriterTableVersionSix<JavaRDD<HoodieRecord>> {
+public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieBackedTableMetadataWriterTableVersionSix<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieBackedTableMetadataWriter.class);
 
@@ -142,7 +143,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
   }
 
   @Override
-  public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, ?> initializeWriteClient() {
+  public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> initializeWriteClient() {
     return new SparkRDDWriteClient(engineContext, metadataWriteConfig, Option.empty());
   }
 
