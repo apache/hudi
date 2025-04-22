@@ -34,7 +34,7 @@ import org.junit.jupiter.params.provider.ValueSource
 class TestPartitionDirectoryConverter extends SparkAdapterSupport {
 
   val spark = SparkSession.builder
-    .config(getSparkConfForTest("Hoodie Datasource test"))
+    .config(getSparkConfForTest("TestPartitionDirectoryConverter"))
     .config("spark.sql.files.openCostInBytes", "0")
     .getOrCreate
 
