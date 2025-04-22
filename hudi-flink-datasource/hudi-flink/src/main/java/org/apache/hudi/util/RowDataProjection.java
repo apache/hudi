@@ -33,12 +33,12 @@ import java.util.List;
 /**
  * Utilities to project the row data with given positions.
  */
-public class RowDataDataProjection implements RowProjection {
+public class RowDataProjection implements RowProjection {
   private static final long serialVersionUID = 1L;
 
   private final RowData.FieldGetter[] fieldGetters;
 
-  protected RowDataDataProjection(LogicalType[] types, int[] positions) {
+  protected RowDataProjection(LogicalType[] types, int[] positions) {
     ValidationUtils.checkArgument(types.length == positions.length,
         "types and positions should have the equal number");
     this.fieldGetters = new RowData.FieldGetter[types.length];
@@ -49,19 +49,19 @@ public class RowDataDataProjection implements RowProjection {
     }
   }
 
-  public static RowDataDataProjection instance(RowType rowType, int[] positions) {
+  public static RowDataProjection instance(RowType rowType, int[] positions) {
     final LogicalType[] types = rowType.getChildren().toArray(new LogicalType[0]);
-    return new RowDataDataProjection(types, positions);
+    return new RowDataProjection(types, positions);
   }
 
-  public static RowDataDataProjection instanceV2(RowType rowType, int[] positions) {
+  public static RowDataProjection instanceV2(RowType rowType, int[] positions) {
     List<LogicalType> fieldTypes = rowType.getChildren();
     final LogicalType[] types = Arrays.stream(positions).mapToObj(fieldTypes::get).toArray(LogicalType[]::new);
-    return new RowDataDataProjection(types, positions);
+    return new RowDataProjection(types, positions);
   }
 
-  public static RowDataDataProjection instance(LogicalType[] types, int[] positions) {
-    return new RowDataDataProjection(types, positions);
+  public static RowDataProjection instance(LogicalType[] types, int[] positions) {
+    return new RowDataProjection(types, positions);
   }
 
   /**

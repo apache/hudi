@@ -37,7 +37,7 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkClientUtil;
-import org.apache.hudi.util.RowDataDataProjection;
+import org.apache.hudi.util.RowDataProjection;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.data.GenericRowData;
@@ -188,7 +188,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
 
   private static List<RowData> projectNestedColStatsColumns(List<RowData> rows) {
     int pos = HoodieMetadataRecord.SCHEMA$.getField(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).pos();
-    RowDataDataProjection projection = RowDataDataProjection.instanceV2((RowType) COL_STATS_DATA_TYPE.getLogicalType(), COL_STATS_TARGET_POS);
+    RowDataProjection projection = RowDataProjection.instanceV2((RowType) COL_STATS_DATA_TYPE.getLogicalType(), COL_STATS_TARGET_POS);
     return rows.stream().parallel()
         .map(row -> {
           RowData columnStatsField = row.getRow(pos, 9);

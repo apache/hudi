@@ -44,7 +44,7 @@ import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.RowDataDataProjection;
+import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.util.StringToRowDataConverter;
@@ -541,7 +541,7 @@ public class MergeOnReadInputFormat
     // base file record iterator
     private final ClosableIterator<RowData> nested;
     private final InstantRange instantRange;
-    private final RowDataDataProjection projection;
+    private final RowDataProjection projection;
 
     private RowData currentRecord;
 
@@ -562,7 +562,7 @@ public class MergeOnReadInputFormat
       } else {
         positions = IntStream.range(0, requiredPos.length).toArray();
       }
-      this.projection = RowDataDataProjection.instance(requiredRowType, positions);
+      this.projection = RowDataProjection.instance(requiredRowType, positions);
     }
 
     @Override
@@ -673,7 +673,7 @@ public class MergeOnReadInputFormat
     private final RowDataToAvroConverters.RowDataToAvroConverter rowDataToAvroConverter;
     private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
 
-    private final Option<RowDataDataProjection> projection;
+    private final Option<RowDataProjection> projection;
     private final Option<Function<IndexedRecord, GenericRecord>> avroProjection;
 
     private final InstantRange instantRange;
@@ -701,7 +701,7 @@ public class MergeOnReadInputFormat
         ClosableIterator<RowData> nested) { // the iterator should be with full schema
       this(flinkConf, hadoopConf, split, tableRowType, requiredRowType, tableSchema,
           querySchema,
-          Option.of(RowDataDataProjection.instance(requiredRowType, requiredPos)),
+          Option.of(RowDataProjection.instance(requiredRowType, requiredPos)),
           Option.of(record -> buildAvroRecordBySchema(record, requiredSchema, requiredPos, new GenericRecordBuilder(requiredSchema))),
           emitDelete, operationPos, nested);
     }
@@ -714,7 +714,7 @@ public class MergeOnReadInputFormat
         RowType requiredRowType,
         Schema tableSchema,
         InternalSchema querySchema,
-        Option<RowDataDataProjection> projection,
+        Option<RowDataProjection> projection,
         Option<Function<IndexedRecord, GenericRecord>> avroProjection,
         boolean emitDelete,
         int operationPos,

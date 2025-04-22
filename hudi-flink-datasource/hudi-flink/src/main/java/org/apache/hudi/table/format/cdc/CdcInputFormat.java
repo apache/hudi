@@ -57,7 +57,7 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.RowDataDataProjection;
+import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -303,11 +303,11 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
 
   static class RemoveBaseFileIterator implements ClosableIterator<RowData> {
     private ClosableIterator<RowData> nested;
-    private final RowDataDataProjection projection;
+    private final RowDataProjection projection;
 
     RemoveBaseFileIterator(MergeOnReadTableState tableState, ClosableIterator<RowData> iterator) {
       this.nested = iterator;
-      this.projection = RowDataDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
+      this.projection = RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
     }
 
     @Override
@@ -338,7 +338,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     private final ImageManager imageManager;
     private final HoodieMergedLogRecordScanner scanner;
     private final Iterator<String> logRecordsKeyIterator;
-    private final RowDataDataProjection projection;
+    private final RowDataProjection projection;
     private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
     private final RowDataToAvroConverters.RowDataToAvroConverter rowDataToAvroConverter;
     private final HoodieRecordMerger recordMerger;
@@ -366,7 +366,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       this.rowDataToAvroConverter = RowDataToAvroConverters.createConverter(tableState.getRowType(), flinkConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
       this.projection = tableState.getRequiredRowType().equals(tableState.getRowType())
           ? null
-          : RowDataDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
+          : RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
 
       List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
           .map(String::trim)
@@ -596,7 +596,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
 
     protected final long maxCompactionMemoryInBytes;
 
-    protected final RowDataDataProjection projection;
+    protected final RowDataProjection projection;
     protected final ImageManager imageManager;
 
     BeforeImageIterator(
@@ -609,7 +609,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         ImageManager imageManager) throws IOException {
       super(hadoopConf, tablePath, tableState, cdcSchema, fileSplit);
       this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf);
-      this.projection = RowDataDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
+      this.projection = RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
       this.imageManager = imageManager;
       initImages(fileSplit);
     }
@@ -672,7 +672,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
 
   static class ReplaceCommitIterator implements ClosableIterator<RowData> {
     private final ClosableIterator<RowData> itr;
-    private final RowDataDataProjection projection;
+    private final RowDataProjection projection;
 
     ReplaceCommitIterator(
         Configuration flinkConf,
@@ -681,7 +681,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         HoodieCDCFileSplit fileSplit,
         Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
       this.itr = initIterator(tablePath, StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf), fileSplit, splitIteratorFunc);
-      this.projection = RowDataDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
+      this.projection = RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
     }
 
     private ClosableIterator<RowData> initIterator(

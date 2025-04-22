@@ -20,8 +20,8 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.format.TypeConverters.TypeConverter;
-import org.apache.hudi.util.RowDataCastDataProjection;
-import org.apache.hudi.util.RowDataDataProjection;
+import org.apache.hudi.util.RowDataCastProjection;
+import org.apache.hudi.util.RowDataProjection;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.table.types.DataType;
@@ -55,7 +55,7 @@ public final class CastMap implements Serializable {
 
   private DataType[] fileFieldTypes;
 
-  public Option<RowDataDataProjection> toRowDataProjection(int[] selectedFields) {
+  public Option<RowDataProjection> toRowDataProjection(int[] selectedFields) {
     if (castMap.isEmpty()) {
       return Option.empty();
     }
@@ -63,7 +63,7 @@ public final class CastMap implements Serializable {
     for (int i = 0; i < selectedFields.length; i++) {
       requiredType[i] = fileFieldTypes[selectedFields[i]].getLogicalType();
     }
-    return Option.of(new RowDataCastDataProjection(requiredType, this));
+    return Option.of(new RowDataCastProjection(requiredType, this));
   }
 
   public Object castIfNeeded(int pos, Object val) {
