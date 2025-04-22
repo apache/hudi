@@ -23,7 +23,6 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFileGroupId, HoodieLogFile}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
-
 import org.apache.commons.lang.math.RandomUtils.nextInt
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.execution.PartitionedFileUtil
@@ -33,11 +32,6 @@ import org.junit.jupiter.params.provider.ValueSource
 
 class TestPartitionDirectoryConverter extends SparkAdapterSupport {
 
-  val spark = SparkSession.builder
-    .config(getSparkConfForTest("TestPartitionDirectoryConverter"))
-    .config("spark.sql.files.openCostInBytes", "0")
-    .getOrCreate
-
   val blockSize = 1024
   val fixedSizePerRecordWithParquetFormat = 100L
   val partitionPath = "p_date=2025-01-01"
@@ -46,6 +40,11 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
   @ParameterizedTest
   @ValueSource(doubles = Array(0.1, 0.2, 0.3, 0.5, 0.8, 1.0))
   def testConvertFileSlicesToPartitionDirectory(logFraction: Double): Unit = {
+    val spark = SparkSession.builder
+      .config(getSparkConfForTest("TestPartitionDirectoryConverter"))
+      .config("spark.sql.files.openCostInBytes", "0")
+      .getOrCreate
+
     val options = Map(
       s"${HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key()}" -> logFraction.toString
     )
@@ -99,6 +98,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
 
     val tasks = sparkAdapter.getFilePartitions(spark, partitionedFiles, maxSplitSize)
     verifyBalanceByNum(tasks, totalRecordNum, logFraction)
+    spark.stop()
   }
 
   private def verifyBalanceByNum(tasks: Seq[FilePartition], totalRecordNum: Int, logFraction: Double): Unit = {
