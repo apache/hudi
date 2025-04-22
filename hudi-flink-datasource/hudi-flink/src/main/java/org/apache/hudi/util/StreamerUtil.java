@@ -29,9 +29,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
-import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -329,12 +329,12 @@ public class StreamerUtil {
     }
     if (conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
       return conf.get(FlinkOptions.PAYLOAD_CLASS_NAME);
-    } else if (getMergeMode(conf) == RecordMergeMode.EVENT_TIME_ORDERING) {
-      // Flink use EventTimeAvroPayload when merge mode is EVENT_TIME_ORDERING
-      return EventTimeAvroPayload.class.getName();
+    } else if (getMergeMode(conf) == RecordMergeMode.COMMIT_TIME_ORDERING) {
+      return OverwriteWithLatestAvroPayload.class.getName();
     } else {
-      // payload will be inferred in HoodieTableConfig
-      return null;
+      // payload inferred in HoodieTableConfig for EVENT_TIME_ORDERING is DefaultHoodieRecordPayload,
+      // but Flink use EventTimeAvroPayload, so return default value here if necessary
+      return conf.get(FlinkOptions.PAYLOAD_CLASS_NAME);
     }
   }
 
