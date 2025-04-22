@@ -2760,14 +2760,15 @@
 
     <profile>
       <id>java17</id>
+      <activation>
+        <jdk>[17,)</jdk>
+      </activation>
       <properties>
+        <java.version>17</java.version>
+        <!-- to check during compilation that we didn't use APIs that don't exist in previous releases, remove after drop support of JDK 8 -->
+        <maven.compiler.release>8</maven.compiler.release>
         <argLine>-Xmx2g --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED -Djol.magicFieldOffset=true</argLine>
       </properties>
-      <activation>
-        <property>
-          <name>java17</name>
-        </property>
-      </activation>
     </profile>
 
     <!-- This profile is only used to copy all Java class files into one directory

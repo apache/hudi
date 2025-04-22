@@ -348,7 +348,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java17-java-functional-tests:
     runs-on: ubuntu-latest
@@ -387,28 +387,28 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
       - name: Java UT 2 - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Java FTA - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Java FTB - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests-b -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests-b -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
 
   test-spark-java17-scala-dml-tests:
@@ -449,14 +449,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Scala FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java17-scala-other-tests:
     runs-on: ubuntu-latest
@@ -496,14 +496,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Scala FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java11-17-java-unit-tests:
     runs-on: ubuntu-latest
@@ -543,7 +543,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java11-17-java-functional-tests:
     runs-on: ubuntu-latest
@@ -582,28 +582,28 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
       - name: Java UT 2 - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Java FTA - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Java FTB - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests-b -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests-b -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java11-17-scala-dml-tests:
     runs-on: ubuntu-latest
@@ -643,14 +643,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Scala FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java11-17-scala-other-tests:
     runs-on: ubuntu-latest
@@ -690,14 +690,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Scala FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-flink-1:
     runs-on: ubuntu-latest
@@ -1044,13 +1044,13 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS
 
   build-flink-java17:
     runs-on: ubuntu-latest
@@ -1074,10 +1074,10 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
         run:
-          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
