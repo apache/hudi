@@ -18,28 +18,14 @@
 
 package org.apache.hudi.sink.transform;
 
-import org.apache.hudi.client.model.HoodieFlinkAvroRecord;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.table.action.commit.BucketInfo;
-import org.apache.hudi.util.CommonClientUtils;
-import org.apache.hudi.util.OrderingValueExtractor;
-import org.apache.hudi.util.RowDataToAvroConverters;
-import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.types.logical.RowType;
 
 import java.io.Serializable;
 
@@ -49,41 +35,12 @@ import java.io.Serializable;
 public interface RecordConverter extends Serializable {
   HoodieRecord convert(RowData dataRow, BucketInfo bucketInfo);
 
-  static RecordConverter getInstance(
-      Configuration flinkConf,
-      RowType rowType,
-      RowDataKeyGen keyGen,
-      HoodieWriteConfig writeConfig,
-      HoodieTableConfig tableConfig) {
-    // construct flink record according to the log block format type
-    HoodieLogBlock.HoodieLogBlockType logBlockType = CommonClientUtils.getLogBlockType(writeConfig, tableConfig);
-    OrderingValueExtractor orderingValueExtractor = OrderingValueExtractor.getInstance(flinkConf, rowType);
-    if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
-      return (dataRow, bucketInfo) -> {
-        String key = keyGen.getRecordKey(dataRow);
-        Comparable<?> orderingValue = orderingValueExtractor.getOrderingValue(dataRow);
-        HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
-        HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
-        return new HoodieFlinkRecord(hoodieKey, operation, orderingValue, dataRow);
-      };
-    } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK) {
-      return new RecordConverter() {
-        private final Schema avroSchema = StreamerUtil.getSourceSchema(flinkConf);
-        private final RowDataToAvroConverters.RowDataToAvroConverter converter = RowDataToAvroConverters.createConverter(rowType, flinkConf.get(FlinkOptions.WRITE_UTC_TIMEZONE));
-
-        @Override
-        public HoodieRecord convert(RowData dataRow, BucketInfo bucketInfo) {
-          String key = keyGen.getRecordKey(dataRow);
-          Comparable<?> orderingValue = orderingValueExtractor.getOrderingValue(dataRow);
-          HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
-          HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
-
-          GenericRecord record = (GenericRecord) converter.convert(avroSchema, dataRow);
-          return new HoodieFlinkAvroRecord(hoodieKey, operation, orderingValue, record);
-        }
-      };
-    } else {
-      throw new HoodieException("Unsupported log block type: " + logBlockType);
-    }
+  static RecordConverter getInstance(RowDataKeyGen keyGen) {
+    return (dataRow, bucketInfo) -> {
+      String key = keyGen.getRecordKey(dataRow);
+      HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
+      HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
+      return new HoodieFlinkRecord(hoodieKey, operation, dataRow);
+    };
   }
 }

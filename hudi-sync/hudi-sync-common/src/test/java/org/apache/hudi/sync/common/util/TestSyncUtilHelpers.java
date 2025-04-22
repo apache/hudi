@@ -100,10 +100,9 @@ public class TestSyncUtilHelpers {
   @ParameterizedTest
   @ValueSource(classes = {DeprecatedSyncTool1.class, DeprecatedSyncTool2.class})
   public void testCreateDeprecatedSyncClass(Class<?> clazz) {
-    Properties properties = new Properties();
     HoodieSyncTool syncTool = SyncUtilHelpers.instantiateMetaSyncTool(
         clazz.getName(),
-        new TypedProperties(properties),
+        new TypedProperties(),
         hadoopConf,
         fileSystem,
         BASE_PATH,

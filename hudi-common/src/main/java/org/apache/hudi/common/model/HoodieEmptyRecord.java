@@ -27,6 +27,7 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
@@ -98,6 +99,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
+  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
+  }
+
+  @Override
   public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
     throw new UnsupportedOperationException();
   }
@@ -147,6 +153,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
     return Option.empty();
+  }
+
+  @Override
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) {
+    return new ByteArrayOutputStream(0);
   }
 
   @Override

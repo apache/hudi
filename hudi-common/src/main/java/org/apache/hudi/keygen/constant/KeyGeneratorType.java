@@ -21,6 +21,8 @@ package org.apache.hudi.keygen.constant;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ConfigUtils;
 
 import javax.annotation.Nullable;
 
@@ -125,10 +127,16 @@ public enum KeyGeneratorType {
 
   @Nullable
   public static String getKeyGeneratorClassName(HoodieConfig config) {
-    if (config.contains(KEY_GENERATOR_CLASS_NAME)) {
-      return config.getString(KEY_GENERATOR_CLASS_NAME);
-    } else if (config.contains(KEY_GENERATOR_TYPE)) {
-      return KeyGeneratorType.valueOf(config.getString(KEY_GENERATOR_TYPE)).getClassName();
+    return getKeyGeneratorClassName(config.getProps());
+  }
+
+  @Nullable
+  public static String getKeyGeneratorClassName(TypedProperties props) {
+    if (ConfigUtils.containsConfigProperty(props, KEY_GENERATOR_CLASS_NAME)) {
+      return ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_CLASS_NAME);
+    }
+    if (ConfigUtils.containsConfigProperty(props, KEY_GENERATOR_TYPE)) {
+      return KeyGeneratorType.valueOf(ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_TYPE)).getClassName();
     }
     return null;
   }

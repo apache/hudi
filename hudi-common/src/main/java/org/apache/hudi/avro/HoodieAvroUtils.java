@@ -171,24 +171,31 @@ public class HoodieAvroUtils {
    * TODO serialize other type of record.
    */
   public static Option<byte[]> recordToBytes(HoodieRecord record, Schema schema) throws IOException {
-    return Option.of(HoodieAvroUtils.indexedRecordToBytes(record.toIndexedRecord(schema, new Properties()).get().getData()));
+    return Option.of(HoodieAvroUtils.indexedRecordToBytesStream(record.toIndexedRecord(schema, new Properties()).get().getData()).toByteArray());
   }
 
   /**
    * Convert a given avro record to bytes.
    */
-  public static byte[] avroToBytes(GenericRecord record) {
-    return indexedRecordToBytes(record);
+  public static byte[] avroToBytes(IndexedRecord record) {
+    return indexedRecordToBytesStream(record).toByteArray();
   }
 
-  public static <T extends IndexedRecord> byte[] indexedRecordToBytes(T record) {
+  /**
+   * Convert a given avro record to bytes.
+   */
+  public static ByteArrayOutputStream avroToBytesStream(IndexedRecord record) {
+    return indexedRecordToBytesStream(record);
+  }
+
+  public static <T extends IndexedRecord> ByteArrayOutputStream indexedRecordToBytesStream(T record) {
     GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema(), ConvertingGenericData.INSTANCE);
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, BINARY_ENCODER.get());
       BINARY_ENCODER.set(encoder);
       writer.write(record, encoder);
       encoder.flush();
-      return out.toByteArray();
+      return out;
     } catch (IOException e) {
       throw new HoodieIOException("Cannot convert GenericRecord to bytes", e);
     }

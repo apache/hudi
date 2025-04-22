@@ -129,7 +129,7 @@ public class TestHiveIncrementalPuller {
   }
 
   private TypedProperties getTargetHiveSyncConfig(String basePath) {
-    TypedProperties targetHiveSyncProps = new TypedProperties(hiveSyncProps);
+    TypedProperties targetHiveSyncProps = TypedProperties.copy(hiveSyncProps);
     targetHiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), "tgtdb");
     targetHiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key(), "test2");
     targetHiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
@@ -139,7 +139,7 @@ public class TestHiveIncrementalPuller {
   }
 
   private TypedProperties getAssertionSyncConfig(String databaseName) {
-    TypedProperties assertHiveSyncProps = new TypedProperties(hiveSyncProps);
+    TypedProperties assertHiveSyncProps = TypedProperties.copy(hiveSyncProps);
     assertHiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), databaseName);
     return assertHiveSyncProps;
   }

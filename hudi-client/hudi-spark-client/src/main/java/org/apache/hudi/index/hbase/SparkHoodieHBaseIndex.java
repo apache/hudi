@@ -20,7 +20,6 @@ package org.apache.hudi.index.hbase;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -69,6 +68,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.storage.StorageLevel;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,6 +97,7 @@ import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_AUTHORIZATION
 import static org.apache.hadoop.hbase.security.User.HBASE_SECURITY_CONF_KEY;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 /**
  * Hoodie Index implementation backed by HBase.
@@ -453,7 +454,8 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
     JavaRDD<WriteStatus> writeStatusJavaRDD = partitionedRDD.mapPartitionsWithIndex(updateLocationFunction(),
         true);
     // caching the index updated status RDD
-    writeStatusJavaRDD = writeStatusJavaRDD.persist(SparkMemoryUtils.getWriteStatusStorageLevel(config.getProps()));
+    writeStatusJavaRDD = writeStatusJavaRDD.persist(
+        StorageLevel.fromString(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE)));
     // force trigger update location(hbase puts)
     writeStatusJavaRDD.count();
     this.hBaseIndexQPSResourceAllocator.releaseQPSResources();

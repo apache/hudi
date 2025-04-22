@@ -68,6 +68,11 @@ public class FlinkAppendHandle<T, I, K, O>
   }
 
   @Override
+  protected void flushToDiskIfRequired(HoodieRecord record, boolean appendDeleteBlocks) {
+    // do not flush for one batch of records
+  }
+
+  @Override
   protected void createMarkerFile(String partitionPath, String dataFileName) {
     // In some rare cases, the task was pulled up again with same write file name,
     // for e.g, reuse the small log files from last commit instant.

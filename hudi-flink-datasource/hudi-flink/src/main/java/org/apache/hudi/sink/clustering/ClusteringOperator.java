@@ -26,7 +26,6 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -301,7 +300,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             .build();
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
         Option<BaseKeyGenerator> keyGeneratorOpt = tableConfig.populateMetaFields() ? Option.empty() :
-            Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(writeConfig.getProps())));
+            Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
         HoodieFileSliceReader<? extends IndexedRecord> hoodieFileSliceReader = new HoodieFileSliceReader(baseFileReader, scanner, readerSchema,
             tableConfig.getPreCombineField(),writeConfig.getRecordMerger(),
             tableConfig.getProps(),

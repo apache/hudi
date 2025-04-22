@@ -516,8 +516,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
             return Collections.emptyIterator();
           } else {
             // Prefix is greater than the current key. Call seekTo to move the cursor.
-            int val = reader.seekTo(lookUpKeyPrefix);
-            if (val >= 1) {
+            if (reader.seekTo(lookUpKeyPrefix) >= HFileReader.SEEK_TO_IN_RANGE) {
               // Try moving to next entry, matching the prefix key; if we're at the EOF,
               // `next()` will return false
               if (!reader.next()) {
@@ -530,8 +529,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         // do not call seekTo. Continue with reading the keys with the prefix.
       } else {
         // For the first key prefix, directly do seekTo.
-        int val = reader.seekTo(lookUpKeyPrefix);
-        if (val >= 1) {
+        if (reader.seekTo(lookUpKeyPrefix) >= HFileReader.SEEK_TO_IN_RANGE) {
           // Try moving to next entry, matching the prefix key; if we're at the EOF,
           // `next()` will return false
           if (!reader.next()) {

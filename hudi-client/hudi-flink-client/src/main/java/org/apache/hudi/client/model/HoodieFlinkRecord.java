@@ -18,36 +18,48 @@
 
 package org.apache.hudi.client.model;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowDataAvroQueryContexts.RowDataQueryContext;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 
-import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * Flink Engine-specific Implementations of `HoodieRecord`, which is expected to hold {@code RowData} as payload.
  */
 public class HoodieFlinkRecord extends HoodieRecord<RowData> {
-  private Comparable<?> orderingValue = 0;
+  private Comparable<?> orderingValue;
 
   public HoodieFlinkRecord(RowData rowData) {
     super(null, rowData);
+  }
+
+  public HoodieFlinkRecord(HoodieKey key, HoodieOperation op, RowData rowData) {
+    super(key, rowData, op, Option.empty());
   }
 
   public HoodieFlinkRecord(HoodieKey key, HoodieOperation op, Comparable<?> orderingValue, RowData rowData) {
@@ -72,6 +84,14 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+    if (this.orderingValue == null) {
+      String orderingField = ConfigUtils.getOrderingField(props);
+      if (isNullOrEmpty(orderingField)) {
+        this.orderingValue = DEFAULT_ORDERING_VALUE;
+      } else {
+        this.orderingValue = (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props);
+      }
+    }
     return this.orderingValue;
   }
 
@@ -103,6 +123,14 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   @Override
   public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+  }
+
+  @Override
+  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
+        HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
+    RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
+    return rowDataQueryContext.getFieldQueryContext(column).getValAsJava(data);
   }
 
   @Override
@@ -144,7 +172,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
+  public boolean shouldIgnore(Schema recordSchema, Properties props) {
     return false;
   }
 
@@ -176,6 +204,19 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+    boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
+        HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
+    RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
+    IndexedRecord indexedRecord = (IndexedRecord) rowDataQueryContext.getRowDataToAvroConverter().convert(recordSchema, getData());
+    return Option.of(new HoodieAvroIndexedRecord(getKey(), indexedRecord, getOperation(), getMetadata()));
+  }
+
+  @Override
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) {
+    boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
+        HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
+    RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
+    IndexedRecord indexedRecord = (IndexedRecord) rowDataQueryContext.getRowDataToAvroConverter().convert(recordSchema, getData());
+    return HoodieAvroUtils.avroToBytesStream(indexedRecord);
   }
 }

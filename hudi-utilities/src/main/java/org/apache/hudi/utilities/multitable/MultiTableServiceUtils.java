@@ -170,7 +170,7 @@ public class MultiTableServiceUtils {
                                                                TypedProperties props) {
     TableServicePipeline pipeline = new TableServicePipeline();
     HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, basePath, true);
-    TypedProperties propsWithTableConfig = new TypedProperties(metaClient.getTableConfig().getProps());
+    TypedProperties propsWithTableConfig = TypedProperties.copy(metaClient.getTableConfig().getProps());
     propsWithTableConfig.putAll(props);
 
     if (cfg.enableCompaction) {

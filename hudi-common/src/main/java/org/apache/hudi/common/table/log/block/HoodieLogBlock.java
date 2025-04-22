@@ -93,7 +93,7 @@ public abstract class HoodieLogBlock {
   }
 
   // Return the bytes representation of the data belonging to a LogBlock
-  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
+  public ByteArrayOutputStream getContentBytes(HoodieStorage storage) throws IOException {
     throw new HoodieException("No implementation was provided");
   }
 
@@ -343,6 +343,21 @@ public abstract class HoodieLogBlock {
     byte[] content = new byte[contentLength];
     inputStream.readFully(content, 0, contentLength);
     return Option.of(content);
+  }
+
+  /**
+   * Return bytes content as a {@link ByteArrayOutputStream}.
+   *
+   * @return a {@link ByteArrayOutputStream} contains the block content bytes
+   */
+  protected Option<ByteArrayOutputStream> getContentAsByteStream() throws IOException {
+    if (content.isEmpty()) {
+      return Option.empty();
+    }
+    byte[] contentBytes = content.get();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream(contentBytes.length);
+    baos.write(contentBytes);
+    return Option.of(baos);
   }
 
   protected Supplier<SeekableDataInputStream> getInputStreamSupplier() {

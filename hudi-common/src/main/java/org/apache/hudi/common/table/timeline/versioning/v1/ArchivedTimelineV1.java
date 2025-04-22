@@ -282,7 +282,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
         if (actionData != null) {
           this.readCommits.computeIfAbsent(instantTime, k -> new HashMap<>());
           if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
-            readCommits.get(instantTime).put(hoodieInstant.getState(), HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData));
+            readCommits.get(instantTime).put(hoodieInstant.getState(), HoodieAvroUtils.avroToBytes((IndexedRecord) actionData));
           } else {
             readCommits.get(instantTime).put(hoodieInstant.getState(), actionData.toString().getBytes(StandardCharsets.UTF_8));
           }

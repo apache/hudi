@@ -782,6 +782,34 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT);
   }
 
+  @Test
+  void testDeleteForLegacyAvroWrite() {
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
+        // disable rowdata write mode to use legacy avro writing path
+        .option(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED, false)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+
+    final String insertInto1 = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
+
+    execInsertSql(streamTableEnv, insertInto1);
+
+    final String insertInto2 = "insert into t1 values\n"
+        + "('id1','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par2'),\n"
+        + "('id1','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par1'),\n"
+        + "('id1','Fabian',31,TIMESTAMP '1970-01-01 00:00:04','par2'),\n"
+        + "('id1','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par3')";
+
+    execInsertSql(streamTableEnv, insertInto2);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, "[+I[id1, Sophia, 18, 1970-01-01T00:00:05, par3]]");
+  }
+
   @ParameterizedTest
   @EnumSource(value = ExecMode.class)
   void testWriteAndReadParMiddle(ExecMode execMode) throws Exception {
@@ -2615,19 +2643,6 @@ public class ITTestHoodieDataSource {
             {HoodieTableType.COPY_ON_WRITE, true},
             {HoodieTableType.MERGE_ON_READ, false},
             {HoodieTableType.MERGE_ON_READ, true}};
-    return Stream.of(data).map(Arguments::of);
-  }
-
-  /**
-   * Return test params => (HoodieTableType, LogBlockType).
-   */
-  private static Stream<Arguments> tableTypeAndLogBlockTypeParams() {
-    Object[][] data =
-        new Object[][] {
-            {HoodieTableType.COPY_ON_WRITE, "avro"},
-            {HoodieTableType.COPY_ON_WRITE, "parquet"},
-            {HoodieTableType.MERGE_ON_READ, "avro"},
-            {HoodieTableType.MERGE_ON_READ, "parquet"}};
     return Stream.of(data).map(Arguments::of);
   }
 
