@@ -39,6 +39,7 @@ import java.util.Map;
  * org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2#deserialize method.
  * ***************************
  */
+@Deprecated // we should only rely on their avro counterpart completely.
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieReplaceCommitMetadata.class);

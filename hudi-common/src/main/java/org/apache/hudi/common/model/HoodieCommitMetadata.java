@@ -54,6 +54,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
  * org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2#deserialize method.
  * ***************************
  */
+@Deprecated // we should only rely on their avro counterpart completely.
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieCommitMetadata implements Serializable {
 
