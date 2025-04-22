@@ -29,7 +29,6 @@ import collection.JavaConverters._
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop.ParquetFileReader
-import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -65,42 +64,39 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     val metadataConfig = HoodieMetadataConfig.newBuilder.enable(false).build
     val metadata = HoodieTableMetadata.create(new HoodieSparkEngineContext(jsc), storage, metadataConfig, srcPath)
     val partitionPaths: java.util.List[String] = metadata.getPartitionPathWithPathPrefixes(partitions.split(",").toList.asJava)
-    val partitionPathsSize = if (partitionPaths.size() == 0) 1 else partitionPaths.size()
     val instantsList = if (StringUtils.isNullOrEmpty(instants)) Array.empty[String] else instants.split(",")
+    val fileStatus = partitionPaths.asScala.flatMap(part => {
+      val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
+      HadoopFSUtils.getAllDataFilesInPartition(fs, HadoopFSUtils.constructAbsolutePathInHadoopPath(srcPath, part))
+    })
 
-    val javaRdd: JavaRDD[String] = jsc.parallelize(partitionPaths, partitionPathsSize)
-    val parquetRdd = javaRdd.rdd.map(part => {
-        val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
-        HadoopFSUtils.getAllDataFilesInPartition(fs, HadoopFSUtils.constructAbsolutePathInHadoopPath(srcPath, part)).filter(fileStatus => {
-          var isFilter = true
-          if (!instantsList.isEmpty) {
-            val parquetCommitTime = FSUtils.getCommitTimeWithFullPath(fileStatus.getPath.toString)
-            isFilter = instantsList.contains(parquetCommitTime)
-          }
-          isFilter
-        })
-    }).flatMap(_.toList)
-      .filter(status => {
-        val filePath = status.getPath
-        var isInvalid = false
-        if (filePath.toString.endsWith(".parquet")) {
-          try ParquetFileReader.readFooter(storageConf.unwrap(), filePath, SKIP_ROW_GROUPS).getFileMetaData catch {
-            case e: Exception =>
-              isInvalid = e.getMessage.contains("is not a Parquet file")
-              if (isInvalid && needDelete) {
-                val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
-                try {
-                  isInvalid = !fs.delete(filePath, false)
-                } catch {
-                  case ex: Exception =>
-                    isInvalid = true
-                }
+    val parquetRdd = jsc.parallelize(fileStatus, Math.max(fileStatus.size, 1)).filter(fileStatus => {
+      if (instantsList.nonEmpty) {
+        val parquetCommitTime = FSUtils.getCommitTimeWithFullPath(fileStatus.getPath.toString)
+        instantsList.contains(parquetCommitTime)
+      } else {
+       true
+      }}).filter(status => {
+      val filePath = status.getPath
+      var isInvalid = false
+      if (filePath.toString.endsWith(".parquet")) {
+        try ParquetFileReader.readFooter(storageConf.unwrap(), filePath, SKIP_ROW_GROUPS).getFileMetaData catch {
+          case e: Exception =>
+            isInvalid = e.getMessage.contains("is not a Parquet file")
+            if (isInvalid && needDelete) {
+              val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
+              try {
+                isInvalid = !fs.delete(filePath, false)
+              } catch {
+                case ex: Exception =>
+                  isInvalid = true
               }
-          }
+            }
         }
-        isInvalid
-      })
-      .map(status => Row(status.getPath.toString))
+      }
+      isInvalid
+    }).map(status => Row(status.getPath.toString))
+
     if (limit.isDefined) {
       parquetRdd.take(limit.get.asInstanceOf[Int])
     } else {
