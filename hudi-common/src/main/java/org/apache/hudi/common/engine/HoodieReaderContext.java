@@ -22,6 +22,7 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
@@ -251,39 +252,28 @@ public abstract class HoodieReaderContext<T> {
   /**
    * Gets the ordering value in particular type.
    *
-   * @param recordOption An option of record.
-   * @param metadataMap  A map containing the record metadata.
+   * @param record An engine specific record
    * @param schema       The Avro schema of the record.
-   * @param orderingFieldName name of the ordering field
+   * @param orderingFieldName name of the ordering field, if any
    * @return The ordering value.
    */
-  public Comparable getOrderingValue(Option<T> recordOption,
-                                     Map<String, Object> metadataMap,
-                                     Schema schema,
-                                     Option<String> orderingFieldName) {
-    if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
-      return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
-    }
-
-    if (!recordOption.isPresent() || orderingFieldName.isEmpty()) {
+  public Comparable getOrderingValue(T record, Schema schema, Option<String> orderingFieldName) {
+    if (orderingFieldName.isEmpty()) {
       return DEFAULT_ORDERING_VALUE;
     }
 
-    Object value = getValue(recordOption.get(), schema, orderingFieldName.get());
+    Object value = getValue(record, schema, orderingFieldName.get());
     Comparable finalOrderingVal = value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
-    metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
     return finalOrderingVal;
   }
 
   /**
    * Constructs a new {@link HoodieRecord} based on the record of engine-specific type and metadata for merging.
    *
-   * @param recordOption An option of the record in engine-specific type if exists.
-   * @param metadataMap  The record metadata.
+   * @param bufferedRecord the input record and its metadata
    * @return A new instance of {@link HoodieRecord}.
    */
-  public abstract HoodieRecord<T> constructHoodieRecord(Option<T> recordOption,
-                                                        Map<String, Object> metadataMap);
+  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
@@ -417,7 +407,7 @@ public abstract class HoodieReaderContext<T> {
   /**
    * Encodes the given avro schema for efficient serialization.
    */
-  private Integer encodeAvroSchema(Schema schema) {
+  public Integer encodeAvroSchema(Schema schema) {
     return this.localAvroSchemaCache.cacheSchema(schema);
   }
 
@@ -425,7 +415,7 @@ public abstract class HoodieReaderContext<T> {
    * Decodes the avro schema with given version ID.
    */
   @Nullable
-  private Schema decodeAvroSchema(Object versionId) {
+  public Schema decodeAvroSchema(Object versionId) {
     return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
   }
 }

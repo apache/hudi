@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -93,17 +94,15 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public HoodieRecord<InternalRow> constructHoodieRecord(Option<InternalRow> rowOption,
-                                                         Map<String, Object> metadataMap) {
-    if (!rowOption.isPresent()) {
+  public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord) {
+    if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(
-          new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY),
-              (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)),
+          new HoodieKey(bufferedRecord.getRecordKey(), null), // TODO: why is partition reuired in this context but not below?
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
-    Schema schema = getSchemaFromMetadata(metadataMap);
-    InternalRow row = rowOption.get();
+    Schema schema = decodeAvroSchema(bufferedRecord.getSchemaId());
+    InternalRow row = bufferedRecord.getRecord();
     return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
   }
 

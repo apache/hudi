@@ -23,7 +23,6 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -36,10 +35,7 @@ import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 
-import java.io.IOException;
 import java.io.Serializable;
-import java.util.Iterator;
-import java.util.Map;
 
 public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   // Used to order the records in the record map.
@@ -53,12 +49,13 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       Option<String> partitionNameOverrideOpt,
       Option<String[]> partitionPathFieldOpt,
       TypedProperties props,
-      HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
+      HoodieReadStats readStats,
+      EngineBasedMerger<T> merger) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats, merger);
   }
 
   @Override
-  protected boolean doHasNext() throws IOException {
+  protected boolean doHasNext() {
     ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
 
     // Output from base file first.
@@ -69,14 +66,14 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Output records based on the index to preserve the order.
     if (!records.isEmpty()) {
-      Pair<Option<T>, Map<String, Object>> nextRecordInfo = records.remove(getIndex++);
+      BufferedRecord<T> nextRecordInfo = records.remove(getIndex++);
 
       if (nextRecordInfo == null) {
         throw new HoodieException("Row index should be continuous!");
       }
 
-      if (nextRecordInfo.getLeft().isPresent()) {
-        nextRecord = nextRecordInfo.getKey().get();
+      if (!nextRecordInfo.isDelete()) {
+        nextRecord = nextRecordInfo.getRecord();
       } else {
         throw new IllegalStateException("No deletes should exist in unmerged reading mode");
       }
@@ -84,11 +81,6 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     }
 
     return false;
-  }
-
-  @Override
-  public Iterator<Pair<Option<T>, Map<String, Object>>> getLogRecordIterator() {
-    return records.values().iterator();
   }
 
   @Override
@@ -109,29 +101,20 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
-        Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-            nextRecord, schema);
-        processNextDataRecord(nextRecord, metadata, putIndex++);
+        processNextLogRecord(BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, false), putIndex++);
       }
     }
   }
 
   @Override
-  public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable index) {
-    records.put(index, Pair.of(Option.ofNullable(readerContext.seal(record)), metadata));
+  public void processNextLogRecord(BufferedRecord<T> record, Serializable index) {
+    record.sealRecord(readerContext);
+    records.put(index, record);
   }
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
     // no-op
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) {
-    // never used for now
-    records.put(index, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-        deleteRecord.getRecordKey(), deleteRecord.getPartitionPath(),
-        getOrderingValue(readerContext, deleteRecord))));
   }
 
   @Override

@@ -19,13 +19,11 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -60,10 +58,10 @@ public interface HoodieFileGroupRecordBuffer<T> {
    * Process a next record in a log data block.
    *
    * @param record
-   * @param metadata
+   * @param index
    * @throws Exception
    */
-  void processNextDataRecord(T record, Map<String, Object> metadata, Serializable index) throws IOException;
+  void processNextLogRecord(BufferedRecord<T> record, Serializable index) throws IOException;
 
   /**
    * Process a log delete block, and store the resulting records into the buffer.
@@ -72,13 +70,6 @@ public interface HoodieFileGroupRecordBuffer<T> {
    * @throws IOException
    */
   void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException;
-
-  /**
-   * Process next delete record.
-   *
-   * @param deleteRecord
-   */
-  void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index);
 
   /**
    * Check if a record exists in the buffered records.
@@ -98,12 +89,12 @@ public interface HoodieFileGroupRecordBuffer<T> {
   /**
    * @return An iterator on the log records.
    */
-  Iterator<Pair<Option<T>, Map<String, Object>>> getLogRecordIterator();
+  Iterator<BufferedRecord<T>> getLogRecordIterator();
 
   /**
    * @return The underlying data stored in the buffer.
    */
-  Map<Serializable, Pair<Option<T>, Map<String, Object>>> getLogRecords();
+  Map<Serializable, BufferedRecord<T>> getLogRecords();
 
   /**
    * Link the base file iterator for consequential merge.
