@@ -264,7 +264,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
       String instantTime = "001";
       writeClient.startCommitWithTime(instantTime);
       List<HoodieRecord> records = generateRecords(100, instantTime);
-      Stream<HoodieBaseFile> baseFileStream = insertRecordsToMORTable(reloadedMetaClient, records, writeClient, writeConfig, instantTime);
+      Stream<HoodieBaseFile> baseFileStream = insertRecordsToMORTable(reloadedMetaClient, records, writeClient, writeConfig, instantTime, true);
       assertTrue(baseFileStream.findAny().isPresent());
 
       // Check metadata files.
@@ -293,7 +293,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
       records2.addAll(records3);
       records2.addAll(records4);
       assertEquals(67, records2.size());
-      updateRecordsInMORTable(reloadedMetaClient, records2, writeClient, writeConfig, instantTime, false);
+      updateRecordsInMORTable(reloadedMetaClient, records2, writeClient, writeConfig, instantTime, true);
 
       // Check metadata files.
       deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
@@ -317,7 +317,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
       List<HoodieRecord> records5 = generateEmptyRecords(getKeys(records).subList(50, 59)); // 9 deletes only
       assertEquals(9, records5.size());
-      updateRecordsInMORTable(reloadedMetaClient, records5, writeClient, writeConfig, instantTime, false);
+      updateRecordsInMORTable(reloadedMetaClient, records5, writeClient, writeConfig, instantTime, true);
       checkDataEquality(expectedRecordNum - 9);
     }
   }

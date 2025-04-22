@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.HoodieJavaWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
@@ -189,11 +190,13 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
       // Make a copy of the records for writing. The writer will clear out the data field.
       List<HoodieRecord> recordsCopy = new ArrayList<>(recordList.size());
       recordList.forEach(hoodieRecord -> recordsCopy.add(new HoodieAvroRecord<>(hoodieRecord.getKey(), (HoodieRecordPayload) hoodieRecord.getData())));
+      List<WriteStatus> statuses;
       if (operation.toLowerCase().equals("insert")) {
-        writeClient.insert(recordsCopy, instantTime);
+        statuses = writeClient.insert(recordsCopy, instantTime);
       } else {
-        writeClient.upsert(recordsCopy, instantTime);
+        statuses = writeClient.upsert(recordsCopy, instantTime);
       }
+      writeClient.commit(instantTime, statuses);
     }
   }
 

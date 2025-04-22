@@ -162,8 +162,10 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+      JavaRDD<WriteStatus> statusRDD = client.upsert(writeRecords, newCommitTime);
+      List<WriteStatus> statuses = statusRDD.collect();
       assertNoWriteErrors(statuses);
+      client.commit(newCommitTime, statusRDD);
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
 
@@ -196,9 +198,10 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       List<HoodieRecord> newRecords = dataGen.generateUpdates(newCommitTime, records);
       newRecords.addAll(dataGen.generateInserts(newCommitTime, 20));
 
-      statuses = client.upsert(jsc().parallelize(newRecords), newCommitTime).collect();
-      // Verify there are no errors
+      statusRDD = client.upsert(jsc().parallelize(newRecords), newCommitTime);
+      statuses = statusRDD.collect();
       assertNoWriteErrors(statuses);
+      client.commit(newCommitTime, statusRDD);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
@@ -247,8 +250,9 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       client.startCommitWithTime(newCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
+      JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
+      assertNoWriteErrors(statuses.collect());
+      client.commit(newCommitTime, statuses);
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
 
@@ -283,10 +287,12 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
                                                              Map<String, List<String>> baseFileToLogFileMapping) throws IOException {
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> newRecords = dataGen.generateUpdates(newCommitTime, records);
-    List<WriteStatus> statuses = client.upsert(jsc().parallelize(newRecords), newCommitTime).collect();
+    JavaRDD<WriteStatus> statuses = client.upsert(jsc().parallelize(newRecords), newCommitTime);
+    List<WriteStatus> statusList = statuses.collect();
+    client.commit(newCommitTime, statuses);
     // validate the data itself
     validateNewData(newRecords);
-    assertNoWriteErrors(statuses);
+    assertNoWriteErrors(statusList);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
@@ -359,7 +365,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
-      writeClient.insert(recordsRDD, newCommitTime).collect();
+      JavaRDD<WriteStatus> writeStatusRDD = writeClient.insert(recordsRDD, newCommitTime);
+      writeClient.commit(newCommitTime, writeStatusRDD);
 
       // Update all the 100 records
       newCommitTime = "101";
@@ -370,7 +377,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = readClient.tagLocation(updatedRecordsRDD);
 
       writeClient.startCommitWithTime(newCommitTime);
-      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
+      writeStatusRDD = writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime);
+      writeClient.commit(newCommitTime, writeStatusRDD);
 
       // Write them to corresponding avro logfiles
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -400,6 +408,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         // Do a compaction
         String compactionInstantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
         HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.compact(compactionInstantTime);
+        writeClient.commitCompaction(compactionInstantTime, result.getCommitMetadata().get(), Option.empty());
 
         // Verify that recently written compacted data file has no log file
         metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -465,7 +474,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
-      writeClient.insert(recordsRDD, newCommitTime).collect();
+      JavaRDD<WriteStatus> statusRDD = writeClient.insert(recordsRDD, newCommitTime);
+      writeClient.commit(newCommitTime, statusRDD);
 
       // Update all the 100 records
       newCommitTime = "101";
@@ -476,13 +486,13 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = readClient.tagLocation(updatedRecordsRDD);
 
       writeClient.startCommitWithTime(newCommitTime);
-      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
-
+      statusRDD = writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime);
+      writeClient.commit(newCommitTime, statusRDD);
 
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
-      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
-
+      statusRDD = writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime);
+      writeClient.commit(newCommitTime, statusRDD);
 
       // Write them to corresponding avro logfiles
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -512,6 +522,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         // Do a log compaction
         String logCompactionInstantTime = writeClient.scheduleLogCompaction(Option.empty()).get().toString();
         HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.logCompact(logCompactionInstantTime);
+        writeClient.commitLogCompaction(logCompactionInstantTime, result.getCommitMetadata().get(), Option.empty());
 
         // Verify that recently written compacted data file has no log file
         metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -761,8 +772,10 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
+      JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
+      List<WriteStatus> statusList = statuses.collect();
+      assertNoWriteErrors(statusList);
+      client.commit(newCommitTime, statuses);
 
       HoodieSparkMergeOnReadTable hoodieTable = (HoodieSparkMergeOnReadTable) HoodieSparkTable.create(cfg, context(), metaClient);
 
@@ -792,15 +805,17 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       metaClient.reloadActiveTimeline();
       records = dataGen.generateUpdates(newCommitTime, records);
       writeRecords = jsc().parallelize(records, 1);
-      statuses = client.upsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
+      statuses = client.upsert(writeRecords, newCommitTime);
+      statusList = statuses.collect();
+      assertNoWriteErrors(statusList);
+      client.commit(newCommitTime, statuses);
 
       /**
        * Write 3 (only deletes, written to .log file)
        */
       final String newDeleteTime = "004";
       final String partitionPath = records.get(0).getPartitionPath();
-      final String fileId = statuses.get(0).getFileId();
+      final String fileId = statusList.get(0).getFileId();
       client.startCommitWithTime(newDeleteTime);
       metaClient.reloadActiveTimeline();
 

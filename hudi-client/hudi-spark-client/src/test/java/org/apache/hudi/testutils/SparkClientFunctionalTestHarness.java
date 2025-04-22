@@ -274,7 +274,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
-                                                 SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
+                                                           SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
                                                            boolean doExplicitCommit) throws IOException {
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
 
