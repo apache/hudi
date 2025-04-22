@@ -428,8 +428,17 @@ public class HoodieMetrics {
     HoodieTimeline filteredInstants = activeTimeline.filterInflightsAndRequested().filter(instant -> validActions.contains(instant.getAction()));
     Option<HoodieInstant> hoodieInstantOption = filteredInstants.firstInstant();
     if (hoodieInstantOption.isPresent()) {
-      updateMetric(action, metricName, Long.parseLong(hoodieInstantOption.get().requestedTime()));
+      updateTimestampMetric(metricName, action, hoodieInstantOption);
     }
+  }
+
+  private void updateTimestampMetric(String metricName, String action, Option<HoodieInstant> hoodieInstantOption) {
+    String requestedTime = hoodieInstantOption.get().requestedTime();
+    if (requestedTime.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
+      // If requested instant is in MDT with table version six, it can contain suffix
+      requestedTime = requestedTime.substring(0, MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH);
+    }
+    updateMetric(action, metricName, Long.parseLong(requestedTime));
   }
 
   /**
@@ -456,12 +465,7 @@ public class HoodieMetrics {
     HoodieTimeline filteredInstants = activeTimeline.filterCompletedInstants().filter(instant -> validActions.contains(instant.getAction()));
     Option<HoodieInstant> hoodieInstantOption = filteredInstants.lastInstant();
     if (hoodieInstantOption.isPresent()) {
-      String requestedTime = hoodieInstantOption.get().requestedTime();
-      if (requestedTime.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
-        // If requested instant is in MDT with table version six, it can contain suffix
-        requestedTime = requestedTime.substring(0, MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH);
-      }
-      updateMetric(action, metricName, Long.parseLong(requestedTime));
+      updateTimestampMetric(metricName, action, hoodieInstantOption);
     }
   }
 

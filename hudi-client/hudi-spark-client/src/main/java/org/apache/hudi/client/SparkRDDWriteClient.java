@@ -248,8 +248,16 @@ public class SparkRDDWriteClient<T> extends
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table.getMetaClient());
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
+    HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
+    if (metadataWriterOpt.isPresent()) {
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      mdtWriteStatuses.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
+      result.setMetadataTableWriteStatuses(mdtWriteStatuses);
+      allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
+    }
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(allWriteStatus));
     return postWrite(resultRDD, instantTime, table);
   }
 
@@ -296,8 +304,17 @@ public class SparkRDDWriteClient<T> extends
         initTable(WriteOperationType.INSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT_PREPPED, table.getMetaClient());
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table.getMetaClient());
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
+    //HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
+    HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
+    if (metadataWriterOpt.isPresent()) {
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      mdtWriteStatuses.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
+      result.setMetadataTableWriteStatuses(mdtWriteStatuses);
+      allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
+    }
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(allWriteStatus));
     return postWrite(resultRDD, instantTime, table);
   }
 
@@ -364,8 +381,17 @@ public class SparkRDDWriteClient<T> extends
         initTable(WriteOperationType.BULK_INSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient());
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table.getMetaClient());
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords), bulkInsertPartitioner);
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
+    HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
+    if (metadataWriterOpt.isPresent()) {
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      mdtWriteStatuses.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
+      result.setMetadataTableWriteStatuses(mdtWriteStatuses);
+      allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
+    }
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(allWriteStatus));
+    //HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }
 
@@ -391,8 +417,17 @@ public class SparkRDDWriteClient<T> extends
   public JavaRDD<WriteStatus> deletePrepped(JavaRDD<HoodieRecord<T>> preppedRecord, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE_PREPPED, Option.ofNullable(instantTime));
     preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient());
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table.getMetaClient());
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.deletePrepped(context,instantTime, HoodieJavaRDD.of(preppedRecord));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
+    //HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
+    HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
+    if (metadataWriterOpt.isPresent()) {
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      mdtWriteStatuses.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
+      result.setMetadataTableWriteStatuses(mdtWriteStatuses);
+      allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
+    }
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(allWriteStatus));
     return postWrite(resultRDD, instantTime, table);
   }
 
