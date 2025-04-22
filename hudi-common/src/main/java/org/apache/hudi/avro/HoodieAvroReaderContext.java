@@ -192,7 +192,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
     if (!renamedColumns.isEmpty()) {
-      throw new UnsupportedOperationException("Schema evolution is not supported for the HoodieAvroReaderContext");
+      throw new UnsupportedOperationException("Column renaming is not supported for the HoodieAvroReaderContext");
     }
     Map<String, Integer> fromFields = IntStream.range(0, from.getFields().size())
         .boxed()
