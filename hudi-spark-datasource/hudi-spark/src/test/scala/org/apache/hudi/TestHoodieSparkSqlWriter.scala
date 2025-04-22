@@ -821,7 +821,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
  * @return dataframe to be used by testDeletePartitionsV2 and a map containing the table params
  */
   def deletePartitionSetup(): (DataFrame, Map[String,String]) = {
-    var fooTableModifier = getCommonParams(tempPath, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+    val fooTableModifier = getCommonParams(tempPath, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(10)
