@@ -163,14 +163,14 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     writeConfigs.put("hoodie.index.type", "INMEMORY");
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
-      // One commit; reading one file group containing a base file only
+      // One commit; reading one file group containing a log file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
       commitToTable(initialRecords, INSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 1, recordMergeMode,
           initialRecords, initialRecords);
 
-      // Two commits; reading one file group containing a base file and a log file
+      // Two commits; reading one file group containing two log files
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       List<HoodieRecord> allRecords = mergeRecordLists(updates, initialRecords);
       commitToTable(updates, UPSERT.value(), writeConfigs);

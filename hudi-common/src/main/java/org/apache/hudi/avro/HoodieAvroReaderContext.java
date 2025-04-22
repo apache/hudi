@@ -27,7 +27,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
@@ -49,7 +48,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -131,7 +129,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
-        return Option.of(new HoodiePreCombineAvroRecordMerger());
+        return Option.of(new HoodieAvroRecordMerger());
       case COMMIT_TIME_ORDERING:
         return Option.of(new OverwriteWithLatestMerger());
       case CUSTOM:
@@ -177,12 +175,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public IndexedRecord seal(IndexedRecord record) {
-    Schema schema = record.getSchema();
-    GenericRecordBuilder builder = new GenericRecordBuilder(schema);
-    for (Schema.Field field : schema.getFields()) {
-      builder.set(field, record.get(field.pos()));
-    }
-    return builder.build();
+    return record;
   }
 
   @Override
