@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.HoodieCleanStat;
@@ -26,9 +27,13 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -64,6 +69,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -519,5 +525,25 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats));
       HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata);
     }
+  }
+
+  @Test
+  void shouldReadArchivedFileAndValidateContent() throws Exception {
+    Path path = new Path(TestHoodieTimelineArchiveLog.class
+        .getResource("/.commits_.archive.202_1-0-1").getPath());
+
+    assertDoesNotThrow(() -> {
+      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
+          metaClient.getFs(), new HoodieLogFile(path), HoodieArchivedMetaEntry.getClassSchema())) {
+
+        while (reader.hasNext()) {
+          HoodieLogBlock block = reader.next();
+          if (block instanceof HoodieAvroDataBlock) {
+            HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
+            avroBlock.deserializeRecords();
+          }
+        }
+      }
+    });
   }
 }

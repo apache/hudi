@@ -82,7 +82,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected byte[] serializeRecords() throws IOException {
+  public byte[] serializeRecords() throws IOException {
     Schema schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
     GenericDatumWriter<IndexedRecord> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -124,7 +124,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   // TODO (na) - Break down content into smaller chunks of byte [] to be GC as they are used
   // TODO (na) - Implement a recordItr instead of recordList
   @Override
-  protected void deserializeRecords() throws IOException {
+  public void deserializeRecords() throws IOException {
     SizeAwareDataInputStream dis =
         new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(getContent().get())));
 
