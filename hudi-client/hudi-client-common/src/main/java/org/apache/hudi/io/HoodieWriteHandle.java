@@ -334,7 +334,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     // populate col stats if required
     try {
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-          HoodieTableMetadataUtil.collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields);
+          HoodieTableMetadataUtil.collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, hoodieTable.getStorageConf());
       stat.putRecordsStats(columnRangeMetadataMap);
       deflateAllRecords(recordList);
     } catch (HoodieException e) {
