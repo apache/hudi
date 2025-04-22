@@ -101,7 +101,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   public abstract String getBasePath();
 
-  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf);
+  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient);
 
   public abstract String getCustomPayload();
 
@@ -163,14 +163,14 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     writeConfigs.put("hoodie.index.type", "INMEMORY");
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
-      // One commit; reading one file group containing a base file only
+      // One commit; reading one file group containing a log file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
       commitToTable(initialRecords, INSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 1, recordMergeMode,
           initialRecords, initialRecords);
 
-      // Two commits; reading one file group containing a base file and a log file
+      // Two commits; reading one file group containing two log files
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       List<HoodieRecord> allRecords = mergeRecordLists(updates, initialRecords);
       commitToTable(updates, UPSERT.value(), writeConfigs);
@@ -192,7 +192,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       List<FileSlice> fileSlices = getFileSlicesToRead(getStorageConf(), getBasePath(), metaClient, dataGen.getPartitionPaths(), true, 0);
       List<T> records = readRecordsFromFileGroup(getStorageConf(), getBasePath(), metaClient, fileSlices,
           avroSchema, RecordMergeMode.COMMIT_TIME_ORDERING, false);
-      HoodieReaderContext<T> readerContext = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf());
+      HoodieReaderContext<T> readerContext = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf(), metaClient);
       Comparable orderingFieldValue = "100";
       for (Boolean isCompressionEnabled : new boolean[] {true, false}) {
         try (ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> spillableMap =
@@ -272,7 +272,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, tablePath);
     Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
     // use reader context for conversion to engine specific objects
-    HoodieReaderContext<T> readerContext = getHoodieReaderContext(tablePath, avroSchema, getStorageConf());
+    HoodieReaderContext<T> readerContext = getHoodieReaderContext(tablePath, avroSchema, getStorageConf(), metaClient);
     List<HoodieTestDataGenerator.RecordIdentifier> expectedRecords = convertHoodieRecords(expectedHoodieRecords, avroSchema);
     List<HoodieTestDataGenerator.RecordIdentifier> expectedUnmergedRecords = convertHoodieRecords(expectedHoodieUnmergedRecords, avroSchema);
     List<FileSlice> fileSlices = getFileSlicesToRead(storageConf, tablePath, metaClient, partitionPaths, containsBaseFile, expectedLogFileNum);
@@ -344,7 +344,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     fileSlices.forEach(fileSlice -> {
       if (shouldValidatePartialRead(fileSlice, avroSchema)) {
         assertThrows(IllegalArgumentException.class, () -> new HoodieFileGroupReader<>(
-            getHoodieReaderContext(tablePath, avroSchema, storageConf),
+            getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient),
             metaClient.getStorage(),
             tablePath,
             metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
@@ -360,7 +360,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             false));
       }
       try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-          getHoodieReaderContext(tablePath, avroSchema, storageConf),
+          getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient),
           metaClient.getStorage(),
           tablePath,
           metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
