@@ -33,12 +33,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.index.EngineIndexHelper;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -72,10 +72,13 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
                                                            HoodieWriteConfig writeConfig,
                                                            HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                            HoodieEngineContext engineContext,
+                                                           EngineIndexHelper indexHelper,
                                                            Option<String> inflightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, indexHelper, inflightInstantTimestamp);
   }
 
+  // TODO(yihua): move this filtering
+  /*
   @Override
   List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
     return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient).stream()
@@ -84,6 +87,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
         .filter(partition -> !partition.equals(MetadataPartitionType.PARTITION_STATS))
         .collect(Collectors.toList());
   }
+  */
 
   @Override
   boolean shouldInitializeFromFilesystem(Set<String> pendingDataInstants, Option<String> inflightInstantTimestamp) {

@@ -84,7 +84,8 @@ public class TestMetadataPartitionType {
         break;
     }
 
-    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfigBuilder.build(), metaClient);
+    List<MetadataPartitionType> enabledPartitions =
+        MetadataPartitionType.getEnabledPartitions(metadataConfigBuilder.build(), metaClient);
 
     // Verify partition type is enabled due to config
     assertEquals(expectedEnabledPartitions, enabledPartitions.size());
@@ -124,7 +125,8 @@ public class TestMetadataPartitionType {
     Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(Mockito.any())).thenReturn(false);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
 
-    List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
+    List<MetadataPartitionType> enabledPartitions =
+        MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
 
     // Verify no partitions are enabled
     assertTrue(enabledPartitions.isEmpty(), "No partitions should be enabled");
