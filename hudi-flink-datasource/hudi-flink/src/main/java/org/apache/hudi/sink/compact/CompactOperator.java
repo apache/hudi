@@ -21,7 +21,9 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.format.FlinkRowDataReaderContext;
@@ -35,7 +37,6 @@ import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.Lazy;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -54,6 +55,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Operator to execute the actual compaction task assigned by the compaction plan task.
@@ -72,6 +74,11 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
    * Write Client.
    */
   private transient HoodieFlinkWriteClient<?> writeClient;
+
+  /**
+   * Hoodie Flink table.
+   */
+  private transient HoodieFlinkTable<?> flinkTable;
 
   /**
    * Whether to execute compaction asynchronously.
@@ -93,7 +100,10 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
    */
   private transient StreamRecordCollector<CompactionCommitEvent> collector;
 
-  private transient Lazy<HoodieReaderContext<?>> readerContextLazy;
+  /**
+   * Reader context.
+   */
+  private transient Option<HoodieReaderContext<?>> readerContextOpt;
 
   /**
    * Compaction metrics.
@@ -114,7 +124,8 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   public void open() throws Exception {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    this.readerContextLazy = Lazy.lazily(this::initReaderContext);
+    this.flinkTable = this.writeClient.getHoodieTable();
+    this.readerContextOpt = initReaderContext(this.writeClient);
     if (this.asyncCompaction) {
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
@@ -146,8 +157,9 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
                             HoodieWriteConfig writeConfig) throws Exception {
     compactionMetrics.startCompaction();
     HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
-    HoodieFlinkTable flinkTable = writeClient.getHoodieTable();
     HoodieTableMetaClient metaClient = flinkTable.getMetaClient();
+    // reload the timeline
+    metaClient.reloadActiveTimeline();
     // schema evolution
     CompactionUtil.setAvroSchema(writeConfig, metaClient);
     List<WriteStatus> writeStatuses = compactor.compact(
@@ -157,16 +169,25 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
         compactionOperation,
         instantTime,
         flinkTable.getTaskContextSupplier(),
-        readerContextLazy);
+        readerContextOpt);
     compactionMetrics.endCompaction();
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }
 
-  private HoodieReaderContext<?> initReaderContext() {
-    InternalSchemaManager internalSchemaManager = InternalSchemaManager.get(conf, writeClient.getHoodieTable().getMetaClient());
-    // initialize storage conf lazily.
-    StorageConfiguration<?> readerConf = StreamerUtil.storageConfForFileGroupReader(writeClient.getEngineContext().getStorageConf(), conf);
-    return new FlinkRowDataReaderContext(readerConf, internalSchemaManager, Collections.emptyList());
+  private Option<HoodieReaderContext<?>> initReaderContext(HoodieFlinkWriteClient<?> writeClient) {
+    HoodieTableMetaClient metaClient = flinkTable.getMetaClient();
+    boolean useFileGroupReaderBasedCompaction = !metaClient.isMetadataTable()
+        && writeClient.getConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+        && writeClient.getConfig().populateMetaFields()                                                         // Virtual key support by fg reader is not ready
+        && !(metaClient.getTableConfig().isCDCEnabled() && writeClient.getConfig().isYieldingPureLogForMor());  // do not support produce cdc log during fg reader
+    if (useFileGroupReaderBasedCompaction) {
+      // CAUTION: reuse the meta client so that the timeline is updated
+      Supplier<InternalSchemaManager> internalSchemaManager = () -> InternalSchemaManager.get(conf, metaClient);
+      // initialize storage conf lazily.
+      StorageConfiguration<?> readerConf = StreamerUtil.storageConfForFileGroupReader(writeClient.getEngineContext().getStorageConf(), conf);
+      return Option.of(new FlinkRowDataReaderContext(readerConf, internalSchemaManager, Collections.emptyList()));
+    }
+    return Option.empty();
   }
 
   @VisibleForTesting

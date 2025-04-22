@@ -60,6 +60,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -73,13 +74,13 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  */
 public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   private final List<Predicate> predicates;
-  private final InternalSchemaManager internalSchemaManager;
+  private final Supplier<InternalSchemaManager> internalSchemaManager;
   private RowDataSerializer rowDataSerializer;
   private final boolean utcTimezone;
 
   public FlinkRowDataReaderContext(
       StorageConfiguration<?> storageConfiguration,
-      InternalSchemaManager internalSchemaManager,
+      Supplier<InternalSchemaManager> internalSchemaManager,
       List<Predicate> predicates) {
     super(storageConfiguration);
     this.internalSchemaManager = internalSchemaManager;
@@ -97,7 +98,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       HoodieStorage storage) throws IOException {
     boolean isLogFile = FSUtils.isLogFile(filePath);
     // disable schema evolution in fileReader if it's log file, since schema evolution for log file is handled in `FileGroupRecordBuffer`
-    InternalSchemaManager schemaManager = isLogFile ? InternalSchemaManager.DISABLED : internalSchemaManager;
+    InternalSchemaManager schemaManager = isLogFile ? InternalSchemaManager.DISABLED : internalSchemaManager.get();
     RowDataFileReaderFactories.Factory readerFactory = RowDataFileReaderFactories.getFactory(HoodieFileFormat.PARQUET);
     RowDataFileReader fileReader = readerFactory.createFileReader(schemaManager, getStorageConfiguration());
 
