@@ -88,6 +88,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
     final int numFileGroups = fileGroupSize;
 
+    // TODO(yihua): revisit caching
     if (config.getRecordIndexUseCaching()) {
       records.persist(config.getRecordIndexInputStorageLevel());
     }
