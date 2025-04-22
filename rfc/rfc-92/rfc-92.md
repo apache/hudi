@@ -179,11 +179,6 @@ Even so, bitmap indexes are valuable, especially when multiple low-cardinality c
 Bitwise operations on these indexes can efficiently narrow down relevant file groups.
 In the future, as Hudi adds row-level or row-group-level skipping, bitmap indexes will offer even greater performance gains by enabling precise row filtering within files.
 
-Another interesting observation: with cloud object stores like S3, fine-grained data skipping can sometimes hurt performance. 
-While formats like Iceberg support row group–level skipping, cloud storage is optimized for large, sequential reads. 
-Reading two small row groups can be slower and costlier than reading one big block, due to the overhead of multiple small I/O calls. 
-In short, 0.3 + 0.3 > 1 can happen— so it's important to balance skipping precision with I/O efficiency.
-
 ### Write Amplification
 Like other indexes, bitmap indexes can amplify write operations and negatively impact writer performance.
 This is especially true for updates, where Hudi needs to compare the previous file slice with the current one to identify which indexed field values have changed, in order to update the corresponding bitmaps.
@@ -209,21 +204,6 @@ As of now, the bitmap index only supports the `EqualTo` (`=`) query filter.
 The `Not(EqualTo)` (`!=`) filter is not supported because the underlying implementation uses RoaringBitmap.
 RoaringBitmap is a space-efficient, sparse bitmap format. It doesn't support global `not` or `flipAll` operations, as these require a well-defined range of record positions (this holds true for most compressed bitmap implementations).
 In other words, we would need to know the full range of possible record positions in advance—which is not practical in most cases.
-
-Support for the `IN` predicate is possible, but not memory-efficient. Take the following query as an example:
-```
-SELECT age FROM commute_table WHERE commute_type IN ('car', 'walk', 'bike')
-```
-This query retrieves the ages of people who commute using any of the three specified types.
-If we have a bitmap index on `commute_type` and support the `IN` predicate, we would need to load three bitmaps into memory for every file group and perform a bitwise `OR` across them to determine if that file group contains any matching values.
-This introduces additional memory overhead on the Hudi side.
-Instead, the query can be rewritten as:
-```
-SELECT age FROM commute_table WHERE commute_type='car' OR commute_type='walk' OR commute_type='bike'
-```
-In this version, we still read the same three bitmaps, but not all at once. 
-Only one bitmap is loaded into memory at a time, and the query engine handles the `OR` logic by merging file name results from each predicate.
-The overall performance should be nearly the same, but the memory usage is significantly reduced.
 
 ## Rollout/Adoption Plan
 
