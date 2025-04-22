@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -67,6 +68,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -151,28 +153,42 @@ public class SparkRDDWriteClient<T> extends
     return metadataWriterMap.get(triggeringInstantTimestamp);
   }
 
-
-
   /**
    * Complete changes performed at the given instantTime marker with specified action.
    */
   @Override
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
-                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                        WriteStatusHandlerCallback writeStatusHandlerCallback) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
-    // writeStatuses is a mix of data table write status and mdt write status
-    List<Pair<Boolean, HoodieWriteStat>> writeStats = writeStatuses.map(writeStatus ->
-        Pair.of(writeStatus.isMetadataTable(), writeStatus.getStat())).collect();
-    List<HoodieWriteStat> dataTableWriteStats = writeStats.stream().filter(entry -> !entry.getKey()).map(Pair::getValue).collect(Collectors.toList());
-    List<HoodieWriteStat> mdtWriteStats = writeStats.stream().filter(Pair::getKey).map(Pair::getValue).collect(Collectors.toList());
-    if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
-      dataTableWriteStats.clear();
-      dataTableWriteStats.addAll(mdtWriteStats);
-      mdtWriteStats.clear();
+    List<Pair<Boolean, LeanWriteStatus>> leanWriteStatuses = writeStatuses.map(writeStatus -> Pair.of(writeStatus.isMetadataTable(), new LeanWriteStatus(writeStatus))).collect();
+    // if there are any errors, do call the callback and proceed only if its true.
+    AtomicLong totalRecords = new AtomicLong(0);
+    AtomicLong totalErrorRecords = new AtomicLong(0);
+    leanWriteStatuses.forEach(triplet -> {
+      totalRecords.getAndAdd(triplet.getValue().getTotalRecords());
+      totalErrorRecords.getAndAdd(triplet.getValue().getTotalErrorRecords());
+    });
+    boolean canProceed = writeStatusHandlerCallback.processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
+        leanWriteStatuses.stream().filter(triplet -> triplet.getValue().hasErrors()).map(Pair::getValue).collect(Collectors.toList()));
+
+    if (canProceed) {
+      // writeStatuses is a mix of data table write status and mdt write status
+      List<HoodieWriteStat> dataTableWriteStats = leanWriteStatuses.stream().filter(entry -> !entry.getKey()).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
+      List<HoodieWriteStat> mdtWriteStats = leanWriteStatuses.stream().filter(Pair::getKey).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
+      if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
+        dataTableWriteStats.clear();
+        dataTableWriteStats.addAll(mdtWriteStats);
+        mdtWriteStats.clear();
+      }
+
+      return commitStats(instantTime, dataTableWriteStats, mdtWriteStats, extraMetadata, commitActionType,
+          partitionToReplacedFileIds, extraPreCommitFunc);
+    } else {
+      LOG.error("Exiting early due to errors with write operation ");
+      return false;
     }
-    return commitStats(instantTime, dataTableWriteStats, mdtWriteStats, extraMetadata, commitActionType,
-        partitionToReplacedFileIds, extraPreCommitFunc);
   }
 
   @Override

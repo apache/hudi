@@ -98,7 +98,7 @@ import java.util.Set;
  * </p>
  */
 @NotThreadSafe
-public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class  HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandle.class);
 

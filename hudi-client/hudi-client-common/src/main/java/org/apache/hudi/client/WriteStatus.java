@@ -55,11 +55,11 @@ public class WriteStatus implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final long RANDOM_SEED = 9038412832L;
 
-  private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
+  protected HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
   private final List<HoodieRecordDelegate> writtenRecordDelegates = new ArrayList<>();
 
-  private final List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
+  protected List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
   private boolean isMetadataTable;
   private Throwable globalError = null;

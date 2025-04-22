@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.callback.HoodieWriteCommitCallback;
+import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -243,9 +244,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         Option.empty());
   }
 
+  public boolean commit(String instantTime, O writeStatuses, Option<Map<String, String>> extraMetadata,
+                                 String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
+                                 Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+    return commit(instantTime, writeStatuses, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
+        new NoOpWriteStatusHandlerCallback());
+  }
+
   public abstract boolean commit(String instantTime, O writeStatuses, Option<Map<String, String>> extraMetadata,
                                  String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
-                                 Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc);
+                                 Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                                 WriteStatusHandlerCallback writeStatusHandlerCallback);
 
   public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
                              String commitActionType) {
@@ -288,7 +297,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
 
-      commit(table, commitActionType, instantTime, metadata, dataTableStats, mdtStats);
+      commit(table, commitActionType, instantTime, metadata, dataTableStats, mdtStats, operationType);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
@@ -317,7 +326,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
-                            List<HoodieWriteStat> dataTablestats, List<HoodieWriteStat> mdtStats) throws IOException {
+                            List<HoodieWriteStat> dataTablestats, List<HoodieWriteStat> mdtStats, WriteOperationType writeOperationType) throws IOException {
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
@@ -329,19 +338,22 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     // generate Completion time
     String completionTime = activeTimeline.createCompletionTime();
+    boolean optimizedWrite = config.getOptimizedWritesEnabled() && WriteOperationType.optimizedWriteDagSupported(writeOperationType);
     // update Metadata table
-
-    if (metadataWriterMap.containsKey(instantTime) && metadataWriterMap.get(instantTime).isPresent()) {
+    if (optimizedWrite && metadataWriterMap.containsKey(instantTime) && metadataWriterMap.get(instantTime).isPresent()) {
+      HoodieTableMetadataWriter metadataWriter = metadataWriterMap.get(instantTime).get();
       try {
-        // wraps the commit in MDT
-        // todo: do we need to add completion time to MDT or not yet.
-        metadataWriterMap.get(instantTime).get().writeToFilesPartitionAndCommit(instantTime, context, mdtStats, metadata);
-        metadataWriterMap.get(instantTime).get().close();
-        metadataWriterMap.remove(instantTime);
+        metadataWriter.writeToFilesPartitionAndCommit(instantTime, context, mdtStats, metadata);
+        metadataWriter.close();
       } catch (Exception e) {
         throw new HoodieException("Failed to close metadata writer ", e);
+      } finally {
+        metadataWriterMap.remove(instantTime);
       }
+    } else {
+      writeTableMetadata(table, instantTime, metadata);
     }
+
     activeTimeline.saveAsComplete(false, table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime),
         Option.of(metadata), Option.of(completionTime));
     // update cols to Index as applicable
@@ -1731,5 +1743,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
       }
     });
+  }
+
+  static class NoOpWriteStatusHandlerCallback implements WriteStatusHandlerCallback {
+
+    @Override
+    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, List<LeanWriteStatus> leanWriteStatuses) {
+      return true;
+    }
   }
 }

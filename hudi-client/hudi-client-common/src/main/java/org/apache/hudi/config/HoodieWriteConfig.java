@@ -860,6 +860,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
 
+  public static final ConfigProperty<Boolean> OPTIMIZED_WRITE_DAG = ConfigProperty
+      .key("hoodie.write.optimized.write.dag")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Whether to enable optimized write dag or not. With optimized writes, we execute writes to both data table and metadata table "
+          + "using one RDD stage boundary. If not, writes to data table and metadata table happens across stage boundaries.");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -2942,6 +2950,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getSecondaryIndexParallelism();
   }
 
+  public boolean getOptimizedWritesEnabled() {
+    return getBoolean(OPTIMIZED_WRITE_DAG);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -3514,6 +3526,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
+      writeConfig.setDefaultValue(OPTIMIZED_WRITE_DAG, getDefaultForOptimizedWriteDag(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
       // Set default values of HoodieHBaseIndexConfig
@@ -3695,6 +3708,18 @@ public class HoodieWriteConfig extends HoodieConfig {
         case JAVA:
           // Timeline-server-based marker is not supported for Flink and Java engines
           return MarkerType.DIRECT.toString();
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+
+    private boolean getDefaultForOptimizedWriteDag(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return true;
+        case FLINK:
+        case JAVA:
+          return false;
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
