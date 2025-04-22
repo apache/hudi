@@ -176,27 +176,28 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   /**
    * Initialize correct record buffer
    */
-  private FileGroupRecordBuffer<T> getRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                   HoodieTableMetaClient hoodieTableMetaClient,
-                                                   RecordMergeMode recordMergeMode,
-                                                   TypedProperties props,
-                                                   Option<HoodieBaseFile> baseFileOption,
-                                                   boolean hasNoLogFiles,
-                                                   boolean isSkipMerge,
-                                                   boolean shouldUseRecordPosition,
-                                                   HoodieReadStats readStats,
+  private <T> FileGroupRecordBuffer<T> getRecordBuffer(HoodieReaderContext<T> readerContext,
+                                                       HoodieTableMetaClient hoodieTableMetaClient,
+                                                       RecordMergeMode recordMergeMode,
+                                                       TypedProperties props,
+                                                       Option<HoodieBaseFile> baseFileOption,
+                                                       boolean hasNoLogFiles,
+                                                       boolean isSkipMerge,
+                                                       boolean shouldUseRecordPosition,
+                                                       HoodieReadStats readStats,
                                                    boolean emitDelete) {
+    EngineBasedMerger<T> merger = new EngineBasedMerger<>(readerContext, recordMergeMode, hoodieTableMetaClient.getTableConfig(), props);
     if (hasNoLogFiles) {
       return null;
     } else if (isSkipMerge) {
       return new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, merger, emitDelete);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, merger, emitDelete);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, merger, emitDelete);
     }
   }
 

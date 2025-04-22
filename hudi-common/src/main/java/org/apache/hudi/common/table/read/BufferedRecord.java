@@ -73,8 +73,8 @@ public class BufferedRecord<T> implements Serializable {
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
   }
 
-  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue) {
-    return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, true);
+  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord) {
+    return new BufferedRecord<>(deleteRecord.getRecordKey(), deleteRecord.getOrderingValue(), null, null, true);
   }
 
   public String getRecordKey() {
@@ -106,5 +106,9 @@ public class BufferedRecord<T> implements Serializable {
       record = readerContext.seal(readerContext.toBinaryRow(readerContext.getSchemaFromBufferRecord(this), record));
     }
     return this;
+  }
+
+  public BufferedRecord<T> asDeleteRecord() {
+    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, true);
   }
 }

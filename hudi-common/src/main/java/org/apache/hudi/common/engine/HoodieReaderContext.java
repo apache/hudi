@@ -457,7 +457,7 @@ public abstract class HoodieReaderContext<T> {
    * Decodes the avro schema with given version ID.
    */
   @Nullable
-  private Schema decodeAvroSchema(Object versionId) {
+  public Schema decodeAvroSchema(Object versionId) {
     return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
   }
 }

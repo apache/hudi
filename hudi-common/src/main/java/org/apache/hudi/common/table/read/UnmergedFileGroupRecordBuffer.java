@@ -22,7 +22,6 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -51,8 +50,9 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       RecordMergeMode recordMergeMode,
       TypedProperties props,
       HoodieReadStats readStats,
+      EngineBasedMerger<T> merger,
       boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, Option.empty(), emitDelete);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, Option.empty(), merger, emitDelete);
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }
 
@@ -83,11 +83,6 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     nextRecord = readerContext.seal(recordIterator.next());
     readStats.incrementNumInserts();
     return true;
-  }
-
-  @Override
-  public Iterator<BufferedRecord<T>> getLogRecordIterator() {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override

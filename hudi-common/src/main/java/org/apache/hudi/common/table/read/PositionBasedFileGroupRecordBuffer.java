@@ -72,8 +72,8 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
                                             TypedProperties props,
                                             HoodieReadStats readStats,
                                             Option<String> orderingFieldName,
-                                            boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+                                            EngineBasedMerger<T> merger) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, merger, emitDelete);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
@@ -124,16 +124,17 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         T nextRecord = recordIterator.next();
 
         // Skip a record if it is not contained in the specified keys.
-        if (shouldSkip(nextRecord, isFullKey, keys, dataBlock.getSchema())) {
+        if (shouldSkip(nextRecord, dataBlock.getKeyFieldName(), isFullKey, keys, dataBlock.getSchema())) {
           recordIndex++;
           continue;
         }
 
         long recordPosition = recordPositions.get(recordIndex++);
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
+
         boolean isDelete = isBuiltInDeleteRecord(evolvedNextRecord) || isCustomDeleteRecord(evolvedNextRecord) || isDeleteHoodieOperation(evolvedNextRecord);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext, orderingFieldName, isDelete);
-        processNextDataRecord(bufferedRecord, recordPosition);
+        processNextLogRecord(bufferedRecord, recordPosition);
       }
     }
   }
@@ -145,7 +146,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     for (Serializable position : positions) {
       BufferedRecord<T> entry = records.get(position);
       String recordKey = entry.getRecordKey();
-      if (!entry.isDelete() || recordKey != null) {
+      if (entry.getRecord() != null || recordKey != null) {
 
         records.put(recordKey, entry);
         records.remove(position);
@@ -172,46 +173,12 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       super.processDeleteBlock(deleteBlock);
       return;
     }
-
-    switch (recordMergeMode) {
-      case COMMIT_TIME_ORDERING:
-        int commitTimeBasedRecordIndex = 0;
-        DeleteRecord[] deleteRecords = deleteBlock.getRecordsToDelete();
-        for (Long recordPosition : recordPositions) {
-          // IMPORTANT:
-          // use #put for log files with regular order(see HoodieLogFile.LOG_FILE_COMPARATOR);
-          // use #putIfAbsent for log files with reverse order(see HoodieLogFile.LOG_FILE_COMPARATOR_REVERSED),
-          // the delete block would be parsed ahead of a data block if they are in different log files.
-
-          // set up the record key for key-based fallback handling, this is needed
-          // because under hybrid strategy in #doHasNextFallbackBaseRecord, if the record keys are not set up,
-          // this delete-vector could be kept in the records cache(see the check in #fallbackToKeyBasedBuffer),
-          // and these keys would be deleted no matter whether there are following-up inserts/updates.
-          DeleteRecord deleteRecord = deleteRecords[commitTimeBasedRecordIndex++];
-          BufferedRecord<T> record = BufferedRecord.forDeleteRecord(deleteRecord, deleteRecord.getOrderingValue());
-          records.put(recordPosition, record);
-        }
-        return;
-      case EVENT_TIME_ORDERING:
-      case CUSTOM:
-      default:
-        int recordIndex = 0;
-        Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
-        while (it.hasNext()) {
-          DeleteRecord record = it.next();
-          long recordPosition = recordPositions.get(recordIndex++);
-          processNextDeletedRecord(record, recordPosition);
-        }
-    }
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
-    BufferedRecord<T> existingRecord = records.get(recordPosition);
-    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecord);
-    if (recordOpt.isPresent()) {
-      Comparable orderingValue = getOrderingValue(readerContext, recordOpt.get());
-      records.put(recordPosition, BufferedRecord.forDeleteRecord(recordOpt.get(), orderingValue));
+    int recordIndex = 0;
+    Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
+    while (it.hasNext()) {
+      DeleteRecord record = it.next();
+      long recordPosition = recordPositions.get(recordIndex++);
+      processNextLogRecord(BufferedRecord.forDeleteRecord(record), recordPosition);
     }
   }
 
@@ -219,7 +186,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   public boolean containsLogRecord(String recordKey) {
     return records.values().stream()
         .filter(r -> !r.isDelete())
-        .map(r -> readerContext.getRecordKey(r.getRecord(), readerSchema)).anyMatch(recordKey::equals);
+        .map(BufferedRecord::getRecordKey).anyMatch(recordKey::equals);
   }
 
   @Override
@@ -231,25 +198,27 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
-
-    final Pair<Boolean, T> isDeleteAndRecord;
-    T resultRecord = null;
-    if (logRecordInfo != null) {
+    final Option<T> resultRecord;
+    if (logRecordInfo != null) { // TODO dedupe with hasNextBaseRecord?
       BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
-      isDeleteAndRecord = merge(bufferedRecord, logRecordInfo);
-      if (!isDeleteAndRecord.getLeft()) {
-        resultRecord = isDeleteAndRecord.getRight();
+      BufferedRecord<T> merged = merger.merge(Option.of(bufferedRecord), Option.ofNullable(logRecordInfo), enablePartialMerging);
+      if (!merged.isDelete()) {
+        // Updates
+        nextRecord = merged.getRecord();
         readStats.incrementNumUpdates();
+        return true;
       } else {
+        // Deletes
         readStats.incrementNumDeletes();
+        return false;
       }
     } else {
-      resultRecord = baseRecord;
+      resultRecord = Option.of(baseRecord);
       readStats.incrementNumInserts();
     }
 
-    if (resultRecord != null) {
-      nextRecord = readerContext.seal(resultRecord);
+    if (resultRecord.isPresent()) {
+      nextRecord = readerContext.seal(resultRecord.get());
       return true;
     }
     return false;
@@ -260,11 +229,11 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       //see if there is a delete block with record positions
       nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
           ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
-      BufferedRecord<T> logRecordInfo  = records.remove(nextRecordPosition++);
+      BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
       if (logRecordInfo != null) {
         //we have a delete that was not to be able to be converted. Since it is the newest version, the record is deleted
         //remove a key based record if it exists
-        records.remove(readerContext.getRecordKey(baseRecord, readerSchema));
+        records.remove(logRecordInfo.getRecordKey());
         return false;
       }
     }
@@ -276,13 +245,13 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
    * 1. A set of pre-specified keys exists.
    * 2. The key of the record is not contained in the set.
    */
-  protected boolean shouldSkip(T record, boolean isFullKey, Set<String> keys, Schema writerSchema) {
+  protected boolean shouldSkip(T record, String keyFieldName, boolean isFullKey, Set<String> keys, Schema writerSchema) {
     // No keys are specified. Cannot skip at all.
     if (keys.isEmpty()) {
       return false;
     }
 
-    String recordKey = readerContext.getRecordKey(record, writerSchema);
+    String recordKey = readerContext.getValue(record, writerSchema, keyFieldName).toString();
     // Can not extract the record key, throw.
     if (recordKey == null || recordKey.isEmpty()) {
       throw new HoodieKeyException("Can not extract the key for a record");
