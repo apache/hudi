@@ -145,8 +145,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected Option<HoodieMetadataMetrics> metrics;
   protected StorageConfiguration<?> storageConf;
   protected final transient HoodieEngineContext engineContext;
-  protected final Map<MetadataPartitionType, Indexer> enabledIndexBuilderMap;
-  protected final EngineIndexHelper indexHelper;
+  protected final transient Map<MetadataPartitionType, Indexer> enabledIndexBuilderMap;
+  protected final transient EngineIndexHelper indexHelper;
   // Is the MDT bootstrapped and ready to be read from
   boolean initialized = false;
   private HoodieTableFileSystemView metadataView;
