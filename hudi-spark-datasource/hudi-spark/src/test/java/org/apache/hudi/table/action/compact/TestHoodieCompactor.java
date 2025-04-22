@@ -25,7 +25,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -466,7 +465,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   private HoodieWriteMetadata compact(SparkRDDWriteClient writeClient, String compactionInstantTime) {
     writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
     HoodieWriteMetadata compactMetadata = writeClient.compact(compactionInstantTime);
-    writeClient.commitCompaction(compactionInstantTime, (HoodieCommitMetadata) compactMetadata.getCommitMetadata().get(), Option.empty());
+    writeClient.commitCompaction(compactionInstantTime, compactMetadata, Option.empty());
     return compactMetadata;
   }
 
