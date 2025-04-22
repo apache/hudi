@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.AutoRecordKeyGenerationUtils.mayBeValidateParamsForAutoGenerationOfRecordKeys
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
+import org.apache.hudi.DataSourceUtils.SparkDataSourceWriteStatusHandlerCallback
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
@@ -81,6 +82,7 @@ import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.BiConsumer
 
 import scala.collection.JavaConverters._
@@ -994,17 +996,20 @@ class HoodieSparkSqlWriterInternal {
                                              tableInstantInfo: TableInstantInfo,
                                              extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]]
                                             ): (Boolean, HOption[java.lang.String], HOption[java.lang.String]) = {
-    if (writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors).count() == 0) {
-      log.info("Proceeding to commit the write.")
-      val metaMap = parameters.filter(kv =>
-        kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX.key)))
-      val commitSuccess =
-        client.commit(tableInstantInfo.instantTime, writeResult.getWriteStatuses,
-          common.util.Option.of(new java.util.HashMap[String, String](metaMap.asJava)),
-          tableInstantInfo.commitActionType,
-          writeResult.getPartitionToReplaceFileIds,
-          common.util.Option.ofNullable(extraPreCommitFn.orNull))
 
+  val hasErrors = new AtomicBoolean(false)
+    log.info("Proceeding to commit the write.")
+    val metaMap = parameters.filter(kv =>
+      kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX.key)))
+    val commitSuccess =
+      client.commit(tableInstantInfo.instantTime, writeResult.getWriteStatuses,
+        common.util.Option.of(new java.util.HashMap[String, String](metaMap.asJava)),
+        tableInstantInfo.commitActionType,
+        writeResult.getPartitionToReplaceFileIds,
+        common.util.Option.ofNullable(extraPreCommitFn.orNull),
+        new SparkDataSourceWriteStatusHandlerCallback(tableInstantInfo.operation, hasErrors));
+
+    if(!hasErrors.get()) {
       if (commitSuccess) {
         log.info("Commit " + tableInstantInfo.instantTime + " successful!")
       }
@@ -1038,19 +1043,6 @@ class HoodieSparkSqlWriterInternal {
       log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
       (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
     } else {
-      log.error(s"${tableInstantInfo.operation} failed with errors")
-      if (log.isTraceEnabled) {
-        log.trace("Printing out the top 100 errors")
-        writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors)
-          .take(100)
-          .foreach(ws => {
-            log.trace("Global error :", ws.getGlobalError)
-            if (ws.getErrors.size() > 0) {
-              ws.getErrors.asScala.foreach(kt =>
-                log.trace(s"Error for key: ${kt._1}", kt._2))
-            }
-          })
-      }
       (false, common.util.Option.empty(), common.util.Option.empty())
     }
   }

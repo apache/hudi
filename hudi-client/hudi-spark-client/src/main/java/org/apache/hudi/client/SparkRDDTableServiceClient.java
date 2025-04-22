@@ -63,15 +63,15 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
     if (metadataWriterOpt.isPresent()) { // write to metadata table if enabled
       HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT((HoodieData<WriteStatus>) writeMetadata.getDataTableWriteStatuses(), compactionInstantTime);
       writeMetadata.setAllWriteStatuses(((HoodieData<WriteStatus>) writeMetadata.getDataTableWriteStatuses()).union(mdtWriteStatuses));
+      return writeMetadata;
     } else {
-      writeMetadata.setAllWriteStatuses(writeMetadata.getDataTableWriteStatuses());
+      return super.writeToMetadata(writeMetadata, compactionInstantTime, metadataWriterOpt);
     }
-    return writeMetadata;
   }
 
   @Override
-  protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> processAndFetchHoodieWriteStats(HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionWriteMetadata) {
-    List<Pair<Boolean, HoodieWriteStat>> writeStats = compactionWriteMetadata.getAllWriteStatuses().map(writeStatus ->
+  protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> processAndFetchHoodieWriteStats(HoodieWriteMetadata<JavaRDD<WriteStatus>> tableServiceWriteMetadata) {
+    List<Pair<Boolean, HoodieWriteStat>> writeStats = tableServiceWriteMetadata.getAllWriteStatuses().map(writeStatus ->
         Pair.of(writeStatus.isMetadataTable(), writeStatus.getStat())).collect();
     List<HoodieWriteStat> dataTableWriteStats = writeStats.stream().filter(entry -> !entry.getKey()).map(Pair::getValue).collect(Collectors.toList());
     List<HoodieWriteStat> mdtWriteStats = writeStats.stream().filter(Pair::getKey).map(Pair::getValue).collect(Collectors.toList());
