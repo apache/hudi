@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -188,12 +189,13 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       if (activeTimeline.isEmpty(cleanInstant)) {
         activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
+        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
         try {
           // Deserialize plan.
-          return Option.of(CleanerUtils.getCleanerPlan(table.getMetaClient(), cleanInstant));
+          return Option.of(activeTimeline.readCleanerPlan(cleanPlanInstant));
         } catch (IOException ex) {
           // If it is empty we catch error and repair.
-          if (activeTimeline.isEmpty(CleanerUtils.getCleanRequestInstant(table.getMetaClient(), cleanInstant))) {
+          if (activeTimeline.isEmpty(cleanPlanInstant)) {
             return Option.of(new HoodieCleanerPlan());
           }
           throw new HoodieIOException("Failed to parse cleaner plan", ex);
