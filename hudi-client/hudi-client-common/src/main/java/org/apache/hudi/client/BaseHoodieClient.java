@@ -284,8 +284,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   class GetMetadataWriterFunc implements Functions.Function2<String, HoodieTableMetaClient, Option<HoodieTableMetadataWriter>> {
 
     @Override
-    public Option<HoodieTableMetadataWriter> apply(String val1, HoodieTableMetaClient metaClient) {
-      return getMetadataWriter(val1, metaClient);
+    public Option<HoodieTableMetadataWriter> apply(String triggeringInstantTimestamp, HoodieTableMetaClient metaClient) {
+      return getMetadataWriter(triggeringInstantTimestamp, metaClient);
     }
   }
 
