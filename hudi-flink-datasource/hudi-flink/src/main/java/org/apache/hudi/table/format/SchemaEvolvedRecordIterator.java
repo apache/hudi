@@ -19,7 +19,7 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.util.DefaultRowDataDataProjection;
+import org.apache.hudi.util.RowDataDataProjection;
 
 import org.apache.flink.table.data.RowData;
 
@@ -28,9 +28,9 @@ import org.apache.flink.table.data.RowData;
  */
 public final class SchemaEvolvedRecordIterator implements ClosableIterator<RowData> {
   private final ClosableIterator<RowData> nested;
-  private final DefaultRowDataDataProjection castProjection;
+  private final RowDataDataProjection castProjection;
 
-  public SchemaEvolvedRecordIterator(ClosableIterator<RowData> nested, DefaultRowDataDataProjection castProjection) {
+  public SchemaEvolvedRecordIterator(ClosableIterator<RowData> nested, RowDataDataProjection castProjection) {
     this.nested = nested;
     this.castProjection = castProjection;
   }

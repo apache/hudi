@@ -27,10 +27,10 @@ import javax.annotation.Nullable;
 import java.util.stream.IntStream;
 
 /**
- * This class is responsible to project row as well as {@link DefaultRowDataDataProjection}.
+ * This class is responsible to project row as well as {@link RowDataDataProjection}.
  * In addition, fields are converted according to the CastMap.
  */
-public final class RowDataCastDataProjection extends DefaultRowDataDataProjection {
+public final class RowDataCastDataProjection extends RowDataDataProjection {
   private static final long serialVersionUID = 1L;
 
   private final CastMap castMap;

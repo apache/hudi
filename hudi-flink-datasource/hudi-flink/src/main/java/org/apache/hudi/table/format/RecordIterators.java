@@ -25,7 +25,7 @@ import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
-import org.apache.hudi.util.DefaultRowDataDataProjection;
+import org.apache.hudi.util.RowDataDataProjection;
 
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.data.RowData;
@@ -93,7 +93,7 @@ public abstract class RecordIterators {
               recordFilter));
     } else {
       CastMap castMap = internalSchemaManager.getCastMap(mergeSchema, fieldNames, fieldTypes, selectedFields);
-      Option<DefaultRowDataDataProjection> castProjection = castMap.toRowDataProjection(selectedFields);
+      Option<RowDataDataProjection> castProjection = castMap.toRowDataProjection(selectedFields);
       ClosableIterator<RowData> itr = new ParquetSplitRecordIterator(
           ParquetSplitReaderUtil.genPartColumnarRowReader(
               utcTimestamp,

@@ -338,6 +338,9 @@ public class StreamerUtil {
     }
   }
 
+  /**
+   * Returns the merge mode.
+   */
   public static RecordMergeMode getMergeMode(Configuration conf) {
     if (conf.contains(FlinkOptions.RECORD_MERGE_MODE)) {
       return RecordMergeMode.valueOf(conf.get(FlinkOptions.RECORD_MERGE_MODE));
@@ -346,7 +349,10 @@ public class StreamerUtil {
     }
   }
 
-  public static String getMergeClasses(Configuration conf) {
+  /**
+   * Returns the merger classes.
+   */
+  public static String getMergerClasses(Configuration conf) {
     if (conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
       String payloadClass = conf.get(FlinkOptions.PAYLOAD_CLASS_NAME);
       if (payloadClass.contains(PartialUpdateAvroPayload.class.getSimpleName())) {

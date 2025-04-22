@@ -25,7 +25,7 @@ import java.io.Serializable;
 /**
  * Interface for Flink {@link RowData} projection.
  */
-public interface RowDataProjection extends Serializable {
+public interface RowProjection extends Serializable {
 
   /**
    * Project on a given rowData to generate another rowData.

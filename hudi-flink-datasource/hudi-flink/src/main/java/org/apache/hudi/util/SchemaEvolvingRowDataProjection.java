@@ -42,9 +42,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * An implementation of {@link RowDataProjection} which supports schema evolvable projection on {@link RowData}.
+ * An implementation of {@link RowProjection} which supports schema evolvable projection on {@link RowData}.
  */
-public class SchemaEvolvingRowDataDataProjection implements RowDataProjection {
+public class SchemaEvolvingRowDataProjection implements RowProjection {
   private static final long serialVersionUID = 1L;
 
   /**
@@ -54,7 +54,7 @@ public class SchemaEvolvingRowDataDataProjection implements RowDataProjection {
 
   private final ObjectConverter innerProjection;
 
-  public SchemaEvolvingRowDataDataProjection(RowType from, RowType to, Map<String, String> renamedColumns) {
+  public SchemaEvolvingRowDataProjection(RowType from, RowType to, Map<String, String> renamedColumns) {
     this.innerProjection = createProjection(from, to, renamedColumns, new ArrayDeque<>());
   }
 
@@ -62,8 +62,8 @@ public class SchemaEvolvingRowDataDataProjection implements RowDataProjection {
     return (RowData) this.innerProjection.convert(rowData);
   }
 
-  public static SchemaEvolvingRowDataDataProjection instance(RowType from, RowType to, Map<String, String> renamedColumns) {
-    return new SchemaEvolvingRowDataDataProjection(from, to, renamedColumns);
+  public static SchemaEvolvingRowDataProjection instance(RowType from, RowType to, Map<String, String> renamedColumns) {
+    return new SchemaEvolvingRowDataProjection(from, to, renamedColumns);
   }
 
   private ObjectConverter createProjection(LogicalType fromType, LogicalType toType, Map<String, String> renamedColumns, Deque<String> fieldNameStack) {
