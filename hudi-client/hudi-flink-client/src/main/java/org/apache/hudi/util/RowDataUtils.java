@@ -18,8 +18,6 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.exception.HoodieValidationException;
-
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.TimestampData;
@@ -37,6 +35,18 @@ import java.util.function.Function;
  */
 public class RowDataUtils {
   /**
+   * An implementation of {@code FieldGetter} which always return NULL.
+   */
+  public static final RowData.FieldGetter NULL_GETTER = new RowData.FieldGetter() {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public Object getFieldOrNull(RowData rowData) {
+      return null;
+    }
+  };
+
+  /**
    * Resolve the native Java object from given row data field value.
    *
    * <p>IMPORTANT: the logic references the row-data to avro conversion in {@code RowDataToAvroConverters.createConverter}
@@ -45,7 +55,7 @@ public class RowDataUtils {
    * @param logicalType The logical type
    * @param utcTimezone whether to use UTC timezone for timestamp data type
    */
-  public static Function<Object, Object> orderingValFunc(LogicalType logicalType, boolean utcTimezone) {
+  public static Function<Object, Object> javaValFunc(LogicalType logicalType, boolean utcTimezone) {
     switch (logicalType.getTypeRoot()) {
       case NULL:
         return fieldVal -> null;
@@ -88,12 +98,7 @@ public class RowDataUtils {
       case DECIMAL:
         return fieldVal -> ((DecimalData) fieldVal).toBigDecimal();
       default:
-        return fieldVal -> {
-          if (fieldVal == null) {
-            throw new HoodieValidationException("Ordering value(legacy as preCombine field value) can not be null");
-          }
-          return fieldVal;
-        };
+        return fieldVal -> fieldVal;
     }
   }
 

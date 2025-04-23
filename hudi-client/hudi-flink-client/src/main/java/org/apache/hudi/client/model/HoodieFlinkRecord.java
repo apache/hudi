@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
@@ -67,6 +68,10 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
     this.orderingValue = orderingValue;
   }
 
+  public HoodieFlinkRecord(HoodieKey key, RowData rowData) {
+    super(key, rowData);
+  }
+
   @Override
   public HoodieRecord<RowData> newInstance() {
     return new HoodieFlinkRecord(key, operation, orderingValue, data);
@@ -83,13 +88,21 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
+  public HoodieOperation getOperation() {
+    if (this.operation == null) {
+      this.operation = HoodieOperation.fromValue(data.getRowKind().toByteValue());
+    }
+    return this.operation;
+  }
+
+  @Override
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     if (this.orderingValue == null) {
       String orderingField = ConfigUtils.getOrderingField(props);
       if (isNullOrEmpty(orderingField)) {
         this.orderingValue = DEFAULT_ORDERING_VALUE;
       } else {
-        this.orderingValue = (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props);
+        this.orderingValue = (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props, false);
       }
     }
     return this.orderingValue;
@@ -127,10 +140,14 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    return getColumnValueAsJava(recordSchema, column, props, true);
+  }
+
+  private Object getColumnValueAsJava(Schema recordSchema, String column, Properties props, boolean allowsNull) {
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
         HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
     RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
-    return rowDataQueryContext.getFieldQueryContext(column).getValAsJava(data);
+    return rowDataQueryContext.getFieldQueryContext(column).getValAsJava(data, allowsNull);
   }
 
   @Override
@@ -149,6 +166,15 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
       }
     }
     return new HoodieFlinkRecord(key, operation, orderingValue, new JoinedRowData(data.getRowKind(), metaRow, data));
+  }
+
+  @Override
+  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    ValidationUtils.checkArgument(recordSchema.getField(RECORD_KEY_METADATA_FIELD) != null,
+        "The record is expected to contain metadata fields.");
+    GenericRowData rowData = (GenericRowData) getData();
+    rowData.setField(ordinal, StringData.fromString(value));
+    return this;
   }
 
   @Override
