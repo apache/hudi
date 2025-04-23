@@ -20,7 +20,6 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -198,30 +197,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
-    final Option<T> resultRecord;
-    if (logRecordInfo != null) { // TODO dedupe with hasNextBaseRecord?
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
-      BufferedRecord<T> merged = merger.merge(Option.of(bufferedRecord), Option.ofNullable(logRecordInfo), enablePartialMerging);
-      if (!merged.isDelete()) {
-        // Updates
-        nextRecord = merged.getRecord();
-        readStats.incrementNumUpdates();
-        return true;
-      } else {
-        // Deletes
-        readStats.incrementNumDeletes();
-        return false;
-      }
-    } else {
-      resultRecord = Option.of(baseRecord);
-      readStats.incrementNumInserts();
-    }
-
-    if (resultRecord.isPresent()) {
-      nextRecord = readerContext.seal(resultRecord.get());
-      return true;
-    }
-    return false;
+    return hasNextBaseRecord(baseRecord, logRecordInfo);
   }
 
   private boolean doHasNextFallbackBaseRecord(T baseRecord) throws IOException {

@@ -29,10 +29,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -54,7 +52,7 @@ class EngineBasedMerger<T> {
   private final Option<String> orderingFieldName;
   private final TypedProperties props;
 
-  EngineBasedMerger(HoodieReaderContext<T> readerContext, RecordMergeMode recordMergeMode, HoodieTableConfig tableConfig, TypedProperties props) {
+  EngineBasedMerger(HoodieReaderContext<T> readerContext, RecordMergeMode recordMergeMode, HoodieTableConfig tableConfig, TypedProperties props, Option<String> orderingFieldName) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
@@ -64,16 +62,7 @@ class EngineBasedMerger<T> {
     } else {
       this.payloadClass = Option.empty();
     }
-    this.orderingFieldName = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
-        ? Option.empty()
-        : Option.ofNullable(ConfigUtils.getOrderingField(props))
-        .or(() -> {
-          String preCombineField = tableConfig.getPreCombineField();
-          if (StringUtils.isNullOrEmpty(preCombineField)) {
-            return Option.empty();
-          }
-          return Option.of(preCombineField);
-        });
+    this.orderingFieldName = orderingFieldName;
     this.props = props;
   }
 

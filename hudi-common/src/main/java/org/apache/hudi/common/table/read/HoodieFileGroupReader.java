@@ -185,7 +185,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                                        boolean isSkipMerge,
                                                        boolean shouldUseRecordPosition,
                                                        HoodieReadStats readStats,
-                                                   boolean emitDelete) {
+                                                       boolean emitDelete) {
     EngineBasedMerger<T> merger = new EngineBasedMerger<>(readerContext, recordMergeMode, hoodieTableMetaClient.getTableConfig(), props);
     if (hasNoLogFiles) {
       return null;
