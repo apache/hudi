@@ -421,7 +421,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false, false).mergeSchemaGetRenamed();
     Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName());
-    assert mergedAvroSchema.equals(readerSchema);
+    // `mergedAvroSchema` maybe not equal with `readerSchema`, case: drop a column `f_x`, and then add a new column with same name `f_x`,
+    // then the new added column in `mergedAvroSchema` will have a suffix: `f_xsuffix`, distinguished from the original column `f_x`, see
+    // InternalSchemaMerger#buildRecordType() for details.
+    // Delete and add a field with the same name, reads should not return previously inserted datum of dropped field of the same name,
+    // so we use `mergedAvroSchema` as the target schema for record projecting.
     return Option.of(Pair.of(readerContext.projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
   }
 
@@ -582,8 +586,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   protected boolean hasNextBaseRecord(T baseRecord, Pair<Option<T>, Map<String, Object>> logRecordInfo) throws IOException {
-    Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-        baseRecord, readerSchema);
+    Map<String, Object> metadata = readerContext.generateMetadataForRecord(baseRecord, readerSchema);
 
     if (logRecordInfo != null) {
       Option<T> resultRecord = merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight());

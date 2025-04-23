@@ -45,7 +45,8 @@ public class HadoopConfigurations {
   }
 
   /**
-   * Creates a new hadoop configuration that is initialized with the given flink configuration.
+   * Creates a new hadoop configuration that is initialized with the given flink configuration
+   * along with some configurations necessary to construct file readers/writers.
    */
   public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
     org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();

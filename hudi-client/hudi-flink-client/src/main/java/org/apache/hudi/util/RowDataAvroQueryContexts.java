@@ -23,7 +23,10 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.util.RowDataToAvroConverters.RowDataToAvroConverter;
+import org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -35,6 +38,10 @@ import java.util.function.Function;
  */
 public class RowDataAvroQueryContexts {
   private static final Map<Schema, RowDataQueryContext> QUERY_CONTEXT_MAP = new ConcurrentHashMap<>();
+
+  public static RowDataQueryContext fromAvroSchema(Schema avroSchema) {
+    return fromAvroSchema(avroSchema, true);
+  }
 
   public static RowDataQueryContext fromAvroSchema(Schema avroSchema, boolean utcTimezone) {
     return QUERY_CONTEXT_MAP.computeIfAbsent(avroSchema, k -> {
@@ -50,25 +57,38 @@ public class RowDataAvroQueryContexts {
         contextMap.put(rowFields[i].getName(), FieldQueryContext.create(fieldType, fieldGetter, utcTimezone));
       }
       RowDataToAvroConverter rowDataToAvroConverter = RowDataToAvroConverters.createConverter(rowType, utcTimezone);
-      return RowDataQueryContext.create(contextMap, fieldGetters, rowDataToAvroConverter);
+      AvroToRowDataConverter avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType, utcTimezone);
+      return RowDataQueryContext.create(dataType, contextMap, fieldGetters, rowDataToAvroConverter, avroToRowDataConverter);
     });
   }
 
   public static class RowDataQueryContext {
+    private final DataType rowType;
     private final Map<String, FieldQueryContext> contextMap;
     private final RowData.FieldGetter[] fieldGetters;
     private final RowDataToAvroConverter rowDataToAvroConverter;
-    private RowDataQueryContext(Map<String, FieldQueryContext> contextMap, RowData.FieldGetter[] fieldGetters, RowDataToAvroConverter rowDataAvroConverter) {
+    private final AvroToRowDataConverter avroToRowDataConverter;
+
+    private RowDataQueryContext(
+        DataType rowType,
+        Map<String, FieldQueryContext> contextMap,
+        RowData.FieldGetter[] fieldGetters,
+        RowDataToAvroConverter rowDataAvroConverter,
+        AvroToRowDataConverter avroToRowDataConverter) {
+      this.rowType = rowType;
       this.contextMap = contextMap;
       this.fieldGetters = fieldGetters;
       this.rowDataToAvroConverter = rowDataAvroConverter;
+      this.avroToRowDataConverter = avroToRowDataConverter;
     }
 
     public static RowDataQueryContext create(
+        DataType rowType,
         Map<String, FieldQueryContext> contextMap,
         RowData.FieldGetter[] fieldGetters,
-        RowDataToAvroConverter rowDataToAvroConverter) {
-      return new RowDataQueryContext(contextMap, fieldGetters, rowDataToAvroConverter);
+        RowDataToAvroConverter rowDataToAvroConverter,
+        AvroToRowDataConverter avroToRowDataConverter) {
+      return new RowDataQueryContext(rowType, contextMap, fieldGetters, rowDataToAvroConverter, avroToRowDataConverter);
     }
 
     public FieldQueryContext getFieldQueryContext(String fieldName) {
@@ -82,6 +102,14 @@ public class RowDataAvroQueryContexts {
     public RowDataToAvroConverter getRowDataToAvroConverter() {
       return rowDataToAvroConverter;
     }
+
+    public AvroToRowDataConverter getAvroToRowDataConverter() {
+      return avroToRowDataConverter;
+    }
+
+    public DataType getRowType() {
+      return this.rowType;
+    }
   }
 
   public static class FieldQueryContext {
@@ -91,7 +119,7 @@ public class RowDataAvroQueryContexts {
     private FieldQueryContext(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone) {
       this.logicalType = logicalType;
       this.fieldGetter = fieldGetter;
-      this.javaTypeConverter = RowDataUtils.orderingValFunc(logicalType, utcTimezone);
+      this.javaTypeConverter = RowDataUtils.javaValFunc(logicalType, utcTimezone);
     }
 
     public static FieldQueryContext create(LogicalType logicalType, RowData.FieldGetter fieldGetter, boolean utcTimezone) {
@@ -107,7 +135,15 @@ public class RowDataAvroQueryContexts {
     }
 
     public Object getValAsJava(RowData rowData) {
-      return this.javaTypeConverter.apply(fieldGetter.getFieldOrNull(rowData));
+      return getValAsJava(rowData, true);
+    }
+
+    public Object getValAsJava(RowData rowData, boolean allowsNull) {
+      Object val = this.javaTypeConverter.apply(fieldGetter.getFieldOrNull(rowData));
+      if (val == null && !allowsNull) {
+        throw new HoodieException("The field value can not be null");
+      }
+      return val;
     }
   }
 }

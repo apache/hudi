@@ -412,6 +412,18 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public abstract HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props);
 
   /**
+   * Update a specific metadata field with given value.
+   *
+   * @param recordSchema the schema for the record
+   * @param ordinal the ordinal for the target medata field
+   * @param value the new value for the target metadata field
+   * @return the new HoodieRecord with updated metadata value
+   */
+  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    throw new UnsupportedOperationException("updateMetaField is not supported yet for: " + this.getClass().getSimpleName());
+  }
+
+  /**
    * Support schema evolution.
    */
   public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols);

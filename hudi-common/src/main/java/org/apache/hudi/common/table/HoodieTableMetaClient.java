@@ -507,6 +507,14 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * Reload active timeline and table config.
+   */
+  public synchronized void reload() {
+    reloadActiveTimeline();
+    reloadTableConfig();
+  }
+
+  /**
    * Reload ActiveTimeline and cache.
    *
    * @return Active instants timeline

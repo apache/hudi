@@ -27,14 +27,13 @@ import org.apache.flink.table.types.logical.RowType;
 
 import javax.annotation.Nullable;
 
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 
 /**
  * Utilities to project the row data with given positions.
  */
-public class RowDataProjection implements Serializable {
+public class RowDataProjection implements RowProjection {
   private static final long serialVersionUID = 1L;
 
   private final RowData.FieldGetter[] fieldGetters;
@@ -68,6 +67,7 @@ public class RowDataProjection implements Serializable {
   /**
    * Returns the projected row data.
    */
+  @Override
   public RowData project(RowData rowData) {
     GenericRowData genericRowData = new GenericRowData(this.fieldGetters.length);
     genericRowData.setRowKind(rowData.getRowKind());

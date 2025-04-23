@@ -16,24 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.format.cow.vector;
+package org.apache.hudi.util;
 
-import org.apache.flink.table.data.DecimalData;
-import org.apache.flink.table.data.vector.DecimalColumnVector;
-import org.apache.flink.table.data.vector.heap.HeapBytesVector;
+import org.apache.flink.table.data.RowData;
+
+import java.io.Serializable;
 
 /**
- * This class represents a nullable heap map decimal vector.
+ * Interface for Flink {@link RowData} projection.
  */
-public class HeapDecimalVector extends HeapBytesVector implements DecimalColumnVector {
+public interface RowProjection extends Serializable {
 
-  public HeapDecimalVector(int len) {
-    super(len);
-  }
-
-  @Override
-  public DecimalData getDecimal(int i, int precision, int scale) {
-    return DecimalData.fromUnscaledBytes(
-        this.getBytes(i).getBytes(), precision, scale);
-  }
+  /**
+   * Project on a given rowData to generate another rowData.
+   *
+   * @param rowData the row to project on
+   * @return projected rowData
+   */
+  RowData project(RowData rowData);
 }
