@@ -729,3 +729,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-04-22 16:04:17] [release-v1.113.0] ---
 [ENG-25154][HUDI-9088] Fix unnecessary scanning of target table in MERGE INTO on Spark (#1316)
 [AUDIT-1071]: Changelog for release-v1.112.0 (#1335)
+
+--- [2025-04-23 16:04:29] [release-v1.115.0] ---
+[ENG-25571][INTERNAL] Integrate kafka createRDD from spark-sql-kafka-0-10 (#1338)
+[AUDIT-1071]: Changelog for release-v1.113.0 (#1339)
