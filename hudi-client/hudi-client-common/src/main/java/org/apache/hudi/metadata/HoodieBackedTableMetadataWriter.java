@@ -1170,7 +1170,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // tag records
     List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>(enabledPartitionTypes);
     mdtPartitionsToTag.remove(FILES);
-    Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> taggedMdtRecords = tagRecordsWithLocation(mdtRecords, metadataMetaClient.getTableConfig().getMetadataPartitions());
+    Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> taggedMdtRecords = tagRecordsWithLocation(mdtRecords, dataMetaClient.getTableConfig().getMetadataPartitions());
     // todo fix parallelism. Do we really need this. Upsert partitioner will do this anyways.
 
     // write partial writes to mdt table (every partition except FILES)
