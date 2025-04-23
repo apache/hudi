@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
@@ -45,8 +44,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
-import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -451,11 +448,10 @@ public enum MetadataPartitionType {
   /**
    * Returns the list of metadata partition types enabled based on the metadata config and table config.
    */
-  public static List<MetadataPartitionType> getEnabledPartitions(TypedProperties writeConfig, HoodieTableMetaClient metaClient) {
-    if (!getBooleanWithAltKeys(writeConfig, ENABLE)) {
+  public static List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig dataMetadataConfig, HoodieTableMetaClient metaClient) {
+    if (!dataMetadataConfig.isEnabled()) {
       return Collections.emptyList();
     }
-    HoodieMetadataConfig dataMetadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(writeConfig).build();
     return Arrays.stream(getValidValues())
         .filter(partitionType -> partitionType.isMetadataPartitionEnabled(dataMetadataConfig) || partitionType.isMetadataPartitionAvailable(metaClient))
         .collect(Collectors.toList());

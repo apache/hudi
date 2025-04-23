@@ -83,7 +83,6 @@ parameters:
     type: object
     default:
       - '!hudi-examples/hudi-examples-k8s'
-      - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
       - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-flink-datasource/hudi-flink1.17.x'

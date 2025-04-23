@@ -177,6 +177,8 @@ public class HoodieCDCLogger implements Closeable {
     HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(cdcRecord));
     if (cdcData.isEmpty()) {
       averageCDCRecordSize = sizeEstimator.sizeEstimate(payload);
+    } else if (numOfCDCRecordsInMemory.get() % 100 == 0) {
+      averageCDCRecordSize = (long) (averageCDCRecordSize * 0.8 + sizeEstimator.sizeEstimate(payload) * 0.2);
     }
     cdcData.put(recordKey, payload);
     numOfCDCRecordsInMemory.incrementAndGet();

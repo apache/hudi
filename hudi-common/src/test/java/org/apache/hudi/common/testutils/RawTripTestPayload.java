@@ -42,6 +42,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -238,6 +239,9 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   }
 
   public Map<String, Object> getJsonDataAsMap() throws IOException {
+    if (jsonDataCompressed == null) {
+      return Collections.emptyMap();
+    }
     return OBJECT_MAPPER.readValue(getJsonData(), Map.class);
   }
 

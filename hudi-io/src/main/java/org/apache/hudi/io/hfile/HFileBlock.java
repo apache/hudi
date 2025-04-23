@@ -122,6 +122,10 @@ public abstract class HFileBlock {
     switch (blockType) {
       case ROOT_INDEX:
         return new HFileRootIndexBlock(context, byteBuff, startOffsetInBuff);
+      case LEAF_INDEX:
+        return new HFileLeafIndexBlock(context, byteBuff, startOffsetInBuff);
+      case INTERMEDIATE_INDEX:
+        return new HFileIntermediateIndexBlock(context, byteBuff, startOffsetInBuff);
       case FILE_INFO:
         return new HFileFileInfoBlock(context, byteBuff, startOffsetInBuff);
       case DATA:

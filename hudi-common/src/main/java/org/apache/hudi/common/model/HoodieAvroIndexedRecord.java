@@ -34,6 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
@@ -56,6 +57,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieRecordLocation currentLocation) {
     super(key, data, null, currentLocation, null);
+  }
+
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation, HoodieRecordLocation currentLocation, HoodieRecordLocation newLocation) {
+    super(key, data, operation, currentLocation, newLocation);
   }
 
   public HoodieAvroIndexedRecord(IndexedRecord data, HoodieRecordLocation currentLocation) {
@@ -189,9 +194,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     }
     HoodieKey hoodieKey = new HoodieKey(key, partition);
 
-    HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
-    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, avroPayload);
-    return hoodieRecord;
+    return new HoodieAvroIndexedRecord(hoodieKey, record);
   }
 
   @Override
@@ -218,8 +221,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public byte[] getAvroBytes(Schema recordSchema, Properties props) {
-    return HoodieAvroUtils.avroToBytes(data);
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) {
+    return HoodieAvroUtils.avroToBytesStream(data);
   }
 
   /**

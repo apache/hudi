@@ -30,14 +30,33 @@ import java.nio.ByteBuffer;
  */
 public interface HFileReader extends Closeable {
   // Return code of seekTo(Key)
-  // When the lookup key is less than the first key of the file
+  // When the lookup key is not found, but it's lexicographically greater than
+  // or equal to the fake first key of the data block based on the block index and
+  // lexicographically smaller than the actual first key of the data block
+  // The cursor points to the actual first key of the data block which is
+  // lexicographically greater than the lookup key
+  // PLEASE NOTE that there is an optimization of block index (enabled by default)
+  // that the first key can be shortened to save memory, i.e., a fake first key is
+  // stored in the block index entry, and such a fake first key does not exist in
+  // the data block. The fake first key is lexicographically greater than the last
+  // key of the previous block and lexicographically equal or smaller than the
+  // actual first key of the current block.
+  // PLEASE ALSO NOTE that the first key of the first data block stored in the block
+  // index is not shortened and always exists in the first data block.
+  int SEEK_TO_BEFORE_BLOCK_FIRST_KEY = -2;
+  // When the lookup key is lexicographically smaller than the first key of the file
   // The cursor points to the first key of the file
-  int SEEK_TO_BEFORE_FIRST_KEY = -1;
+  int SEEK_TO_BEFORE_FILE_FIRST_KEY = -1;
   // When the lookup key is found in the file
   // The cursor points to the matched key in the file
   int SEEK_TO_FOUND = 0;
-  // When the lookup key is not found, but it's in the range of the file
-  // The cursor points to the greatest key that is less than the lookup key
+  // When the lookup key is not found, but it's in the range of the file,
+  // and specifically the lookup key is lexicographically greater than the
+  // actual first key of the data block and lexicographically smaller than
+  // the start key of the next data block based on the block index,
+  // or lexicographically smaller than or equal to the last key of the file
+  // if the data block is the last one
+  // The cursor points to the greatest key that is lexicographically smaller than the lookup key
   int SEEK_TO_IN_RANGE = 1;
   // When the lookup key is greater than the last key of the file, EOF is reached
   // The cursor points to EOF
@@ -83,14 +102,19 @@ public interface HFileReader extends Closeable {
    * <p>
    *
    * @param key {@link Key} to seek to.
-   * @return -1, if key &lt; kv[0], no position;
-   * 0, such that kv[i].key = key and the reader is left in position i; and
-   * 1, such that kv[i].key &lt; key if there is no exact match, and the reader is left in
-   * position i.
-   * The reader will position itself between kv[i] and kv[i+1] where
-   * kv[i].key &lt; key &lt;= kv[i+1].key;
-   * 2, if there is no KV greater than or equal to the input key, and the reader positions
-   * itself at the end of the file and next() will return {@code false} when it is called.
+   * @return -2 ({@link HFileReader#SEEK_TO_BEFORE_BLOCK_FIRST_KEY}), such that
+   * block_fake_first_key &lt;= key &lt; block_actual_first_key if there is no
+   * exact match, and the reader is left in position at block_actual_first_key;
+   * -1 ({@link HFileReader#SEEK_TO_BEFORE_FILE_FIRST_KEY}), if key &lt; kv[0], the reader
+   * is left in position 0;
+   * 0 ({@link HFileReader#SEEK_TO_FOUND}), such that kv[i].key = key and the reader is
+   * left in position i;
+   * 1 ({@link HFileReader#SEEK_TO_IN_RANGE}), such that kv[i].key &lt; key if there is
+   * no exact match and the key is greater than the actual first of the data block, and
+   * the reader is left in position i;
+   * 2 ({@link HFileReader#SEEK_TO_EOF}), if there is no KV greater than or equal to the
+   * input key, and the reader positions itself at the end of the file and next() will
+   * return {@code false} when it is called.
    * @throws IOException upon read errors.
    */
   int seekTo(Key key) throws IOException;

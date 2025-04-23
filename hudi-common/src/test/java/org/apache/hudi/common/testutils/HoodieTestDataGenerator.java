@@ -1043,7 +1043,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
         index = (index + 1) % numExistingKeys;
         kp = existingKeys.get(index);
       }
-      logger.debug("key getting updated: " + kp.key.getRecordKey());
+      logger.debug("key getting updated: {}", kp.key.getRecordKey());
       used.add(kp);
       try {
         return new HoodieAvroRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false));
@@ -1231,7 +1231,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
         String recordKey = payload.getRowKey();
         String partitionPath = payload.getPartitionPath();
         String orderingVal = payload.getOrderingValue().toString();
-        String riderValue = payload.getJsonDataAsMap().get("rider").toString();
+        String riderValue = payload.getJsonDataAsMap().getOrDefault("rider", "").toString();
         return new RecordIdentifier(recordKey, partitionPath, orderingVal, riderValue);
       } catch (IOException ex) {
         throw new HoodieIOException("Failed to parse payload", ex);

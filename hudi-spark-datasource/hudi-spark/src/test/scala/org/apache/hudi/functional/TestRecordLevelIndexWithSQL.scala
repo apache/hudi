@@ -204,6 +204,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   @Test
   def testInFilterOnNonRecordKey(): Unit = {
     var hudiOpts = commonOpts
+    val recordKeyFields = "record_key_col"
     hudiOpts = hudiOpts + (
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
@@ -217,10 +218,10 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
          |  partition_key_col string
          |) using hudi
          | options (
-         |  primaryKey ='record_key_col',
+         |  primaryKey ='$recordKeyFields',
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
-         |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+         |  hoodie.datasource.write.recordkey.field = '$recordKeyFields',
          |  hoodie.enable.data.skipping = 'true'
          | )
          | partitioned by(partition_key_col)
@@ -274,12 +275,13 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   @Test
   def testRLIWithTwoRecordKeyFields(): Unit = {
     val tableName = "dummy_table_two_pk"
+    val recordKeyFields = "record_key_col,name"
     val dummyTablePath = tempDir.resolve(tableName).toAbsolutePath.toString
     val hudiOpts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> tableName,
-      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "record_key_col,name",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> s"$recordKeyFields",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_key_col",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
       "hoodie.metadata.index.column.stats.enable" -> "false"
@@ -294,10 +296,10 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
          |  partition_key_col string
          |) using hudi
          | options (
-         |  primaryKey ='record_key_col,name',
+         |  primaryKey ='$recordKeyFields',
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
-         |  hoodie.datasource.write.recordkey.field = 'record_key_col,name',
+         |  hoodie.datasource.write.recordkey.field = '$recordKeyFields',
          |  hoodie.enable.data.skipping = 'true',
          |  hoodie.metadata.index.column.stats.enable = 'false'
          | )
@@ -322,12 +324,13 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   @Test
   def testRLIWithThreeRecordKeyFields(): Unit = {
     val tableName = "dummy_table_three_pk"
+    val recordKeyFields = "record_key_col1,record_key_col2,record_key_col3"
     val dummyTablePath = tempDir.resolve(tableName).toAbsolutePath.toString
     val hudiOpts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> tableName,
-      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "record_key_col1,record_key_col2,record_key_col3",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyFields,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_key_col",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
     ) ++ metadataOpts
@@ -341,10 +344,10 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
          |  partition_key_col string
          |) using hudi
          | options (
-         |  primaryKey ='record_key_col,name',
+         |  primaryKey = '$recordKeyFields',
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
-         |  hoodie.datasource.write.recordkey.field = 'record_key_col1,record_key_col2,record_key_col3',
+         |  hoodie.datasource.write.recordkey.field = '$recordKeyFields',
          |  hoodie.enable.data.skipping = 'true',
          |  hoodie.metadata.index.column.stats.enable = 'false'
          | )

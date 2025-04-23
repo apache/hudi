@@ -21,7 +21,6 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -78,8 +77,8 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
   }
 
   @Override
-  List<MetadataPartitionType> getEnabledPartitions(TypedProperties writeConfigProps, HoodieTableMetaClient metaClient) {
-    return MetadataPartitionType.getEnabledPartitions(writeConfigProps, metaClient).stream()
+  List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
+    return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient).stream()
         .filter(partition -> !partition.equals(MetadataPartitionType.SECONDARY_INDEX))
         .filter(partition -> !partition.equals(MetadataPartitionType.EXPRESSION_INDEX))
         .filter(partition -> !partition.equals(MetadataPartitionType.PARTITION_STATS))

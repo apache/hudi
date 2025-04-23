@@ -66,11 +66,12 @@ public class DataSourceTestUtils {
 
   public static List<Row> generateRandomRows(int count) {
     List<Row> toReturn = new ArrayList<>();
-    List<String> partitions = Arrays.asList(new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH});
+    List<String> partitions = Arrays.asList(
+        DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH);
     for (int i = 0; i < count; i++) {
       Object[] values = new Object[4];
       values[0] = HoodieTestDataGenerator.genPseudoRandomUUID(RANDOM).toString();
-      values[1] = partitions.get(RANDOM.nextInt(3));
+      values[1] = partitions.get(i % 3);
       values[2] = new Date().getTime();
       values[3] = false;
       toReturn.add(RowFactory.create(values));

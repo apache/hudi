@@ -2934,6 +2934,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.isSecondaryIndexEnabled();
   }
 
+  public boolean isExpressionIndexEnabled() {
+    return metadataConfig.isExpressionIndexEnabled();
+  }
+
   public int getSecondaryIndexParallelism() {
     return metadataConfig.getSecondaryIndexParallelism();
   }

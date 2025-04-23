@@ -55,6 +55,7 @@ public class TestBucketIndexUtil {
     argsList.add(Arguments.of(201, 100, true));
     argsList.add(Arguments.of(400, 1000, true));
     argsList.add(Arguments.of(401, 1000, true));
+    argsList.add(Arguments.of(65536, 65536, true));
 
     return argsList.stream();
   }
@@ -144,6 +145,7 @@ public class TestBucketIndexUtil {
 
   private void checkResult(Map<Integer, Integer> parallelism2TaskCount, int parallelism, int bucketNumber, boolean partitioned, boolean needExpand) {
     int sum = 0;
+    assertTrue(parallelism2TaskCount.keySet().stream().allMatch(id -> id >= 0 && id < parallelism));
     for (int v : parallelism2TaskCount.values()) {
       sum = sum + v;
     }

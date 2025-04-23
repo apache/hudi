@@ -73,13 +73,13 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
       if (smallFileSlice.getBaseFile().isPresent()) {
         HoodieBaseFile baseFile = smallFileSlice.getBaseFile().get();
         sf.location = new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId());
-        sf.sizeBytes = getTotalFileSize(smallFileSlice);
+        sf.sizeBytes = smallFileSlice.getTotalFileSizeAsParquetFormat(config.getLogFileToParquetCompressionRatio());
         smallFileLocations.add(sf);
       } else {
         HoodieLogFile logFile = smallFileSlice.getLogFiles().findFirst().get();
         sf.location = new HoodieRecordLocation(logFile.getDeltaCommitTime(),
             logFile.getFileId());
-        sf.sizeBytes = getTotalFileSize(smallFileSlice);
+        sf.sizeBytes = smallFileSlice.getTotalFileSizeAsParquetFormat(config.getLogFileToParquetCompressionRatio());
         smallFileLocations.add(sf);
       }
     }
@@ -121,31 +121,9 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
         .collect(Collectors.toList());
   }
 
-  private long getTotalFileSize(FileSlice fileSlice) {
-    if (!fileSlice.getBaseFile().isPresent()) {
-      return convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
-    } else {
-      return fileSlice.getBaseFile().get().getFileSize()
-          + convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
-    }
-  }
-
   private boolean isSmallFile(FileSlice fileSlice) {
-    long totalSize = getTotalFileSize(fileSlice);
+    long totalSize = fileSlice.getTotalFileSizeAsParquetFormat(config.getLogFileToParquetCompressionRatio());
     return totalSize < config.getParquetMaxFileSize();
   }
 
-  // TODO (NA) : Make this static part of utility
-  public long convertLogFilesSizeToExpectedParquetSize(List<HoodieLogFile> hoodieLogFiles) {
-    long totalSizeOfLogFiles =
-        hoodieLogFiles.stream()
-            .map(HoodieLogFile::getFileSize)
-            .filter(size -> size > 0)
-            .reduce(Long::sum)
-            .orElse(0L);
-    // Here we assume that if there is no base parquet file, all log files contain only inserts.
-    // We can then just get the parquet equivalent size of these log files, compare that with
-    // {@link config.getParquetMaxFileSize()} and decide if there is scope to insert more rows
-    return (long) (totalSizeOfLogFiles * config.getLogFileToParquetCompressionRatio());
-  }
 }

@@ -293,7 +293,8 @@ test_cli_bundle() {
 
     # Execute with debug output
     echo "Executing Hudi CLI commands..."
-    $WORKDIR/docker-test/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh < $WORKDIR/cli/commands.txt 2>&1 | tee $CLI_TEST_DIR/output.txt
+    # This feeds CLI commands, stripping license lines to avoid parser errors
+    sed '/^#/d' "$WORKDIR/cli/commands.txt" | $WORKDIR/docker-test/packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh 2>&1 | tee $CLI_TEST_DIR/output.txt
 
     # Verify CLI started successfully
     if ! grep -q "hudi->" $CLI_TEST_DIR/output.txt; then

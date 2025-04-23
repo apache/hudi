@@ -100,7 +100,7 @@ public class LegacyArchivedMetaEntryReader {
       Object actionData = record.get(key);
       if (actionData != null) {
         if (actionData instanceof IndexedRecord) {
-          return HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData);
+          return HoodieAvroUtils.avroToBytes((IndexedRecord) actionData);
         } else {
           // should be json bytes.
           try {

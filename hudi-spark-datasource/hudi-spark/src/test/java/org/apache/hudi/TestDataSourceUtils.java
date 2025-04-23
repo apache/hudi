@@ -291,7 +291,7 @@ public class TestDataSourceUtils {
             .findFirst().get();
 
     IndexedRecord record = hoodieMetadataPayload.getData().getInsertValue(null).get();
-    byte[] recordToBytes = HoodieAvroUtils.indexedRecordToBytes(record);
+    byte[] recordToBytes = HoodieAvroUtils.avroToBytes(record);
     GenericRecord genericRecord = HoodieAvroUtils.bytesToAvro(recordToBytes, record.getSchema());
 
     HoodieMetadataPayload genericRecordHoodieMetadataPayload = new HoodieMetadataPayload(Option.of(genericRecord));

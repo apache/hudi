@@ -19,14 +19,12 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieAvroRecordTestMerger;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
-import org.apache.hudi.common.testutils.reader.HoodieRecordTestPayload;
-import org.apache.hudi.common.testutils.reader.HoodieTestReaderContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
@@ -50,11 +48,6 @@ public class TestHoodieFileGroupReaderInflightCommit extends HoodieFileGroupRead
 
   @BeforeAll
   public static void setUp() throws IOException {
-    HoodieAvroRecordMerger merger = new HoodieAvroRecordTestMerger();
-    readerContext = new HoodieTestReaderContext(
-        Option.of(merger),
-        Option.of(HoodieRecordTestPayload.class.getName()));
-
     // -------------------------------------------------------------
     // The test logic is as follows:
     // 1. Base file contains 10 records,
@@ -77,7 +70,6 @@ public class TestHoodieFileGroupReaderInflightCommit extends HoodieFileGroupRead
     // Specify the instant time for each file.
     instantTimes = Arrays.asList(
         "001", "002");
-    shouldWritePositions = Arrays.asList(false, false);
   }
 
   @BeforeEach
@@ -87,26 +79,30 @@ public class TestHoodieFileGroupReaderInflightCommit extends HoodieFileGroupRead
     initMetaClient();
     initTestDataGenerator(new String[]{PARTITION_PATH});
     testTable = HoodieTestTable.of(metaClient);
+    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig(), new TestKeyGenerator());
+    readerContext.setRecordMerger(Option.of(new HoodieAvroRecordTestMerger()));
     setUpMockCommits();
   }
 
   @Test
   public void testInflightDataRead() throws IOException, InterruptedException {
+    shouldWritePositions = Arrays.asList(false, false);
     // delete the completed instant to convert last update commit to inflight commit
     testTable.moveCompleteCommitToInflight(instantTimes.get(1));
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // The FileSlice contains a base file and a log file.
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(2, false, true);
-    List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "4", "5");
-    List<Long> leftTimestampsExpected = Arrays.asList(3L, 3L, 3L, 2L, 2L);
-    List<String> leftKeysActual = new ArrayList<>();
-    List<Long> leftTimestampsActual = new ArrayList<>();
-    while (iterator.hasNext()) {
-      IndexedRecord record = iterator.next();
-      leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
-      leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+    try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(2, false, true)) {
+      List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "4", "5");
+      List<Long> leftTimestampsExpected = Arrays.asList(3L, 3L, 3L, 2L, 2L);
+      List<String> leftKeysActual = new ArrayList<>();
+      List<Long> leftTimestampsActual = new ArrayList<>();
+      while (iterator.hasNext()) {
+        IndexedRecord record = iterator.next();
+        leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
+        leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+      }
+      assertEquals(leftKeysExpected, leftKeysActual);
+      assertEquals(leftTimestampsExpected, leftTimestampsActual);
     }
-    assertEquals(leftKeysExpected, leftKeysActual);
-    assertEquals(leftTimestampsExpected, leftTimestampsActual);
   }
 }

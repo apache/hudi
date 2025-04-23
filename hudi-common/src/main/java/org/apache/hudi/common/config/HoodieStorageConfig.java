@@ -186,7 +186,8 @@ public class HoodieStorageConfig extends HoodieConfig {
       .defaultValue(String.valueOf(0.35))
       .markAdvanced()
       .withDocumentation("Expected additional compression as records move from log files to parquet. Used for merge_on_read "
-          + "table to send inserts into log files & control the size of compacted parquet file.");
+          + "table to send inserts into log files & control the size of compacted parquet file."
+          + "When encoding log blocks in parquet format, increase this value for a more accurate estimation");
 
   // Configs that control the bloom filter that is written to the file footer
   public static final ConfigProperty<String> BLOOM_FILTER_TYPE = ConfigProperty

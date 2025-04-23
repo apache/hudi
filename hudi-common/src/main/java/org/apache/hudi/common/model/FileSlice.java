@@ -186,4 +186,26 @@ public class FileSlice implements Serializable {
   public int hashCode() {
     return Objects.hash(fileGroupId, baseInstantTime);
   }
+
+  /**
+   * Get the total file size of a file slice similar on the base file.
+   * For the log file, we need to convert its size to the estimated size similar on the base file in a certain proportion
+   */
+  public long getTotalFileSizeAsParquetFormat(double logFileFraction) {
+    long logFileSize = convertLogFilesSizeToExpectedParquetSize(logFileFraction);
+    return getBaseFile().isPresent() ? getBaseFile().get().getFileSize() + logFileSize : logFileSize;
+  }
+
+  private long convertLogFilesSizeToExpectedParquetSize(double logFileFraction) {
+    long totalSizeOfLogFiles =
+        logFiles.stream()
+            .map(HoodieLogFile::getFileSize)
+            .filter(size -> size > 0)
+            .reduce(Long::sum)
+            .orElse(0L);
+    // Here we assume that if there is no base parquet file, all log files contain only inserts.
+    // We can then just get the parquet equivalent size of these log files, compare that with
+    // {@link config.getParquetMaxFileSize()} and decide if there is scope to insert more rows
+    return (long) (totalSizeOfLogFiles * logFileFraction);
+  }
 }

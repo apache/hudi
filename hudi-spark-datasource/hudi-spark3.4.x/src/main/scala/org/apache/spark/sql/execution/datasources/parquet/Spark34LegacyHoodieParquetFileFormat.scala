@@ -179,7 +179,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         val storage = new HoodieHadoopStorage(tablePath, sharedConf)
         InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath, storage,
           if (validCommits == null) "" else validCommits,
-          layout.getInstantFileNameParser, layout.getCommitMetadataSerDe, layout.getInstantGenerator)
+          layout)
       } else {
         null
       }
