@@ -825,10 +825,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
     HoodieWriteMetadata<List<WriteStatus>> clusterMetadata = transformWriteMetadataFn.apply(client.cluster(clusteringCommitTime, completeClustering));
     if (config.populateMetaFields()) {
-      verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getRight()), allRecords.getLeft(), clusterMetadata.getDataTableWriteStatuses());
+      verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getRight()), allRecords.getLeft(),
+          clusterMetadata.getAllWriteStatuses().stream().filter(writeStatus -> !writeStatus.isMetadataTable()).collect(Collectors.toList()));
     } else {
-      verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft(), clusterMetadata.getDataTableWriteStatuses(),
-              config, createKeyGeneratorFn.apply(config));
+      verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft(),
+          clusterMetadata.getAllWriteStatuses().stream().filter(writeStatus -> !writeStatus.isMetadataTable()).collect(
+              Collectors.toList()), config, createKeyGeneratorFn.apply(config));
     }
     return clusterMetadata;
   }
@@ -855,7 +857,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       String clusteringCommitTime = createMetaClient().reloadActiveTimeline().getCompletedReplaceTimeline()
               .getReverseOrderedInstants().findFirst().get().requestedTime();
       verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft().getLeft(),
-              clusterMetadata.getDataTableWriteStatuses(), config, createKeyGeneratorFn.apply(config));
+              clusterMetadata.getAllWriteStatuses().stream().filter(writeStatus -> !writeStatus.isMetadataTable()).collect(Collectors.toList()), config, createKeyGeneratorFn.apply(config));
     }
   }
 
