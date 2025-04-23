@@ -173,7 +173,6 @@ Refer to the table below for building with different Flink and Scala versions.
 | `-Dflink1.17`       | hudi-flink1.17-bundle          | For Flink 1.17                   |
 | `-Dflink1.16`       | hudi-flink1.16-bundle          | For Flink 1.16                   |
 | `-Dflink1.15`       | hudi-flink1.15-bundle          | For Flink 1.15                   |
-| `-Dflink1.14`       | hudi-flink1.14-bundle          | For Flink 1.14                   |
 
 For example,
 ```
