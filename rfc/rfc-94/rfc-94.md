@@ -14,8 +14,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-
-# RFC-[number]: [Title]
+# RFC-94: Hudi Timeline User Interface (UI)
 
 ## Proposers
 
@@ -94,9 +93,9 @@ Avro readers to convert the binaries to a JSON format.
 
 ## Scope
 
-The current scope of work is to allow for visulisation of metadata that are available in Hudi
+The current scope of work is to allow for visualisation of metadata that are available in Hudi
 tables.
-Hence, all features offered are on a READ-ONLY basis.
+Hence, all features offered are on a **READ-ONLY** basis.
 There will be no feature in this RFC that offers starting/spawning of jobs to mutate a Hudi table.
 
 ## Implementation
@@ -106,8 +105,10 @@ dependencies as possible to reduce bloat. Changes will be made to the existing
 `hudi-timeline-service` module. This module contains a Javalin web-application that caches useful 
 filesystem metadata of a Hudi table for job executors whenever tagging/writing is performed.
 
-The Hudi Timeline User Interface (UI) can be split into two large sections. The frontend and
-backend.
+Therefore, to use the Hudi Timeline UI, users are only required to start the Timeline Server in 
+**STANDALONE** mode, which is already supported as of now.
+
+The Hudi Timeline UI can be split into two large sections. The frontend and backend.
 
 ### Frontend
 
@@ -180,10 +181,12 @@ There are other features/improvements that we can add to the UI. For example:
 3. Overlay metadata table timeline
 4. Visualising archive timeline
 
+
 ## Rollout/Adoption Plan
 
 - No impact for existing users as this is a new feature.
 - Add support in 1.1.x
+- Add guide to start Timeline Server in Standalone mode.
 
 ## Test Plan
 
