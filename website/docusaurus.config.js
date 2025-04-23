@@ -458,6 +458,14 @@ module.exports = {
               to: "https://www.apache.org/security",
             },
             {
+              label: "Privacy",
+              to: "https://privacy.apache.org/policies/privacy-policy-public.html",
+            },
+            {
+              label: "Telemetry",
+              to: "/asf/telemetry",
+            },
+            {
               label: "Sponsorship",
               to: "https://www.apache.org/foundation/sponsorship.html",
             },
