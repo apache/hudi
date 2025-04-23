@@ -84,12 +84,12 @@ public class IndexerFactory {
       HoodieTableMetaClient metaClient,
       HoodieTable table,
       EngineIndexHelper indexHelper) {
-    // TODO(yihua): use HoodieWriteConfig APIs directly
     if (!dataTableWriteConfig.getMetadataConfig().isEnabled()) {
       return Collections.emptyMap();
     }
     return Arrays.stream(getValidValues())
-        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig())
+        .filter(partitionType -> partitionType.isMetadataPartitionSupported(metaClient)
+            || partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig())
             || partitionType.isMetadataPartitionAvailable(metaClient))
         .collect(Collectors.toMap(
             Function.identity(), type -> IndexerFactory.getIndexBuilder(

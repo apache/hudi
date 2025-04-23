@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -89,7 +88,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -114,7 +112,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetada
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readRecordKeysFromBaseFiles;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
-import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords;
@@ -296,6 +293,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // If the un-synced instants have been archived, then
     // the metadata table will need to be initialized again.
+    // TODO(yihua): take care of this in the constructor with indexer map when reinitialization is needed.
     if (exists) {
       try {
         metadataMetaClient = HoodieTableMetaClient.builder()
@@ -381,13 +379,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       }
     }
 
-    ArrayList<MetadataPartitionType> indexTypeList = new ArrayList<>(builderMapForPartitionsToInit.keySet());
-    for (MetadataPartitionType type : indexTypeList) {
-      if (dataMetaClient.getTableConfig().isMetadataPartitionAvailable(type)) {
-        // Already initialized partitions can be ignored
-        builderMapForPartitionsToInit.remove(type);
-      }
-    }
+    builderMapForPartitionsToInit.keySet().removeIf(
+        metadataPartition -> dataMetaClient.getTableConfig().isMetadataPartitionAvailable(metadataPartition));
 
     // Get a complete list of files and partitions from the file system or from already initialized FILES partition of MDT
     List<DirectoryInfo> partitionInfoList;
@@ -409,65 +402,70 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    // validate that each index is eligible to be initialized
-    Iterator<MetadataPartitionType> iterator = builderMapForPartitionsToInit.keySet().iterator();
-    while (iterator.hasNext()) {
-      MetadataPartitionType partitionType = iterator.next();
-      if (partitionType == PARTITION_STATS && !dataMetaClient.getTableConfig().isTablePartitioned()) {
-        LOG.warn("Partition stats index cannot be enabled for a non-partitioned table. Removing from initialization list. Please disable {}",
-            HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key());
-        iterator.remove();
-        this.enabledIndexBuilderMap.remove(partitionType);
-      }
+    if (!filesPartitionAvailable) {
+      initializeMetadataPartition(
+          FILES, builderMapForPartitionsToInit.get(FILES), initializationTime, partitionInfoList, partitionToFilesMap);
     }
 
     Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList = getLazyLatestMergedPartitionFileSliceList();
     // TODO(yihua): FILES partition should not be included here (dead code?) as it should be initialized already
     for (Map.Entry<MetadataPartitionType, Indexer> entry : builderMapForPartitionsToInit.entrySet()) {
-      MetadataPartitionType partitionType = entry.getKey();
-      Indexer indexer = entry.getValue();
-      // Find the commit timestamp to use for this partition. Each initialization should use its own unique commit time.
-      String instantTimeForPartition = generateUniqueInstantTime(dataTableInstantTime);
-      String partitionTypeName = partitionType.name();
-      LOG.info("Initializing MDT partition {} at instant {}", partitionTypeName, instantTimeForPartition);
-      Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair;
-      try {
-        fileGroupCountAndRecordsPair = indexer.build(
-            partitionInfoList, partitionToFilesMap, dataTableInstantTime,
-            Lazy.lazily(this::getMetadataView), metadata, instantTimeForPartition);
-      } catch (Exception e) {
-        String metricKey = partitionType.getPartitionPath() + "_" + HoodieMetadataMetrics.BOOTSTRAP_ERR_STR;
-        metrics.ifPresent(m -> m.setMetric(metricKey, 1));
-        String errMsg = String.format("Bootstrap on %s partition failed for %s",
-            partitionType.getPartitionPath(), metadataMetaClient.getBasePath());
-        LOG.error(errMsg, e);
-        throw new HoodieMetadataException(errMsg, e);
-      }
-
-      if (LOG.isInfoEnabled()) {
-        LOG.info("Initializing {} index with {} mappings", partitionTypeName, fileGroupCountAndRecordsPair.getKey());
-      }
-      HoodieTimer partitionInitTimer = HoodieTimer.start();
-
-      // Generate the file groups
-      final int fileGroupCount = fileGroupCountAndRecordsPair.getKey();
-      if (fileGroupCount <= 0) {
+      if (entry.getKey() == FILES) {
         continue;
       }
-      String partitionName = indexer.getPartitionName();
-      initializeFileGroups(dataMetaClient, partitionType, instantTimeForPartition, fileGroupCount, partitionName);
-
-      // Perform the commit using bulkCommit
-      HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
-      bulkCommit(instantTimeForPartition, partitionName, records, fileGroupCount);
-      indexer.updateTableConfig();
-      dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionName, true);
-      // initialize the metadata reader again so the MDT partition can be read after initialization
-      initMetadataReader();
-      long totalInitTime = partitionInitTimer.endTimer();
-      LOG.info("Initializing {} index in metadata table took {} in ms", partitionTypeName, totalInitTime);
+      initializeMetadataPartition(
+          entry.getKey(), entry.getValue(), initializationTime, partitionInfoList, partitionToFilesMap);
     }
     return true;
+  }
+
+  private void initializeMetadataPartition(MetadataPartitionType partitionType,
+                                           Indexer indexer,
+                                           String initializationTime,
+                                           List<DirectoryInfo> partitionInfoList,
+                                           Map<String, Map<String, Long>> partitionToFilesMap)
+      throws IOException {
+    // Find the commit timestamp to use for this partition. Each initialization should use its own unique commit time.
+    String instantTimeForPartition = generateUniqueInstantTime(initializationTime);
+    String partitionTypeName = partitionType.name();
+    LOG.info("Initializing MDT partition {} at instant {}", partitionTypeName, instantTimeForPartition);
+    Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair;
+    try {
+      fileGroupCountAndRecordsPair = indexer.build(
+          partitionInfoList, partitionToFilesMap, initializationTime,
+          Lazy.lazily(this::getMetadataView), metadata, instantTimeForPartition);
+    } catch (Exception e) {
+      String metricKey = partitionType.getPartitionPath() + "_" + HoodieMetadataMetrics.BOOTSTRAP_ERR_STR;
+      metrics.ifPresent(m -> m.setMetric(metricKey, 1));
+      String errMsg = String.format("Bootstrap on %s partition failed for %s",
+          partitionType.getPartitionPath(), metadataMetaClient.getBasePath());
+      LOG.error(errMsg, e);
+      throw new HoodieMetadataException(errMsg, e);
+    }
+
+    if (LOG.isInfoEnabled()) {
+      LOG.info("Initializing {} index with {} mappings", partitionTypeName, fileGroupCountAndRecordsPair.getKey());
+    }
+    HoodieTimer partitionInitTimer = HoodieTimer.start();
+
+    // Generate the file groups
+    final int fileGroupCount = fileGroupCountAndRecordsPair.getKey();
+    if (fileGroupCount <= 0) {
+      LOG.info("Skip building {} index in metadata table", partitionTypeName);
+      return;
+    }
+    String partitionName = indexer.getPartitionName();
+    initializeFileGroups(dataMetaClient, partitionType, instantTimeForPartition, fileGroupCount, partitionName);
+
+    // Perform the commit using bulkCommit
+    HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
+    bulkCommit(instantTimeForPartition, partitionName, records, fileGroupCount);
+    indexer.updateTableConfig();
+    dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionName, true);
+    // initialize the metadata reader again so the MDT partition can be read after initialization
+    initMetadataReader();
+    long totalInitTime = partitionInitTimer.endTimer();
+    LOG.info("Initializing {} index in metadata table took {} in ms", partitionTypeName, totalInitTime);
   }
 
   /**

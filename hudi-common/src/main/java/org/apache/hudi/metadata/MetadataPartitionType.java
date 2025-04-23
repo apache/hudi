@@ -234,6 +234,12 @@ public enum MetadataPartitionType {
     }
 
     @Override
+    public boolean isMetadataPartitionSupported(HoodieTableMetaClient metaClient) {
+      // Partition stats is supported for partitioned tables only
+      return metaClient.getTableConfig().isTablePartitioned();
+    }
+
+    @Override
     public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
       constructColumnStatsMetadataPayload(payload, record);
     }
@@ -354,6 +360,10 @@ public enum MetadataPartitionType {
    */
   public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
     return metaClient.getTableConfig().isMetadataPartitionAvailable(this);
+  }
+
+  public boolean isMetadataPartitionSupported(HoodieTableMetaClient metaClient) {
+    return true;
   }
 
   MetadataPartitionType(final String partitionPath, final String fileIdPrefix, final int recordType) {
