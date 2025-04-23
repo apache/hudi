@@ -88,7 +88,7 @@ public class HoodieWriteClientExample {
       FileSystem fs = HadoopFSUtils.getFs(tablePath, jsc.hadoopConfiguration());
       if (!fs.exists(path)) {
         HoodieTableMetaClient.newTableBuilder()
-            .setTableType(TABLE_TYPE)
+            .setTableType(tableType)
             .setTableName(tableName)
             .setPayloadClass(HoodieAvroPayload.class)
             .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tablePath);
@@ -140,11 +140,10 @@ public class HoodieWriteClientExample {
         client.deletePartitions(deleteList, newCommitTime);
 
         // compaction
-        if (HoodieTableType.valueOf(TABLE_TYPE) == HoodieTableType.MERGE_ON_READ) {
+        if (HoodieTableType.valueOf(tableType) == HoodieTableType.MERGE_ON_READ) {
           Option<String> instant = client.scheduleCompaction(Option.empty());
           HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instant.get());
-          client.commitCompaction(instant.get(), compactionMetadata.getCommitMetadata().get(), Option.empty(),
-              Collections.emptyList());
+          client.commitCompaction(instant.get(), compactionMetadata, Option.empty());
         }
       }
     }
