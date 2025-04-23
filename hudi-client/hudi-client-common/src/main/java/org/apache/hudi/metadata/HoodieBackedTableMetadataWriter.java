@@ -88,7 +88,6 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -1171,7 +1170,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // tag records
     List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>(enabledPartitionTypes);
     mdtPartitionsToTag.remove(FILES);
-    Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> taggedMdtRecords = tagRecordsWithLocation(mdtRecords, mdtPartitionsToTag);
+    Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> taggedMdtRecords = tagRecordsWithLocation(mdtRecords, metadataMetaClient.getTableConfig().getMetadataPartitions());
     // todo fix parallelism. Do we really need this. Upsert partitioner will do this anyways.
 
     // write partial writes to mdt table (every partition except FILES)
@@ -1184,7 +1183,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     HoodieData<HoodieRecord> mdtRecords = metadataIndexGenerator.prepareFilesPartitionRecords(context, commitMetadata, instantTime);
     // write to mdt table
     Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> taggedRecords = tagRecordsWithLocation(mdtRecords.map(record -> Pair.of(FILES.getPartitionPath(), record)),
-        Arrays.asList(FILES));
+        Collections.singleton(FILES.getPartitionPath()));
     HoodieData<WriteStatus> mdtWriteStatusHoodieData = convertEngineSpecificDataToHoodieData(writeToMDT(taggedRecords, instantTime, false));
     return mdtWriteStatusHoodieData;
   }
@@ -1199,7 +1198,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * @return
    */
   protected Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> tagRecordsWithLocation(HoodieData<Pair<String, HoodieRecord>> untaggedMdtRecords,
-                                                                               List<MetadataPartitionType> enabledMetadataPartitions) {
+                                                                                              Set<String> enabledMetadataPartitions) {
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
     List<Pair<String, String>> mdtPartitionFileIdPairs = new ArrayList<>();
@@ -1207,20 +1206,20 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
       // Fetch latest file slices for all enabled MDT partitions
       Map<String, List<FileSlice>> mdtPartitionLatestFileSlices = new HashMap<>();
-      enabledMetadataPartitions.forEach(entry -> {
+      enabledMetadataPartitions.forEach(partitionName -> {
         List<FileSlice> fileSlices =
-            HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), entry.getPartitionPath());
+            HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), partitionName);
         if (fileSlices.isEmpty()) {
           // scheduling of INDEX only initializes the file group and not add commit
           // so if there are no committed file slices, look for inflight slices
-          fileSlices = getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), entry.getPartitionPath());
+          fileSlices = getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionName);
         }
-        mdtPartitionLatestFileSlices.put(entry.getPartitionPath(), fileSlices);
+        mdtPartitionLatestFileSlices.put(partitionName, fileSlices);
         final int fileGroupCount = fileSlices.size();
         fileSlices.stream().forEach(fileSlice -> {
-          mdtPartitionFileIdPairs.add(Pair.of(entry.getPartitionPath(), fileSlice.getFileId()));
+          mdtPartitionFileIdPairs.add(Pair.of(partitionName, fileSlice.getFileId()));
         });
-        ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be > 0", entry));
+        ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be > 0", partitionName));
       });
 
       HoodieData<HoodieRecord> rddSinglePartitionRecords = untaggedMdtRecords.map(mdtPartitionRecordPair -> {
