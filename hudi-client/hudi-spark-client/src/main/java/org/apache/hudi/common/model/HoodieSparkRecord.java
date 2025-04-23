@@ -89,6 +89,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    */
   private final transient StructType schema;
 
+  private transient Comparable<?> orderingValue;
+
   public HoodieSparkRecord(UnsafeRow data) {
     this(data, null);
   }
@@ -319,20 +321,18 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+  protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField)) {
-      return DEFAULT_ORDERING_VALUE;
+    if (!isNullOrEmpty(orderingField)) {
+      scala.Option<NestedFieldPath> cachedNestedFieldPath =
+          HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
+      if (cachedNestedFieldPath.isDefined()) {
+        NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+        return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
+      }
     }
-    scala.Option<NestedFieldPath> cachedNestedFieldPath =
-        HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
-    if (cachedNestedFieldPath.isDefined()) {
-      NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
-      return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
-    } else {
-      return DEFAULT_ORDERING_VALUE;
-    }
+    return DEFAULT_ORDERING_VALUE;
   }
 
   /**

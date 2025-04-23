@@ -22,11 +22,11 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -51,7 +51,7 @@ import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
  * @param <T> type of engine-specific record representation.
  */
 public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
-    implements Iterable<Pair<Option<T>, Map<String, Object>>>, Closeable {
+    implements Iterable<BufferedRecord<T>>, Closeable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordReader.class);
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
@@ -166,11 +166,11 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   }
 
   @Override
-  public Iterator<Pair<Option<T>, Map<String, Object>>> iterator() {
+  public Iterator<BufferedRecord<T>> iterator() {
     return recordBuffer.getLogRecordIterator();
   }
 
-  public Map<Serializable, Pair<Option<T>, Map<String, Object>>> getRecords() {
+  public Map<Serializable, BufferedRecord<T>> getRecords() {
     return recordBuffer.getLogRecords();
   }
 
