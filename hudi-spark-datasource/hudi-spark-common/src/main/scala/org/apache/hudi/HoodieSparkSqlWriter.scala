@@ -449,8 +449,8 @@ class HoodieSparkSqlWriterInternal {
             // Issue delete partitions
             instantTime = client.createNewInstantTime()
             client.startCommitWithTime(instantTime, commitActionType)
-            val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
-            (writeStatuses, client)
+            val writeResult = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
+            (writeResult, client)
 
           // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
           case _ =>

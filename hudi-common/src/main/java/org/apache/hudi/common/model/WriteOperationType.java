@@ -183,6 +183,6 @@ public enum WriteOperationType {
   }
 
   public static boolean optimizedWriteDagSupported(WriteOperationType writeOperationType) {
-    return (isInsert(writeOperationType) || isUpsert(writeOperationType) || isCompactionOrClustering(writeOperationType));
+    return (isInsert(writeOperationType) || isChangingRecords(writeOperationType) || isCompactionOrClustering(writeOperationType));
   }
 }

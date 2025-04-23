@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -115,6 +116,10 @@ public class SparkRDDWriteClient<T> extends
   }
 
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieTableMetaClient metaClient) {
+    /*if (!metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      return Option.empty();
+    }*/
+
     if (this.metadataWriterMap.containsKey(triggeringInstantTimestamp)) {
       return this.metadataWriterMap.get(triggeringInstantTimestamp);
     }

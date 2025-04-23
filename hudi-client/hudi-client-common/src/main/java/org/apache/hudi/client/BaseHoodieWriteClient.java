@@ -338,7 +338,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     // generate Completion time
     String completionTime = activeTimeline.createCompletionTime();
-    boolean optimizedWrite = config.getOptimizedWritesEnabled() && WriteOperationType.optimizedWriteDagSupported(writeOperationType);
+    boolean optimizedWrite = config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion()) && WriteOperationType.optimizedWriteDagSupported(writeOperationType);
     // update Metadata table
     if (optimizedWrite && metadataWriterMap.containsKey(instantTime) && metadataWriterMap.get(instantTime).isPresent()) {
       HoodieTableMetadataWriter metadataWriter = metadataWriterMap.get(instantTime).get();
@@ -1173,19 +1173,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       throw new UnsupportedOperationException("Compaction should be delegated to table service manager instead of direct run.");
     }
     return compact(compactionInstantTime, config.shouldAutoCommit());
-  }
-
-  /**
-   * Commit a compaction operation. Allow passing additional meta-data to be stored in commit instant file.
-   *
-   * @param compactionInstantTime Compaction Instant Time
-   * @param metadata All the metadata that gets stored along with a commit
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata,
-                               Option<Map<String, String>> extraMetadata, List<HoodieWriteStat> partialMdtHoodieWriteStats,
-                               Option<HoodieTableMetadataWriter> metadataWriterOpt) {
-    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata, partialMdtHoodieWriteStats, metadataWriterOpt);
   }
 
   /**

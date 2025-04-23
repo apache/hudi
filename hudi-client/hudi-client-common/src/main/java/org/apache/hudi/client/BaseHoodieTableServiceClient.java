@@ -331,7 +331,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     compactionTimer = metrics.getCompactionCtx();
     // start commit in MDT if enabled
     Option<HoodieTableMetadataWriter> metadataWriterOpt = Option.empty();
-    if (config.getOptimizedWritesEnabled()) {
+    if (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
       metadataWriterOpt = getMetadataWriterFunc.apply(compactionInstantTime, table.getMetaClient());
     }
     if (metadataWriterOpt.isPresent()) {
@@ -341,7 +341,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieWriteMetadata<T> writeMetadata = table.compact(context, compactionInstantTime);
     HoodieWriteMetadata<T> processedWriteMetadata = writeToMetadata(writeMetadata, compactionInstantTime, metadataWriterOpt);
     HoodieWriteMetadata<O> compactionWriteMetadata = convertToOutputMetadata(processedWriteMetadata);
-    if (shouldComplete && (config.getOptimizedWritesEnabled() || compactionWriteMetadata.getCommitMetadata().isPresent())) {
+    if (shouldComplete && (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion()) || compactionWriteMetadata.getCommitMetadata().isPresent())) {
       commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.of(table), metadataWriterOpt);
     }
     return compactionWriteMetadata;
@@ -383,20 +383,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   /**
-   * Commit a compaction operation. Allow passing additional meta-data to be stored in commit instant file.
-   *
-   * @param compactionInstantTime Compaction Instant Time
-   * @param metadata              All the metadata that gets stored along with a commit
-   * @param extraMetadata         Extra Metadata to be stored
-   */
-  public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata,
-                               List<HoodieWriteStat> partialMdtHoodieWriteStats,
-                               Option<HoodieTableMetadataWriter> metadataWriterOpt) {
-    extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeCompaction(metadata, createTable(config, context.getStorageConf()), compactionInstantTime, partialMdtHoodieWriteStats, metadataWriterOpt);
-  }
-
-  /**
    * Commit Compaction and track metrics.
    */
   protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime, List<HoodieWriteStat> partialMdtHoodieWriteStats,
@@ -411,7 +397,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       finalizeWrite(table, compactionCommitTime, writeStats);
       // write to MDT FILES partition and commit
       // commit call will also be doing marker reconciliation for metadata table.
-      if (!metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled()) {
+      if (!metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
         // with auto commit disabled flow, user may not have reference to metadata writer. So, lets fetch the metadata writer instance once.
         metadataWriterOpt = getMetadataWriterFunc.apply(compactionCommitTime, table.getMetaClient());
         // if metadata table is enabled, this will return a valid instance, if not, will return Option.empty.
