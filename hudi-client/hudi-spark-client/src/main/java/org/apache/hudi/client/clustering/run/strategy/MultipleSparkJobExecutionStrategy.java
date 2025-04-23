@@ -33,6 +33,7 @@ import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -72,10 +73,8 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.SparkBroadcastManager;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
@@ -455,8 +454,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     SerializableSchema serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields);
 
     // broadcast reader context.
-    SparkBroadcastManager broadcastManager = new SparkBroadcastManager(getEngineContext(), getHoodieTable().getMetaClient());
-    broadcastManager.prepareAndBroadcast();
+    ReaderContextFactory<InternalRow> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient());
     StructType sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields);
 
     RDD<InternalRow> internalRowRDD = jsc.parallelize(clusteringOps, clusteringOps.size()).flatMap(new FlatMapFunction<ClusteringOperation, InternalRow>() {
@@ -469,20 +467,17 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         if (isInternalSchemaPresent) {
           internalSchemaOption = SerDeHelper.fromJson(internalSchemaStr);
         }
-        Option<HoodieReaderContext> readerContextOpt = broadcastManager.retrieveFileGroupReaderContext(new StoragePath(basePath));
-        Configuration conf = broadcastManager.retrieveStorageConfig().get();
 
         // instantiate FG reader
-        HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(readerContextOpt.get(),
-            getHoodieTable().getMetaClient().getStorage().newInstance(new StoragePath(basePath), new HadoopStorageConfiguration(conf)),
+        HoodieReaderContext<InternalRow> readerContext = readerContextFactory.getContext();
+        HoodieFileGroupReader<InternalRow> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
+            getHoodieTable().getMetaClient().getStorage().newInstance(new StoragePath(basePath), readerContext.getStorageConfiguration()),
             basePath, instantTime, fileSlice, readerSchema, readerSchema, internalSchemaOption,
             getHoodieTable().getMetaClient(), getHoodieTable().getMetaClient().getTableConfig().getProps(),
             0, Long.MAX_VALUE, usePosition, false);
         fileGroupReader.initRecordIterators();
         // read records from the FG reader
-        HoodieFileGroupReader.HoodieFileGroupReaderIterator<InternalRow> recordIterator
-            = (HoodieFileGroupReader.HoodieFileGroupReaderIterator<InternalRow>) fileGroupReader.getClosableIterator();
-        return recordIterator;
+        return fileGroupReader.getClosableIterator();
       }
     }).rdd();
 

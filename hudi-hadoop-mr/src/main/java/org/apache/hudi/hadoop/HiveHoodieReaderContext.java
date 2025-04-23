@@ -37,6 +37,7 @@ import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -95,7 +96,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
                                     String recordKeyField,
                                     List<String> partitionCols,
-                                    ObjectInspectorCache objectInspectorCache) {
+                                    ObjectInspectorCache objectInspectorCache,
+                                    StorageConfiguration<?> storageConfiguration) {
+    super(storageConfiguration);
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);

@@ -174,14 +174,14 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   }
 
   @Test
-  public void testAutoUpgradeFailure() throws IOException {
+  public void testWithoutAutoUpgrade() throws IOException {
     Map<String, String> params = new HashMap<>();
     addNewTableParamsToProps(params);
     HoodieWriteConfig cfg = getConfigBuilder().withAutoUpgradeVersion(false).withProps(params).build();
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX);
-    assertThrows(IllegalStateException.class, () ->
-        new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.EIGHT, null)
-    );
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.EIGHT, null);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
   }
 
   @Test
@@ -702,6 +702,12 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     assertTrue(shouldUpgrade);
 
     // assert upgrade for table version 8 from table version 6
+    shouldUpgrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.EIGHT);
+    assertTrue(shouldUpgrade);
+
+    // assert upgrade for table version 8 from table version 6 with auto upgrade set to false
+    when(writeConfig.autoUpgrade()).thenReturn(false);
     shouldUpgrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
         .needsUpgrade(HoodieTableVersion.EIGHT);
     assertTrue(shouldUpgrade);

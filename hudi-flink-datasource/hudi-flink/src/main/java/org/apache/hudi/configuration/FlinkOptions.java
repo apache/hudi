@@ -139,6 +139,15 @@ public class FlinkOptions extends HoodieConfig {
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
 
   @AdvancedConfig
+  public static final ConfigOption<String> RECORD_MERGE_MODE = ConfigOptions
+      .key(HoodieWriteConfig.RECORD_MERGE_MODE.key())
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Using EVENT_TIME_ORDERING to merge records by ordering value,"
+          + "using COMMIT_TIME_ORDERING to merge records by commit time,"
+          + "and using CUSTOM to merge records by the user specified logic.");
+
+  @AdvancedConfig
   public static final ConfigOption<String> RECORD_MERGER_STRATEGY_ID = ConfigOptions
       .key("record.merger.strategy")
       .stringType()

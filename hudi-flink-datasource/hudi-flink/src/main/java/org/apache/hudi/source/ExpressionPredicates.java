@@ -408,8 +408,7 @@ public class ExpressionPredicates {
 
     private static final long serialVersionUID = 1L;
 
-    private static final Logger LOG = LoggerFactory.getLogger(ExpressionEvaluators.In.class);
-
+    private static final Logger LOG = LoggerFactory.getLogger(In.class);
 
     private static final int IN_PREDICATE_LIMIT = 200;
 

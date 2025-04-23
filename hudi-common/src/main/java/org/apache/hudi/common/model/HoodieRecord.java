@@ -394,6 +394,12 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public abstract Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled);
 
   /**
+   * Get column in record to support RDDCustomColumnsSortPartitioner
+   * @return column value
+   */
+  public abstract Object getColumnValueAsJava(Schema recordSchema, String column, Properties props);
+
+  /**
    * Support bootstrap.
    */
   public abstract HoodieRecord joinWith(HoodieRecord other, Schema targetSchema);
@@ -404,6 +410,18 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * NOTE: This operation is idempotent
    */
   public abstract HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props);
+
+  /**
+   * Update a specific metadata field with given value.
+   *
+   * @param recordSchema the schema for the record
+   * @param ordinal the ordinal for the target medata field
+   * @param value the new value for the target metadata field
+   * @return the new HoodieRecord with updated metadata value
+   */
+  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    throw new UnsupportedOperationException("updateMetaField is not supported yet for: " + this.getClass().getSimpleName());
+  }
 
   /**
    * Support schema evolution.

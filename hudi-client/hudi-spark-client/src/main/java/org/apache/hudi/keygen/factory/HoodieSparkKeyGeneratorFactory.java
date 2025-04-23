@@ -108,7 +108,7 @@ public class HoodieSparkKeyGeneratorFactory {
   public static Option<BaseKeyGenerator> createBaseKeyGenerator(HoodieWriteConfig writeConfig) {
     if (!writeConfig.populateMetaFields()) {
       try {
-        TypedProperties typedProperties = new TypedProperties(writeConfig.getProps());
+        TypedProperties typedProperties = TypedProperties.copy(writeConfig.getProps());
         return Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
       } catch (ClassCastException cce) {
         throw new HoodieException("Only BaseKeyGenerators are supported when meta columns are disabled ", cce);

@@ -24,6 +24,8 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
@@ -46,7 +48,6 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.table.EngineBroadcastManager;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
@@ -88,16 +89,6 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    * @param writeStatus {@link HoodieData} of {@link WriteStatus}.
    */
   public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime);
-
-  /**
-   * @param context {@link HoodieEngineContext} instance
-   *
-   * @return the {@link EngineBroadcastManager} if available.
-   */
-  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context,
-                                                                  HoodieTableMetaClient metaClient) {
-    return Option.empty();
-  }
 
   /**
    * Execute compaction operations and report back status.
@@ -152,11 +143,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         && config.populateMetaFields();                                             // Virtual key support by fg reader is not ready
 
     if (useFileGroupReaderBasedCompaction) {
-      Option<EngineBroadcastManager> broadcastManagerOpt = getEngineBroadcastManager(context, metaClient);
-      // Broadcast required information.
-      broadcastManagerOpt.ifPresent(EngineBroadcastManager::prepareAndBroadcast);
+      ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
       return context.parallelize(operations).map(
-              operation -> compact(compactionHandler, metaClient, config, operation, compactionInstantTime, broadcastManagerOpt))
+              operation -> compact(compactionHandler, config, operation, compactionInstantTime, readerContextFactory.getContext()))
           .flatMap(List::iterator);
     } else {
       return context.parallelize(operations).map(
@@ -297,14 +286,11 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    * Execute a single compaction operation and report back status.
    */
   public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
-                                   HoodieTableMetaClient metaClient,
                                    HoodieWriteConfig writeConfig,
                                    CompactionOperation operation,
                                    String instantTime,
-                                   Option<EngineBroadcastManager> broadcastManagerOpt) throws IOException {
-    return compactionHandler.compactUsingFileGroupReader(instantTime, operation,
-        writeConfig, broadcastManagerOpt.get().retrieveFileGroupReaderContext(metaClient.getBasePath()).get(),
-        broadcastManagerOpt.get().retrieveStorageConfig().get());
+                                   HoodieReaderContext hoodieReaderContext) throws IOException {
+    return compactionHandler.compactUsingFileGroupReader(instantTime, operation, writeConfig, hoodieReaderContext);
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {

@@ -160,7 +160,7 @@ Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specifie
 
 ### Build with different Flink versions
 
-The default Flink version supported is 1.20. The default Flink 1.20.x version, corresponding to `flink1.20` profile is 1.20.0.
+The default Flink version supported is 1.20. The default Flink 1.20.x version, corresponding to `flink1.20` profile is 1.20.1.
 Flink is Scala-free since 1.15.x, there is no need to specify the Scala version for Flink 1.15.x and above versions.
 Refer to the table below for building with different Flink and Scala versions.
 
@@ -173,7 +173,6 @@ Refer to the table below for building with different Flink and Scala versions.
 | `-Dflink1.17`       | hudi-flink1.17-bundle          | For Flink 1.17                   |
 | `-Dflink1.16`       | hudi-flink1.16-bundle          | For Flink 1.16                   |
 | `-Dflink1.15`       | hudi-flink1.15-bundle          | For Flink 1.15                   |
-| `-Dflink1.14`       | hudi-flink1.14-bundle          | For Flink 1.14                   |
 
 For example,
 ```

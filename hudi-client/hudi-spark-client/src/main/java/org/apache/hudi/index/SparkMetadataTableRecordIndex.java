@@ -19,7 +19,6 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -80,13 +79,17 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       HoodieWriteConfig otherConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps())
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(FALLBACK_INDEX_TYPE).build()).build();
       HoodieIndex fallbackIndex = SparkHoodieIndexFactory.createIndex(otherConfig);
+
+      // Fallback index needs to be a global index like record index
+      ValidationUtils.checkArgument(fallbackIndex.isGlobal(), "Fallback index needs to be a global index like record index");
+
       return fallbackIndex.tagLocation(records, context, hoodieTable);
     }
 
     final int numFileGroups = fileGroupSize;
 
     if (config.getRecordIndexUseCaching()) {
-      records.persist(new HoodieConfig(config.getProps()).getString(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+      records.persist(config.getRecordIndexInputStorageLevel());
     }
 
     // Partition the record keys to lookup such that each partition looks up one record index shard
@@ -163,10 +166,9 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       recordKeyIterator.forEachRemaining(keysToLookup::add);
 
       // recordIndexInfo object only contains records that are present in record_index.
-      Map<String, List<HoodieRecordGlobalLocation>> recordIndexInfo = hoodieTable.getMetadataTable().readRecordIndex(keysToLookup);
+      Map<String, HoodieRecordGlobalLocation> recordIndexInfo = hoodieTable.getMetadataTable().readRecordIndex(keysToLookup);
       return recordIndexInfo.entrySet().stream()
-          .flatMap(e -> e.getValue().stream().map(loc -> new Tuple2<>(e.getKey(), loc)))
-          .iterator();
+          .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
     }
   }
 

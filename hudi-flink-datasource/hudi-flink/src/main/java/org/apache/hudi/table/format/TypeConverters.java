@@ -67,6 +67,15 @@ public class TypeConverters {
     Object convert(Object val);
   }
 
+  public static final TypeConverter NOOP_CONVERTER = new TypeConverter() {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public Object convert(Object val) {
+      return val;
+    }
+  };
+
   public static TypeConverter getInstance(LogicalType fromType, LogicalType toType) {
     LogicalTypeRoot from = fromType.getTypeRoot();
     LogicalTypeRoot to = toType.getTypeRoot();
@@ -313,21 +322,10 @@ public class TypeConverters {
     };
   }
 
-  private static TypeConverter createNoOpConverter() {
-    return new TypeConverter() {
-      private static final long serialVersionUID = 1L;
-
-      @Override
-      public Object convert(Object val) {
-        return val;
-      }
-    };
-  }
-
   private static TypeConverter createRowConverter(LogicalType fromType, LogicalType toType) {
     final List<LogicalType> fromChildren = fromType.getChildren();
     final List<LogicalType> toChildren = toType.getChildren();
-    final RowData.FieldGetter[] fieldGetters = IntStream
+    final FieldGetter[] fieldGetters = IntStream
         .range(0, fromChildren.size())
         .mapToObj(i -> RowData.createFieldGetter(fromChildren.get(i), i))
         .toArray(FieldGetter[]::new);
@@ -337,7 +335,7 @@ public class TypeConverters {
           LogicalType fromChild = fromChildren.get(i);
           LogicalType toChild = toChildren.get(i);
           if (isPrimitiveTypeRootEqual(fromChild.getTypeRoot(), toChild.getTypeRoot())) {
-            return createNoOpConverter();
+            return NOOP_CONVERTER;
           } else {
             return getInstance(fromChild, toChild);
           }

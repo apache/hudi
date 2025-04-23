@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -36,7 +37,6 @@ import org.apache.avro.generic.IndexedRecord;
 
 import javax.annotation.Nullable;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -57,8 +57,8 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  * @param <T> The type of engine-specific record representation, e.g.,{@code InternalRow} in Spark
  *            and {@code RowData} in Flink.
  */
-public abstract class HoodieReaderContext<T> implements Closeable {
-
+public abstract class HoodieReaderContext<T> {
+  private final StorageConfiguration<?> storageConfiguration;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
@@ -70,6 +70,10 @@ public abstract class HoodieReaderContext<T> implements Closeable {
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
+
+  protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration) {
+    this.storageConfiguration = storageConfiguration;
+  }
 
   // Getter and Setter for schemaHandler
   public FileGroupReaderSchemaHandler<T> getSchemaHandler() {
@@ -141,6 +145,10 @@ public abstract class HoodieReaderContext<T> implements Closeable {
 
   public void setShouldMergeUseRecordPosition(boolean shouldMergeUseRecordPosition) {
     this.shouldMergeUseRecordPosition = shouldMergeUseRecordPosition;
+  }
+
+  public StorageConfiguration<?> getStorageConfiguration() {
+    return storageConfiguration;
   }
 
   // These internal key names are only used in memory for record metadata and merging,
@@ -419,12 +427,5 @@ public abstract class HoodieReaderContext<T> implements Closeable {
   @Nullable
   private Schema decodeAvroSchema(Object versionId) {
     return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
-  }
-
-  @Override
-  public void close() {
-    if (this.localAvroSchemaCache != null) {
-      this.localAvroSchemaCache.close();
-    }
   }
 }

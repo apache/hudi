@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,10 +32,14 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.compact.HoodieJavaMergeOnReadTableCompactor;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
+import org.apache.hudi.table.action.deltacommit.JavaBulkInsertDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.JavaBulkInsertPreppedDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.JavaDeleteDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.JavaDeletePreppedDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.JavaInsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.JavaUpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.JavaUpsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.restore.MergeOnReadRestoreActionExecutor;
@@ -54,6 +59,11 @@ public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T>
   }
 
   @Override
+  public HoodieWriteMetadata<List<WriteStatus>> insert(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> hoodieRecords) {
+    return new JavaInsertDeltaCommitActionExecutor<>((HoodieJavaEngineContext) context, config, this, instantTime, hoodieRecords).execute();
+  }
+
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(HoodieEngineContext context,
                                                               String instantTime,
                                                               List<HoodieRecord<T>> preppedRecords) {
@@ -63,11 +73,28 @@ public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T>
   }
 
   @Override
+  public HoodieWriteMetadata<List<WriteStatus>> delete(HoodieEngineContext context, String instantTime, List<HoodieKey> keys) {
+    return new JavaDeleteDeltaCommitActionExecutor<>(context, config, this, instantTime, keys).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> deletePrepped(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> preppedRecords) {
+    return new JavaDeletePreppedDeltaCommitActionExecutor<>((HoodieJavaEngineContext) context, config,
+        this, instantTime, preppedRecords).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> bulkInsert(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> hoodieRecords, Option<BulkInsertPartitioner> bulkInsertPartitioner) {
+    return new JavaBulkInsertDeltaCommitActionExecutor((HoodieJavaEngineContext) context, config,
+        this, instantTime, hoodieRecords, bulkInsertPartitioner).execute();
+  }
+
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context,
                                                                   String instantTime,
                                                                   List<HoodieRecord<T>> preppedRecords,
                                                                   Option<BulkInsertPartitioner> bulkInsertPartitioner) {
-    return new JavaBulkInsertPreppedCommitActionExecutor((HoodieJavaEngineContext) context, config,
+    return new JavaBulkInsertPreppedDeltaCommitActionExecutor((HoodieJavaEngineContext) context, config,
         this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
   }
 

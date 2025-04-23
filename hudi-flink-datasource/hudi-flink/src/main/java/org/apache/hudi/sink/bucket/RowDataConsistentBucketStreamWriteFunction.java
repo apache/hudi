@@ -87,7 +87,7 @@ public class RowDataConsistentBucketStreamWriteFunction extends RowDataStreamWri
         new MutableIteratorWrapperIterator<>(
             rowDataBucket.getDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()));
     Iterator<HoodieRecord> recordItr = deduplicateRecordsIfNeeded(
-        new MappingIterator<>(rowItr, rowData -> convertToRecord(rowData, rowDataBucket.getBucketInfo())));
+        new MappingIterator<>(rowItr, rowData -> recordConverter.convert(rowData, rowDataBucket.getBucketInfo())));
 
     Pair<List<BucketRecords>, Set<HoodieFileGroupId>> recordListFgPair =
         updateStrategy.handleUpdate(Collections.singletonList(BucketRecords.of(recordItr, rowDataBucket.getBucketInfo(), instant)));

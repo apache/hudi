@@ -61,6 +61,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.CommonClientUtils;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
@@ -283,7 +284,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     return hoodieRecord.getCurrentLocation() != null;
   }
 
-  private Option<HoodieRecord> prepareRecord(HoodieRecord<T> hoodieRecord) {
+  private void bufferRecord(HoodieRecord<T> hoodieRecord) {
     Option<Map<String, String>> recordMetadata = hoodieRecord.getMetadata();
     Schema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
     try {
@@ -292,36 +293,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       boolean isUpdateRecord = isUpdateRecord(hoodieRecord);
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
 
-      final Option<HoodieRecord> finalRecordOpt;
       // Check for delete
       if (!hoodieRecord.isDelete(schema, recordProperties) || config.allowOperationMetadataField()) {
-        // Check if the record should be ignored (special case for [[ExpressionPayload]])
-        if (hoodieRecord.shouldIgnore(schema, recordProperties)) {
-          return Option.of(hoodieRecord);
-        }
-
-        // Prepend meta-fields into the record
-        MetadataValues metadataValues = populateMetadataFields(hoodieRecord);
-        HoodieRecord populatedRecord =
-            hoodieRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
-
-        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-        //       it since these records will be put into the recordList(List).
-        finalRecordOpt = Option.of(populatedRecord.copy());
-        if (isUpdateRecord || isLogCompaction) {
-          updatedRecordsWritten++;
-        } else {
-          insertRecordsWritten++;
-        }
-        recordsWritten++;
+        bufferInsertAndUpdate(schema, hoodieRecord, isUpdateRecord);
       } else {
-        finalRecordOpt = Option.empty();
-        // Clear the new location as the record was deleted
-        hoodieRecord.unseal();
-        hoodieRecord.clearNewLocation();
-        hoodieRecord.seal();
-        recordsDeleted++;
+        bufferDelete(hoodieRecord);
       }
 
       writeStatus.markSuccess(hoodieRecord, recordMetadata);
@@ -329,12 +305,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // part of marking
       // record successful.
       hoodieRecord.deflate();
-      return finalRecordOpt;
     } catch (Exception e) {
-      LOG.error("Error writing record  " + hoodieRecord, e);
+      LOG.error("Error writing record {}", hoodieRecord, e);
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
     }
-    return Option.empty();
   }
 
   private MetadataValues populateMetadataFields(HoodieRecord<T> hoodieRecord) {
@@ -458,7 +432,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           .map(fieldName -> HoodieAvroUtils.getSchemaForField(writeSchemaWithMetaFields, fieldName)).collect(Collectors.toList());
       try {
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-            collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields);
+            collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, storage.getConf());
         stat.putRecordsStats(columnRangeMetadataMap);
       } catch (HoodieException e) {
         throw new HoodieAppendException("Failed to extract append result", e);
@@ -499,7 +473,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        dataBlock = getDataBlock(config, pickLogDataBlockFormat(), recordList,
+        dataBlock = getDataBlock(config, getLogBlockType(), recordList,
             getUpdatedHeader(header, config, baseFileInstantTimeOfPositions), keyField);
         blocks.add(dataBlock);
       }
@@ -624,29 +598,49 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       record.seal();
     }
     // fetch the ordering val first in case the record was deflated.
-    final Comparable<?> orderingVal = record.getOrderingValue(writeSchema, recordProperties);
-    Option<HoodieRecord> indexedRecord = prepareRecord(record);
-    if (indexedRecord.isPresent()) {
-      // Skip the ignored record.
-      try {
-        if (!indexedRecord.get().shouldIgnore(writeSchema, recordProperties)) {
-          recordList.add(indexedRecord.get());
-        }
-      } catch (IOException e) {
-        writeStatus.markFailure(record, e, record.getMetadata());
-        LOG.error("Error writing record  " + indexedRecord.get(), e);
-      }
-    } else {
-      long position = baseFileInstantTimeOfPositions.isPresent() ? record.getCurrentPosition() : -1L;
-      recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(record.getKey(), orderingVal), position));
-    }
+    bufferRecord(record);
     numberOfRecords++;
+  }
+
+  private void bufferInsertAndUpdate(Schema schema, HoodieRecord<T> hoodieRecord, boolean isUpdateRecord) throws IOException {
+    // Check if the record should be ignored (special case for [[ExpressionPayload]])
+    if (hoodieRecord.shouldIgnore(schema, recordProperties)) {
+      return;
+    }
+
+    // Prepend meta-fields into the record
+    MetadataValues metadataValues = populateMetadataFields(hoodieRecord);
+    HoodieRecord populatedRecord =
+        hoodieRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+
+    // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+    //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+    //       it since these records will be put into the recordList(List).
+    recordList.add(populatedRecord.copy());
+    if (isUpdateRecord || isLogCompaction) {
+      updatedRecordsWritten++;
+    } else {
+      insertRecordsWritten++;
+    }
+    recordsWritten++;
+  }
+
+  private void bufferDelete(HoodieRecord<T> hoodieRecord) {
+    // Clear the new location as the record was deleted
+    hoodieRecord.unseal();
+    hoodieRecord.clearNewLocation();
+    hoodieRecord.seal();
+    recordsDeleted++;
+
+    final Comparable<?> orderingVal = hoodieRecord.getOrderingValue(writeSchema, recordProperties);
+    long position = baseFileInstantTimeOfPositions.isPresent() ? hoodieRecord.getCurrentPosition() : -1L;
+    recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(hoodieRecord.getKey(), orderingVal), position));
   }
 
   /**
    * Checks if the number of records have reached the set threshold and then flushes the records to disk.
    */
-  private void flushToDiskIfRequired(HoodieRecord record, boolean appendDeleteBlocks) {
+  protected void flushToDiskIfRequired(HoodieRecord record, boolean appendDeleteBlocks) {
     if (numberOfRecords >= (int) (maxBlockSize / averageRecordSize)
         || numberOfRecords % NUMBER_OF_RECORDS_TO_ESTIMATE_RECORD_SIZE == 0) {
       averageRecordSize = (long) (averageRecordSize * 0.8 + sizeEstimator.sizeEstimate(record) * 0.2);
@@ -664,23 +658,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
   }
 
-  protected HoodieLogBlock.HoodieLogBlockType pickLogDataBlockFormat() {
-    Option<HoodieLogBlock.HoodieLogBlockType> logBlockTypeOpt = config.getLogDataBlockFormat();
-    if (logBlockTypeOpt.isPresent()) {
-      return logBlockTypeOpt.get();
-    }
-
-    // Fallback to deduce data-block type based on the base file format
-    switch (hoodieTable.getBaseFileFormat()) {
-      case PARQUET:
-      case ORC:
-        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
-      case HFILE:
-        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
-      default:
-        throw new HoodieException("Base file format " + hoodieTable.getBaseFileFormat()
-            + " does not have associated log block type");
-    }
+  protected HoodieLogBlock.HoodieLogBlockType getLogBlockType() {
+    return CommonClientUtils.getLogBlockType(config, hoodieTable.getMetaClient().getTableConfig());
   }
 
   private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header,

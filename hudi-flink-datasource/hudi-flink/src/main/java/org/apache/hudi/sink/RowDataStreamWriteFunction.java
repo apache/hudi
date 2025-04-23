@@ -18,22 +18,17 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
-import org.apache.hudi.client.model.HoodieFlinkRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.HoodieRecordUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
@@ -43,23 +38,18 @@ import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
+import org.apache.hudi.sink.transform.RecordConverter;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
-import org.apache.hudi.util.OrderingValueExtractor;
-import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
-import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
-import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
@@ -67,6 +57,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -130,8 +121,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
   protected final RowDataKeyGen keyGen;
 
-  protected final OrderingValueExtractor orderingValueExtractor;
-
   /**
    * Total size tracer.
    */
@@ -144,6 +133,8 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
   protected transient MemorySegmentPool memorySegmentPool;
 
+  protected transient RecordConverter recordConverter;
+
   /**
    * Constructs a StreamingSinkFunction.
    *
@@ -153,7 +144,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     super(config);
     this.rowType = rowType;
     this.keyGen = RowDataKeyGen.instance(config, rowType);
-    this.orderingValueExtractor = getOrderingValueExtractor(config, rowType);
   }
 
   @Override
@@ -162,6 +152,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     initBuffer();
     initWriteFunction();
     initMergeClass();
+    initRecordConverter();
     registerMetrics();
   }
 
@@ -227,6 +218,10 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     }
   }
 
+  private void initRecordConverter() {
+    this.recordConverter = RecordConverter.getInstance(keyGen);
+  }
+
   private void initMergeClass() {
     recordMerger = HoodieRecordUtils.mergerToPreCombineMode(writeClient.getConfig().getRecordMerger());
     LOG.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
@@ -279,19 +274,21 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
         RowKind.fromByteValue(HoodieOperation.fromName(record.getOperationType()).getValue()));
     final String bucketID = getBucketID(record.getPartitionPath(), record.getFileId());
 
+    // 1. try buffer the record into the memory pool
     boolean success = doBufferRecord(bucketID, record);
-    // 1. flushing bucket for memory pool is full.
     if (!success) {
+      // 2. flushes the bucket if the memory pool is full
       RowDataBucket bucketToFlush = this.buckets.values().stream()
           .max(Comparator.comparingLong(RowDataBucket::getBufferSize))
           .orElseThrow(NoSuchElementException::new);
       if (flushBucket(bucketToFlush)) {
+        // 2.1 flushes the data bucket with maximum size
         this.tracer.countDown(bucketToFlush.getBufferSize());
         disposeBucket(bucketToFlush);
       } else {
         LOG.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
       }
-      // try write row again
+      // 2.2 try to write row again
       success = doBufferRecord(bucketID, record);
       if (!success) {
         throw new RuntimeException("Buffer is too small to hold a single record.");
@@ -299,7 +296,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     }
     RowDataBucket bucket = this.buckets.get(bucketID);
     this.tracer.trace(bucket.getLastRecordSize());
-    // 2. flushing bucket for bucket is full.
+    // 3. flushes the bucket if it is full
     if (bucket.isFull()) {
       if (flushBucket(bucket)) {
         this.tracer.countDown(bucket.getBufferSize());
@@ -405,12 +402,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     writeMetrics.resetAfterCommit();
   }
 
-  private void registerMetrics() {
-    MetricGroup metrics = getRuntimeContext().getMetricGroup();
-    writeMetrics = new FlinkStreamWriteMetrics(metrics);
-    writeMetrics.registerMetrics();
-  }
-
   protected List<WriteStatus> writeRecords(
       String instant,
       RowDataBucket rowDataBucket) {
@@ -420,20 +411,12 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
         new MutableIteratorWrapperIterator<>(
             rowDataBucket.getDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()));
     Iterator<HoodieRecord> recordItr = new MappingIterator<>(
-        rowItr, rowData -> convertToRecord(rowData, rowDataBucket.getBucketInfo()));
+        rowItr, rowData -> recordConverter.convert(rowData, rowDataBucket.getBucketInfo()));
 
     List<WriteStatus> statuses = writeFunction.write(deduplicateRecordsIfNeeded(recordItr), rowDataBucket.getBucketInfo(), instant);
     writeMetrics.endFileFlush();
     writeMetrics.increaseNumOfFilesWritten();
     return statuses;
-  }
-
-  protected HoodieFlinkRecord convertToRecord(RowData dataRow, BucketInfo bucketInfo) {
-    String key = keyGen.getRecordKey(dataRow);
-    Comparable<?> preCombineValue = orderingValueExtractor.getOrderingValue(dataRow);
-    HoodieOperation operation = HoodieOperation.fromValue(dataRow.getRowKind().toByteValue());
-    HoodieKey hoodieKey = new HoodieKey(key, bucketInfo.getPartitionPath());
-    return new HoodieFlinkRecord(hoodieKey, operation, preCombineValue, dataRow);
   }
 
   protected Iterator<HoodieRecord> deduplicateRecordsIfNeeded(Iterator<HoodieRecord> records) {
@@ -445,34 +428,10 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
     }
   }
 
-  private OrderingValueExtractor getOrderingValueExtractor(Configuration conf, RowType rowType) {
-    String preCombineField = OptionsResolver.getPreCombineField(conf);
-    if (StringUtils.isNullOrEmpty(preCombineField)) {
-      // return a dummy extractor.
-      return new OrderingValueExtractor() {
-        @Override
-        public Comparable<?> getOrderingValue(RowData rowData) {
-          return HoodieRecord.DEFAULT_ORDERING_VALUE;
-        }
-      };
-    }
-    int preCombineFieldIdx = rowType.getFieldNames().indexOf(preCombineField);
-    LogicalType fieldType = rowType.getChildren().get(preCombineFieldIdx);
-    RowData.FieldGetter preCombineFieldGetter = RowData.createFieldGetter(fieldType, preCombineFieldIdx);
-
-    // currently the log reader for flink is avro reader, and it merges records based on ordering value
-    // in form of AVRO format, so here we align the data format with reader.
-    // TODO refactor this after RowData reader is supported, HUDI-9146.
-    RowDataToAvroConverters.RowDataToAvroConverter fieldConverter =
-        RowDataToAvroConverters.createConverter(fieldType, conf.get(FlinkOptions.WRITE_UTC_TIMEZONE));
-    Schema fieldSchema = AvroSchemaConverter.convertToSchema(fieldType, preCombineField);
-    return new OrderingValueExtractor() {
-      @Override
-      public Comparable<?> getOrderingValue(RowData rowData) {
-        return (Comparable<?>) HoodieAvroUtils.convertValueForSpecificDataTypes(
-            fieldSchema, fieldConverter.convert(fieldSchema, preCombineFieldGetter.getFieldOrNull(rowData)), false);
-      }
-    };
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    writeMetrics = new FlinkStreamWriteMetrics(metrics);
+    writeMetrics.registerMetrics();
   }
 
   // -------------------------------------------------------------------------
@@ -489,14 +448,21 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
           new MutableIteratorWrapperIterator<>(
               entry.getValue().getDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()));
       while (rowItr.hasNext()) {
-        records.add(convertToRecord(rowItr.next(), entry.getValue().getBucketInfo()));
+        records.add(recordConverter.convert(rowItr.next(), entry.getValue().getBucketInfo()));
       }
       ret.put(entry.getKey(), records);
     }
     return ret;
   }
 
-  protected interface WriteFunction {
+  // -------------------------------------------------------------------------
+  //  Inner Classes
+  // -------------------------------------------------------------------------
+
+  /**
+   * Write function to trigger the actual write action.
+   */
+  protected interface WriteFunction extends Serializable {
     List<WriteStatus> write(Iterator<HoodieRecord> records, BucketInfo bucketInfo, String instant);
   }
 }

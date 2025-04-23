@@ -221,11 +221,11 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   }
 
   public TypedProperties getProps() {
-    return new TypedProperties(hoodieConfig.getProps());
+    return TypedProperties.copy(hoodieConfig.getProps());
   }
 
   public TypedProperties getProps(boolean includeGlobalProps) {
-    return new TypedProperties(hoodieConfig.getProps(includeGlobalProps));
+    return TypedProperties.copy(hoodieConfig.getProps(includeGlobalProps));
   }
 
   private static Option<StoragePath> getConfPathFromEnv() {

@@ -973,16 +973,15 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         }
         ArrayList<CombineFileSplit> combineFileSplits = new ArrayList<>();
         HoodieCombineRealtimeFileSplit.Builder builder = new HoodieCombineRealtimeFileSplit.Builder();
-        int counter = 0;
+        long counter = 0;
         for (int pos = 0; pos < splits.length; pos++) {
-          if (counter == maxSize - 1 || pos == splits.length - 1) {
-            builder.addSplit((FileSplit) splits[pos]);
+          InputSplit split = splits[pos];
+          counter += split.getLength();
+          builder.addSplit((FileSplit) split);
+          if (counter >= maxSize || pos == splits.length - 1) {
             combineFileSplits.add(builder.build(job));
             builder = new HoodieCombineRealtimeFileSplit.Builder();
             counter = 0;
-          } else if (counter < maxSize) {
-            counter++;
-            builder.addSplit((FileSplit) splits[pos]);
           }
         }
         return combineFileSplits.toArray(new CombineFileSplit[combineFileSplits.size()]);

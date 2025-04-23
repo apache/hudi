@@ -446,7 +446,7 @@ trait ProvidesHoodieConfig extends Logging {
                           extraOptions: Map[String, String] = Map.empty): HiveSyncConfig = {
     val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
-    val props = new TypedProperties(toProperties(combinedOpts))
+    val props = toProperties(combinedOpts)
 
     // Enable the hive sync by default if spark have enable the hive metastore.
     val enableHive = isUsingHiveCatalog(sparkSession)

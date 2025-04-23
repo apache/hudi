@@ -22,12 +22,15 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -88,6 +91,29 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
   }
 
   /**
+   * Create a parquet RowData writer on a given storage path.
+   *
+   * @param instantTime instant time to write
+   * @param storagePath file storage path
+   * @param config Hoodie configuration
+   * @param schema write schema
+   * @param taskContextSupplier task context supplier
+   * @return A RowData parquet writer
+   */
+  @Override
+  protected HoodieFileWriter newParquetFileWriter(
+      String instantTime,
+      StoragePath storagePath,
+      HoodieConfig config,
+      Schema schema,
+      TaskContextSupplier taskContextSupplier) throws IOException {
+    final DataType rowDataType = AvroSchemaConverter.convertToDataType(schema);
+    final RowType rowType = (RowType) rowDataType.getLogicalType();
+    Configuration conf = storage.getConf().unwrapAs(Configuration.class);
+    return newParquetInternalRowFileWriter(new Path(storagePath.toUri()), (HoodieWriteConfig) config, rowType, conf);
+  }
+
+  /**
    * Factory method to assist in instantiating an instance of {@link HoodieRowDataFileWriter}.
    *
    * @param path        path of the RowFileWriter.
@@ -102,21 +128,26 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetInternalRowFileWriter(path, config, schema, hoodieTable);
+      Configuration conf = (Configuration) hoodieTable.getStorageConf().unwrap();
+      return newParquetInternalRowFileWriter(path, config, schema, conf);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
   private static HoodieRowDataFileWriter newParquetInternalRowFileWriter(
-      Path path, HoodieWriteConfig writeConfig, RowType rowType, HoodieTable table)
+      Path path, HoodieWriteConfig writeConfig, RowType rowType, Configuration conf)
       throws IOException {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(
         writeConfig.getBloomFilterNumEntries(),
         writeConfig.getBloomFilterFPP(),
         writeConfig.getDynamicBloomFilterMaxNumEntries(),
         writeConfig.getBloomFilterType());
-    HoodieRowDataParquetWriteSupport writeSupport =
-        new HoodieRowDataParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), rowType, filter);
+
+    HoodieRowDataParquetWriteSupport writeSupport = (HoodieRowDataParquetWriteSupport) ReflectionUtils.loadClass(
+        writeConfig.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS),
+        new Class<?>[] {Configuration.class, RowType.class, BloomFilter.class},
+        conf, rowType, filter);
+
     return new HoodieRowDataParquetWriter(
         convertToStoragePath(path),
         new HoodieParquetConfig<>(
