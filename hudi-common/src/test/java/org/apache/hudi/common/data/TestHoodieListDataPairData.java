@@ -153,10 +153,10 @@ public class TestHoodieListDataPairData {
 
   @Test
   void testReduceByKeyWithCloseableInput() {
-    List<WrappedIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
+    List<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
     HoodiePairData<Integer, Integer> data = HoodieListData.lazy(Arrays.asList(1, 1, 1))
         .flatMapToPair(key -> {
-          WrappedIterator<Pair<Integer, Integer>> iter = new WrappedIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
+          CloseValidationIterator<Pair<Integer, Integer>> iter = new CloseValidationIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
           createdIterators.add(iter);
           return iter;
         });
@@ -167,10 +167,10 @@ public class TestHoodieListDataPairData {
 
   @Test
   void testLeftOuterJoinWithCloseableInput() {
-    List<WrappedIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
+    List<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
     HoodiePairData<Integer, Integer> dataToJoin = HoodieListData.lazy(Arrays.asList(1, 2, 3))
         .flatMapToPair(key -> {
-          WrappedIterator<Pair<Integer, Integer>> iter = new WrappedIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
+          CloseValidationIterator<Pair<Integer, Integer>> iter = new CloseValidationIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
           createdIterators.add(iter);
           return iter;
         });
@@ -182,10 +182,10 @@ public class TestHoodieListDataPairData {
 
   @Test
   void testJoinWithCloseableInput() {
-    List<WrappedIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
+    List<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
     HoodiePairData<Integer, Integer> dataToJoin = HoodieListData.lazy(Arrays.asList(1, 2, 3))
         .flatMapToPair(key -> {
-          WrappedIterator<Pair<Integer, Integer>> iter = new WrappedIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
+          CloseValidationIterator<Pair<Integer, Integer>> iter = new CloseValidationIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
           createdIterators.add(iter);
           return iter;
         });

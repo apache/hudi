@@ -27,11 +27,11 @@ import java.util.Iterator;
  * Implementation of a {@link ClosableIterator} to help validate that the close method is properly called.
  * @param <T> type of record within the iterator
  */
-class WrappedIterator<T> implements ClosableIterator<T> {
+class CloseValidationIterator<T> implements ClosableIterator<T> {
   private final Iterator<T> inner;
   private boolean isClosed = false;
 
-  public WrappedIterator(Iterator<T> inner) {
+  public CloseValidationIterator(Iterator<T> inner) {
     this.inner = inner;
   }
 
