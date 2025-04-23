@@ -30,15 +30,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * All the metadata that gets stored along with a commit.
- * ******** IMPORTANT ********
- * For any newly added/removed data fields, make sure we have the same definition in
- * src/main/avro/HoodieReplaceCommitMetadata.avsc file!!!!!
+ * Represents replace commit metadata.
  *
- * For any newly added subclass, make sure we add corresponding handler in
- * org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2#deserialize method.
- * ***************************
+ * @deprecated As of Hudi version 1.1.0
+ * Please use the standard Avro-generated model
+ * {@link org.apache.hudi.avro.model.HoodieReplaceCommitMetadata} instead.
+ * This class may be removed in a future release.
  */
+@Deprecated // we should only rely on their avro counterpart completely.
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieReplaceCommitMetadata.class);
