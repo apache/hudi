@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
