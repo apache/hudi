@@ -21,7 +21,7 @@ package org.apache.hudi.common.table.read
 
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
-import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode}
+import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
@@ -32,10 +32,11 @@ import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFil
 import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.keygen.CustomKeyGenerator
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
-import org.apache.avro.Schema
+import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
@@ -48,6 +49,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.mockito.Mockito
+import org.mockito.Mockito.when
 
 import java.util
 
@@ -269,6 +271,46 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       HOption.of(row), metadataMap, avroSchema, HOption.of(orderingColumn)))
     assertEquals(expectedOrderingValue,
       metadataMap.get(HoodieReaderContext.INTERNAL_META_ORDERING_FIELD))
+  }
+
+  @Test
+  def getRecordKeyFromMetadataFields(): Unit = {
+    val reader = Mockito.mock(classOf[SparkParquetReader])
+    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
+    val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
+    when(tableConfig.populateMetaFields()).thenReturn(true)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
+    val schema = SchemaBuilder.builder()
+      .record("test")
+      .fields()
+      .requiredString(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+      .optionalString("field2")
+      .endRecord()
+    val key = "my_key"
+    val row = InternalRow.fromSeq(Seq(UTF8String.fromString(key), UTF8String.fromString("value2")))
+    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
+  }
+
+  @Test
+  def getRecordKeyWithKeyGen (): Unit = {
+    val reader = Mockito.mock(classOf[SparkParquetReader])
+    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
+    when(tableConfig.populateMetaFields()).thenReturn(false)
+    when(tableConfig.getKeyGeneratorClassName).thenReturn(classOf[CustomKeyGenerator].getName)
+    val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
+    val props = new TypedProperties
+    props.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "field1,field2")
+    when(tableConfig.getProps).thenReturn(props)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
+    val schema = SchemaBuilder.builder()
+      .record("test")
+      .fields()
+      .requiredString("field1")
+      .optionalString("field2")
+      .endRecord()
+    val key = "field1:compound,field2:key"
+    val row = InternalRow.fromSeq(Seq(UTF8String.fromString("compound"), UTF8String.fromString("key")))
+    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
   }
 }
 

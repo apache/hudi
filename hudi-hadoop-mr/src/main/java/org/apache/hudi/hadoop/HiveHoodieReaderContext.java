@@ -37,8 +37,6 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
-import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -81,7 +79,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
  * {@link HoodieReaderContext} for Hive-specific {@link HoodieFileGroupReaderBasedRecordReader}.
@@ -94,9 +91,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   private final List<String> partitionCols;
   private final Set<String> partitionColSet;
-  private final BaseKeyGenerator keyGenerator;
+
+  private final String recordKeyField;
 
   protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
+                                    String recordKeyField,
                                     List<String> partitionCols,
                                     ObjectInspectorCache objectInspectorCache,
                                     StorageConfiguration<?> storageConfiguration,
@@ -105,9 +104,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
+    this.recordKeyField = recordKeyField;
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
-    this.keyGenerator = metaFieldsPopulated ? null : buildKeyGenerator(tableConfig);
   }
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
@@ -130,11 +129,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   protected String getKeyGenClass(HoodieTableConfig tableConfig) {
-    String keyGeneratorClassName = tableConfig.getKeyGeneratorClassName();
-    if (keyGeneratorClassName == null) {
-      return tableConfig.isTablePartitioned() ? KeyGeneratorType.SIMPLE_AVRO.getClassName() : KeyGeneratorType.NON_PARTITION_AVRO.getClassName();
-    }
-    return KeyGeneratorType.fromClassName(keyGeneratorClassName).getAvroImplementation().getClassName();
+    throw new UnsupportedOperationException("KeyGen classes are not available in the Hive reader.");
   }
 
   @Override
@@ -215,10 +210,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   public String getRecordKey(ArrayWritable record, Schema schema) {
-    if (metaFieldsPopulated) {
-      return getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
-    }
-    return keyGenerator.getRecordKey(convertToAvroRecord(record, schema));
+    return getValue(record, schema, recordKeyField).toString();
   }
 
   @Override

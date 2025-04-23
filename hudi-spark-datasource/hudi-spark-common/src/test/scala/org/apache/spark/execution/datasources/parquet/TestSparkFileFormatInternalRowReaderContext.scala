@@ -100,44 +100,6 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
       sparkReaderContext.convertValueToEngineType(UTF8String.fromString(stringValue)))
   }
 
-  @Test
-  def getRecordKeyFromMetadataFields(): Unit = {
-    val reader = Mockito.mock(classOf[SparkParquetReader])
-    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
-    when(tableConfig.populateMetaFields()).thenReturn(true)
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
-    val schema = SchemaBuilder.builder()
-      .record("test")
-      .fields()
-      .requiredString(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-      .optionalString("field2")
-      .endRecord()
-    val key = "my_key"
-    val row = InternalRow.fromSeq(Seq(key, "value2"))
-    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
-  }
-
-  @Test
-  def getRecordKeyWithKeyGen (): Unit = {
-    val reader = Mockito.mock(classOf[SparkParquetReader])
-    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
-    when(tableConfig.populateMetaFields()).thenReturn(false)
-    when(tableConfig.getKeyGeneratorClassName).thenReturn(classOf[CustomKeyGenerator].getName)
-    val props = new TypedProperties
-    props.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "field1,field2")
-    when(tableConfig.getProps).thenReturn(props)
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
-    val schema = SchemaBuilder.builder()
-      .record("test")
-      .fields()
-      .requiredString("field1")
-      .optionalString("field2")
-      .endRecord()
-    val key = "compound,key"
-    val row = InternalRow.fromSeq(Seq("compound", "key"))
-    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
-  }
-
   @ParameterizedTest
   @ValueSource(booleans = Array(false, true))
   def getKeyGeneratorClassDefaults(isPartitioned: Boolean): Unit = {

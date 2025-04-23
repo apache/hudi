@@ -48,6 +48,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getRecordKeyField;
 import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getStoredPartitionFieldNames;
 
 public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJavaTestBase<ArrayWritable> {
@@ -93,7 +94,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = (inputSplit, jobConf) -> new MapredParquetInputFormat().getRecordReader(inputSplit, jobConf, null);
     JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
     setupJobconf(jobConf);
-    return new HiveHoodieReaderContext(readerCreator,
+    return new HiveHoodieReaderContext(readerCreator, getRecordKeyField(metaClient),
         getStoredPartitionFieldNames(new JobConf(storageConf.unwrapAs(Configuration.class)), avroSchema),
         new ObjectInspectorCache(avroSchema, jobConf), storageConf, metaClient.getTableConfig());
   }
