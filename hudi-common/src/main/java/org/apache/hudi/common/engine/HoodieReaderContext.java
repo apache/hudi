@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
+import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
 
@@ -263,7 +264,22 @@ public abstract class HoodieReaderContext<T> {
    * @param schema The Avro schema of the record.
    * @return The record key in String.
    */
-  public abstract String getRecordKey(T record, Schema schema);
+  public String getRecordKey(T record, Schema schema) {
+    if (metaFieldsPopulated) {
+      Object val = getValue(record, schema, RECORD_KEY_METADATA_FIELD);
+      return val.toString();
+    }
+    return getVirtualRecordKey(record, schema);
+  }
+
+  /**
+   * Computes the record key using the key generator specified for this table.
+   * This method should only be used when the record key metadata field is not populated because it is more expensive.
+   * @param record The record in engine-specific type.
+   * @param schema The Avro schema of the record.
+   * @return The computed record key in String.
+   */
+  protected abstract String getVirtualRecordKey(T record, Schema schema);
 
   /**
    * Gets the ordering value in particular type.

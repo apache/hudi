@@ -136,7 +136,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           initialRecords, initialRecords);
 
       // Two commits; reading one file group containing a base file and a log file
-      List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 90);
+      List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       List<HoodieRecord> allRecords = mergeRecordLists(updates, initialRecords);
       List<HoodieRecord> unmergedRecords = CollectionUtils.combine(initialRecords, updates);
       commitToTable(updates, UPSERT.value(), writeConfigs);

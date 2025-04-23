@@ -56,7 +56,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -145,10 +144,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public String getRecordKey(IndexedRecord record, Schema schema) {
-    if (metaFieldsPopulated) {
-      return getFieldValueFromIndexedRecord(record, schema, RECORD_KEY_METADATA_FIELD).toString();
-    }
+  protected String getVirtualRecordKey(IndexedRecord record, Schema schema) {
     return keyGenerator.getRecordKey((GenericRecord) record);
   }
 

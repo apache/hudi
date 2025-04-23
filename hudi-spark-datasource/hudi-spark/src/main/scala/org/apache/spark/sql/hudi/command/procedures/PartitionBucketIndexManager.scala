@@ -227,7 +227,7 @@ class PartitionBucketIndexManager extends BaseProcedure
           val internalSchemaOption: Option[InternalSchema] = Option.empty()
           // instantiate FG reader
           val fileGroupReader = new HoodieFileGroupReader(
-            readerContextFactory.getContext(metaClient.getTableConfig),
+            readerContextFactory.getContext(),
             metaClient.getStorage,
             basePath.toString,
             latestInstantTime.requestedTime(),

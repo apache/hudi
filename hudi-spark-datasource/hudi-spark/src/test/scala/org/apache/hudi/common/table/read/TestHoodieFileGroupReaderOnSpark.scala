@@ -292,7 +292,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   }
 
   @Test
-  def getRecordKeyWithKeyGen (): Unit = {
+  def getRecordKeyWithKeyGen(): Unit = {
     val reader = Mockito.mock(classOf[SparkParquetReader])
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     when(tableConfig.populateMetaFields()).thenReturn(false)

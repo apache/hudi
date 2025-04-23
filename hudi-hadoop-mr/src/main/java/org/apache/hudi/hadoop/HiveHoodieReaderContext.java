@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
@@ -129,7 +130,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   protected String getKeyGenClass(HoodieTableConfig tableConfig) {
-    throw new UnsupportedOperationException("KeyGen classes are not available in the Hive reader.");
+    throw new HoodieNotSupportedException("KeyGen classes are not available in the Hive reader.");
   }
 
   @Override
@@ -209,7 +210,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public String getRecordKey(ArrayWritable record, Schema schema) {
+  protected String getVirtualRecordKey(ArrayWritable record, Schema schema) {
     return getValue(record, schema, recordKeyField).toString();
   }
 

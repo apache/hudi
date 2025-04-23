@@ -93,7 +93,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
   public HoodieReaderContext<ArrayWritable> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient) {
     HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = (inputSplit, jobConf) -> new MapredParquetInputFormat().getRecordReader(inputSplit, jobConf, null);
     JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
-    setupJobconf(jobConf);
+    setupJobconf(jobConf, metaClient.getTableConfig().populateMetaFields());
     return new HiveHoodieReaderContext(readerCreator, getRecordKeyField(metaClient),
         getStoredPartitionFieldNames(new JobConf(storageConf.unwrapAs(Configuration.class)), avroSchema),
         new ObjectInspectorCache(avroSchema, jobConf), storageConf, metaClient.getTableConfig());
@@ -104,11 +104,12 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     ArrayWritableTestUtil.assertArrayWritableEqual(schema, expected, actual, false);
   }
 
-  private void setupJobconf(JobConf jobConf) {
-    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA);
+  private void setupJobconf(JobConf jobConf, boolean populateMetaFields) {
+    Schema schema = populateMetaFields ? HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA) : HoodieTestDataGenerator.AVRO_SCHEMA;
     List<Schema.Field> fields = schema.getFields();
     setHiveColumnNameProps(fields, jobConf, USE_FAKE_PARTITION);
-    jobConf.set("columns.types","string,string,string,string,string," + HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES + ",string");
+    String metaFieldTypes = "string,string,string,string,string,";
+    jobConf.set("columns.types", (populateMetaFields ? metaFieldTypes : "") + HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES + ",string");
   }
 
   private void setHiveColumnNameProps(List<Schema.Field> fields, JobConf jobConf, boolean isPartitioned) {

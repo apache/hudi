@@ -471,7 +471,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
         // instantiate FG reader
         HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
-        HoodieReaderContext<InternalRow> readerContext = readerContextFactory.getContext(metaClient.getTableConfig());
+        HoodieReaderContext<InternalRow> readerContext = readerContextFactory.getContext();
         HoodieFileGroupReader<InternalRow> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
             metaClient.getStorage().newInstance(new StoragePath(basePath), readerContext.getStorageConfiguration()),
             basePath, instantTime, fileSlice, readerSchema, readerSchema, internalSchemaOption,

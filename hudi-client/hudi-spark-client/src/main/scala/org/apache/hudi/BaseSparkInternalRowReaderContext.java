@@ -49,7 +49,6 @@ import java.util.function.UnaryOperator;
 import scala.Function1;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
 /**
@@ -103,12 +102,9 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public String getRecordKey(InternalRow row, Schema schema) {
-    if (metaFieldsPopulated) {
-      return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
-    }
+  protected String getVirtualRecordKey(InternalRow record, Schema schema) {
     StructType structType = getCachedSchema(schema);
-    return keyGenerator.getRecordKey(row, structType).toString();
+    return keyGenerator.getRecordKey(record, structType).toString();
   }
 
   @Override
