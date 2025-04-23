@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -38,18 +39,20 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.RowProjection;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowProjection;
 import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
@@ -57,22 +60,22 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
-import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
  * Implementation of {@link HoodieReaderContext} to read {@link RowData}s from base files or
  * log files with Flink parquet reader.
  */
 public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
+  private final Map<Schema, RowDataKeyGen> keyGenCache;
   private final List<Predicate> predicates;
   private final Supplier<InternalSchemaManager> internalSchemaManager;
   private RowDataSerializer rowDataSerializer;
@@ -81,11 +84,13 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   public FlinkRowDataReaderContext(
       StorageConfiguration<?> storageConfiguration,
       Supplier<InternalSchemaManager> internalSchemaManager,
-      List<Predicate> predicates) {
-    super(storageConfiguration);
+      List<Predicate> predicates,
+      HoodieTableConfig tableConfig) {
+    super(storageConfiguration, tableConfig.populateMetaFields());
     this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;
     this.utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
+    keyGenCache = metaFieldsPopulated ? null : new HashMap<>(); // only allocate map if required
   }
 
   @Override
@@ -143,8 +148,11 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public String getRecordKey(RowData record, Schema schema) {
-    return Objects.toString(getValue(record, schema, RECORD_KEY_METADATA_FIELD));
+  protected String getVirtualRecordKey(RowData record, Schema providedSchema) {
+    return keyGenCache.computeIfAbsent(providedSchema, schema -> {
+      RowType rowType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(schema).getRowType().getLogicalType();
+      return RowDataKeyGen.instance(getStorageConfiguration().unwrapAs(Configuration.class), rowType);
+    }).getRecordKey(record);
   }
 
   @Override

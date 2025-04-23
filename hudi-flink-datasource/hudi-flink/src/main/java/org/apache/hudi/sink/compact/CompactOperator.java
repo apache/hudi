@@ -185,7 +185,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       Supplier<InternalSchemaManager> internalSchemaManager = () -> InternalSchemaManager.get(conf, metaClient);
       // initialize storage conf lazily.
       StorageConfiguration<?> readerConf = StreamerUtil.storageConfForFileGroupReader(writeClient.getEngineContext().getStorageConf(), conf);
-      return Option.of(new FlinkRowDataReaderContext(readerConf, internalSchemaManager, Collections.emptyList()));
+      return Option.of(new FlinkRowDataReaderContext(readerConf, internalSchemaManager, Collections.emptyList(), metaClient.getTableConfig()));
     }
     return Option.empty();
   }

@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
@@ -126,11 +125,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNames);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, requiredSchema.getFields()
         .stream().map(f -> String.valueOf(dataSchema.getField(f.name()).pos())).collect(Collectors.joining(",")));
-  }
-
-  @Override
-  protected String getKeyGenClass(HoodieTableConfig tableConfig) {
-    throw new HoodieNotSupportedException("KeyGen classes are not available in the Hive reader.");
   }
 
   @Override

@@ -94,7 +94,9 @@ public abstract class HoodieReaderContext<T> {
     return (BaseKeyGenerator) ReflectionUtils.loadClass(getKeyGenClass(tableConfig), properties);
   }
 
-  protected abstract String getKeyGenClass(HoodieTableConfig tableConfig);
+  protected String getKeyGenClass(HoodieTableConfig tableConfig) {
+    return tableConfig.getKeyGeneratorClassName();
+  }
 
   // Getter and Setter for schemaHandler
   public FileGroupReaderSchemaHandler<T> getSchemaHandler() {
