@@ -176,6 +176,25 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                 Option<StoragePath> dataFilePath,
                                                                 HoodieIndexDefinition indexDefinition,
                                                                 String instantTime) throws Exception {
+    HoodieFileSliceReader fileSliceReader =
+        getFileSliceReader(metaClient, engineType, logFilePaths, tableSchema, partition, dataFilePath, instantTime);
+    // Collect the records from the iterator in a map by record key to secondary key
+    Map<String, String> recordKeyToSecondaryKey = new HashMap<>();
+    while (fileSliceReader.hasNext()) {
+      HoodieRecord record = (HoodieRecord) fileSliceReader.next();
+      String secondaryKey = getSecondaryKey(record, tableSchema, indexDefinition);
+      if (secondaryKey != null) {
+        // no delete records here
+        recordKeyToSecondaryKey.put(record.getRecordKey(tableSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD), secondaryKey);
+      }
+    }
+    return recordKeyToSecondaryKey;
+  }
+
+  private static HoodieFileSliceReader getFileSliceReader(
+      HoodieTableMetaClient metaClient, EngineType engineType,
+      List<String> logFilePaths, Schema tableSchema, String partition,
+      Option<StoragePath> dataFilePath, String instantTime) throws IOException {
     final String basePath = metaClient.getBasePath().toString();
     final StorageConfiguration<?> storageConf = metaClient.getStorageConf();
 
@@ -207,19 +226,8 @@ public class SecondaryIndexRecordGenerationUtils {
     if (dataFilePath.isPresent()) {
       baseFileReader = Option.of(HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType()).getFileReader(getReaderConfigs(storageConf), dataFilePath.get()));
     }
-    HoodieFileSliceReader fileSliceReader = new HoodieFileSliceReader(baseFileReader, mergedLogRecordScanner, tableSchema, metaClient.getTableConfig().getPreCombineField(), recordMerger,
+    return new HoodieFileSliceReader(baseFileReader, mergedLogRecordScanner, tableSchema, metaClient.getTableConfig().getPreCombineField(), recordMerger,
         metaClient.getTableConfig().getProps(), Option.empty(), Option.empty());
-    // Collect the records from the iterator in a map by record key to secondary key
-    Map<String, String> recordKeyToSecondaryKey = new HashMap<>();
-    while (fileSliceReader.hasNext()) {
-      HoodieRecord record = (HoodieRecord) fileSliceReader.next();
-      String secondaryKey = getSecondaryKey(record, tableSchema, indexDefinition);
-      if (secondaryKey != null) {
-        // no delete records here
-        recordKeyToSecondaryKey.put(record.getRecordKey(tableSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD), secondaryKey);
-      }
-    }
-    return recordKeyToSecondaryKey;
   }
 
   private static String getSecondaryKey(HoodieRecord record, Schema tableSchema, HoodieIndexDefinition indexDefinition) {
@@ -277,41 +285,8 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                               Option<StoragePath> dataFilePath,
                                                                               HoodieIndexDefinition indexDefinition,
                                                                               String instantTime) throws Exception {
-    final String basePath = metaClient.getBasePath().toString();
-    final StorageConfiguration<?> storageConf = metaClient.getStorageConf();
-
-    HoodieRecordMerger recordMerger = HoodieRecordUtils.createRecordMerger(
-        basePath,
-        engineType,
-        Collections.emptyList(),
-        metaClient.getTableConfig().getRecordMergeStrategyId());
-
-    HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(metaClient.getStorage())
-        .withBasePath(metaClient.getBasePath())
-        .withLogFilePaths(logFilePaths)
-        .withReaderSchema(tableSchema)
-        .withLatestInstantTime(instantTime)
-        .withReverseReader(false)
-        .withMaxMemorySizeInBytes(storageConf.getLong(MAX_MEMORY_FOR_COMPACTION.key(), DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES))
-        .withBufferSize(HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue())
-        .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath())
-        .withPartition(partition)
-        .withOptimizedLogBlocksScan(storageConf.getBoolean("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN, false))
-        .withDiskMapType(storageConf.getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()))
-        .withBitCaskDiskMapCompressionEnabled(storageConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
-        .withRecordMerger(recordMerger)
-        .withTableMetaClient(metaClient)
-        .build();
-
-    Option<HoodieFileReader> baseFileReader = Option.empty();
-    if (dataFilePath.isPresent()) {
-      baseFileReader = Option.of(HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType()).getFileReader(getReaderConfigs(storageConf), dataFilePath.get()));
-    }
-    HoodieFileSliceReader fileSliceReader = new HoodieFileSliceReader(baseFileReader, mergedLogRecordScanner, tableSchema, metaClient.getTableConfig().getPreCombineField(), recordMerger,
-        metaClient.getTableConfig().getProps(),
-        Option.empty(), Option.empty());
-    ClosableIterator<HoodieRecord> fileSliceIterator = ClosableIterator.wrap(fileSliceReader);
+    ClosableIterator<HoodieRecord> fileSliceIterator = ClosableIterator.wrap(
+        getFileSliceReader(metaClient, engineType, logFilePaths, tableSchema, partition, dataFilePath, instantTime));
     return new ClosableIterator<HoodieRecord>() {
       private HoodieRecord nextValidRecord;
 
