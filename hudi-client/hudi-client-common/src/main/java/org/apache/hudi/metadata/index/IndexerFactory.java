@@ -89,8 +89,8 @@ public class IndexerFactory {
     }
     return Arrays.stream(getValidValues())
         .filter(partitionType -> partitionType.isMetadataPartitionSupported(metaClient)
-            || partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig())
-            || partitionType.isMetadataPartitionAvailable(metaClient))
+            && (partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig())
+            || partitionType.isMetadataPartitionAvailable(metaClient)))
         .collect(Collectors.toMap(
             Function.identity(), type -> IndexerFactory.getIndexBuilder(
                 type, engineContext, dataTableWriteConfig, metaClient, table, indexHelper)));
