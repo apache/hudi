@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.Arrays;
 import java.util.List;
@@ -269,7 +270,8 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
     } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-      writeClient.compact(compactionInstantTime);
+      HoodieWriteMetadata<O> compactionWriteMetadata = writeClient.compact(compactionInstantTime);
+      writeClient.commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.empty(), Option.empty());
     } else if (metadataWriteConfig.isLogCompactionEnabled()) {
       // Schedule and execute log compaction with suffixes based on the same instant time. This ensures that any future
       // delta commits synced over will not have an instant time lesser than the last completed instant on the
@@ -279,7 +281,8 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
         LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
       } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
         LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
-        writeClient.logCompact(logCompactionInstantTime);
+        HoodieWriteMetadata<?> logCompactionWriteMetadata = writeClient.logCompact(logCompactionInstantTime);
+        writeClient.commitLogCompaction(logCompactionInstantTime, logCompactionWriteMetadata.getCommitMetadata().get(), Option.empty());
       }
     }
   }
