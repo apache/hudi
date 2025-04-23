@@ -72,7 +72,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       HoodieTableConfig tableConfig) {
     super(storageConfiguration, tableConfig.populateMetaFields());
     this.payloadClass = tableConfig.getPayloadClass();
-    String keyGenClassName = KeyGeneratorType.fromClassName(tableConfig.getKeyGeneratorClassName()).getAvroImplementation().getClassName();
     this.keyGenerator = metaFieldsPopulated ? null : buildKeyGenerator(tableConfig);
   }
 

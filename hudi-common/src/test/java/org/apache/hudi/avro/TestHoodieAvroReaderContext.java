@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -31,6 +32,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -180,6 +183,20 @@ class TestHoodieAvroReaderContext {
     indexedRecord.put(6, "field2");
     indexedRecord.put(7, 3);
     assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, schemaWithMetaFields));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void getKeyGeneratorClassDefaults(boolean isPartitioned) {
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isTablePartitioned()).thenReturn(isPartitioned);
+    when(tableConfig.getKeyGeneratorClassName()).thenReturn(null);
+    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig);
+    if (isPartitioned) {
+      assertEquals(KeyGeneratorType.SIMPLE_AVRO.getClassName(), avroReaderContext.getKeyGenClass(tableConfig));
+    } else {
+      assertEquals(KeyGeneratorType.NON_PARTITION_AVRO.getClassName(), avroReaderContext.getKeyGenClass(tableConfig));
+    }
   }
 
   private HoodieAvroReaderContext getReaderContextWithMetaFields() {

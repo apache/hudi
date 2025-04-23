@@ -89,7 +89,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  protected String getKeyGenClass(HoodieTableConfig tableConfig) {
+  public String getKeyGenClass(HoodieTableConfig tableConfig) {
     String keyGeneratorClassName = tableConfig.getKeyGeneratorClassName();
     if (keyGeneratorClassName == null) {
       return tableConfig.isTablePartitioned() ? KeyGeneratorType.SIMPLE.getClassName() : KeyGeneratorType.NON_PARTITION.getClassName();

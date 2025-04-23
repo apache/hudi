@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.keygen.CustomKeyGenerator
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 
 import org.apache.avro.SchemaBuilder
 import org.apache.spark.sql.catalyst.InternalRow
@@ -36,6 +37,8 @@ import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito
 import org.mockito.Mockito.when
 
@@ -133,5 +136,18 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
     val key = "compound,key"
     val row = InternalRow.fromSeq(Seq("compound", "key"))
     assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def getKeyGeneratorClassDefaults(isPartitioned: Boolean): Unit = {
+    val reader = Mockito.mock(classOf[SparkParquetReader])
+    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
+    when(tableConfig.populateMetaFields).thenReturn(true)
+    when(tableConfig.isTablePartitioned).thenReturn(isPartitioned)
+    when(tableConfig.getKeyGeneratorClassName).thenReturn(null)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
+    if (isPartitioned) assertEquals(KeyGeneratorType.SIMPLE.getClassName, sparkReaderContext.getKeyGenClass(tableConfig))
+    else assertEquals(KeyGeneratorType.NON_PARTITION.getClassName, sparkReaderContext.getKeyGenClass(tableConfig))
   }
 }
