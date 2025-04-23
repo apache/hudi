@@ -122,8 +122,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
           val writeResponse = client.compact(compactionInstant)
           handleResponse(writeResponse.getCommitMetadata.get())
           val emptyOpt : org.apache.hudi.common.util.Option[HoodieTableMetadataWriter[_, _]] = org.apache.hudi.common.util.Option.empty()
-          client.commitCompaction(compactionInstant, writeResponse.getCommitMetadata.get(), HOption.empty(), Collections.emptyList(),
-            emptyOpt)
+          client.commitCompaction(compactionInstant, writeResponse, HOption.empty(), emptyOpt)
         }
         logInfo(s"Finish Run compaction at instants: [${filteredPendingCompactionInstants.mkString(",")}]," +
           s" spend: ${timer.endTimer()}ms")

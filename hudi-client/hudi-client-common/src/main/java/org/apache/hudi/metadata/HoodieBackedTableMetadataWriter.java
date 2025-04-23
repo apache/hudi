@@ -196,7 +196,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
     this.enabledPartitionTypes = getEnabledPartitions(dataWriteConfig.getMetadataConfig(), dataMetaClient);
     if (writeConfig.isMetadataTableEnabled()) {
-      this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
+      this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, dataMetaClient.getTableConfig().getTableVersion());
       try {
         initRegistry();
         initialized = initializeIfNeeded(dataMetaClient, inflightInstantTimestamp);
@@ -1256,7 +1256,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   @Override
   public void update(HoodieCommitMetadata commitMetadata, String instantTime) {
     mayBeReinitMetadataReader();
-    /*processAndCommit(instantTime, () -> {
+    processAndCommit(instantTime, () -> {
       Map<String, HoodieData<HoodieRecord>> partitionToRecordMap =
           HoodieTableMetadataUtil.convertMetadataToRecords(
               engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient, getTableMetadata(),
@@ -1275,7 +1275,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, instantTime);
       return partitionToRecordMap;
     });
-    closeInternal();*/
+    closeInternal();
   }
 
   /**
@@ -1451,9 +1451,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // The commit which is being rolled back on the dataset
       final String commitToRollbackInstantTime = rollbackMetadata.getCommitsRollback().get(0);
       // The deltacommit that will be rolled back
-      HoodieInstant deltaCommitInstant = metadataMetaClient.createNewInstant(HoodieInstant.State.COMPLETED,
-          HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
-      if (metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().containsInstant(deltaCommitInstant)) {
+      if (metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().containsInstant(commitToRollbackInstantTime)) {
         validateRollback(commitToRollbackInstantTime);
         LOG.info("Rolling back MDT deltacommit {}", commitToRollbackInstantTime);
         if (!getWriteClient().rollback(commitToRollbackInstantTime, instantTime)) {
@@ -1668,7 +1666,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   public void performTableServices(Option<String> inFlightInstantTimestamp, boolean requiresTimelineRefresh) {
     HoodieTimer metadataTableServicesTimer = HoodieTimer.start();
     boolean allTableServicesExecutedSuccessfullyOrSkipped = true;
-    BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient();
+    BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();
     try {
       // Run any pending table services operations and return the active timeline
       HoodieActiveTimeline activeTimeline = runPendingTableServicesOperationsAndRefreshTimeline(metadataMetaClient, writeClient, requiresTimelineRefresh);
@@ -1739,7 +1737,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * 2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
    * deltacommit.
    */
-  void compactIfNecessary(BaseHoodieWriteClient<?,I,?,?> writeClient, Option<String> latestDeltaCommitTimeOpt) {
+  void compactIfNecessary(BaseHoodieWriteClient<?,I,?,O> writeClient, Option<String> latestDeltaCommitTimeOpt) {
     // IMPORTANT: Trigger compaction with max instant time that is smaller than(or equals) the earliest pending instant from DT.
     // The compaction planner will manage to filter out the log files that finished with greater completion time.
     // see BaseHoodieCompactionPlanGenerator.generateCompactionPlan for more details.
@@ -1760,8 +1758,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
     } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-      HoodieWriteMetadata<?> compactionWriteMetadata = writeClient.compact(compactionInstantTime);
-      writeClient.commitCompaction(compactionInstantTime, compactionWriteMetadata.getCommitMetadata().get(), Option.empty(), Collections.emptyList(), Option.empty());
+      HoodieWriteMetadata<O> compactionWriteMetadata = writeClient.compact(compactionInstantTime);
+      writeClient.commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.empty(), Option.empty());
     } else if (metadataWriteConfig.isLogCompactionEnabled()) {
       // Schedule and execute log compaction with new instant time.
       final String logCompactionInstantTime = metadataMetaClient.createNewInstantTime(false);
