@@ -34,7 +34,6 @@ import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.RowType.RowField;
 
-import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
@@ -42,17 +41,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * An implementation of {@link RowProjection} which supports schema evolvable projection on {@link RowData}.
+ * An implementation of {@link RowProjection} which supports schema evolving projection on {@link RowData}.
  */
 public class SchemaEvolvingRowDataProjection implements RowProjection {
   private static final long serialVersionUID = 1L;
 
-  /**
-   * An implementation of {@code ObjectConverter} which return the object itself.
-   */
-  private static final ObjectConverter NOOP_CONVERTER = obj -> obj;
-
-  private final ObjectConverter innerProjection;
+  private final TypeConverters.TypeConverter innerProjection;
 
   public SchemaEvolvingRowDataProjection(RowType from, RowType to, Map<String, String> renamedColumns) {
     this.innerProjection = createProjection(from, to, renamedColumns, new ArrayDeque<>());
@@ -66,7 +60,7 @@ public class SchemaEvolvingRowDataProjection implements RowProjection {
     return new SchemaEvolvingRowDataProjection(from, to, renamedColumns);
   }
 
-  private ObjectConverter createProjection(LogicalType fromType, LogicalType toType, Map<String, String> renamedColumns, Deque<String> fieldNameStack) {
+  private TypeConverters.TypeConverter createProjection(LogicalType fromType, LogicalType toType, Map<String, String> renamedColumns, Deque<String> fieldNameStack) {
     LogicalTypeRoot to = toType.getTypeRoot();
     switch (to) {
       case MAP:
@@ -77,7 +71,7 @@ public class SchemaEvolvingRowDataProjection implements RowProjection {
         return createRowProjection(fromType, toType, renamedColumns, fieldNameStack);
       default:
         if (fromType.equals(toType)) {
-          return NOOP_CONVERTER;
+          return TypeConverters.NOOP_CONVERTER;
         } else {
           // return TypeConverter directly for non-composite type
           return o -> Option.ofNullable(TypeConverters.getInstance(fromType, toType))
@@ -87,12 +81,12 @@ public class SchemaEvolvingRowDataProjection implements RowProjection {
     }
   }
 
-  private ObjectConverter createArrayProjection(LogicalType fromType, LogicalType toType, Map<String, String> renamedColumns, Deque<String> fieldNameStack) {
+  private TypeConverters.TypeConverter createArrayProjection(LogicalType fromType, LogicalType toType, Map<String, String> renamedColumns, Deque<String> fieldNameStack) {
     final LogicalType elementFromType = fromType.getChildren().get(0);
     final LogicalType elementToType = toType.getChildren().get(0);
     final ArrayData.ElementGetter elementGetter = ArrayData.createElementGetter(elementFromType);
     fieldNameStack.push("element");
-    final ObjectConverter elementConverter = createProjection(elementFromType, elementToType, renamedColumns, fieldNameStack);
+    final TypeConverters.TypeConverter elementConverter = createProjection(elementFromType, elementToType, renamedColumns, fieldNameStack);
     fieldNameStack.pop();
     return obj -> {
       ArrayData array = (ArrayData) obj;
@@ -106,7 +100,7 @@ public class SchemaEvolvingRowDataProjection implements RowProjection {
     };
   }
 
-  private ObjectConverter createMapProjection(LogicalType fromType, LogicalType toType, Map<String, String> renamedColumns, Deque<String> fieldNameStack) {
+  private TypeConverters.TypeConverter createMapProjection(LogicalType fromType, LogicalType toType, Map<String, String> renamedColumns, Deque<String> fieldNameStack) {
     // no schema evolution is allowed on the keyType, hence, we only need to care about the valueType
     final LogicalType keyType = fromType.getChildren().get(0);
     final ArrayData.ElementGetter keyElementGetter = ArrayData.createElementGetter(keyType);
@@ -114,7 +108,7 @@ public class SchemaEvolvingRowDataProjection implements RowProjection {
     final LogicalType toValueType = toType.getChildren().get(1);
     final ArrayData.ElementGetter valueElementGetter = ArrayData.createElementGetter(fromValueType);
     fieldNameStack.push("value");
-    final ObjectConverter valueConverter = createProjection(fromValueType, toValueType, renamedColumns, fieldNameStack);
+    final TypeConverters.TypeConverter valueConverter = createProjection(fromValueType, toValueType, renamedColumns, fieldNameStack);
     fieldNameStack.pop();
 
     return obj -> {
@@ -131,13 +125,13 @@ public class SchemaEvolvingRowDataProjection implements RowProjection {
     };
   }
 
-  private ObjectConverter createRowProjection(LogicalType fromType, LogicalType toType, Map<String, String> renamedColumns, Deque<String> fieldNameStack) {
+  private TypeConverters.TypeConverter createRowProjection(LogicalType fromType, LogicalType toType, Map<String, String> renamedColumns, Deque<String> fieldNameStack) {
     RowType fromRowType = (RowType) fromType;
     RowType toRowType = (RowType) toType;
     List<String> fromFieldNames = fromRowType.getFieldNames();
     // index in `from` type for fields of `to`, -1 if the field is new added field, as it does not exist in `from`
     RowData.FieldGetter[] fieldGetters = new RowData.FieldGetter[toRowType.getFieldCount()];
-    ObjectConverter[] objectConverters = new ObjectConverter[toRowType.getFieldCount()];
+    TypeConverters.TypeConverter[] objectConverters = new TypeConverters.TypeConverter[toRowType.getFieldCount()];
     for (int i = 0; i < toRowType.getFieldCount(); i++) {
       RowField field = toRowType.getFields().get(i);
       fieldNameStack.push(field.getName());
@@ -167,16 +161,5 @@ public class SchemaEvolvingRowDataProjection implements RowProjection {
       }
       return result;
     };
-  }
-
-  // -------------------------------------------------------------------------
-  //  Inner Classes
-  // -------------------------------------------------------------------------
-
-  /**
-   * A converter used to convert RowData, e.g., projecting on RowData, or converting the field value to another type.
-   */
-  private interface ObjectConverter extends Serializable {
-    Object convert(Object obj);
   }
 }
