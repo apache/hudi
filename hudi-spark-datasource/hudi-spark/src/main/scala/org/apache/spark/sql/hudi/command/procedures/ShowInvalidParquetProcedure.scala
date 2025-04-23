@@ -68,7 +68,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     val fileStatus = partitionPaths.asScala.flatMap(part => {
       val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
       HadoopFSUtils.getAllDataFilesInPartition(fs, HadoopFSUtils.constructAbsolutePathInHadoopPath(srcPath, part))
-    })
+    }).toList
 
     val parquetRdd = jsc.parallelize(fileStatus, Math.max(fileStatus.size, 1)).filter(fileStatus => {
       if (instantsList.nonEmpty) {
