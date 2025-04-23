@@ -232,7 +232,11 @@ public class S3StorageLockClient implements StorageLockClient {
       // Set all request timeouts to be 1/5 of the default validity.
       // Each call to acquire a lock requires 2 requests.
       // Each renewal requires 1 request.
-      long validityTimeoutSecs = (long) props.getOrDefault(VALIDITY_TIMEOUT_SECONDS.key(), VALIDITY_TIMEOUT_SECONDS.defaultValue());
+      long validityTimeoutSecs =
+          ((Number) props.getOrDefault(
+              VALIDITY_TIMEOUT_SECONDS.key(),
+              VALIDITY_TIMEOUT_SECONDS.defaultValue()
+          )).longValue();
       long s3CallTimeoutSecs = validityTimeoutSecs / 5;
       S3Client s3Client = createS3Client(region, s3CallTimeoutSecs, props);
       if (requiredFallbackRegion) {
