@@ -46,6 +46,6 @@ public class FlinkBulkInsertPreppedCommitActionExecutor<T> extends BaseFlinkComm
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return super.execute(preppedRecords, );
+    return super.execute(preppedRecords);
   }
 }
