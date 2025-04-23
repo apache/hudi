@@ -1435,7 +1435,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public Boolean shouldAutoCommit() {
-    return getBoolean(AUTO_COMMIT_ENABLE);
+    return false;
   }
 
   public boolean shouldUseExternalSchemaTransformation() {
