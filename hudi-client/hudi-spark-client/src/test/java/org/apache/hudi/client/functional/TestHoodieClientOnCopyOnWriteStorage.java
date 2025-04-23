@@ -215,7 +215,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   private final Function<HoodieWriteMetadata, HoodieWriteMetadata<List<WriteStatus>>> clusteringMetadataRdd2List =
-      metadata -> metadata.clone(((JavaRDD)(metadata.getDataTableWriteStatuses())).collect());
+      metadata -> metadata.clone(((JavaRDD)(metadata.getAllWriteStatuses())).collect());
 
   private final Function<HoodieWriteConfig, KeyGenerator> createKeyGenerator =
       config -> HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps());
@@ -1422,7 +1422,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     insertsAndUpdates.addAll(dataGen.generateUpdates(instantTime, inserts));
 
     JavaRDD<HoodieRecord> insertAndUpdatesRDD = jsc.parallelize(insertsAndUpdates, 1);
-    client.commit(instantTime, client.upsert(insertAndUpdatesRDD, instantTime));
+    client.commit(instantTime, client.upsert(insertAndUpdatesRDD, instantTime), Option.empty(), COMMIT_ACTION, Collections.emptyMap());
 
     assertTheEntireDatasetHasAllRecordsStill(expectedRecords);
     return Pair.of(keys, inserts);

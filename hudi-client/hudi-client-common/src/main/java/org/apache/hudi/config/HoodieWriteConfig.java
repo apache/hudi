@@ -2950,8 +2950,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getSecondaryIndexParallelism();
   }
 
-  public boolean getOptimizedWritesEnabled() {
-    return getBoolean(OPTIMIZED_WRITE_DAG);
+  public boolean getOptimizedWritesEnabled(HoodieTableVersion tableVersion) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      return getBoolean(OPTIMIZED_WRITE_DAG);
+    } else {
+      return false;
+    }
   }
 
   public static class Builder {

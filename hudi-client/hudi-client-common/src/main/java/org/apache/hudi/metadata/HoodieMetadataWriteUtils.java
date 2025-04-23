@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -83,12 +84,15 @@ public class HoodieMetadataWriteUtils {
    * Create a {@code HoodieWriteConfig} to use for the Metadata Table.
    *
    * @param writeConfig                {@code HoodieWriteConfig} of the main dataset writer
-   * @param failedWritesCleaningPolicy Cleaning policy on failed writes
+   * @param datatableVesion HoodieTableVersion
    */
   @VisibleForTesting
   public static HoodieWriteConfig createMetadataWriteConfig(
-      HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+      HoodieWriteConfig writeConfig, HoodieTableVersion datatableVesion) {
     String tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
+    WriteConcurrencyMode concurrencyMode = datatableVesion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL : WriteConcurrencyMode.SINGLE_WRITER;
+    HoodieLockConfig lockConfig = datatableVesion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build() :
+        HoodieLockConfig.newBuilder().build();
 
     final long maxLogFileSizeBytes = writeConfig.getMetadataConfig().getMaxLogFileSize();
     // Borrow the cleaner policy from the main table and adjust the cleaner policy based on the main table's cleaner policy
@@ -170,9 +174,9 @@ public class HoodieMetadataWriteUtils {
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(HoodieMetadataPayload.class.getCanonicalName()).build())
         .withRecordMergeImplClasses(HoodieAvroRecordMerger.class.getCanonicalName())
-        .withWriteConcurrencyMode(WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL)
+        .withWriteConcurrencyMode(concurrencyMode)
         // need to fix to re-use the same lock configuration as data table.
-        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+        .withLockConfig(lockConfig)
         .withWriteRecordPositionsEnabled(false);
 
     // RecordKey properties are needed for the metadata table records
