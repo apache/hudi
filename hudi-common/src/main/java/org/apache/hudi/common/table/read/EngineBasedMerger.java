@@ -89,6 +89,7 @@ class EngineBasedMerger<T> {
           readerSchema,
           props);
 
+      // TODO schema rewriting?
       return mergedRecord.map(combinedRecordAndSchema -> {
         HoodieRecord<T> combinedRecord = combinedRecordAndSchema.getLeft();
         // If pre-combine returns existing record, no need to update it
@@ -121,7 +122,7 @@ class EngineBasedMerger<T> {
             return mergedRecord.map(combinedRecordAndSchema -> {
               T record = readerContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchema.getLeft());
               return BufferedRecord.forRecordWithContext(record, combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, false);
-            }).orElseGet(newer::asDeleteRecord);
+            }).orElseGet(newer::asDeleteRecord); // todo should this be older record if it was previously a delete?
           } else {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
                 readerContext.constructHoodieRecord(older), readerContext.decodeAvroSchema(older.getSchemaId()),
@@ -156,7 +157,7 @@ class EngineBasedMerger<T> {
    * Constructs a new {@link HoodieAvroRecord} for payload based merging
    *
    * @param readerContext reader context
-   * @param bufferedRecord TODO
+   * @param bufferedRecord the provided engine specific record and its metadata
    * @return A new instance of {@link HoodieRecord}.
    */
   private HoodieRecord constructHoodieAvroRecord(HoodieReaderContext<T> readerContext, BufferedRecord<T> bufferedRecord) {

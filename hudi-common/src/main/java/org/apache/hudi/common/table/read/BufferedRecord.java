@@ -45,7 +45,7 @@ public class BufferedRecord<T> implements Serializable {
   private final Integer schemaId;
   private final boolean isDelete;
 
-  private BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
+  BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
     this.recordKey = recordKey;
     this.orderingValue = orderingValue;
     this.record = record;
