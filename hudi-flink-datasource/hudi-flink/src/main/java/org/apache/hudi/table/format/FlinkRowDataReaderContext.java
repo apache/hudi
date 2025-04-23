@@ -31,12 +31,12 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
@@ -51,6 +51,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
@@ -148,35 +149,26 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public HoodieRecord<RowData> constructHoodieRecord(Option<RowData> recordOption, Map<String, Object> metadataMap) {
-    HoodieKey hoodieKey = new HoodieKey(
-        (String) metadataMap.get(INTERNAL_META_RECORD_KEY),
-        (String) metadataMap.get(INTERNAL_META_PARTITION_PATH));
-    RowData rowData = recordOption.get();
+  public HoodieRecord<RowData> constructHoodieRecord(BufferedRecord<RowData> bufferedRecord) {
+    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), null);
     // delete record
-    if (recordOption.isEmpty()) {
-      Comparable orderingValue;
-      if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
-        orderingValue = (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
-      } else {
-        throw new HoodieException("There should be ordering value in metadataMap.");
-      }
+    if (bufferedRecord.isDelete()) {
+      Comparable orderingValue = bufferedRecord.getOrderingValue();
       return new HoodieEmptyRecord<>(hoodieKey, HoodieOperation.DELETE, orderingValue, HoodieRecord.HoodieRecordType.FLINK);
     }
-    return new HoodieFlinkRecord(hoodieKey, rowData);
+    return new HoodieFlinkRecord(hoodieKey, bufferedRecord.getRecord());
   }
 
   @Override
-  public Comparable getOrderingValue(Option<RowData> recordOption, Map<String, Object> metadataMap, Schema schema, Option<String> orderingFieldName) {
-    if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
-      return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
-    }
-    if (!recordOption.isPresent() || orderingFieldName.isEmpty()) {
+  public Comparable getOrderingValue(
+      RowData record,
+      Schema schema,
+      Option<String> orderingFieldName) {
+    if (orderingFieldName.isEmpty()) {
       return DEFAULT_ORDERING_VALUE;
     }
     RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(orderingFieldName.get());
-    Comparable finalOrderingVal = (Comparable) context.getValAsJava(recordOption.get(), false);
-    metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
+    Comparable finalOrderingVal = (Comparable) context.getValAsJava(record, false);
     return finalOrderingVal;
   }
 
@@ -188,6 +180,18 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     }
     // copy is unnecessary if there is no caching in subsequent processing.
     return rowDataSerializer.copy(rowData);
+  }
+
+  @Override
+  public RowData toBinaryRow(Schema avroSchema, RowData record) {
+    if (record instanceof BinaryRowData) {
+      return record;
+    }
+    if (rowDataSerializer == null) {
+      RowType requiredRowType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(getSchemaHandler().getRequiredSchema()).getRowType().getLogicalType();
+      rowDataSerializer = new RowDataSerializer(requiredRowType);
+    }
+    return rowDataSerializer.toBinaryRow(record);
   }
 
   @Override

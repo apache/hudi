@@ -137,16 +137,6 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
         + "{\"name\": \"col2\", \"type\": \"long\" },"
         + "{ \"name\": \"col3\", \"type\": [\"null\", \"string\"], \"default\": null}]}")
     val row = InternalRow("item", 1000L, "blue")
-    val metadataMap = Map(HoodieReaderContext.INTERNAL_META_ORDERING_FIELD -> 100L)
-    assertEquals(100L, sparkReaderContext.getOrderingValue(
-      HOption.empty(), metadataMap.asJava.asInstanceOf[java.util.Map[String, Object]],
-      avroSchema, HOption.of(orderingFieldName)))
-    assertEquals(DEFAULT_ORDERING_VALUE, sparkReaderContext.getOrderingValue(
-      HOption.empty(), Map().asJava.asInstanceOf[java.util.Map[String, Object]],
-      avroSchema, HOption.of(orderingFieldName)))
-    assertEquals(DEFAULT_ORDERING_VALUE, sparkReaderContext.getOrderingValue(
-      HOption.of(row), Map().asJava.asInstanceOf[java.util.Map[String, Object]],
-      avroSchema, HOption.empty()))
     testGetOrderingValue(sparkReaderContext, row, avroSchema, orderingFieldName, 1000L)
     testGetOrderingValue(
       sparkReaderContext, row, avroSchema, "col3", UTF8String.fromString("blue"))
@@ -264,11 +254,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                                    avroSchema: Schema,
                                    orderingColumn: String,
                                    expectedOrderingValue: Comparable[_]): Unit = {
-    val metadataMap = new util.HashMap[String, Object]()
     assertEquals(expectedOrderingValue, sparkReaderContext.getOrderingValue(
-      HOption.of(row), metadataMap, avroSchema, HOption.of(orderingColumn)))
-    assertEquals(expectedOrderingValue,
-      metadataMap.get(HoodieReaderContext.INTERNAL_META_ORDERING_FIELD))
+      row, avroSchema, HOption.of(orderingColumn)))
   }
 }
 
