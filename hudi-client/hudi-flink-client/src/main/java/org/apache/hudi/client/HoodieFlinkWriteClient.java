@@ -219,7 +219,6 @@ public class HoodieFlinkWriteClient<T>
     }).flatMap(Collection::stream).collect(Collectors.toList());
   }
 
-
   @Override
   public List<WriteStatus> insert(List<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =

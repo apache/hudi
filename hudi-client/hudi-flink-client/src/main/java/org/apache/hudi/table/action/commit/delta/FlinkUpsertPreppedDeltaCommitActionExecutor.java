@@ -49,6 +49,6 @@ public class FlinkUpsertPreppedDeltaCommitActionExecutor<T>
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return super.execute(preppedRecords, );
+    return super.execute(preppedRecords);
   }
 }

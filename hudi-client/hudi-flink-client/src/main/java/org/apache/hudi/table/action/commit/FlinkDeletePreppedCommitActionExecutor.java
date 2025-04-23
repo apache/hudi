@@ -46,6 +46,6 @@ public class FlinkDeletePreppedCommitActionExecutor<T> extends BaseFlinkCommitAc
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return super.execute(preppedRecords, );
+    return super.execute(preppedRecords);
   }
 }
