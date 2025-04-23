@@ -288,11 +288,11 @@ class TestFileGroupRecordBuffer {
         new KeyBasedFileGroupRecordBuffer(
             readerContext,
             hoodieTableMetaClient,
-            RecordMergeMode.COMMIT_TIME_ORDERING,
             partitionNameOverrideOpt,
             partitionPathFieldOpt,
             props,
             readStats,
+            Option.empty(),
             merger);
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
@@ -302,11 +302,11 @@ class TestFileGroupRecordBuffer {
     keyBasedBuffer = new KeyBasedFileGroupRecordBuffer<>(
             readerContext,
             hoodieTableMetaClient,
-            RecordMergeMode.COMMIT_TIME_ORDERING,
             partitionNameOverrideOpt,
             partitionPathFieldOpt,
             props,
             readStats,
+            Option.empty(),
             merger);
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
@@ -325,11 +325,11 @@ class TestFileGroupRecordBuffer {
         new KeyBasedFileGroupRecordBuffer<>(
             readerContext,
             hoodieTableMetaClient,
-            RecordMergeMode.COMMIT_TIME_ORDERING,
             partitionNameOverrideOpt,
             partitionPathFieldOpt,
             props,
             readStats,
+            Option.empty(),
             merger);
 
     // CASE 2: With _hoodie_is_deleted is true.
